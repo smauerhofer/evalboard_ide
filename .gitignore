@@ -1,0 +1,104 @@
+# ---------------------------------------------------------------------------
+# .gitignore for the Ga144EvalboardIde solution (.NET 10 / WPF / Visual Studio)
+# Ignores build output and IDE-generated files; keeps all source, the sample
+# YAML files, docs, and examples that are part of the project.
+# ---------------------------------------------------------------------------
+
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio / Rider / VS Code workspace state
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+*.userprefs
+*.rsuser
+
+# Build results / intermediate
+[Dd]ebug/
+[Rr]elease/
+[Dd]ebugPublic/
+[Rr]eleases/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]uild/
+[Bb]uilds/
+msbuild.log
+msbuild.err
+msbuild.wrn
+
+# .NET restore / build artifacts
+project.lock.json
+project.fragment.lock.json
+artifacts/
+*.nupkg
+*.snupkg
+.packages/
+**/packages/*
+!**/packages/build/
+
+# MSBuild binary logs
+*.binlog
+
+# Test results / coverage
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+TestResults/
+
+# Publish output
+publish/
+*.[Pp]ublish.xml
+*.azurePubxml
+*.pubxml
+*.pubxml.user
+
+# ClickOnce / app host
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+
+# ReSharper / dotCover
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Rider
+*.sln.iml
+
+# OS-generated
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Crash / diagnostic dumps
+*.dmp
+
+# NuGet package cache restored locally
+*.nuget.props
+*.nuget.targets
+
+# ---------------------------------------------------------------------------
+# Runtime app data
+# The IDE writes workspace.yaml / ga144-rom.yaml to LocalApplicationData, not
+# into the repo, so nothing needs ignoring there. The tracked sample-*.yaml and
+# examples/*.yaml ARE part of the project and are intentionally NOT ignored.
+# ---------------------------------------------------------------------------

@@ -177,6 +177,9 @@ public sealed class F18Compiler
       case "or":
         AddError("F18C046", "The F18A opcode at 0x16 is exclusive OR; use the source word 'xor'.", token.Location);
         return;
+      case "-":
+        AddError("F18C054", "The F18A opcode at 0x13 inverts all bits and is now named 'inv' (or 'not'); the former '-' spelling was removed to avoid confusion with subtraction. A leading '-' still denotes a negative numeric literal.", token.Location);
+        return;
       case "org":
         InterpretOrigin(token);
         return;
@@ -800,6 +803,11 @@ public sealed class F18Compiler
       else if (token.Text.Equals("or", StringComparison.OrdinalIgnoreCase))
       {
         AddError("F18C046", "Inside A[ ... ]], use 'xor'; F18A opcode 0x16 is exclusive OR.", token.Location);
+        continue;
+      }
+      else if (token.Text.Equals("-", StringComparison.OrdinalIgnoreCase))
+      {
+        AddError("F18C055", "Inside A[ ... ]], the F18A opcode at 0x13 is named 'inv' (or 'not'); the former '-' spelling was removed to avoid confusion with subtraction.", token.Location);
         continue;
       }
       else if (!F18InstructionSet.Opcodes.TryGetValue(token.Text, out opcode))

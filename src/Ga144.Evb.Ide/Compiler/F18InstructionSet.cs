@@ -23,7 +23,7 @@ public static class F18InstructionSet
         ["+*"] = 0x10,
         ["2*"] = 0x11,
         ["2/"] = 0x12,
-        ["-"] = 0x13,
+        ["inv"] = 0x13,
         ["not"] = 0x13,
         ["+"] = 0x14,
         ["and"] = 0x15,
