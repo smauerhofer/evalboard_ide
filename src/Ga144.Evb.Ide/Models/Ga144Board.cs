@@ -62,6 +62,7 @@ public sealed class Ga144Board
     MigrateLegacyJumper("J23-C", "J23-C-RX", "J23-C-TX");
     MigrateLegacyJumper("J22", "J22-HOST", "J22-USB-C", "J22-RC");
     MigrateLegacyJumper("J20", "J20-RESET", "J20-USB-A");
+    MigrateLegacyJumper("J37", "J37-1", "J37-2");
 
     BoardVisualDefinition definition = BoardVisualCatalog.Get(Model);
     foreach (JumperVisualDefinition jumper in definition.Jumpers)

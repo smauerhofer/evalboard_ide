@@ -93,8 +93,13 @@ public partial class BoardViewControl : UserControl
     foreach (JumperVisualDefinition jumper in definition.Jumpers)
     {
       Button button = CreateJumperButton(jumper);
-      Canvas.SetLeft(button, jumper.X);
-      Canvas.SetTop(button, jumper.Y);
+      // For three-pin selectors the stored bool picks which pin pair the shunt
+      // occupies, so the overlay is drawn at that pair's origin. Two-pin jumpers
+      // always use (X,Y).
+      bool selected = Board?.IsJumperInstalled(jumper.Id) == true;
+      (double originX, double originY) = jumper.OriginFor(selected);
+      Canvas.SetLeft(button, originX);
+      Canvas.SetTop(button, originY);
       OverlayCanvas.Children.Add(button);
     }
   }
@@ -138,16 +143,31 @@ public partial class BoardViewControl : UserControl
 
   private Button CreateJumperButton(JumperVisualDefinition jumper)
   {
-    bool installed = Board?.IsJumperInstalled(jumper.Id) == true;
+    bool state = Board?.IsJumperInstalled(jumper.Id) == true;
     var button = CreateOverlayButton(jumper.Width, jumper.Height);
     button.Tag = jumper.Id;
     button.Content = string.Empty;
-    button.Background = installed
-        ? new SolidColorBrush(Color.FromArgb(190, 255, 188, 49))
-        : new SolidColorBrush(Color.FromArgb(22, 20, 20, 20));
-    button.BorderBrush = installed ? Brushes.White : Brushes.Orange;
-    button.BorderThickness = new Thickness(installed ? 1.5 : 1.0);
-    button.ToolTip = $"{jumper.Id}: {jumper.Label}\nCurrent state: {(installed ? "installed" : "removed")}\nClick to toggle.";
+
+    if (jumper.IsThreePin)
+    {
+      // Three-pin selector: the shunt is always present, on pins 1-2 (false) or
+      // 2-3 (true). Never transparent; clicking moves it between the two pairs.
+      button.Background = new SolidColorBrush(Color.FromArgb(190, 255, 188, 49));
+      button.BorderBrush = Brushes.White;
+      button.BorderThickness = new Thickness(1.5);
+      string position = state ? "2-3" : "1-2";
+      button.ToolTip = $"{jumper.Id}: {jumper.Label}\nShunt on pins {position}\nClick to move to pins {(state ? "1-2" : "2-3")}.";
+    }
+    else
+    {
+      // Two-pin jumper: installed (opaque) or removed (transparent).
+      button.Background = state
+          ? new SolidColorBrush(Color.FromArgb(190, 255, 188, 49))
+          : new SolidColorBrush(Color.FromArgb(22, 20, 20, 20));
+      button.BorderBrush = state ? Brushes.White : Brushes.Orange;
+      button.BorderThickness = new Thickness(state ? 1.5 : 1.0);
+      button.ToolTip = $"{jumper.Id}: {jumper.Label}\nCurrent state: {(state ? "installed" : "removed")}\nClick to toggle.";
+    }
 
     button.Click += (_, _) =>
     {
