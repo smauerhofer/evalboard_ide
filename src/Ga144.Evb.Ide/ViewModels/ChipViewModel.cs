@@ -112,6 +112,15 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
         anchor,
         verifyTarget: false,
         allowErect: true);
+
+      // Erection leaves the COM handle open (there is no follow-up transaction to
+      // park it, unlike the check path which scans immediately after). Park it now
+      // so the idle policy takes effect: under CloseAfterIdleTimeout this arms the
+      // 1 s idle-close timer, so the handle does not stay open for the whole
+      // session. Without this the handle would remain open indefinitely and keep
+      // the FTDI/VCP driver active on a shared USB controller (continuous mouse
+      // hiccups that never stop until the app exits).
+      await KrakenController.ParkTransportAsync();
     }
 
     RebuildNodes();
