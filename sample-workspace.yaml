@@ -1,0 +1,47 @@
+schemaVersion: 7
+activeBoardId: 11111111-1111-1111-1111-111111111111
+activeProjectId: 22222222-2222-2222-2222-222222222222
+settings:
+  autoDetect: true
+  activeProbeNewFtdiPorts: true
+  scanIntervalMs: 1500
+  baudRate: 921600
+boards:
+  - id: 11111111-1111-1111-1111-111111111111
+    name: EVB001 S0121
+    model: EVB001
+    serialNumber: '0121'
+    portA: null
+    portB: null
+    portC: null
+    jumpers: {}
+    lastSeenUtc: null
+projects:
+  - id: 22222222-2222-2222-2222-222222222222
+    name: Kraken demonstration
+    board: null
+    chips:
+      - role: Host
+        name: Host GA144
+        nodes: []
+        kraken:
+          enabled: true
+          headCoordinate: 708
+          tentacles:
+            - number: 1
+              name: West
+              nodes: [707, 706, 705, 704, 703, 702, 701, 700, 600, 601, 602, 603, 604, 605, 505, 504, 503, 502, 501, 500, 400, 401, 402, 403, 404, 405, 305, 304, 303, 302, 301, 300, 200, 201, 202, 203, 204, 205, 105, 104, 103, 102, 101, 100, 0, 1, 2, 3, 4, 5]
+            - number: 2
+              name: East
+              nodes: [709, 710, 711, 712, 713, 714, 715, 716, 717, 617, 616, 615, 614, 613, 612, 512, 513, 514, 515, 516, 517, 417, 416, 415, 414, 413, 412, 312, 313, 314, 315, 316, 317, 217, 216, 215, 214, 213, 212, 112, 113, 114, 115, 116, 117, 17]
+            - number: 3
+              name: South
+              nodes: [608, 609, 610, 611, 511, 411, 311, 211, 111, 110, 109, 209, 210, 310, 309, 409, 410, 510, 509, 508, 408, 407, 507, 607, 606, 506, 406, 306, 307, 308, 208, 207, 206, 106, 6, 7, 107, 108, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+      - role: Target
+        name: Target GA144
+        nodes: []
+        kraken:
+          enabled: false
+          headCoordinate: 708
+          tentacles: []
+    userMacros: []

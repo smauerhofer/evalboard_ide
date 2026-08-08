@@ -1,0 +1,14 @@
+systemMacros:
+- name: rom-support
+  description: One instruction sequence shared by ROM and RAM.
+  sourceCode: |-
+    dup
+    drop
+- name: relay-one
+  description: Pass one word from the receiving port to the port in B.
+  sourceCode: '@p !b'
+- name: relay-two
+  description: Nested macro example.
+  sourceCode: |-
+    relay-one import
+    relay-one import

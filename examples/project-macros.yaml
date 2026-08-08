@@ -1,0 +1,10 @@
+userMacros:
+- name: project-output
+  description: Project-local source fragment; RAM only.
+  sourceCode: |-
+    output-value
+    !b
+- name: project-relay
+  description: A user macro may nest a system macro.
+  sourceCode: |-
+    relay-two import

@@ -1,0 +1,28 @@
+<Application x:Class="Ga144.Evb.Ide.App"
+             ShutdownMode="OnMainWindowClose"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <SolidColorBrush x:Key="AccentBrush" Color="#1F6F3D" />
+        <SolidColorBrush x:Key="PanelBrush" Color="#F4F6F5" />
+        <SolidColorBrush x:Key="BorderBrush" Color="#D7DDD9" />
+
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="12,6" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="MinHeight" Value="30" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="Margin" Value="0,3,0,8" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Padding" Value="5,3" />
+            <Setter Property="Margin" Value="0,3,0,8" />
+        </Style>
+        <Style TargetType="GroupBox">
+            <Setter Property="Margin" Value="8" />
+            <Setter Property="Padding" Value="8" />
+        </Style>
+    </Application.Resources>
+</Application>

@@ -1,0 +1,11 @@
+// System-wide ROM source example for one GA144 node.
+0x080 org
+0x3ffff const rom-mask
+entry rom-identity
+
+: rom-identity
+    rom-support import
+    rom-mask and
+;
+
+label rom-end

@@ -1,0 +1,13 @@
+schemaVersion: 2
+chipPart: GA144-1.20
+nodes:
+  - coordinate: 708
+    sourceCode: |-
+      // Example system-wide node 708 ROM dictionary.
+      0x080 org
+      0x3ffff const rom-mask
+
+      : rom-identity
+          rom-mask and
+      ;
+    romWords: []

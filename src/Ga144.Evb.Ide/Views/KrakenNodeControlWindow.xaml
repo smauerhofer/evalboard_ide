@@ -1,0 +1,211 @@
+<Window x:Class="Ga144.Evb.Ide.Views.KrakenNodeControlWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Online Kraken"
+        Width="1280"
+        Height="860"
+        MinWidth="1040"
+        MinHeight="700"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Online Kraken — node " FontSize="24" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding NodeCoordinate}" FontSize="24" FontWeight="SemiBold" FontFamily="Consolas" />
+                    <Border Background="#E7ECE8" BorderBrush="#9AA69D" BorderThickness="1" CornerRadius="4" Padding="7,2" Margin="12,0,0,0">
+                        <TextBlock Text="{Binding ConnectionText}" FontWeight="Bold" />
+                    </Border>
+                </StackPanel>
+                <TextBlock Text="{Binding RouteText}" Margin="0,3,0,0" Foreground="#4D5C51" />
+                <TextBlock Text="{Binding EndpointText}" Margin="0,2,0,0" Foreground="#555" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Connect / erect Kraken once" Command="{Binding ConnectCommand}" MinWidth="200" Padding="10,6" />
+                <Button Content="Refresh all" Command="{Binding RefreshAllCommand}" MinWidth="100" Padding="10,6" Margin="8,0,0,0" />
+                <TextBlock Text="COM handle parks while idle" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#555" FontWeight="SemiBold" />
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="1" Background="#FFF5D9" BorderBrush="#D8B45A" BorderThickness="1" CornerRadius="4" Padding="9" Margin="0,9,0,9">
+            <TextBlock Text="{Binding DestructiveWarning}" TextWrapping="Wrap" />
+        </Border>
+
+        <TabControl Grid.Row="2">
+            <TabItem Header="RAM">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Margin="0,0,0,7">
+                        <TextBlock Text="Live node RAM (0x000–0x03F). Kraken itself consumes no RAM in this controlled node."
+                                   VerticalAlignment="Center" FontWeight="SemiBold" />
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Content="Read 64" Command="{Binding ReadRamCommand}" MinWidth="90" Padding="8,4" />
+                            <Button Content="Write 64" Command="{Binding WriteRamCommand}" MinWidth="90" Padding="8,4" Margin="7,0,0,0" />
+                        </StackPanel>
+                    </DockPanel>
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding RamWords}" AutoGenerateColumns="False" CanUserAddRows="False"
+                              HeadersVisibility="Column" GridLinesVisibility="Horizontal" FontFamily="Consolas">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="#" Binding="{Binding Label}" IsReadOnly="True" Width="90" />
+                            <DataGridTextColumn Header="Address" Binding="{Binding AddressText}" IsReadOnly="True" Width="120" />
+                            <DataGridTextColumn Header="18-bit value" Binding="{Binding ValueText, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="ROM">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Margin="0,0,0,7">
+                        <TextBlock Text="Live hardware ROM (0x080–0x0BF), read-only." FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button DockPanel.Dock="Right" Content="Read ROM 64" Command="{Binding ReadRomCommand}" MinWidth="110" Padding="8,4" />
+                    </DockPanel>
+                    <DataGrid Grid.Row="1" ItemsSource="{Binding RomWords}" AutoGenerateColumns="False" CanUserAddRows="False"
+                              IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" FontFamily="Consolas">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="#" Binding="{Binding Label}" Width="90" />
+                            <DataGridTextColumn Header="Address" Binding="{Binding AddressText}" Width="120" />
+                            <DataGridTextColumn Header="18-bit value" Binding="{Binding ValueText}" Width="180" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Registers / I/O">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="180" />
+                            <ColumnDefinition Width="240" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="A" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding AValue, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" Margin="0,3" />
+                        <StackPanel Grid.Row="0" Grid.Column="2" Orientation="Horizontal" Margin="8,0">
+                            <Button Content="Read A" Command="{Binding ReadACommand}" MinWidth="82" />
+                            <Button Content="Write A" Command="{Binding WriteACommand}" MinWidth="82" Margin="6,0,0,0" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="0" Grid.Column="3" Text="General address/data register; true hardware read/write." VerticalAlignment="Center" TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="IO (0x15D)" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding IoValue, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" Margin="0,3" />
+                        <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal" Margin="8,0">
+                            <Button Content="Read IO" Command="{Binding ReadIoCommand}" MinWidth="82" />
+                            <Button Content="Write IO" Command="{Binding WriteIoCommand}" MinWidth="82" Margin="6,0,0,0" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="1" Grid.Column="3" Text="Direct access to the node's IO control/status register." VerticalAlignment="Center" TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="P" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding KnownPText, Mode=OneWay}" FontFamily="Consolas" IsReadOnly="True" Margin="0,3" />
+                        <StackPanel Grid.Row="2" Grid.Column="2" Orientation="Horizontal" Margin="8,0">
+                            <TextBox Text="{Binding JumpValue, UpdateSourceTrigger=PropertyChanged}" Width="82" FontFamily="Consolas" ToolTip="Destination 0x000..0x3FF" />
+                            <Button Content="Jump / detach" Command="{Binding JumpCommand}" MinWidth="104" Margin="6,0,0,0" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="2" Grid.Column="3" Text="P has no direct read instruction. While Kraken is attached its value is known to be the incoming COM port. Jump changes P and intentionally leaves Kraken focus." VerticalAlignment="Center" TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="B" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding BValue, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" Margin="0,3" />
+                        <Button Grid.Row="3" Grid.Column="2" Content="Write B" Command="{Binding WriteBCommand}" MinWidth="82" Margin="8,0" />
+                        <TextBlock Grid.Row="3" Grid.Column="3" Text="{Binding BReadLimitation}" VerticalAlignment="Center" TextWrapping="Wrap" />
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="I" FontWeight="Bold" VerticalAlignment="Center" />
+                        <TextBox Grid.Row="4" Grid.Column="1" Text="not directly readable" IsReadOnly="True" Margin="0,3" />
+                        <TextBlock Grid.Row="4" Grid.Column="3" Text="{Binding ILimitation}" VerticalAlignment="Center" TextWrapping="Wrap" />
+
+                        <Border Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="4" Background="#F5E7E7" BorderBrush="#C89090" BorderThickness="1" Padding="8" Margin="0,12,0,0">
+                            <TextBlock Text="Writing a different B or using Jump can break the configured tentacle. The IDE will keep the COM endpoint reserved but will mark the Kraken topology faulted/altered; it will NOT reset or re-erect automatically. The monitor deliberately does not offer writes to undocumented I/O addresses because an inappropriate F18 I/O access can suspend or hang the node." TextWrapping="Wrap" />
+                        </Border>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Stacks">
+                <Grid Margin="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Grid Grid.Column="0" Margin="0,0,10,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <DockPanel Margin="0,0,0,7">
+                            <StackPanel DockPanel.Dock="Left">
+                                <TextBlock Text="Parameter stack — 10 words, bottom → top" FontWeight="SemiBold" />
+                                <TextBlock Text="Read pops all 10 values, captures them, then restores the same image." Foreground="#555" FontSize="12" />
+                            </StackPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Content="Read" Command="{Binding ReadParameterStackCommand}" MinWidth="70" />
+                                <Button Content="Write" Command="{Binding WriteParameterStackCommand}" MinWidth="70" Margin="6,0,0,0" />
+                            </StackPanel>
+                        </DockPanel>
+                        <DataGrid Grid.Row="1" ItemsSource="{Binding ParameterStack}" AutoGenerateColumns="False" CanUserAddRows="False" FontFamily="Consolas">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Position" Binding="{Binding Label}" IsReadOnly="True" Width="150" />
+                                <DataGridTextColumn Header="18-bit value" Binding="{Binding ValueText, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+
+                    <Grid Grid.Column="1" Margin="10,0,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <DockPanel Margin="0,0,0,7">
+                            <StackPanel DockPanel.Dock="Left">
+                                <TextBlock Text="Return stack — 9 words, bottom → top/R" FontWeight="SemiBold" />
+                                <TextBlock Text="Read uses r&gt; / !p and then restores all nine values." Foreground="#555" FontSize="12" />
+                            </StackPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Content="Read" Command="{Binding ReadReturnStackCommand}" MinWidth="70" />
+                                <Button Content="Write" Command="{Binding WriteReturnStackCommand}" MinWidth="70" Margin="6,0,0,0" />
+                            </StackPanel>
+                        </DockPanel>
+                        <DataGrid Grid.Row="1" ItemsSource="{Binding ReturnStack}" AutoGenerateColumns="False" CanUserAddRows="False" FontFamily="Consolas">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Position" Binding="{Binding Label}" IsReadOnly="True" Width="150" />
+                                <DataGridTextColumn Header="18-bit value" Binding="{Binding ValueText, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="3" Background="#EEF4EF" BorderBrush="#C4D2C7" BorderThickness="1" Padding="8" Margin="0,9,0,0">
+            <TextBlock Text="{Binding StatusText}" TextWrapping="Wrap" />
+        </Border>
+    </Grid>
+</Window>

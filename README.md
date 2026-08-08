@@ -199,5 +199,4 @@ Workspaces from earlier schema versions are normalized automatically. Board stat
 ### USB pacing while Kraken is live
 
 Normal Kraken transactions use a 5 ms settle interval; Check Kraken uses 10 ms. Once Kraken is erected, all serial/COM discovery is frozen. The resident Kraken keeps its COM endpoint reserved, but the native Win32 COM handle is closed/parked whenever no explicit Kraken operation is active and reopened without an intentional reset for the next operation.
-#   e v a l b o a r d _ i d e  
- 
+

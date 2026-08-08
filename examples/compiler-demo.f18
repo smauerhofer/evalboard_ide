@@ -1,0 +1,22 @@
+// Textual F18A compiler demonstration.
+const output-value = 0x15555
+
+org 0x00
+entry start
+
+: write-output
+    io b!
+    output-value !b
+;
+
+: start
+    write-output
+    begin
+        @b !b
+    again
+;
+
+// An instruction word may be assembled explicitly. Inside a definition it is a literal.
+: delay-word
+    A[ !b @p @ ]]
+;
