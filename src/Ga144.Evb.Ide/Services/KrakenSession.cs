@@ -1,6 +1,6 @@
+using System.Diagnostics;
 using Ga144.Evb.Ide.Compiler;
 using Ga144.Evb.Ide.Models;
-using System.Diagnostics;
 
 namespace Ga144.Evb.Ide.Services;
 
@@ -84,12 +84,6 @@ internal sealed class KrakenSession : IAsyncDisposable
   {
     ArgumentNullException.ThrowIfNull(configuration);
     ArgumentNullException.ThrowIfNull(targetRoute);
-    configuration.Normalize();
-
-    if (!configuration.Enabled)
-    {
-      throw new InvalidOperationException("The Kraken topology is not installed on this chip.");
-    }
 
     if (targetRoute.IsHead)
     {

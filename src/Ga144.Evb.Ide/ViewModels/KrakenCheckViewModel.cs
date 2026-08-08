@@ -1,6 +1,6 @@
+using System.Collections.ObjectModel;
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.Services;
-using System.Collections.ObjectModel;
 
 namespace Ga144.Evb.Ide.ViewModels;
 
@@ -16,28 +16,24 @@ public sealed class KrakenCheckViewModel : ObservableObject, IAsyncDisposable
   private int _completed;
 
   public KrakenCheckViewModel(
-      KrakenConfiguration configuration,
-      KrakenLiveController controller)
+    KrakenConfiguration configuration,
+    KrakenLiveController controller)
   {
     _configuration = configuration;
     _controller = controller;
-    _configuration.Normalize();
 
-    if (_configuration.Enabled)
+    IReadOnlyDictionary<int, KrakenNodeRoute> routes = KrakenTopology.BuildRouteMap(_configuration);
+    foreach (KrakenNodeRoute route in routes.Values
+      .Where(item => !item.IsHead)
+      .OrderBy(item => item.Position)
+      .ThenBy(item => item.TentacleNumber))
     {
-      IReadOnlyDictionary<int, KrakenNodeRoute> routes = KrakenTopology.BuildRouteMap(_configuration);
-      foreach (KrakenNodeRoute route in routes.Values
-                   .Where(item => !item.IsHead)
-                   .OrderBy(item => item.Position)
-                   .ThenBy(item => item.TentacleNumber))
-      {
-        Items.Add(new KrakenCheckItemViewModel(route));
-      }
+      Items.Add(new KrakenCheckItemViewModel(route));
     }
 
     CancelCommand = new RelayCommand(
-        () => _shutdown.Cancel(),
-        () => IsBusy && !_shutdown.IsCancellationRequested);
+      () => _shutdown.Cancel(),
+      () => IsBusy && !_shutdown.IsCancellationRequested);
   }
 
   public ObservableCollection<KrakenCheckItemViewModel> Items { get; } = [];
@@ -82,42 +78,26 @@ public sealed class KrakenCheckViewModel : ObservableObject, IAsyncDisposable
     {
       KrakenNodeRoute anchor = Items[0].Route;
       bool resetPerformed = await _controller.EnsureOnlineAsync(
-          anchor,
-          verifyTarget: false,
-          allowErect: true,
-          _shutdown.Token);
+        anchor,
+        verifyTarget: false,
+        allowErect: true,
+        _shutdown.Token);
 
       KrakenEndpointInfo? endpoint = _controller.CurrentEndpoint;
       EndpointText = endpoint is null
-          ? "Kraken endpoint connected."
-          : $"{endpoint.BoardName} — {endpoint.Role} — {endpoint.PortName} @ {KrakenSession.OnlineBaudRate:N0} baud";
+        ? "Kraken endpoint connected."
+        : $"{endpoint.BoardName} — {endpoint.Role} — {endpoint.PortName} @ {KrakenSession.OnlineBaudRate:N0} baud";
 
       StatusText = resetPerformed
-          ? "Kraken erected once; opening COM only for the active RAM[0] scan. It will be parked when the scan finishes..."
-          : "Resident Kraken found; opening its reserved COM endpoint for this RAM[0] scan without reset/re-erection...";
+        ? "Kraken erected once; opening COM only for the active RAM[0] scan. It will be parked when the scan finishes..."
+        : "Resident Kraken found; opening its reserved COM endpoint for this RAM[0] scan without reset/re-erection...";
 
       var progress = new Progress<KrakenRamZeroCheckResult>(ApplyProgress);
       IReadOnlyList<KrakenNodeRoute> orderedRoutes = Items.Select(item => item.Route).ToArray();
-
-      // Hold the FTDI handle open across the whole scan (and, on a first
-      // check, fold the scan's open into the erection that just happened) so
-      // the device re-enumerates once for the check instead of per operation.
-      // No-op under HoldOpen. Single per-transaction opens are already
-      // avoided inside CheckRamZeroAsync; this collapses the remaining
-      // per-operation open under CloseWhileIdle.
-      await _controller.BeginKeepOpenAsync(_shutdown.Token);
-      IReadOnlyList<KrakenRamZeroCheckResult> results;
-      try
-      {
-        results = await _controller.CheckRamZeroAsync(
-            orderedRoutes,
-            progress,
-            _shutdown.Token);
-      }
-      finally
-      {
-        await _controller.EndKeepOpenAsync(CancellationToken.None);
-      }
+      IReadOnlyList<KrakenRamZeroCheckResult> results = await _controller.CheckRamZeroAsync(
+        orderedRoutes,
+        progress,
+        _shutdown.Token);
 
       int passed = results.Count(item => item.Outcome == KrakenCheckOutcome.Passed);
       int failed = results.Count(item => item.Outcome == KrakenCheckOutcome.Failed);

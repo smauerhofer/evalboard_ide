@@ -1,7 +1,7 @@
-using Ga144.Evb.Ide.Models;
-using Ga144.Evb.Ide.Services;
 using System.Collections.ObjectModel;
 using System.Windows;
+using Ga144.Evb.Ide.Models;
+using Ga144.Evb.Ide.Services;
 
 namespace Ga144.Evb.Ide.ViewModels;
 
@@ -10,13 +10,13 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   private bool _disposed;
 
   public ChipViewModel(
-      ProjectViewModel project,
-      Ga144ChipRole role,
-      Ga144RomLibrary romLibrary,
-      string romLibraryPath,
-      Func<Task> saveRomLibraryAsync,
-      Func<KrakenEndpointInfo?> krakenEndpointResolver,
-      KrakenLiveController krakenController)
+    ProjectViewModel project,
+    Ga144ChipRole role,
+    Ga144RomLibrary romLibrary,
+    string romLibraryPath,
+    Func<Task> saveRomLibraryAsync,
+    Func<KrakenEndpointInfo?> krakenEndpointResolver,
+    KrakenLiveController krakenController)
   {
     Project = project;
     Role = role;
@@ -27,7 +27,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     KrakenEndpointResolver = krakenEndpointResolver;
     KrakenController = krakenController ?? throw new ArgumentNullException(nameof(krakenController));
     KrakenController.StateChanged += OnKrakenControllerStateChanged;
-    ToggleKrakenCommand = new RelayCommand(ToggleKraken, () => !KrakenController.HardwareErected);
+    ToggleKrakenCommand = new AsyncRelayCommand(ToggleKrakenAsync);
     RebuildNodes();
   }
 
@@ -40,24 +40,22 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public Func<KrakenEndpointInfo?> KrakenEndpointResolver { get; }
   public KrakenLiveController KrakenController { get; }
   public ObservableCollection<NodeViewModel> Nodes { get; } = [];
-  public RelayCommand ToggleKrakenCommand { get; }
+  public AsyncRelayCommand ToggleKrakenCommand { get; }
   public string Title => $"{Project.Name} — {Chip.Name}";
 
-  /// <summary>Design-time: this chip's saved topology includes a Kraken. Persisted in YAML.</summary>
-  public bool KrakenInstalled => Chip.Kraken.Enabled;
-
   /// <summary>
-  /// Runtime truth: a Kraken is erected and running on the connected silicon
-  /// THIS session. The IDE only knows this is true after it erects the Kraken
-  /// itself; at startup it cannot know what the chip is doing, so this is false
-  /// until an erection happens. Never inferred from the persisted topology.
+  /// Runtime truth: a Kraken is erected and running on the connected silicon THIS
+  /// session. The IDE only knows this is true after it erects the Kraken itself;
+  /// at startup it cannot know what the chip is doing, so this is false until an
+  /// erection happens. This is the ONLY notion of "is there a Kraken" — the
+  /// structure is a constant and is never a persisted install choice.
   /// </summary>
   public bool KrakenActive => KrakenController.HardwareErected;
 
-  public string KrakenButtonText => KrakenInstalled ? "Remove Kraken" : "Install 3-tentacle Kraken";
-  public string KrakenStatusText => KrakenInstalled
-      ? BuildKrakenStatus() + BuildRuntimeStatus()
-      : "No Kraken installed on this chip.";
+  public string KrakenButtonText => KrakenActive ? "Remove Kraken" : "Install Kraken";
+  public string KrakenStatusText => KrakenActive
+    ? BuildKrakenStatus() + BuildRuntimeStatus()
+    : "No Kraken running on this chip. Install to erect the 3-tentacle Kraken (this resets the chip once).";
 
   public IReadOnlyDictionary<int, KrakenNodeRoute> KrakenRoutes => KrakenTopology.BuildRouteMap(Chip.Kraken);
 
@@ -67,6 +65,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   {
     OnPropertyChanged(nameof(KrakenStatusText));
     OnPropertyChanged(nameof(KrakenActive));
+    OnPropertyChanged(nameof(KrakenButtonText));
     ToggleKrakenCommand.NotifyCanExecuteChanged();
   }
 
@@ -86,28 +85,36 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     return ValueTask.CompletedTask;
   }
 
-  private void ToggleKraken()
+  private async Task ToggleKrakenAsync()
   {
     if (KrakenController.HardwareErected)
     {
-      throw new InvalidOperationException(
-          "The project-side Kraken topology cannot be installed/removed while the hardware Kraken is running. " +
-          "The resident Kraken endpoint must remain reserved and the chip must not be reset/re-erected.");
-    }
-
-    if (Chip.Kraken.Enabled)
-    {
-      Chip.Kraken.Remove();
+      // Remove = release the running Kraken: drop erection state and close the
+      // COM handle. No chip reset is issued here.
+      await KrakenController.ResetTransientErectionAsync();
     }
     else
     {
-      Chip.Kraken.InstallDefault();
+      // Install = erect the Kraken now. This pulses RESET- and installs the head
+      // + tentacles (the one reset intrinsic to bringing a Kraken online). We
+      // anchor on the first non-head route of the fixed topology.
+      KrakenNodeRoute? anchor = KrakenRoutes.Values
+        .Where(route => !route.IsHead)
+        .OrderBy(route => route.TentacleNumber)
+        .ThenBy(route => route.Position)
+        .FirstOrDefault();
+      if (anchor is null)
+      {
+        return;
+      }
+
+      await KrakenController.EnsureOnlineAsync(
+        anchor,
+        verifyTarget: false,
+        allowErect: true);
     }
 
-    KrakenController.InvalidateAsync().GetAwaiter().GetResult();
-    Project.NotifyProjectChanged();
     RebuildNodes();
-    OnPropertyChanged(nameof(KrakenInstalled));
     OnPropertyChanged(nameof(KrakenButtonText));
     OnPropertyChanged(nameof(KrakenStatusText));
     OnPropertyChanged(nameof(KrakenActive));
@@ -119,8 +126,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     bool krakenActive = KrakenController.HardwareErected;
     Nodes.Clear();
     foreach (Ga144NodeConfiguration node in Chip.Nodes
-                 .OrderByDescending(item => item.Coordinate / 100)
-                 .ThenBy(item => item.Coordinate % 100))
+      .OrderByDescending(item => item.Coordinate / 100)
+      .ThenBy(item => item.Coordinate % 100))
     {
       routes.TryGetValue(node.Coordinate, out KrakenNodeRoute? route);
       Nodes.Add(new NodeViewModel(node, route, krakenActive));
@@ -129,10 +136,9 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
 
   private string BuildKrakenStatus()
   {
-    Chip.Kraken.Normalize();
     string lengths = string.Join(", ", Chip.Kraken.Tentacles
-        .OrderBy(item => item.Number)
-        .Select(item => $"T{item.Number} {item.Nodes.Count} nodes"));
+      .OrderBy(item => item.Number)
+      .Select(item => $"T{item.Number} {item.Nodes.Count} nodes"));
     int covered = Chip.Kraken.Tentacles.Sum(item => item.Nodes.Count);
     return $"Kraken head 708; {lengths}. {covered}/143 non-head nodes covered.";
   }
@@ -152,11 +158,11 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     if (KrakenController.TransportFaulted)
     {
       return $" Hardware Kraken RESERVED on {endpoint}; COM is parked while idle. " +
-             $"Transport/topology fault: {KrakenController.FaultText} No reset/probe/re-erection will be attempted.";
+      $"Transport/topology fault: {KrakenController.FaultText} No reset/probe/re-erection will be attempted.";
     }
 
     return $" Hardware Kraken ONLINE on {endpoint}; the Win32 COM handle is opened only during explicit Kraken operations and closed/parked while idle; no SerialPort event loop is used. " +
-           "Reset, node-708 probing, and re-erection are forbidden while Kraken is resident; the COM endpoint remains reserved.";
+    "Reset, node-708 probing, and re-erection are forbidden while Kraken is resident; the COM endpoint remains reserved.";
   }
 
   private void OnKrakenControllerStateChanged(object? sender, EventArgs e)
@@ -170,6 +176,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       RebuildNodes();
       OnPropertyChanged(nameof(KrakenStatusText));
       OnPropertyChanged(nameof(KrakenActive));
+      OnPropertyChanged(nameof(KrakenButtonText));
       ToggleKrakenCommand.NotifyCanExecuteChanged();
     }
 

@@ -1,3 +1,5 @@
+using YamlDotNet.Serialization;
+
 namespace Ga144.Evb.Ide.Models;
 
 public sealed class Ga144ChipConfiguration
@@ -5,7 +7,17 @@ public sealed class Ga144ChipConfiguration
   public Ga144ChipRole Role { get; set; }
   public string Name { get; set; } = string.Empty;
   public List<Ga144NodeConfiguration> Nodes { get; set; } = [];
-  public KrakenConfiguration Kraken { get; set; } = new();
+
+  /// <summary>
+  /// The Kraken structure (head 708 + three fixed tentacles) is a constant of the
+  /// GA144 array and the boot protocol, not per-chip configuration. It is never
+  /// persisted: it is always the one fixed topology, recreated in memory. Whether
+  /// a Kraken is actually running is transient runtime state owned by the live
+  /// controller (HardwareErected), not anything stored here. Any legacy 'kraken:'
+  /// block in old YAML is ignored on load.
+  /// </summary>
+  [YamlIgnore]
+  public KrakenConfiguration Kraken { get; } = KrakenConfiguration.CreateFixed();
 
   public static Ga144ChipConfiguration Create(Ga144ChipRole role)
   {
@@ -22,11 +34,9 @@ public sealed class Ga144ChipConfiguration
   public void Normalize()
   {
     Name = string.IsNullOrWhiteSpace(Name)
-        ? Role == Ga144ChipRole.Host ? "Host GA144" : "Target GA144"
-        : Name.Trim();
+    ? Role == Ga144ChipRole.Host ? "Host GA144" : "Target GA144"
+    : Name.Trim();
     Nodes ??= [];
-    Kraken ??= new KrakenConfiguration();
-    Kraken.Normalize();
     EnsureAllNodes();
     Nodes.Sort((left, right) => left.Coordinate.CompareTo(right.Coordinate));
   }

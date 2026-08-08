@@ -1,46 +1,37 @@
 namespace Ga144.Evb.Ide.Models;
 
 /// <summary>
-/// Project-side description of a Kraken installed on one GA144.
-/// The head is node 708.  The three tentacles are ordered paths of adjacent
-/// F18A nodes; node zero of each tentacle is directly adjacent to the head.
+/// The fixed Kraken structure for one GA144: head node 708 plus three tentacles
+/// of adjacent F18A nodes. This is a constant of the array and the boot protocol,
+/// not per-project configuration, and is never persisted. Use
+/// <see cref="CreateFixed"/> to obtain the canonical instance. Whether a Kraken is
+/// actually running on the silicon is transient runtime state (the live
+/// controller's HardwareErected), unrelated to this structure.
 /// </summary>
 public sealed class KrakenConfiguration
 {
-  public bool Enabled { get; set; }
-  public int HeadCoordinate { get; set; } = KrakenTopology.HeadCoordinate;
-  public List<KrakenTentacleConfiguration> Tentacles { get; set; } = [];
+  public int HeadCoordinate { get; } = KrakenTopology.HeadCoordinate;
+  public List<KrakenTentacleConfiguration> Tentacles { get; }
 
-  public void Normalize()
+  private KrakenConfiguration(List<KrakenTentacleConfiguration> tentacles)
   {
-    Tentacles ??= [];
-
-    if (!Enabled)
-    {
-      HeadCoordinate = KrakenTopology.HeadCoordinate;
-      return;
-    }
-
-    if (HeadCoordinate != KrakenTopology.HeadCoordinate || !KrakenTopology.IsValid(Tentacles))
-    {
-      InstallDefault();
-    }
+    Tentacles = tentacles;
   }
 
-  public void InstallDefault()
-  {
-    Enabled = true;
-    HeadCoordinate = KrakenTopology.HeadCoordinate;
-    Tentacles = KrakenTopology.CreateDefaultTentacles();
-  }
+  /// <summary>
+  /// The canonical fixed Kraken structure. Always present, always the same three
+  /// tentacles. There is no "installed/removed" persisted state: a Kraken either
+  /// is or is not erected on hardware at runtime, which this type does not track.
+  /// </summary>
+  public static KrakenConfiguration CreateFixed() =>
+  new(KrakenTopology.CreateDefaultTentacles());
 
-  public void Remove()
-  {
-    Enabled = false;
-    HeadCoordinate = KrakenTopology.HeadCoordinate;
-    Tentacles ??= [];
-    Tentacles.Clear();
-  }
+  /// <summary>
+  /// Always true: the structure is a constant and is always defined. Retained so
+  /// existing consumers (route map building, session erection) that guarded on a
+  /// former persisted flag keep compiling and behave as "structure present".
+  /// </summary>
+  public bool Enabled => true;
 }
 
 public sealed class KrakenTentacleConfiguration
@@ -51,16 +42,16 @@ public sealed class KrakenTentacleConfiguration
 }
 
 public sealed record KrakenNodeRoute(
-    int Coordinate,
-    bool IsHead,
-    int TentacleNumber,
-    string TentacleName,
-    int Position,
-    int? PreviousCoordinate,
-    int? NextCoordinate,
-    string IncomingPort,
-    string OutgoingPort,
-    int? OutgoingBAddress);
+  int Coordinate,
+  bool IsHead,
+  int TentacleNumber,
+  string TentacleName,
+  int Position,
+  int? PreviousCoordinate,
+  int? NextCoordinate,
+  string IncomingPort,
+  string OutgoingPort,
+  int? OutgoingBAddress);
 
 /// <summary>
 /// Balanced three-tentacle topology for an 8 x 18 GA144 array.  Node 708 is
@@ -78,46 +69,46 @@ public static class KrakenTopology
   // paths that are easy to inspect on the rectangular chip drawing.
   private static readonly int[] Tentacle1Nodes =
   [
-      707, 706, 705, 704, 703, 702, 701, 700,
-        600, 601, 602, 603, 604, 605,
-        505, 504, 503, 502, 501, 500,
-        400, 401, 402, 403, 404, 405,
-        305, 304, 303, 302, 301, 300,
-        200, 201, 202, 203, 204, 205,
-        105, 104, 103, 102, 101, 100,
-        000, 001, 002, 003, 004, 005
+    707, 706, 705, 704, 703, 702, 701, 700,
+    600, 601, 602, 603, 604, 605,
+    505, 504, 503, 502, 501, 500,
+    400, 401, 402, 403, 404, 405,
+    305, 304, 303, 302, 301, 300,
+    200, 201, 202, 203, 204, 205,
+    105, 104, 103, 102, 101, 100,
+    000, 001, 002, 003, 004, 005
   ];
 
   private static readonly int[] Tentacle2Nodes =
   [
-      709, 710, 711, 712, 713, 714, 715, 716, 717,
-        617, 616, 615, 614, 613, 612,
-        512, 513, 514, 515, 516, 517,
-        417, 416, 415, 414, 413, 412,
-        312, 313, 314, 315, 316, 317,
-        217, 216, 215, 214, 213, 212,
-        112, 113, 114, 115, 116, 117,
-        017
+    709, 710, 711, 712, 713, 714, 715, 716, 717,
+    617, 616, 615, 614, 613, 612,
+    512, 513, 514, 515, 516, 517,
+    417, 416, 415, 414, 413, 412,
+    312, 313, 314, 315, 316, 317,
+    217, 216, 215, 214, 213, 212,
+    112, 113, 114, 115, 116, 117,
+    017
   ];
 
   private static readonly int[] Tentacle3Nodes =
   [
-      608, 609, 610, 611, 511, 411, 311, 211, 111,
-        110, 109, 209, 210, 310, 309, 409, 410, 510,
-        509, 508, 408, 407, 507, 607, 606, 506, 406,
-        306, 307, 308, 208, 207, 206, 106, 006, 007,
-        107, 108, 008, 009, 010, 011, 012, 013, 014,
-        015, 016
+    608, 609, 610, 611, 511, 411, 311, 211, 111,
+    110, 109, 209, 210, 310, 309, 409, 410, 510,
+    509, 508, 408, 407, 507, 607, 606, 506, 406,
+    306, 307, 308, 208, 207, 206, 106, 006, 007,
+    107, 108, 008, 009, 010, 011, 012, 013, 014,
+    015, 016
   ];
 
   public static List<KrakenTentacleConfiguration> CreateDefaultTentacles()
   {
     var result = new List<KrakenTentacleConfiguration>
-        {
-            CreateTentacle(1, "West", Tentacle1Nodes),
-            CreateTentacle(2, "East", Tentacle2Nodes),
-            CreateTentacle(3, "South", Tentacle3Nodes)
-        };
+    {
+      CreateTentacle(1, "West", Tentacle1Nodes),
+      CreateTentacle(2, "East", Tentacle2Nodes),
+      CreateTentacle(3, "South", Tentacle3Nodes)
+    };
 
     if (!IsValid(result))
     {
@@ -130,25 +121,20 @@ public static class KrakenTopology
   public static IReadOnlyDictionary<int, KrakenNodeRoute> BuildRouteMap(KrakenConfiguration configuration)
   {
     ArgumentNullException.ThrowIfNull(configuration);
-    configuration.Normalize();
 
     var routes = new Dictionary<int, KrakenNodeRoute>();
-    if (!configuration.Enabled)
-    {
-      return routes;
-    }
 
     routes[HeadCoordinate] = new KrakenNodeRoute(
-        HeadCoordinate,
-        true,
-        0,
-        "Head",
-        0,
-        null,
-        null,
-        "PC / asynchronous serial",
-        "W -> T1, E -> T2, S -> T3",
-        null);
+      HeadCoordinate,
+      true,
+      0,
+      "Head",
+      0,
+      null,
+      null,
+      "PC / asynchronous serial",
+      "W -> T1, E -> T2, S -> T3",
+      null);
 
     foreach (KrakenTentacleConfiguration tentacle in configuration.Tentacles.OrderBy(item => item.Number))
     {
@@ -162,16 +148,16 @@ public static class KrakenTopology
         int? bAddress = next is int target ? PortAddress(coordinate, target) : null;
 
         routes[coordinate] = new KrakenNodeRoute(
-            coordinate,
-            false,
-            tentacle.Number,
-            tentacle.Name,
-            index,
-            previous,
-            next,
-            incoming,
-            outgoing,
-            bAddress);
+          coordinate,
+          false,
+          tentacle.Number,
+          tentacle.Name,
+          index,
+          previous,
+          next,
+          incoming,
+          outgoing,
+          bAddress);
       }
     }
 
@@ -283,15 +269,15 @@ public static class KrakenTopology
   }
 
   private static KrakenTentacleConfiguration CreateTentacle(int number, string name, IReadOnlyCollection<int> nodes) =>
-      new()
-      {
-        Number = number,
-        Name = name,
-        Nodes = [.. nodes]
-      };
+  new()
+  {
+    Number = number,
+    Name = name,
+    Nodes = [.. nodes]
+  };
 
   private static (int RowDelta, int ColumnDelta) Delta(int from, int to) =>
-      (to / 100 - from / 100, to % 100 - from % 100);
+  (to / 100 - from / 100, to % 100 - from % 100);
 
   private static bool IsNodeCoordinate(int coordinate)
   {

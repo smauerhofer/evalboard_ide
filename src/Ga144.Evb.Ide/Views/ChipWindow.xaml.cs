@@ -1,5 +1,3 @@
-using Ga144.Evb.Ide.Models;
-using Ga144.Evb.Ide.ViewModels;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
@@ -7,6 +5,8 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using Ga144.Evb.Ide.Models;
+using Ga144.Evb.Ide.ViewModels;
 
 namespace Ga144.Evb.Ide.Views;
 
@@ -73,12 +73,10 @@ public partial class ChipWindow : Window
 
   private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
   {
-    // Tentacle arrows reflect runtime erection state (KrakenActive) and the
-    // installed topology (KrakenInstalled: install/remove changes the routes).
-    // Redraw on either. Other runtime status changes (endpoint text, etc.)
-    // must not rebuild the large visual tree.
-    if (e.PropertyName == nameof(ChipViewModel.KrakenInstalled)
-        || e.PropertyName == nameof(ChipViewModel.KrakenActive))
+    // Tentacle arrows reflect runtime erection state (KrakenActive). The Kraken
+    // structure is a constant, so there is no install/remove topology event to
+    // watch. Other runtime status changes must not rebuild the large visual tree.
+    if (e.PropertyName == nameof(ChipViewModel.KrakenActive))
     {
       Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(DrawKrakenPaths));
     }
@@ -131,11 +129,11 @@ public partial class ChipWindow : Window
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
           MessageBox.Show(
-              this,
-              $"The node was saved to the project, but the system-wide ROM library could not be saved.\n\n{exception.Message}",
-              "ROM library save error",
-              MessageBoxButton.OK,
-              MessageBoxImage.Error);
+            this,
+            $"The node was saved to the project, but the system-wide ROM library could not be saved.\n\n{exception.Message}",
+            "ROM library save error",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
         }
       }
 
@@ -147,12 +145,8 @@ public partial class ChipWindow : Window
 
   private void OnCheckKrakenClick(object sender, RoutedEventArgs e)
   {
-    if (!_viewModel.KrakenInstalled)
-    {
-      MessageBox.Show(this, "Install the Kraken topology on this chip before running the online check.", "Check Kraken", MessageBoxButton.OK, MessageBoxImage.Information);
-      return;
-    }
-
+    // No topology precondition: the Kraken structure is a constant, and the check
+    // erects the Kraken once if it is not already running.
     // Do not use ShowDialog here. A modal owned window disables/re-enables
     // this Window and runs a nested DispatcherFrame. With the very large
     // GA144 ItemsControl/Viewbox/Canvas visual tree that caused WPF to
@@ -191,11 +185,11 @@ public partial class ChipWindow : Window
       _krakenCheckViewModel = null;
       _krakenCheckWindow = null;
       MessageBox.Show(
-          this,
-          $"Unable to run the Kraken check.\n\n{exception}",
-          "Check Kraken error",
-          MessageBoxButton.OK,
-          MessageBoxImage.Error);
+        this,
+        $"Unable to run the Kraken check.\n\n{exception}",
+        "Check Kraken error",
+        MessageBoxButton.OK,
+        MessageBoxImage.Error);
     }
   }
 
@@ -221,7 +215,7 @@ public partial class ChipWindow : Window
   {
     KrakenPathCanvas.Children.Clear();
     // Arrows reflect runtime state: only draw when a Kraken is erected this
-    // session. The persisted topology alone (KrakenInstalled) must not show
+    // session. The fixed topology alone must not show arrows after a restart,
     // arrows after a restart, since the IDE cannot know the chip state then.
     if (!_viewModel.KrakenActive)
     {
@@ -230,9 +224,9 @@ public partial class ChipWindow : Window
 
     IReadOnlyDictionary<int, KrakenNodeRoute> routes = _viewModel.KrakenRoutes;
     foreach (KrakenNodeRoute route in routes.Values
-                 .Where(item => !item.IsHead && item.PreviousCoordinate.HasValue)
-                 .OrderBy(item => item.TentacleNumber)
-                 .ThenBy(item => item.Position))
+      .Where(item => !item.IsHead && item.PreviousCoordinate.HasValue)
+      .OrderBy(item => item.TentacleNumber)
+      .ThenBy(item => item.Position))
     {
       int previous = route.PreviousCoordinate!.Value;
       DrawArrow(previous, route.Coordinate, BrushForTentacle(route.TentacleNumber));
