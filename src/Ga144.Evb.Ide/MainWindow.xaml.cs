@@ -1,9 +1,9 @@
-using System.ComponentModel;
-using System.Windows;
 using Ga144.Evb.Ide.Controls;
 using Ga144.Evb.Ide.Services;
 using Ga144.Evb.Ide.ViewModels;
 using Ga144.Evb.Ide.Views;
+using System.ComponentModel;
+using System.Windows;
 
 namespace Ga144.Evb.Ide;
 

@@ -2,57 +2,57 @@ namespace Ga144.Evb.Ide.Models;
 
 public sealed class F18MacroDefinition
 {
-    public string Name { get; set; } = "macro";
-    public string Description { get; set; } = string.Empty;
-    public string SourceCode { get; set; } = string.Empty;
+  public string Name { get; set; } = "macro";
+  public string Description { get; set; } = string.Empty;
+  public string SourceCode { get; set; } = string.Empty;
 
-    public F18MacroDefinition Clone() => new()
-    {
-        Name = Name,
-        Description = Description,
-        SourceCode = SourceCode
-    };
+  public F18MacroDefinition Clone() => new()
+  {
+    Name = Name,
+    Description = Description,
+    SourceCode = SourceCode
+  };
 
-    public void Normalize()
+  public void Normalize()
+  {
+    Name = (Name ?? string.Empty).Trim();
+    Description ??= string.Empty;
+    SourceCode ??= string.Empty;
+  }
+
+  public static bool IsValidName(string? name)
+  {
+    if (string.IsNullOrWhiteSpace(name))
     {
-        Name = (Name ?? string.Empty).Trim();
-        Description ??= string.Empty;
-        SourceCode ??= string.Empty;
+      return false;
     }
 
-    public static bool IsValidName(string? name)
+    string value = name.Trim();
+    if (value.Any(char.IsWhiteSpace) ||
+        value.Any(character => character is '(' or ')' or ':' or ';' or ',' or '=' or '[' or ']'))
     {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            return false;
-        }
-
-        string value = name.Trim();
-        if (value.Any(char.IsWhiteSpace) ||
-            value.Any(character => character is '(' or ')' or ':' or ';' or ',' or '=' or '[' or ']'))
-        {
-            return false;
-        }
-
-        // Decimal tokens are reserved for node imports such as "607 import".
-        return value.Any(character => !char.IsDigit(character));
+      return false;
     }
 
-    public static void NormalizeList(List<F18MacroDefinition> macros)
+    // Decimal tokens are reserved for node imports such as "607 import".
+    return value.Any(character => !char.IsDigit(character));
+  }
+
+  public static void NormalizeList(List<F18MacroDefinition> macros)
+  {
+    for (int index = macros.Count - 1; index >= 0; index--)
     {
-        for (int index = macros.Count - 1; index >= 0; index--)
-        {
-            F18MacroDefinition? macro = macros[index];
-            if (macro is null)
-            {
-                macros.RemoveAt(index);
-                continue;
-            }
+      F18MacroDefinition? macro = macros[index];
+      if (macro is null)
+      {
+        macros.RemoveAt(index);
+        continue;
+      }
 
-            macro.Normalize();
-        }
-
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        macros.RemoveAll(macro => string.IsNullOrWhiteSpace(macro.Name) || !seen.Add(macro.Name));
+      macro.Normalize();
     }
+
+    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    macros.RemoveAll(macro => string.IsNullOrWhiteSpace(macro.Name) || !seen.Add(macro.Name));
+  }
 }

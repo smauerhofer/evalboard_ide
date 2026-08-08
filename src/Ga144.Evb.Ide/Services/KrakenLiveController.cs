@@ -38,6 +38,62 @@ public sealed class KrakenLiveController : IAsyncDisposable
   /// <summary>The idle-handle policy in effect for this controller's session.</summary>
   public KrakenIdlePolicy IdlePolicy => _idlePolicy;
 
+  /// <summary>
+  /// Tear down transient erection state and close the COM handle, WITHOUT
+  /// resetting the GA144. Unlike InvalidateAsync (which forbids teardown while a
+  /// Kraken is resident), this is the explicit path for treating erection as
+  /// transient runtime state: it is called at startup, on board change, and on a
+  /// port-binding change for the affected role. After this the controller reports
+  /// not-erected, and the next operation must erect again (which performs the
+  /// reset intrinsic to installing a Kraken).
+  ///
+  /// This does not itself pulse reset; it only drops IDE state and releases the
+  /// native handle. The subsequent erection is what resets the chip, per the
+  /// GA144 async-boot protocol, and only if/when the user starts a Kraken op.
+  /// </summary>
+  public async Task ResetTransientErectionAsync(CancellationToken cancellationToken = default)
+  {
+    await _gate.WaitAsync(cancellationToken);
+    try
+    {
+      if (_disposed)
+      {
+        return;
+      }
+
+      bool wasErected = _hardwareErected;
+
+      // Disposing the session closes the native COM handle (and stops the idle
+      // timer / releases the held handle, depending on policy). No chip reset.
+      if (_session is not null)
+      {
+        try
+        {
+          await _session.DisposeAsync();
+        }
+        catch
+        {
+          // Teardown is best-effort; a disappearing USB device must not block it.
+        }
+        _session = null;
+      }
+
+      _hardwareErected = false;
+      _endpoint = null;
+      _transportFaulted = false;
+      _faultText = null;
+
+      if (wasErected)
+      {
+        RaiseStateChanged();
+      }
+    }
+    finally
+    {
+      _gate.Release();
+    }
+  }
+
   public event EventHandler? StateChanged;
 
   /// <summary>True while the resident hardware Kraken is usable, even if the host COM handle is parked.</summary>
@@ -479,16 +535,16 @@ public sealed class KrakenLiveController : IAsyncDisposable
   }
 
   private KrakenEndpointInfo ResolveEndpoint() =>
-      _endpointResolver() ?? throw new InvalidOperationException(
-          "No connected COM port matches the selected board's USB A/C FTDI binding.");
+    _endpointResolver() ?? throw new InvalidOperationException(
+      "No connected COM port matches the selected board's USB A/C FTDI binding.");
 
   private KrakenSession RequireSession() =>
-      _session is { IsConnected: true } session
-          ? session
-          : throw new InvalidOperationException(
-              _hardwareErected
-                  ? "The resident Kraken session is unavailable."
-                  : "The Kraken transport is offline.");
+    _session is { IsConnected: true } session
+      ? session
+      : throw new InvalidOperationException(
+        _hardwareErected
+          ? "The resident Kraken session is unavailable."
+          : "The Kraken transport is offline.");
 
   private void EnsureOperational()
   {
@@ -500,8 +556,8 @@ public sealed class KrakenLiveController : IAsyncDisposable
     if (_transportFaulted)
     {
       throw new InvalidOperationException(
-          "The Kraken endpoint remains reserved, but online transactions are blocked after a transport/topology fault. " +
-          (_faultText ?? string.Empty));
+        "The Kraken endpoint remains reserved, but online transactions are blocked after a transport/topology fault. " +
+        (_faultText ?? string.Empty));
     }
   }
 

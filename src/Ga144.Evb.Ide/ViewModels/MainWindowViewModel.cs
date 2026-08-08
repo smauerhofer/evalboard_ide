@@ -1,9 +1,9 @@
+using Ga144.Evb.Ide.Models;
+using Ga144.Evb.Ide.Services;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
-using Ga144.Evb.Ide.Models;
-using Ga144.Evb.Ide.Services;
 
 namespace Ga144.Evb.Ide.ViewModels;
 
@@ -123,6 +123,78 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     return controller;
   }
 
+  /// <summary>
+  /// Erection is transient runtime state, never persisted to YAML. Drop it (and
+  /// close the COM handle) for every cached controller. Called at startup after
+  /// the workspace loads, so a resident Kraken from a previous run is never
+  /// assumed to still be installed. Does not reset the GA144.
+  /// </summary>
+  private async Task ResetAllTransientErectionAsync()
+  {
+    foreach (KrakenLiveController controller in _krakenControllers.Values.ToArray())
+    {
+      try
+      {
+        await controller.ResetTransientErectionAsync();
+      }
+      catch
+      {
+        // Best-effort: startup invalidation must not block workspace load.
+      }
+    }
+  }
+
+  /// <summary>
+  /// Drop transient erection for every controller bound to a given board (both
+  /// roles). Called when the selected board changes: the previously erected chip
+  /// must not appear resident under a different board selection.
+  /// </summary>
+  private async Task ResetTransientErectionForBoardAsync(Guid boardId)
+  {
+    foreach (KeyValuePair<(Guid ProjectId, Guid BoardId, Ga144ChipRole Role), KrakenLiveController> item
+             in _krakenControllers.Where(entry => entry.Key.BoardId == boardId).ToArray())
+    {
+      try
+      {
+        await item.Value.ResetTransientErectionAsync();
+      }
+      catch
+      {
+        // Best-effort.
+      }
+    }
+  }
+
+  /// <summary>
+  /// Drop transient erection for the single controller bound to a board + role.
+  /// Called when that role's port binding changes: Port A change resets the host
+  /// chip's erection, Port C change resets the target chip's. Only the affected
+  /// role is invalidated.
+  /// </summary>
+  private async Task ResetTransientErectionForRoleAsync(Guid boardId, Ga144ChipRole role)
+  {
+    foreach (KeyValuePair<(Guid ProjectId, Guid BoardId, Ga144ChipRole Role), KrakenLiveController> item
+             in _krakenControllers.Where(entry => entry.Key.BoardId == boardId && entry.Key.Role == role).ToArray())
+    {
+      try
+      {
+        await item.Value.ResetTransientErectionAsync();
+      }
+      catch
+      {
+        // Best-effort.
+      }
+    }
+  }
+
+  /// <summary>Map an eval-board port role to the GA144 chip role it drives.</summary>
+  private static Ga144ChipRole? ChipRoleForPortRole(EvalBoardPortRole role) => role switch
+  {
+    EvalBoardPortRole.PortAHost => Ga144ChipRole.Host,
+    EvalBoardPortRole.PortCTarget => Ga144ChipRole.Target,
+    _ => null // Port B (general host serial) does not carry a Kraken erection.
+  };
+
   public bool IsPortKrakenOwned(string portName) =>
       !string.IsNullOrWhiteSpace(portName) &&
       _krakenControllers.Values.Any(controller =>
@@ -161,8 +233,18 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     get => _selectedBoard;
     set
     {
+      BoardViewModel? previous = _selectedBoard;
       if (SetProperty(ref _selectedBoard, value))
       {
+        // Erection is transient: switching away from a board must not leave its
+        // chips appearing resident. Invalidate the previous board's controllers
+        // (both roles) and close their COM handles. No chip reset.
+        if (previous is not null && previous.Id != value?.Id)
+        {
+          Guid previousBoardId = previous.Id;
+          _ = ResetTransientErectionForBoardAsync(previousBoardId);
+        }
+
         _workspace.ActiveBoardId = value?.Id;
         OnPropertyChanged(nameof(HasSelectedBoard));
         MarkWorkspaceDirty();
@@ -316,6 +398,10 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     {
       IsBusy = false;
     }
+
+    // Erection is transient runtime state and is never persisted. Ensure no
+    // controller from a prior workspace state is assumed still resident.
+    await ResetAllTransientErectionAsync();
 
     await ScanAsync(probeAllFtdiPorts: false);
   }
@@ -772,10 +858,13 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
       return;
     }
 
-    if (IsBoardRoleKrakenOwned(board.Id, role))
+    // Erection is transient: changing this role's port binding invalidates the
+    // affected chip's erection (Port A -> host, Port C -> target) and closes its
+    // COM handle. The chip is not reset here; the next Kraken operation will
+    // erect again. Only the affected role is invalidated.
+    if (ChipRoleForPortRole(role) is Ga144ChipRole chipRole)
     {
-      StatusText = $"{board.Name} {FormatRole(role)} is locked by a resident Kraken. Port reassignment is forbidden while that endpoint is reserved.";
-      return;
+      await ResetTransientErectionForRoleAsync(board.Id, chipRole);
     }
 
     RemoveIdentityFromAllBindings(port.Port);

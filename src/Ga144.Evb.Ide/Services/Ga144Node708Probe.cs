@@ -1,6 +1,6 @@
+using Ga144.Evb.Ide.Models;
 using System.Diagnostics;
 using System.IO.Ports;
-using Ga144.Evb.Ide.Models;
 
 namespace Ga144.Evb.Ide.Services;
 

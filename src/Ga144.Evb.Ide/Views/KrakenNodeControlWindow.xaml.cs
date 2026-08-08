@@ -1,46 +1,46 @@
-using System.Windows;
 using Ga144.Evb.Ide.ViewModels;
+using System.Windows;
 
 namespace Ga144.Evb.Ide.Views;
 
 public partial class KrakenNodeControlWindow : Window
 {
-    private readonly KrakenNodeControlViewModel _viewModel;
-    private bool _closeCompleted;
+  private readonly KrakenNodeControlViewModel _viewModel;
+  private bool _closeCompleted;
 
-    public KrakenNodeControlWindow(KrakenNodeControlViewModel viewModel)
+  public KrakenNodeControlWindow(KrakenNodeControlViewModel viewModel)
+  {
+    InitializeComponent();
+    _viewModel = viewModel;
+    DataContext = viewModel;
+    Title = $"Online Kraken — node {viewModel.NodeCoordinate}";
+    Loaded += OnLoaded;
+    Closing += OnClosing;
+  }
+
+  private async void OnLoaded(object sender, RoutedEventArgs e)
+  {
+    Loaded -= OnLoaded;
+    await _viewModel.InitializeAsync();
+  }
+
+  private async void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+  {
+    if (_closeCompleted)
     {
-        InitializeComponent();
-        _viewModel = viewModel;
-        DataContext = viewModel;
-        Title = $"Online Kraken — node {viewModel.NodeCoordinate}";
-        Loaded += OnLoaded;
-        Closing += OnClosing;
+      return;
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs e)
+    e.Cancel = true;
+    IsEnabled = false;
+    try
     {
-        Loaded -= OnLoaded;
-        await _viewModel.InitializeAsync();
+      await _viewModel.DisposeAsync();
     }
-
-    private async void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    finally
     {
-        if (_closeCompleted)
-        {
-            return;
-        }
-
-        e.Cancel = true;
-        IsEnabled = false;
-        try
-        {
-            await _viewModel.DisposeAsync();
-        }
-        finally
-        {
-            _closeCompleted = true;
-            Close();
-        }
+      _closeCompleted = true;
+      Close();
     }
+  }
 }
