@@ -24,6 +24,7 @@ public sealed class RomComparison
   public const int RomBaseAddress = 0x080;
   public const int RomWordCount = 64;
   private const int WordMask = Compiler.F18InstructionSet.WordMask; // 18 bits, shared with the compiler
+  private const int EmptyWord = Compiler.F18InstructionSet.EncodingXor; // 0x15555 unwritten ROM word
 
   public int Coordinate { get; }
   public int BaseAddress { get; }
@@ -50,11 +51,13 @@ public sealed class RomComparison
   }
 
   /// <summary>
-  /// Compare generated ROM words against chip ROM words. Both lists are expected
-  /// to start at <paramref name="baseAddress"/> (default 0x080) and to be 64 words
-  /// long. If they differ in length, the overlap is compared and the shortfall is
-  /// reported in <see cref="Coverage"/>. All words are masked to 18 bits so stray
-  /// high bits never produce phantom mismatches.
+  /// Compare generated ROM words against chip ROM words. Both are expected to be
+  /// 64 words starting at <paramref name="baseAddress"/>. The comparison never
+  /// treats a differing length as a failure by itself: ROM is always 64 physical
+  /// words, and any word absent from either side is treated as the F18A empty-word
+  /// value 0x15555 (the same value the compiler pre-fills and the chip reads back
+  /// for unwritten ROM). All words are masked to 18 bits so stray high bits never
+  /// produce phantom mismatches.
   /// </summary>
   public static RomComparison Compare(
       int coordinate,
@@ -65,32 +68,21 @@ public sealed class RomComparison
     ArgumentNullException.ThrowIfNull(generated);
     ArgumentNullException.ThrowIfNull(onChip);
 
-    int compareCount = Math.Min(generated.Count, onChip.Count);
+    // Always compare the full ROM window. A short list on either side is padded
+    // with the empty-word value rather than reported as a length mismatch.
+    int count = Math.Max(RomWordCount, Math.Max(generated.Count, onChip.Count));
     var mismatches = new List<RomWordMismatch>();
-    for (int index = 0; index < compareCount; index++)
+    for (int index = 0; index < count; index++)
     {
-      int g = generated[index] & WordMask;
-      int c = onChip[index] & WordMask;
+      int g = (index < generated.Count ? generated[index] : EmptyWord) & WordMask;
+      int c = (index < onChip.Count ? onChip[index] : EmptyWord) & WordMask;
       if (g != c)
       {
         mismatches.Add(new RomWordMismatch(baseAddress + index, g, c));
       }
     }
 
-    string? coverage = null;
-    if (generated.Count != onChip.Count)
-    {
-      coverage =
-          $"Length mismatch: {generated.Count} generated word(s) vs {onChip.Count} read from chip. " +
-          $"Only the first {compareCount} were compared.";
-    }
-    else if (generated.Count != RomWordCount)
-    {
-      coverage =
-          $"Expected {RomWordCount} ROM words but both sides had {generated.Count}.";
-    }
-
-    return new RomComparison(coordinate, baseAddress, compareCount, mismatches, coverage);
+    return new RomComparison(coordinate, baseAddress, count, mismatches, coverage: null);
   }
 
   /// <summary>A one-line human summary for logs and the sweep report.</summary>

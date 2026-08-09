@@ -1467,25 +1467,15 @@ public sealed class F18Compiler
 
     public IReadOnlyList<int> CreateImage()
     {
-      var highest = -1;
-      for (var index = _memory.Length - 1; index >= 0; index--)
+      // The image always spans the full memory (64 words for ROM/RAM). Unwritten
+      // words are the F18A empty-word value 0x15555 (an all-zero instruction word
+      // XOR-encodes to 0x15555, which is what the compiler pre-fills slots with and
+      // what the chip reads back for never-written ROM/RAM). This makes a compiled
+      // image directly comparable, word-for-word, with the ROM read from silicon.
+      var result = new int[_memory.Length];
+      for (var index = 0; index < _memory.Length; index++)
       {
-        if (_memory[index].HasValue)
-        {
-          highest = index;
-          break;
-        }
-      }
-
-      if (highest < 0)
-      {
-        return [];
-      }
-
-      var result = new int[highest + 1];
-      for (var index = 0; index <= highest; index++)
-      {
-        result[index] = _memory[index] ?? 0;
+        result[index] = _memory[index] ?? F18InstructionSet.EncodingXor;
       }
 
       return result;
