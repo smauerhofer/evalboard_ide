@@ -9,29 +9,29 @@
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
         WindowStartupLocation="CenterOwner">
-    <Grid Margin="10">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+  <Grid Margin="10">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
 
-        <Grid Margin="0,0,0,8">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="3*" />
-                <ColumnDefinition Width="2*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+    <Grid Margin="0,0,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="3*" />
+        <ColumnDefinition Width="2*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                <TextBlock Text="{Binding Title, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding KrakenStatusText, Mode=OneWay}"
+      <StackPanel Grid.Column="0" VerticalAlignment="Center">
+        <TextBlock Text="{Binding Title, Mode=OneWay}" FontSize="22" FontWeight="SemiBold" />
+        <TextBlock Text="{Binding KrakenStatusText, Mode=OneWay}"
                            Foreground="#555"
                            Margin="0,2,12,0"
                            TextWrapping="Wrap" />
-            </StackPanel>
+      </StackPanel>
 
-            <TextBlock Grid.Column="1"
+      <TextBlock Grid.Column="1"
                        Margin="18,0"
                        Text="Rows 7 to 0, columns 00 to 17. Port markers show the available north/east/south/west COM links."
                        VerticalAlignment="Center"
@@ -39,21 +39,30 @@
                        Foreground="#555"
                        TextWrapping="Wrap" />
 
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="Check Kraken"
+      <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button Content="Check Kraken"
                         Click="OnCheckKrakenClick"
                         IsEnabled="True"
                         Padding="12,6"
                         Margin="0,0,8,0"
                         ToolTip="Erect Kraken once if necessary, then verify RAM[0] outward from node 708. The COM endpoint remains reserved, but its native handle is parked whenever no Kraken operation is active." />
-                <Button Content="{Binding KrakenButtonText, Mode=OneWay}"
+        <Button Content="{Binding KrakenButtonText, Mode=OneWay}"
                         Command="{Binding ToggleKrakenCommand}"
                         Padding="12,6"
                         ToolTip="Install or remove the project-side Kraken topology on this Host or Target GA144." />
-            </StackPanel>
-        </Grid>
+        <Button Content="Verify all node ROMs"
+                        Command="{Binding VerifyAllRomsCommand}"
+                        Padding="12,6"
+                        Margin="8,0,0,0"
+                        ToolTip="Compile each node's ROM and compare it against the ROM read from the chip via Kraken. Erects once if needed; reads all 143 reachable nodes through one session. Node 708 (Kraken head) is skipped." />
+        <TextBlock Text="{Binding VerifyStatus, Mode=OneWay}"
+                           VerticalAlignment="Center"
+                           Margin="10,0,0,0"
+                           Foreground="#555" />
+      </StackPanel>
+    </Grid>
 
-        <!--
+    <!--
             Keep the chip surface in the normal WPF layout tree.  Earlier
             versions put a fixed 2448x1152 visual tree inside a Viewbox.
             While the modeless Kraken check DataGrid was receiving frequent
@@ -62,95 +71,95 @@
             stretching Grid avoids the additional Viewbox render transform and
             keeps the node surface independent of the check window's updates.
         -->
-        <Grid x:Name="ChipDrawingGrid"
+    <Grid x:Name="ChipDrawingGrid"
               Grid.Row="1"
               MinHeight="520"
               ClipToBounds="True"
               Background="White"
               SizeChanged="OnChipDrawingGridSizeChanged">
-            <ItemsControl x:Name="NodeItemsControl"
+      <ItemsControl x:Name="NodeItemsControl"
                           ItemsSource="{Binding Nodes}"
                           HorizontalAlignment="Stretch"
                           VerticalAlignment="Stretch"
                           Panel.ZIndex="0">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <UniformGrid Columns="18" Rows="8" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Button Click="OnNodeClick" Margin="8" Padding="0"
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <UniformGrid Columns="18" Rows="8" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Button Click="OnNodeClick" Margin="8" Padding="0"
                                 HorizontalContentAlignment="Stretch"
                                 VerticalContentAlignment="Stretch"
                                 ToolTip="{Binding ToolTip}" Tag="{Binding}">
-                            <Button.Style>
-                                <Style TargetType="Button">
-                                    <Setter Property="Background" Value="Transparent" />
-                                    <Setter Property="BorderThickness" Value="0" />
-                                </Style>
-                            </Button.Style>
-                            <Border x:Name="NodeBorder" BorderBrush="#54705C" BorderThickness="2" Background="#F7FBF8" CornerRadius="4">
-                                <Grid Margin="4">
-                                    <Border BorderBrush="{Binding KrakenBrush}"
+              <Button.Style>
+                <Style TargetType="Button">
+                  <Setter Property="Background" Value="Transparent" />
+                  <Setter Property="BorderThickness" Value="0" />
+                </Style>
+              </Button.Style>
+              <Border x:Name="NodeBorder" BorderBrush="#54705C" BorderThickness="2" Background="#F7FBF8" CornerRadius="4">
+                <Grid Margin="4">
+                  <Border BorderBrush="{Binding KrakenBrush}"
                                             BorderThickness="3"
                                             CornerRadius="3"
                                             Margin="-2"
                                             IsHitTestVisible="False"
                                             Visibility="{Binding KrakenVisibility}" />
 
-                                    <Rectangle Width="22" Height="5" Fill="#365C42" HorizontalAlignment="Center" VerticalAlignment="Top"
+                  <Rectangle Width="22" Height="5" Fill="#365C42" HorizontalAlignment="Center" VerticalAlignment="Top"
                                                Visibility="{Binding NorthVisibility}" />
-                                    <Rectangle Width="22" Height="5" Fill="#365C42" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                  <Rectangle Width="22" Height="5" Fill="#365C42" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                                                Visibility="{Binding SouthVisibility}" />
-                                    <Rectangle Width="5" Height="22" Fill="#365C42" HorizontalAlignment="Left" VerticalAlignment="Center"
+                  <Rectangle Width="5" Height="22" Fill="#365C42" HorizontalAlignment="Left" VerticalAlignment="Center"
                                                Visibility="{Binding WestVisibility}" />
-                                    <Rectangle Width="5" Height="22" Fill="#365C42" HorizontalAlignment="Right" VerticalAlignment="Center"
+                  <Rectangle Width="5" Height="22" Fill="#365C42" HorizontalAlignment="Right" VerticalAlignment="Center"
                                                Visibility="{Binding EastVisibility}" />
 
-                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding CoordinateText}" FontFamily="Consolas" FontWeight="Bold" FontSize="20" HorizontalAlignment="Center" />
-                                        <TextBlock Text="{Binding StateText}" FontSize="12" Foreground="#406A4B" HorizontalAlignment="Center" />
-                                    </StackPanel>
+                  <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding CoordinateText}" FontFamily="Consolas" FontWeight="Bold" FontSize="20" HorizontalAlignment="Center" />
+                    <TextBlock Text="{Binding StateText}" FontSize="12" Foreground="#406A4B" HorizontalAlignment="Center" />
+                  </StackPanel>
 
-                                    <Border Background="{Binding KrakenBrush}"
+                  <Border Background="{Binding KrakenBrush}"
                                             CornerRadius="3"
                                             HorizontalAlignment="Left"
                                             VerticalAlignment="Top"
                                             Padding="3,1"
                                             Visibility="{Binding KrakenVisibility}">
-                                        <TextBlock Text="{Binding KrakenLabel}"
+                    <TextBlock Text="{Binding KrakenLabel}"
                                                    Foreground="White"
                                                    FontSize="10"
                                                    FontWeight="Bold" />
-                                    </Border>
+                  </Border>
 
-                                    <Border Background="#D7E7DA" BorderBrush="#5A8664" BorderThickness="1" CornerRadius="3"
+                  <Border Background="#D7E7DA" BorderBrush="#5A8664" BorderThickness="1" CornerRadius="3"
                                             HorizontalAlignment="Right" VerticalAlignment="Bottom" Padding="3,1"
                                             Visibility="{Binding ExternalIoVisibility}">
-                                        <TextBlock Text="I/O" FontSize="11" FontWeight="Bold" />
-                                    </Border>
-                                </Grid>
-                            </Border>
-                        </Button>
-                        <DataTemplate.Triggers>
-                            <DataTrigger Binding="{Binding IsConfigured}" Value="True">
-                                <Setter TargetName="NodeBorder" Property="Background" Value="#FFF1C7" />
-                                <Setter TargetName="NodeBorder" Property="BorderBrush" Value="#B57A16" />
-                                <Setter TargetName="NodeBorder" Property="BorderThickness" Value="3" />
-                            </DataTrigger>
-                        </DataTemplate.Triggers>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <Canvas x:Name="KrakenPathCanvas"
+                    <TextBlock Text="I/O" FontSize="11" FontWeight="Bold" />
+                  </Border>
+                </Grid>
+              </Border>
+            </Button>
+            <DataTemplate.Triggers>
+              <DataTrigger Binding="{Binding IsConfigured}" Value="True">
+                <Setter TargetName="NodeBorder" Property="Background" Value="#FFF1C7" />
+                <Setter TargetName="NodeBorder" Property="BorderBrush" Value="#B57A16" />
+                <Setter TargetName="NodeBorder" Property="BorderThickness" Value="3" />
+              </DataTrigger>
+            </DataTemplate.Triggers>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <Canvas x:Name="KrakenPathCanvas"
                     IsHitTestVisible="False"
                     Panel.ZIndex="10" />
-        </Grid>
-
-        <Border Grid.Row="2" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="8" Margin="0,8,0,0">
-            <TextBlock Text="Click a node to edit its F18 source, ROM, compiled RAM words, entry point, registers, and startup stacks. Configured nodes are highlighted. When a Kraken is installed, colored arrows show each tentacle's directed path from node 708. Check Kraken verifies RAM[0] outward from the three direct neighbors along all tentacles. Once hardware Kraken is erected, its COM endpoint remains exclusively reserved and all subsequent chip access goes through Kraken/Tentacles; the native handle is opened only for explicit operations and parked while idle. Reset, node-708 probe, port reassignment, and re-erection are disabled."
-                       TextWrapping="Wrap" />
-        </Border>
     </Grid>
+
+    <Border Grid.Row="2" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="8" Margin="0,8,0,0">
+      <TextBlock Text="Click a node to edit its F18 source, ROM, compiled RAM words, entry point, registers, and startup stacks. Configured nodes are highlighted. When a Kraken is installed, colored arrows show each tentacle's directed path from node 708. Check Kraken verifies RAM[0] outward from the three direct neighbors along all tentacles. Once hardware Kraken is erected, its COM endpoint remains exclusively reserved and all subsequent chip access goes through Kraken/Tentacles; the native handle is opened only for explicit operations and parked while idle. Reset, node-708 probe, port reassignment, and re-erection are disabled."
+                       TextWrapping="Wrap" />
+    </Border>
+  </Grid>
 </Window>

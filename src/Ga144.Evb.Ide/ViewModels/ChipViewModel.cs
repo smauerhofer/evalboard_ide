@@ -8,6 +8,8 @@ namespace Ga144.Evb.Ide.ViewModels;
 public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
 {
   private bool _disposed;
+  private bool _verifyBusy;
+  private string _verifyStatus = "";
 
   public ChipViewModel(
     ProjectViewModel project,
@@ -28,6 +30,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     KrakenController = krakenController ?? throw new ArgumentNullException(nameof(krakenController));
     KrakenController.StateChanged += OnKrakenControllerStateChanged;
     ToggleKrakenCommand = new AsyncRelayCommand(ToggleKrakenAsync);
+    VerifyAllRomsCommand = new AsyncRelayCommand(VerifyAllRomsAsync, () => !_verifyBusy);
     RebuildNodes();
   }
 
@@ -41,6 +44,25 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public KrakenLiveController KrakenController { get; }
   public ObservableCollection<NodeViewModel> Nodes { get; } = [];
   public AsyncRelayCommand ToggleKrakenCommand { get; }
+  public AsyncRelayCommand VerifyAllRomsCommand { get; }
+
+  public string VerifyStatus
+  {
+    get => _verifyStatus;
+    private set => SetProperty(ref _verifyStatus, value);
+  }
+
+  public bool VerifyBusy
+  {
+    get => _verifyBusy;
+    private set
+    {
+      if (SetProperty(ref _verifyBusy, value))
+      {
+        VerifyAllRomsCommand.NotifyCanExecuteChanged();
+      }
+    }
+  }
   public string Title => $"{Project.Name} — {Chip.Name}";
 
   /// <summary>
@@ -127,6 +149,152 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     OnPropertyChanged(nameof(KrakenButtonText));
     OnPropertyChanged(nameof(KrakenStatusText));
     OnPropertyChanged(nameof(KrakenActive));
+  }
+
+  /// <summary>
+  /// Verify every tentacle-reachable node's generated ROM against the ROM read
+  /// from the live chip via Kraken. Erects once (if needed) and reads all nodes
+  /// through the one session inside a keep-open scope, retargeting per node, so
+  /// the FTDI handle is not idle-closed/reopened between nodes. Node 708 (the
+  /// Kraken head) is skipped and noted; it must be verified later by a separate
+  /// direct-boot mechanism. On a node with mismatches, one dialog lists all its
+  /// differing words with Continue (skip to next node) and Abort (stop the sweep).
+  /// </summary>
+  private async Task VerifyAllRomsAsync()
+  {
+    if (_verifyBusy)
+    {
+      return;
+    }
+
+    VerifyBusy = true;
+    try
+    {
+      // Order the non-head routes breadth-first (tentacle, then position), the
+      // same order Check Kraken uses.
+      var routes = KrakenRoutes.Values
+          .Where(route => !route.IsHead)
+          .OrderBy(route => route.TentacleNumber)
+          .ThenBy(route => route.Position)
+          .ToList();
+
+      if (routes.Count == 0)
+      {
+        VerifyStatus = "No tentacle-reachable nodes to verify.";
+        return;
+      }
+
+      // Erect once if not already online, anchored on the first route.
+      if (!KrakenController.HardwareErected)
+      {
+        await KrakenController.EnsureOnlineAsync(routes[0], verifyTarget: false, allowErect: true);
+      }
+
+      var compileService = new Compiler.F18NodeCompilationService(
+          Chip, RomLibrary, RomLibrary.SystemMacros);
+
+      int matched = 0;
+      int mismatched = 0;
+      var notCompiled = new List<int>();
+      bool aborted = false;
+
+      await KrakenController.BeginKeepOpenAsync();
+      try
+      {
+        for (int index = 0; index < routes.Count; index++)
+        {
+          KrakenNodeRoute route = routes[index];
+          VerifyStatus = $"Verifying node {route.Coordinate:000} ({index + 1}/{routes.Count})…";
+
+          // Compile the generated ROM for this node.
+          IReadOnlyList<int>? generated = null;
+          try
+          {
+            var result = compileService.CompileNode(route.Coordinate);
+            if (result.Rom.Success)
+            {
+              generated = result.Rom.Words
+                  .Select(word => word & Compiler.F18InstructionSet.WordMask)
+                  .ToArray();
+            }
+          }
+          catch
+          {
+            generated = null;
+          }
+
+          if (generated is null)
+          {
+            notCompiled.Add(route.Coordinate);
+            continue;
+          }
+
+          IReadOnlyList<int> onChip = await KrakenController.ReadRomAsync(route);
+          var comparison = RomComparison.Compare(route.Coordinate, generated, onChip);
+
+          if (comparison.IsMatch)
+          {
+            matched++;
+            continue;
+          }
+
+          mismatched++;
+          var dialog = new Views.RomMismatchDialog(comparison, showAbort: true)
+          {
+            Owner = Application.Current?.Windows
+                .OfType<Window>()
+                .FirstOrDefault(window => window.IsActive)
+          };
+          bool? result2 = dialog.ShowDialog();
+          if (dialog.Aborted || result2 == false)
+          {
+            aborted = true;
+            break;
+          }
+        }
+      }
+      finally
+      {
+        await KrakenController.EndKeepOpenAsync();
+      }
+
+      // Build the final summary. 708 is always unchecked here.
+      var summary = new System.Text.StringBuilder();
+      summary.AppendLine(aborted ? "ROM verification aborted." : "ROM verification complete.");
+      summary.AppendLine($"Matched: {matched}");
+      summary.AppendLine($"Mismatched: {mismatched}");
+      if (notCompiled.Count > 0)
+      {
+        summary.AppendLine($"Not compared (ROM did not compile): {notCompiled.Count} node(s) — "
+            + string.Join(", ", notCompiled.Select(coordinate => coordinate.ToString("000"))));
+      }
+      summary.AppendLine();
+      summary.AppendLine("Node 708 was not checked: it is the Kraken head and cannot be read "
+          + "through Kraken. It requires a separate direct-boot readback (planned).");
+
+      VerifyStatus = aborted
+          ? $"Aborted. {matched} matched, {mismatched} mismatched so far."
+          : $"Done. {matched} matched, {mismatched} mismatched.";
+
+      MessageBox.Show(
+          summary.ToString(),
+          "Verify all node ROMs",
+          MessageBoxButton.OK,
+          mismatched > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+    }
+    catch (Exception exception)
+    {
+      VerifyStatus = "Verification failed.";
+      MessageBox.Show(
+          $"ROM verification could not complete:\n\n{exception.Message}",
+          "Verify all node ROMs",
+          MessageBoxButton.OK,
+          MessageBoxImage.Error);
+    }
+    finally
+    {
+      VerifyBusy = false;
+    }
   }
 
   private void RebuildNodes()

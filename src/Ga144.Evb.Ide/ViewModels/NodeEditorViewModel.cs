@@ -196,6 +196,25 @@ public sealed class NodeEditorViewModel : ObservableObject
         $"ROM compiled first ({result.Rom.UsedWordCount} word(s)); RAM compiled second ({result.Ram.UsedWordCount} word(s)); {warningCount} warning(s).";
   }
 
+  /// <summary>
+  /// Compile just this node's ROM and return the generated words (18-bit masked),
+  /// or null if ROM compilation failed. Used by the Online Kraken window to verify
+  /// the generated ROM against the chip without disturbing the editor's UI state.
+  /// </summary>
+  public IReadOnlyList<int>? CompileGeneratedRomWords()
+  {
+    var service = new F18NodeCompilationService(_chip, _romLibrary, _userMacros);
+    var result = service.CompileNode(Node.Coordinate, SourceCode, RomSourceCode);
+    if (!result.Rom.Success)
+    {
+      return null;
+    }
+
+    return result.Rom.Words
+        .Select(word => word & F18InstructionSet.WordMask)
+        .ToArray();
+  }
+
   public bool Apply()
   {
     Node.Enabled = Enabled;

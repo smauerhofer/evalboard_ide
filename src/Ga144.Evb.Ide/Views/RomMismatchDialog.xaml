@@ -1,0 +1,63 @@
+<Window x:Class="Ga144.Evb.Ide.Views.RomMismatchDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ROM mismatch"
+        Width="460"
+        Height="420"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False">
+  <Grid Margin="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Grid.Row="0"
+               x:Name="HeaderText"
+               FontWeight="Bold"
+               TextWrapping="Wrap"
+               Margin="0,0,0,6" />
+
+    <TextBlock Grid.Row="1"
+               x:Name="CoverageText"
+               TextWrapping="Wrap"
+               Foreground="#B00"
+               Margin="0,0,0,6"
+               Visibility="Collapsed" />
+
+    <DataGrid Grid.Row="2"
+              x:Name="MismatchGrid"
+              AutoGenerateColumns="False"
+              IsReadOnly="True"
+              HeadersVisibility="Column"
+              GridLinesVisibility="Horizontal"
+              CanUserAddRows="False"
+              FontFamily="Consolas">
+      <DataGrid.Columns>
+        <DataGridTextColumn Header="Address" Binding="{Binding AddressHex}" Width="Auto" />
+        <DataGridTextColumn Header="Generated" Binding="{Binding GeneratedHex}" Width="*" />
+        <DataGridTextColumn Header="On chip" Binding="{Binding OnChipHex}" Width="*" />
+      </DataGrid.Columns>
+    </DataGrid>
+
+    <StackPanel Grid.Row="3"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Margin="0,10,0,0">
+      <Button x:Name="ContinueButton"
+              Content="Continue"
+              MinWidth="90"
+              Margin="0,0,8,0"
+              IsDefault="True"
+              Click="OnContinueClick" />
+      <Button x:Name="AbortButton"
+              Content="Abort"
+              MinWidth="90"
+              IsCancel="True"
+              Click="OnAbortClick" />
+    </StackPanel>
+  </Grid>
+</Window>

@@ -9,6 +9,7 @@ public sealed class KrakenNodeControlViewModel : ObservableObject, IAsyncDisposa
 {
   private readonly KrakenNodeRoute _route;
   private readonly KrakenLiveController _controller;
+  private readonly Func<IReadOnlyList<int>?>? _compileGeneratedRom;
   private readonly CancellationTokenSource _shutdown = new();
   private bool _isConnected;
   private bool _isBusy;
@@ -21,10 +22,12 @@ public sealed class KrakenNodeControlViewModel : ObservableObject, IAsyncDisposa
 
   public KrakenNodeControlViewModel(
       KrakenNodeRoute route,
-      KrakenLiveController controller)
+      KrakenLiveController controller,
+      Func<IReadOnlyList<int>?>? compileGeneratedRom = null)
   {
     _route = route;
     _controller = controller;
+    _compileGeneratedRom = compileGeneratedRom;
     int ioAddress = F18InstructionSet.Constants["io"];
     _bValue = $"0x{(route.OutgoingBAddress ?? ioAddress):X3}";
     if (_controller.IsOperational)
@@ -61,6 +64,7 @@ public sealed class KrakenNodeControlViewModel : ObservableObject, IAsyncDisposa
     ReadRamCommand = new AsyncRelayCommand(ReadRamAsync, CanOperate);
     WriteRamCommand = new AsyncRelayCommand(WriteRamAsync, CanOperate);
     ReadRomCommand = new AsyncRelayCommand(ReadRomAsync, CanOperate);
+    VerifyRomCommand = new AsyncRelayCommand(VerifyRomAsync, CanVerifyRom);
     ReadACommand = new AsyncRelayCommand(ReadAAsync, CanOperate);
     WriteACommand = new AsyncRelayCommand(WriteAAsync, CanOperate);
     ReadIoCommand = new AsyncRelayCommand(ReadIoAsync, CanOperate);
@@ -124,6 +128,7 @@ public sealed class KrakenNodeControlViewModel : ObservableObject, IAsyncDisposa
   public AsyncRelayCommand ReadRamCommand { get; }
   public AsyncRelayCommand WriteRamCommand { get; }
   public AsyncRelayCommand ReadRomCommand { get; }
+  public AsyncRelayCommand VerifyRomCommand { get; }
   public AsyncRelayCommand ReadACommand { get; }
   public AsyncRelayCommand WriteACommand { get; }
   public AsyncRelayCommand ReadIoCommand { get; }
@@ -225,6 +230,46 @@ public sealed class KrakenNodeControlViewModel : ObservableObject, IAsyncDisposa
   });
 
   private Task ReadRomAsync() => RunAsync("Reading 64 ROM words", async () => Load(RomWords, await _controller.ReadRomAsync(_route, _shutdown.Token)));
+
+  private bool CanVerifyRom() => CanOperate() && _compileGeneratedRom is not null;
+
+  private Task VerifyRomAsync() => RunAsync("Verifying ROM against chip", async () =>
+  {
+    IReadOnlyList<int>? generated = _compileGeneratedRom?.Invoke();
+    if (generated is null)
+    {
+      System.Windows.MessageBox.Show(
+          "The generated ROM could not be compiled for this node, so it cannot be compared. Fix the ROM source and try again.",
+          "Verify ROM",
+          System.Windows.MessageBoxButton.OK,
+          System.Windows.MessageBoxImage.Warning);
+      return;
+    }
+
+    IReadOnlyList<int> onChip = await _controller.ReadRomAsync(_route, _shutdown.Token);
+    Load(RomWords, onChip);
+
+    var comparison = RomComparison.Compare(_route.Coordinate, generated, onChip);
+    if (comparison.IsMatch)
+    {
+      System.Windows.MessageBox.Show(
+          $"Node {_route.Coordinate:000}: the generated ROM matches the chip ({comparison.ComparedWordCount}/{RomComparison.RomWordCount} words).",
+          "Verify ROM",
+          System.Windows.MessageBoxButton.OK,
+          System.Windows.MessageBoxImage.Information);
+      return;
+    }
+
+    // Single-node verify: show the mismatch list with only "Close" (no Abort).
+    var dialog = new Views.RomMismatchDialog(comparison, showAbort: false)
+    {
+      Owner = System.Windows.Application.Current?.Windows
+          .OfType<System.Windows.Window>()
+          .FirstOrDefault(window => window.IsActive)
+    };
+    dialog.ContinueButton.Content = "Close";
+    dialog.ShowDialog();
+  });
 
   private Task ReadAAsync() => RunAsync("Reading A", async () => AValue = Format(await _controller.ReadAAsync(_route, _shutdown.Token)));
 
@@ -404,6 +449,7 @@ public sealed class KrakenNodeControlViewModel : ObservableObject, IAsyncDisposa
     ReadRamCommand?.NotifyCanExecuteChanged();
     WriteRamCommand?.NotifyCanExecuteChanged();
     ReadRomCommand?.NotifyCanExecuteChanged();
+    VerifyRomCommand?.NotifyCanExecuteChanged();
     ReadACommand?.NotifyCanExecuteChanged();
     WriteACommand?.NotifyCanExecuteChanged();
     ReadIoCommand?.NotifyCanExecuteChanged();
