@@ -169,7 +169,11 @@ public sealed class KrakenLiveController : IAsyncDisposable
         throw new InvalidOperationException("An unexpected Kraken session already exists before erection.");
       }
 
-      var session = new KrakenSession(_configuration, route, _idlePolicy);
+      // Only Port A (Host) has RTS wired to RESET-, so only there does reopening
+      // the COM port reset the chip and require re-erection. Port C (Target) does
+      // not, and must not be re-erected on reopen.
+      bool reopenResetsChip = endpoint.Role == Ga144ChipRole.Host;
+      var session = new KrakenSession(_configuration, route, _idlePolicy, reopenResetsChip);
       try
       {
         if (verifyTarget)

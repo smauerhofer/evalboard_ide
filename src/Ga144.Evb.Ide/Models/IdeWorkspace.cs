@@ -129,4 +129,9 @@ public sealed class AppSettings
   public bool ActiveProbeNewFtdiPorts { get; set; } = true;
   public int ScanIntervalMs { get; set; } = 1500;
   public int BaudRate { get; set; } = 921600;
+
+  // Idle-handle policy for resident Kraken sessions. Persisted so the choice
+  // survives restarts. CloseAfterIdleTimeout is the KVM-friendly default: the
+  // FTDI handle opens on demand and closes ~1 s after the last transaction.
+  public KrakenIdlePolicy KrakenIdlePolicy { get; set; } = KrakenIdlePolicy.CloseAfterIdleTimeout;
 }

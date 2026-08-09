@@ -40,13 +40,17 @@ public partial class NodeEditorWindow : Window
       };
       window.ShowDialog();
     }
+    catch (OperationCanceledException)
+    {
+      // Normal cancellation during close is not an error.
+    }
     catch (Exception exception)
     {
-      // A UI construction/binding error must never terminate the IDE.
-      // Show the full exception so field testing can report an actionable failure.
+      // This wraps the whole dialog lifetime (open, use, and close), so the
+      // failure is not necessarily an "open" failure. Report it plainly.
       MessageBox.Show(
           this,
-          $"Unable to open Online Kraken for node {_viewModel.NodeCoordinate}.\n\n{exception}",
+          $"The Online Kraken window for node {_viewModel.NodeCoordinate} reported an error.\n\n{exception}",
           "Online Kraken error",
           MessageBoxButton.OK,
           MessageBoxImage.Error);

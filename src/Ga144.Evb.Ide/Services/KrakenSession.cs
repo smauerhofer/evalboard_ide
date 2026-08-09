@@ -57,6 +57,12 @@ internal sealed class KrakenSession : IAsyncDisposable
 
   private readonly KrakenConfiguration _configuration;
   private readonly KrakenIdlePolicy _idlePolicy;
+  // True only when opening this endpoint's COM port pulses the GA144 RESET-.
+  // On the EVB that is Port A (Host): RTS is wired to RESET- and the stock FTDI
+  // driver briefly asserts RTS during CreateFile, which resets the chip and
+  // destroys a resident Kraken, so every reopen must re-erect. Port C (Target)
+  // has no such wiring, so its reopen is a plain transport reopen (no re-erect).
+  private readonly bool _reopenResetsChip;
   private KrakenNodeRoute _targetRoute;
   private readonly SemaphoreSlim _gate = new(1, 1);
   private NativeWindowsSerialPort? _port;
@@ -80,7 +86,8 @@ internal sealed class KrakenSession : IAsyncDisposable
   public KrakenSession(
       KrakenConfiguration configuration,
       KrakenNodeRoute targetRoute,
-      KrakenIdlePolicy idlePolicy = KrakenIdlePolicy.HoldOpen)
+      KrakenIdlePolicy idlePolicy = KrakenIdlePolicy.HoldOpen,
+      bool reopenResetsChip = true)
   {
     ArgumentNullException.ThrowIfNull(configuration);
     ArgumentNullException.ThrowIfNull(targetRoute);
@@ -93,6 +100,7 @@ internal sealed class KrakenSession : IAsyncDisposable
     _configuration = configuration;
     _targetRoute = targetRoute;
     _idlePolicy = idlePolicy;
+    _reopenResetsChip = reopenResetsChip;
 
     if (_idlePolicy == KrakenIdlePolicy.CloseAfterIdleTimeout)
     {
@@ -433,56 +441,7 @@ internal sealed class KrakenSession : IAsyncDisposable
 
     try
     {
-      cancellationToken.ThrowIfCancellationRequested();
-      port.SetDtr(true);
-      // Preserve the exact verified EVB reset polarity used by the node-708 detector.
-      port.SetRts(false);
-      Thread.Sleep(ResetAssertMilliseconds);
-      port.PurgeInputOutput();
-      port.SetRts(true);
-      Thread.Sleep(ResetReleaseMilliseconds);
-
-      // The first frame is accepted by node 708 through `cold` because
-      // reset starts there. Its completion address is ser-exec, the ROM
-      // concatenation entry specifically intended for additional boot
-      // frames. Persistent online traffic must use that continuation path
-      // instead of repeatedly re-entering cold's wake/start-bit
-      // reasonableness classifier.
-      int[] replyProgram = BuildReplyProgram();
-      SendBootFrame(port, AsyncSerialContinuationAddress, 0x000, replyProgram);
-
-      foreach (KrakenTentacleConfiguration tentacle in _configuration.Tentacles.OrderBy(item => item.Number))
-      {
-        int tentacleHeadPort = KrakenTopology.PortAddress(KrakenTopology.HeadCoordinate, tentacle.Nodes[0]);
-        for (int position = 0; position < tentacle.Nodes.Count; position++)
-        {
-          cancellationToken.ThrowIfCancellationRequested();
-          int coordinate = tentacle.Nodes[position];
-          int previous = position == 0
-              ? KrakenTopology.HeadCoordinate
-              : tentacle.Nodes[position - 1];
-
-          // A reset F18 normally executes from a MULTIPORT address.  That
-          // is sufficient to accept the first instruction, but it is not
-          // sufficient for Kraken readback: !p on a multiport P is a
-          // multiport write and would wait for every selected neighbor.
-          // Kraken requires each tentacle node to execute from the SINGLE
-          // incoming port.  Focus it explicitly before assigning B.
-          int incomingPort = KrakenTopology.PortAddress(coordinate, previous);
-          int focusJump = F18InstructionSet.EncodeSlot0Control(0x02, incomingPort);
-          IReadOnlyList<int> focusSequence = KrakenProtocol.BuildX1(position, focusJump);
-          SendBootFrame(port, AsyncSerialContinuationAddress, tentacleHeadPort, focusSequence);
-
-          int b = position + 1 < tentacle.Nodes.Count
-              ? KrakenTopology.PortAddress(coordinate, tentacle.Nodes[position + 1])
-              : IoAddress;
-          IReadOnlyList<int> bSequence = KrakenProtocol.BuildW1(position, KrakenProtocol.WriteBInstruction, b);
-          SendBootFrame(port, AsyncSerialContinuationAddress, tentacleHeadPort, bSequence);
-        }
-      }
-
-      SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
-      port.PurgeInput();
+      ErectOnto(port, cancellationToken);
       _port = port;
       _hardwareErectionCompleted = true;
 
@@ -538,6 +497,56 @@ internal sealed class KrakenSession : IAsyncDisposable
 
       throw;
     }
+  }
+
+  // Run the full erection sequence (reset pulse, node-708 reply-helper load, and
+  // tentacle focus/B setup) on an already-open port. Used both for the initial
+  // erection and to RE-erect after an idle-close reopen, because opening the COM
+  // port on Port A pulses RESET- (the FTDI VCP driver briefly asserts RTS during
+  // CreateFile) and wipes the resident Kraken. There is no way to reopen without
+  // resetting on Port A, so the Kraken must be rebuilt on every reopen.
+  private void ErectOnto(NativeWindowsSerialPort port, CancellationToken cancellationToken)
+  {
+    cancellationToken.ThrowIfCancellationRequested();
+    port.SetDtr(true);
+    // Preserve the exact verified EVB reset polarity used by the node-708 detector.
+    port.SetRts(false);
+    Thread.Sleep(ResetAssertMilliseconds);
+    port.PurgeInputOutput();
+    port.SetRts(true);
+    Thread.Sleep(ResetReleaseMilliseconds);
+
+    // The first frame is accepted by node 708 through `cold`; its completion
+    // address is ser-exec, the ROM concatenation entry for additional frames.
+    int[] replyProgram = BuildReplyProgram();
+    SendBootFrame(port, AsyncSerialContinuationAddress, 0x000, replyProgram);
+
+    foreach (KrakenTentacleConfiguration tentacle in _configuration.Tentacles.OrderBy(item => item.Number))
+    {
+      int tentacleHeadPort = KrakenTopology.PortAddress(KrakenTopology.HeadCoordinate, tentacle.Nodes[0]);
+      for (int position = 0; position < tentacle.Nodes.Count; position++)
+      {
+        cancellationToken.ThrowIfCancellationRequested();
+        int coordinate = tentacle.Nodes[position];
+        int previous = position == 0
+            ? KrakenTopology.HeadCoordinate
+            : tentacle.Nodes[position - 1];
+
+        int incomingPort = KrakenTopology.PortAddress(coordinate, previous);
+        int focusJump = F18InstructionSet.EncodeSlot0Control(0x02, incomingPort);
+        IReadOnlyList<int> focusSequence = KrakenProtocol.BuildX1(position, focusJump);
+        SendBootFrame(port, AsyncSerialContinuationAddress, tentacleHeadPort, focusSequence);
+
+        int b = position + 1 < tentacle.Nodes.Count
+            ? KrakenTopology.PortAddress(coordinate, tentacle.Nodes[position + 1])
+            : IoAddress;
+        IReadOnlyList<int> bSequence = KrakenProtocol.BuildW1(position, KrakenProtocol.WriteBInstruction, b);
+        SendBootFrame(port, AsyncSerialContinuationAddress, tentacleHeadPort, bSequence);
+      }
+    }
+
+    SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
+    port.PurgeInput();
   }
 
   private IReadOnlyList<int> ReadMemoryBlock(int startAddress, int count, CancellationToken cancellationToken)
@@ -609,23 +618,9 @@ internal sealed class KrakenSession : IAsyncDisposable
     NativeWindowsSerialPort port = RequirePort();
     cancellationToken.ThrowIfCancellationRequested();
 
-    // The receive side is synchronized once after erection. Do not issue
-    // PurgeComm on every online transaction: the persistent
-    // Kraken path consumes exactly 18 reply bytes and otherwise leaves the
-    // FTDI driver state untouched. A protocol error now fails visibly
-    // instead of being hidden by repeated driver-buffer purges.
     int headPort = HeadPortFor(route);
     byte[] frame = EncodeBootFrame(completionAddress: 0, transferAddress: headPort, sequence);
-    port.Write(frame);
-    WaitForTransmitDrain(port, frame.Length);
 
-    // Each logical bit gets a pair of host-generated UART carriers. The
-    // EVB serial path presents the documented asynchronous polarity to the
-    // F18 (idle low, start high), while the board/FTDI path converts it back
-    // for the PC. The node-708 helper mirrors the 0x00 carrier for a zero or
-    // the following 0xFF carrier for a one. Thus every returned bit is
-    // clocked entirely by the FTDI UART; no F18 delay-loop calibration is
-    // needed.
     byte[] carriers = new byte[36];
     for (int bit = 0; bit < 18; bit++)
     {
@@ -633,20 +628,31 @@ internal sealed class KrakenSession : IAsyncDisposable
       carriers[bit * 2 + 1] = 0xFF;
     }
 
-    port.Write(carriers);
-    WaitForTransmitDrain(port, carriers.Length);
+    // Under the idle-close policies the first transaction after a reopen can lose
+    // its request frame while the freshly opened FTDI is still initialising, so
+    // the node returns nothing and the read times out. If that happens on the
+    // first read after a reopen, purge and retry the whole request once; a single
+    // dropped frame must not fail an entire 64-word ROM block. The flag is never
+    // set under HoldOpen, so this retry is inert there.
+    bool firstAfterReopen = _reopenedThisTransaction;
+    _reopenedThisTransaction = false;
+    int responseTimeout = firstAfterReopen
+        ? Math.Max(ResponseTimeoutMilliseconds, FirstReadAfterReopenTimeoutMilliseconds)
+        : ResponseTimeoutMilliseconds;
 
-    // Under CloseWhileIdle the reply can be late on the first transaction
-    // after a reopen (FTDI selective-suspend wake). Widen the timeout once,
-    // then revert. The flag is never set under HoldOpen, so this is inert.
-    int responseTimeout = ResponseTimeoutMilliseconds;
-    if (_reopenedThisTransaction)
+    byte[] response;
+    try
     {
-      responseTimeout = Math.Max(ResponseTimeoutMilliseconds, FirstReadAfterReopenTimeoutMilliseconds);
-      _reopenedThisTransaction = false;
+      response = WriteRequestAndRead(port, frame, carriers, responseTimeout, cancellationToken);
+    }
+    catch (TimeoutException) when (firstAfterReopen)
+    {
+      // Resync exactly as erection does (flush stale RX), settle, and retry once.
+      try { port.PurgeInput(); } catch { }
+      SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
+      response = WriteRequestAndRead(port, frame, carriers, responseTimeout, cancellationToken);
     }
 
-    byte[] response = ReadExactly(port, 18, responseTimeout, cancellationToken);
     int word = 0;
     for (int bit = 0; bit < 18; bit++)
     {
@@ -658,6 +664,24 @@ internal sealed class KrakenSession : IAsyncDisposable
 
     SettleUsb(settleMilliseconds, cancellationToken);
     return word & F18InstructionSet.WordMask;
+  }
+
+  // Write one request frame plus its 18-bit carrier train and read the fixed
+  // 18-byte reply. Each logical bit gets a pair of host-generated UART carriers;
+  // the node-708 helper mirrors the 0x00 carrier for a zero or the 0xFF carrier
+  // for a one, so every returned bit is clocked by the FTDI UART.
+  private byte[] WriteRequestAndRead(
+      NativeWindowsSerialPort port,
+      byte[] frame,
+      byte[] carriers,
+      int responseTimeout,
+      CancellationToken cancellationToken)
+  {
+    port.Write(frame);
+    WaitForTransmitDrain(port, frame.Length);
+    port.Write(carriers);
+    WaitForTransmitDrain(port, carriers.Length);
+    return ReadExactly(port, 18, responseTimeout, cancellationToken);
   }
 
   private void WriteSequence(IReadOnlyList<int> sequence, CancellationToken cancellationToken) =>
@@ -974,15 +998,16 @@ internal sealed class KrakenSession : IAsyncDisposable
     // fire during this transaction. ParkTransport re-arms it afterward.
     _idleCloseTimer?.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
 
-    // CloseWhileIdle: reopen only the host transport. NativeWindowsSerialPort
-    // .Open forces DTR/RTS inactive-high immediately after CreateFile. No
-    // reset pulse, node-708 probe, boot helper reload, or tentacle erection
-    // is issued.
+    // Opening the COM port on Port A pulses RESET- and destroys the resident
+    // Kraken (the stock FTDI driver briefly asserts RTS during CreateFile, and
+    // that glitch is a reset on the EVB). So a reopen cannot simply resume the
+    // old session: the chip is blank again. Reopen the transport AND re-run the
+    // full erection sequence, rebuilding the node-708 reply helper and all
+    // tentacles before the pending transaction proceeds.
     //
-    // A single CreateFile can transiently fail while the previous CloseHandle
-    // is still tearing the FTDI endpoint down, or while the device wakes from
-    // selective suspend. Retry with bounded back-off before allowing a fault,
-    // so one unlucky reopen does not permanently brick the resident Kraken.
+    // A single CreateFile can transiently fail while the previous CloseHandle is
+    // still tearing the FTDI endpoint down, or while the device wakes from
+    // selective suspend. Retry with bounded back-off before allowing a fault.
     int backoff = ReopenInitialBackoffMilliseconds;
     IOException? lastError = null;
 
@@ -991,15 +1016,43 @@ internal sealed class KrakenSession : IAsyncDisposable
       cancellationToken.ThrowIfCancellationRequested();
       try
       {
-        _port = NativeWindowsSerialPort.Open(
+        NativeWindowsSerialPort port = NativeWindowsSerialPort.Open(
             _portName!,
             OnlineBaudRate,
             readTimeoutMilliseconds: 50,
             writeTimeoutMilliseconds: 2_000);
 
-        // A tiny line-settle interval avoids beginning the first boot byte
-        // in the same instant as the FTDI modem-control state is restored.
-        Thread.Sleep(2);
+        if (_reopenResetsChip)
+        {
+          // Port A: opening the port pulsed RESET- and wiped the Kraken, so
+          // rebuild it on the freshly reset chip before the pending transaction.
+          try
+          {
+            ErectOnto(port, cancellationToken);
+          }
+          catch
+          {
+            port.Dispose();
+            throw;
+          }
+        }
+        else
+        {
+          // Port C: no RTS-to-RESET- wiring, so the Kraken survived the reopen.
+          // Just resume the transport: settle briefly and flush any stale RX so
+          // the fixed 18-byte reply framing is clean for the next read.
+          SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
+          try
+          {
+            port.PurgeInput();
+          }
+          catch
+          {
+            // Best-effort; the widened first-read timeout still applies.
+          }
+        }
+
+        _port = port;
         _reopenedThisTransaction = true;
         return;
       }
@@ -1021,8 +1074,7 @@ internal sealed class KrakenSession : IAsyncDisposable
     }
 
     throw new IOException(
-        $"Could not reopen the parked Kraken COM endpoint '{_portName}' after {ReopenMaxAttempts} attempts. " +
-        "No reset or re-erection was attempted.",
+        $"Could not reopen and re-erect the Kraken COM endpoint '{_portName}' after {ReopenMaxAttempts} attempts.",
         lastError);
   }
 

@@ -32,7 +32,9 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
   // Idle-handle policy applied to every new Kraken controller. HoldOpen is the
   // safe default on Port A (RTS = EVB RESET-); switch to CloseWhileIdle only if
   // the COM port must be shared with another process while the Kraken is idle.
-  private readonly KrakenIdlePolicy _krakenIdlePolicy = KrakenIdlePolicy.CloseAfterIdleTimeout;
+  // The idle policy applied to newly created Kraken controllers. Backed by the
+  // persisted workspace setting and user-selectable via the main-window dropdown.
+  private KrakenIdlePolicy KrakenIdlePolicyValue => _workspace.Settings.KrakenIdlePolicy;
   private bool _disposed;
 
   public MainWindowViewModel(
@@ -117,7 +119,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     KrakenLiveController controller = new(
         project.GetChip(role).Kraken,
         () => ResolveKrakenEndpoint(board.Id, role),
-        _krakenIdlePolicy);
+        KrakenIdlePolicyValue);
     controller.StateChanged += OnKrakenControllerStateChanged;
     _krakenControllers.Add(key, controller);
     return controller;
@@ -301,6 +303,64 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
     }
   }
 
+  /// <summary>The idle-handle policies offered in the main-window dropdown.</summary>
+  public IReadOnlyList<KrakenIdlePolicyOption> KrakenIdlePolicyOptions { get; } =
+  [
+      new(KrakenIdlePolicy.CloseAfterIdleTimeout, "Close after 1 s idle (recommended)"),
+      new(KrakenIdlePolicy.CloseWhileIdle, "Close between transactions"),
+      new(KrakenIdlePolicy.HoldOpen, "Hold open while resident")
+  ];
+
+  /// <summary>
+  /// The persisted idle-handle policy for Kraken sessions, bound to the dropdown.
+  /// Changing it invalidates idle (non-erected) controllers so their next erection
+  /// adopts the new policy; a resident, erected Kraken is left untouched to avoid
+  /// disturbing live silicon, and adopts the new policy the next time it erects.
+  /// </summary>
+  public KrakenIdlePolicy SelectedKrakenIdlePolicy
+  {
+    get => _workspace.Settings.KrakenIdlePolicy;
+    set
+    {
+      if (_workspace.Settings.KrakenIdlePolicy == value)
+      {
+        return;
+      }
+
+      _workspace.Settings.KrakenIdlePolicy = value;
+      OnPropertyChanged();
+      MarkWorkspaceDirty();
+      _ = ApplyIdlePolicyToIdleControllersAsync();
+    }
+  }
+
+  private async Task ApplyIdlePolicyToIdleControllersAsync()
+  {
+    // Recreate only controllers that are not currently erected. A live Kraken
+    // keeps its policy until it is released/re-erected; tearing it down here would
+    // reset the endpoint. Idle controllers are dropped so GetKrakenController
+    // rebuilds them with the new policy on next use.
+    foreach (KeyValuePair<(Guid ProjectId, Guid BoardId, Ga144ChipRole Role), KrakenLiveController> entry
+             in _krakenControllers.ToArray())
+    {
+      if (entry.Value.HasExclusiveSerialOwnership)
+      {
+        continue;
+      }
+
+      try
+      {
+        entry.Value.StateChanged -= OnKrakenControllerStateChanged;
+        await entry.Value.DisposeAsync();
+      }
+      catch
+      {
+        // Best-effort teardown of an idle controller.
+      }
+      _krakenControllers.Remove(entry.Key);
+    }
+  }
+
   public bool ActiveProbeNewPortsEnabled
   {
     get => _workspace.Settings.ActiveProbeNewFtdiPorts;
@@ -388,6 +448,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
       OnPropertyChanged(nameof(AutoDetectEnabled));
       OnPropertyChanged(nameof(ActiveProbeNewPortsEnabled));
+      OnPropertyChanged(nameof(SelectedKrakenIdlePolicy));
       StatusText = "Workspace ready";
     }
     catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)

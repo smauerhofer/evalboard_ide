@@ -67,3 +67,9 @@ public enum KrakenIdlePolicy
   /// </summary>
   CloseAfterIdleTimeout
 }
+
+/// <summary>A selectable idle-policy option with a human-readable label for UI binding.</summary>
+public sealed record KrakenIdlePolicyOption(KrakenIdlePolicy Policy, string Label)
+{
+  public override string ToString() => Label;
+}

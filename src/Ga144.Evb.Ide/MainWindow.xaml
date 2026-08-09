@@ -8,164 +8,175 @@
         MinWidth="1350"
         MinHeight="720"
         WindowStartupLocation="CenterScreen">
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+  <Grid>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
 
-        <Border Grid.Row="0"
+    <Border Grid.Row="0"
                 Background="{StaticResource PanelBrush}"
                 BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="0,0,0,1"
                 Padding="10">
-            <DockPanel LastChildFill="True">
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                    <Button Content="Save YAML workspace" Command="{Binding SaveWorkspaceCommand}" />
-                    <Button Content="Scan serial ports" Command="{Binding ScanNowCommand}" />
-                    <Button Content="Edit F18 macros" Click="OnMacrosClick" />
-                    <Button Content="Open workspace folder" Command="{Binding OpenConfigurationFolderCommand}" />
-                    <CheckBox Content="Auto-detect"
-                              IsChecked="{Binding AutoDetectEnabled}"
-                              VerticalAlignment="Center"
-                              Margin="8,0,14,0" />
-                    <CheckBox Content="Probe new FTDI ports"
-                              IsChecked="{Binding ActiveProbeNewPortsEnabled}"
-                              VerticalAlignment="Center" />
-                </StackPanel>
-                <TextBlock Text="{Binding ConfigurationPath}"
+      <DockPanel LastChildFill="True">
+        <TextBlock DockPanel.Dock="Right"
+                           Text="{Binding ConfigurationPath}"
                            TextTrimming="CharacterEllipsis"
                            VerticalAlignment="Center"
                            HorizontalAlignment="Right"
                            Foreground="#555"
-                           MaxWidth="440" />
-            </DockPanel>
-        </Border>
+                           MaxWidth="320" />
+        <WrapPanel Orientation="Horizontal">
+          <Button Content="Save YAML workspace" Command="{Binding SaveWorkspaceCommand}" />
+          <Button Content="Scan serial ports" Command="{Binding ScanNowCommand}" />
+          <Button Content="Edit F18 macros" Click="OnMacrosClick" />
+          <Button Content="Open workspace folder" Command="{Binding OpenConfigurationFolderCommand}" />
+          <CheckBox Content="Auto-detect"
+                              IsChecked="{Binding AutoDetectEnabled}"
+                              VerticalAlignment="Center"
+                              Margin="8,0,14,0" />
+          <CheckBox Content="Probe new FTDI ports"
+                              IsChecked="{Binding ActiveProbeNewPortsEnabled}"
+                              VerticalAlignment="Center" />
+          <TextBlock Text="Kraken COM:"
+                               VerticalAlignment="Center"
+                               Margin="14,0,4,0" />
+          <ComboBox ItemsSource="{Binding KrakenIdlePolicyOptions}"
+                              SelectedValue="{Binding SelectedKrakenIdlePolicy, Mode=TwoWay}"
+                              SelectedValuePath="Policy"
+                              DisplayMemberPath="Label"
+                              VerticalAlignment="Center"
+                              MinWidth="210"
+                              ToolTip="How the FTDI COM handle is managed while a Kraken is resident. 'Close after 1 s idle' is best when the FTDI shares a USB controller with a KVM." />
+        </WrapPanel>
+      </DockPanel>
+    </Border>
 
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="285" />
-                <ColumnDefinition Width="270" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="350" />
-            </Grid.ColumnDefinitions>
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="285" />
+        <ColumnDefinition Width="270" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="350" />
+      </Grid.ColumnDefinitions>
 
-            <GroupBox Grid.Column="0" Header="Boards">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+      <GroupBox Grid.Column="0" Header="Boards">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
 
-                    <ListBox ItemsSource="{Binding Boards}"
+          <ListBox ItemsSource="{Binding Boards}"
                              SelectedItem="{Binding SelectedBoard, Mode=TwoWay}"
                              DisplayMemberPath="DisplayName" />
 
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,8">
-                        <Button Content="New board" Command="{Binding AddBoardCommand}" />
-                        <Button Content="Remove" Command="{Binding RemoveBoardCommand}" />
-                    </StackPanel>
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,8">
+            <Button Content="New board" Command="{Binding AddBoardCommand}" />
+            <Button Content="Remove" Command="{Binding RemoveBoardCommand}" />
+          </StackPanel>
 
-                    <Border Grid.Row="2"
+          <Border Grid.Row="2"
                             Background="{StaticResource PanelBrush}"
                             BorderBrush="{StaticResource BorderBrush}"
                             BorderThickness="1"
                             Padding="10">
-                        <StackPanel>
-                            <TextBlock Text="Selected physical board" FontWeight="SemiBold" />
-                            <TextBox Text="{Binding SelectedBoard.Name, UpdateSourceTrigger=PropertyChanged}" />
+            <StackPanel>
+              <TextBlock Text="Selected physical board" FontWeight="SemiBold" />
+              <TextBox Text="{Binding SelectedBoard.Name, UpdateSourceTrigger=PropertyChanged}" />
 
-                            <TextBlock Text="Evalboard model" FontWeight="SemiBold" />
-                            <ComboBox ItemsSource="{Binding BoardModels}"
+              <TextBlock Text="Evalboard model" FontWeight="SemiBold" />
+              <ComboBox ItemsSource="{Binding BoardModels}"
                                       SelectedItem="{Binding SelectedBoard.BoardModel, Mode=TwoWay}" />
 
-                            <TextBlock Text="Board serial" FontWeight="SemiBold" />
-                            <TextBox Text="{Binding SelectedBoard.SerialNumber, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBlock Text="Board serial" FontWeight="SemiBold" />
+              <TextBox Text="{Binding SelectedBoard.SerialNumber, UpdateSourceTrigger=PropertyChanged}" />
 
-                            <TextBlock Text="{Binding SelectedBoard.ConnectionText}"
+              <TextBlock Text="{Binding SelectedBoard.ConnectionText}"
                                        TextWrapping="Wrap"
                                        Foreground="#555" />
-                        </StackPanel>
-                    </Border>
-                </Grid>
-            </GroupBox>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </GroupBox>
 
-            <GroupBox Grid.Column="1" Header="Projects">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+      <GroupBox Grid.Column="1" Header="Projects">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
 
-                    <ListBox ItemsSource="{Binding Projects}"
+          <ListBox ItemsSource="{Binding Projects}"
                              SelectedItem="{Binding SelectedProject, Mode=TwoWay}"
                              DisplayMemberPath="DisplayName" />
 
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,8">
-                        <Button Content="New project" Command="{Binding AddProjectCommand}" />
-                        <Button Content="Remove" Command="{Binding RemoveProjectCommand}" />
-                    </StackPanel>
+          <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,8,0,8">
+            <Button Content="New project" Command="{Binding AddProjectCommand}" />
+            <Button Content="Remove" Command="{Binding RemoveProjectCommand}" />
+          </StackPanel>
 
-                    <Border Grid.Row="2"
+          <Border Grid.Row="2"
                             Background="{StaticResource PanelBrush}"
                             BorderBrush="{StaticResource BorderBrush}"
                             BorderThickness="1"
                             Padding="10">
-                        <StackPanel>
-                            <TextBlock Text="Active project" FontWeight="SemiBold" />
-                            <TextBox Text="{Binding SelectedProject.Name, UpdateSourceTrigger=PropertyChanged}" />
-                            <TextBlock Text="The selected project supplies Host/Target source, RAM, startup state and project macros. It is independent of the selected physical board."
+            <StackPanel>
+              <TextBlock Text="Active project" FontWeight="SemiBold" />
+              <TextBox Text="{Binding SelectedProject.Name, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBlock Text="The selected project supplies Host/Target source, RAM, startup state and project macros. It is independent of the selected physical board."
                                        TextWrapping="Wrap"
                                        Foreground="#555"
                                        Margin="0,5,0,0" />
-                        </StackPanel>
-                    </Border>
-                </Grid>
-            </GroupBox>
+            </StackPanel>
+          </Border>
+        </Grid>
+      </GroupBox>
 
-            <TabControl Grid.Column="2" Margin="4,8">
-                <TabItem Header="Board">
-                    <Grid Margin="8">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+      <TabControl Grid.Column="2" Margin="4,8">
+        <TabItem Header="Board">
+          <Grid Margin="8">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-                        <TextBlock Text="{Binding SelectedBoard.BoardDescription}"
+            <TextBlock Text="{Binding SelectedBoard.BoardDescription}"
                                    FontSize="15"
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,8"
                                    TextWrapping="Wrap" />
 
-                        <controls:BoardViewControl Grid.Row="1"
+            <controls:BoardViewControl Grid.Row="1"
                                                    Board="{Binding SelectedBoard}"
                                                    ChipRequested="OnChipRequested"
                                                    PortRequested="OnBoardPortRequested" />
 
-                        <Border Grid.Row="2"
+            <Border Grid.Row="2"
                                 Background="#EEF5EF"
                                 BorderBrush="#B9CCBD"
                                 BorderThickness="1"
                                 Padding="8"
                                 Margin="0,8,0,0">
-                            <TextBlock Text="The board image, jumper settings and FTDI A/B/C assignments belong to the selected physical board. H and T open the corresponding chip from the independently selected project. Select a serial-interface row before clicking A, B or C on the board image."
+              <TextBlock Text="The board image, jumper settings and FTDI A/B/C assignments belong to the selected physical board. H and T open the corresponding chip from the independently selected project. Select a serial-interface row before clicking A, B or C on the board image."
                                        TextWrapping="Wrap" />
-                        </Border>
-                    </Grid>
-                </TabItem>
+            </Border>
+          </Grid>
+        </TabItem>
 
-                <TabItem Header="Serial interfaces">
-                    <Grid Margin="6">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+        <TabItem Header="Serial interfaces">
+          <Grid Margin="6">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="*" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-                        <DataGrid ItemsSource="{Binding Ports}"
+            <DataGrid ItemsSource="{Binding Ports}"
                                   SelectedItem="{Binding SelectedPort, Mode=TwoWay}"
                                   AutoGenerateColumns="False"
                                   IsReadOnly="True"
@@ -174,83 +185,89 @@
                                   GridLinesVisibility="Horizontal"
                                   HeadersVisibility="Column"
                                   RowHeaderWidth="0">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="State" Binding="{Binding StatusText}" Width="105" />
-                                <DataGridTextColumn Header="COM" Binding="{Binding PortName}" Width="65" />
-                                <DataGridTextColumn Header="Device" Binding="{Binding FriendlyName}" Width="200" />
-                                <DataGridTextColumn Header="FTDI serial" Binding="{Binding SerialNumber}" Width="140" />
-                                <DataGridTextColumn Header="Board hint" Binding="{Binding EvalBoardHintText}" Width="180" />
-                                <DataGridTextColumn Header="VID:PID" Binding="{Binding VidPid}" Width="85" />
-                                <DataGridTextColumn Header="Assignment" Binding="{Binding AssignmentText}" Width="210" />
-                                <DataGridTextColumn Header="Probe result" Binding="{Binding ProbeMessage}" Width="*" />
-                            </DataGrid.Columns>
-                        </DataGrid>
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="State" Binding="{Binding StatusText}" Width="105" />
+                <DataGridTextColumn Header="COM" Binding="{Binding PortName}" Width="65" />
+                <DataGridTextColumn Header="Device" Binding="{Binding FriendlyName}" Width="200" />
+                <DataGridTextColumn Header="FTDI serial" Binding="{Binding SerialNumber}" Width="140" />
+                <DataGridTextColumn Header="Board hint" Binding="{Binding EvalBoardHintText}" Width="180" />
+                <DataGridTextColumn Header="VID:PID" Binding="{Binding VidPid}" Width="85" />
+                <DataGridTextColumn Header="Assignment" Binding="{Binding AssignmentText}" Width="210" />
+                <DataGridTextColumn Header="Probe result" Binding="{Binding ProbeMessage}" Width="*" />
+              </DataGrid.Columns>
+            </DataGrid>
 
-                        <Border Grid.Row="1"
+            <Border Grid.Row="1"
                                 Background="#FFF4D6"
                                 BorderBrush="#E6C15B"
                                 BorderThickness="1"
                                 Padding="8"
                                 Margin="0,8,0,0">
-                            <TextBlock Text="Active probing asserts RTS, resets the connected GA144, loads a temporary node-708 echo program, and leaves that program running. Reset or boot the board afterward to restore the intended application."
+              <TextBlock Text="Active probing asserts RTS, resets the connected GA144, loads a temporary node-708 echo program, and leaves that program running. Reset or boot the board afterward to restore the intended application."
                                        TextWrapping="Wrap" />
-                        </Border>
-                    </Grid>
-                </TabItem>
-            </TabControl>
+            </Border>
+          </Grid>
+        </TabItem>
+      </TabControl>
 
-            <GroupBox Grid.Column="3" Header="Board and interface details">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <TextBlock Text="Selected board" FontWeight="SemiBold" FontSize="16" />
-                        <TextBlock Text="{Binding SelectedBoard.IdentityText}" FontSize="20" FontWeight="SemiBold" Margin="0,4,0,4" />
-                        <TextBlock Text="{Binding SelectedBoard.ConnectionText}" TextWrapping="Wrap" Margin="0,0,0,10" />
+      <GroupBox Grid.Column="3" Header="Board and interface details">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <StackPanel>
+            <TextBlock Text="Selected board" FontWeight="SemiBold" FontSize="16" />
+            <TextBlock Text="{Binding SelectedBoard.IdentityText}" FontSize="20" FontWeight="SemiBold" Margin="0,4,0,4" />
+            <TextBlock Text="{Binding SelectedBoard.ConnectionText}" TextWrapping="Wrap" Margin="0,0,0,10" />
 
-                        <TextBlock Text="USB A / Host node 708" FontWeight="SemiBold" Margin="0,8,0,2" />
-                        <TextBlock Text="{Binding SelectedBoard.PortASummary}" TextWrapping="Wrap" />
-                        <TextBlock Text="USB B / Host serial" FontWeight="SemiBold" Margin="0,10,0,2" />
-                        <TextBlock Text="{Binding SelectedBoard.PortBSummary}" TextWrapping="Wrap" />
-                        <TextBlock Text="USB C / Target node 708" FontWeight="SemiBold" Margin="0,10,0,2" />
-                        <TextBlock Text="{Binding SelectedBoard.PortCSummary}" TextWrapping="Wrap" />
+            <TextBlock Text="USB A / Host node 708" FontWeight="SemiBold" Margin="0,8,0,2" />
+            <TextBlock Text="{Binding SelectedBoard.PortASummary}" TextWrapping="Wrap" />
+            <TextBlock Text="USB B / Host serial" FontWeight="SemiBold" Margin="0,10,0,2" />
+            <TextBlock Text="{Binding SelectedBoard.PortBSummary}" TextWrapping="Wrap" />
+            <TextBlock Text="USB C / Target node 708" FontWeight="SemiBold" Margin="0,10,0,2" />
+            <TextBlock Text="{Binding SelectedBoard.PortCSummary}" TextWrapping="Wrap" />
 
-                        <Separator Margin="0,12" />
-                        <TextBlock Text="Selected serial interface" FontWeight="SemiBold" FontSize="16" />
-                        <TextBlock Text="{Binding SelectedPort.PortName}" FontSize="22" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding SelectedPort.FriendlyName}" TextWrapping="Wrap" Margin="0,2,0,8" />
-                        <TextBlock Text="{Binding SelectedPort.EvalBoardHintText}" TextWrapping="Wrap" Margin="0,0,0,10" />
+            <Separator Margin="0,12" />
+            <TextBlock Text="Selected serial interface" FontWeight="SemiBold" FontSize="16" />
+            <TextBlock Text="{Binding SelectedPort.PortName}" FontSize="22" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding SelectedPort.FriendlyName}" TextWrapping="Wrap" Margin="0,2,0,8" />
+            <TextBlock Text="{Binding SelectedPort.EvalBoardHintText}" TextWrapping="Wrap" Margin="0,0,0,10" />
 
-                        <TextBlock Text="Stable FTDI identity" FontWeight="SemiBold" />
-                        <TextBox Text="{Binding SelectedPort.StableId, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" />
-                        <TextBlock Text="Plug-and-Play ID" FontWeight="SemiBold" />
-                        <TextBox Text="{Binding SelectedPort.PnpDeviceId, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" />
-                        <TextBlock Text="Manufacturer" FontWeight="SemiBold" />
-                        <TextBox Text="{Binding SelectedPort.Manufacturer, Mode=OneWay}" IsReadOnly="True" />
+            <TextBlock Text="Stable FTDI identity" FontWeight="SemiBold" />
+            <TextBox Text="{Binding SelectedPort.StableId, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" />
+            <TextBlock Text="Plug-and-Play ID" FontWeight="SemiBold" />
+            <TextBox Text="{Binding SelectedPort.PnpDeviceId, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" />
+            <TextBlock Text="Manufacturer" FontWeight="SemiBold" />
+            <TextBox Text="{Binding SelectedPort.Manufacturer, Mode=OneWay}" IsReadOnly="True" />
 
-                        <Separator Margin="0,8" />
-                        <Button Content="Assign as USB A / Host" Command="{Binding AssignPortACommand}" Margin="0,0,0,6" />
-                        <Button Content="Assign as USB B" Command="{Binding AssignPortBCommand}" Margin="0,0,0,6" />
-                        <Button Content="Assign as USB C / Target" Command="{Binding AssignPortCCommand}" Margin="0,0,0,6" />
-                        <Button Content="Forget assignment" Command="{Binding ForgetAssignmentCommand}" Margin="0,0,0,10" />
-                        <Button Content="Probe selected port" Command="{Binding ProbeSelectedPortCommand}" Margin="0,0,0,10" />
+            <Separator Margin="0,8" />
+            <Button Content="Assign as USB A / Host" Command="{Binding AssignPortACommand}" Margin="0,0,0,6" />
+            <Button Content="Assign as USB B" Command="{Binding AssignPortBCommand}" Margin="0,0,0,6" />
+            <Button Content="Assign as USB C / Target" Command="{Binding AssignPortCCommand}" Margin="0,0,0,6" />
+            <Button Content="Forget assignment" Command="{Binding ForgetAssignmentCommand}" Margin="0,0,0,10" />
+            <Button Content="Probe selected port" Command="{Binding ProbeSelectedPortCommand}" Margin="0,0,0,10" />
 
-                        <Border Background="#EAF4EC"
+            <Border Background="#EAF4EC"
                                 BorderBrush="#84B58E"
                                 BorderThickness="1"
                                 Padding="10">
-                            <TextBlock Text="Recognized GreenArrays FTDI serial numbers are used to identify EVB001/EVB002 board identity and physical A/B/C connector role. Active node-708 probing remains available for A and C."
+              <TextBlock Text="Recognized GreenArrays FTDI serial numbers are used to identify EVB001/EVB002 board identity and physical A/B/C connector role. Active node-708 probing remains available for A and C."
                                        TextWrapping="Wrap" />
-                        </Border>
-                    </StackPanel>
-                </ScrollViewer>
-            </GroupBox>
-        </Grid>
-
-        <StatusBar Grid.Row="2">
-            <StatusBarItem><TextBlock Text="{Binding StatusText}" /></StatusBarItem>
-            <Separator />
-            <StatusBarItem><TextBlock Text="{Binding LastScanText}" /></StatusBarItem>
-            <Separator />
-            <StatusBarItem><ProgressBar Width="120" Height="14" IsIndeterminate="True" Visibility="{Binding BusyVisibility}" /></StatusBarItem>
-        </StatusBar>
+            </Border>
+          </StackPanel>
+        </ScrollViewer>
+      </GroupBox>
     </Grid>
+
+    <StatusBar Grid.Row="2">
+      <StatusBarItem>
+        <TextBlock Text="{Binding StatusText}" />
+      </StatusBarItem>
+      <Separator />
+      <StatusBarItem>
+        <TextBlock Text="{Binding LastScanText}" />
+      </StatusBarItem>
+      <Separator />
+      <StatusBarItem>
+        <ProgressBar Width="120" Height="14" IsIndeterminate="True" Visibility="{Binding BusyVisibility}" />
+      </StatusBarItem>
+    </StatusBar>
+  </Grid>
 </Window>
