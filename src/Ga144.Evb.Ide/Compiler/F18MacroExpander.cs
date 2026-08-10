@@ -76,25 +76,49 @@ internal static class F18MacroExpander
 
     for (int index = 0; index < tokens.Count - 1; index++)
     {
-      F18Token macroToken = tokens[index];
-      F18Token importToken = tokens[index + 1];
-      if (!importToken.Text.Equals("import", StringComparison.OrdinalIgnoreCase) ||
-          IsDecimalToken(macroToken.Text))
+      // Macro invocation is the prefix form 'macro <name>', where 'macro' is a
+      // defining-style keyword (like ':') followed by the macro name. Node imports
+      // ('<coordinate> import') are a separate, postfix directive handled by the
+      // main compiler, not here, so this scan only looks for the 'macro' keyword.
+      F18Token keywordToken = tokens[index];
+      if (!keywordToken.Text.Equals("macro", StringComparison.OrdinalIgnoreCase))
       {
+        // Migration aid: the former macro-invocation syntax was '<name> import'
+        // (postfix). That is now 'macro <name>' (prefix). Detect a leftover
+        // '<non-decimal> import' and emit a precise diagnostic instead of letting
+        // the bare name fail later as an unknown word. '<decimal> import' is a node
+        // import and is left untouched.
+        F18Token next = tokens[index + 1];
+        if (next.Text.Equals("import", StringComparison.OrdinalIgnoreCase) &&
+            !IsDecimalToken(keywordToken.Text))
+        {
+          AddError(
+              diagnostics,
+              "F18P007",
+              $"Macro invocation syntax changed: write 'macro {keywordToken.Text}' instead of '{keywordToken.Text} import'.",
+              keywordToken.Location,
+              sourceName);
+        }
+
         continue;
       }
 
-      output.Append(source, cursor, macroToken.StartIndex - cursor);
+      F18Token macroToken = tokens[index + 1];
+
+      // The span replaced is 'macro <name>' (keyword through name). Emit the text
+      // before the 'macro' keyword, then the expanded macro body.
+      output.Append(source, cursor, keywordToken.StartIndex - cursor);
+      int spanEnd = macroToken.StartIndex + macroToken.Length;
 
       if (options.MacroResolver is null)
       {
         AddError(
             diagnostics,
             "F18P002",
-            $"Macro '{macroToken.Text}' cannot be imported because no macro resolver is available.",
+            $"Macro '{macroToken.Text}' cannot be expanded because no macro resolver is available.",
             macroToken.Location,
             sourceName);
-        cursor = importToken.StartIndex + importToken.Length;
+        cursor = spanEnd;
         index++;
         continue;
       }
@@ -112,7 +136,7 @@ internal static class F18MacroExpander
             $"Macro '{macroToken.Text}' import failed: {exception.Message}",
             macroToken.Location,
             sourceName);
-        cursor = importToken.StartIndex + importToken.Length;
+        cursor = spanEnd;
         index++;
         continue;
       }
@@ -125,7 +149,7 @@ internal static class F18MacroExpander
             $"Macro '{macroToken.Text}' import failed: {resolution.ErrorMessage ?? "unknown macro"}",
             macroToken.Location,
             sourceName);
-        cursor = importToken.StartIndex + importToken.Length;
+        cursor = spanEnd;
         index++;
         continue;
       }
@@ -146,7 +170,7 @@ internal static class F18MacroExpander
             $"Cyclic macro import detected: {cycle}.",
             macroToken.Location,
             sourceName);
-        cursor = importToken.StartIndex + importToken.Length;
+        cursor = spanEnd;
         index++;
         continue;
       }
@@ -181,7 +205,7 @@ internal static class F18MacroExpander
       output.Append("\\ end macro ");
       output.AppendLine(resolvedName);
 
-      cursor = importToken.StartIndex + importToken.Length;
+      cursor = spanEnd;
       index++;
 
       if (output.Length > MaximumExpandedLength)

@@ -7,266 +7,272 @@
         MinWidth="980"
         MinHeight="680"
         WindowStartupLocation="CenterOwner">
-    <Grid Margin="12">
-        <Grid.RowDefinitions>
+  <Grid Margin="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <DockPanel Margin="0,0,0,10">
+      <StackPanel DockPanel.Dock="Left">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="Node " FontSize="24" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding NodeCoordinate}" FontSize="24" FontWeight="SemiBold" FontFamily="Consolas" />
+        </StackPanel>
+        <TextBlock Text="{Binding KrakenOnlineHint}" Foreground="#555" Margin="0,2,0,0" />
+      </StackPanel>
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button Content="Online Kraken…" Click="OnOnlineKrakenClick"
+                        IsEnabled="{Binding KrakenOnlineAvailable}" Padding="10,5" Margin="0,0,12,0"
+                        ToolTip="Open live RAM/ROM/register/stack/I/O control through the installed Kraken tentacle." />
+        <CheckBox Content="Include this node in project boot/startup" IsChecked="{Binding Enabled}"
+                          VerticalAlignment="Center" />
+      </StackPanel>
+    </DockPanel>
+
+    <TabControl Grid.Row="1">
+      <TabItem Header="RAM source">
+        <Grid Margin="8">
+          <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+          </Grid.RowDefinitions>
 
-        <DockPanel Margin="0,0,0,10">
+          <DockPanel Margin="0,0,0,7">
             <StackPanel DockPanel.Dock="Left">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="Node " FontSize="24" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding NodeCoordinate}" FontSize="24" FontWeight="SemiBold" FontFamily="Consolas" />
-                </StackPanel>
-                <TextBlock Text="{Binding KrakenOnlineHint}" Foreground="#555" Margin="0,2,0,0" />
-            </StackPanel>
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Content="Online Kraken…" Click="OnOnlineKrakenClick"
-                        IsEnabled="{Binding KrakenOnlineAvailable}" Padding="10,5" Margin="0,0,12,0"
-                        ToolTip="Open live RAM/ROM/register/stack/I/O control through the installed Kraken tentacle." />
-                <CheckBox Content="Include this node in project boot/startup" IsChecked="{Binding Enabled}"
-                          VerticalAlignment="Center" />
-            </StackPanel>
-        </DockPanel>
-
-        <TabControl Grid.Row="1">
-            <TabItem Header="RAM source">
-                <Grid Margin="8">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <DockPanel Margin="0,0,0,7">
-                        <StackPanel DockPanel.Dock="Left">
-                            <TextBlock Text="Project-specific F18A RAM source for this node. The node's ROM dictionary is automatically in scope."
+              <TextBlock Text="Project-specific F18A RAM source for this node. The node's ROM dictionary is automatically in scope."
                                        FontWeight="SemiBold" />
-                            <TextBlock Text="Example: 0 org   entry start   : start io b! begin @b !b again ;"
+              <TextBlock Text="Example: 0 org   entry start   : start io b! begin @b !b again ;"
                                        FontFamily="Consolas" Foreground="#555" Margin="0,3,0,0" />
-                        </StackPanel>
-                        <Button Content="Compile ROM + RAM" Command="{Binding CompileCommand}" DockPanel.Dock="Right"
+            </StackPanel>
+            <Button Content="Compile ROM + RAM" Command="{Binding CompileCommand}" DockPanel.Dock="Right"
                                 MinWidth="150" MinHeight="32" Margin="12,0,0,0" />
-                    </DockPanel>
+          </DockPanel>
 
-                    <TextBox Grid.Row="1" Text="{Binding SourceCode, UpdateSourceTrigger=PropertyChanged}"
+          <TextBox Grid.Row="1" Text="{Binding SourceCode, UpdateSourceTrigger=PropertyChanged}"
                              AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="14"
                              TextWrapping="NoWrap" SpellCheck.IsEnabled="False" />
 
-                    <Border Grid.Row="2" Background="#F4F4F4" BorderBrush="#D0D0D0" BorderThickness="1"
+          <Border Grid.Row="2" Background="#F4F4F4" BorderBrush="#D0D0D0" BorderThickness="1"
                             Padding="8" Margin="0,7,0,0">
-                        <TextBlock Text="{Binding CompilationStatus}" TextWrapping="Wrap" />
-                    </Border>
-                </Grid>
-            </TabItem>
+            <TextBox Text="{Binding CompilationStatus, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 TextWrapping="Wrap"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 Padding="0"
+                                 IsInactiveSelectionHighlightEnabled="True" />
+          </Border>
+        </Grid>
+      </TabItem>
 
-            <TabItem Header="ROM source">
-                <Grid Margin="8">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+      <TabItem Header="ROM source">
+        <Grid Margin="8">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
 
-                    <DockPanel Margin="0,0,0,7">
-                        <StackPanel DockPanel.Dock="Left">
-                            <TextBlock Text="System-wide F18A ROM source for this GA144 node (addresses 0x080 through 0x0BF)."
+          <DockPanel Margin="0,0,0,7">
+            <StackPanel DockPanel.Dock="Left">
+              <TextBlock Text="System-wide F18A ROM source for this GA144 node (addresses 0x080 through 0x0BF)."
                                        FontWeight="SemiBold" />
-                            <TextBlock Foreground="#555" Margin="0,3,0,0" TextWrapping="Wrap">
+              <TextBlock Foreground="#555" Margin="0,3,0,0" TextWrapping="Wrap">
                                 <Run Text="This source is shared by every project and by Host/Target chips. System macros available: " />
                                 <Run Text="{Binding SystemMacroCount, Mode=OneWay}" FontWeight="SemiBold" />
                                 <Run Text=". Library: " />
                                 <Run Text="{Binding RomLibraryPath, Mode=OneWay}" FontFamily="Consolas" />
-                            </TextBlock>
-                        </StackPanel>
-                        <Button Content="Compile ROM + RAM" Command="{Binding CompileCommand}" DockPanel.Dock="Right"
+              </TextBlock>
+            </StackPanel>
+            <Button Content="Compile ROM" Command="{Binding CompileRomCommand}" DockPanel.Dock="Right"
                                 MinWidth="150" MinHeight="32" Margin="12,0,0,0" />
-                    </DockPanel>
+          </DockPanel>
 
-                    <TextBox Grid.Row="1" Text="{Binding RomSourceCode, UpdateSourceTrigger=PropertyChanged}"
+          <TextBox Grid.Row="1" Text="{Binding RomSourceCode, UpdateSourceTrigger=PropertyChanged}"
                              AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="14"
                              TextWrapping="NoWrap" SpellCheck.IsEnabled="False" />
 
-                    <Border Grid.Row="2" Background="#FFF7DF" BorderBrush="#D7BE74" BorderThickness="1"
+          <Border Grid.Row="2" Background="#FFF7DF" BorderBrush="#D7BE74" BorderThickness="1"
                             Padding="8" Margin="0,7,0,0">
-                        <TextBlock TextWrapping="Wrap"
+            <TextBlock TextWrapping="Wrap"
                                    Text="ROM is compiled before RAM. Exported ROM words, labels, and constants are automatically visible while compiling this node's RAM source. Saving this node updates the system-wide ga144-rom.yaml library." />
-                    </Border>
-                </Grid>
-            </TabItem>
+          </Border>
+        </Grid>
+      </TabItem>
 
-            <TabItem Header="Expanded macro source">
-                <Grid Margin="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+      <TabItem Header="Expanded macro source">
+        <Grid Margin="8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
 
-                    <Grid Grid.Column="0" Margin="0,0,6,0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="Expanded ROM source" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,5" />
-                        <TextBox Grid.Row="1" Text="{Binding ExpandedRomSource, Mode=OneWay}" IsReadOnly="True"
+          <Grid Grid.Column="0" Margin="0,0,6,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Expanded ROM source" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,5" />
+            <TextBox Grid.Row="1" Text="{Binding ExpandedRomSource, Mode=OneWay}" IsReadOnly="True"
                                  AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="13"
                                  TextWrapping="NoWrap" />
-                    </Grid>
+          </Grid>
 
-                    <Grid Grid.Column="1" Margin="6,0,0,0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="Expanded RAM source" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,5" />
-                        <TextBox Grid.Row="1" Text="{Binding ExpandedRamSource, Mode=OneWay}" IsReadOnly="True"
+          <Grid Grid.Column="1" Margin="6,0,0,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Expanded RAM source" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,5" />
+            <TextBox Grid.Row="1" Text="{Binding ExpandedRamSource, Mode=OneWay}" IsReadOnly="True"
                                  AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="13"
                                  TextWrapping="NoWrap" />
-                    </Grid>
-                </Grid>
-            </TabItem>
+          </Grid>
+        </Grid>
+      </TabItem>
 
-            <TabItem Header="Compiler output">
-                <Grid Margin="8">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <DockPanel Margin="0,0,0,7">
-                        <TextBlock Text="ROM is compiled first; RAM is compiled only when the ROM dictionary succeeds."
+      <TabItem Header="Compiler output">
+        <Grid Margin="8">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+          <DockPanel Margin="0,0,0,7">
+            <TextBlock Text="ROM is compiled first; RAM is compiled only when the ROM dictionary succeeds."
                                    FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <Button Content="Compile ROM + RAM" Command="{Binding CompileCommand}" DockPanel.Dock="Right"
+            <Button Content="Compile ROM + RAM" Command="{Binding CompileCommand}" DockPanel.Dock="Right"
                                 MinWidth="150" MinHeight="30" Margin="12,0,0,0" />
-                    </DockPanel>
+          </DockPanel>
 
-                    <TabControl Grid.Row="1">
-                        <TabItem Header="Diagnostics">
-                            <TextBox Margin="6" Text="{Binding CompilationDiagnostics, Mode=OneWay}" IsReadOnly="True"
+          <TabControl Grid.Row="1">
+            <TabItem Header="Diagnostics">
+              <TextBox Margin="6" Text="{Binding CompilationDiagnostics, Mode=OneWay}" IsReadOnly="True"
                                      AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
                                      HorizontalScrollBarVisibility="Auto" FontFamily="Consolas"
                                      TextWrapping="NoWrap" />
-                        </TabItem>
-                        <TabItem Header="ROM listing">
-                            <TextBox Margin="6" Text="{Binding RomCompilationListing, Mode=OneWay}" IsReadOnly="True"
-                                     AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
-                                     HorizontalScrollBarVisibility="Auto" FontFamily="Consolas"
-                                     TextWrapping="NoWrap" />
-                        </TabItem>
-                        <TabItem Header="RAM listing">
-                            <TextBox Margin="6" Text="{Binding CompilationListing, Mode=OneWay}" IsReadOnly="True"
-                                     AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
-                                     HorizontalScrollBarVisibility="Auto" FontFamily="Consolas"
-                                     TextWrapping="NoWrap" />
-                        </TabItem>
-                        <TabItem Header="Symbols / compile-time stacks">
-                            <TextBox Margin="6" Text="{Binding CompilationSymbols, Mode=OneWay}" IsReadOnly="True"
-                                     AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
-                                     HorizontalScrollBarVisibility="Auto" FontFamily="Consolas"
-                                     TextWrapping="NoWrap" />
-                        </TabItem>
-                    </TabControl>
-                </Grid>
             </TabItem>
+            <TabItem Header="ROM listing">
+              <TextBox Margin="6" Text="{Binding RomCompilationListing, Mode=OneWay}" IsReadOnly="True"
+                                     AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto" FontFamily="Consolas"
+                                     TextWrapping="NoWrap" />
+            </TabItem>
+            <TabItem Header="RAM listing">
+              <TextBox Margin="6" Text="{Binding CompilationListing, Mode=OneWay}" IsReadOnly="True"
+                                     AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto" FontFamily="Consolas"
+                                     TextWrapping="NoWrap" />
+            </TabItem>
+            <TabItem Header="Symbols / compile-time stacks">
+              <TextBox Margin="6" Text="{Binding CompilationSymbols, Mode=OneWay}" IsReadOnly="True"
+                                     AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto" FontFamily="Consolas"
+                                     TextWrapping="NoWrap" />
+            </TabItem>
+          </TabControl>
+        </Grid>
+      </TabItem>
 
-            <TabItem Header="RAM and startup">
-                <Grid Margin="8">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="2*" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
+      <TabItem Header="RAM and startup">
+        <Grid Margin="8">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2*" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
 
-                    <Grid Grid.Column="0" Margin="0,0,12,0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="Compiled RAM image (one 18-bit word per line, addresses 0x000 through 0x03F)"
+          <Grid Grid.Column="0" Margin="0,0,12,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Compiled RAM image (one 18-bit word per line, addresses 0x000 through 0x03F)"
                                    FontWeight="SemiBold" />
-                        <TextBox Grid.Row="1" Text="{Binding RamWordsText, UpdateSourceTrigger=PropertyChanged}"
+            <TextBox Grid.Row="1" Text="{Binding RamWordsText, UpdateSourceTrigger=PropertyChanged}"
                                  AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="13"
                                  TextWrapping="NoWrap" SpellCheck.IsEnabled="False" />
-                    </Grid>
+          </Grid>
 
-                    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                        <StackPanel>
-                            <TextBlock Text="Startup registers" FontWeight="SemiBold" FontSize="15" />
-                            <UniformGrid Columns="2" Margin="0,6,0,8">
-                                <StackPanel Margin="0,0,6,0">
-                                    <TextBlock Text="Entry point" />
-                                    <TextBox Text="{Binding EntryPoint, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
-                                </StackPanel>
-                                <StackPanel>
-                                    <TextBlock Text="P" />
-                                    <TextBox Text="{Binding P, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
-                                </StackPanel>
-                                <StackPanel Margin="0,0,6,0">
-                                    <TextBlock Text="A" />
-                                    <TextBox Text="{Binding A, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
-                                </StackPanel>
-                                <StackPanel>
-                                    <TextBlock Text="B" />
-                                    <TextBox Text="{Binding B, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
-                                </StackPanel>
-                            </UniformGrid>
-                            <TextBlock Text="IO" />
-                            <TextBox Text="{Binding Io, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
+          <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+              <TextBlock Text="Startup registers" FontWeight="SemiBold" FontSize="15" />
+              <UniformGrid Columns="2" Margin="0,6,0,8">
+                <StackPanel Margin="0,0,6,0">
+                  <TextBlock Text="Entry point" />
+                  <TextBox Text="{Binding EntryPoint, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
+                </StackPanel>
+                <StackPanel>
+                  <TextBlock Text="P" />
+                  <TextBox Text="{Binding P, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
+                </StackPanel>
+                <StackPanel Margin="0,0,6,0">
+                  <TextBlock Text="A" />
+                  <TextBox Text="{Binding A, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
+                </StackPanel>
+                <StackPanel>
+                  <TextBlock Text="B" />
+                  <TextBox Text="{Binding B, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
+                </StackPanel>
+              </UniformGrid>
+              <TextBlock Text="IO" />
+              <TextBox Text="{Binding Io, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas" />
 
-                            <TextBlock Text="Return stack (bottom to top, maximum 9)" FontWeight="SemiBold" Margin="0,8,0,2" />
-                            <TextBox Text="{Binding ReturnStackText, UpdateSourceTrigger=PropertyChanged}"
+              <TextBlock Text="Return stack (bottom to top, maximum 9)" FontWeight="SemiBold" Margin="0,8,0,2" />
+              <TextBox Text="{Binding ReturnStackText, UpdateSourceTrigger=PropertyChanged}"
                                      AcceptsReturn="True" Height="125" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
 
-                            <TextBlock Text="Parameter stack (bottom to top, maximum 10)" FontWeight="SemiBold" Margin="0,8,0,2" />
-                            <TextBox Text="{Binding ParameterStackText, UpdateSourceTrigger=PropertyChanged}"
+              <TextBlock Text="Parameter stack (bottom to top, maximum 10)" FontWeight="SemiBold" Margin="0,8,0,2" />
+              <TextBox Text="{Binding ParameterStackText, UpdateSourceTrigger=PropertyChanged}"
                                      AcceptsReturn="True" Height="135" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" />
-                        </StackPanel>
-                    </ScrollViewer>
-                </Grid>
-            </TabItem>
+            </StackPanel>
+          </ScrollViewer>
+        </Grid>
+      </TabItem>
 
-            <TabItem Header="System ROM image">
-                <Grid Margin="8">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Text="Compiled ROM image (one 18-bit word per line, addresses 0x080 through 0x0BF)"
+      <TabItem Header="System ROM image">
+        <Grid Margin="8">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+          <TextBlock Text="Compiled ROM image (one 18-bit word per line, addresses 0x080 through 0x0BF)"
                                FontWeight="SemiBold" />
-                    <TextBox Grid.Row="1" Text="{Binding RomWordsText, UpdateSourceTrigger=PropertyChanged}"
+          <TextBox Grid.Row="1" Text="{Binding RomWordsText, UpdateSourceTrigger=PropertyChanged}"
                              AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="13"
                              TextWrapping="NoWrap" SpellCheck.IsEnabled="False" Margin="0,5,0,0" />
-                    <Border Grid.Row="2" Background="#EEF5EF" BorderBrush="#B9CCBD" BorderThickness="1"
+          <Border Grid.Row="2" Background="#EEF5EF" BorderBrush="#B9CCBD" BorderThickness="1"
                             Padding="8" Margin="0,7,0,0">
-                        <TextBlock TextWrapping="Wrap">
+            <TextBlock TextWrapping="Wrap">
                             <Run Text="This image and its source are stored in the system-wide ROM library: " />
                             <Run Text="{Binding RomLibraryPath, Mode=OneWay}" FontFamily="Consolas" />
                             <Run Text=". The image is not part of the per-project workspace." />
-                        </TextBlock>
-                    </Border>
-                </Grid>
-            </TabItem>
-        </TabControl>
+            </TextBlock>
+          </Border>
+        </Grid>
+      </TabItem>
+    </TabControl>
 
-        <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="False">
-            <StackPanel DockPanel.Dock="Left" Width="900">
-                <TextBlock Text="A successful compile replaces the ROM image first and then the RAM image; RAM entry point is updated from the RAM compile. Save node persists project RAM/startup state and any changed system ROM source/image."
+    <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="False">
+      <StackPanel DockPanel.Dock="Left" Width="900">
+        <TextBlock Text="A successful compile replaces the ROM image first and then the RAM image; RAM entry point is updated from the RAM compile. Save node persists project RAM/startup state and any changed system ROM source/image."
                            TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#555" />
-                <TextBlock Foreground="#777" Margin="0,2,0,0">
+        <TextBlock Foreground="#777" Margin="0,2,0,0">
                     <Run Text="Macros: " /><Run Text="{Binding SystemMacroCount, Mode=OneWay}" FontWeight="SemiBold" />
                     <Run Text=" system, " /><Run Text="{Binding UserMacroCount, Mode=OneWay}" FontWeight="SemiBold" />
                     <Run Text=" project user." />
-                </TextBlock>
-            </StackPanel>
-            <Button Content="Cancel" IsCancel="True" MinWidth="90" Margin="8,0,0,0" />
-            <Button Content="Save node" IsDefault="True" Click="OnSaveClick" MinWidth="110" Margin="8,0,0,0" />
-        </DockPanel>
-    </Grid>
+        </TextBlock>
+      </StackPanel>
+      <Button Content="Cancel" IsCancel="True" MinWidth="90" Margin="8,0,0,0" />
+      <Button Content="Save node" IsDefault="True" Click="OnSaveClick" MinWidth="110" Margin="8,0,0,0" />
+    </DockPanel>
+  </Grid>
 </Window>

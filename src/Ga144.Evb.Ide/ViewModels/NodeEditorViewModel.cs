@@ -74,7 +74,15 @@ public sealed class NodeEditorViewModel : ObservableObject
     _originalRomSource = _romSourceCode;
     _originalRomWords = _romWordsText;
     CompileCommand = new RelayCommand(Compile);
+    CompileRomCommand = new RelayCommand(CompileRom);
   }
+
+  /// <summary>
+  /// Raised when a compile produces one or more errors. The view subscribes and
+  /// shows the non-modal diagnostics window; the VM does not create windows.
+  /// Arguments: (windowHeader, fullDiagnosticsText).
+  /// </summary>
+  public event Action<string, string>? DiagnosticsRequested;
 
   public Ga144NodeConfiguration Node { get; }
   public string NodeCoordinate => Node.Coordinate.ToString("000");
@@ -93,6 +101,7 @@ public sealed class NodeEditorViewModel : ObservableObject
     { } route => $"Open live Kraken control via T{route.TentacleNumber}:{route.Position:00}. Use Connect & erect if no live Kraken has been established yet."
   };
   public RelayCommand CompileCommand { get; }
+  public RelayCommand CompileRomCommand { get; }
   public int SystemMacroCount => _romLibrary.SystemMacros.Count;
   public int UserMacroCount => _userMacros.Count;
 
@@ -178,6 +187,12 @@ public sealed class NodeEditorViewModel : ObservableObject
           .Count(item => item.Severity == F18DiagnosticSeverity.Warning);
       CompilationStatus =
           $"Compilation failed: {errors} error(s), {warnings} warning(s). Any successful ROM output was retained; RAM output was not replaced.";
+      if (errors > 0)
+      {
+        DiagnosticsRequested?.Invoke(
+            $"Node {Node.Coordinate:000}: ROM + RAM compilation failed ({errors} error(s), {warnings} warning(s)).",
+            CompilationDiagnostics);
+      }
       return;
     }
 
@@ -197,7 +212,49 @@ public sealed class NodeEditorViewModel : ObservableObject
   }
 
   /// <summary>
-  /// Compile just this node's ROM and return the generated words (18-bit masked),
+  /// Compile only the ROM dictionary (no RAM). Used by the "Compile ROM" button on
+  /// the ROM source tab. Updates the ROM outputs and status, and raises the
+  /// diagnostics event if the ROM compile has errors.
+  /// </summary>
+  public void CompileRom()
+  {
+    var service = new F18NodeCompilationService(_chip, _romLibrary, _userMacros);
+    var result = service.CompileNode(Node.Coordinate, SourceCode, RomSourceCode);
+
+    CompilationDiagnostics = FormatDiagnostics(result.Rom, result.Ram);
+    ExpandedRomSource = result.Rom.ExpandedSource;
+    RomCompilationListing = result.Rom.CreateListing();
+
+    var errors = result.Rom.Diagnostics.Count(item => item.Severity == F18DiagnosticSeverity.Error);
+    var warnings = result.Rom.Diagnostics.Count(item => item.Severity == F18DiagnosticSeverity.Warning);
+
+    if (result.Rom.Success)
+    {
+      RomWordsText = string.Join(
+          Environment.NewLine,
+          result.Rom.Words.Select(word => $"0x{word & F18InstructionSet.WordMask:X5}"));
+      CompilationStatus = $"ROM compiled ({result.Rom.UsedWordCount} word(s)); {warnings} warning(s).";
+      return;
+    }
+
+    CompilationStatus = $"ROM compilation failed: {errors} error(s), {warnings} warning(s).";
+    if (errors > 0)
+    {
+      DiagnosticsRequested?.Invoke(
+          $"Node {Node.Coordinate:000}: ROM compilation failed ({errors} error(s), {warnings} warning(s)).",
+          FormatRomDiagnostics(result.Rom));
+    }
+  }
+
+  private static string FormatRomDiagnostics(F18CompileResult rom)
+  {
+    var body = rom.Diagnostics.Count == 0
+        ? "No diagnostics."
+        : string.Join(Environment.NewLine, rom.Diagnostics.Select(diagnostic => diagnostic.ToString()));
+    return "ROM" + Environment.NewLine + "---" + Environment.NewLine + body;
+  }
+
+
   /// or null if ROM compilation failed. Used by the Online Kraken window to verify
   /// the generated ROM against the chip without disturbing the editor's UI state.
   /// </summary>

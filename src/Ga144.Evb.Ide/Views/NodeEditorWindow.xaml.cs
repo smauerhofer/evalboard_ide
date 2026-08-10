@@ -6,6 +6,7 @@ namespace Ga144.Evb.Ide.Views;
 public partial class NodeEditorWindow : Window
 {
   private readonly NodeEditorViewModel _viewModel;
+  private CompileDiagnosticsWindow? _diagnosticsWindow;
 
   public NodeEditorWindow(NodeEditorViewModel viewModel)
   {
@@ -13,6 +14,30 @@ public partial class NodeEditorWindow : Window
     _viewModel = viewModel;
     DataContext = viewModel;
     Title = $"Node {viewModel.NodeCoordinate} editor";
+    _viewModel.DiagnosticsRequested += OnDiagnosticsRequested;
+    Closed += OnEditorClosed;
+  }
+
+  private void OnDiagnosticsRequested(string header, string diagnostics)
+  {
+    // Reuse a single non-modal diagnostics window for this editor.
+    if (_diagnosticsWindow is null)
+    {
+      _diagnosticsWindow = new CompileDiagnosticsWindow { Owner = this };
+      _diagnosticsWindow.Closed += (_, _) => _diagnosticsWindow = null;
+    }
+
+    _diagnosticsWindow.ShowDiagnostics(header, diagnostics);
+  }
+
+  private void OnEditorClosed(object? sender, System.EventArgs e)
+  {
+    _viewModel.DiagnosticsRequested -= OnDiagnosticsRequested;
+    if (_diagnosticsWindow is not null)
+    {
+      _diagnosticsWindow.Close();
+      _diagnosticsWindow = null;
+    }
   }
 
   private void OnOnlineKrakenClick(object sender, RoutedEventArgs e)
