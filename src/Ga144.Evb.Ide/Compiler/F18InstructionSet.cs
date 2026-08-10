@@ -139,4 +139,87 @@ public static class F18InstructionSet
     var encodedOpcode = ((opcode << 13) ^ EncodingXor) & 0x3E000;
     return (encodedOpcode | (destination & 0x3FF)) & WordMask;
   }
+
+  // ---- Packed control transfers (DB001 2.3.1) --------------------------------
+  // A jump-class opcode (jump/call/next/if/-if) may occupy slot 0, 1, or 2. When
+  // it does, the remainder of the word is its destination address field: the low
+  // n bits of the word, where n is 10, 8, or 3 for slots 0, 1, and 2. Slot 3 can
+  // never hold a transfer. The stored field replaces the low n bits of the
+  // (incremented) value of P at execution time, so a slot 1 or 2 transfer can
+  // only reach a destination whose high bits match those of the next word.
+
+  // Width in bits of the destination address field for a transfer in the given slot.
+  public static int AddressFieldWidth(int slot) => slot switch
+  {
+    0 => 10,
+    1 => 8,
+    2 => 3,
+    _ => 0
+  };
+
+  // True if a transfer occupying 'slot' of the word at 'wordAddress' can reach
+  // 'destination'. The n-bit field replaces the low n bits of (wordAddress + 1),
+  // so the destination's high bits must equal those of the next word. Slot 0
+  // carries the full 10-bit P address and always reaches within a node.
+  public static bool ControlFitsSlot(int slot, int wordAddress, int destination)
+  {
+    var width = AddressFieldWidth(slot);
+    if (width == 0)
+    {
+      return false;
+    }
+
+    if (slot == 0)
+    {
+      return destination is >= 0 and <= 0x3FF;
+    }
+
+    var mask = (1 << width) - 1;
+    var reconstructed = ((wordAddress + 1) & ~mask) | (destination & mask);
+    return reconstructed == destination;
+  }
+
+  // Encode a word whose slots 0..slotIndex-1 hold ordinary (non-transfer) opcodes
+  // and whose slot slotIndex holds a jump-class opcode with 'destination' in the
+  // low AddressFieldWidth(slotIndex) bits. slotIndex must be 0, 1, or 2.
+  public static int EncodePackedControl(
+      IReadOnlyList<byte> leadingSlots,
+      byte transferOpcode,
+      int destination,
+      int slotIndex)
+  {
+    if (slotIndex is < 0 or > 2)
+    {
+      throw new ArgumentOutOfRangeException(nameof(slotIndex), "A transfer opcode may only occupy slot 0, 1, or 2.");
+    }
+
+    if (leadingSlots.Count != slotIndex)
+    {
+      throw new ArgumentException("The leading slots must exactly fill slots 0..slotIndex-1.", nameof(leadingSlots));
+    }
+
+    if (transferOpcode is < 0x02 or > 0x07)
+    {
+      throw new ArgumentOutOfRangeException(nameof(transferOpcode), "The opcode is not a control-transfer opcode.");
+    }
+
+    var width = AddressFieldWidth(slotIndex);
+    var mask = (1 << width) - 1;
+
+    // Only the low 'width' bits are stored; the high bits of P supply the rest at
+    // run time. The caller (ControlFitsSlot) is responsible for confirming those
+    // high bits are correct for the intended destination. Any destination bits
+    // above the field are dropped here by design, so a slot-0 transfer keeps its
+    // full 10-bit address while slot 1/2 keep only the region-relative low bits.
+    var shifts = new[] { 13, 8, 3 };
+    var raw = 0;
+    for (var index = 0; index < slotIndex; index++)
+    {
+      raw |= leadingSlots[index] << shifts[index];
+    }
+
+    raw |= transferOpcode << shifts[slotIndex];
+    raw |= destination & mask;
+    return (raw ^ EncodingXor) & WordMask;
+  }
 }

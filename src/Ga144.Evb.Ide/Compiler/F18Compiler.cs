@@ -899,7 +899,12 @@ public sealed class F18Compiler
 
     if (TryResolveAddress(target, out var address))
     {
-      Builder.EmitControl(opcode, address, token);
+      // A resolved target is a known (typically backward) destination, so it may
+      // pack into the current word's next free slot; otherwise force-align it.
+      if (!Builder.TryEmitPackedControl(opcode, address, token))
+      {
+        Builder.EmitControl(opcode, address, token);
+      }
     }
     else if (!TryResolveValue(target, out _))
     {
@@ -1040,7 +1045,13 @@ public sealed class F18Compiler
       return;
     }
 
-    Builder.EmitControl(opcode, destination & 0x3FF, token);
+    // Prefer packing the backward branch into the current word's next free slot
+    // (matching the ROM); fall back to a force-aligned slot-0 control word when it
+    // cannot pack or the destination is out of the narrowed field's reach.
+    if (!Builder.TryEmitPackedControl(opcode, destination & 0x3FF, token))
+    {
+      Builder.EmitControl(opcode, destination & 0x3FF, token);
+    }
   }
 
   private void CompileUnext(F18Token token)
@@ -1108,7 +1119,13 @@ public sealed class F18Compiler
       return;
     }
 
-    Builder.EmitControl(0x05, destination & 0x3FF, token);
+    // 'next' (0x05) is a jump-class transfer. Pack it into the current word's next
+    // free slot when the loop destination is reachable there (ROM: 'for @+ next'),
+    // otherwise emit a force-aligned slot-0 control word.
+    if (!Builder.TryEmitPackedControl(0x05, destination & 0x3FF, token))
+    {
+      Builder.EmitControl(0x05, destination & 0x3FF, token);
+    }
   }
 
   // while (x - r x) == 'if swap'; -while (x - r x) == '-if swap'.
@@ -1530,6 +1547,50 @@ public sealed class F18Compiler
     {
       Align();
       WriteWord(F18InstructionSet.EncodeSlot0Control(opcode, destination), token);
+    }
+
+    // Try to pack a control transfer with a KNOWN destination (a backward branch:
+    // next/again/until/-until) into the next free slot of the current instruction
+    // word rather than force-aligning it into its own slot-0 word. This matches the
+    // ROM, which packs e.g. 'for @+ next' into a single word. Returns true and emits
+    // the completed word when the transfer fits slot 1 or 2 and the destination is
+    // reachable through that slot's narrowed address field; returns false (emitting
+    // nothing) when the current word offers no usable transfer slot or the
+    // destination is out of reach, so the caller can fall back to EmitControl.
+    public bool TryEmitPackedControl(byte opcode, int destination, F18Token token)
+    {
+      // The transfer would land in slot _slots.Count. Slots 1 and 2 can hold a
+      // transfer; slot 0 is the ordinary aligned case (handled by EmitControl) and
+      // slot 3 can never hold a transfer, so there must be one or two slots pending.
+      var slot = _slots.Count;
+      if (slot is not (1 or 2))
+      {
+        return false;
+      }
+
+      if (!F18InstructionSet.ControlFitsSlot(slot, _cursor, destination))
+      {
+        return false;
+      }
+
+      int encoded;
+      try
+      {
+        // ControlFitsSlot has confirmed the destination's high bits match the next
+        // word, so only the low field bits are stored; EncodePackedControl re-checks.
+        encoded = F18InstructionSet.EncodePackedControl(_slots, opcode, destination, slot);
+      }
+      catch (ArgumentException)
+      {
+        return false;
+      }
+
+      var instructionToken = GetInstructionToken();
+      WriteWord(encoded, instructionToken);
+      _slots.Clear();
+      _instructionToken = null;
+      FlushPendingData();
+      return true;
     }
 
     public int EmitControlPlaceholder(byte opcode, F18Token token)
