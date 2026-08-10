@@ -7,8 +7,8 @@ public sealed class F18Compiler
         ":", ";", "[", "]", "org", "entry", "const", "constant", "label", "data", "word", ".word", ",",
         "align", "..", "lit", "literal", "A[", "]]", "call", "jump", "jmp",
         "branch-if", "branch--if", "branch-next", "begin", "again", "until", "-until",
-        "if", "-if", "else", "then", "ahead", "leap", "for", "next", "while", "-while",
-        "repeat", "recurse", "exit", "import", "swap", "here",
+        "if", "-if", "zif", "else", "then", "ahead", "leap", "for", "next", "unext", "while", "-while",
+        "repeat", "recurse", "exit", "import", "swap", "here", "end", "*next",
         "rot", "nip", "tuck", "1+", "1-", "negate", "=", "<>", "<", ">", "0=", "0<",
         "depth", "rdepth", "clear", "rclear", "invert",
         // Former GreenArrays spellings are reserved so a source file receives a
@@ -23,7 +23,6 @@ public sealed class F18Compiler
 
   private readonly List<F18Diagnostic> _diagnostics = [];
   private readonly List<SymbolRelocation> _symbolRelocations = [];
-  private readonly Stack<ControlMarker> _controlStack = [];
 
   private MemoryBuilder? _builder;
   private F18CompileTimeInterpreter? _interpreter;
@@ -61,15 +60,10 @@ public sealed class F18Compiler
         AddError("F18C043", "The definition entered interpretation with '[' but did not resume compilation with ']'.", LastLocation());
       }
 
-      AddError("F18C001", $"Definition '{_currentDefinition}' is missing its terminating ';'.", LastLocation());
-    }
-
-    if (_controlStack.Count > 0)
-    {
-      foreach (ControlMarker marker in _controlStack.Reverse())
-      {
-        AddError("F18C002", $"Unclosed '{marker.Kind}' control structure.", marker.Token.Location);
-      }
+      // GreenArrays F18 style: a trailing ':' definition need not end with ';'.
+      // An unterminated final definition simply falls through to the end of the
+      // dictionary, so this is not an error. Any open control structures are
+      // still reported below.
     }
 
     Builder.Align();
@@ -138,7 +132,6 @@ public sealed class F18Compiler
     }
 
     _symbolRelocations.Clear();
-    _controlStack.Clear();
     _tokens = [];
     _tokenIndex = 0;
     _inDefinition = false;
@@ -262,6 +255,12 @@ public sealed class F18Compiler
       case "-if":
         CompileForwardIf(token, 0x07, ControlKind.MinusIf);
         return;
+      case "zif":
+        // DB013 5.3.2.1: if R is zero, pop R and continue; otherwise decrement R
+        // and jump to matching 'then'. This is the R-controlled 'next' opcode
+        // (0x05) used as a FORWARD transfer resolved by 'then'.
+        CompileForwardIf(token, 0x05, ControlKind.If);
+        return;
       case "else":
         CompileElse(token);
         return;
@@ -269,14 +268,32 @@ public sealed class F18Compiler
         CompileThen(token);
         return;
       case "ahead":
-      case "leap":
         CompileAhead(token);
+        return;
+      case "leap":
+        // DB013 5.3.2.1: leap compiles a CALL to matching then (ahead jumps).
+        CompileLeap(token);
         return;
       case "for":
         CompileFor(token);
         return;
       case "next":
         CompileNext(token);
+        return;
+      case "unext":
+        // DB013 5.3.2.2: ends a micronext loop (opcode 0x04). The loop body is
+        // within a single instruction word, so no destination address is used;
+        // the matching 'for' marker is consumed.
+        CompileUnext(token);
+        return;
+      case "*next":
+        // DB013 5.3.2.3: equivalent to 'swap next'.
+        CompileStarNext(token);
+        return;
+      case "end":
+        // DB013 5.3.2.3: unconditionally jumps to a (backward jump, opcode 0x02),
+        // consuming a 'begin' marker.
+        CompileBackwardBranch(token, ControlKind.Begin, 0x02, "begin");
         return;
       case "while":
         CompileWhile(token, 0x06, ControlKind.While);
@@ -630,8 +647,20 @@ public sealed class F18Compiler
   {
     if (_inDefinition)
     {
-      AddError("F18C007", $"Definition '{_currentDefinition}' must be terminated before another definition begins.", token.Location);
-      return;
+      // GreenArrays F18 style: a ':' definition need not be terminated by ';'.
+      // A following ':' simply sets a new label; execution falls through into it
+      // (the boot-ROM 'relay'/'done' idiom). Pending control values on the shared
+      // stack intentionally CARRY ACROSS the ':' — e.g. a 'then' after ': done'
+      // resolves a handle left before the label — so they are not cleared here.
+      if (!_compileMode)
+      {
+        // An open '[' interpretation must be closed with ']' first.
+        AddError("F18C052", "The definition cannot end while '[' interpretation is active; insert ']' before starting a new definition.", token.Location);
+        _compileMode = true;
+      }
+
+      _inDefinition = false;
+      _currentDefinition = null;
     }
 
     var name = ReadRequiredToken(token, "word name");
@@ -664,12 +693,6 @@ public sealed class F18Compiler
     {
       AddError("F18C052", "The definition cannot end while '[' interpretation is active; insert ']' before ';'.", token.Location);
       _compileMode = true;
-    }
-
-    if (_controlStack.Count > 0)
-    {
-      AddError("F18C009", "All control structures must be closed before the definition terminator.", token.Location);
-      _controlStack.Clear();
     }
 
     Builder.EmitPrimitive(0x00, token);
@@ -894,78 +917,54 @@ public sealed class F18Compiler
     }
 
     Builder.Align();
-    _controlStack.Push(new ControlMarker(ControlKind.Begin, Builder.CurrentAddress, null, token));
+    // begin (-a): push the current address as a destination onto the shared stack.
+    PushControlValue(Builder.CurrentAddress, token);
   }
 
-  private void CompileBackwardBranch(F18Token token, ControlKind expected, byte opcode, string expectedName)
+  // ---- Unified control stack -------------------------------------------------
+  // Per the F18 language (DB013 5.3.x), the compiler's control stack IS the
+  // interpreter data stack. Forward transfers leave a HANDLE 'r'; loop/branch
+  // openers leave a DESTINATION 'a'. Both are ordinary integer values, so 'swap'
+  // (including yellow/interpret-mode '[ swap ]') reorders them naturally and
+  // composite structures like 'while' = 'if swap' work by construction.
+  //
+  // A destination is a bare 10-bit address. A handle packs the patch address
+  // (bits 0-9) with the slot-0 transfer opcode (bits 12-14) so 'then' can restore
+  // the exact opcode (jump/call/if/-if/zif) when it fills in the destination.
+  private const int HandleOpcodeShift = 12;
+
+  private static int EncodeHandle(int patchAddress, byte opcode) =>
+      (patchAddress & 0x3FF) | ((opcode & 0x07) << HandleOpcodeShift);
+
+  private static int HandleAddress(int handle) => handle & 0x3FF;
+  private static byte HandleOpcode(int handle) => (byte)((handle >> HandleOpcodeShift) & 0x07);
+
+  private void PushControlValue(int value, F18Token token) =>
+      Interpreter.TryPushData(value, token);
+
+  private bool TryPopControlValue(F18Token token, string need, out int value)
   {
-    if (!RequireDefinition(token))
+    if (Interpreter.DataStack.Count == 0)
     {
-      return;
+      AddError("F18C028", $"'{token.Text}' requires {need} on the stack, but it is empty.", token.Location);
+      value = 0;
+      return false;
     }
 
-    if (!TryPopControl(expected, token, expectedName, out var marker))
-    {
-      return;
-    }
-
-    Builder.EmitControl(opcode, marker.Address, token);
+    return Interpreter.TryPopData(token, out value);
   }
 
+  // Forward transfer: emit the branch with its opcode and leave a handle 'r'.
   private void CompileForwardIf(F18Token token, byte opcode, ControlKind kind)
   {
+    _ = kind; // kind is no longer used; the opcode is carried in the handle.
     if (!RequireDefinition(token))
     {
       return;
     }
 
     var patchAddress = Builder.EmitControlPlaceholder(opcode, token);
-    _controlStack.Push(new ControlMarker(kind, 0, patchAddress, token));
-  }
-
-  private void CompileElse(F18Token token)
-  {
-    if (!RequireDefinition(token))
-    {
-      return;
-    }
-
-    if (_controlStack.Count == 0 || _controlStack.Peek().Kind is not (ControlKind.If or ControlKind.MinusIf))
-    {
-      AddError("F18C024", "else requires a preceding if or -if.", token.Location);
-      return;
-    }
-
-    var previous = _controlStack.Pop();
-    var jumpPatch = Builder.EmitControlPlaceholder(0x02, token);
-    Builder.PatchControl(previous.PatchAddress!.Value, previous.Kind == ControlKind.If ? (byte)0x06 : (byte)0x07,
-        Builder.CurrentAddress, previous.Token);
-    _controlStack.Push(new ControlMarker(ControlKind.Else, 0, jumpPatch, token));
-  }
-
-  private void CompileThen(F18Token token)
-  {
-    if (!RequireDefinition(token))
-    {
-      return;
-    }
-
-    if (_controlStack.Count == 0 || _controlStack.Peek().Kind is not
-        (ControlKind.If or ControlKind.MinusIf or ControlKind.Else or ControlKind.Ahead))
-    {
-      AddError("F18C025", "then requires if, -if, else, or ahead.", token.Location);
-      return;
-    }
-
-    var marker = _controlStack.Pop();
-    Builder.Align();
-    var opcode = marker.Kind switch
-    {
-      ControlKind.If => (byte)0x06,
-      ControlKind.MinusIf => (byte)0x07,
-      _ => (byte)0x02
-    };
-    Builder.PatchControl(marker.PatchAddress!.Value, opcode, Builder.CurrentAddress, marker.Token);
+    PushControlValue(EncodeHandle(patchAddress, opcode), token);
   }
 
   private void CompileAhead(F18Token token)
@@ -976,11 +975,116 @@ public sealed class F18Compiler
     }
 
     var patchAddress = Builder.EmitControlPlaceholder(0x02, token);
-    _controlStack.Push(new ControlMarker(ControlKind.Ahead, 0, patchAddress, token));
+    PushControlValue(EncodeHandle(patchAddress, 0x02), token);
+  }
+
+  private void CompileLeap(F18Token token)
+  {
+    // DB013 5.3.2.1: leap compiles a CALL (0x03) to the matching then.
+    if (!RequireDefinition(token))
+    {
+      return;
+    }
+
+    var patchAddress = Builder.EmitControlPlaceholder(0x03, token);
+    PushControlValue(EncodeHandle(patchAddress, 0x03), token);
+  }
+
+  // then (r-): resolve a forward handle to here.
+  private void CompileThen(F18Token token)
+  {
+    if (!RequireDefinition(token))
+    {
+      return;
+    }
+
+    if (!TryPopControlValue(token, "a forward reference (r)", out int handle))
+    {
+      return;
+    }
+
+    Builder.Align();
+    Builder.PatchControl(HandleAddress(handle), HandleOpcode(handle), Builder.CurrentAddress, token);
+  }
+
+  // else (r-r): resolve the previous handle to here and open a new forward jump.
+  private void CompileElse(F18Token token)
+  {
+    if (!RequireDefinition(token))
+    {
+      return;
+    }
+
+    if (!TryPopControlValue(token, "a forward reference (r)", out int handle))
+    {
+      return;
+    }
+
+    var jumpPatch = Builder.EmitControlPlaceholder(0x02, token);
+    Builder.PatchControl(HandleAddress(handle), HandleOpcode(handle), Builder.CurrentAddress, token);
+    PushControlValue(EncodeHandle(jumpPatch, 0x02), token);
+  }
+
+  // Backward transfer to a destination 'a' with the given opcode (until/-until/end/again).
+  private void CompileBackwardBranch(F18Token token, ControlKind expected, byte opcode, string expectedName)
+  {
+    _ = expected;
+    _ = expectedName;
+    if (!RequireDefinition(token))
+    {
+      return;
+    }
+
+    if (!TryPopControlValue(token, "a destination (a)", out int destination))
+    {
+      return;
+    }
+
+    Builder.EmitControl(opcode, destination & 0x3FF, token);
+  }
+
+  private void CompileUnext(F18Token token)
+  {
+    // DB013 5.3.2.2: unext (micronext) loops within one instruction word using R,
+    // with no destination address (opcode 0x04). It consumes the loop's
+    // destination 'a' left by 'for' or 'begin'.
+    if (!RequireDefinition(token))
+    {
+      return;
+    }
+
+    if (!TryPopControlValue(token, "a loop destination (a)", out _))
+    {
+      return;
+    }
+
+    Builder.EmitPrimitive(0x04, token);
+  }
+
+  private void CompileStarNext(F18Token token)
+  {
+    // DB013 5.3.2.3: *next (a x - x) == 'swap next'. Bring the loop destination to
+    // the top past one intervening value, then emit next.
+    if (!RequireDefinition(token))
+    {
+      return;
+    }
+
+    if (Interpreter.DataStack.Count < 2)
+    {
+      AddError("F18C028", "'*next' requires a destination and one value (a x) on the stack.", token.Location);
+      return;
+    }
+
+    Interpreter.TryPopData(token, out int x);
+    Interpreter.TryPopData(token, out int destination);
+    PushControlValue(x, token);
+    Builder.EmitControl(0x05, destination & 0x3FF, token);
   }
 
   private void CompileFor(F18Token token)
   {
+    // for (-a): push count-load primitive, align, and leave the loop destination.
     if (!RequireDefinition(token))
     {
       return;
@@ -988,9 +1092,10 @@ public sealed class F18Compiler
 
     Builder.EmitPrimitive(0x1D, token);
     Builder.Align();
-    _controlStack.Push(new ControlMarker(ControlKind.For, Builder.CurrentAddress, null, token));
+    PushControlValue(Builder.CurrentAddress, token);
   }
 
+  // next (a-): backward transfer to the loop destination.
   private void CompileNext(F18Token token)
   {
     if (!RequireDefinition(token))
@@ -998,30 +1103,43 @@ public sealed class F18Compiler
       return;
     }
 
-    if (!TryPopControl(ControlKind.For, token, "for", out var marker))
+    if (!TryPopControlValue(token, "a loop destination (a)", out int destination))
     {
       return;
     }
 
-    Builder.EmitControl(0x05, marker.Address, token);
+    Builder.EmitControl(0x05, destination & 0x3FF, token);
   }
 
+  // while (x - r x) == 'if swap'; -while (x - r x) == '-if swap'.
   private void CompileWhile(F18Token token, byte opcode, ControlKind kind)
   {
+    _ = kind;
     if (!RequireDefinition(token))
     {
       return;
     }
 
-    if (!TryPopControl(ControlKind.Begin, token, "begin", out var begin))
-    {
-      return;
-    }
-
+    // 'if': emit the conditional forward branch and produce a handle.
     var patchAddress = Builder.EmitControlPlaceholder(opcode, token);
-    _controlStack.Push(new ControlMarker(kind, begin.Address, patchAddress, token));
+    int handle = EncodeHandle(patchAddress, opcode);
+
+    // 'swap': exchange the new handle with the value beneath (the begin
+    // destination), leaving ( ... r x ) so repeat/again resolves them correctly.
+    if (Interpreter.DataStack.Count >= 1)
+    {
+      Interpreter.TryPopData(token, out int beneath);
+      PushControlValue(handle, token);
+      PushControlValue(beneath, token);
+    }
+    else
+    {
+      // Nothing beneath to swap with; just leave the handle.
+      PushControlValue(handle, token);
+    }
   }
 
+  // repeat: ( r a - ) close a begin..while loop: jump back to 'a', resolve 'r' here.
   private void CompileRepeat(F18Token token)
   {
     if (!RequireDefinition(token))
@@ -1029,16 +1147,16 @@ public sealed class F18Compiler
       return;
     }
 
-    if (_controlStack.Count == 0 || _controlStack.Peek().Kind is not (ControlKind.While or ControlKind.MinusWhile))
+    if (Interpreter.DataStack.Count < 2)
     {
-      AddError("F18C026", "repeat requires begin ... while or begin ... -while.", token.Location);
+      AddError("F18C026", "repeat requires begin ... while (or -while): a handle and destination (r a) must be on the stack.", token.Location);
       return;
     }
 
-    var marker = _controlStack.Pop();
-    Builder.EmitControl(0x02, marker.Address, token);
-    var branchOpcode = marker.Kind == ControlKind.While ? (byte)0x06 : (byte)0x07;
-    Builder.PatchControl(marker.PatchAddress!.Value, branchOpcode, Builder.CurrentAddress, marker.Token);
+    Interpreter.TryPopData(token, out int destination);
+    Interpreter.TryPopData(token, out int handle);
+    Builder.EmitControl(0x02, destination & 0x3FF, token);
+    Builder.PatchControl(HandleAddress(handle), HandleOpcode(handle), Builder.CurrentAddress, token);
   }
 
   private void CompileRecurse(F18Token token)
@@ -1055,19 +1173,6 @@ public sealed class F18Compiler
     }
 
     Builder.EmitControl(0x03, symbol.Value, token);
-  }
-
-  private bool TryPopControl(ControlKind expected, F18Token token, string expectedName, out ControlMarker marker)
-  {
-    if (_controlStack.Count == 0 || _controlStack.Peek().Kind != expected)
-    {
-      AddError("F18C028", $"'{token.Text}' requires a matching '{expectedName}'.", token.Location);
-      marker = default!;
-      return false;
-    }
-
-    marker = _controlStack.Pop();
-    return true;
   }
 
   private bool DefineSymbol(F18Token token, int address, F18ExportKind kind)
@@ -1327,8 +1432,6 @@ public sealed class F18Compiler
     While,
     MinusWhile
   }
-
-  private sealed record ControlMarker(ControlKind Kind, int Address, int? PatchAddress, F18Token Token);
 
   private sealed class MemoryBuilder
   {

@@ -133,6 +133,16 @@ public sealed class NodeEditorViewModel : ObservableObject
 
   public string RamWordsText { get => _ramWordsText; set => SetProperty(ref _ramWordsText, value ?? string.Empty); }
   public string RomWordsText { get => _romWordsText; set => SetProperty(ref _romWordsText, value ?? string.Empty); }
+
+  /// <summary>
+  /// Fixed address gutter for the System ROM image (0x080..0x0BF, one per line),
+  /// shown read-only alongside the editable word column so each line's address is
+  /// visible without becoming part of the editable/round-tripped text.
+  /// </summary>
+  public string RomAddressGutterText { get; } = string.Join(
+      Environment.NewLine,
+      Enumerable.Range(0, Models.RomComparison.RomWordCount)
+          .Select(index => $"0x{Models.RomComparison.RomBaseAddress + index:X3}"));
   public string EntryPoint { get => _entryPoint; set => SetProperty(ref _entryPoint, value ?? string.Empty); }
   public string P { get => _p; set => SetProperty(ref _p, value ?? string.Empty); }
   public string A { get => _a; set => SetProperty(ref _a, value ?? string.Empty); }
