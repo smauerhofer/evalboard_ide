@@ -901,7 +901,9 @@ public sealed class F18Compiler
     {
       // A resolved target is a known (typically backward) destination, so it may
       // pack into the current word's next free slot; otherwise force-align it.
-      if (!Builder.TryEmitPackedControl(opcode, address, token))
+      // Packing is skipped when PackBackwardBranches is disabled.
+      if (!_options.PackBackwardBranches ||
+          !Builder.TryEmitPackedControl(opcode, address, token))
       {
         Builder.EmitControl(opcode, address, token);
       }
@@ -1047,8 +1049,11 @@ public sealed class F18Compiler
 
     // Prefer packing the backward branch into the current word's next free slot
     // (matching the ROM); fall back to a force-aligned slot-0 control word when it
-    // cannot pack or the destination is out of the narrowed field's reach.
-    if (!Builder.TryEmitPackedControl(opcode, destination & 0x3FF, token))
+    // cannot pack or the destination is out of the narrowed field's reach. Packing
+    // can be disabled (PackBackwardBranches = false) for layout-stable artifacts
+    // such as the runtime-compiled Kraken node-708 reply helper.
+    if (!_options.PackBackwardBranches ||
+        !Builder.TryEmitPackedControl(opcode, destination & 0x3FF, token))
     {
       Builder.EmitControl(opcode, destination & 0x3FF, token);
     }
@@ -1121,8 +1126,10 @@ public sealed class F18Compiler
 
     // 'next' (0x05) is a jump-class transfer. Pack it into the current word's next
     // free slot when the loop destination is reachable there (ROM: 'for @+ next'),
-    // otherwise emit a force-aligned slot-0 control word.
-    if (!Builder.TryEmitPackedControl(0x05, destination & 0x3FF, token))
+    // otherwise emit a force-aligned slot-0 control word. Packing is skipped when
+    // PackBackwardBranches is disabled.
+    if (!_options.PackBackwardBranches ||
+        !Builder.TryEmitPackedControl(0x05, destination & 0x3FF, token))
     {
       Builder.EmitControl(0x05, destination & 0x3FF, token);
     }

@@ -835,7 +835,21 @@ internal sealed class KrakenSession : IAsyncDisposable
             """;
 
     var compiler = new F18Compiler();
-    F18CompileResult result = compiler.Compile(source, F18CompilerOptions.ForRam(KrakenTopology.HeadCoordinate));
+    // Compile with backward-branch packing DISABLED. This hand-authored helper is
+    // booted to node 708 and its layout must stay byte-identical regardless of
+    // codegen changes; the ROM-matching slot packing (DB001 2.3.1) applies to
+    // ordinary source compilation, not to this fixed-layout runtime artifact.
+    var options = new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = KrakenTopology.HeadCoordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      MacroLookupScope = F18MacroLookupScope.UserAndSystem,
+      PackBackwardBranches = false
+    };
+    F18CompileResult result = compiler.Compile(source, options);
     if (!result.Success)
     {
       string diagnostics = string.Join(Environment.NewLine, result.Diagnostics.Select(item => item.ToString()));

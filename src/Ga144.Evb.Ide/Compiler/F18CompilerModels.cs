@@ -117,6 +117,14 @@ public sealed class F18CompilerOptions
   public Func<string, F18MacroLookupScope, F18MacroResolution>? MacroResolver { get; init; }
   public F18MacroLookupScope MacroLookupScope { get; init; } = F18MacroLookupScope.UserAndSystem;
 
+  // When true (the default), backward transfers (next/again/until/-until) pack
+  // into the current instruction word's next free slot when the destination is
+  // reachable through that slot's narrowed address field, matching the silicon
+  // ROM (DB001 2.3.1). Set false to force every backward transfer into its own
+  // slot-0 word. The runtime-compiled Kraken node-708 reply helper relies on the
+  // pre-packing layout, so it compiles with this disabled to stay byte-stable.
+  public bool PackBackwardBranches { get; init; } = true;
+
   public string MemoryName => MemorySpace == F18MemorySpace.Ram ? "RAM" : "ROM";
 
   public static F18CompilerOptions ForRam(int nodeCoordinate = 0) => new()

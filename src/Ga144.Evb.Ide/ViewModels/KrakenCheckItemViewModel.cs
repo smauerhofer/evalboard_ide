@@ -49,4 +49,13 @@ public sealed class KrakenCheckItemViewModel : ObservableObject
     Status = "SKIP";
     Message = message;
   }
+
+  // Reset the row to its initial state so a reset-and-retry pass of the check
+  // starts clean, regardless of the previous outcome.
+  internal void MarkPending()
+  {
+    Status = "PENDING";
+    Actual = "—";
+    Message = "Waiting.";
+  }
 }

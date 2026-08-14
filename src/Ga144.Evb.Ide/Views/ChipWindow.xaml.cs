@@ -169,7 +169,8 @@ public partial class ChipWindow : Window
     {
       var checkViewModel = new KrakenCheckViewModel(
         _viewModel.Chip.Kraken,
-        _viewModel.KrakenController);
+        _viewModel.KrakenController,
+        ConfirmKrakenResetAndRetryAsync);
       var window = new KrakenCheckWindow(checkViewModel)
       {
         Owner = this
@@ -191,6 +192,26 @@ public partial class ChipWindow : Window
         MessageBoxButton.OK,
         MessageBoxImage.Error);
     }
+  }
+
+  // Prompt the user to reset and re-erect the chip after a Kraken transport fault
+  // during Check Kraken. Returns true to retry (reset + re-erect + rescan), false
+  // to stop. Marshaled to the UI thread and owned by the check window when it is
+  // open so the dialog is correctly modal.
+  private Task<bool> ConfirmKrakenResetAndRetryAsync(string message)
+  {
+    return Dispatcher.InvokeAsync(() =>
+    {
+      Window owner = (Window?)_krakenCheckWindow ?? this;
+      MessageBoxResult result = MessageBox.Show(
+        owner,
+        message,
+        "Kraken communication failed",
+        MessageBoxButton.YesNo,
+        MessageBoxImage.Warning,
+        MessageBoxResult.No);
+      return result == MessageBoxResult.Yes;
+    }).Task;
   }
 
   private void OnKrakenCheckWindowClosed(object? sender, EventArgs e)
