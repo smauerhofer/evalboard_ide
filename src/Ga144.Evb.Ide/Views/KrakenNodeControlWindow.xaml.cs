@@ -18,6 +18,24 @@ public partial class KrakenNodeControlWindow : Window
     Closing += OnClosing;
   }
 
+  private void OnCopyRamClick(object sender, RoutedEventArgs e) =>
+      CopyToClipboard(_viewModel.BuildRamText());
+
+  private void OnCopyRomClick(object sender, RoutedEventArgs e) =>
+      CopyToClipboard(_viewModel.BuildRomText());
+
+  private static void CopyToClipboard(string text)
+  {
+    try
+    {
+      Clipboard.SetText(text);
+    }
+    catch (System.Runtime.InteropServices.ExternalException)
+    {
+      // The clipboard can transiently fail if another process holds it; ignore.
+    }
+  }
+
   private async void OnLoaded(object sender, RoutedEventArgs e)
   {
     Loaded -= OnLoaded;

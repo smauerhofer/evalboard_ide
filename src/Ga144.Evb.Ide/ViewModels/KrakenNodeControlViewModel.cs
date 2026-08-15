@@ -93,6 +93,25 @@ public sealed class KrakenNodeControlViewModel : ObservableObject, IAsyncDisposa
   public ObservableCollection<KrakenWordCellViewModel> ParameterStack { get; } = [];
   public ObservableCollection<KrakenWordCellViewModel> ReturnStack { get; } = [];
 
+  // Tab-separated "address<TAB>value" lines for the current RAM cells, suitable for
+  // pasting into a spreadsheet or a diff. Header included for clarity.
+  public string BuildRamText() => BuildWordText(RamWords, "RAM");
+
+  // Tab-separated "address<TAB>value" lines for the current ROM cells.
+  public string BuildRomText() => BuildWordText(RomWords, "ROM");
+
+  private static string BuildWordText(IReadOnlyList<KrakenWordCellViewModel> cells, string title)
+  {
+    var builder = new System.Text.StringBuilder();
+    builder.Append("Address\t").Append(title).Append('\n');
+    foreach (KrakenWordCellViewModel cell in cells)
+    {
+      builder.Append(cell.AddressText).Append('\t').Append(cell.ValueText).Append('\n');
+    }
+
+    return builder.ToString();
+  }
+
   public bool IsConnected
   {
     get => _isConnected;

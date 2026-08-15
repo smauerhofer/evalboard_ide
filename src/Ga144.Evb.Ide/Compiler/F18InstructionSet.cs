@@ -102,7 +102,16 @@ public static class F18InstructionSet
       throw new ArgumentOutOfRangeException(nameof(opcodes), "An F18A instruction word has at most four slots.");
     }
 
-    var slots = new byte[4] { NopOpcode, NopOpcode, NopOpcode, NopOpcode };
+    // Unused trailing slots are filled with nop ('.', 0x1C) so that, if execution
+    // reaches them, nothing happens. But when the word already ends in a
+    // control-flow terminator (ret 0x00 or ex 0x01) execution never falls through,
+    // and the F18A ROM leaves the remaining slots as raw 0 -- so we must match that
+    // to be byte-identical (filling with nop would set those bits and mismatch).
+    var terminated = opcodes.Count > 0 &&
+        (opcodes[^1] == 0x00 || opcodes[^1] == 0x01);
+    var fill = terminated ? (byte)0x00 : NopOpcode;
+
+    var slots = new byte[4] { fill, fill, fill, fill };
     for (var index = 0; index < opcodes.Count; index++)
     {
       slots[index] = opcodes[index];
