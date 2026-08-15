@@ -79,10 +79,12 @@
           </Grid.RowDefinitions>
           <DockPanel Margin="0,0,0,7">
             <TextBlock Text="Live hardware ROM (0x080–0x0BF), read-only." FontWeight="SemiBold" VerticalAlignment="Center" />
-            <Button DockPanel.Dock="Right" Content="Read ROM 64" Command="{Binding ReadRomCommand}" MinWidth="110" Padding="8,4" />
-            <Button DockPanel.Dock="Right" Content="Verify ROM vs chip" Command="{Binding VerifyRomCommand}" MinWidth="130" Padding="8,4" Margin="0,0,6,0" />
-            <Button DockPanel.Dock="Right" Content="Copy" Click="OnCopyRomClick" MinWidth="70" Padding="8,4" Margin="0,0,6,0"
-                    ToolTip="Copy all ROM cells (address and value) to the clipboard." />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+              <Button Content="Read ROM 64" Command="{Binding ReadRomCommand}" MinWidth="110" Padding="8,4" />
+              <Button Content="Verify ROM vs chip" Command="{Binding VerifyRomCommand}" MinWidth="130" Padding="8,4" Margin="7,0,0,0" />
+              <Button Content="Copy" Click="OnCopyRomClick" MinWidth="70" Padding="8,4" Margin="7,0,0,0"
+                      ToolTip="Copy all ROM cells (address and value) to the clipboard." />
+            </StackPanel>
           </DockPanel>
           <DataGrid Grid.Row="1" ItemsSource="{Binding RomWords}" AutoGenerateColumns="False" CanUserAddRows="False"
                               IsReadOnly="True" HeadersVisibility="Column" GridLinesVisibility="Horizontal" FontFamily="Consolas">

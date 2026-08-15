@@ -198,15 +198,6 @@ public static class F18InstructionSet
       return destination is >= 0 and <= 0x3FF;
     }
 
-    // When the destination carries the Extended Arithmetic Mode bit (P9), the branch
-    // executes inside an EAM region, so the running P also has P9 set. The physical
-    // nextP we track does not, so align it to the destination's P9 before comparing
-    // the high bits; otherwise an in-region slot 1/2 branch would look unreachable.
-    if ((destination & ExtendedArithmeticBit) != 0)
-    {
-      nextP |= ExtendedArithmeticBit;
-    }
-
     var mask = (1 << width) - 1;
     var reconstructed = (nextP & ~mask) | (destination & mask);
     return reconstructed == destination;

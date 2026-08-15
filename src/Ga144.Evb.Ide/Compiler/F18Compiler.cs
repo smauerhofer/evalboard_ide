@@ -30,7 +30,6 @@ public sealed class F18Compiler
   private int _tokenIndex;
   private bool _inDefinition;
   private bool _compileMode;
-  private bool _extendedArithmetic;
   private string? _currentDefinition;
   private int? _firstDefinitionAddress;
   private F18Token? _entryToken;
@@ -133,7 +132,6 @@ public sealed class F18Compiler
     _tokens = [];
     _tokenIndex = 0;
     _inDefinition = false;
-    _extendedArithmetic = false;
     // The compiler starts in compile mode; only '[' switches to interpretation.
     _compileMode = true;
     _currentDefinition = null;
@@ -209,14 +207,13 @@ public sealed class F18Compiler
         InterpretComma(token);
         return;
       case "+cy":
-        // Enter Extended Arithmetic Mode region: labels defined here get bit P9
-        // (0x200) set in their address so that calling them enables EAM (DB001 2.1,
-        // DB002 3.2 -- "the address of this word has the EAM bit set").
-        _extendedArithmetic = true;
+        // Enter Extended Arithmetic Mode: set bit P9 on the location counter so
+        // every address captured here carries it (DB001 2.1, DB002 3.2).
+        Builder.SetExtendedArithmetic(true);
         return;
       case "-cy":
-        // Leave the Extended Arithmetic Mode region.
-        _extendedArithmetic = false;
+        // Leave Extended Arithmetic Mode: clear bit P9 on the location counter.
+        Builder.SetExtendedArithmetic(false);
         return;
       case "align":
       case "..":
@@ -536,7 +533,7 @@ public sealed class F18Compiler
   private void InterpretHere(F18Token token)
   {
     Builder.Align();
-    Interpreter.TryPushData(LocalTarget(Builder.CurrentAddress), token);
+    Interpreter.TryPushData(Builder.CurrentAddress, token);
   }
 
   private void CompileSwap(F18Token token)
@@ -704,7 +701,7 @@ public sealed class F18Compiler
     }
 
     Builder.Align();
-    if (!DefineSymbol(name, LocalTarget(Builder.CurrentAddress), F18ExportKind.Word))
+    if (!DefineSymbol(name, Builder.CurrentAddress, F18ExportKind.Word))
     {
       return;
     }
@@ -769,7 +766,7 @@ public sealed class F18Compiler
     }
 
     Builder.Align();
-    DefineSymbol(name, LocalTarget(Builder.CurrentAddress), F18ExportKind.Label);
+    DefineSymbol(name, Builder.CurrentAddress, F18ExportKind.Label);
   }
 
   private void CompileRawData(F18Token token)
@@ -981,7 +978,7 @@ public sealed class F18Compiler
 
     Builder.Align();
     // begin (-a): push the current address as a destination onto the shared stack.
-    PushControlValue(LocalTarget(Builder.CurrentAddress), token);
+    PushControlValue(Builder.CurrentAddress, token);
   }
 
   // ---- Unified control stack -------------------------------------------------
@@ -1083,16 +1080,6 @@ public sealed class F18Compiler
   }
 
   // then (r-): resolve a forward handle to here.
-  // Capture the current compile address as a value (label, marker, or forward/back
-  // reference). Inside a '+cy' region every such address carries the Extended
-  // Arithmetic Mode bit (P9): the code is still placed at the physical address, but
-  // any transfer to it uses the full address including P9, so execution stays in
-  // EAM. Outside the region the address is unchanged. Centralizing the bit here
-  // means transfers themselves need no EAM special-casing -- they just use the
-  // full address value that was captured at definition/reference time.
-  private int LocalTarget(int address) =>
-      _extendedArithmetic ? address | F18InstructionSet.ExtendedArithmeticBit : address;
-
   private void CompileThen(F18Token token)
   {
     if (!RequireDefinition(token))
@@ -1111,11 +1098,10 @@ public sealed class F18Compiler
 
   // Resolve a forward handle to 'destination'. Uses the slot-aware packed patch
   // when packing is enabled (the handle records the transfer's slot), else the
-  // legacy slot-0 patch. Inside a '+cy' region the destination carries the EAM bit
-  // (P9) so the branch keeps Extended Arithmetic Mode active.
+  // legacy slot-0 patch. The destination already carries any P9 bit, since it comes
+  // from the location counter, so an in-region branch keeps Extended Arithmetic Mode.
   private void PatchForwardHandle(int handle, int destination, F18Token token)
   {
-    destination = LocalTarget(destination);
     if (_options.PackControlTransfers)
     {
       Builder.PatchPackedControl(
@@ -1229,7 +1215,7 @@ public sealed class F18Compiler
 
     Builder.EmitPrimitive(0x1D, token);
     Builder.Align();
-    PushControlValue(LocalTarget(Builder.CurrentAddress), token);
+    PushControlValue(Builder.CurrentAddress, token);
   }
 
   // next (a-): backward transfer to the loop destination.
@@ -1651,13 +1637,28 @@ public sealed class F18Compiler
 
     public int UsedWordCount => _memory.Count(word => word.HasValue);
 
+    // '+cy'/'-cy' (DB002 3.2): Extended Arithmetic Mode is selected by bit P9 of the
+    // running address, so the assembler simply sets or clears P9 on the location
+    // counter. Every address captured while it is set (labels, markers, forward and
+    // backward references) then carries P9, and every transfer to such an address
+    // keeps EAM active -- no separate mode flag is needed. Flush first so the change
+    // applies to the next word, not a partially filled one.
+    public void SetExtendedArithmetic(bool enabled)
+    {
+      Align();
+      _cursor = enabled
+          ? _cursor | F18InstructionSet.ExtendedArithmeticBit
+          : _cursor & ~F18InstructionSet.ExtendedArithmeticBit;
+    }
+
     public void SetOrigin(int address, F18Token token)
     {
       Align();
       // The origin may land anywhere in the space or its mirror (DB001 Figure 2);
-      // the mirror maps onto the same 64 physical words. Only an address outside
-      // the whole region (e.g. I/O space) is rejected.
-      if (address < _baseAddress || address >= _baseAddress + _memory.Length * 2)
+      // the mirror maps onto the same 64 physical words. P9 is not part of decoding,
+      // so mask it out for the boundary check while preserving it in the cursor.
+      var decoded = address & ~F18InstructionSet.ExtendedArithmeticBit;
+      if (decoded < _baseAddress || decoded >= _baseAddress + _memory.Length * 2)
       {
         ReportError(
             "F18M001",
@@ -1950,9 +1951,14 @@ public sealed class F18Compiler
     // equivalent in ROM). So an address in the base region or its mirror maps into
     // the 64-word array modulo the word count; only an address outside the whole
     // space (e.g. I/O at x100+) is genuinely out of range. Returns -1 if unmapped.
+    // Bit P9 (0x200) is not part of memory decoding (DB001 2.2): it only selects
+    // Extended Arithmetic Mode. It rides along in the location counter and in every
+    // address value so that transfers carry it, but it must be masked out before any
+    // physical-memory calculation or boundary check. P8 is left intact -- it does
+    // participate in decoding (it selects the I/O region), unlike P9.
     private int ToPhysicalIndex(int address)
     {
-      var offset = address - _baseAddress;
+      var offset = (address & ~F18InstructionSet.ExtendedArithmeticBit) - _baseAddress;
       if (offset < 0 || offset >= _memory.Length * 2)
       {
         return -1;

@@ -1,0 +1,690 @@
+schemaVersion: 2
+chipPart: GA144-1.20
+nodes:
+- coordinate: 0
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 1
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 2
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 3
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 4
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 5
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 6
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 7
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 8
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 9
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 10
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 11
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 12
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 13
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 14
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 15
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 16
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 17
+  sourceCode: macro rom_basic
+  romWords:
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x120C0
+  - 0x149B2
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+- coordinate: 100
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 101
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 102
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 103
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 104
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 105
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 106
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 107
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 108
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 109
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 110
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 111
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 112
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 113
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 114
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 115
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 116
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 117
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 200
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 201
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 202
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 203
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 204
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 205
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 206
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 207
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 208
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 209
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 210
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 211
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 212
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 213
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 214
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 215
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 216
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 217
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 300
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 301
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 302
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 303
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 304
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 305
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 306
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 307
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 308
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 309
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 310
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 311
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 312
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 313
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 314
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 315
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 316
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 317
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 400
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 401
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 402
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 403
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 404
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 405
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 406
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 407
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 408
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 409
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 410
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 411
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 412
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 413
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 414
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 415
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 416
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 417
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 500
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 501
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 502
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 503
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 504
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 505
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 506
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 507
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 508
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 509
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 510
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 511
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 512
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 513
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 514
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 515
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 516
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 517
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 600
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 601
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 602
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 603
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 604
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 605
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 606
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 607
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 608
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 609
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 610
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 611
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 612
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 613
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 614
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 615
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 616
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 617
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 700
+  sourceCode: >
+    macro rom_basic
+  romWords: []
+- coordinate: 701
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 702
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 703
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 704
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 705
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 706
+  sourceCode: macro rom_warm
+  romWords: []
+- coordinate: 707
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 708
+  sourceCode: ''
+  romWords: []
+- coordinate: 709
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 710
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 711
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 712
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 713
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 714
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 715
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 716
+  sourceCode: macro rom_basic
+  romWords: []
+- coordinate: 717
+  sourceCode: macro rom_basic
+  romWords: []
+systemMacros:
+- name: rom_async
+  description: ''
+  sourceCode: >
+    # 0xCB equ 18ibits
+
+    : cold   x31A5. a! @  @b .. -if
+
+    : ser-exec ( x - d)   18ibits drop >r 18ibits drop a! 18ibits
+
+    : ser-copy ( xnx-d)   drop >r zif ;  then begin 18ibits drop !+ next ;  then drop avail alit >r >r ;
+
+    : wait ( x-1/1)   begin . drop @b -until  . drop ;
+
+    : sync ( x-3/2-d)   dup dup wait  xor inv >r begin @b . -if . drop *next await ;  then . drop r> inv 2/ ;
+
+    : start ( dw-4/2-dw,io) dup wait over dup 2/ . + >r
+
+    : delay ( -1/1-io) begin @b . -if then . drop next @b ;
+
+    ( 18ibits ( x-4/6-dwx) sync sync dup start ( 2bits) leap leap
+
+    : byte   then drop start leap
+
+    : 4bits   then leap
+
+    : 2bits   then then leap
+
+    : 1bit ( nw,io - nw,io) then >r 2/ r> over xor x20000. and xor over >r delay ;
+- name: rom_basic
+  description: ''
+  sourceCode: >-
+    macro rom_relay
+
+    macro rom_warm
+
+    # 0xB0 org
+
+    macro rom_mul17
+
+    macro rom_muldot
+
+    macro rom_filter
+
+    macro rom_interp
+
+    macro rom_triangle
+
+    macro rom_divide
+
+    macro rom_poly
+- name: rom_dac
+  description: ''
+  sourceCode: >-
+    : -dac ( legacy entry name ...)
+
+    : dac27 ( m c p a w - m c p) dup >r >r over r> inv . +  >r >r  x155. r> over xor a
+      begin unext !b . begin unext !b !b ;
+- name: rom_divide
+  description: ''
+  sourceCode: >-
+    +cy
+
+    : clc ( -2-) dup dup xor dup . + drop ;
+
+    : --u/mod ( hld-rq) clc
+
+    : -u/mod ( hld-ra) a! 17. >r
+      begin begin dup . + . >r dup . + dup a . + -if drop r> *next dup . + ;
+      then over xor xor . r> next dup . + ;
+    -cy
+- name: rom_filter
+  description: ''
+  sourceCode: ": taps ( y x c - y' x') r> a! >r begin @+ @ >r a >r *.17 r> a! >r !+ r> . + r> next @ a! ;"
+- name: rom_interp
+  description: ''
+  sourceCode: >-
+    : interp ( ims-v)
+      dup >r >r over begin 2/ unext a! and >r @+ dup @+ inv . + inv r> a! dup dup xor
+      begin +* unext >r drop r> . + ;
+- name: rom_mul17
+  description: ''
+  sourceCode: >-
+    : *.17 ( a b - a a*b)
+      a! 16. >r dup dup xor begin +* unext inv +* a -if drop inv 2* ; then drop 2* inv ;
+- name: rom_muldot
+  description: ''
+  sourceCode: ': *. ( f1 f2 - f1 f1*f2) *.17 a 2* -if drop inv 2* inv ; then drop 2* ;'
+- name: rom_poly
+  description: ''
+  sourceCode: >-
+    # 0xAA org
+
+    : poly ( xn-xy) r> a! >r @+ a begin >r *. r> a! @+ + a next >r ;
+- name: rom_relay
+  description: ''
+  sourceCode: >-
+    # 0xA1 org
+
+    : relay ( a) r> a! @+ >r @+
+      zif drop ahead [ swap ] then r> over >r @p a relay !b !b !b
+      begin @+ !b unext
+    : done then a >r a! ;
+- name: rom_shift
+  description: ''
+  sourceCode: >-
+    : lsh ( w n-1 - w') for 2* unext ;
+
+    : rsh ( w n-1 - w') for 2/ unext ;
+- name: rom_spi
+  description: ''
+  sourceCode: >+
+    # 0x2A NL ---  # 0x2B NL --+  # 0x3A NL +--  # 0x3B NL +-+  # 0x2F NL -++
+
+    # 0xC2 org
+
+    : 8obits ( dw-dw') 7. for  ( obit) leap 2* *next ;
+
+    : ibit ( dw-dw') @b . -if  drop inv 2* ;  then drop 2* inv ;
+
+    : half ( dwc-dw) !b over for . . unext ;
+
+    : select ( dw-dw) -++ half --+ half ;
+
+    : obit ( dw-dw) then  -if +-- half +-+ half ; then
+
+    : rbit ( dw-dw) --- half --+ half ;
+
+    : 18ibits ( d-dw) dup 17. >r
+
+    : ibits   begin rbit ibit inv next ;
+
+    : u2/ ( n - n) 2/ x1FFFF. and ;
+
+    # 497 NL spispeed
+
+    # 0xC00 NL spicmd
+
+    # 0 NL spiadr
+
+    : cold @b inv ..  avail -until  spispeed spiadr >r spicmd
+
+    : spi-boot ( d ah - d x) select  8obits 8obits drop r> . 8obits 8obits
+
+    : spi-exec ( dx-dx) drop 18ibits x1E000. . +  # rdl- -until >r 18ibits a! 18ibits
+
+    : spi-copy ( dn-dx) >r zif ; then begin 18ibits !+ next  dup ;
+
+
+- name: rom_sync
+  description: ''
+  sourceCode: >
+    # 0xBE equ sget
+
+    : cold   x31A5. a! @ @b . .
+      -if avail 0x3.FC00 [+] lit  dup >r dup begin drop @b . 
+      -if ( rising) *next  SWAP then avail alit >r  drop >r ; then
+    : ser-exec ( x - x)   sget >r  sget a!  sget
+
+    : ser-copy ( n)   >r zif ;  then begin sget !+ next ;
+
+    ( sget) ( -4/3-w)   dup leap leap
+
+    : 6in   then then leap leap
+
+    : 2in   then then  2* 2*  dup
+      begin . drop @b . inv -until  inv 2. and dup begin . drop @b . . -until  2. and 2/ xor xor ;
+- name: rom_triangle
+  description: ''
+  sourceCode: ': triangle ( ang*4) x1.0000 over -if drop . + ; then drop inv . + inv ;'
+- name: rom_warm
+  description: ''
+  sourceCode: >-
+    # 0xA9 org
+
+    : warm await ;
+- name: rom_wire1
+  description: ''
+  sourceCode: >-
+    # 0x9E org
+
+    : rcv ( s-sn) a >r dup dup a! 17. for begin
+
+    : bit @ drop @b -if drop inv 2* inv *next r> a! ; then drop 2* next r> a! ;
+
+    # 0xAA org
+
+    : cold left center a! . io b! dup dup xB7. dup >r >r 16. >r @ drop @b # await -until
+      drop a! . bit ;
+    : fwd-b7 >r rcv a! rcv >r zif ; thn begin rcv !+ next ;
