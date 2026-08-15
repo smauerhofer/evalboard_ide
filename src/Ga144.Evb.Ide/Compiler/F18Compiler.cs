@@ -1761,9 +1761,14 @@ public sealed class F18Compiler
         return;
       }
 
+      // The address field is stored UNENCODED (see EncodePackedControl): only the
+      // opcode slots are XOR-encoded, the low 'width' bits hold the raw destination.
+      // The placeholder was written with a zero field, so clear the field region and
+      // OR in the raw destination bits. (Earlier versions XORed the field in, or
+      // XORed the destination with EncodingXor -- both corrupted the field, since the
+      // field is not part of the XOR-encoded region at all.)
       var mask = (1 << F18InstructionSet.AddressFieldWidth(slot)) - 1;
-      var encodedField = (destination ^ F18InstructionSet.EncodingXor) & mask;
-      var patched = (_memory[index]!.Value & ~mask) | encodedField;
+      var patched = (_memory[index]!.Value & ~mask) | (destination & mask);
       _memory[index] = patched & F18InstructionSet.WordMask;
     }
 

@@ -112,6 +112,21 @@ public sealed class F18NodeCompilationService
             : _romLibrary.GetNode(coordinate).SourceCode;
 
         var options = F18CompilerOptions.ForRom(coordinate);
+        // Inject 'await' as a callable word resolving to this node's multiport
+        // execution address (what warm at 0xA9 jumps to). Provisional per-node
+        // values live in F18AwaitAddresses; unknown nodes use a placeholder so the
+        // source still compiles. Injected as a predefined symbol so 'await'
+        // compiles to a call/jump to that address, like any other ROM word.
+        var predefinedSymbols = new Dictionary<string, F18ExportedSymbol>(StringComparer.OrdinalIgnoreCase)
+        {
+          ["await"] = new F18ExportedSymbol(
+              "await",
+              F18AwaitAddresses.ForNode(coordinate),
+              F18ExportKind.Word,
+              coordinate,
+              F18MemorySpace.Rom)
+        };
+
         options = new F18CompilerOptions
         {
           MemorySpace = options.MemorySpace,
@@ -119,6 +134,7 @@ public sealed class F18NodeCompilationService
           MemoryBaseAddress = options.MemoryBaseAddress,
           MemoryWordCount = options.MemoryWordCount,
           IncludeCommonRomWords = false,
+          PredefinedSymbols = predefinedSymbols,
           ImportResolver = importedCoordinate => ResolveRomImport(coordinate, importedCoordinate),
           MacroResolver = ResolveMacro,
           MacroLookupScope = F18MacroLookupScope.SystemOnly

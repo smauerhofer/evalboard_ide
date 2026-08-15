@@ -206,20 +206,29 @@ public static class F18InstructionSet
     var width = AddressFieldWidth(slotIndex);
     var mask = (1 << width) - 1;
 
-    // Only the low 'width' bits are stored; the high bits of P supply the rest at
-    // run time. The caller (ControlFitsSlot) is responsible for confirming those
-    // high bits are correct for the intended destination. Any destination bits
-    // above the field are dropped here by design, so a slot-0 transfer keeps its
-    // full 10-bit address while slot 1/2 keep only the region-relative low bits.
+    // The address field is inserted UNENCODED, exactly as EncodeSlot0Control does:
+    // on the F18A only the opcode slots are XOR-encoded with EncodingXor; the
+    // destination occupies the low 'width' bits raw. Build the opcode-only word and
+    // XOR-encode it, keeping ONLY the five-bit opcode slots (at shifts 13/8/3) from
+    // the encoded result -- the bits between the transfer opcode and the field
+    // (e.g. bits 10..12 for a slot-0 ten-bit field) must stay zero, just as
+    // EncodeSlot0Control masks with 0x3E000. Then OR in the raw destination. (An
+    // earlier version XOR-encoded the whole word including the field, which flipped
+    // it by EncodingXor's low bits -- 0x5 in a 3-bit slot, 0x55 in an 8-bit slot --
+    // corrupting the target.)
     var shifts = new[] { 13, 8, 3 };
-    var raw = 0;
+    var opcodeBits = 0;
+    var opcodeMask = 0;
     for (var index = 0; index < slotIndex; index++)
     {
-      raw |= leadingSlots[index] << shifts[index];
+      opcodeBits |= leadingSlots[index] << shifts[index];
+      opcodeMask |= 0x1F << shifts[index];
     }
 
-    raw |= transferOpcode << shifts[slotIndex];
-    raw |= destination & mask;
-    return (raw ^ EncodingXor) & WordMask;
+    opcodeBits |= transferOpcode << shifts[slotIndex];
+    opcodeMask |= 0x1F << shifts[slotIndex];
+
+    var encodedOpcodes = (opcodeBits ^ EncodingXor) & opcodeMask;
+    return (encodedOpcodes | (destination & mask)) & WordMask;
   }
 }
