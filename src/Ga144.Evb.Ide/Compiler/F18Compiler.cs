@@ -1196,7 +1196,15 @@ public sealed class F18Compiler
     Interpreter.TryPopData(token, out int x);
     Interpreter.TryPopData(token, out int destination);
     PushControlValue(x, token);
-    Builder.EmitControl(0x05, destination & 0x3FF, token);
+
+    // Like ordinary 'next', pack the transfer into the current word's next free
+    // slot when the destination is reachable there (the ROM packs 'drop r> *next'
+    // into a single word); fall back to a force-aligned slot-0 word otherwise.
+    if (!_options.PackControlTransfers ||
+        !Builder.TryEmitPackedControl(0x05, destination & 0x3FF, token))
+    {
+      Builder.EmitControl(0x05, destination & 0x3FF, token);
+    }
   }
 
   private void CompileFor(F18Token token)
