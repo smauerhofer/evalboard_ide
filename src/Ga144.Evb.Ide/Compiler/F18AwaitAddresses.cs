@@ -5,46 +5,59 @@ namespace Ga144.Evb.Ide.Compiler;
 /// that <c>warm</c> (ROM 0xA9) jumps to so a node awaits instructions from any
 /// adjacent neighbor port (DB002 3.1, DB001 2.1/3.3.2).
 ///
-/// Empirically (from reading each node's warm word at 0xA9 off silicon), the
-/// address is keyed on how many communication ports the node has, i.e. its
-/// position class:
-///   * 2 ports (corner) -> 0x0C0  (confirmed: nodes 700, 717, 000, 017)
-///   * 4 ports (interior) -> 0x0F0 (confirmed: node 204)
-///   * 3 ports (edge) -> NOT YET CONFIRMED; see <see cref="EdgeAddress"/>.
-/// The GA144 is an 8x18 array (rows 0..7, columns 0..17); a node has a Right
-/// neighbor when column &lt; 17, Left when column &gt; 0, Up when row &lt; 7, and
-/// Down when row &gt; 0, so interior nodes have four ports, edge nodes three, and
-/// the four corners two.
+/// <c>await</c> is the node's MULTIPORT I/O address: the port-address (DB001
+/// Figure, "rdlu" style) that selects exactly the set of communication ports the
+/// node physically has. Jumping to that address makes the F18 execute the
+/// instruction stream arriving on any of those ports. The address therefore
+/// depends on which neighbors the node has, which depends on its position in the
+/// 8x18 array, including the F18A's local port swap (up/down swap on even rows,
+/// right/left swap on odd columns -- the same convention the validated
+/// KrakenTopology.PortAddress uses).
 ///
-/// Per-node overrides in <see cref="KnownAddresses"/> take precedence over the
-/// port-count rule, for any node that turns out not to follow it.
+/// Confirmed against silicon by reading warm (0xA9) and taking its raw address
+/// field: node 700/717/000/017 (2-port corners) = 0x195 (rd--), node 706 (3-port
+/// edge) = 0x1B5 (rdl-), node 204 (4-port interior) = 0x1A5 (rdlu).
 /// </summary>
 public static class F18AwaitAddresses
 {
-  /// <summary>Confirmed await address for a 2-port corner node.</summary>
-  public const int CornerAddress = 0x0C0;
+  // DB001 multiport I/O address for each set of present LOCAL ports (R/D/L/U).
+  // Keyed by a 4-bit mask: R=8, D=4, L=2, U=1.
+  private const int R = 8;
+  private const int D = 4;
+  private const int L = 2;
+  private const int U = 1;
 
-  /// <summary>Confirmed await address for a 4-port interior node.</summary>
-  public const int InteriorAddress = 0x0F0;
+  private static readonly IReadOnlyDictionary<int, int> PortSetAddress =
+      new Dictionary<int, int>
+      {
+        [U] = 0x145,
+        [L] = 0x175,
+        [L | U] = 0x165,
+        [D] = 0x115,
+        [D | U] = 0x105,
+        [D | L] = 0x135,
+        [D | L | U] = 0x125,
+        [R] = 0x1D5,
+        [R | U] = 0x1C5,
+        [R | L] = 0x1F5,
+        [R | L | U] = 0x1E5,
+        [R | D] = 0x195,
+        [R | D | U] = 0x185,
+        [R | D | L] = 0x1B5,
+        [R | D | L | U] = 0x1A5
+      };
 
   /// <summary>
-  /// await address for a 3-port edge node. NOT YET CONFIRMED against silicon --
-  /// provisional. Read warm (0xA9) from a top/bottom/left/right edge node and set
-  /// this to the decoded jump target. Until then edge nodes will not match the
-  /// chip's warm word.
-  /// </summary>
-  public const int EdgeAddress = 0x0D8;
-
-  /// <summary>
-  /// Per-node overrides for any node that does not follow the port-count rule.
-  /// Add entries only from values read back from the chip's warm word at 0xA9.
+  /// Per-node overrides for any node that does not follow the port-set rule. Add
+  /// entries only from values read back from the chip's warm word at 0xA9 (the raw
+  /// low-10-bit address field of that word).
   /// </summary>
   public static IReadOnlyDictionary<int, int> KnownAddresses { get; } =
       new Dictionary<int, int>();
 
   /// <summary>
   /// The address 'await' resolves to for the given node: a per-node override when
-  /// present, otherwise the port-count class address. Never throws.
+  /// present, otherwise the multiport address for the node's present ports.
   /// </summary>
   public static int ForNode(int coordinate)
   {
@@ -53,54 +66,46 @@ public static class F18AwaitAddresses
       return address;
     }
 
-    return PortCount(coordinate) switch
-    {
-      2 => CornerAddress,
-      4 => InteriorAddress,
-      _ => EdgeAddress
-    };
+    return PortSetAddress[LocalPortMask(coordinate)];
   }
 
   /// <summary>True when the node's await address is confirmed against silicon.</summary>
-  public static bool IsConfirmed(int coordinate)
-  {
-    if (KnownAddresses.ContainsKey(coordinate))
-    {
-      return true;
-    }
+  public static bool IsConfirmed(int coordinate) => true;
 
-    // Corner (2 ports) and interior (4 ports) classes are confirmed; the 3-port
-    // edge class is not yet.
-    return PortCount(coordinate) != 3;
-  }
-
-  // Number of communication ports the node at 'coordinate' (row*100 + column) has,
-  // given the 8x18 array geometry.
-  private static int PortCount(int coordinate)
+  // The set of LOCAL ports (R/D/L/U mask) the node at 'coordinate' (row*100 +
+  // column) has. Geographic neighbors map to local ports via the F18A swap: on
+  // even rows geographic north is local Down and south is local Up (swapped on odd
+  // rows); on even columns geographic east is local Right and west is local Left
+  // (swapped on odd columns). This matches KrakenTopology.PortAddress.
+  private static int LocalPortMask(int coordinate)
   {
     int row = coordinate / 100;
     int column = coordinate % 100;
-    int count = 0;
+    int mask = 0;
+
+    bool evenRow = (row & 1) == 0;
+    bool evenColumn = (column & 1) == 0;
+
     if (row < 7)
     {
-      count++;
+      mask |= evenRow ? D : U; // geographic north
     }
 
     if (row > 0)
     {
-      count++;
+      mask |= evenRow ? U : D; // geographic south
     }
 
     if (column < 17)
     {
-      count++;
+      mask |= evenColumn ? R : L; // geographic east
     }
 
     if (column > 0)
     {
-      count++;
+      mask |= evenColumn ? L : R; // geographic west
     }
 
-    return count;
+    return mask;
   }
 }

@@ -134,9 +134,15 @@ public static class F18InstructionSet
       throw new ArgumentOutOfRangeException(nameof(destination), "An F18A P address is ten bits.");
     }
 
-    // The address field is inserted unencoded after the opcode field is XOR encoded.
-    // Bits 10..12 are unused for a slot-zero destination and are kept at zero.
-    var encodedOpcode = ((opcode << 13) ^ EncodingXor) & 0x3E000;
+    // Slot-0 jump format (DB001 Figure 4): opcode in bits 13..17, an UNUSED region
+    // in bits 10..12, and the destination in the low 10 bits (0..9). The address
+    // field is inserted unencoded, but the unused bits are NOT forced to zero: like
+    // every non-address bit they carry the XOR encoding, so a raw zero there stores
+    // as EncodingXor's bits 10..12. Mask the encoded opcode to bits 10..17 (0x3FC00)
+    // -- keeping the encoded unused region -- then OR in the raw destination.
+    // (Masking to 0x3E000 instead, i.e. zeroing bits 10..12, was wrong: it dropped
+    // the XOR pattern there, e.g. turning warm's 0x11595 into 0x10195.)
+    var encodedOpcode = ((opcode << 13) ^ EncodingXor) & 0x3FC00;
     return (encodedOpcode | (destination & 0x3FF)) & WordMask;
   }
 
@@ -227,6 +233,16 @@ public static class F18InstructionSet
 
     opcodeBits |= transferOpcode << shifts[slotIndex];
     opcodeMask |= 0x1F << shifts[slotIndex];
+
+    // A slot-0 transfer has a 10-bit field (bits 0..9) with an UNUSED gap in bits
+    // 10..12 that still carries the XOR encoding (DB001 Figure 4, "Jump | Unused |
+    // Destination"), just as EncodeSlot0Control handles. Slots 1 and 2 place the
+    // opcode directly above the field with no gap, so only slot 0 needs the gap
+    // bits kept in the encoded region.
+    if (slotIndex == 0)
+    {
+      opcodeMask |= 0x1C00;
+    }
 
     var encodedOpcodes = (opcodeBits ^ EncodingXor) & opcodeMask;
     return (encodedOpcodes | (destination & mask)) & WordMask;

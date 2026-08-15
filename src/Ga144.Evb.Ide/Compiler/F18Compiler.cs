@@ -383,17 +383,60 @@ public sealed class F18Compiler
 
     if (_symbols.TryGetValue(token.Text, out F18ExportedSymbol? localSymbol) && localSymbol is not null)
     {
-      EmitKnownSymbol(localSymbol, token);
+      EmitWordReference(localSymbol, token);
       return;
     }
 
     if (_externalSymbols.TryGetValue(token.Text, out F18ExportedSymbol? externalSymbol) && externalSymbol is not null)
     {
-      EmitKnownSymbol(externalSymbol, token);
+      EmitWordReference(externalSymbol, token);
       return;
     }
 
-    EmitSymbolControl(0x03, token);
+    // Unknown word: a forward reference resolved later. In tail position ('name ;')
+    // it is a jump, otherwise a call (DB001 2.1: 'name ;' compiles to jump to name).
+    if (ConsumeTailSemicolon())
+    {
+      EmitSymbolControl(0x02, token);
+    }
+    else
+    {
+      EmitSymbolControl(0x03, token);
+    }
+  }
+
+  // Emit a reference to a resolved word/symbol. A Word in tail position ('name ;')
+  // compiles to a jump (the jump is the return), otherwise a call; the trailing
+  // ';' is consumed here so it does not also emit a 'return'. Non-Word symbols are
+  // literals and are unaffected.
+  private void EmitWordReference(F18ExportedSymbol symbol, F18Token token)
+  {
+    if (symbol.Kind != F18ExportKind.Word)
+    {
+      Builder.EmitLiteral(symbol.Value, token);
+      return;
+    }
+
+    var opcode = ConsumeTailSemicolon() ? (byte)0x02 : (byte)0x03;
+    EmitKnownControl(opcode, symbol.Value, token);
+  }
+
+  // When the next token is ';' and a definition is open, consume it and return
+  // true, signalling that the just-emitted transfer is a tail call (a jump that
+  // needs no following 'return'). The ';' is swallowed so EndDefinition does not
+  // additionally emit a 'return' opcode.
+  private bool ConsumeTailSemicolon()
+  {
+    if (!_inDefinition || !_compileMode || !Peek(";"))
+    {
+      return false;
+    }
+
+    _tokenIndex++;
+    _inDefinition = false;
+    _compileMode = false;
+    _currentDefinition = null;
+    return true;
   }
 
   private void BeginInterpretation(F18Token token)
@@ -1276,18 +1319,6 @@ public sealed class F18Compiler
         !Builder.TryEmitPackedControl(opcode, destination & 0x3FF, token))
     {
       Builder.EmitControl(opcode, destination & 0x3FF, token);
-    }
-  }
-
-  private void EmitKnownSymbol(F18ExportedSymbol symbol, F18Token token)
-  {
-    if (symbol.Kind == F18ExportKind.Word)
-    {
-      EmitKnownControl(0x03, symbol.Value, token);
-    }
-    else
-    {
-      Builder.EmitLiteral(symbol.Value, token);
     }
   }
 
