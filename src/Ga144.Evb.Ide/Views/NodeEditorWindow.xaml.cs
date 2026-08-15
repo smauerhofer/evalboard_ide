@@ -59,7 +59,8 @@ public partial class NodeEditorWindow : Window
       controlViewModel = new KrakenNodeControlViewModel(
           route,
           _viewModel.KrakenController,
-          _viewModel.CompileGeneratedRomWords);
+          _viewModel.CompileGeneratedRomWords,
+          _viewModel.CompileExpandedRomSource);
       var window = new KrakenNodeControlWindow(controlViewModel)
       {
         Owner = this

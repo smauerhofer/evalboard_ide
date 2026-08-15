@@ -208,6 +208,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
 
           // Compile the generated ROM for this node.
           IReadOnlyList<int>? generated = null;
+          string? expandedRomSource = null;
           try
           {
             var result = compileService.CompileNode(route.Coordinate);
@@ -216,6 +217,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
               generated = result.Rom.Words
                   .Select(word => word & Compiler.F18InstructionSet.WordMask)
                   .ToArray();
+              expandedRomSource = result.Rom.ExpandedSource;
             }
           }
           catch
@@ -239,7 +241,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
           }
 
           mismatched++;
-          var dialog = new Views.RomMismatchDialog(comparison, showAbort: true)
+          var dialog = new Views.RomMismatchDialog(comparison, showAbort: true, expandedRomSource: expandedRomSource)
           {
             Owner = Application.Current?.Windows
                 .OfType<Window>()

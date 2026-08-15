@@ -1237,7 +1237,7 @@ public sealed class F18Compiler
       return;
     }
 
-    Builder.EmitControl(0x03, symbol.Value, token);
+    EmitKnownControl(0x03, symbol.Value, token);
   }
 
   private bool DefineSymbol(F18Token token, int address, F18ExportKind kind)
@@ -1264,11 +1264,26 @@ public sealed class F18Compiler
       F18InstructionSet.Opcodes.ContainsKey(name) ||
       ReservedCompilerWords.Contains(name);
 
+  // Emit a transfer to a KNOWN address (a call to an already-defined word, an
+  // external symbol, or recurse). Packs into the current word's next free slot
+  // when enabled and the destination is reachable through that slot's narrowed
+  // field (matching the chip ROM, e.g. 'a call'), otherwise force-aligns into a
+  // slot-0 word. TryEmitPackedControl's reachability check makes this safe for
+  // cross-node/external addresses: an out-of-reach target simply force-aligns.
+  private void EmitKnownControl(byte opcode, int destination, F18Token token)
+  {
+    if (!_options.PackControlTransfers ||
+        !Builder.TryEmitPackedControl(opcode, destination & 0x3FF, token))
+    {
+      Builder.EmitControl(opcode, destination & 0x3FF, token);
+    }
+  }
+
   private void EmitKnownSymbol(F18ExportedSymbol symbol, F18Token token)
   {
     if (symbol.Kind == F18ExportKind.Word)
     {
-      Builder.EmitControl(0x03, symbol.Value, token);
+      EmitKnownControl(0x03, symbol.Value, token);
     }
     else
     {
@@ -1713,12 +1728,15 @@ public sealed class F18Compiler
     }
 
     // Patch a greedily-packed forward transfer at (memoryAddress, slot). The
-    // placeholder was flushed with a zero address field, so the resolved
-    // destination's low field bits are simply XORed in, preserving the leading
-    // opcodes. Reachability is checked here: a slot 1/2 transfer only reaches a
-    // destination whose high bits match the following word. If the target is out
-    // of reach, this reports an error (F18M005) telling the user to align the
-    // source manually, per the greedy-pack policy.
+    // placeholder was flushed with a zero RAW address field, but the stored word is
+    // XOR-encoded (raw ^ EncodingXor), so its field bits hold EncodingXor's low bits
+    // -- NOT zero. To set the destination we must clear the field bits and write the
+    // encoded field, which is (destination ^ EncodingXor) masked to the slot width.
+    // (An earlier version XORed the field straight in, which is wrong precisely
+    // because the empty word is 0x15555, not 0.) Reachability is checked first: a
+    // slot 1/2 transfer only reaches a destination whose high bits match the
+    // following word. If the target is out of reach, this reports F18M005 telling
+    // the user to align the source manually, per the greedy-pack policy.
     public void PatchPackedControl(int memoryAddress, int slot, int destination, F18Token token)
     {
       var index = memoryAddress - _baseAddress;
@@ -1743,9 +1761,10 @@ public sealed class F18Compiler
         return;
       }
 
-      var width2 = F18InstructionSet.AddressFieldWidth(slot);
-      var field = destination & ((1 << width2) - 1);
-      _memory[index] = (_memory[index]!.Value ^ field) & F18InstructionSet.WordMask;
+      var mask = (1 << F18InstructionSet.AddressFieldWidth(slot)) - 1;
+      var encodedField = (destination ^ F18InstructionSet.EncodingXor) & mask;
+      var patched = (_memory[index]!.Value & ~mask) | encodedField;
+      _memory[index] = patched & F18InstructionSet.WordMask;
     }
 
     public void Align()

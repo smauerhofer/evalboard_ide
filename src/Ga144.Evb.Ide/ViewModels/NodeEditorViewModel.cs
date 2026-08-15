@@ -282,6 +282,16 @@ public sealed class NodeEditorViewModel : ObservableObject
         .ToArray();
   }
 
+  // The macro-expanded ROM source for the current node, or null when it does not
+  // compile. Used by the ROM mismatch dialog's diagnostics copy so the expanded
+  // source can be captured alongside the differing words.
+  public string? CompileExpandedRomSource()
+  {
+    var service = new F18NodeCompilationService(_chip, _romLibrary, _userMacros);
+    var result = service.CompileNode(Node.Coordinate, SourceCode, RomSourceCode);
+    return result.Rom.Success ? result.Rom.ExpandedSource : null;
+  }
+
   public bool Apply()
   {
     Node.Enabled = Enabled;

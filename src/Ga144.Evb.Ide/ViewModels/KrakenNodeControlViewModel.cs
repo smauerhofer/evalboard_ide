@@ -10,6 +10,7 @@ public sealed class KrakenNodeControlViewModel : ObservableObject, IAsyncDisposa
   private readonly KrakenNodeRoute _route;
   private readonly KrakenLiveController _controller;
   private readonly Func<IReadOnlyList<int>?>? _compileGeneratedRom;
+  private readonly Func<string?>? _compileExpandedRomSource;
   private readonly CancellationTokenSource _shutdown = new();
   private bool _isConnected;
   private bool _isBusy;
@@ -23,11 +24,13 @@ public sealed class KrakenNodeControlViewModel : ObservableObject, IAsyncDisposa
   public KrakenNodeControlViewModel(
       KrakenNodeRoute route,
       KrakenLiveController controller,
-      Func<IReadOnlyList<int>?>? compileGeneratedRom = null)
+      Func<IReadOnlyList<int>?>? compileGeneratedRom = null,
+      Func<string?>? compileExpandedRomSource = null)
   {
     _route = route;
     _controller = controller;
     _compileGeneratedRom = compileGeneratedRom;
+    _compileExpandedRomSource = compileExpandedRomSource;
     int ioAddress = F18InstructionSet.Constants["io"];
     _bValue = $"0x{(route.OutgoingBAddress ?? ioAddress):X3}";
     if (_controller.IsOperational)
@@ -261,7 +264,10 @@ public sealed class KrakenNodeControlViewModel : ObservableObject, IAsyncDisposa
     }
 
     // Single-node verify: show the mismatch list with only "Close" (no Abort).
-    var dialog = new Views.RomMismatchDialog(comparison, showAbort: false)
+    var dialog = new Views.RomMismatchDialog(
+        comparison,
+        showAbort: false,
+        expandedRomSource: _compileExpandedRomSource?.Invoke())
     {
       Owner = System.Windows.Application.Current?.Windows
           .OfType<System.Windows.Window>()

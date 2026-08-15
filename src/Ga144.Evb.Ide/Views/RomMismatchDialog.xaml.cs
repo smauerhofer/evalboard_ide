@@ -14,15 +14,20 @@ namespace Ga144.Evb.Ide.Views;
 public partial class RomMismatchDialog : Window
 {
   private readonly RomComparison _comparison;
+  private readonly string? _expandedRomSource;
 
   /// <summary>True when the user chose Abort (stop the sweep).</summary>
   public bool Aborted { get; private set; }
 
-  public RomMismatchDialog(RomComparison comparison, bool showAbort = true)
+  public RomMismatchDialog(
+      RomComparison comparison,
+      bool showAbort = true,
+      string? expandedRomSource = null)
   {
     InitializeComponent();
 
     _comparison = comparison;
+    _expandedRomSource = expandedRomSource;
 
     HeaderText.Text =
         $"Node {comparison.Coordinate:000}: {comparison.Mismatches.Count} ROM word(s) differ from the chip.";
@@ -38,6 +43,13 @@ public partial class RomMismatchDialog : Window
     if (!showAbort)
     {
       AbortButton.Visibility = Visibility.Collapsed;
+    }
+
+    // The diagnostics copy is only useful when the expanded ROM source is
+    // available; hide the button otherwise rather than copy an empty section.
+    if (string.IsNullOrEmpty(_expandedRomSource))
+    {
+      CopyDiagnosticsButton.Visibility = Visibility.Collapsed;
     }
   }
 
@@ -55,7 +67,16 @@ public partial class RomMismatchDialog : Window
 
   private void OnCopyClick(object sender, RoutedEventArgs e)
   {
-    string text = BuildClipboardText();
+    CopyToClipboard(BuildClipboardText());
+  }
+
+  private void OnCopyDiagnosticsClick(object sender, RoutedEventArgs e)
+  {
+    CopyToClipboard(BuildDiagnosticsText());
+  }
+
+  private void CopyToClipboard(string text)
+  {
     try
     {
       Clipboard.SetText(text);
@@ -80,6 +101,24 @@ public partial class RomMismatchDialog : Window
   private string BuildClipboardText()
   {
     var builder = new StringBuilder();
+    AppendMismatchTable(builder);
+    return builder.ToString();
+  }
+
+  // The full diagnostics bundle: the mismatch table plus the macro-expanded ROM
+  // source, so the whole picture can be pasted somewhere for analysis.
+  private string BuildDiagnosticsText()
+  {
+    var builder = new StringBuilder();
+    AppendMismatchTable(builder);
+    builder.AppendLine();
+    builder.AppendLine("=== Expanded ROM source (macros expanded) ===");
+    builder.AppendLine(_expandedRomSource ?? string.Empty);
+    return builder.ToString();
+  }
+
+  private void AppendMismatchTable(StringBuilder builder)
+  {
     builder.AppendLine(
         $"Node {_comparison.Coordinate:000}: {_comparison.Mismatches.Count} ROM word(s) differ from the chip.");
 
@@ -93,7 +132,5 @@ public partial class RomMismatchDialog : Window
     {
       builder.AppendLine($"{mismatch.AddressHex}\t{mismatch.GeneratedHex}\t{mismatch.OnChipHex}");
     }
-
-    return builder.ToString();
   }
 }
