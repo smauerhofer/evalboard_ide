@@ -6,6 +6,12 @@ public static class F18InstructionSet
   public const int EncodingXor = 0x15555;
   public const byte NopOpcode = 0x1C;
 
+  // Bit P9 of an address enables Extended Arithmetic Mode when execution reaches it
+  // (DB001 2.1). Division/carry ROM words (clc, --u/mod, -u/mod) are entered at an
+  // address with this bit set; the '+cy'/'-cy' assembler directives mark the region
+  // whose labels carry it.
+  public const int ExtendedArithmeticBit = 0x200;
+
   public static IReadOnlyDictionary<string, byte> Opcodes { get; } =
       new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase)
       {

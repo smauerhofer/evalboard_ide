@@ -30,6 +30,7 @@ public sealed class F18Compiler
   private int _tokenIndex;
   private bool _inDefinition;
   private bool _compileMode;
+  private bool _extendedArithmetic;
   private string? _currentDefinition;
   private int? _firstDefinitionAddress;
   private F18Token? _entryToken;
@@ -132,6 +133,7 @@ public sealed class F18Compiler
     _tokens = [];
     _tokenIndex = 0;
     _inDefinition = false;
+    _extendedArithmetic = false;
     // The compiler starts in compile mode; only '[' switches to interpretation.
     _compileMode = true;
     _currentDefinition = null;
@@ -205,6 +207,16 @@ public sealed class F18Compiler
         return;
       case ",":
         InterpretComma(token);
+        return;
+      case "+cy":
+        // Enter Extended Arithmetic Mode region: labels defined here get bit P9
+        // (0x200) set in their address so that calling them enables EAM (DB001 2.1,
+        // DB002 3.2 -- "the address of this word has the EAM bit set").
+        _extendedArithmetic = true;
+        return;
+      case "-cy":
+        // Leave the Extended Arithmetic Mode region.
+        _extendedArithmetic = false;
         return;
       case "align":
       case "..":
@@ -1302,9 +1314,17 @@ public sealed class F18Compiler
       return false;
     }
 
+    // Inside a '+cy' region the label's address carries the Extended Arithmetic Mode
+    // bit (P9, 0x200): the code is still placed at the physical address, but callers
+    // reference it with P9 set so that entering the routine enables EAM. The bit is
+    // only meaningful for callable Word labels, not raw data.
+    var symbolValue = _extendedArithmetic && kind == F18ExportKind.Word
+        ? address | F18InstructionSet.ExtendedArithmeticBit
+        : address;
+
     _symbols[token.Text] = new F18ExportedSymbol(
         token.Text,
-        address,
+        symbolValue,
         kind,
         _options.NodeCoordinate,
         _options.MemorySpace);
