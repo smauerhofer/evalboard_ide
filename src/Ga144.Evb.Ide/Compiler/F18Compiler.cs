@@ -536,7 +536,7 @@ public sealed class F18Compiler
   private void InterpretHere(F18Token token)
   {
     Builder.Align();
-    Interpreter.TryPushData(Builder.CurrentAddress, token);
+    Interpreter.TryPushData(LocalTarget(Builder.CurrentAddress), token);
   }
 
   private void CompileSwap(F18Token token)
@@ -704,7 +704,7 @@ public sealed class F18Compiler
     }
 
     Builder.Align();
-    if (!DefineSymbol(name, Builder.CurrentAddress, F18ExportKind.Word))
+    if (!DefineSymbol(name, LocalTarget(Builder.CurrentAddress), F18ExportKind.Word))
     {
       return;
     }
@@ -769,7 +769,7 @@ public sealed class F18Compiler
     }
 
     Builder.Align();
-    DefineSymbol(name, Builder.CurrentAddress, F18ExportKind.Label);
+    DefineSymbol(name, LocalTarget(Builder.CurrentAddress), F18ExportKind.Label);
   }
 
   private void CompileRawData(F18Token token)
@@ -981,7 +981,7 @@ public sealed class F18Compiler
 
     Builder.Align();
     // begin (-a): push the current address as a destination onto the shared stack.
-    PushControlValue(Builder.CurrentAddress, token);
+    PushControlValue(LocalTarget(Builder.CurrentAddress), token);
   }
 
   // ---- Unified control stack -------------------------------------------------
@@ -1083,6 +1083,16 @@ public sealed class F18Compiler
   }
 
   // then (r-): resolve a forward handle to here.
+  // Capture the current compile address as a value (label, marker, or forward/back
+  // reference). Inside a '+cy' region every such address carries the Extended
+  // Arithmetic Mode bit (P9): the code is still placed at the physical address, but
+  // any transfer to it uses the full address including P9, so execution stays in
+  // EAM. Outside the region the address is unchanged. Centralizing the bit here
+  // means transfers themselves need no EAM special-casing -- they just use the
+  // full address value that was captured at definition/reference time.
+  private int LocalTarget(int address) =>
+      _extendedArithmetic ? address | F18InstructionSet.ExtendedArithmeticBit : address;
+
   private void CompileThen(F18Token token)
   {
     if (!RequireDefinition(token))
@@ -1101,9 +1111,11 @@ public sealed class F18Compiler
 
   // Resolve a forward handle to 'destination'. Uses the slot-aware packed patch
   // when packing is enabled (the handle records the transfer's slot), else the
-  // legacy slot-0 patch.
+  // legacy slot-0 patch. Inside a '+cy' region the destination carries the EAM bit
+  // (P9) so the branch keeps Extended Arithmetic Mode active.
   private void PatchForwardHandle(int handle, int destination, F18Token token)
   {
+    destination = LocalTarget(destination);
     if (_options.PackControlTransfers)
     {
       Builder.PatchPackedControl(
@@ -1217,7 +1229,7 @@ public sealed class F18Compiler
 
     Builder.EmitPrimitive(0x1D, token);
     Builder.Align();
-    PushControlValue(Builder.CurrentAddress, token);
+    PushControlValue(LocalTarget(Builder.CurrentAddress), token);
   }
 
   // next (a-): backward transfer to the loop destination.
@@ -1322,17 +1334,9 @@ public sealed class F18Compiler
       return false;
     }
 
-    // Inside a '+cy' region the label's address carries the Extended Arithmetic Mode
-    // bit (P9, 0x200): the code is still placed at the physical address, but callers
-    // reference it with P9 set so that entering the routine enables EAM. The bit is
-    // only meaningful for callable Word labels, not raw data.
-    var symbolValue = _extendedArithmetic && kind == F18ExportKind.Word
-        ? address | F18InstructionSet.ExtendedArithmeticBit
-        : address;
-
     _symbols[token.Text] = new F18ExportedSymbol(
         token.Text,
-        symbolValue,
+        address,
         kind,
         _options.NodeCoordinate,
         _options.MemorySpace);
