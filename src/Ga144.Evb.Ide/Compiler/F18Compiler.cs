@@ -53,18 +53,15 @@ public sealed class F18Compiler
       CompileToken(token);
     }
 
-    if (_inDefinition)
+    if (!_compileMode)
     {
-      if (!_compileMode)
-      {
-        AddError("F18C043", "The definition entered interpretation with '[' but did not resume compilation with ']'.", LastLocation());
-      }
-
-      // GreenArrays F18 style: a trailing ':' definition need not end with ';'.
-      // An unterminated final definition simply falls through to the end of the
-      // dictionary, so this is not an error. Any open control structures are
-      // still reported below.
+      AddError("F18C043", "A '[' interpretation section was opened but not closed with ']'.", LastLocation());
     }
+
+    // The F18 compiler compiles continuously; a trailing routine need not end with
+    // ';'. An unterminated final routine simply falls through to the end of the
+    // dictionary, so that is not an error. Any open control structures are still
+    // reported below.
 
     Builder.Align();
     ResolveSymbolRelocations();
@@ -135,7 +132,8 @@ public sealed class F18Compiler
     _tokens = [];
     _tokenIndex = 0;
     _inDefinition = false;
-    _compileMode = false;
+    // The compiler starts in compile mode; only '[' switches to interpretation.
+    _compileMode = true;
     _currentDefinition = null;
     _firstDefinitionAddress = null;
     _entryToken = null;
@@ -211,6 +209,9 @@ public sealed class F18Compiler
       case "align":
       case "..":
         Builder.Align();
+        return;
+      case "#":
+        PushHashValue(token);
         return;
       case "lit":
         CompilePrefixLiteral(token);
@@ -369,6 +370,9 @@ public sealed class F18Compiler
       return;
     }
 
+    // In the Assembler environment a number (or resolved constant/label) compiles
+    // directly into the code as an @p literal. Precede it with '#' to leave it on
+    // the compile-time stack instead (see the '#' handling in CompileToken).
     if (TryResolveValue(token, out int value))
     {
       Builder.EmitLiteral(value, token);
@@ -421,34 +425,26 @@ public sealed class F18Compiler
     EmitKnownControl(opcode, symbol.Value, token);
   }
 
-  // When the next token is ';' and a definition is open, consume it and return
-  // true, signalling that the just-emitted transfer is a tail call (a jump that
-  // needs no following 'return'). The ';' is swallowed so EndDefinition does not
-  // additionally emit a 'return' opcode.
+  // When the next token is ';' (and we are compiling, not in a '[' section),
+  // consume it and return true, signalling that the just-emitted transfer is a
+  // tail call: it is encoded as a jump instead of a call, and the swallowed ';'
+  // emits no 'return'. Consuming the ';' does NOT change compile mode -- the F18
+  // compiler stays in compile mode across ';'.
   private bool ConsumeTailSemicolon()
   {
-    if (!_inDefinition || !_compileMode || !Peek(";"))
+    if (!_compileMode || !Peek(";"))
     {
       return false;
     }
 
     _tokenIndex++;
-    _inDefinition = false;
-    _compileMode = false;
-    _currentDefinition = null;
     return true;
   }
 
   private void BeginInterpretation(F18Token token)
   {
-    if (!_inDefinition)
-    {
-      // The compiler is already interpreting at module level. Accepting '['
-      // here makes generated source fragments composable without changing state.
-      _compileMode = false;
-      return;
-    }
-
+    // '[' switches from compile mode to interpretation. It is valid anywhere the
+    // compiler is currently compiling.
     if (!_compileMode)
     {
       AddError("F18C049", "Nested '[' is not allowed; the compiler is already interpreting.", token.Location);
@@ -460,12 +456,7 @@ public sealed class F18Compiler
 
   private void ResumeCompilation(F18Token token)
   {
-    if (!_inDefinition)
-    {
-      AddError("F18C050", "']' can resume compilation only inside a ':' definition.", token.Location);
-      return;
-    }
-
+    // ']' resumes compile mode after a '[' interpretation section.
     if (_compileMode)
     {
       AddError("F18C051", "Unexpected ']'; target compilation is already active.", token.Location);
@@ -477,12 +468,10 @@ public sealed class F18Compiler
 
   private void InterpretOrigin(F18Token token)
   {
-    if (_inDefinition)
-    {
-      AddError("F18C006", "org is a module-level FORTH word and cannot be used inside a definition.", token.Location);
-      return;
-    }
-
+    // 'org' sets the location counter. It is an immediate directive and takes its
+    // argument from the compile-time stack (push it with '#', e.g. '# xA9 org').
+    // The F18 compiler compiles continuously, so there is no "inside a definition"
+    // state to forbid it in.
     if (Interpreter.TryPopData(token, out int value))
     {
       SetOrigin(value, token);
@@ -491,12 +480,8 @@ public sealed class F18Compiler
 
   private void InterpretConstant(F18Token token)
   {
-    if (_inDefinition)
-    {
-      AddError("F18C014", "Compile-time constants must be declared outside word definitions.", token.Location);
-      return;
-    }
-
+    // 'constant' names the value on the compile-time stack (push it with '#'). It
+    // is an immediate directive; there is no definition state to forbid it in.
     F18Token? name = ReadRequiredToken(token, "constant name");
     if (name is null || !Interpreter.TryPopData(token, out int value))
     {
@@ -516,12 +501,8 @@ public sealed class F18Compiler
 
   private void InterpretNodeImport(F18Token token)
   {
-    if (_inDefinition)
-    {
-      AddError("F18C036", "import is a module-level directive and cannot appear inside a definition.", token.Location);
-      return;
-    }
-
+    // 'import' is an immediate directive taking a node coordinate from the
+    // compile-time stack. There is no definition state to forbid it in.
     if (!Interpreter.TryPopData(token, out int coordinate))
     {
       return;
@@ -667,7 +648,11 @@ public sealed class F18Compiler
     return TryParseNumber(token.Text, out value);
   }
 
-  private bool IsInterpreting => !_inDefinition || !_compileMode;
+  // Per the F18/colorForth model the compiler is ALWAYS in compile mode except
+  // between '[' and ']'. ':' and ';' do not change the mode (':' flushes and
+  // labels; ';' emits a return), so interpretation is governed solely by whether
+  // a '[' section is open.
+  private bool IsInterpreting => !_compileMode;
 
   private F18CompileTimeInterpreter Interpreter =>
       _interpreter ?? throw new InvalidOperationException("Compile-time FORTH interpreter is not initialized.");
@@ -688,22 +673,16 @@ public sealed class F18Compiler
 
   private void BeginDefinition(F18Token token)
   {
-    if (_inDefinition)
+    // ':' does not enter compile mode (the compiler is already compiling); it
+    // flushes the current instruction word and assigns a label at the current
+    // address. Execution falls through into the new label -- a following ':' after
+    // an unterminated word simply sets a new label (the 'relay'/'done' idiom).
+    // Pending control values on the shared stack intentionally carry across ':'.
+    if (!_compileMode)
     {
-      // GreenArrays F18 style: a ':' definition need not be terminated by ';'.
-      // A following ':' simply sets a new label; execution falls through into it
-      // (the boot-ROM 'relay'/'done' idiom). Pending control values on the shared
-      // stack intentionally CARRY ACROSS the ':' — e.g. a 'then' after ': done'
-      // resolves a handle left before the label — so they are not cleared here.
-      if (!_compileMode)
-      {
-        // An open '[' interpretation must be closed with ']' first.
-        AddError("F18C052", "The definition cannot end while '[' interpretation is active; insert ']' before starting a new definition.", token.Location);
-        _compileMode = true;
-      }
-
-      _inDefinition = false;
-      _currentDefinition = null;
+      // A '[' interpretation section must be closed with ']' before a new label.
+      AddError("F18C052", "A new ':' label cannot start inside a '[' interpretation section; insert ']' first.", token.Location);
+      _compileMode = true;
     }
 
     var name = ReadRequiredToken(token, "word name");
@@ -719,35 +698,33 @@ public sealed class F18Compiler
     }
 
     _inDefinition = true;
-    _compileMode = true;
     _currentDefinition = name.Text;
     _firstDefinitionAddress ??= Builder.CurrentAddress;
   }
 
   private void EndDefinition(F18Token token)
   {
-    if (!_inDefinition)
-    {
-      AddError("F18C008", "Unexpected ';' outside a word definition.", token.Location);
-      return;
-    }
-
+    // Per the F18 model ';' does not exit compile mode or end the "definition"; it
+    // only emits a 'return' (unless a preceding call was converted to a tail jump,
+    // handled at the call site). Code after ';' continues to compile, so a ';' in
+    // the middle of a routine (e.g. 'inv 2* ; then drop 2* inv ;') is valid.
     if (!_compileMode)
     {
-      AddError("F18C052", "The definition cannot end while '[' interpretation is active; insert ']' before ';'.", token.Location);
+      // Inside a '[' interpretation section ';' has no meaning; it must be a target
+      // (compiled) construct. Resume compilation with ']' first.
+      AddError("F18C052", "';' cannot appear inside a '[' interpretation section; insert ']' first.", token.Location);
       _compileMode = true;
     }
 
     Builder.EmitPrimitive(0x00, token);
-    _inDefinition = false;
-    _compileMode = false;
-    _currentDefinition = null;
   }
 
   private void SetOrigin(int value, F18Token token)
   {
+    // The origin may land in the memory region or its mirror (DB001 Figure 2): the
+    // 64 words repeat once (RAM x000-x03F at x040-x07F, ROM x080-x0BF at x0C0-x0FF).
     var first = _options.MemoryBaseAddress;
-    var last = first + _options.MemoryWordCount - 1;
+    var last = first + (_options.MemoryWordCount * 2) - 1;
     if (value < first || value > last)
     {
       AddError(
@@ -812,6 +789,30 @@ public sealed class F18Compiler
     {
       Builder.EmitLiteral(value, token);
     }
+  }
+
+  // '#' (GreenArrays Assembler): the following number/value is left on the
+  // compile-time stack instead of being compiled as a literal. Also conditions
+  // named values (ports, constants) and named calls to push rather than compile.
+  // Used to pass arguments to directives, e.g. '# xA9 org'.
+  private void PushHashValue(F18Token token)
+  {
+    F18Token? valueToken = ReadRequiredToken(token, "value after '#'");
+    if (valueToken is null)
+    {
+      return;
+    }
+
+    if (TryResolveInterpretValue(valueToken, out int value))
+    {
+      Interpreter.TryPushData(value, token);
+      return;
+    }
+
+    AddError(
+        "F18C018",
+        $"'{valueToken.Text}' after '#' is not a numeric value, constant, label, or named value.",
+        valueToken.Location);
   }
 
   private void CompilePrefixLiteral(F18Token token)
@@ -917,7 +918,7 @@ public sealed class F18Compiler
       return;
     }
 
-    if (_inDefinition && _compileMode)
+    if (_compileMode)
     {
       Builder.EmitLiteral(encoded, openingToken);
     }
@@ -1430,6 +1431,20 @@ public sealed class F18Compiler
     }
 
     var normalized = text.Replace("_", string.Empty, StringComparison.Ordinal);
+
+    // A dot marks a double-precision number (e.g. '16.', '1.0'). We use 32-bit
+    // values, so the dot carries no extra magnitude here and is simply removed.
+    // (Only genuine numeric text should reach this point; a lone '.' or a word
+    // containing a dot that is not otherwise numeric will fail conversion below.)
+    if (normalized.Contains('.', StringComparison.Ordinal))
+    {
+      normalized = normalized.Replace(".", string.Empty, StringComparison.Ordinal);
+      if (normalized.Length == 0)
+      {
+        return false;
+      }
+    }
+
     var sign = 1;
     if (normalized.StartsWith('+'))
     {
@@ -1442,7 +1457,15 @@ public sealed class F18Compiler
     }
 
     var numberBase = 10;
-    if (normalized.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+    if (normalized.StartsWith('x') || normalized.StartsWith('X'))
+    {
+      // GreenArrays convention (arrayForth, DB014 3.3.2): a leading lowercase 'x'
+      // means the rest is hexadecimal, regardless of the current radix. We accept
+      // upper-case 'X' too for convenience.
+      numberBase = 16;
+      normalized = normalized[1..];
+    }
+    else if (normalized.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
     {
       numberBase = 16;
       normalized = normalized[2..];
@@ -1497,23 +1520,21 @@ public sealed class F18Compiler
   private bool Peek(string text) =>
       _tokenIndex < _tokens.Count && _tokens[_tokenIndex].Text.Equals(text, StringComparison.OrdinalIgnoreCase);
 
+  // Target-compilation words (if/-if/then/exit/...) are valid whenever the compiler
+  // is compiling. They do NOT require being between a specific ':' and ';': the F18
+  // compiler compiles continuously, so 'then' after a mid-routine ';' is valid. The
+  // only invalid context is inside a '[' interpretation section.
   private bool RequireDefinition(F18Token token)
   {
-    if (_inDefinition && _compileMode)
+    if (_compileMode)
     {
       return true;
     }
 
-    if (_inDefinition)
-    {
-      AddError(
-          "F18C053",
-          $"'{token.Text}' is a target-compilation word and cannot be used while '[' interpretation is active. Use ']' first.",
-          token.Location);
-      return false;
-    }
-
-    AddError("F18C034", $"'{token.Text}' is only valid inside a word definition.", token.Location);
+    AddError(
+        "F18C053",
+        $"'{token.Text}' is a target-compilation word and cannot be used inside a '[' interpretation section. Use ']' first.",
+        token.Location);
     return false;
   }
 
@@ -1551,7 +1572,6 @@ public sealed class F18Compiler
     private readonly List<byte> _slots = [];
     private readonly List<(int Value, F18Token Token)> _pendingData = [];
     private readonly int _baseAddress;
-    private readonly int _lastAddress;
     private readonly string _memoryName;
     private F18Token? _instructionToken;
     private int _cursor;
@@ -1569,7 +1589,6 @@ public sealed class F18Compiler
 
       _report = report;
       _baseAddress = baseAddress;
-      _lastAddress = baseAddress + wordCount - 1;
       _memoryName = memoryName;
       _memory = new int?[wordCount];
       _cursor = baseAddress;
@@ -1593,11 +1612,14 @@ public sealed class F18Compiler
     public void SetOrigin(int address, F18Token token)
     {
       Align();
-      if (address < _baseAddress || address > _lastAddress)
+      // The origin may land anywhere in the space or its mirror (DB001 Figure 2);
+      // the mirror maps onto the same 64 physical words. Only an address outside
+      // the whole region (e.g. I/O space) is rejected.
+      if (address < _baseAddress || address >= _baseAddress + _memory.Length * 2)
       {
         ReportError(
             "F18M001",
-            $"{_memoryName} origin must be between 0x{_baseAddress:X3} and 0x{_lastAddress:X3}.",
+            $"{_memoryName} origin must be between 0x{_baseAddress:X3} and 0x{_baseAddress + _memory.Length * 2 - 1:X3}.",
             token);
         return;
       }
@@ -1738,8 +1760,8 @@ public sealed class F18Compiler
 
     public void PatchControl(int memoryAddress, byte opcode, int destination, F18Token token)
     {
-      var index = memoryAddress - _baseAddress;
-      if (index < 0 || index >= _memory.Length || !_memory[index].HasValue)
+      var index = ToPhysicalIndex(memoryAddress);
+      if (index < 0 || !_memory[index].HasValue)
       {
         ReportError(
             "F18M002",
@@ -1770,8 +1792,8 @@ public sealed class F18Compiler
     // the user to align the source manually, per the greedy-pack policy.
     public void PatchPackedControl(int memoryAddress, int slot, int destination, F18Token token)
     {
-      var index = memoryAddress - _baseAddress;
-      if (index < 0 || index >= _memory.Length || !_memory[index].HasValue)
+      var index = ToPhysicalIndex(memoryAddress);
+      if (index < 0 || !_memory[index].HasValue)
       {
         ReportError(
             "F18M002",
@@ -1869,14 +1891,32 @@ public sealed class F18Compiler
       _pendingData.Clear();
     }
 
+    // Map a decoded address to a physical word index. Per DB001 Figure 2 the 64
+    // words repeat once within the space: RAM x000-x03F is mirrored at x040-x07F,
+    // ROM x080-x0BF at x0C0-x0FF, and incrementing wraps (x07F->x000, and the
+    // equivalent in ROM). So an address in the base region or its mirror maps into
+    // the 64-word array modulo the word count; only an address outside the whole
+    // space (e.g. I/O at x100+) is genuinely out of range. Returns -1 if unmapped.
+    private int ToPhysicalIndex(int address)
+    {
+      var offset = address - _baseAddress;
+      if (offset < 0 || offset >= _memory.Length * 2)
+      {
+        return -1;
+      }
+
+      return offset % _memory.Length;
+    }
+
     private void WriteWord(int value, F18Token token)
     {
-      var index = _cursor - _baseAddress;
-      if (index < 0 || index >= _memory.Length)
+      var index = ToPhysicalIndex(_cursor);
+      if (index < 0)
       {
         ReportError(
             "F18M005",
-            $"Compiled output exceeds the node's {_memory.Length}-word {_memoryName} range.",
+            $"Compiled output at 0x{_cursor:X3} is outside the node's {_memoryName} space " +
+            $"(0x{_baseAddress:X3}-0x{_baseAddress + _memory.Length * 2 - 1:X3}).",
             token);
         _cursor++;
         return;

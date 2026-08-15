@@ -780,7 +780,7 @@ internal sealed class KrakenSession : IAsyncDisposable
   private static int[] BuildReplyProgram()
   {
     string source = $$"""
-            0 org
+            # 0 org
             entry reply
 
             : reply

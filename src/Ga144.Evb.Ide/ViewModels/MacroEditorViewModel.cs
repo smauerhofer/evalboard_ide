@@ -62,12 +62,14 @@ public sealed class MacroEditorViewModel : ObservableObject
     _romLibrary.Normalize();
     RomLibraryPath = romLibraryPath;
 
-    foreach (F18MacroDefinition macro in _romLibrary.SystemMacros)
+    foreach (F18MacroDefinition macro in _romLibrary.SystemMacros
+        .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
     {
       SystemMacros.Add(new MacroDefinitionViewModel(macro.Clone()));
     }
 
-    foreach (F18MacroDefinition macro in _project.UserMacros)
+    foreach (F18MacroDefinition macro in _project.UserMacros
+        .OrderBy(item => item.Name, StringComparer.OrdinalIgnoreCase))
     {
       UserMacros.Add(new MacroDefinitionViewModel(macro.Clone()));
     }

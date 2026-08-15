@@ -12,6 +12,7 @@ public partial class MainWindow : Window
   private readonly MainWindowViewModel _viewModel;
   private SerialDeviceChangeWatcher? _deviceWatcher;
   private bool _closeCompleted;
+  private MacroEditorWindow? _macroEditor;
 
   public MainWindow(MainWindowViewModel viewModel)
   {
@@ -88,8 +89,21 @@ public partial class MainWindow : Window
   }
 
 
-  private async void OnMacrosClick(object sender, RoutedEventArgs e)
+  private void OnMacrosClick(object sender, RoutedEventArgs e)
   {
+    // Only one macro editor at a time: if one is already open, bring it to the
+    // front instead of opening a second, non-modal window.
+    if (_macroEditor is not null)
+    {
+      if (_macroEditor.WindowState == WindowState.Minimized)
+      {
+        _macroEditor.WindowState = WindowState.Normal;
+      }
+
+      _macroEditor.Activate();
+      return;
+    }
+
     if (_viewModel.SelectedProject is null)
     {
       return;
@@ -105,55 +119,77 @@ public partial class MainWindow : Window
       {
         Owner = this
       };
+      _macroEditor = editor;
 
-      if (editor.ShowDialog() != true)
+      // Non-modal: show the editor without blocking, and run the save logic when it
+      // closes after the user saved (the editor sets Saved = true on Save; it is
+      // shown non-modally so DialogResult cannot be used). Clearing _macroEditor on
+      // close lets the button open a fresh one next time while preventing a second
+      // window from being opened while this one is active.
+      editor.Closed += async (_, _) =>
       {
-        return;
-      }
+        _macroEditor = null;
+        if (!editor.Saved)
+        {
+          return;
+        }
 
-      var saveErrors = new List<string>();
-      if (editorViewModel.SystemChanged)
-      {
-        try
-        {
-          await _viewModel.SaveRomLibraryAsync();
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-          saveErrors.Add($"System macro library: {exception.Message}");
-        }
-      }
+        await PersistMacroChangesAsync(editorViewModel);
+      };
 
-      if (editorViewModel.UserChanged)
-      {
-        _viewModel.SelectedProject.NotifyProjectChanged();
-        try
-        {
-          await _viewModel.SaveWorkspaceImmediatelyAsync();
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
-        {
-          saveErrors.Add($"Project workspace: {exception.Message}");
-        }
-      }
-
-      if (saveErrors.Count > 0)
-      {
-        MessageBox.Show(
-            this,
-            "The macro definitions were updated in memory, but one or more files could not be persisted.\n\n" +
-            string.Join(Environment.NewLine, saveErrors),
-            "Macro save error",
-            MessageBoxButton.OK,
-            MessageBoxImage.Error);
-      }
+      editor.Show();
     }
     catch (Exception exception)
     {
+      // Opening failed; drop any partially-created editor so the button works again.
+      _macroEditor = null;
       MessageBox.Show(
           this,
           "The F18 macro editor could not be opened.\n\n" + exception,
           "F18 macro editor error",
+          MessageBoxButton.OK,
+          MessageBoxImage.Error);
+    }
+  }
+
+  // Persist macro edits made in the (non-modal) macro editor: the system ROM
+  // library and/or the project workspace, depending on what changed. Surfaces any
+  // file-write failures without discarding the in-memory updates.
+  private async Task PersistMacroChangesAsync(MacroEditorViewModel editorViewModel)
+  {
+    var saveErrors = new List<string>();
+    if (editorViewModel.SystemChanged)
+    {
+      try
+      {
+        await _viewModel.SaveRomLibraryAsync();
+      }
+      catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+      {
+        saveErrors.Add($"System macro library: {exception.Message}");
+      }
+    }
+
+    if (editorViewModel.UserChanged)
+    {
+      _viewModel.SelectedProject?.NotifyProjectChanged();
+      try
+      {
+        await _viewModel.SaveWorkspaceImmediatelyAsync();
+      }
+      catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+      {
+        saveErrors.Add($"Project workspace: {exception.Message}");
+      }
+    }
+
+    if (saveErrors.Count > 0)
+    {
+      MessageBox.Show(
+          this,
+          "The macro definitions were updated in memory, but one or more files could not be persisted.\n\n" +
+          string.Join(Environment.NewLine, saveErrors),
+          "Macro save error",
           MessageBoxButton.OK,
           MessageBoxImage.Error);
     }
