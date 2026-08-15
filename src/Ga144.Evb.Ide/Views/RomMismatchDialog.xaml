@@ -43,21 +43,26 @@
       </DataGrid.Columns>
     </DataGrid>
 
-    <StackPanel Grid.Row="3"
-                Orientation="Horizontal"
-                HorizontalAlignment="Right"
-                Margin="0,10,0,0">
-      <Button x:Name="ContinueButton"
-              Content="Continue"
+    <Grid Grid.Row="3" Margin="0,10,0,0">
+      <Button x:Name="CopyButton"
+              Content="Copy"
               MinWidth="90"
-              Margin="0,0,8,0"
-              IsDefault="True"
-              Click="OnContinueClick" />
-      <Button x:Name="AbortButton"
-              Content="Abort"
-              MinWidth="90"
-              IsCancel="True"
-              Click="OnAbortClick" />
-    </StackPanel>
+              HorizontalAlignment="Left"
+              Click="OnCopyClick" />
+      <StackPanel Orientation="Horizontal"
+                  HorizontalAlignment="Right">
+        <Button x:Name="ContinueButton"
+                Content="Continue"
+                MinWidth="90"
+                Margin="0,0,8,0"
+                IsDefault="True"
+                Click="OnContinueClick" />
+        <Button x:Name="AbortButton"
+                Content="Abort"
+                MinWidth="90"
+                IsCancel="True"
+                Click="OnAbortClick" />
+      </StackPanel>
+    </Grid>
   </Grid>
 </Window>

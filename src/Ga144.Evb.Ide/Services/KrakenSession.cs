@@ -847,7 +847,7 @@ internal sealed class KrakenSession : IAsyncDisposable
       MemoryWordCount = 64,
       IncludeCommonRomWords = true,
       MacroLookupScope = F18MacroLookupScope.UserAndSystem,
-      PackBackwardBranches = false
+      PackControlTransfers = false
     };
     F18CompileResult result = compiler.Compile(source, options);
     if (!result.Success)
