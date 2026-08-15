@@ -986,13 +986,21 @@ public sealed class F18Compiler
   // forward branch.
   private const int HandleOpcodeShift = 12;
   private const int HandleSlotShift = 15;
+  private const int HandleLiteralShift = 10;
 
-  private static int EncodeHandle(int patchAddress, byte opcode, int slot) =>
+  // A control handle packs everything PatchPackedControl needs into one 18-bit
+  // stack value: the placeholder address (bits 0-9), the count of '@p' literal
+  // words that follow it in the same instruction word (bits 10-11, each advances P
+  // by one for reachability), the transfer opcode (bits 12-14), and the slot the
+  // transfer occupies (bits 15-16).
+  private static int EncodeHandle(int patchAddress, byte opcode, int slot, int literalCount = 0) =>
       (patchAddress & 0x3FF)
+      | ((literalCount & 0x03) << HandleLiteralShift)
       | ((opcode & 0x07) << HandleOpcodeShift)
       | ((slot & 0x03) << HandleSlotShift);
 
   private static int HandleAddress(int handle) => handle & 0x3FF;
+  private static int HandleLiteralCount(int handle) => (handle >> HandleLiteralShift) & 0x03;
   private static byte HandleOpcode(int handle) => (byte)((handle >> HandleOpcodeShift) & 0x07);
   private static int HandleSlot(int handle) => (handle >> HandleSlotShift) & 0x03;
 
@@ -1014,14 +1022,15 @@ public sealed class F18Compiler
   // Emit a forward-transfer placeholder, packing greedily into the current word's
   // next free slot when enabled (returning that slot), else a force-aligned slot-0
   // word. Centralizes the option branch shared by if/-if/ahead/leap/else/while.
-  private int EmitForwardPlaceholder(byte opcode, F18Token token, out int slot)
+  private int EmitForwardPlaceholder(byte opcode, F18Token token, out int slot, out int literalCount)
   {
     if (_options.PackControlTransfers)
     {
-      return Builder.EmitPackedControlPlaceholder(opcode, token, out slot);
+      return Builder.EmitPackedControlPlaceholder(opcode, token, out slot, out literalCount);
     }
 
     slot = 0;
+    literalCount = 0;
     return Builder.EmitControlPlaceholder(opcode, token);
   }
 
@@ -1034,8 +1043,8 @@ public sealed class F18Compiler
       return;
     }
 
-    var patchAddress = EmitForwardPlaceholder(opcode, token, out int slot);
-    PushControlValue(EncodeHandle(patchAddress, opcode, slot), token);
+    var patchAddress = EmitForwardPlaceholder(opcode, token, out int slot, out int literalCount);
+    PushControlValue(EncodeHandle(patchAddress, opcode, slot, literalCount), token);
   }
 
   private void CompileAhead(F18Token token)
@@ -1045,8 +1054,8 @@ public sealed class F18Compiler
       return;
     }
 
-    var patchAddress = EmitForwardPlaceholder(0x02, token, out int slot);
-    PushControlValue(EncodeHandle(patchAddress, 0x02, slot), token);
+    var patchAddress = EmitForwardPlaceholder(0x02, token, out int slot, out int literalCount);
+    PushControlValue(EncodeHandle(patchAddress, 0x02, slot, literalCount), token);
   }
 
   private void CompileLeap(F18Token token)
@@ -1057,8 +1066,8 @@ public sealed class F18Compiler
       return;
     }
 
-    var patchAddress = EmitForwardPlaceholder(0x03, token, out int slot);
-    PushControlValue(EncodeHandle(patchAddress, 0x03, slot), token);
+    var patchAddress = EmitForwardPlaceholder(0x03, token, out int slot, out int literalCount);
+    PushControlValue(EncodeHandle(patchAddress, 0x03, slot, literalCount), token);
   }
 
   // then (r-): resolve a forward handle to here.
@@ -1085,7 +1094,8 @@ public sealed class F18Compiler
   {
     if (_options.PackControlTransfers)
     {
-      Builder.PatchPackedControl(HandleAddress(handle), HandleSlot(handle), destination, token);
+      Builder.PatchPackedControl(
+          HandleAddress(handle), HandleSlot(handle), HandleLiteralCount(handle), destination, token);
     }
     else
     {
@@ -1106,9 +1116,9 @@ public sealed class F18Compiler
       return;
     }
 
-    var jumpPatch = EmitForwardPlaceholder(0x02, token, out int slot);
+    var jumpPatch = EmitForwardPlaceholder(0x02, token, out int slot, out int literalCount);
     PatchForwardHandle(handle, Builder.CurrentAddress, token);
-    PushControlValue(EncodeHandle(jumpPatch, 0x02, slot), token);
+    PushControlValue(EncodeHandle(jumpPatch, 0x02, slot, literalCount), token);
   }
 
   // Backward transfer to a destination 'a' with the given opcode (until/-until/end/again).
@@ -1224,8 +1234,8 @@ public sealed class F18Compiler
     }
 
     // 'if': emit the conditional forward branch and produce a handle.
-    var patchAddress = EmitForwardPlaceholder(opcode, token, out int slot);
-    int handle = EncodeHandle(patchAddress, opcode, slot);
+    var patchAddress = EmitForwardPlaceholder(opcode, token, out int slot, out int literalCount);
+    int handle = EncodeHandle(patchAddress, opcode, slot, literalCount);
 
     // 'swap': exchange the new handle with the value beneath (the begin
     // destination), leaving ( ... r x ) so repeat/again resolves them correctly.
@@ -1684,7 +1694,11 @@ public sealed class F18Compiler
         return false;
       }
 
-      if (!F18InstructionSet.ControlFitsSlot(slot, _cursor, destination))
+      // P after this word points past the instruction word AND past any inline
+      // literals that '@p' in this word will consume (they are written next by
+      // FlushPendingData). Each pending literal advances P by one.
+      var nextP = _cursor + 1 + _pendingData.Count;
+      if (!F18InstructionSet.ControlFitsSlot(slot, nextP, destination))
       {
         return false;
       }
@@ -1723,7 +1737,7 @@ public sealed class F18Compiler
     // PatchPackedControl once the target is known. This matches the chip ROM, which
     // packs forward transfers into whatever slot is free rather than force-aligning
     // them. Slot 3 cannot hold a transfer, so a full 3-slot word is flushed first.
-    public int EmitPackedControlPlaceholder(byte opcode, F18Token token, out int slot)
+    public int EmitPackedControlPlaceholder(byte opcode, F18Token token, out int slot, out int literalCount)
     {
       if (_slots.Count == 3)
       {
@@ -1731,6 +1745,9 @@ public sealed class F18Compiler
       }
 
       slot = _slots.Count;
+      // '@p' literals in this same word (pending flush) each advance P by one, so
+      // record how many follow the transfer for the reachability check at patch time.
+      literalCount = _pendingData.Count;
       var leading = _slots.ToArray();
 
       int encoded;
@@ -1790,7 +1807,7 @@ public sealed class F18Compiler
     // slot 1/2 transfer only reaches a destination whose high bits match the
     // following word. If the target is out of reach, this reports F18M005 telling
     // the user to align the source manually, per the greedy-pack policy.
-    public void PatchPackedControl(int memoryAddress, int slot, int destination, F18Token token)
+    public void PatchPackedControl(int memoryAddress, int slot, int literalCount, int destination, F18Token token)
     {
       var index = ToPhysicalIndex(memoryAddress);
       if (index < 0 || !_memory[index].HasValue)
@@ -1802,7 +1819,11 @@ public sealed class F18Compiler
         return;
       }
 
-      if (!F18InstructionSet.ControlFitsSlot(slot, memoryAddress, destination))
+      // P after this word points past the transfer word AND past any '@p' literals
+      // in the same word (each advances P by one), so reachability is relative to
+      // memoryAddress + 1 + literalCount, not memoryAddress + 1.
+      var nextP = memoryAddress + 1 + literalCount;
+      if (!F18InstructionSet.ControlFitsSlot(slot, nextP, destination))
       {
         int width = F18InstructionSet.AddressFieldWidth(slot);
         ReportError(

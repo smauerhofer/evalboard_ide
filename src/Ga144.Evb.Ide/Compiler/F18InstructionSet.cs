@@ -172,11 +172,14 @@ public static class F18InstructionSet
     _ => 0
   };
 
-  // True if a transfer occupying 'slot' of the word at 'wordAddress' can reach
-  // 'destination'. The n-bit field replaces the low n bits of (wordAddress + 1),
-  // so the destination's high bits must equal those of the next word. Slot 0
-  // carries the full 10-bit P address and always reaches within a node.
-  public static bool ControlFitsSlot(int slot, int wordAddress, int destination)
+  // Reachability for a slot 1/2 transfer. 'nextP' is the value the P register holds
+  // when the transfer computes its target: the address immediately after the
+  // transfer's own instruction word AND after any inline literals that '@p'
+  // instructions in the same word have consumed (each '@p' advances P by one). The
+  // n-bit field replaces the low n bits of nextP, so the destination is reachable
+  // only when its high bits already match nextP's. Slot 0 carries the full 10-bit P
+  // address and always reaches within a node.
+  public static bool ControlFitsSlot(int slot, int nextP, int destination)
   {
     var width = AddressFieldWidth(slot);
     if (width == 0)
@@ -190,7 +193,7 @@ public static class F18InstructionSet
     }
 
     var mask = (1 << width) - 1;
-    var reconstructed = ((wordAddress + 1) & ~mask) | (destination & mask);
+    var reconstructed = (nextP & ~mask) | (destination & mask);
     return reconstructed == destination;
   }
 
