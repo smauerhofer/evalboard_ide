@@ -585,7 +585,9 @@ public sealed class F18Compiler
       return;
     }
 
-    if (NameExists(name.Text))
+    // Like a ':'/'label'/'equ' definition, a constant may take over a name that
+    // only an 'import' has bound (warning, see TryShadowImportedName).
+    if (NameExists(name.Text) && !TryShadowImportedName(name.Text, name))
     {
       AddError("F18C016", $"The name '{name.Text}' is already defined or reserved.", name.Location);
       return;
@@ -742,8 +744,25 @@ public sealed class F18Compiler
   {
     if (NameExists(name))
     {
-      AddError("F18C042", $"Import from node {sourceNode:000} conflicts with existing name '{name}'.", token.Location);
-      return false;
+      // One import may replace a name a PREVIOUS import bound (warning, last
+      // import wins) -- the same rule a local definition gets in
+      // TryShadowImportedName. A collision with anything locally defined stays an
+      // error, and deliberately so: unlike the shadowing case, letting the import
+      // win would retarget forward references that ResolveSymbolRelocations has
+      // not patched yet, silently redirecting already-compiled call sites to
+      // another node's address.
+      if (!IsImportedNameOnly(name))
+      {
+        AddError("F18C042", $"Import from node {sourceNode:000} conflicts with existing name '{name}'.", token.Location);
+        return false;
+      }
+
+      F18ExportedSymbol previous = _externalSymbols[name];
+      AddWarning(
+          "F18C056",
+          $"Import from node {sourceNode:000} replaces '{name}', already imported from node " +
+          $"{previous.NodeCoordinate:000} (0x{previous.Value:X3}). The newer import is used from here on.",
+          token.Location);
     }
 
     _externalSymbols[name] = new F18ExportedSymbol(
@@ -1411,7 +1430,7 @@ public sealed class F18Compiler
 
   private bool DefineSymbol(F18Token token, int address, F18ExportKind kind)
   {
-    if (NameExists(token.Text))
+    if (NameExists(token.Text) && !TryShadowImportedName(token.Text, token))
     {
       AddError("F18C029", $"The name '{token.Text}' is already defined or reserved.", token.Location);
       return false;
@@ -1425,6 +1444,43 @@ public sealed class F18Compiler
         _options.MemorySpace);
     return true;
   }
+
+  // A name bound only by an 'import' may be redefined locally: the local
+  // dictionary always outranks a name borrowed from another node, so this is a
+  // WARNING (reported, then ignored), not an error. Any other collision -- an
+  // existing local definition, a constant, a target opcode, or a reserved
+  // compiler word -- stays an error, because silently rebinding one of those
+  // would change the meaning of code already compiled against it.
+  //
+  // The stale import binding is REMOVED rather than merely shadowed. Several
+  // lookups consult _externalSymbols on a miss whose criteria differ from
+  // _symbols' (TryResolveValue, for one, accepts a local symbol only when it is
+  // Label-kind but an external one whenever it is not Word-kind), so leaving both
+  // entries in place would let the import still win in those paths.
+  private bool TryShadowImportedName(string name, F18Token token)
+  {
+    if (!IsImportedNameOnly(name))
+    {
+      return false;
+    }
+
+    F18ExportedSymbol imported = _externalSymbols[name];
+    AddWarning(
+        "F18C050",
+        $"'{name}' redefines the name imported from node {imported.NodeCoordinate:000} (0x{imported.Value:X3}). " +
+        "The local definition is used from here on; the imported one is no longer reachable by this name.",
+        token.Location);
+    _externalSymbols.Remove(name);
+    return true;
+  }
+
+  // True when 'name' is currently bound ONLY by an imported/external symbol.
+  private bool IsImportedNameOnly(string name) =>
+      _externalSymbols.ContainsKey(name) &&
+      !_symbols.ContainsKey(name) &&
+      !_constants.ContainsKey(name) &&
+      !F18InstructionSet.Opcodes.ContainsKey(name) &&
+      !ReservedCompilerWords.Contains(name);
 
   private bool NameExists(string name) =>
       _symbols.ContainsKey(name) ||

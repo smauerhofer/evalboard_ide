@@ -573,7 +573,7 @@ systemMacros:
     macro rom_poly
 - name: rom_bitsy
   description: ''
-  sourceCode: >-
+  sourceCode: >
     # 106 import
 
     # 0xAA org
@@ -609,7 +609,7 @@ systemMacros:
 
     : 'exit ( rx-r'i) drop rp-- dup bs@ ;
 
-    begin dup 2* -if drop !b ahead [ swap ] then drop >r ;'
+    begin dup 2* -if drop !b ahead [ swap ] then drop >r ;
 
     : bitsy then dup bs@ >r ip++
 
@@ -620,8 +620,6 @@ systemMacros:
     : 'lit ( -w) dup bs@ >r ip++ r> pshbs ;
 
     : 'if ( f-) popbs if drop ip++ ; then drop 'else ;
-
-    : start right a! left b! -32 0 bitsy ;
 - name: rom_dac
   description: ''
   sourceCode: >-
@@ -762,7 +760,9 @@ systemMacros:
     macro rom_spi
 - name: rom_stack
   description: ''
-  sourceCode: >-
+  sourceCode: >
+    macro rom_warm
+
     # 0x3C equ xa@
 
     # 0x3E equ xa!
@@ -793,7 +793,7 @@ systemMacros:
 
     : pshw ( pstw-p'tw) >r pshs r> ;
 
-    : page! ( ptw-p'tw) @p+ !b !b . drop !p+ ;
+    : page! ( ptw-p'tw) @p+ !b !b . drop @p+ ;
 
     pops ;
 
@@ -825,7 +825,7 @@ systemMacros:
 
     : 'and ( ww-w) and pops ;
 
-    : 'negate ( w-w) '1- ;
+    : 'negate ( w-w) '1-
 
     : 'invert ( w-w') begin inv ;
 
@@ -833,9 +833,7 @@ systemMacros:
 
     : '+ ( pww-p'sw') + pops ;
 
-    : swap- inv . + pops ;
-
-    : start right b! 0 dup dup --l- ;
+    : swap- inv . + inv pops ;
 - name: rom_sync
   description: ''
   sourceCode: >
