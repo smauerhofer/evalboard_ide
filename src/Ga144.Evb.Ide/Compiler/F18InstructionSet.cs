@@ -46,6 +46,14 @@ public static class F18InstructionSet
         ["a!"] = 0x1F
       };
 
+  // DB013 4.2.7.1 "Named Literals": these register names normally assemble as a
+  // literal directly in the instruction stream (like any other number); preceded
+  // by '#' they instead leave their value on the compile-time stack (F18Compiler
+  // handles the '#' condition uniformly for every name in Constants/
+  // NamedMultiportCalls via TryResolveInterpretValue). NOT included here: the
+  // per-node cardinal directions (4.2.7.2, F18Compiler injects those per-compile
+  // from NodeCoordinate) and the 15 named multiport calls (4.2.7.3, see
+  // NamedMultiportCalls below -- those default to a CALL, not a literal).
   public static IReadOnlyDictionary<string, int> Constants { get; } =
       new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
       {
@@ -58,18 +66,32 @@ public static class F18InstructionSet
         ["down"] = 0x115,
         ["right"] = 0x1D5,
 
-        ["lu"] = 0x165,
-        ["du"] = 0x105,
-        ["dl"] = 0x135,
-        ["dlu"] = 0x125,
-        ["ru"] = 0x1C5,
-        ["rl"] = 0x1F5,
-        ["rlu"] = 0x1E5,
-        ["rd"] = 0x195,
-        ["rdu"] = 0x185,
-        ["rdl"] = 0x1B5,
-        ["rdlu"] = 0x1A5,
+        ["ram"] = 0x000,
+        ["rom"] = 0x080,
+        ["eam"] = 0x200,
+        ["io-reset"] = 0x15555,
+        ["word-mask"] = WordMask
+      };
 
+  public static IReadOnlyDictionary<string, int> CallableRomWords { get; } =
+      new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+      {
+        ["warm"] = 0x0A9,
+        ["cold"] = 0x0AA
+      };
+
+  // DB013 4.2.7.3 "Named Calls": each of the 15 valid multiport addresses has a
+  // named word that normally assembles a CALL to that address (a jump when in
+  // tail position, same as any other word reference) -- NOT a literal. Preceded
+  // by '#' the word instead leaves its (single-precision) address on the stack.
+  // F18Compiler injects these as external Word-kind symbols so ordinary word
+  // reference/tail-jump handling applies; unlike Constants, they must not be
+  // resolved as a literal by TryResolveValue. The canonical DB013 spelling is the
+  // dash notation; the un-dashed combinations are kept as convenience aliases for
+  // the same 15 addresses (both spellings behave identically).
+  public static IReadOnlyDictionary<string, int> NamedMultiportCalls { get; } =
+      new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+      {
         ["---u"] = 0x145,
         ["--l-"] = 0x175,
         ["--lu"] = 0x165,
@@ -84,19 +106,20 @@ public static class F18InstructionSet
         ["rd--"] = 0x195,
         ["rd-u"] = 0x185,
         ["rdl-"] = 0x1B5,
+        ["rdlu"] = 0x1A5,
 
-        ["ram"] = 0x000,
-        ["rom"] = 0x080,
-        ["eam"] = 0x200,
-        ["io-reset"] = 0x15555,
-        ["word-mask"] = WordMask
-      };
-
-  public static IReadOnlyDictionary<string, int> CallableRomWords { get; } =
-      new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-      {
-        ["warm"] = 0x0A9,
-        ["cold"] = 0x0AA
+        // Convenience aliases (not in DB013, kept for readability): same 15
+        // addresses under the un-dashed combination names.
+        ["lu"] = 0x165,
+        ["du"] = 0x105,
+        ["dl"] = 0x135,
+        ["dlu"] = 0x125,
+        ["ru"] = 0x1C5,
+        ["rl"] = 0x1F5,
+        ["rlu"] = 0x1E5,
+        ["rd"] = 0x195,
+        ["rdu"] = 0x185,
+        ["rdl"] = 0x1B5
       };
 
   public static bool IsSlot3Compatible(byte opcode) => (opcode & 0x03) == 0;

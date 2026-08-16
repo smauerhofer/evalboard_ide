@@ -102,6 +102,17 @@ public sealed class F18Compiler
       _constants[pair.Key] = pair.Value;
     }
 
+    // DB013 4.2.7.2: 'north'/'south'/'east'/'west' are per-node Named Literals --
+    // they resolve to whichever local port ('up'/'down'/'left'/'right') that
+    // geographic direction maps to for this node's position (the F18A swaps
+    // up/down on odd rows and left/right on odd columns). Seeded here, alongside
+    // the other Named Literals, so PredefinedConstants below can still override.
+    foreach (CardinalDirection direction in Enum.GetValues<CardinalDirection>())
+    {
+      string localName = F18AwaitAddresses.LocalPortName(_options.NodeCoordinate, direction);
+      _constants[direction.ToString().ToLowerInvariant()] = F18InstructionSet.Constants[localName];
+    }
+
     foreach (KeyValuePair<string, int> pair in _options.PredefinedConstants)
     {
       _constants[pair.Key] = pair.Value & F18InstructionSet.WordMask;
@@ -110,6 +121,25 @@ public sealed class F18Compiler
     foreach (KeyValuePair<string, F18ExportedSymbol> pair in _options.PredefinedSymbols)
     {
       _externalSymbols[pair.Key] = pair.Value;
+    }
+
+    // DB013 4.2.7.3: each of the 15 named multiport addresses normally assembles a
+    // CALL to that address (a tail jump in 'name ;' position, like any other word
+    // reference) -- unlike Constants, this is unconditional (not gated by
+    // IncludeCommonRomWords): these are fixed silicon addresses, not borrowed ROM
+    // subroutines. PredefinedSymbols above still takes priority if a caller wants
+    // to override one.
+    foreach (KeyValuePair<string, int> pair in F18InstructionSet.NamedMultiportCalls)
+    {
+      if (!_externalSymbols.ContainsKey(pair.Key))
+      {
+        _externalSymbols[pair.Key] = new F18ExportedSymbol(
+            pair.Key,
+            pair.Value,
+            F18ExportKind.Word,
+            _options.NodeCoordinate,
+            F18MemorySpace.Rom);
+      }
     }
 
     if (_options.IncludeCommonRomWords)
@@ -405,7 +435,15 @@ public sealed class F18Compiler
 
     if (_externalSymbols.TryGetValue(token.Text, out F18ExportedSymbol? externalSymbol) && externalSymbol is not null)
     {
-      EmitWordReference(externalSymbol, token);
+      // DB013 4.2.7.3 named multiport calls (---u..rdlu and their un-dashed
+      // aliases) are confirmed against silicon to always occupy a dedicated
+      // slot-0 word: the chip never packs one into a free slot alongside a
+      // preceding op, unlike an ordinary word call/jump. Force alignment only
+      // for the un-shadowed built-in binding; a caller-supplied
+      // PredefinedSymbols override for the same name keeps normal packing.
+      bool forceAligned = F18InstructionSet.NamedMultiportCalls.ContainsKey(token.Text) &&
+          !_options.PredefinedSymbols.ContainsKey(token.Text);
+      EmitWordReference(externalSymbol, token, forceAligned);
       return;
     }
 
@@ -424,8 +462,10 @@ public sealed class F18Compiler
   // Emit a reference to a resolved word/symbol. A Word in tail position ('name ;')
   // compiles to a jump (the jump is the return), otherwise a call; the trailing
   // ';' is consumed here so it does not also emit a 'return'. Non-Word symbols are
-  // literals and are unaffected.
-  private void EmitWordReference(F18ExportedSymbol symbol, F18Token token)
+  // literals and are unaffected. 'forceAligned' skips the free-slot packing
+  // optimization and always emits a dedicated slot-0 word (see the named
+  // multiport call case above).
+  private void EmitWordReference(F18ExportedSymbol symbol, F18Token token, bool forceAligned = false)
   {
     if (symbol.Kind != F18ExportKind.Word)
     {
@@ -434,6 +474,12 @@ public sealed class F18Compiler
     }
 
     var opcode = ConsumeTailSemicolon() ? (byte)0x02 : (byte)0x03;
+    if (forceAligned)
+    {
+      Builder.EmitControl(opcode, symbol.Value & 0x3FF, token);
+      return;
+    }
+
     EmitKnownControl(opcode, symbol.Value, token);
   }
 

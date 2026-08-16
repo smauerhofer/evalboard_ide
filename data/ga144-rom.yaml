@@ -448,7 +448,7 @@ nodes:
     macro rom_basic
   romWords: []
 - coordinate: 701
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_serdes
   romWords: []
 - coordinate: 702
   sourceCode: macro rom_basic
@@ -601,6 +601,28 @@ systemMacros:
       zif drop ahead [ swap ] then r> over >r @p a relay !b !b !b
       begin @+ !b unext
     : done then a >r a! ;
+- name: rom_serdes
+  description: ''
+  sourceCode: >
+    macro rom_relay
+
+    macro rom_warm
+
+    : cold x3141. a! x3FFFE. dup !  rdlu cold ;
+
+    # 0xB0 org
+
+    macro rom_mul17
+
+    macro rom_muldot
+
+    macro rom_filter
+
+    macro rom_interp
+
+    macro rom_triangle
+
+    macro rom_divide
 - name: rom_shift
   description: ''
   sourceCode: >-
@@ -646,7 +668,7 @@ systemMacros:
 
     # 0 constant spiadr
 
-    # 0xEA org
+    # 0xAA org
 
     : cold @b inv ..  avail -until  spispeed spiadr >r spicmd
 
@@ -665,6 +687,10 @@ systemMacros:
     macro rom_warm
 
     macro rom_spi
+
+    # 0x81 org
+
+    warm
 - name: rom_sync
   description: ''
   sourceCode: >

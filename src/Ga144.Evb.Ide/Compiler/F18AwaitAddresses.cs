@@ -72,6 +72,32 @@ public static class F18AwaitAddresses
   /// <summary>True when the node's await address is confirmed against silicon.</summary>
   public static bool IsConfirmed(int coordinate) => true;
 
+  /// <summary>
+  /// DB013 4.2.7.2 "Named Literals for Cardinal Directions": resolves a
+  /// geographic direction (north/south/east/west) to the LOCAL F18InstructionSet
+  /// Constants port name ("up"/"down"/"left"/"right") for the given node, using
+  /// the same even-row/even-column swap as <see cref="LocalPortMask"/> and
+  /// KrakenTopology.PortAddress. This lets source reference a node's neighbor by
+  /// geography instead of by local port name, so moving a node between odd and
+  /// even rows/columns does not require editing port names.
+  /// </summary>
+  public static string LocalPortName(int coordinate, CardinalDirection direction)
+  {
+    int row = coordinate / 100;
+    int column = coordinate % 100;
+    bool evenRow = (row & 1) == 0;
+    bool evenColumn = (column & 1) == 0;
+
+    return direction switch
+    {
+      CardinalDirection.North => evenRow ? "down" : "up",
+      CardinalDirection.South => evenRow ? "up" : "down",
+      CardinalDirection.East => evenColumn ? "right" : "left",
+      CardinalDirection.West => evenColumn ? "left" : "right",
+      _ => throw new ArgumentOutOfRangeException(nameof(direction))
+    };
+  }
+
   // The set of LOCAL ports (R/D/L/U mask) the node at 'coordinate' (row*100 +
   // column) has. Geographic neighbors map to local ports via the F18A swap: on
   // even rows geographic north is local Down and south is local Up (swapped on odd
@@ -108,4 +134,13 @@ public static class F18AwaitAddresses
 
     return mask;
   }
+}
+
+/// <summary>Geographic direction, per DB013 4.2.7.2 (north/south/east/west).</summary>
+public enum CardinalDirection
+{
+  North,
+  South,
+  East,
+  West
 }
