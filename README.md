@@ -45,6 +45,16 @@ The default files are:
 %LOCALAPPDATA%\Ga144EvalboardIde\ga144-rom.yaml
 ```
 
+The data directory can be relocated with the `GA144IDE_DATA` environment variable. When it is set to a non-empty value, that directory is used for `workspace.yaml`, `ga144-rom.yaml`, and the legacy `evalboards.json` instead of `%LOCALAPPDATA%\Ga144EvalboardIde`. Environment variables inside the value are expanded and the result is made absolute:
+
+```text
+GA144IDE_DATA=D:\Ga144\data
+  -> D:\Ga144\data\workspace.yaml
+  -> D:\Ga144\data\ga144-rom.yaml
+```
+
+When `GA144IDE_DATA` is not set, the application falls back to the `%LOCALAPPDATA%\Ga144EvalboardIde` location shown above. The variable is read at startup, so set it before launching the application. An explicit `--config` path still overrides the workspace location, while `ga144-rom.yaml` always follows the resolved data directory.
+
 Workspace saves are atomic. The previous workspace is retained as `workspace.yaml.bak`.
 
 ## Boards and projects
@@ -199,4 +209,3 @@ Workspaces from earlier schema versions are normalized automatically. Board stat
 ### USB pacing while Kraken is live
 
 Normal Kraken transactions use a 5 ms settle interval; Check Kraken uses 10 ms. Once Kraken is erected, all serial/COM discovery is frozen. The resident Kraken keeps its COM endpoint reserved, but the native Win32 COM handle is closed/parked whenever no explicit Kraken operation is active and reopened without an intentional reset for the next operation.
-
