@@ -5,7 +5,7 @@ nodes:
   sourceCode: macro rom_basic
   romWords: []
 - coordinate: 1
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_serdes
   romWords: []
 - coordinate: 2
   sourceCode: macro rom_basic
@@ -171,7 +171,7 @@ nodes:
   sourceCode: macro rom_basic
   romWords: []
 - coordinate: 117
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_analog
   romWords: []
 - coordinate: 200
   sourceCode: macro rom_basic
@@ -228,7 +228,7 @@ nodes:
   sourceCode: macro rom_basic
   romWords: []
 - coordinate: 300
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_sync_boot
   romWords: []
 - coordinate: 301
   sourceCode: macro rom_basic
@@ -441,7 +441,7 @@ nodes:
   sourceCode: macro rom_basic
   romWords: []
 - coordinate: 617
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_analog
   romWords: []
 - coordinate: 700
   sourceCode: >
@@ -472,7 +472,7 @@ nodes:
   sourceCode: ''
   romWords: []
 - coordinate: 709
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_analog
   romWords: []
 - coordinate: 710
   sourceCode: macro rom_basic
@@ -484,7 +484,7 @@ nodes:
   sourceCode: macro rom_basic
   romWords: []
 - coordinate: 713
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_analog
   romWords: []
 - coordinate: 714
   sourceCode: macro rom_basic
@@ -496,9 +496,31 @@ nodes:
   sourceCode: macro rom_basic
   romWords: []
 - coordinate: 717
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_analog
   romWords: []
 systemMacros:
+- name: rom_analog
+  description: ''
+  sourceCode: >-
+    macro rom_relay
+
+    macro rom_warm
+
+    # 0xB0 org
+
+    macro rom_mul17
+
+    macro rom_muldot
+
+    macro rom_dac
+
+    macro rom_interp
+
+    macro rom_triangle
+
+    macro rom_divide
+
+    macro rom_poly
 - name: rom_async
   description: ''
   sourceCode: >
@@ -697,7 +719,7 @@ systemMacros:
     # 0xBE equ sget
 
     : cold   x31A5. a! @ @b . .
-      -if avail 0x3.FC00 [+] lit  dup >r dup begin drop @b . 
+      -if avail 0x3.FC00 [ + ] lit  dup >r dup begin drop @b . 
       -if ( rising) *next  SWAP then avail alit >r  drop >r ; then
     : ser-exec ( x - x)   sget >r  sget a!  sget
 
@@ -709,6 +731,20 @@ systemMacros:
 
     : 2in   then then  2* 2*  dup
       begin . drop @b . inv -until  inv 2. and dup begin . drop @b . . -until  2. and 2/ xor xor ;
+- name: rom_sync_boot
+  description: ''
+  sourceCode: >
+    macro rom_relay
+
+    macro rom_warm
+
+    macro rom_sync
+
+    macro rom_mul17
+
+    macro rom_filter
+
+    macro rom_triangle
 - name: rom_triangle
   description: ''
   sourceCode: ': triangle ( ang*4) x1.0000 over -if drop . + ; then drop inv . + inv ;'
