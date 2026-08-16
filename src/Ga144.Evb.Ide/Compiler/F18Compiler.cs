@@ -1738,10 +1738,17 @@ public sealed class F18Compiler
         return false;
       }
 
-      // P after this word points past the instruction word AND past any inline
-      // literals that '@p' in this word will consume (they are written next by
-      // FlushPendingData). Each pending literal advances P by one.
-      var nextP = _cursor + 1 + _pendingData.Count;
+      // P after this word is the wrapped next address (the F18A P register wraps at
+      // the mirror boundary, e.g. 0x0FF -> 0x080, not 0x100), then advances once
+      // more past each inline '@p' literal this word will consume (written next by
+      // FlushPendingData). Wrapping matters for a transfer in the last word of the
+      // space: its reachability base is 0x080, not 0x100.
+      var nextP = NextAddress(_cursor);
+      for (var i = 0; i < _pendingData.Count; i++)
+      {
+        nextP = NextAddress(nextP);
+      }
+
       if (!F18InstructionSet.ControlFitsSlot(slot, nextP, destination, _memory.Length))
       {
         return false;
@@ -1863,10 +1870,16 @@ public sealed class F18Compiler
         return;
       }
 
-      // P after this word points past the transfer word AND past any '@p' literals
-      // in the same word (each advances P by one), so reachability is relative to
-      // memoryAddress + 1 + literalCount, not memoryAddress + 1.
-      var nextP = memoryAddress + 1 + literalCount;
+      // P after this word is the wrapped next address (the P register wraps at the
+      // mirror boundary, e.g. 0x0FF -> 0x080), advanced once more past each '@p'
+      // literal in the same word. Reachability is relative to that, not
+      // memoryAddress + 1 + literalCount.
+      var nextP = NextAddress(memoryAddress);
+      for (var i = 0; i < literalCount; i++)
+      {
+        nextP = NextAddress(nextP);
+      }
+
       if (!F18InstructionSet.ControlFitsSlot(slot, nextP, destination, _memory.Length))
       {
         int width = F18InstructionSet.AddressFieldWidth(slot);
@@ -1978,21 +1991,26 @@ public sealed class F18Compiler
       return offset % _memory.Length;
     }
 
-    // Advance the location counter by one word. Incrementing wraps within the
-    // memory space and its mirror (DB001 Figure 2): the decoded address runs
-    // baseAddress .. baseAddress + 2*wordCount - 1 and then wraps back to
-    // baseAddress, so code past the top of the mirror (e.g. ROM 0x0FF) continues at
-    // the base (0x080) instead of spilling into I/O space. P9 is not part of memory
-    // decoding, so it is preserved across the wrap.
-    private void AdvanceCursor()
+    // The next logical address after 'address', wrapping within the memory space
+    // and its mirror (DB001 Figure 2): the address runs baseAddress ..
+    // baseAddress + 2*wordCount - 1 and then wraps back to baseAddress (e.g. ROM
+    // 0x0FF -> 0x080), never running into I/O space. P9 is not part of decoding and
+    // is preserved. This is exactly how the F18A P register increments, so it is
+    // used both to advance the location counter and to compute the P value a
+    // transfer sees (its reachability base).
+    private int NextAddress(int address)
     {
-      var p9 = _cursor & F18InstructionSet.ExtendedArithmeticBit;
-      var decoded = _cursor & ~F18InstructionSet.ExtendedArithmeticBit;
+      var p9 = address & F18InstructionSet.ExtendedArithmeticBit;
+      var decoded = address & ~F18InstructionSet.ExtendedArithmeticBit;
       var span = _memory.Length * 2;
       var offset = decoded - _baseAddress;
-
       offset = offset < 0 || offset >= span - 1 ? 0 : offset + 1;
-      _cursor = (_baseAddress + offset) | p9;
+      return (_baseAddress + offset) | p9;
+    }
+
+    private void AdvanceCursor()
+    {
+      _cursor = NextAddress(_cursor);
     }
 
     private void WriteWord(int value, F18Token token)
