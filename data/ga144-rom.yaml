@@ -460,10 +460,10 @@ nodes:
   sourceCode: macro rom_basic
   romWords: []
 - coordinate: 705
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_spi_boot
   romWords: []
 - coordinate: 706
-  sourceCode: macro rom_warm
+  sourceCode: macro rom_basic
   romWords: []
 - coordinate: 707
   sourceCode: macro rom_basic
@@ -610,7 +610,15 @@ systemMacros:
 - name: rom_spi
   description: ''
   sourceCode: >+
-    # 0x2A NL ---  # 0x2B NL --+  # 0x3A NL +--  # 0x3B NL +-+  # 0x2F NL -++
+    # 0x2A constant ---
+
+    # 0x2B constant --+
+
+    # 0x3A constant +--
+
+    # 0x3B constant +-+
+
+    # 0x2F constant -++
 
     # 0xC2 org
 
@@ -632,11 +640,13 @@ systemMacros:
 
     : u2/ ( n - n) 2/ x1FFFF. and ;
 
-    # 497 NL spispeed
+    # 497 constant spispeed
 
-    # 0xC00 NL spicmd
+    # 0xC00 constant spicmd
 
-    # 0 NL spiadr
+    # 0 constant spiadr
+
+    # 0xEA org
 
     : cold @b inv ..  avail -until  spispeed spiadr >r spicmd
 
@@ -647,6 +657,14 @@ systemMacros:
     : spi-copy ( dn-dx) >r zif ; then begin 18ibits !+ next  dup ;
 
 
+- name: rom_spi_boot
+  description: ''
+  sourceCode: >-
+    macro rom_relay
+
+    macro rom_warm
+
+    macro rom_spi
 - name: rom_sync
   description: ''
   sourceCode: >

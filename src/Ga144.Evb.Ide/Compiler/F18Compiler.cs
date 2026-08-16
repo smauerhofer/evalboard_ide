@@ -8,7 +8,7 @@ public sealed class F18Compiler
         "align", "..", "lit", "literal", "A[", "]]", "call", "jump", "jmp",
         "branch-if", "branch--if", "branch-next", "begin", "again", "until", "-until",
         "if", "-if", "zif", "else", "then", "ahead", "leap", "for", "next", "unext", "while", "-while",
-        "repeat", "recurse", "exit", "import", "swap", "here", "end", "*next",
+        "repeat", "recurse", "exit", "import", "swap", "here", "end", "*next", "avail", "+cy", "-cy",
         "rot", "nip", "tuck", "1+", "1-", "negate", "=", "<>", "<", ">", "0=", "0<",
         "depth", "rdepth", "clear", "rclear", "invert",
         // Former GreenArrays spellings are reserved so a source file receives a
@@ -329,6 +329,9 @@ public sealed class F18Compiler
       case "here":
         InterpretHere(token);
         return;
+      case "avail":
+        InterpretAvail(token);
+        return;
     }
 
     DispatchOrdinaryToken(token);
@@ -535,6 +538,14 @@ public sealed class F18Compiler
     Builder.Align();
     Interpreter.TryPushData(Builder.CurrentAddress, token);
   }
+
+  // 'avail' (GreenArrays): pushes the current node's natural multiport-execute
+  // address -- the address an idle node waits at, whose available ports depend on
+  // the node's position (corner/edge/interior). This is the same value 'await'
+  // resolves to, but pushed onto the compile-time stack as a value (e.g. for
+  // '-until' to use as a loop destination) rather than compiled as a call target.
+  private void InterpretAvail(F18Token token) =>
+      Interpreter.TryPushData(F18AwaitAddresses.ForNode(_options.NodeCoordinate), token);
 
   private void CompileSwap(F18Token token)
   {
@@ -1731,7 +1742,7 @@ public sealed class F18Compiler
       // literals that '@p' in this word will consume (they are written next by
       // FlushPendingData). Each pending literal advances P by one.
       var nextP = _cursor + 1 + _pendingData.Count;
-      if (!F18InstructionSet.ControlFitsSlot(slot, nextP, destination))
+      if (!F18InstructionSet.ControlFitsSlot(slot, nextP, destination, _memory.Length))
       {
         return false;
       }
@@ -1856,7 +1867,7 @@ public sealed class F18Compiler
       // in the same word (each advances P by one), so reachability is relative to
       // memoryAddress + 1 + literalCount, not memoryAddress + 1.
       var nextP = memoryAddress + 1 + literalCount;
-      if (!F18InstructionSet.ControlFitsSlot(slot, nextP, destination))
+      if (!F18InstructionSet.ControlFitsSlot(slot, nextP, destination, _memory.Length))
       {
         int width = F18InstructionSet.AddressFieldWidth(slot);
         ReportError(
@@ -1967,6 +1978,23 @@ public sealed class F18Compiler
       return offset % _memory.Length;
     }
 
+    // Advance the location counter by one word. Incrementing wraps within the
+    // memory space and its mirror (DB001 Figure 2): the decoded address runs
+    // baseAddress .. baseAddress + 2*wordCount - 1 and then wraps back to
+    // baseAddress, so code past the top of the mirror (e.g. ROM 0x0FF) continues at
+    // the base (0x080) instead of spilling into I/O space. P9 is not part of memory
+    // decoding, so it is preserved across the wrap.
+    private void AdvanceCursor()
+    {
+      var p9 = _cursor & F18InstructionSet.ExtendedArithmeticBit;
+      var decoded = _cursor & ~F18InstructionSet.ExtendedArithmeticBit;
+      var span = _memory.Length * 2;
+      var offset = decoded - _baseAddress;
+
+      offset = offset < 0 || offset >= span - 1 ? 0 : offset + 1;
+      _cursor = (_baseAddress + offset) | p9;
+    }
+
     private void WriteWord(int value, F18Token token)
     {
       var index = ToPhysicalIndex(_cursor);
@@ -1977,7 +2005,7 @@ public sealed class F18Compiler
             $"Compiled output at 0x{_cursor:X3} is outside the node's {_memoryName} space " +
             $"(0x{_baseAddress:X3}-0x{_baseAddress + _memory.Length * 2 - 1:X3}).",
             token);
-        _cursor++;
+        AdvanceCursor();
         return;
       }
 
@@ -1987,12 +2015,12 @@ public sealed class F18Compiler
             "F18M006",
             $"{_memoryName} address 0x{_cursor:X3} is written more than once.",
             token);
-        _cursor++;
+        AdvanceCursor();
         return;
       }
 
       _memory[index] = value & F18InstructionSet.WordMask;
-      _cursor++;
+      AdvanceCursor();
     }
 
     private void ReportError(string code, string message, F18Token token) =>

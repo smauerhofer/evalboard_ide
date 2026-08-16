@@ -23,26 +23,26 @@ boards:
       manufacturer: FTDI
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
-    lastSeenUtc:
-      dateTime: 2026-08-15T23:20:17.3461760
-      utcDateTime: 2026-08-15T23:20:17.3461760Z
-      localDateTime: 2026-08-16T01:20:17.3461760+02:00
-      date: 2026-08-15T00:00:00.0000000
-      day: 15
-      dayOfWeek: Saturday
-      dayOfYear: 227
-      hour: 23
-      millisecond: 346
-      microsecond: 176
-      nanosecond: 0
-      minute: 20
+    lastSeenUtc: &o0
+      dateTime: 2026-08-16T07:23:02.9058885
+      utcDateTime: 2026-08-16T07:23:02.9058885Z
+      localDateTime: 2026-08-16T09:23:02.9058885+02:00
+      date: 2026-08-16T00:00:00.0000000
+      day: 16
+      dayOfWeek: Sunday
+      dayOfYear: 228
+      hour: 7
+      millisecond: 905
+      microsecond: 888
+      nanosecond: 500
+      minute: 23
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 17
-      ticks: 639224328173461760
-      utcTicks: 639224328173461760
-      timeOfDay: 23:20:17.3461760
+      second: 2
+      ticks: 639224617829058885
+      utcTicks: 639224617829058885
+      timeOfDay: 07:23:02.9058885
       year: 2026
   portB: 
   portC:
@@ -56,27 +56,27 @@ boards:
       manufacturer: FTDI
       friendlyName: USB Serial Port (COM4)
     lastKnownComPort: COM4
-    lastSeenUtc: &o0
-      dateTime: 2026-08-15T23:20:17.3461780
-      utcDateTime: 2026-08-15T23:20:17.3461780Z
-      localDateTime: 2026-08-16T01:20:17.3461780+02:00
-      date: 2026-08-15T00:00:00.0000000
-      day: 15
-      dayOfWeek: Saturday
-      dayOfYear: 227
-      hour: 23
-      millisecond: 346
-      microsecond: 178
+    lastSeenUtc:
+      dateTime: 0001-01-01T00:00:00.0000000
+      utcDateTime: 0001-01-01T00:00:00.0000000Z
+      localDateTime: 0001-01-01T01:00:00.0000000+01:00
+      date: 0001-01-01T00:00:00.0000000
+      day: 1
+      dayOfWeek: Monday
+      dayOfYear: 1
+      hour: 0
+      millisecond: 0
+      microsecond: 0
       nanosecond: 0
-      minute: 20
-      month: 8
+      minute: 0
+      month: 1
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 17
-      ticks: 639224328173461780
-      utcTicks: 639224328173461780
-      timeOfDay: 23:20:17.3461780
-      year: 2026
+      second: 0
+      ticks: 0
+      utcTicks: 0
+      timeOfDay: 00:00:00
+      year: 1
   jumpers:
     J23-A-RX: true
     J23-A-TX: true

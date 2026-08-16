@@ -182,10 +182,14 @@ public static class F18InstructionSet
   // when the transfer computes its target: the address immediately after the
   // transfer's own instruction word AND after any inline literals that '@p'
   // instructions in the same word have consumed (each '@p' advances P by one). The
-  // n-bit field replaces the low n bits of nextP, so the destination is reachable
-  // only when its high bits already match nextP's. Slot 0 carries the full 10-bit P
-  // address and always reaches within a node.
-  public static bool ControlFitsSlot(int slot, int nextP, int destination)
+  // n-bit field replaces the low n bits of nextP; the destination is reachable when
+  // the reconstructed target lands on the same physical word as the destination.
+  // 'wordCount' is the node's physical word count (64), so a target that differs
+  // from the destination by a whole multiple of it (i.e. wraps around the mirror,
+  // DB001 Figure 2) still reaches -- e.g. a 'next' at 0x0FF looping back to 0x0EB
+  // reconstructs to 0x1EB, which is the same physical cell. Slot 0 carries the full
+  // 10-bit P address and always reaches within a node.
+  public static bool ControlFitsSlot(int slot, int nextP, int destination, int wordCount)
   {
     var width = AddressFieldWidth(slot);
     if (width == 0)
@@ -200,7 +204,15 @@ public static class F18InstructionSet
 
     var mask = (1 << width) - 1;
     var reconstructed = (nextP & ~mask) | (destination & mask);
-    return reconstructed == destination;
+    if (reconstructed == destination)
+    {
+      return true;
+    }
+
+    // Accept a target that reaches the destination's physical word through address
+    // wrapping: the difference is a whole number of word-count spans.
+    var difference = reconstructed - destination;
+    return wordCount > 0 && difference % wordCount == 0;
   }
 
   // Encode a word whose slots 0..slotIndex-1 hold ordinary (non-transfer) opcodes
