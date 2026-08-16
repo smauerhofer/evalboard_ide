@@ -135,10 +135,10 @@ nodes:
   sourceCode: macro rom_basic
   romWords: []
 - coordinate: 105
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_bitsy
   romWords: []
 - coordinate: 106
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_stack
   romWords: []
 - coordinate: 107
   sourceCode: macro rom_basic
@@ -571,6 +571,55 @@ systemMacros:
     macro rom_divide
 
     macro rom_poly
+- name: rom_bitsy
+  description: ''
+  sourceCode: >-
+    # 0xAA org
+
+    : rp-- ( a-a') -1 . + ;
+
+    : bs@ : 'else ( a-w)
+      @p+ !b !b . @p+ x@
+      @p+ !b @b ; . . . !p+
+    : rp@ ( ri-ri) over rp--
+
+    : pshbs ( w-) @p+ !b !b ; @p+ pshw
+
+    : 'r@ ( ri-ri) over rp--
+
+    : @w ( a-) bs@ pshbs ;
+
+    : rfrom ( ri-r'i) over rp-- over over @w ;
+
+    : popbs ( -w) @p+ !b @b ; !p+ pops
+
+    : pshr ( aw-a) @p+ !b !b dup @p+ . . @p+
+      !b @p+ !b . x!
+    : rp++ : ip++ ( a-a') 1 . + ;
+
+    : tor ( ri-r'i) >r popbs pshr r> ;
+
+    : rp! ( i-ri) >r popbs rp++ r> ;
+
+    : 'con ( ra-r'i) bs@
+
+    : 'var ( ra-r'i) dup pshbs
+
+    : 'exit ( rx-r'i) drop rp-- dup bs@ ;
+
+    begin dup 2* -if drop !b ahead [ swap ] then drop >r ;'
+
+    : bitsy then dup bs@ >r ip++
+
+    : xxt r> -until >r pshr r> bitsy ;
+
+    : 'ex ( xt-) popbs >r xxt ;
+
+    : 'lit ( -w) dup bs@ >r ip++ r> pshbs ;
+
+    : 'if ( f-) popbs if drop ip++ ; then drop 'else ;
+
+    : start right a! left b! -32 0 bitsy ;
 - name: rom_dac
   description: ''
   sourceCode: >-
@@ -709,6 +758,82 @@ systemMacros:
     macro rom_warm
 
     macro rom_spi
+- name: rom_stack
+  description: ''
+  sourceCode: >-
+    # 0x3C equ xa@
+
+    # 0x3E equ xa!
+
+    # 0xAA org
+
+    : 'c@ : '@ : x@ ( a-w) za@ @b ;
+
+    : sp++ : char+ : cell+ : 1+ ( w-w') 1 . + ;
+
+    : popt ( p-xp't) dup sp++ over x@ ;
+
+    : sp-- : char- : cell- : 1- -1 . + ;
+
+    : psht ( pt-p') >r sp-- r> over
+
+    : x! ( wa-) xa! !b ;
+
+    : 'c! : '! ( pwa-p'st) x!
+
+    : popts ( p-p'st) popt
+
+    : pops ( pt-p'st) >r popt r> ;
+
+    : pshs ( pst-p't) >r psht r> ;
+
+    : page@ ( pst-p'tw) @p+ !b @b . dup !p+ ;
+
+    : pshw ( pstw-p'tw) >r pshs r> ;
+
+    : page! ( ptw-p'tw) @p+ !b !b . drop !p+ ;
+
+    pops ;
+
+    : sp@ ( -a) pshs psht dup pops ;
+
+    : sp! ( a-) pshs popts ;
+
+    : 'drop ( w-) drop pops ;
+
+    : 'over ( ww-www) over pshw ;
+
+    : 'dup ( w-ww) dup pshw ;
+
+    : 'swap ( ab-ba) over >r >r drop r> r> ;
+
+    : '2/ ( w-w) 2/ ; : '2* ( w-w) 2* ;
+
+    : um+ ( uu-uc) over xor -if over xor . + -if
+
+    : 'nc ( -0) dup dup xor ;
+
+    : 'cy ( -1) then 1 ; then over xor -if + 'cy ; then + 'nc ;
+
+    : zless ( n-f) -if dup xor inv ; then dup xor ;
+
+    : 'or ( ww-w) over inv and
+
+    : 'xor ( ww-w) xor pops ;
+
+    : 'and ( ww-w) and pops ;
+
+    : 'negate ( w-w) 1- ;
+
+    : 'invert ( w-w') begin inv ;
+
+    : 'zeq ( w-f) until dup xor ;
+
+    : '+ ( pww-p'sw') + pops ;
+
+    : swap- inv . + pops ;
+
+    : start right b! 0 dup dup --l- ;
 - name: rom_sync
   description: ''
   sourceCode: >
