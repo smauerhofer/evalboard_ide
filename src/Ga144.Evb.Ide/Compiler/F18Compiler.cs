@@ -4,7 +4,7 @@ public sealed class F18Compiler
 {
   private static readonly HashSet<string> ReservedCompilerWords = new(StringComparer.OrdinalIgnoreCase)
     {
-        ":", ";", "[", "]", "org", "entry", "const", "constant", "label", "data", "word", ".word", ",",
+        ":", ";", "[", "]", "org", "entry", "const", "constant", "equ", "label", "data", "word", ".word", ",",
         "align", "..", "lit", "literal", "A[", "]]", "call", "jump", "jmp",
         "branch-if", "branch--if", "branch-next", "begin", "again", "until", "-until",
         "if", "-if", "zif", "else", "then", "ahead", "leap", "for", "next", "unext", "while", "-while",
@@ -74,7 +74,7 @@ public sealed class F18Compiler
 
     return new F18CompileResult
     {
-      Words = Builder.CreateImage(),
+      Words = Builder.CreateImage(ResolveUnwrittenRomFillWord()),
       Diagnostics = _diagnostics.ToArray(),
       Symbols = new Dictionary<string, F18ExportedSymbol>(_symbols, StringComparer.OrdinalIgnoreCase),
       Constants = new Dictionary<string, int>(_userConstants, StringComparer.OrdinalIgnoreCase),
@@ -87,6 +87,38 @@ public sealed class F18Compiler
       InterpreterDataStack = Interpreter.DataStack.ToArray(),
       InterpreterReturnStack = Interpreter.ReturnStack.ToArray()
     };
+  }
+
+  // A ROM word the compiled source never claims reads back on silicon as a CALL to
+  // 'warm', not as 0x15555 (see CreateImage). Resolve 'warm' the same way an
+  // ordinary bareword reference would -- a local definition first (the common case:
+  // rom_warm's ': warm await ;' compiled earlier in the same source), falling back
+  // to an external/predefined symbol (a caller-supplied override, e.g. a test
+  // harness) -- and pre-encode the CALL word for CreateImage to drop into any
+  // untouched cell. Returns null (leaving untouched cells at 0x15555, the prior
+  // behavior) for RAM compiles or a ROM compile that never defines 'warm'.
+  private int? ResolveUnwrittenRomFillWord()
+  {
+    if (_options.MemorySpace != F18MemorySpace.Rom)
+    {
+      return null;
+    }
+
+    int warmAddress;
+    if (_symbols.TryGetValue("warm", out F18ExportedSymbol? localWarm) && localWarm is not null)
+    {
+      warmAddress = localWarm.Value;
+    }
+    else if (_externalSymbols.TryGetValue("warm", out F18ExportedSymbol? externalWarm) && externalWarm is not null)
+    {
+      warmAddress = externalWarm.Value;
+    }
+    else
+    {
+      return null;
+    }
+
+    return F18InstructionSet.EncodeSlot0Control(0x03, warmAddress & 0x3FF);
   }
 
   private void Reset()
@@ -211,6 +243,9 @@ public sealed class F18Compiler
       case "constant":
         InterpretConstant(token);
         return;
+      case "equ":
+        InterpretEqu(token);
+        return;
       case "import":
         InterpretNodeImport(token);
         return;
@@ -252,9 +287,13 @@ public sealed class F18Compiler
       case "#":
         PushHashValue(token);
         return;
+      // 'lit' is the real GA144/DB013 word: postfix, same as 'literal' -- it
+      // compiles whatever is already on the compile-time stack (typically left
+      // there by a preceding '[ ... ]' section) as an @p literal. Confirmed
+      // against rom_sync's ROM source: 'avail 0x3.FC00 [ + ] lit' computes a
+      // value in brackets, then 'lit' takes it off the stack; it is not a prefix
+      // 'lit <value>' operator.
       case "lit":
-        CompilePrefixLiteral(token);
-        return;
       case "literal":
         CompileStackLiteral(token);
         return;
@@ -555,6 +594,30 @@ public sealed class F18Compiler
     value &= F18InstructionSet.WordMask;
     _constants[name.Text] = value;
     _userConstants[name.Text] = value;
+  }
+
+  // 'equ' (n --): names the value on the compile-time stack (push it with '#',
+  // e.g. '# 0xBE equ sget') as a CALLABLE label -- 'equ' assigns an explicit
+  // address to a name, the same way a ':' definition's name gets the address it
+  // starts at, except the address comes from the stack instead of the location
+  // counter. Confirmed against rom_sync's ROM: 'sget' (defined via '# 0xBE equ
+  // sget') is referenced bare three times in 'ser-exec' and each site compiles
+  // to a CALL to 0xBE, not a literal push of 0xBE -- so equ'd names default to
+  // Word (auto-call) like ordinary colon-definitions, matching DB013 4.2.7.3's
+  // 'Named Calls' default rather than 4.2.7.1's 'Named Literals' one. '#' before
+  // the name still pushes its raw address value (TryResolveInterpretValue reads
+  // any symbol's Value regardless of Kind), so it can still feed
+  // 'call'/'jump'/a control-transfer word explicitly when needed. It is an
+  // immediate directive; there is no definition state to forbid it in.
+  private void InterpretEqu(F18Token token)
+  {
+    F18Token? name = ReadRequiredToken(token, "equ name");
+    if (name is null || !Interpreter.TryPopData(token, out int value))
+    {
+      return;
+    }
+
+    DefineSymbol(name, value & F18InstructionSet.WordMask, F18ExportKind.Word);
   }
 
   private void InterpretNodeImport(F18Token token)
@@ -879,29 +942,6 @@ public sealed class F18Compiler
         "F18C018",
         $"'{valueToken.Text}' after '#' is not a numeric value, constant, label, or named value.",
         valueToken.Location);
-  }
-
-  private void CompilePrefixLiteral(F18Token token)
-  {
-    if (!RequireDefinition(token))
-    {
-      return;
-    }
-
-    // Preserve the earlier convenient prefix form: lit <value>. It never
-    // consumes a possibly unrelated value left on the interpreter stack.
-    F18Token? valueToken = ReadRequiredToken(token, "literal value");
-    if (valueToken is null || !TryResolveInterpretValue(valueToken, out int value))
-    {
-      if (valueToken is not null)
-      {
-        AddError("F18C018", $"'{valueToken.Text}' is not a numeric value, constant, label, or word address.", valueToken.Location);
-      }
-
-      return;
-    }
-
-    Builder.EmitLiteral(value, valueToken);
   }
 
   private void CompileQuotedInstruction(F18Token openingToken)
@@ -1955,17 +1995,31 @@ public sealed class F18Compiler
       FlushPendingData();
     }
 
-    public IReadOnlyList<int> CreateImage()
+    public IReadOnlyList<int> CreateImage(int? unwrittenFillWord = null)
     {
-      // The image always spans the full memory (64 words for ROM/RAM). Unwritten
-      // words are the F18A empty-word value 0x15555 (an all-zero instruction word
-      // XOR-encodes to 0x15555, which is what the compiler pre-fills slots with and
-      // what the chip reads back for never-written ROM/RAM). This makes a compiled
-      // image directly comparable, word-for-word, with the ROM read from silicon.
+      // The image always spans the full memory (64 words for ROM/RAM). A word never
+      // written by the compiled source defaults to the F18A empty-word value
+      // 0x15555 (an all-zero instruction word XOR-encodes to 0x15555, which is what
+      // the compiler pre-fills slots with and what RAM -- and most never-written ROM
+      // words -- read back as on silicon). This makes a compiled image directly
+      // comparable, word-for-word, with the ROM/RAM read from silicon.
+      //
+      // ROM is the one exception: confirmed against two different nodes (705 at
+      // 0x081, 300 at 0xA0 -- different addresses because each node's macro set
+      // leaves a different single word unclaimed), any word a node's ROM program
+      // never claims reads back on silicon as a CALL to 'warm', not as 0x15555. This
+      // matches the factory ROM's own boot safety net: an untouched cell retreats to
+      // the multiport-wait loop instead of falling through as a spurious ';' chain.
+      // 'unwrittenFillWord' carries that pre-encoded CALL word (or null when 'warm'
+      // isn't resolvable, e.g. RAM compiles or a ROM compile that omits rom_warm),
+      // so only cells the source left genuinely untouched get it -- any word the
+      // source actually wrote (even to a bit-identical 0x15555, e.g. an all-';'
+      // terminated word) keeps its real compiled value.
+      var fill = unwrittenFillWord ?? F18InstructionSet.EncodingXor;
       var result = new int[_memory.Length];
       for (var index = 0; index < _memory.Length; index++)
       {
-        result[index] = _memory[index] ?? F18InstructionSet.EncodingXor;
+        result[index] = _memory[index] ?? fill;
       }
 
       return result;

@@ -66,6 +66,21 @@ public static class F18InstructionSet
         ["down"] = 0x115,
         ["right"] = 0x1D5,
 
+        // 'side'/'corner'/'top'/'center' are positional aliases for four of the
+        // same 15 multiport addresses NamedMultiportCalls holds under their dashed
+        // port-letter names (e.g. 'side' and 'rd-u' are both 0x185) -- but unlike
+        // those, these default to a LITERAL, not a call (DB013 4.2.7.1, not
+        // 4.2.7.3). Confirmed against the node-200 ROM: 'cold' uses 'center' as a
+        // plain value ('left center a! ...'), not a call target. 'warp' doesn't
+        // match any multiport address; its use is still unconfirmed against
+        // silicon. All five values recovered from the project's prior C++
+        // implementation's rom_literals_ table.
+        ["warp"] = 0x157,
+        ["side"] = 0x185,
+        ["corner"] = 0x195,
+        ["top"] = 0x1B5,
+        ["center"] = 0x1A5,
+
         ["ram"] = 0x000,
         ["rom"] = 0x080,
         ["eam"] = 0x200,

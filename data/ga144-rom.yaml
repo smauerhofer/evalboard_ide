@@ -174,7 +174,7 @@ nodes:
   sourceCode: macro rom_analog
   romWords: []
 - coordinate: 200
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_wire1_boot
   romWords: []
 - coordinate: 201
   sourceCode: macro rom_basic
@@ -703,24 +703,20 @@ systemMacros:
 
 - name: rom_spi_boot
   description: ''
-  sourceCode: >-
+  sourceCode: >
     macro rom_relay
 
     macro rom_warm
 
     macro rom_spi
-
-    # 0x81 org
-
-    warm
 - name: rom_sync
   description: ''
   sourceCode: >
     # 0xBE equ sget
 
     : cold   x31A5. a! @ @b . .
-      -if avail 0x3.FC00 [ + ] lit  dup >r dup begin drop @b . 
-      -if ( rising) *next  SWAP then avail alit >r  drop >r ; then
+      -if avail [ 0x3.FC00 + ] lit  dup >r dup begin drop @b . 
+      -if ( rising) *next [ swap ] then avail lit >r  drop >r ; then
     : ser-exec ( x - x)   sget >r  sget a!  sget
 
     : ser-copy ( n)   >r zif ;  then begin sget !+ next ;
@@ -767,4 +763,18 @@ systemMacros:
 
     : cold left center a! . io b! dup dup xB7. dup >r >r 16. >r @ drop @b # await -until
       drop a! . bit ;
-    : fwd-b7 >r rcv a! rcv >r zif ; thn begin rcv !+ next ;
+    : fwd-b7 >r rcv a! rcv >r zif ; then begin rcv !+ next ;
+- name: rom_wire1_boot
+  description: ''
+  sourceCode: >
+    macro rom_warm
+
+    macro rom_wire1
+
+    macro rom_triangle
+
+    macro rom_mul17
+
+    macro rom_muldot
+
+    macro rom_divide
