@@ -19,10 +19,12 @@ public static class F18InstructionSet
         ["ex"] = 0x01,
         ["unext"] = 0x04,
         ["@p"] = 0x08,
+        ["@p+"] = 0x08, // alias: '@p' post-increments P by fetching the next word, same as '@+' post-increments A/B.
         ["@+"] = 0x09,
         ["@b"] = 0x0A,
         ["@"] = 0x0B,
         ["!p"] = 0x0C,
+        ["!p+"] = 0x0C, // alias: see '@p+' above.
         ["!+"] = 0x0D,
         ["!b"] = 0x0E,
         ["!"] = 0x0F,

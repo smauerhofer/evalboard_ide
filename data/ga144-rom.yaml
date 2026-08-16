@@ -574,6 +574,8 @@ systemMacros:
 - name: rom_bitsy
   description: ''
   sourceCode: >-
+    # 106 import
+
     # 0xAA org
 
     : rp-- ( a-a') -1 . + ;
@@ -767,13 +769,13 @@ systemMacros:
 
     # 0xAA org
 
-    : 'c@ : '@ : x@ ( a-w) za@ @b ;
+    : 'c@ : '@ : x@ ( a-w) xa@ @b ;
 
-    : sp++ : char+ : cell+ : 1+ ( w-w') 1 . + ;
+    : sp++ : char+ : cell+ : '1+ ( w-w') 1 . + ;
 
     : popt ( p-xp't) dup sp++ over x@ ;
 
-    : sp-- : char- : cell- : 1- -1 . + ;
+    : sp-- : char- : cell- : '1- -1 . + ;
 
     : psht ( pt-p') >r sp-- r> over
 
@@ -823,7 +825,7 @@ systemMacros:
 
     : 'and ( ww-w) and pops ;
 
-    : 'negate ( w-w) 1- ;
+    : 'negate ( w-w) '1- ;
 
     : 'invert ( w-w') begin inv ;
 
