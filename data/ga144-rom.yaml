@@ -23,13 +23,13 @@ nodes:
   sourceCode: macro rom_basic
   romWords: []
 - coordinate: 7
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_data
   romWords: []
 - coordinate: 8
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_warm
   romWords: []
 - coordinate: 9
-  sourceCode: macro rom_basic
+  sourceCode: macro rom_address
   romWords: []
 - coordinate: 10
   sourceCode: macro rom_basic
@@ -628,6 +628,18 @@ systemMacros:
 
     : dac27 ( m c p a w - m c p) dup >r >r over r> inv . +  >r >r  x155. r> over xor a
       begin unext !b . begin unext !b !b ;
+- name: rom_data
+  description: ''
+  sourceCode: >-
+    macro rom_warm
+
+    # 0xAA org
+
+    : db@ ( -w) @ ;
+
+    : db! ( w-) 0x15555 !b !
+
+    : inpt 0x14555 !b ;
 - name: rom_divide
   description: ''
   sourceCode: >-
@@ -904,3 +916,11 @@ systemMacros:
     macro rom_muldot
 
     macro rom_divide
+- name: rom_address
+  description: ''
+  sourceCode: >-
+    macro rom_warm
+
+    # 0xAA org
+
+    : cmd ( c-) 0x3d555 !b .. @ !b cmd ;
