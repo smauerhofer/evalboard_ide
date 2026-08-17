@@ -252,6 +252,9 @@ public sealed class F18Compiler
       case "label":
         CompileLabel(token);
         return;
+      case ".loc":
+        ShowLocation(token);
+        return;
       case "data":
         // Preserve the earlier module-level raw-data directive. Inside a
         // definition, including a [ ... ] section, data is the I/O constant.
@@ -907,6 +910,17 @@ public sealed class F18Compiler
     Builder.Align();
     DefineSymbol(name, Builder.CurrentAddress, F18ExportKind.Label);
   }
+
+  // Debug-only, colorForth-grey-word-style location annotation: reports where
+  // compilation currently sits without emitting any code, defining any symbol,
+  // or altering output in any way. Deliberately does NOT call Builder.Align()
+  // the way 'label' does -- forcing alignment here would flush/pad whatever
+  // word is currently in progress just because a debug directive was inserted,
+  // silently changing the compiled ROM/RAM layout. Builder.PendingAddress
+  // reports the in-progress word's own address instead, safe to read whether
+  // or not a partial word is pending.
+  private void ShowLocation(F18Token token) =>
+      AddInfo("F18I010", $"'.loc': current address 0x{Builder.PendingAddress:X3}.", token.Location);
 
   private void CompileRawData(F18Token token)
   {
@@ -1791,6 +1805,9 @@ public sealed class F18Compiler
   private void AddWarning(string code, string message, F18SourceLocation location) =>
       _diagnostics.Add(new F18Diagnostic(F18DiagnosticSeverity.Warning, code, message, location));
 
+  private void AddInfo(string code, string message, F18SourceLocation location) =>
+      _diagnostics.Add(new F18Diagnostic(F18DiagnosticSeverity.Info, code, message, location));
+
   private sealed record SymbolRelocation(int MemoryAddress, byte Opcode, string Symbol, F18Token Token);
 
   private enum ControlKind
@@ -1848,6 +1865,14 @@ public sealed class F18Compiler
     }
 
     public int UsedWordCount => _memory.Count(word => word.HasValue);
+
+    /// <summary>
+    /// The address of the word currently being assembled -- unlike
+    /// <see cref="CurrentAddress"/>, this is always readable, whether or not a
+    /// partial word (pending slots) is in progress. Purely observational: reading
+    /// it never flushes, pads, or otherwise changes anything that gets compiled.
+    /// </summary>
+    public int PendingAddress => _cursor;
 
     // '+cy'/'-cy' (DB002 3.2): Extended Arithmetic Mode is selected by bit P9 of the
     // running address, so the assembler simply sets or clears P9 on the location

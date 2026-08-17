@@ -469,8 +469,72 @@ nodes:
   sourceCode: macro rom_basic
   romWords: []
 - coordinate: 708
-  sourceCode: ''
-  romWords: []
+  sourceCode: macro rom_async_boot
+  romWords:
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
+  - 0x15555
 - coordinate: 709
   sourceCode: macro rom_analog
   romWords: []
@@ -499,6 +563,14 @@ nodes:
   sourceCode: macro rom_analog
   romWords: []
 systemMacros:
+- name: rom_address
+  description: ''
+  sourceCode: >-
+    macro rom_warm
+
+    # 0xAA org
+
+    : cmd ( c-) 0x3d555 !b .. @ !b cmd ;
 - name: rom_analog
   description: ''
   sourceCode: >-
@@ -530,7 +602,7 @@ systemMacros:
 
     : ser-exec ( x - d)   18ibits drop >r 18ibits drop a! 18ibits
 
-    : ser-copy ( xnx-d)   drop >r zif ;  then begin 18ibits drop !+ next ;  then drop avail alit >r >r ;
+    : ser-copy ( xnx-d)   drop >r zif ;  then begin 18ibits drop !+ next ;  then drop avail lit >r >r ;
 
     : wait ( x-1/1)   begin . drop @b -until  . drop ;
 
@@ -538,9 +610,9 @@ systemMacros:
 
     : start ( dw-4/2-dw,io) dup wait over dup 2/ . + >r
 
-    : delay ( -1/1-io) begin @b . -if then . drop next @b ;
+    : delay ( -1/1-io) .loc begin @b . -if then . drop next @b ;
 
-    ( 18ibits ( x-4/6-dwx) sync sync dup start ( 2bits) leap leap
+    ( 18ibits ( x-4/6-dwx) .loc sync sync dup start ( 2bits) leap leap
 
     : byte   then drop start leap
 
@@ -549,6 +621,16 @@ systemMacros:
     : 2bits   then then leap
 
     : 1bit ( nw,io - nw,io) then >r 2/ r> over xor x20000. and xor over >r delay ;
+- name: rom_async_boot
+  description: ''
+  sourceCode: >-
+    macro rom_relay
+
+    macro rom_warm
+
+    macro rom_async
+
+    macro rom_shift
 - name: rom_basic
   description: ''
   sourceCode: >-
@@ -916,11 +998,3 @@ systemMacros:
     macro rom_muldot
 
     macro rom_divide
-- name: rom_address
-  description: ''
-  sourceCode: >-
-    macro rom_warm
-
-    # 0xAA org
-
-    : cmd ( c-) 0x3d555 !b .. @ !b cmd ;
