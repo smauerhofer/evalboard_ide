@@ -31,6 +31,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     KrakenController.StateChanged += OnKrakenControllerStateChanged;
     ToggleKrakenCommand = new AsyncRelayCommand(ToggleKrakenAsync);
     VerifyAllRomsCommand = new AsyncRelayCommand(VerifyAllRomsAsync, () => !_verifyBusy);
+    VerifyNode708RomCommand = new AsyncRelayCommand(VerifyNode708RomAsync, () => !_verifyBusy);
     RebuildNodes();
   }
 
@@ -45,6 +46,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public ObservableCollection<NodeViewModel> Nodes { get; } = [];
   public AsyncRelayCommand ToggleKrakenCommand { get; }
   public AsyncRelayCommand VerifyAllRomsCommand { get; }
+  public AsyncRelayCommand VerifyNode708RomCommand { get; }
 
   public string VerifyStatus
   {
@@ -60,6 +62,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       if (SetProperty(ref _verifyBusy, value))
       {
         VerifyAllRomsCommand.NotifyCanExecuteChanged();
+        VerifyNode708RomCommand.NotifyCanExecuteChanged();
       }
     }
   }
@@ -272,7 +275,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       }
       summary.AppendLine();
       summary.AppendLine("Node 708 was not checked: it is the Kraken head and cannot be read "
-          + "through Kraken. It requires a separate direct-boot readback (planned).");
+          + "through Kraken. Use the \"Verify node 708 ROM\" button instead (requires removing "
+          + "the Kraken first).");
 
       VerifyStatus = aborted
           ? $"Aborted. {matched} matched, {mismatched} mismatched so far."
@@ -290,6 +294,123 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       MessageBox.Show(
           $"ROM verification could not complete:\n\n{exception.Message}",
           "Verify all node ROMs",
+          MessageBoxButton.OK,
+          MessageBoxImage.Error);
+    }
+    finally
+    {
+      VerifyBusy = false;
+    }
+  }
+
+  /// <summary>
+  /// Verify node 708's own ROM against a compiled-from-yaml expectation. Node
+  /// 708 is the Kraken head and cannot be read through the normal tentacle R1
+  /// mechanism (there is no route to it), so this uses a completely separate
+  /// direct-boot readback (<see cref="Ga144Node708RomReader"/>) instead of
+  /// KrakenController. That reader resets the chip to load its one-shot
+  /// dump-rom program, which is fundamentally incompatible with a resident
+  /// Kraken (whose lifetime rule forbids ever pulsing reset again), so this is
+  /// blocked outright while a Kraken is erected.
+  /// </summary>
+  private async Task VerifyNode708RomAsync()
+  {
+    if (_verifyBusy)
+    {
+      return;
+    }
+
+    if (KrakenController.HardwareErected)
+    {
+      MessageBox.Show(
+          "Node 708 cannot be verified while a Kraken is erected on this chip. "
+          + "Reading node 708's own ROM requires resetting it to load a one-shot "
+          + "readback program, and a resident Kraken must never be reset. "
+          + "Remove the Kraken first, then verify node 708.",
+          "Verify node 708 ROM",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
+    if (endpoint is null)
+    {
+      MessageBox.Show(
+          "No serial endpoint is assigned to this chip. Assign a COM port before verifying node 708.",
+          "Verify node 708 ROM",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    VerifyBusy = true;
+    VerifyStatus = "Verifying node 708…";
+    try
+    {
+      var compileService = new Compiler.F18NodeCompilationService(
+          Chip, RomLibrary, RomLibrary.SystemMacros);
+
+      IReadOnlyList<int>? generated = null;
+      string? expandedRomSource = null;
+      try
+      {
+        var result = compileService.CompileNode(KrakenTopology.HeadCoordinate);
+        if (result.Rom.Success)
+        {
+          generated = result.Rom.Words
+              .Select(word => word & Compiler.F18InstructionSet.WordMask)
+              .ToArray();
+          expandedRomSource = result.Rom.ExpandedSource;
+        }
+      }
+      catch
+      {
+        generated = null;
+      }
+
+      if (generated is null)
+      {
+        VerifyStatus = "Node 708 ROM did not compile.";
+        MessageBox.Show(
+            "Node 708's ROM source did not compile; nothing to compare against the chip.",
+            "Verify node 708 ROM",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+        return;
+      }
+
+      var reader = new Ga144Node708RomReader();
+      int[] onChip = await reader.ReadRomAsync(endpoint.PortName);
+
+      var comparison = RomComparison.Compare(KrakenTopology.HeadCoordinate, generated, onChip);
+      if (comparison.IsMatch)
+      {
+        VerifyStatus = "Node 708: ROM matches.";
+        MessageBox.Show(
+            comparison.Summary(),
+            "Verify node 708 ROM",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+      }
+      else
+      {
+        VerifyStatus = $"Node 708: {comparison.Mismatches.Count} mismatch(es).";
+        var dialog = new Views.RomMismatchDialog(comparison, showAbort: false, expandedRomSource: expandedRomSource)
+        {
+          Owner = Application.Current?.Windows
+              .OfType<Window>()
+              .FirstOrDefault(window => window.IsActive)
+        };
+        dialog.ShowDialog();
+      }
+    }
+    catch (Exception exception)
+    {
+      VerifyStatus = "Node 708 verification failed.";
+      MessageBox.Show(
+          $"Node 708 ROM verification could not complete:\n\n{exception.Message}",
+          "Verify node 708 ROM",
           MessageBoxButton.OK,
           MessageBoxImage.Error);
     }

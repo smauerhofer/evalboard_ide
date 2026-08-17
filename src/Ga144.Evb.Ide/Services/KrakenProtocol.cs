@@ -31,6 +31,26 @@ internal static class KrakenProtocol
   public static IReadOnlyList<int> BuildW1(int position, int instruction, int value) =>
       WrapForward(position, [Mask(instruction), Mask(value)], appendReturnHop: false);
 
+  /// <summary>
+  /// Concatenates <paramref name="values"/> independent w1 requests (same position,
+  /// same instruction) into one stream. Kraken writes are fire-and-forget -- no
+  /// return hop, no reply capture -- so each w1 block is fully self-contained and
+  /// nodes along the tentacle simply keep fetching/relaying straight through from
+  /// one block into the next. This lets a whole RAM/ROM image (or stack) be
+  /// written in a single transaction instead of one per word, without changing the
+  /// per-word wire protocol at all.
+  /// </summary>
+  public static IReadOnlyList<int> BuildBlockW1(int position, int instruction, IReadOnlyList<int> values)
+  {
+    var stream = new List<int>(values.Count * 2);
+    foreach (int value in values)
+    {
+      stream.AddRange(BuildW1(position, instruction, value));
+    }
+
+    return stream;
+  }
+
   public static IReadOnlyList<int> BuildR1(int position, int instruction) =>
       WrapForward(position, [Mask(instruction)], appendReturnHop: true);
 

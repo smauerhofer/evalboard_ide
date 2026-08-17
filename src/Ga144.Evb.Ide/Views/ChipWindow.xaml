@@ -55,6 +55,11 @@
                         Padding="12,6"
                         Margin="8,0,0,0"
                         ToolTip="Compile each node's ROM and compare it against the ROM read from the chip via Kraken. Erects once if needed; reads all 143 reachable nodes through one session. Node 708 (Kraken head) is skipped." />
+        <Button Content="Verify node 708 ROM"
+                        Command="{Binding VerifyNode708RomCommand}"
+                        Padding="12,6"
+                        Margin="8,0,0,0"
+                        ToolTip="Direct-boot readback of node 708's own ROM (it cannot be read through Kraken). Resets the chip once to load a one-shot dump-rom program, so this is blocked while a Kraken is erected -- remove the Kraken first." />
         <TextBlock Text="{Binding VerifyStatus, Mode=OneWay}"
                            VerticalAlignment="Center"
                            Margin="10,0,0,0"

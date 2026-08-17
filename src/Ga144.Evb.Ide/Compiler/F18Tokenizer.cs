@@ -28,28 +28,25 @@ internal static class F18Tokenizer
       {
         var startLine = line;
         var startColumn = column;
-        var depth = 0;
+
+        // Standard FORTH comment: '(' opens a comment that the NEXT ')' closes.
+        // Comments do not nest -- any '(' encountered while scanning is just
+        // ordinary comment text with no effect on when the comment ends. Only
+        // the first ')' matters.
+        var closed = false;
 
         while (index < source.Length)
         {
           current = source[index];
-          if (current == '(')
-          {
-            depth++;
-          }
-          else if (current == ')')
-          {
-            depth--;
-          }
-
           Advance(current, ref index, ref line, ref column);
-          if (depth == 0)
+          if (current == ')')
           {
+            closed = true;
             break;
           }
         }
 
-        if (depth != 0)
+        if (!closed)
         {
           diagnostics.Add(new F18Diagnostic(
               F18DiagnosticSeverity.Error,

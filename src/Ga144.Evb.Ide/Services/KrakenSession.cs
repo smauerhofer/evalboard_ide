@@ -577,12 +577,12 @@ internal sealed class KrakenSession : IAsyncDisposable
     try
     {
       WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteAInstruction, startAddress), cancellationToken);
-      foreach (int word in words)
-      {
-        WriteSequence(
-            KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteMemoryIncrementInstruction, word),
-            cancellationToken);
-      }
+      // All 64 RAM/ROM words travel in one transaction instead of one per word.
+      // Kraken writes need no reply, so this is a pure concatenation of the same
+      // already-proven per-word w1 sequence -- see KrakenProtocol.BuildBlockW1.
+      WriteSequence(
+          KrakenProtocol.BuildBlockW1(_targetRoute.Position, KrakenProtocol.WriteMemoryIncrementInstruction, words),
+          cancellationToken);
     }
     finally
     {
@@ -592,18 +592,18 @@ internal sealed class KrakenSession : IAsyncDisposable
 
   private void RestoreDataStack(IReadOnlyList<int> bottomToTop, CancellationToken cancellationToken)
   {
-    foreach (int word in bottomToTop)
-    {
-      WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.PushDataInstruction, word), cancellationToken);
-    }
+    // One transaction for all ten pushes instead of one per word (see WriteMemoryBlock).
+    WriteSequence(
+        KrakenProtocol.BuildBlockW1(_targetRoute.Position, KrakenProtocol.PushDataInstruction, bottomToTop),
+        cancellationToken);
   }
 
   private void RestoreReturnStack(IReadOnlyList<int> bottomToTop, CancellationToken cancellationToken)
   {
-    foreach (int word in bottomToTop)
-    {
-      WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.PushReturnInstruction, word), cancellationToken);
-    }
+    // One transaction for all nine pushes instead of one per word (see WriteMemoryBlock).
+    WriteSequence(
+        KrakenProtocol.BuildBlockW1(_targetRoute.Position, KrakenProtocol.PushReturnInstruction, bottomToTop),
+        cancellationToken);
   }
 
   private int ReadWord(IReadOnlyList<int> sequence, CancellationToken cancellationToken) =>

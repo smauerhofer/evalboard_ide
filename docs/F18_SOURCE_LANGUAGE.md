@@ -161,6 +161,20 @@ All of these forms are accepted:
 \ line comment
 ```
 
+`( ... )` comments follow standard FORTH semantics: `(` opens a comment that the *next* `)` closes. They do not nest -- a `(` appearing inside an open comment has no effect on when the comment ends, it's just more comment text. `( 18ibits ( x-4/6-dwx) ...)` is therefore two independent comments back to back (`( 18ibits ( x-4/6-dwx)` closing at that first `)`, ordinary code, then whatever comment follows), not one comment nested inside another.
+
+## Debug directives
+
+`.loc` reports the current compile address as an informational diagnostic and has no effect on the compiled output -- it doesn't emit a word, define a symbol, or force word alignment, so it's safe to drop anywhere, including mid-word inside a definition:
+
+```forth
+: foo
+    dup
+    .loc        \ reports the current address; compiles nothing
+    drop
+;
+```
+
 ## Current scope
 
 The compiler assembles both system ROM and project RAM, resolves local definitions and labels, supports compile-time FORTH interpretation, system/user textual macros with the scope rules above, and resolves explicit cross-node imports. It intentionally does not ship guessed node-ROM-specific vendor dictionaries or reproduce arrayForth's full optimizing slot-placement policy.
