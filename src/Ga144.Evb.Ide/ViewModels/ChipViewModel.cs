@@ -507,6 +507,13 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       summary.AppendLine($"  Read:  avg {speed.AverageReadTime.TotalMilliseconds:F2} ms  (~{speed.ReadBitsPerSecond:F0} data bit/s)");
       summary.AppendLine($"  Round trip: avg {speed.AverageRoundTripTime.TotalMilliseconds:F2} ms  (~{speed.RoundTripsPerSecond:F1} round trips/s)");
       summary.AppendLine();
+      summary.AppendLine("\"Write\" is the host write call plus draining the local output buffer "
+          + "(the closest thing .NET's SerialPort API exposes to \"the bytes actually left\" -- "
+          + "there is no true hardware transmit-complete signal). \"Read\" is everything after "
+          + "that: remaining wire time, node 708's own receive/decode/reply work, and the wire "
+          + "time of its reply -- so read is the more representative figure for real round-trip "
+          + "latency; round trips/s is the most trustworthy single number here.");
+      summary.AppendLine();
       summary.AppendLine("\"Expected\" bytes are computed independently in C# from obit/oword/obyt's own "
           + "bit-extraction algorithm (LSB-first, F18 arithmetic '2/' shift), not copied from any single "
           + "observed result, so a mismatch here is a real discrepancy worth investigating.");

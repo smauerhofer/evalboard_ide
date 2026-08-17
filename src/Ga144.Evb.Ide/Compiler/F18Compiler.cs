@@ -4,7 +4,7 @@ public sealed class F18Compiler
 {
   private static readonly HashSet<string> ReservedCompilerWords = new(StringComparer.OrdinalIgnoreCase)
     {
-        ":", ";", "[", "]", "org", "entry", "const", "constant", "equ", "label", "data", "word", ".word", ",",
+        ":", ";", "[", "]", "org", "entry", "const", "constant", "equ", "f18var", "label", "data", "word", ".word", ",",
         "align", "..", "lit", "literal", "A[", "]]", "call", "jump", "jmp",
         "branch-if", "branch--if", "branch-next", "begin", "again", "until", "-until",
         "if", "-if", "zif", "else", "then", "ahead", "leap", "for", "next", "unext", "while", "-while",
@@ -245,6 +245,9 @@ public sealed class F18Compiler
         return;
       case "equ":
         InterpretEqu(token);
+        return;
+      case "f18var":
+        CompileF18Var(token);
         return;
       case "import":
         InterpretNodeImport(token);
@@ -623,6 +626,82 @@ public sealed class F18Compiler
     }
 
     DefineSymbol(name, value & F18InstructionSet.WordMask, F18ExportKind.Word);
+  }
+
+  // 'f18var' (n --): declares a RAM variable using the classic F18 @p/!p
+  // storage-cell idiom instead of requiring it to be hand-written every time.
+  // 'n', the variable's initial value, must already be on the compile-time
+  // stack (push it with '#', the same convention 'constant' and 'equ' use).
+  // Expands to exactly:
+  //     : !name @p drop !p ; : name @p ; ,
+  // -- 'name' fetches: '@p' reads the memory word that immediately follows
+  // name's own one-word body, which is exactly the cell the trailing ','
+  // appends right after it. '!name' stores: '@p' reads (and discards, via
+  // 'drop') that same cell so P is left pointing at it, then '!p' writes the
+  // new top-of-stack there. Both 'name' and '!name' end up as perfectly
+  // ordinary words -- this directive is pure sugar over ':'/opcodes/',' the
+  // compiler already supports, so rather than emit instruction words
+  // directly it splices the equivalent source text in at the current read
+  // position and lets the normal pipeline compile it (the same way an
+  // 'import'ed macro's body is woven into compilation).
+  //
+  // Only useful in RAM: '!p' cannot store into ROM (DB001/DB002), so an
+  // f18var compiled into ROM would build without error but be inert on real
+  // hardware -- flagged here instead of failing silently later.
+  private void CompileF18Var(F18Token token)
+  {
+    F18Token? name = ReadRequiredToken(token, "variable name");
+    if (name is null)
+    {
+      return;
+    }
+
+    if (_options.MemorySpace != F18MemorySpace.Ram)
+    {
+      AddWarning(
+          "F18C058",
+          $"'f18var {name.Text}' declares a RAM variable, but this compilation targets ROM. " +
+          $"'!{name.Text}' would try to store via '!p', which does not work in ROM, so this " +
+          "variable would be unusable on real hardware.",
+          token.Location);
+    }
+
+    string syntheticSource = $": !{name.Text} @p drop !p ; : {name.Text} @p ; ,";
+    var syntheticDiagnostics = new List<F18Diagnostic>();
+    IReadOnlyList<F18Token> syntheticTokens = F18Tokenizer.Tokenize(syntheticSource, syntheticDiagnostics);
+
+    if (syntheticDiagnostics.Count > 0 || syntheticTokens.Count != 11)
+    {
+      // Should be unreachable for any name the real tokenizer already accepted
+      // once (as the token this method itself just read) -- guarded rather
+      // than assumed, so a future tokenizer change fails loudly here instead
+      // of silently miscompiling.
+      AddError(
+          "F18C059",
+          $"'f18var {name.Text}' could not build its generated definitions.",
+          token.Location);
+      return;
+    }
+
+    // Re-point every generated token at the variable name's own source
+    // position, so any diagnostic raised while compiling them (most likely a
+    // 'name'/'!name' collision) lands on something the user actually wrote,
+    // not on the throwaway synthetic snippet's own line 1.
+    List<F18Token> remapped = syntheticTokens
+        .Select(syntheticToken => syntheticToken with { Line = name.Line, Column = name.Column })
+        .ToList();
+
+    // Splice the generated tokens in at the current read position, exactly
+    // where 'f18var name' itself sat. The main compile loop (and every
+    // nested ReadRequiredToken call the generated ':'/';'/',' processing
+    // makes) reads from _tokens/_tokenIndex, so once this returns, the very
+    // next tokens it sees are '!name's body, then 'name's, then the comma --
+    // it never learns this text wasn't in the original source.
+    var spliced = new List<F18Token>(_tokens.Count + remapped.Count);
+    spliced.AddRange(_tokens.Take(_tokenIndex));
+    spliced.AddRange(remapped);
+    spliced.AddRange(_tokens.Skip(_tokenIndex));
+    _tokens = spliced;
   }
 
   private void InterpretNodeImport(F18Token token)

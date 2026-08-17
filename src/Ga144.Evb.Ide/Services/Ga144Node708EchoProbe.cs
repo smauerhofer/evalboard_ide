@@ -182,22 +182,39 @@ public sealed class Ga144Node708EchoProbe
   }
 
   /// <summary>One send-then-receive round trip against the already-booted
-  /// 'echo' loop, with the write phase (host write + node processing time,
-  /// per <see cref="WaitForTransmitDrain"/>) and read phase (waiting for and
-  /// collecting the 3 reply bytes) timed separately. 'echo' is strictly
-  /// receive-then-transmit with no concurrency of its own, so round trips are
-  /// paced one at a time here rather than attempted as an overlapped
-  /// burst -- sending a second word while node 708 is still mid-transmit of
-  /// the previous reply would risk desynchronizing the next 18ibits/sync
-  /// calibration.</summary>
+  /// 'echo' loop. The write phase covers issuing the host write and draining
+  /// it out of the local output buffer (<see cref="WaitForWriteBufferDrain"/>
+  /// -- the closest .NET's SerialPort API gets to a real "bytes are on the
+  /// wire" signal); the read phase covers everything after that: whatever
+  /// remains of the wire time out, node 708's own receive/decode/re-encode
+  /// work, and the wire time of its reply back. That split makes "read" the
+  /// more representative number when you want a feel for real round-trip
+  /// latency, since neither .NET nor this hardware exposes a way to see
+  /// node 708's receive-complete or reply-start moments directly. 'echo' is
+  /// strictly receive-then-transmit with no concurrency of its own, so round
+  /// trips are paced one at a time here rather than attempted as an
+  /// overlapped burst -- sending a second word while node 708 is still
+  /// mid-transmit of the previous reply would risk desynchronizing the next
+  /// 18ibits/sync calibration.</summary>
   private static ExchangeOutcome ExchangeWord(System.IO.Ports.SerialPort port, int word, CancellationToken cancellationToken)
   {
     byte[] sentBytes = new byte[3];
     Ga144Node708Probe.EncodeAsynchronousWord(word, sentBytes);
 
+    // Deliberately NOT using WaitForTransmitDrain's fixed formula-based sleep
+    // here (that is still fine for the one-shot boot stream above, where
+    // nothing is timed against it). For per-exchange timing it would be
+    // actively misleading: that sleep is generous enough to already cover
+    // the whole round trip, so the reply would already be sitting in the OS
+    // receive buffer before the read timer ever started, making "read" look
+    // artificially instant and dumping all the real latency into "write".
+    // Polling BytesToWrite down to zero is the closest thing .NET's
+    // SerialPort API offers to "our bytes actually left the local output
+    // buffer" (there is no hardware transmit-complete signal exposed), so it
+    // is used as the write/read boundary instead.
     var writeStopwatch = System.Diagnostics.Stopwatch.StartNew();
     port.Write(sentBytes, 0, sentBytes.Length);
-    WaitForTransmitDrain(port, sentBytes.Length);
+    WaitForWriteBufferDrain(port);
     writeStopwatch.Stop();
 
     var readStopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -205,6 +222,23 @@ public sealed class Ga144Node708EchoProbe
     readStopwatch.Stop();
 
     return new ExchangeOutcome(sentBytes, receivedBytes, writeStopwatch.Elapsed, readStopwatch.Elapsed);
+  }
+
+  // At this baud rate, draining 3 bytes out of the local output buffer is
+  // expected to take a small fraction of a millisecond -- far under the
+  // ~15 ms granularity Thread.Sleep gets from the Windows scheduler, which
+  // would swamp the very thing being measured. A tight spin-wait keeps the
+  // write-phase measurement meaningful. Capped so a driver that never
+  // reports BytesToWrite == 0 can't hang the speed test.
+  private const int WriteDrainTimeoutMilliseconds = 50;
+
+  private static void WaitForWriteBufferDrain(System.IO.Ports.SerialPort port)
+  {
+    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+    while (port.BytesToWrite > 0 && stopwatch.ElapsedMilliseconds < WriteDrainTimeoutMilliseconds)
+    {
+      Thread.SpinWait(200);
+    }
   }
 
   private sealed record ExchangeOutcome(byte[] SentBytes, byte[] ReceivedBytes, TimeSpan WriteElapsed, TimeSpan ReadElapsed);
