@@ -968,6 +968,23 @@ public sealed class F18Compiler
     var opcodes = new List<byte>();
     var terminated = false;
 
+    // A[ ... ]] normally assembles a plain instruction word from up to four
+    // primitive opcodes. But a quoted word may also embed a CALL to a resolved
+    // word -- local or (per DB002 3.1) imported from another node -- when the
+    // whole point of the word is to be shipped elsewhere over a port and executed
+    // there: the target node has no way to reach this node's dictionary, so the
+    // call target must be assembled as raw bits here, in this node's compiler,
+    // before transmission. A bare (unquoted) reference to a cross-node name still
+    // pushes its address as a literal (see EmitWordReference) -- that rule is
+    // about ordinary code in THIS node, which can never execute a call into
+    // another node's address space. Inside a quote the resulting word is data,
+    // not something this node runs, so encoding a call into it is meaningful.
+    // Once a word reference appears, it occupies the rest of the word (same rule
+    // as any other packed control transfer) -- no further opcodes may follow it.
+    F18Token? callToken = null;
+    var callTarget = 0;
+    var hasCall = false;
+
     while (_tokenIndex < _tokens.Count)
     {
       var token = _tokens[_tokenIndex++];
@@ -975,6 +992,15 @@ public sealed class F18Compiler
       {
         terminated = true;
         break;
+      }
+
+      if (hasCall)
+      {
+        AddError(
+            "F18C057",
+            $"'{token.Text}' cannot follow '{callToken!.Text}' inside A[ ... ]]; a word reference occupies the rest of the quoted word.",
+            token.Location);
+        continue;
       }
 
       byte opcode;
@@ -1004,7 +1030,25 @@ public sealed class F18Compiler
       }
       else if (!F18InstructionSet.Opcodes.TryGetValue(token.Text, out opcode))
       {
-        AddError("F18C019", $"'{token.Text}' is not a primitive F18A opcode and cannot appear inside A[ ... ]].", token.Location);
+        int? target = null;
+        if (_symbols.TryGetValue(token.Text, out F18ExportedSymbol? localSymbol) && localSymbol is not null)
+        {
+          target = localSymbol.Value;
+        }
+        else if (_externalSymbols.TryGetValue(token.Text, out F18ExportedSymbol? externalSymbol) && externalSymbol is not null)
+        {
+          target = externalSymbol.Value;
+        }
+
+        if (target is null)
+        {
+          AddError("F18C019", $"'{token.Text}' is not a primitive F18A opcode and cannot appear inside A[ ... ]].", token.Location);
+          continue;
+        }
+
+        hasCall = true;
+        callTarget = target.Value;
+        callToken = token;
         continue;
       }
 
@@ -1021,26 +1065,41 @@ public sealed class F18Compiler
       return;
     }
 
-    if (opcodes.Count == 0 || opcodes.Count > 4)
-    {
-      return;
-    }
-
-    if (opcodes.Count == 4 && !F18InstructionSet.IsSlot3Compatible(opcodes[3]))
-    {
-      AddError("F18C022", "The fourth opcode is not legal in F18A slot 3.", openingToken.Location);
-      return;
-    }
-
     int encoded;
-    try
+    if (hasCall)
     {
-      encoded = F18InstructionSet.EncodePackedInstruction(opcodes);
+      try
+      {
+        encoded = F18InstructionSet.EncodePackedControl(opcodes, 0x03, callTarget, opcodes.Count);
+      }
+      catch (ArgumentException exception)
+      {
+        AddError("F18C023", exception.Message, callToken?.Location ?? openingToken.Location);
+        return;
+      }
     }
-    catch (ArgumentException exception)
+    else
     {
-      AddError("F18C023", exception.Message, openingToken.Location);
-      return;
+      if (opcodes.Count == 0 || opcodes.Count > 4)
+      {
+        return;
+      }
+
+      if (opcodes.Count == 4 && !F18InstructionSet.IsSlot3Compatible(opcodes[3]))
+      {
+        AddError("F18C022", "The fourth opcode is not legal in F18A slot 3.", openingToken.Location);
+        return;
+      }
+
+      try
+      {
+        encoded = F18InstructionSet.EncodePackedInstruction(opcodes);
+      }
+      catch (ArgumentException exception)
+      {
+        AddError("F18C023", exception.Message, openingToken.Location);
+        return;
+      }
     }
 
     if (_compileMode)

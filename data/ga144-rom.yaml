@@ -576,16 +576,17 @@ systemMacros:
   sourceCode: >
     # 106 import
 
+    macro rom_warm
+
     # 0xAA org
 
     : rp-- ( a-a') -1 . + ;
 
     : bs@ : 'else ( a-w)
-      @p+ !b !b . @p+ x@
-      @p+ !b @b ; . . . !p+
+      A[ @p+ x@ ]] !b !b . A[ . . . !p+ ]] !b @b ;
     : rp@ ( ri-ri) over rp--
 
-    : pshbs ( w-) @p+ !b !b ; @p+ pshw
+    : pshbs ( w-) A[ @p+ pshw ]] !b !b ;
 
     : 'r@ ( ri-ri) over rp--
 
@@ -593,10 +594,10 @@ systemMacros:
 
     : rfrom ( ri-r'i) over rp-- over over @w ;
 
-    : popbs ( -w) @p+ !b @b ; !p+ pops
+    : popbs ( -w) A[ !p+ pops ]] !b @b ;
 
-    : pshr ( aw-a) @p+ !b !b dup @p+ . . @p+
-      !b @p+ !b . x!
+    : pshr ( aw-a) A[ @p+ . . @p+ ]] !b !b dup !b A[ x! ]] !b .
+
     : rp++ : ip++ ( a-a') 1 . + ;
 
     : tor ( ri-r'i) >r popbs pshr r> ;
@@ -609,7 +610,7 @@ systemMacros:
 
     : 'exit ( rx-r'i) drop rp-- dup bs@ ;
 
-    begin dup 2* -if drop !b ahead [ swap ] then drop >r ;
+    begin dup 2* -if drop !b ahead [ swap ] then drop >r ex
 
     : bitsy then dup bs@ >r ip++
 

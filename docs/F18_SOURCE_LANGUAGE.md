@@ -4,15 +4,24 @@ The IDE compiler uses ordinary text rather than color semantics. It compiles one
 
 ## Module directives
 
+`org`, `const`/`constant`, `equ`, and `import` are immediate directives that consume their argument from the compile-time data stack. Push the value first with `#`, then name the directive:
+
 ```forth
-org 0x00             // Prefix form
-0x20 org             // arrayForth-compatible postfix form
+# 0x00 org
 entry start
-const mask = 0x20000
-constant count 63
+# 0x20000 const mask
+# 63 constant count
+# 0xBE equ sget
+# 106 import
 ```
 
-`org` is checked against the active compilation space: RAM accepts `0x000` through `0x03f`, while ROM accepts `0x080` through `0x0bf`. `entry` selects the startup entry-point symbol. For RAM, without `entry`, the first `:` definition is used.
+`#` pushes a value onto the compile-time stack. `org` sets the location counter to the popped value. `const`/`constant` and `equ` pop a value and bind it to the name that follows. `import` pops a node coordinate and brings that node's exported symbols into scope.
+
+`org` is checked against the active compilation space: RAM accepts `0x000` through `0x03f`, while ROM accepts `0x080` through `0x0bf` (an address may also land in either range's mirror, `0x040..0x07f` or `0x0c0..0x0ff`, which wraps to the same physical cells).
+
+`entry name` selects the startup entry-point symbol. It takes its target as an ordinary following token, not from the stack, and may only appear outside a definition. For RAM, without `entry`, the first `:` definition is used.
+
+`label name` assigns the current location counter to `name`, the same way a bare `:` would but without compiling a return. It also takes its target as a following token.
 
 ## Definitions
 
@@ -25,9 +34,11 @@ constant count 63
 ;
 ```
 
-`:` must be followed by a word name. `;` compiles the F18A return opcode and terminates the definition. A word name used in another definition compiles a call. Forward references are supported.
+`:` opens a definition and must be followed by a word name. Referencing that name from another definition compiles a call; forward references are supported.
 
-`exit` compiles a return without ending the textual definition. `call name`, `jump name`, and `recurse` are also available.
+`;` compiles a return opcode (`ret`). It does not end or close the definition -- compilation simply continues with whatever follows. A definition may contain any number of `;`, and later code can fall straight through from one `:` into the next without an intervening `;` at all. `exit` compiles the same return opcode as `;` and is used the same way inside a definition's body.
+
+`call name`, `jump name`, and `recurse` are also available for explicit control transfers.
 
 ## Numbers and literals
 
@@ -47,16 +58,16 @@ word 0x12345
 0x12345 ,
 ```
 
-For compatibility, `data 0x12345` is also accepted at module level. Inside a definition, `data` is the GreenArrays I/O address constant and therefore compiles as a literal.
+`data 0x12345` is also accepted at module level as an alternate spelling. Inside a definition, `data` is the GreenArrays I/O address constant and therefore compiles as a literal.
 
 ## Primitive F18A opcodes
 
 ```text
 ex  unext  @p  @+  @b  @  !p  !+  !b  !
-+*  2*  2/  -  +  and  xor  drop  dup  r>  over  a  .  >r  b!  a!
++*  2*  2/  inv  +  and  xor  drop  dup  r>  over  a  .  >r  b!  a!
 ```
 
-`nop` aliases `.`, and `not` aliases `-`. The F18A opcode at `0x16` is exclusive OR and is written `xor` in this textual syntax. The F18 stack-transfer opcodes are written `>r` and `r>`; legacy `push`, `pop`, and `or` spellings are rejected with diagnostics.
+`nop` aliases `.`. The F18A opcode at `0x13` is written `inv`. The F18A opcode at `0x16` is exclusive OR and is written `xor`. The F18 stack-transfer opcodes are written `>r` and `r>`; the spellings `push`, `pop`, and `or` are rejected with diagnostics.
 
 ## Control extensions
 
@@ -78,7 +89,7 @@ The compiler aligns branch destinations to instruction-word boundaries and emits
 
 ## Quoted instruction words
 
-`A[ ... ]]` assembles one F18A instruction word. Inside a definition, the assembled word is compiled as a literal. At module level it is left on the compile-time data stack, so `A[ ... ]] ,` emits it as a raw word into the active RAM or ROM image.
+`A[ ... ]]` assembles one F18A instruction word from up to four primitive opcodes. Inside a definition, the assembled word is compiled as a literal. At module level it is left on the compile-time data stack, so `A[ ... ]] ,` emits it as a raw word into the active RAM or ROM image.
 
 ```forth
 : send-oldest
@@ -94,6 +105,12 @@ A[ !b @p @ ]]  = 0x09d0a
 A[ !b !+ !b ]] = 0x09822
 ```
 
+A quoted word may also end with a single resolved word reference -- local or imported from another node -- instead of, or after, primitive opcodes. This compiles that reference as a packed call occupying the rest of the word. The assembled word is data as far as this node is concerned: the point is to ship it to another node over a port (via `!b`/`!p`) so that node executes it. An ordinary bare reference to an imported name still pushes its address as a literal, since this node can never itself execute a call into another node's address space -- but inside `A[ ... ]]` the goal is to construct bits for the other node to run, so embedding its call target is exactly what's needed. The word reference must be the last thing before `]]`; like any other packed control transfer, it consumes the remainder of the word:
+
+```forth
+# 106 import
+: relay-fetch A[ @p+ x@ ]] !b !b . ;   \ ships a call to node 106's 'x@'
+```
 
 ## ROM source library
 
@@ -101,10 +118,10 @@ Each coordinate has one system-wide ROM source stored in `ga144-rom.yaml`. The n
 
 Compilation order is always ROM then RAM. Constants, labels, and words exported by the selected node's ROM source are automatically in scope when its RAM source is compiled. System macros may be expanded in ROM or RAM; project user macros are RAM-only.
 
-A module-level node import uses a coordinate on the compile-time stack:
+A module-level node import pops a coordinate from the compile-time stack:
 
 ```forth
-708 import
+# 708 import
 ```
 
 In ROM compilation this imports the other node's ROM exports. In RAM compilation it imports the other node's ROM and RAM exports. The current node may not import itself because its own ROM dictionary is already supplied automatically to RAM.
