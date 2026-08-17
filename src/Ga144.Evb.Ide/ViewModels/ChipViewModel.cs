@@ -32,6 +32,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     ToggleKrakenCommand = new AsyncRelayCommand(ToggleKrakenAsync);
     VerifyAllRomsCommand = new AsyncRelayCommand(VerifyAllRomsAsync, () => !_verifyBusy);
     VerifyNode708RomCommand = new AsyncRelayCommand(VerifyNode708RomAsync, () => !_verifyBusy);
+    RunNode708EchoTestCommand = new AsyncRelayCommand(RunNode708EchoTestAsync, () => !_verifyBusy);
     RebuildNodes();
   }
 
@@ -47,6 +48,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public AsyncRelayCommand ToggleKrakenCommand { get; }
   public AsyncRelayCommand VerifyAllRomsCommand { get; }
   public AsyncRelayCommand VerifyNode708RomCommand { get; }
+  public AsyncRelayCommand RunNode708EchoTestCommand { get; }
 
   public string VerifyStatus
   {
@@ -63,6 +65,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       {
         VerifyAllRomsCommand.NotifyCanExecuteChanged();
         VerifyNode708RomCommand.NotifyCanExecuteChanged();
+        RunNode708EchoTestCommand.NotifyCanExecuteChanged();
       }
     }
   }
@@ -411,6 +414,115 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       MessageBox.Show(
           $"Node 708 ROM verification could not complete:\n\n{exception.Message}",
           "Verify node 708 ROM",
+          MessageBoxButton.OK,
+          MessageBoxImage.Error);
+    }
+    finally
+    {
+      VerifyBusy = false;
+    }
+  }
+
+  /// <summary>
+  /// Test node 708's own hand-written direct-UART transmit routines
+  /// (obit/oword/obyt/echo) instead of the old carrier-clock
+  /// wait-high/wait-low scheme: uploads a one-shot program that receives an
+  /// 18-bit word the normal way (via the ROM's own already-verified
+  /// <c>18ibits</c>, which self-calibrates via <c>sync</c>) and immediately
+  /// transmits it straight back out as genuine, self-timed UART bytes via
+  /// <c>delay</c> -- no host-driven carrier clocking on the return path. One
+  /// boot then drives a whole suite over the same session: a sweep of fixed
+  /// and walking-single-bit test patterns, each checked against an
+  /// independent bit-level prediction of obit/oword/obyt's own algorithm, and
+  /// a speed test estimating write and read throughput. See
+  /// <see cref="Ga144Node708EchoProbe"/> for details. This supersedes the
+  /// earlier "Read node 708 delay" probe (Ga144Node708DelayProbe, now
+  /// removable from the project). Same reset requirement and
+  /// Kraken-exclusivity restriction as "Verify node 708 ROM".
+  /// </summary>
+  private async Task RunNode708EchoTestAsync()
+  {
+    if (_verifyBusy)
+    {
+      return;
+    }
+
+    if (KrakenController.HardwareErected)
+    {
+      MessageBox.Show(
+          "Node 708's echo test cannot run while a Kraken is erected on this chip. "
+          + "This probe requires resetting node 708 to load a one-shot test program, and a "
+          + "resident Kraken must never be reset. Remove the Kraken first, then try again.",
+          "Node 708 echo test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
+    if (endpoint is null)
+    {
+      MessageBox.Show(
+          "No serial endpoint is assigned to this chip. Assign a COM port before running the node 708 echo test.",
+          "Node 708 echo test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    VerifyBusy = true;
+    VerifyStatus = "Running node 708 echo test…";
+    try
+    {
+      var probe = new Ga144Node708EchoProbe();
+      Node708EchoReport report = await probe.RunEchoSuiteAsync(endpoint.PortName, Chip, RomLibrary);
+
+      int matched = report.PatternResults.Count(item => item.Matched);
+      int mismatched = report.PatternResults.Count - matched;
+      var mismatches = report.PatternResults.Where(item => !item.Matched).ToList();
+
+      VerifyStatus = mismatched == 0
+          ? $"Node 708 echo test: {matched}/{report.PatternResults.Count} patterns matched. "
+              + $"~{report.SpeedResult.WriteBitsPerSecond:F0} bit/s write, ~{report.SpeedResult.ReadBitsPerSecond:F0} bit/s read."
+          : $"Node 708 echo test: {mismatched}/{report.PatternResults.Count} pattern(s) MISMATCHED.";
+
+      var summary = new System.Text.StringBuilder();
+      summary.AppendLine($"Pattern sweep: {matched}/{report.PatternResults.Count} matched.");
+      if (mismatches.Count > 0)
+      {
+        summary.AppendLine();
+        summary.AppendLine("Mismatches:");
+        foreach (Node708EchoPatternResult item in mismatches)
+        {
+          string received = string.Join(" ", item.ReceivedBytes.Select(b => $"{b:X2}"));
+          string expected = string.Join(" ", item.ExpectedBytes.Select(b => $"{b:X2}"));
+          summary.AppendLine($"  0x{item.SentWord:X5}: received {received}, expected {expected}");
+        }
+      }
+
+      summary.AppendLine();
+      Node708EchoSpeedResult speed = report.SpeedResult;
+      summary.AppendLine($"Speed test ({speed.Iterations} round trips of a fixed 0x15555 test word):");
+      summary.AppendLine($"  Write: avg {speed.AverageWriteTime.TotalMilliseconds:F2} ms  (~{speed.WriteBitsPerSecond:F0} data bit/s)");
+      summary.AppendLine($"  Read:  avg {speed.AverageReadTime.TotalMilliseconds:F2} ms  (~{speed.ReadBitsPerSecond:F0} data bit/s)");
+      summary.AppendLine($"  Round trip: avg {speed.AverageRoundTripTime.TotalMilliseconds:F2} ms  (~{speed.RoundTripsPerSecond:F1} round trips/s)");
+      summary.AppendLine();
+      summary.AppendLine("\"Expected\" bytes are computed independently in C# from obit/oword/obyt's own "
+          + "bit-extraction algorithm (LSB-first, F18 arithmetic '2/' shift), not copied from any single "
+          + "observed result, so a mismatch here is a real discrepancy worth investigating.");
+
+      MessageBox.Show(
+          summary.ToString(),
+          "Node 708 echo test",
+          MessageBoxButton.OK,
+          mismatched > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+    }
+    catch (Exception exception)
+    {
+      VerifyStatus = "Node 708 echo test failed.";
+      MessageBox.Show(
+          $"Node 708 echo test could not complete:\n\n{exception.Message}",
+          "Node 708 echo test",
           MessageBoxButton.OK,
           MessageBoxImage.Error);
     }

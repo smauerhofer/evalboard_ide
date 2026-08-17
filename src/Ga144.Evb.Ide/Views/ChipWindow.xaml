@@ -60,6 +60,11 @@
                         Padding="12,6"
                         Margin="8,0,0,0"
                         ToolTip="Direct-boot readback of node 708's own ROM (it cannot be read through Kraken). Resets the chip once to load a one-shot dump-rom program, so this is blocked while a Kraken is erected -- remove the Kraken first." />
+        <Button Content="Node 708 echo test"
+                        Command="{Binding RunNode708EchoTestCommand}"
+                        Padding="12,6"
+                        Margin="8,0,0,0"
+                        ToolTip="Tests node 708's own direct-UART obit/oword/obyt/echo routines: sends one async-encoded word, node 708 receives it via its own 18ibits/sync and transmits it straight back as real, self-timed UART bytes (no host carrier clocking). Requires node 708's ROM to define '18ibits' and 'delay'. Resets the chip once, so this is blocked while a Kraken is erected." />
         <TextBlock Text="{Binding VerifyStatus, Mode=OneWay}"
                            VerticalAlignment="Center"
                            Margin="10,0,0,0"
