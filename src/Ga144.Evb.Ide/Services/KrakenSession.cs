@@ -30,12 +30,6 @@ internal sealed class KrakenSession : IAsyncDisposable
   // line rate as the node-708 detector and the head-protocol probe.
   public const int OnlineBaudRate = Ga144Serial.MaximumBaudRate;
 
-  // G144A12 node 708 asynchronous boot ROM continuation entry. Unlike
-  // `cold` (0x0AA), ser-exec is the documented concatenation path for
-  // additional frames and does not rerun cold's wake/start-bit
-  // reasonableness classifier. After the first frame is accepted following
-  // reset, every persistent Kraken frame returns here.
-  private const int AsyncSerialContinuationAddress = 0x0AE;
   private const int IoAddress = 0x15D;
   private const int ResetAssertMilliseconds = 20;
   private const int ResetReleaseMilliseconds = 1;
@@ -48,6 +42,22 @@ internal sealed class KrakenSession : IAsyncDisposable
   // HID devices. Check Kraken is intentionally even more conservative.
   private const int OnlineTransactionSettleMilliseconds = 5;
   private const int CheckTransactionSettleMilliseconds = 10;
+
+  // Every word sent to node 708 after boot is decoded by '18ibits', which
+  // calls 'sync' to recalibrate bit timing fresh for that word (rom_async's
+  // "sync sync dup start..." per-word preamble). The only hardware-proven
+  // pacing of this receive path (Ga144Node708EchoProbe) sends one word,
+  // waits for a full reply, then sends the next -- it never sends two words
+  // back-to-back. 'w/r' asks node 708 to receive several words in a row
+  // (wordsToRead, writeWords.Count, then each payload word) with no reply in
+  // between, which is new and unproven, and a documented hardware hazard
+  // (Ga144Node708DelayProbe) shows 'sync's polling loop can desync around an
+  // unexpected gap on the wire. Pad every post-boot word send with extra
+  // settle time beyond the bare wire-drain time, as a first, safe,
+  // host-only experiment against a too-tight inter-word gap being the cause
+  // of a totally silent (0-byte) reply timeout. Revert or retune once real
+  // hardware confirms whether this actually matters.
+  private const int InterWordSettleMilliseconds = 20;
 
   // Reopen hardening for the CloseWhileIdle policy. A single CreateFile can
   // transiently fail while the previous CloseHandle is still tearing the FTDI
@@ -531,10 +541,22 @@ internal sealed class KrakenSession : IAsyncDisposable
     port.SetRts(true);
     Thread.Sleep(ResetReleaseMilliseconds);
 
-    // The first frame is accepted by node 708 through `cold`; its completion
-    // address is ser-exec, the ROM concatenation entry for additional frames.
+    // The frame is accepted by node 708 through `cold`. Only ONE boot frame is
+    // ever sent for the whole Kraken session -- everything after this is
+    // 'main's own single-word dispatch loop, not another boot frame -- so the
+    // completion address must point directly at the freshly loaded payload's
+    // entry ('main', which always compiles to 0x000 here), not at ser-exec
+    // (the ROM entry that waits for yet another frame header). Pointing
+    // completion at ser-exec left the chip parked in ROM waiting for a
+    // frame that never came, silently swallowing every post-boot word as
+    // bogus follow-up-frame data instead of running 'main' at all -- this
+    // matches both observed failures: the old (pre-readw) design only
+    // noticed at 'focus', its first acknowledged reply, while the readw
+    // design notices immediately, at sett's own first echo. Confirmed against
+    // Ga144Node708EchoProbe, which boots with completion == transfer ==
+    // entry address == 0 and works (22/22 pattern-sweep match).
     (int[] headProgram, Node708HeadAddresses addresses) = BuildHeadProgram();
-    SendBootFrame(port, AsyncSerialContinuationAddress, 0x000, headProgram);
+    SendBootFrame(port, 0x000, 0x000, headProgram);
     _headAddresses = addresses;
 
     foreach (KrakenTentacleConfiguration tentacle in _configuration.Tentacles.OrderBy(item => item.Number))
@@ -543,6 +565,7 @@ internal sealed class KrakenSession : IAsyncDisposable
       // Node 708's B stays pointed at this tentacle's own single hop for
       // every node erected along it: deeper hops are reached purely by the
       // tentacle(n) wrapping below, not by moving B.
+      SelectTentacle708(port, tentacleHeadPort, cancellationToken);
       SelectTentacle708(port, tentacleHeadPort, cancellationToken);
 
       for (int position = 0; position < tentacle.Nodes.Count; position++)
@@ -561,7 +584,10 @@ internal sealed class KrakenSession : IAsyncDisposable
         // requires; discarded here as a pure sync pulse.
         int incomingPort = KrakenTopology.PortAddress(coordinate, previous);
         int[] focusSequence = KrakenProtocol.BuildTentacle(position, KrakenProtocol.BuildFocus(incomingPort), replyWordCountMinusOne: 0);
-        _ = WriteRead708(port, focusSequence, wordsToRead: 1, cancellationToken);
+        _ = WriteRead708(
+            port, focusSequence, wordsToRead: 1,
+            context: $"erecting node {coordinate:000} (tentacle {tentacle.Number} position {position}), 'focus' -> port 0x{incomingPort:X3}",
+            cancellationToken);
 
         // Then this node's B, so it can relay further out once the next
         // node's focus is erected. The last node in a tentacle has nothing
@@ -570,7 +596,10 @@ internal sealed class KrakenSession : IAsyncDisposable
             ? KrakenTopology.PortAddress(coordinate, tentacle.Nodes[position + 1])
             : IoAddress;
         int[] bSequence = KrakenProtocol.BuildTentacle(position, KrakenProtocol.BuildWriteB(b), replyWordCountMinusOne: 0);
-        _ = WriteRead708(port, bSequence, wordsToRead: 1, cancellationToken);
+        _ = WriteRead708(
+            port, bSequence, wordsToRead: 1,
+            context: $"erecting node {coordinate:000} (tentacle {tentacle.Number} position {position}), 'writeB' -> 0x{b:X3}",
+            cancellationToken);
       }
     }
 
@@ -585,13 +614,65 @@ internal sealed class KrakenSession : IAsyncDisposable
   // '18ibits'), node to host via node 708's own 'oword'/'obyt' direct-UART
   // transmit, decoded here by DecodeObywordReply. No host-driven carrier
   // clocking is involved anywhere in this path.
+  //
+  // Node 708's head program now reads every word EXCEPT the initial
+  // dispatch/call address through 'readw' instead of bare '18ibits': 'readw'
+  // echoes the word straight back over the port before returning it, so the
+  // host can confirm receipt before sending the next one. This replaces the
+  // earlier fixed-delay-only pacing (InterWordSettleMilliseconds) with a
+  // real handshake for every word inside 'sett'/'setn'/'w/r's own bodies --
+  // the part of this scheme that sends several words in a row with nothing
+  // to naturally pace it, unlike 'main's own single dispatch-address read,
+  // which still uses plain '18ibits' and is sent via SendWord708 (no ack).
 
   private static void SendWord708(NativeWindowsSerialPort port, int value)
+  {
+    SendWord708Raw(port, value);
+    // Only used for the single, unacknowledged dispatch-address word 'main'
+    // reads via bare '18ibits'; keep a fixed settle margin here since there
+    // is no echo to naturally pace against.
+    Thread.Sleep(InterWordSettleMilliseconds);
+  }
+
+  private static void SendWord708Raw(NativeWindowsSerialPort port, int value)
   {
     byte[] bytes = new byte[3];
     Ga144Node708Probe.EncodeAsynchronousWord(value, bytes);
     port.Write(bytes);
     WaitForTransmitDrain(port, bytes.Length);
+  }
+
+  // Sends one word that node 708 reads via 'readw' and immediately echoes
+  // back, then blocks for that echo and verifies it matches. This is the
+  // actual fix for the totally-silent timeouts: the read IS the pacing, so
+  // there is no separate fixed delay here (unlike SendWord708) -- the block
+  // on ReadWord708 already waits exactly as long as node 708 needs.
+  private static void SendWord708AndVerify(
+      NativeWindowsSerialPort port,
+      int value,
+      string context,
+      CancellationToken cancellationToken,
+      int responseTimeoutMilliseconds = ResponseTimeoutMilliseconds)
+  {
+    int expected = value & F18InstructionSet.WordMask;
+    SendWord708Raw(port, expected);
+
+    int echoed;
+    try
+    {
+      echoed = ReadWord708(port, responseTimeoutMilliseconds, cancellationToken);
+    }
+    catch (TimeoutException exception)
+    {
+      throw new TimeoutException(
+          $"Kraken word acknowledgment timed out ({context}, sent 0x{expected:X5}): {exception.Message}", exception);
+    }
+
+    if (echoed != expected)
+    {
+      throw new IOException(
+          $"Kraken word acknowledgment mismatch ({context}): sent 0x{expected:X5}, node echoed 0x{echoed:X5}.");
+    }
   }
 
   private static int ReadWord708(NativeWindowsSerialPort port, int timeoutMilliseconds, CancellationToken cancellationToken)
@@ -618,7 +699,7 @@ internal sealed class KrakenSession : IAsyncDisposable
     cancellationToken.ThrowIfCancellationRequested();
     Node708HeadAddresses addresses = RequireHeadAddresses();
     SendWord708(port, addresses.SetTentacle);
-    SendWord708(port, portAddress & F18InstructionSet.WordMask);
+    SendWord708AndVerify(port, portAddress, "sett: port value", cancellationToken);
   }
 
   // Calls node 708's 'w/r': writes writeWords then reads back wordsToRead
@@ -626,10 +707,19 @@ internal sealed class KrakenSession : IAsyncDisposable
   // word must be written, at least 1 word must be read" precondition -- it
   // unconditionally 'dec's each count to prime its loop counters, so a count
   // of 0 would wrap to a huge loop instead of doing nothing.
+  //
+  // 'context' is a short human-readable label (which node/tentacle/position,
+  // which operation) with no effect on the wire -- it exists purely so a
+  // timeout, if one happens, says exactly where in the erection/transaction
+  // sequence it happened instead of just "0 of 3 bytes", since this whole
+  // sett/setn/w/r path has not yet been exercised on real hardware and a
+  // bare timeout alone does not say whether the stall is in node 708's own
+  // dispatch, in a specific relay hop, or somewhere else entirely.
   private int[] WriteRead708(
       NativeWindowsSerialPort port,
       IReadOnlyList<int> writeWords,
       int wordsToRead,
+      string context,
       CancellationToken cancellationToken,
       int responseTimeoutMilliseconds = ResponseTimeoutMilliseconds)
   {
@@ -646,18 +736,37 @@ internal sealed class KrakenSession : IAsyncDisposable
 
     cancellationToken.ThrowIfCancellationRequested();
     Node708HeadAddresses addresses = RequireHeadAddresses();
-    SendWord708(port, addresses.WriteRead);
-    SendWord708(port, wordsToRead);
-    SendWord708(port, writeWords.Count);
-    foreach (int word in writeWords)
+    try
     {
-      SendWord708(port, word & F18InstructionSet.WordMask);
+      // Only the call address itself goes through 'main's raw, unacknowledged
+      // '18ibits'; every word 'w/r' reads for itself (wordsToRead,
+      // writeWords.Count, and each forwarded payload word) now goes through
+      // 'readw' and is verified here.
+      SendWord708(port, addresses.WriteRead);
+      SendWord708AndVerify(port, wordsToRead, $"{context}: wordsToRead", cancellationToken, responseTimeoutMilliseconds);
+      SendWord708AndVerify(port, writeWords.Count, $"{context}: writeWords.Count", cancellationToken, responseTimeoutMilliseconds);
+      for (int index = 0; index < writeWords.Count; index++)
+      {
+        SendWord708AndVerify(port, writeWords[index], $"{context}: payload word {index + 1} of {writeWords.Count}", cancellationToken, responseTimeoutMilliseconds);
+      }
+    }
+    catch (Exception exception) when (exception is IOException or TimeoutException)
+    {
+      throw new IOException($"Kraken transaction failed while sending the 'w/r' request ({context}, {writeWords.Count} write word(s), {wordsToRead} to read).", exception);
     }
 
     var result = new int[wordsToRead];
     for (int index = 0; index < wordsToRead; index++)
     {
-      result[index] = ReadWord708(port, responseTimeoutMilliseconds, cancellationToken);
+      try
+      {
+        result[index] = ReadWord708(port, responseTimeoutMilliseconds, cancellationToken);
+      }
+      catch (TimeoutException exception)
+      {
+        throw new TimeoutException(
+            $"Kraken reply timed out ({context}, reply word {index + 1} of {wordsToRead}): {exception.Message}", exception);
+      }
     }
 
     return result;
@@ -669,18 +778,22 @@ internal sealed class KrakenSession : IAsyncDisposable
   // Selects the given route's tentacle and relays 'leaf' out to its position
   // via tentacle(n) wrapping, returning wordsToRead reply words. This is the
   // one online-transaction primitive every per-node operation below builds on.
+  // 'operationName' is captured automatically from the calling method (e.g.
+  // "ReadA", "WriteRamAsync") purely for diagnostics -- see WriteRead708.
   private int[] Transact(
       KrakenNodeRoute route,
       IReadOnlyList<int> leaf,
       int wordsToRead,
       CancellationToken cancellationToken,
-      int settleMilliseconds = OnlineTransactionSettleMilliseconds)
+      int settleMilliseconds = OnlineTransactionSettleMilliseconds,
+      [System.Runtime.CompilerServices.CallerMemberName] string operationName = "")
   {
     NativeWindowsSerialPort port = RequirePort();
     cancellationToken.ThrowIfCancellationRequested();
 
     int headPort = HeadPortFor(route);
     int[] wrapped = KrakenProtocol.BuildTentacle(route.Position, leaf, wordsToRead - 1);
+    string context = $"node {route.Coordinate:000} (tentacle {route.TentacleNumber} position {route.Position}), '{operationName}'";
 
     // Under the idle-close policies the first transaction after a reopen can lose
     // its request while the freshly opened FTDI is still initialising, so the
@@ -698,14 +811,14 @@ internal sealed class KrakenSession : IAsyncDisposable
     try
     {
       SelectTentacle708(port, headPort, cancellationToken);
-      reply = WriteRead708(port, wrapped, wordsToRead, cancellationToken, responseTimeout);
+      reply = WriteRead708(port, wrapped, wordsToRead, context, cancellationToken, responseTimeout);
     }
     catch (TimeoutException) when (firstAfterReopen)
     {
       try { port.PurgeInput(); } catch { }
       SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
       SelectTentacle708(port, headPort, cancellationToken);
-      reply = WriteRead708(port, wrapped, wordsToRead, cancellationToken, responseTimeout);
+      reply = WriteRead708(port, wrapped, wordsToRead, context, cancellationToken, responseTimeout);
     }
 
     SettleUsb(settleMilliseconds, cancellationToken);
@@ -784,30 +897,34 @@ internal sealed class KrakenSession : IAsyncDisposable
     const string source = """
         # 0 org
         entry main
-
-        : main 18ibits drop >r ex main ;
+        : main 18ibits drop >r ex main;
         : obit ( dwn-dw) !b over >r delay ;
+        : readw dup 18ibits drop over over
         : oword ( dw-d)  leap drop  leap drop leap drop  drop ;
         : obyt ( dw-dwx)  then then then  3 obit drop
             7 for dup 1 and 3 xor obit  drop 2/ next
             2 obit ;
-        # 0 f18var n
-        : sett .loc 18ibits drop b! ;
-        : setn .loc 18ibits drop !n ;
+        # 0 f18var n // target node(0..last node)
+        : sett .loc readw drop b! ; // set b register, used to select tentacle
+        : setn .loc readw drop !n ; // set node, used to select node in a tentacle
         : dec ( w-w') -1 . + ;
-        : w/r .loc
-          18ibits drop dec dup >r a!
-          18ibits drop dec dup >r
+        : w/r .loc // writes & reads words from a node. at least 1 word must be written, at least 1 word must be read
+          readw drop dec dup >r a! // # of words to read -1
+          readw drop dec dup >r // # of words to write -1
+          // write pre
           n dup if dec for
             A[ @p >r ]] !b r> dup >r
-            dup dup . + . + 2* over . +
+            dup dup . + . + 2* over . + // multiply by 6
             A[ @p !b unext ]] !b
           next then
-          begin 18ibits drop !b next
+          //
+          begin readw drop !b next
+          // write post
           n dup if dec for
             A[ @p >r ]] !b a !b
             A[ @b !p unext ]] !b
           next then
+          //
           begin @b oword next ;
         .loc
         """;

@@ -37,15 +37,24 @@ public sealed record Node708EchoReport(
 /// <summary>
 /// Standalone, pre-Kraken communication test for node 708's own hand-written
 /// direct-UART transmit routines (<c>obit</c>/<c>oword</c>/<c>obyt</c>/
-/// <c>echo</c>) -- the replacement for the old carrier-clock
+/// <c>readw</c>/<c>echo</c>) -- the replacement for the old carrier-clock
 /// wait-high/wait-low scheme, which drove the F18's output pin from raw host
 /// bytes instead of letting the node itself frame and time real UART bytes.
-/// This program instead calls the node's own already-verified <c>18ibits</c>
-/// (which internally calibrates via <c>sync</c>) to receive one 18-bit word
-/// the normal way boot frames are received, then transmits it straight back
-/// out as genuine start/8-data/stop-bit framed UART bytes, timed by the
-/// node's own <c>delay</c> -- no host-driven carrier clocking on the return
-/// path at all.
+///
+/// <c>echo</c>'s receive step is now <c>readw</c> itself -- the exact same
+/// word Kraken's head program uses inside <c>sett</c>/<c>setn</c>/<c>w/r</c>
+/// to read and acknowledge every word it receives (defined identically here:
+/// no terminating ';', so it falls straight through into <c>oword</c> to
+/// transmit the echo, exactly as designed) -- rather than the hand-inlined
+/// "<c>18ibits drop oword</c>" this probe used before. Since this harness is
+/// otherwise the ONLY hardware-validated multi-word exchange in the project
+/// (flat receive/transmit loop, no dispatcher, no tentacle wrapping, minimal
+/// return-stack nesting), running <c>readw</c> through it in isolation is a
+/// direct test of whether <c>readw</c> itself echoes correctly on real
+/// hardware, decoupled from Kraken's own <c>main</c>/<c>sett</c> dispatch
+/// machinery -- if this test fails the same way the erection does, the bug
+/// is in <c>readw</c>/<c>oword</c> itself; if it passes, the bug is
+/// specific to how Kraken's dispatcher invokes it.
 ///
 /// One boot loads <c>echo</c>'s infinite receive/transmit loop, then this
 /// probe drives it through two phases without ever rebooting the chip:
@@ -315,11 +324,11 @@ public sealed class Ga144Node708EchoProbe
   }
 
   /// <summary>
-  /// Compiles the user's obit/oword/obyt/echo program against node 708's
-  /// REAL, currently configured ROM exports (the same PredefinedSymbols
-  /// mechanism used when compiling any node's ordinary RAM source), so
-  /// referencing <c>18ibits</c> and <c>delay</c> resolves to that ROM's own,
-  /// already hardware-verified addresses.
+  /// Compiles the user's obit/readw/oword/obyt/echo program against node
+  /// 708's REAL, currently configured ROM exports (the same
+  /// PredefinedSymbols mechanism used when compiling any node's ordinary RAM
+  /// source), so referencing <c>18ibits</c> and <c>delay</c> resolves to
+  /// that ROM's own, already hardware-verified addresses.
   /// </summary>
   private static int[] BuildEchoProgram(Ga144ChipConfiguration chip, Ga144RomLibrary romLibrary)
   {
@@ -328,19 +337,25 @@ public sealed class Ga144Node708EchoProbe
     // AND where execution begins once loading completes (see
     // BuildReplyProgram/Ga144Node708RomReader's dump-rom, which rely on the
     // same thing) -- it cannot be two different addresses. Putting 'echo'
-    // last (after obit/oword/obyt, matching how the words were given) made
-    // it compile to a non-zero address while the boot frame still loaded the
-    // payload starting at 0, so the chip began executing 'obit' instead of
-    // 'echo'. Forth call order doesn't care about textual definition order
-    // (forward references are supported), so reordering here changes
-    // nothing about the program's behavior -- only where 'echo' physically
-    // lands.
+    // last (after obit/readw/oword/obyt, matching how the words were given)
+    // made it compile to a non-zero address while the boot frame still
+    // loaded the payload starting at 0, so the chip began executing 'obit'
+    // instead of 'echo'. Forth call order doesn't care about textual
+    // definition order (forward references are supported), so reordering
+    // here changes nothing about the program's behavior -- only where
+    // 'echo' physically lands. 'echo' now calls 'readw' (a forward
+    // reference to the definition below, resolved the same way) instead of
+    // the previous hand-inlined '18ibits drop oword' -- 'readw' itself is
+    // copied verbatim from KrakenSession.BuildHeadProgram's source: no
+    // terminating ';', so it falls straight through into 'oword' to
+    // transmit the echo, exactly as in the real head program.
     const string source = """
         # 0 org
         entry echo
 
-        : echo 18ibits drop oword echo ;
+        : echo readw drop echo ;
         : obit ( dwn-dw) !b over >r delay ;
+        : readw dup 18ibits drop over over
         : oword ( dw-d)  leap drop  leap drop leap drop  drop ;
         : obyt ( dw-dwx)  then then then  3 obit drop
             7 for dup 1 and 3 xor obit  drop 2/ next
