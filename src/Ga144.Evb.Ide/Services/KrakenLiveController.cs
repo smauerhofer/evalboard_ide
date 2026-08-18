@@ -15,6 +15,8 @@ namespace Ga144.Evb.Ide.Services;
 public sealed class KrakenLiveController : IAsyncDisposable
 {
   private readonly KrakenConfiguration _configuration;
+  private readonly Ga144ChipConfiguration _chip;
+  private readonly Ga144RomLibrary _romLibrary;
   private readonly Func<KrakenEndpointInfo?> _endpointResolver;
   private readonly KrakenIdlePolicy _idlePolicy;
   private readonly SemaphoreSlim _gate = new(1, 1);
@@ -27,10 +29,14 @@ public sealed class KrakenLiveController : IAsyncDisposable
 
   public KrakenLiveController(
       KrakenConfiguration configuration,
+      Ga144ChipConfiguration chip,
+      Ga144RomLibrary romLibrary,
       Func<KrakenEndpointInfo?> endpointResolver,
       KrakenIdlePolicy idlePolicy = KrakenIdlePolicy.HoldOpen)
   {
     _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+    _chip = chip ?? throw new ArgumentNullException(nameof(chip));
+    _romLibrary = romLibrary ?? throw new ArgumentNullException(nameof(romLibrary));
     _endpointResolver = endpointResolver ?? throw new ArgumentNullException(nameof(endpointResolver));
     _idlePolicy = idlePolicy;
   }
@@ -173,7 +179,7 @@ public sealed class KrakenLiveController : IAsyncDisposable
       // the COM port reset the chip and require re-erection. Port C (Target) does
       // not, and must not be re-erected on reopen.
       bool reopenResetsChip = endpoint.Role == Ga144ChipRole.Host;
-      var session = new KrakenSession(_configuration, route, _idlePolicy, reopenResetsChip);
+      var session = new KrakenSession(_configuration, route, _chip, _romLibrary, _idlePolicy, reopenResetsChip);
       try
       {
         if (verifyTarget)

@@ -118,6 +118,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
 
     KrakenLiveController controller = new(
         project.GetChip(role).Kraken,
+        project.GetChip(role),
+        RomLibrary,
         () => ResolveKrakenEndpoint(board.Id, role),
         KrakenIdlePolicyValue);
     controller.StateChanged += OnKrakenControllerStateChanged;

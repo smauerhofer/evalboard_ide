@@ -14,13 +14,20 @@ namespace Ga144.Evb.Ide.Services;
 /// CloseWhileIdle closes it when idle and reopens it (transport-only, no reset,
 /// retry-hardened) for the next operation. Neither policy ever pulses reset or
 /// re-erects automatically.
+///
+/// Transport: node 708 is booted with the new sett/setn/w/r head protocol (see
+/// <see cref="Ga144Node708HeadProtocol"/> for the host-side primitives this
+/// reuses the same wire shapes as) instead of the old carrier-clocked
+/// hi/lo/wait-high/wait-low reply helper. Every erection step and every online
+/// transaction is now a plain async-encoded word request/reply pair, and every
+/// tentacle hop is relayed with the focus/writeA/.../tentacle(n) word sequences
+/// built by <see cref="KrakenProtocol"/>. There is no more host-driven carrier
+/// clocking anywhere in this class.
 /// </summary>
 internal sealed class KrakenSession : IAsyncDisposable
 {
-  // Use the same hardware-verified line rate as the node-708 detector. The
-  // response path is carrier-clocked and does not synthesize a UART baud rate
-  // in the F18, so process/voltage/temperature variation is not converted into
-  // serial bit-time error.
+  // Node 708's own async word transport runs at the same hardware-verified
+  // line rate as the node-708 detector and the head-protocol probe.
   public const int OnlineBaudRate = Ga144Serial.MaximumBaudRate;
 
   // G144A12 node 708 asynchronous boot ROM continuation entry. Unlike
@@ -56,6 +63,8 @@ internal sealed class KrakenSession : IAsyncDisposable
   private const int IdleCloseTimeoutMilliseconds = 1_000;
 
   private readonly KrakenConfiguration _configuration;
+  private readonly Ga144ChipConfiguration _chip;
+  private readonly Ga144RomLibrary _romLibrary;
   private readonly KrakenIdlePolicy _idlePolicy;
   // True only when opening this endpoint's COM port pulses the GA144 RESET-.
   // On the EVB that is Port A (Host): RTS is wired to RESET- and the stock FTDI
@@ -69,6 +78,12 @@ internal sealed class KrakenSession : IAsyncDisposable
   private string? _portName;
   private bool _disposed;
   private bool _hardwareErectionCompleted;
+  // Node 708's sett/setn/w/r RAM addresses, resolved from the compiler's own
+  // symbol table when the head program is booted (see BuildHeadProgram's
+  // remarks -- this program only fits 64 words with packing enabled, so
+  // unlike this project's other fixed-layout probes these addresses are not
+  // assumed constant across builds).
+  private Node708HeadAddresses? _headAddresses;
   // CloseWhileIdle only: while > 0, ParkTransport keeps the handle OPEN so a batch
   // of exclusive operations (e.g. a full Check Kraken: erection verify + RAM scan)
   // reopens/closes the FTDI once for the whole batch instead of once per call.
@@ -86,11 +101,15 @@ internal sealed class KrakenSession : IAsyncDisposable
   public KrakenSession(
       KrakenConfiguration configuration,
       KrakenNodeRoute targetRoute,
+      Ga144ChipConfiguration chip,
+      Ga144RomLibrary romLibrary,
       KrakenIdlePolicy idlePolicy = KrakenIdlePolicy.HoldOpen,
       bool reopenResetsChip = true)
   {
     ArgumentNullException.ThrowIfNull(configuration);
     ArgumentNullException.ThrowIfNull(targetRoute);
+    ArgumentNullException.ThrowIfNull(chip);
+    ArgumentNullException.ThrowIfNull(romLibrary);
 
     if (targetRoute.IsHead)
     {
@@ -99,6 +118,8 @@ internal sealed class KrakenSession : IAsyncDisposable
 
     _configuration = configuration;
     _targetRoute = targetRoute;
+    _chip = chip;
+    _romLibrary = romLibrary;
     _idlePolicy = idlePolicy;
     _reopenResetsChip = reopenResetsChip;
 
@@ -228,49 +249,50 @@ internal sealed class KrakenSession : IAsyncDisposable
       }, cancellationToken);
 
   public Task<int> ReadAAsync(CancellationToken cancellationToken = default) =>
-      RunExclusiveAsync(() => ReadWord(KrakenProtocol.BuildR1(_targetRoute.Position, KrakenProtocol.ReadAInstruction), cancellationToken), cancellationToken);
+      RunExclusiveAsync(() => ReadA(_targetRoute, cancellationToken), cancellationToken);
 
   public Task WriteAAsync(int value, CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(() =>
       {
-        WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteAInstruction, value), cancellationToken);
+        WriteA(_targetRoute, value, cancellationToken);
         return 0;
       }, cancellationToken);
 
   public Task<int> ReadIoAsync(CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(() =>
       {
-        int savedA = ReadWord(KrakenProtocol.BuildR1(_targetRoute.Position, KrakenProtocol.ReadAInstruction), cancellationToken);
+        int savedA = ReadA(_targetRoute, cancellationToken);
         try
         {
-          WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteAInstruction, IoAddress), cancellationToken);
-          return ReadWord(KrakenProtocol.BuildR1(_targetRoute.Position, KrakenProtocol.ReadMemoryInstruction), cancellationToken);
+          WriteA(_targetRoute, IoAddress, cancellationToken);
+          return ReadMemory(_targetRoute, cancellationToken);
         }
         finally
         {
-          WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteAInstruction, savedA), cancellationToken);
+          WriteA(_targetRoute, savedA, cancellationToken);
         }
       }, cancellationToken);
 
   public Task WriteIoAsync(int value, CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(() =>
       {
-        int savedA = ReadWord(KrakenProtocol.BuildR1(_targetRoute.Position, KrakenProtocol.ReadAInstruction), cancellationToken);
+        int savedA = ReadA(_targetRoute, cancellationToken);
         try
         {
-          WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteAInstruction, IoAddress), cancellationToken);
-          WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteMemoryInstruction, value), cancellationToken);
+          WriteA(_targetRoute, IoAddress, cancellationToken);
+          WriteMemory(_targetRoute, value, cancellationToken);
         }
         finally
         {
-          WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteAInstruction, savedA), cancellationToken);
+          WriteA(_targetRoute, savedA, cancellationToken);
         }
 
         return 0;
       }, cancellationToken);
 
   public Task<IReadOnlyList<int>> ReadRamAsync(CancellationToken cancellationToken = default) =>
-      RunExclusiveAsync<IReadOnlyList<int>>(() => ReadMemoryBlock(0x000, 64, cancellationToken), cancellationToken);
+      RunExclusiveAsync<IReadOnlyList<int>>(() =>
+          Transact(_targetRoute, KrakenProtocol.BuildReadRam(), wordsToRead: 64, cancellationToken), cancellationToken);
 
   public Task WriteRamAsync(IReadOnlyList<int> words, CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(() =>
@@ -280,52 +302,43 @@ internal sealed class KrakenSession : IAsyncDisposable
           throw new ArgumentException("A GA144 node RAM image contains exactly 64 words.", nameof(words));
         }
 
-        WriteMemoryBlock(0x000, words, cancellationToken);
+        _ = Transact(_targetRoute, KrakenProtocol.BuildWriteRam(words), wordsToRead: 1, cancellationToken);
         return 0;
       }, cancellationToken);
 
   public Task<IReadOnlyList<int>> ReadRomAsync(CancellationToken cancellationToken = default) =>
-      RunExclusiveAsync<IReadOnlyList<int>>(() => ReadMemoryBlock(0x080, 64, cancellationToken), cancellationToken);
+      RunExclusiveAsync<IReadOnlyList<int>>(() =>
+          Transact(_targetRoute, KrakenProtocol.BuildReadRom(), wordsToRead: 64, cancellationToken), cancellationToken);
 
+  // 'readPStack' pops and sends back 10 words (see KrakenProtocol's remarks
+  // on the write/read count asymmetry given for the parameter stack).
   public Task<IReadOnlyList<int>> ReadParameterStackAsync(CancellationToken cancellationToken = default) =>
       RunExclusiveAsync<IReadOnlyList<int>>(() =>
       {
-        var topToBottom = new List<int>(10);
-        for (int index = 0; index < 10; index++)
-        {
-          topToBottom.Add(ReadWord(KrakenProtocol.BuildR1(_targetRoute.Position, KrakenProtocol.PopDataInstruction), cancellationToken));
-        }
-
+        int[] topToBottom = Transact(_targetRoute, KrakenProtocol.BuildReadPStack(), wordsToRead: 10, cancellationToken);
         var bottomToTop = topToBottom.AsEnumerable().Reverse().ToArray();
-        RestoreDataStack(bottomToTop, cancellationToken);
         return bottomToTop;
       }, cancellationToken);
 
+  // 'writePStack' pushes exactly 9 words (see KrakenProtocol's remarks).
   public Task WriteParameterStackAsync(IReadOnlyList<int> bottomToTop, CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(() =>
       {
-        if (bottomToTop.Count != 10)
+        if (bottomToTop.Count != 9)
         {
-          throw new ArgumentException("The F18A parameter stack view contains exactly 10 words.", nameof(bottomToTop));
+          throw new ArgumentException("'writePStack' restores exactly 9 parameter-stack words.", nameof(bottomToTop));
         }
 
-        // Ten pushes overwrite one complete F18A parameter-stack image,
-        // matching the Kraken setup procedure.
-        RestoreDataStack(bottomToTop, cancellationToken);
+        _ = Transact(_targetRoute, KrakenProtocol.BuildWritePStack(bottomToTop), wordsToRead: 1, cancellationToken);
         return 0;
       }, cancellationToken);
 
+  // The F18A return stack is 9 words (R plus 8 circular cells).
   public Task<IReadOnlyList<int>> ReadReturnStackAsync(CancellationToken cancellationToken = default) =>
       RunExclusiveAsync<IReadOnlyList<int>>(() =>
       {
-        var topToBottom = new List<int>(9);
-        for (int index = 0; index < 9; index++)
-        {
-          topToBottom.Add(ReadWord(KrakenProtocol.BuildR1(_targetRoute.Position, KrakenProtocol.PopReturnInstruction), cancellationToken));
-        }
-
+        int[] topToBottom = Transact(_targetRoute, KrakenProtocol.BuildReadRStack(), wordsToRead: 9, cancellationToken);
         var bottomToTop = topToBottom.AsEnumerable().Reverse().ToArray();
-        RestoreReturnStack(bottomToTop, cancellationToken);
         return bottomToTop;
       }, cancellationToken);
 
@@ -334,22 +347,28 @@ internal sealed class KrakenSession : IAsyncDisposable
       {
         if (bottomToTop.Count != 9)
         {
-          throw new ArgumentException("The F18A return stack view contains exactly 9 words.", nameof(bottomToTop));
+          throw new ArgumentException("'writeRStack' restores exactly 9 return-stack words (rs(8)..rs(0)).", nameof(bottomToTop));
         }
 
-        // Nine pushes overwrite R plus the eight circular return-stack
-        // registers, matching the Kraken node setup sequence.
-        RestoreReturnStack(bottomToTop, cancellationToken);
+        // The caller supplies bottom-to-top (matching the parameter-stack
+        // convention); writeRStack wants rs(8) first, i.e. top first.
+        var rs8ToRs0 = bottomToTop.AsEnumerable().Reverse().ToArray();
+        _ = Transact(_targetRoute, KrakenProtocol.BuildWriteRStack(rs8ToRs0), wordsToRead: 1, cancellationToken);
         return 0;
       }, cancellationToken);
 
   public Task WriteBAsync(int value, CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(() =>
       {
-        WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteBInstruction, value), cancellationToken);
+        _ = Transact(_targetRoute, KrakenProtocol.BuildWriteB(value), wordsToRead: 1, cancellationToken);
         return 0;
       }, cancellationToken);
 
+  // 'focus' is the same "pop a word, jump P to it" primitive whether the
+  // popped word is a compass port address (erection) or an arbitrary 10-bit
+  // RAM address (this Jump). Reused directly rather than duplicated. Note
+  // its trailing '!p' destroys whatever was on the target's top of stack
+  // (see KrakenProtocol.BuildFocus) -- an accepted side effect of a jump.
   public Task JumpAsync(int destination, CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(() =>
       {
@@ -358,8 +377,7 @@ internal sealed class KrakenSession : IAsyncDisposable
           throw new ArgumentOutOfRangeException(nameof(destination), "P is a 10-bit address.");
         }
 
-        int jump = F18InstructionSet.EncodeSlot0Control(0x02, destination);
-        WriteSequence(KrakenProtocol.BuildX1(_targetRoute.Position, jump), cancellationToken);
+        _ = Transact(_targetRoute, KrakenProtocol.BuildFocus(destination), wordsToRead: 1, cancellationToken);
         return 0;
       }, cancellationToken);
 
@@ -449,10 +467,7 @@ internal sealed class KrakenSession : IAsyncDisposable
       {
         // Do not report an online node session until a real read has
         // traversed the selected tentacle and returned through node 708.
-        _ = ReadWord(
-            _targetRoute,
-            KrakenProtocol.BuildR1(_targetRoute.Position, KrakenProtocol.ReadAInstruction),
-            cancellationToken);
+        _ = ReadA(_targetRoute, cancellationToken);
       }
 
       // Kraken remains resident in the GA144. A normal Connect parks the
@@ -499,7 +514,7 @@ internal sealed class KrakenSession : IAsyncDisposable
     }
   }
 
-  // Run the full erection sequence (reset pulse, node-708 reply-helper load, and
+  // Run the full erection sequence (reset pulse, node-708 head-protocol load, and
   // tentacle focus/B setup) on an already-open port. Used both for the initial
   // erection and to RE-erect after an idle-close reopen, because opening the COM
   // port on Port A pulses RESET- (the FTDI VCP driver briefly asserts RTS during
@@ -518,12 +533,18 @@ internal sealed class KrakenSession : IAsyncDisposable
 
     // The first frame is accepted by node 708 through `cold`; its completion
     // address is ser-exec, the ROM concatenation entry for additional frames.
-    int[] replyProgram = BuildReplyProgram();
-    SendBootFrame(port, AsyncSerialContinuationAddress, 0x000, replyProgram);
+    (int[] headProgram, Node708HeadAddresses addresses) = BuildHeadProgram();
+    SendBootFrame(port, AsyncSerialContinuationAddress, 0x000, headProgram);
+    _headAddresses = addresses;
 
     foreach (KrakenTentacleConfiguration tentacle in _configuration.Tentacles.OrderBy(item => item.Number))
     {
       int tentacleHeadPort = KrakenTopology.PortAddress(KrakenTopology.HeadCoordinate, tentacle.Nodes[0]);
+      // Node 708's B stays pointed at this tentacle's own single hop for
+      // every node erected along it: deeper hops are reached purely by the
+      // tentacle(n) wrapping below, not by moving B.
+      SelectTentacle708(port, tentacleHeadPort, cancellationToken);
+
       for (int position = 0; position < tentacle.Nodes.Count; position++)
       {
         cancellationToken.ThrowIfCancellationRequested();
@@ -532,16 +553,24 @@ internal sealed class KrakenSession : IAsyncDisposable
             ? KrakenTopology.HeadCoordinate
             : tentacle.Nodes[position - 1];
 
+        // Erect this node's own focus first (anchor its P on its incoming
+        // port), reaching it by relaying through the 'position' nodes ahead
+        // of it that are already erected. focus's own trailing '!p' sends
+        // back whatever was on that node's T (destroying it) -- not
+        // meaningful data, just the 1 real reply word every relay hop
+        // requires; discarded here as a pure sync pulse.
         int incomingPort = KrakenTopology.PortAddress(coordinate, previous);
-        int focusJump = F18InstructionSet.EncodeSlot0Control(0x02, incomingPort);
-        IReadOnlyList<int> focusSequence = KrakenProtocol.BuildX1(position, focusJump);
-        SendBootFrame(port, AsyncSerialContinuationAddress, tentacleHeadPort, focusSequence);
+        int[] focusSequence = KrakenProtocol.BuildTentacle(position, KrakenProtocol.BuildFocus(incomingPort), replyWordCountMinusOne: 0);
+        _ = WriteRead708(port, focusSequence, wordsToRead: 1, cancellationToken);
 
+        // Then this node's B, so it can relay further out once the next
+        // node's focus is erected. The last node in a tentacle has nothing
+        // further to relay to; point it at IoAddress like the old scheme did.
         int b = position + 1 < tentacle.Nodes.Count
             ? KrakenTopology.PortAddress(coordinate, tentacle.Nodes[position + 1])
             : IoAddress;
-        IReadOnlyList<int> bSequence = KrakenProtocol.BuildW1(position, KrakenProtocol.WriteBInstruction, b);
-        SendBootFrame(port, AsyncSerialContinuationAddress, tentacleHeadPort, bSequence);
+        int[] bSequence = KrakenProtocol.BuildTentacle(position, KrakenProtocol.BuildWriteB(b), replyWordCountMinusOne: 0);
+        _ = WriteRead708(port, bSequence, wordsToRead: 1, cancellationToken);
       }
     }
 
@@ -549,69 +578,101 @@ internal sealed class KrakenSession : IAsyncDisposable
     port.PurgeInput();
   }
 
-  private IReadOnlyList<int> ReadMemoryBlock(int startAddress, int count, CancellationToken cancellationToken)
-  {
-    int savedA = ReadWord(KrakenProtocol.BuildR1(_targetRoute.Position, KrakenProtocol.ReadAInstruction), cancellationToken);
-    var words = new int[count];
-    try
-    {
-      WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteAInstruction, startAddress), cancellationToken);
-      for (int index = 0; index < count; index++)
-      {
-        words[index] = ReadWord(
-            KrakenProtocol.BuildR1(_targetRoute.Position, KrakenProtocol.ReadMemoryIncrementInstruction),
-            cancellationToken);
-      }
-    }
-    finally
-    {
-      WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteAInstruction, savedA), cancellationToken);
-    }
+  // ---- node-708 word transport --------------------------------------------
+  // Every request/reply to/from node 708 travels as plain async-encoded words
+  // (3 bytes each, the same wire shape as a boot-frame field): host to node
+  // via Ga144Node708Probe.EncodeAsynchronousWord (decoded on the node by
+  // '18ibits'), node to host via node 708's own 'oword'/'obyt' direct-UART
+  // transmit, decoded here by DecodeObywordReply. No host-driven carrier
+  // clocking is involved anywhere in this path.
 
-    return words;
+  private static void SendWord708(NativeWindowsSerialPort port, int value)
+  {
+    byte[] bytes = new byte[3];
+    Ga144Node708Probe.EncodeAsynchronousWord(value, bytes);
+    port.Write(bytes);
+    WaitForTransmitDrain(port, bytes.Length);
   }
 
-  private void WriteMemoryBlock(int startAddress, IReadOnlyList<int> words, CancellationToken cancellationToken)
+  private static int ReadWord708(NativeWindowsSerialPort port, int timeoutMilliseconds, CancellationToken cancellationToken)
   {
-    int savedA = ReadWord(KrakenProtocol.BuildR1(_targetRoute.Position, KrakenProtocol.ReadAInstruction), cancellationToken);
-    try
+    byte[] bytes = ReadExactly(port, 3, timeoutMilliseconds, cancellationToken);
+    return DecodeObywordReply(bytes);
+  }
+
+  // Inverse of node 708's own 'oword'/'obyt' transmit encoding -- see the
+  // identical helper and remarks on Ga144Node708HeadProtocol.DecodeObywordReply.
+  private static int DecodeObywordReply(byte[] threeBytes)
+  {
+    if (threeBytes is null || threeBytes.Length != 3)
     {
-      WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteAInstruction, startAddress), cancellationToken);
-      // All 64 RAM/ROM words travel in one transaction instead of one per word.
-      // Kraken writes need no reply, so this is a pure concatenation of the same
-      // already-proven per-word w1 sequence -- see KrakenProtocol.BuildBlockW1.
-      WriteSequence(
-          KrakenProtocol.BuildBlockW1(_targetRoute.Position, KrakenProtocol.WriteMemoryIncrementInstruction, words),
-          cancellationToken);
+      throw new ArgumentException("An obyt/oword reply is exactly 3 bytes.", nameof(threeBytes));
     }
-    finally
+
+    int value = threeBytes[0] | (threeBytes[1] << 8) | ((threeBytes[2] & 0x03) << 16);
+    return value & F18InstructionSet.WordMask;
+  }
+
+  private void SelectTentacle708(NativeWindowsSerialPort port, int portAddress, CancellationToken cancellationToken)
+  {
+    cancellationToken.ThrowIfCancellationRequested();
+    Node708HeadAddresses addresses = RequireHeadAddresses();
+    SendWord708(port, addresses.SetTentacle);
+    SendWord708(port, portAddress & F18InstructionSet.WordMask);
+  }
+
+  // Calls node 708's 'w/r': writes writeWords then reads back wordsToRead
+  // words. Both counts must be at least 1, matching 'w/r's own "at least 1
+  // word must be written, at least 1 word must be read" precondition -- it
+  // unconditionally 'dec's each count to prime its loop counters, so a count
+  // of 0 would wrap to a huge loop instead of doing nothing.
+  private int[] WriteRead708(
+      NativeWindowsSerialPort port,
+      IReadOnlyList<int> writeWords,
+      int wordsToRead,
+      CancellationToken cancellationToken,
+      int responseTimeoutMilliseconds = ResponseTimeoutMilliseconds)
+  {
+    ArgumentNullException.ThrowIfNull(writeWords);
+    if (writeWords.Count == 0)
     {
-      WriteSequence(KrakenProtocol.BuildW1(_targetRoute.Position, KrakenProtocol.WriteAInstruction, savedA), cancellationToken);
+      throw new ArgumentException("'w/r' requires at least 1 word to write.", nameof(writeWords));
     }
+
+    if (wordsToRead <= 0)
+    {
+      throw new ArgumentOutOfRangeException(nameof(wordsToRead), "'w/r' requires at least 1 word to read.");
+    }
+
+    cancellationToken.ThrowIfCancellationRequested();
+    Node708HeadAddresses addresses = RequireHeadAddresses();
+    SendWord708(port, addresses.WriteRead);
+    SendWord708(port, wordsToRead);
+    SendWord708(port, writeWords.Count);
+    foreach (int word in writeWords)
+    {
+      SendWord708(port, word & F18InstructionSet.WordMask);
+    }
+
+    var result = new int[wordsToRead];
+    for (int index = 0; index < wordsToRead; index++)
+    {
+      result[index] = ReadWord708(port, responseTimeoutMilliseconds, cancellationToken);
+    }
+
+    return result;
   }
 
-  private void RestoreDataStack(IReadOnlyList<int> bottomToTop, CancellationToken cancellationToken)
-  {
-    // One transaction for all ten pushes instead of one per word (see WriteMemoryBlock).
-    WriteSequence(
-        KrakenProtocol.BuildBlockW1(_targetRoute.Position, KrakenProtocol.PushDataInstruction, bottomToTop),
-        cancellationToken);
-  }
+  private Node708HeadAddresses RequireHeadAddresses() =>
+      _headAddresses ?? throw new InvalidOperationException("Node 708's head protocol addresses are not known; Kraken has not been erected.");
 
-  private void RestoreReturnStack(IReadOnlyList<int> bottomToTop, CancellationToken cancellationToken)
-  {
-    // One transaction for all nine pushes instead of one per word (see WriteMemoryBlock).
-    WriteSequence(
-        KrakenProtocol.BuildBlockW1(_targetRoute.Position, KrakenProtocol.PushReturnInstruction, bottomToTop),
-        cancellationToken);
-  }
-
-  private int ReadWord(IReadOnlyList<int> sequence, CancellationToken cancellationToken) =>
-      ReadWord(_targetRoute, sequence, cancellationToken);
-
-  private int ReadWord(
+  // Selects the given route's tentacle and relays 'leaf' out to its position
+  // via tentacle(n) wrapping, returning wordsToRead reply words. This is the
+  // one online-transaction primitive every per-node operation below builds on.
+  private int[] Transact(
       KrakenNodeRoute route,
-      IReadOnlyList<int> sequence,
+      IReadOnlyList<int> leaf,
+      int wordsToRead,
       CancellationToken cancellationToken,
       int settleMilliseconds = OnlineTransactionSettleMilliseconds)
   {
@@ -619,149 +680,83 @@ internal sealed class KrakenSession : IAsyncDisposable
     cancellationToken.ThrowIfCancellationRequested();
 
     int headPort = HeadPortFor(route);
-    byte[] frame = EncodeBootFrame(completionAddress: 0, transferAddress: headPort, sequence);
-
-    byte[] carriers = new byte[36];
-    for (int bit = 0; bit < 18; bit++)
-    {
-      carriers[bit * 2] = 0x00;
-      carriers[bit * 2 + 1] = 0xFF;
-    }
+    int[] wrapped = KrakenProtocol.BuildTentacle(route.Position, leaf, wordsToRead - 1);
 
     // Under the idle-close policies the first transaction after a reopen can lose
-    // its request frame while the freshly opened FTDI is still initialising, so
-    // the node returns nothing and the read times out. If that happens on the
-    // first read after a reopen, purge and retry the whole request once; a single
-    // dropped frame must not fail an entire 64-word ROM block. The flag is never
-    // set under HoldOpen, so this retry is inert there.
+    // its request while the freshly opened FTDI is still initialising, so the
+    // node returns nothing and the read times out. If that happens on the first
+    // transaction after a reopen, purge and retry once; a single dropped frame
+    // must not fail an entire operation. The flag is never set under HoldOpen,
+    // so this retry is inert there.
     bool firstAfterReopen = _reopenedThisTransaction;
     _reopenedThisTransaction = false;
     int responseTimeout = firstAfterReopen
         ? Math.Max(ResponseTimeoutMilliseconds, FirstReadAfterReopenTimeoutMilliseconds)
         : ResponseTimeoutMilliseconds;
 
-    byte[] response;
+    int[] reply;
     try
     {
-      response = WriteRequestAndRead(port, frame, carriers, responseTimeout, cancellationToken);
+      SelectTentacle708(port, headPort, cancellationToken);
+      reply = WriteRead708(port, wrapped, wordsToRead, cancellationToken, responseTimeout);
     }
     catch (TimeoutException) when (firstAfterReopen)
     {
-      // Resync exactly as erection does (flush stale RX), settle, and retry once.
       try { port.PurgeInput(); } catch { }
       SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
-      response = WriteRequestAndRead(port, frame, carriers, responseTimeout, cancellationToken);
-    }
-
-    int word = 0;
-    for (int bit = 0; bit < 18; bit++)
-    {
-      if (response[bit] >= 0x80)
-      {
-        word |= 1 << bit;
-      }
+      SelectTentacle708(port, headPort, cancellationToken);
+      reply = WriteRead708(port, wrapped, wordsToRead, cancellationToken, responseTimeout);
     }
 
     SettleUsb(settleMilliseconds, cancellationToken);
-    return word & F18InstructionSet.WordMask;
+    return reply;
   }
 
-  // Write one request frame plus its 18-bit carrier train and read the fixed
-  // 18-byte reply. Each logical bit gets a pair of host-generated UART carriers;
-  // the node-708 helper mirrors the 0x00 carrier for a zero or the 0xFF carrier
-  // for a one, so every returned bit is clocked by the FTDI UART.
-  private byte[] WriteRequestAndRead(
-      NativeWindowsSerialPort port,
-      byte[] frame,
-      byte[] carriers,
-      int responseTimeout,
-      CancellationToken cancellationToken)
-  {
-    port.Write(frame);
-    WaitForTransmitDrain(port, frame.Length);
-    port.Write(carriers);
-    WaitForTransmitDrain(port, carriers.Length);
-    return ReadExactly(port, 18, responseTimeout, cancellationToken);
-  }
+  private int ReadA(KrakenNodeRoute route, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
+      Transact(route, KrakenProtocol.BuildReadA(), wordsToRead: 1, cancellationToken, settleMilliseconds)[0];
 
-  private void WriteSequence(IReadOnlyList<int> sequence, CancellationToken cancellationToken) =>
-      WriteSequence(_targetRoute, sequence, cancellationToken);
+  private void WriteA(KrakenNodeRoute route, int value, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
+      Transact(route, KrakenProtocol.BuildWriteA(value), wordsToRead: 1, cancellationToken, settleMilliseconds);
 
-  private void WriteSequence(
-      KrakenNodeRoute route,
-      IReadOnlyList<int> sequence,
-      CancellationToken cancellationToken,
-      int settleMilliseconds = OnlineTransactionSettleMilliseconds)
-  {
-    NativeWindowsSerialPort port = RequirePort();
-    cancellationToken.ThrowIfCancellationRequested();
-    int headPort = HeadPortFor(route);
-    byte[] frame = EncodeBootFrame(AsyncSerialContinuationAddress, headPort, sequence);
-    port.Write(frame);
-    WaitForTransmitDrain(port, frame.Length);
-    SettleUsb(settleMilliseconds, cancellationToken);
+  // Reads/writes the single word at whatever address is currently in A
+  // (non-incrementing '@'/'!'). Not part of the given formula set -- added
+  // to preserve arbitrary single-address access (e.g. IoAddress), which
+  // none of focus/writeA/.../readRStack cover on their own. Mirrors the old
+  // ReadMemoryInstruction/WriteMemoryInstruction opcode pairs exactly, just
+  // packed through KrakenProtocol's own Pack helper -- see KrakenProtocol.
+  private int ReadMemory(KrakenNodeRoute route, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
+      Transact(route, KrakenProtocol.BuildReadMemory(), wordsToRead: 1, cancellationToken, settleMilliseconds)[0];
 
-    // A write-only transaction consumes the reopen: clear the flag so a later
-    // read does not inherit the widened first-read-after-reopen timeout.
-    // Inert under HoldOpen (the flag is never set there).
-    _reopenedThisTransaction = false;
-  }
+  private void WriteMemory(KrakenNodeRoute route, int value, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
+      Transact(route, KrakenProtocol.BuildWriteMemory(value), wordsToRead: 1, cancellationToken, settleMilliseconds);
 
   private KrakenRamZeroCheckResult CheckRamZero(KrakenNodeRoute route, CancellationToken cancellationToken)
   {
-    int savedA = ReadWord(
-        route,
-        KrakenProtocol.BuildR1(route.Position, KrakenProtocol.ReadAInstruction),
-        cancellationToken,
-        CheckTransactionSettleMilliseconds);
+    int savedA = ReadA(route, cancellationToken, CheckTransactionSettleMilliseconds);
 
-    WriteSequence(
-        route,
-        KrakenProtocol.BuildW1(route.Position, KrakenProtocol.WriteAInstruction, 0),
-        cancellationToken,
-        CheckTransactionSettleMilliseconds);
+    WriteA(route, 0, cancellationToken, CheckTransactionSettleMilliseconds);
 
-    int savedRamZero = ReadWord(
-        route,
-        KrakenProtocol.BuildR1(route.Position, KrakenProtocol.ReadMemoryInstruction),
-        cancellationToken,
-        CheckTransactionSettleMilliseconds);
+    int savedRamZero = ReadMemory(route, cancellationToken, CheckTransactionSettleMilliseconds);
 
     int expected = route.Coordinate & F18InstructionSet.WordMask;
     int actual;
     bool replyCompleted = false;
     try
     {
-      WriteSequence(
-          route,
-          KrakenProtocol.BuildW1(route.Position, KrakenProtocol.WriteMemoryInstruction, expected),
-          cancellationToken,
-          CheckTransactionSettleMilliseconds);
+      WriteMemory(route, expected, cancellationToken, CheckTransactionSettleMilliseconds);
 
-      actual = ReadWord(
-          route,
-          KrakenProtocol.BuildR1(route.Position, KrakenProtocol.ReadMemoryInstruction),
-          cancellationToken,
-          CheckTransactionSettleMilliseconds);
+      actual = ReadMemory(route, cancellationToken, CheckTransactionSettleMilliseconds);
       replyCompleted = true;
     }
     finally
     {
       // Do not transmit cleanup frames after a read timeout: node 708 is
-      // then still inside the reply helper rather than its async boot ROM.
-      // The diagnostic stops after this failure. Reset/re-erection recovery is forbidden while Kraken is running.
+      // then still mid-dispatch rather than idle in 'main'. The diagnostic
+      // stops after this failure. Reset/re-erection recovery is forbidden while Kraken is running.
       if (replyCompleted)
       {
-        WriteSequence(
-            route,
-            KrakenProtocol.BuildW1(route.Position, KrakenProtocol.WriteMemoryInstruction, savedRamZero),
-            cancellationToken,
-            CheckTransactionSettleMilliseconds);
-        WriteSequence(
-            route,
-            KrakenProtocol.BuildW1(route.Position, KrakenProtocol.WriteAInstruction, savedA),
-            cancellationToken,
-            CheckTransactionSettleMilliseconds);
+        WriteMemory(route, savedRamZero, cancellationToken, CheckTransactionSettleMilliseconds);
+        WriteA(route, savedA, cancellationToken, CheckTransactionSettleMilliseconds);
       }
     }
 
@@ -777,68 +772,55 @@ internal sealed class KrakenSession : IAsyncDisposable
     return KrakenTopology.PortAddress(KrakenTopology.HeadCoordinate, tentacle.Nodes[0]);
   }
 
-  private static int[] BuildReplyProgram()
+  // Builds node 708's new sett/setn/w/r head program and resolves its
+  // dispatch addresses from the compiler's own symbol table. Unlike this
+  // project's other directly-booted node-708 probes, this program only fits
+  // node 708's 64-word RAM with control-transfer packing ENABLED (it
+  // compiles to ~74 words unpacked, exactly 64/64 packed), so its compiled
+  // layout is not assumed fixed the way theirs is -- see the identical
+  // remarks on Ga144Node708HeadProtocol, whose exact source this reuses.
+  private (int[] Program, Node708HeadAddresses Addresses) BuildHeadProgram()
   {
-    string source = $$"""
-            # 0 org
-            entry reply
+    const string source = """
+        # 0 org
+        entry main
 
-            : reply
-                io b!
-                lo
-                @
-                17 for
-                    dup dup 2/ 2* xor
-                    if send-one else send-zero then
-                    drop 2/
-                next
-                drop
-                lo
-                jump 0x0AE
-            ;
+        : main 18ibits drop >r ex main ;
+        : obit ( dwn-dw) !b over >r delay ;
+        : oword ( dw-d)  leap drop  leap drop leap drop  drop ;
+        : obyt ( dw-dwx)  then then then  3 obit drop
+            7 for dup 1 and 3 xor obit  drop 2/ next
+            2 obit ;
+        # 0 f18var n
+        : sett .loc 18ibits drop b! ;
+        : setn .loc 18ibits drop !n ;
+        : dec ( w-w') -1 . + ;
+        : w/r .loc
+          18ibits drop dec dup >r a!
+          18ibits drop dec dup >r
+          n dup if dec for
+            A[ @p >r ]] !b r> dup >r
+            dup dup . + . + 2* over . +
+            A[ @p !b unext ]] !b
+          next then
+          begin 18ibits drop !b next
+          n dup if dec for
+            A[ @p >r ]] !b a !b
+            A[ @b !p unext ]] !b
+          next then
+          begin @b oword next ;
+        .loc
+        """;
 
-            : hi 0x15557 !b ;
-            : lo 0x15556 !b ;
+    var compileService = new F18NodeCompilationService(_chip, _romLibrary, _romLibrary.SystemMacros);
+    F18NodeCompilationResult nodeResult = compileService.CompileNode(KrakenTopology.HeadCoordinate);
 
-            : wait-high
-                begin
-                    @b
-                    -if
-                        drop exit
-                    then
-                    drop
-                again
-            ;
+    if (!nodeResult.Rom.Success)
+    {
+      string romDiagnostics = string.Join(Environment.NewLine, nodeResult.Rom.Diagnostics.Select(item => item.ToString()));
+      throw new InvalidOperationException("Node 708's ROM source did not compile.\n" + romDiagnostics);
+    }
 
-            : wait-low
-                begin
-                    @b
-                    -if
-                        drop
-                    else
-                        drop exit
-                    then
-                again
-            ;
-
-            : consume wait-high wait-low ;
-
-            : send-zero
-                wait-high hi wait-low lo
-                consume
-            ;
-
-            : send-one
-                consume
-                wait-high hi wait-low lo
-            ;
-            """;
-
-    var compiler = new F18Compiler();
-    // Compile with backward-branch packing DISABLED. This hand-authored helper is
-    // booted to node 708 and its layout must stay byte-identical regardless of
-    // codegen changes; the ROM-matching slot packing (DB001 2.3.1) applies to
-    // ordinary source compilation, not to this fixed-layout runtime artifact.
     var options = new F18CompilerOptions
     {
       MemorySpace = F18MemorySpace.Ram,
@@ -846,28 +828,47 @@ internal sealed class KrakenSession : IAsyncDisposable
       MemoryBaseAddress = 0x000,
       MemoryWordCount = 64,
       IncludeCommonRomWords = true,
+      PredefinedConstants = nodeResult.Rom.Constants,
+      PredefinedSymbols = nodeResult.Rom.Symbols,
       MacroLookupScope = F18MacroLookupScope.UserAndSystem,
-      PackControlTransfers = false
+      PackControlTransfers = true
     };
-    F18CompileResult result = compiler.Compile(source, options);
+
+    F18CompileResult result = new F18Compiler().Compile(source, options);
     if (!result.Success)
     {
       string diagnostics = string.Join(Environment.NewLine, result.Diagnostics.Select(item => item.ToString()));
-      throw new InvalidOperationException("The node-708 Kraken reply helper did not compile.\n" + diagnostics);
+      throw new InvalidOperationException("The node-708 Kraken head protocol program did not compile.\n" + diagnostics);
     }
 
     if (result.Words.Count > 64)
     {
-      throw new InvalidOperationException($"The node-708 Kraken reply helper requires {result.Words.Count} RAM words; only 64 are available.");
+      throw new InvalidOperationException($"The node-708 Kraken head protocol program requires {result.Words.Count} RAM words; only 64 are available.");
     }
 
     if (result.EntryPoint != 0)
     {
       int selectedEntry = result.EntryPoint ?? -1;
-      throw new InvalidOperationException($"The node-708 Kraken reply helper must enter at RAM 0, but the compiler selected 0x{selectedEntry:X3}.");
+      throw new InvalidOperationException($"The node-708 Kraken head protocol program must enter at RAM 0, but the compiler selected 0x{selectedEntry:X3}.");
     }
 
-    return result.Words.Select(item => item & F18InstructionSet.WordMask).ToArray();
+    var addresses = new Node708HeadAddresses(
+        SetTentacle: RequireSymbol(result, "sett"),
+        SetNode: RequireSymbol(result, "setn"),
+        WriteRead: RequireSymbol(result, "w/r"));
+
+    int[] words = result.Words.Select(item => item & F18InstructionSet.WordMask).ToArray();
+    return (words, addresses);
+  }
+
+  private static int RequireSymbol(F18CompileResult result, string name)
+  {
+    if (!result.Symbols.TryGetValue(name, out F18ExportedSymbol? symbol) || symbol is null)
+    {
+      throw new InvalidOperationException($"The node-708 Kraken head protocol program did not define '{name}'.");
+    }
+
+    return symbol.Value;
   }
 
   private static void SendBootFrame(NativeWindowsSerialPort port, int completionAddress, int transferAddress, IReadOnlyList<int> payload)
@@ -917,7 +918,7 @@ internal sealed class KrakenSession : IAsyncDisposable
 
     if (offset != count)
     {
-      throw new TimeoutException($"Kraken reply timed out after receiving {offset} of {count} carrier-clocked bytes.");
+      throw new TimeoutException($"Kraken reply timed out after receiving {offset} of {count} bytes.");
     }
 
     return result;
@@ -1016,7 +1017,7 @@ internal sealed class KrakenSession : IAsyncDisposable
     // Kraken (the stock FTDI driver briefly asserts RTS during CreateFile, and
     // that glitch is a reset on the EVB). So a reopen cannot simply resume the
     // old session: the chip is blank again. Reopen the transport AND re-run the
-    // full erection sequence, rebuilding the node-708 reply helper and all
+    // full erection sequence, rebuilding the node-708 head program and all
     // tentacles before the pending transaction proceeds.
     //
     // A single CreateFile can transiently fail while the previous CloseHandle is
@@ -1054,7 +1055,7 @@ internal sealed class KrakenSession : IAsyncDisposable
         {
           // Port C: no RTS-to-RESET- wiring, so the Kraken survived the reopen.
           // Just resume the transport: settle briefly and flush any stale RX so
-          // the fixed 18-byte reply framing is clean for the next read.
+          // the word-transport framing is clean for the next read.
           SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
           try
           {
