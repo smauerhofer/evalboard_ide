@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-17T19:42:41.8545806
-      utcDateTime: 2026-08-17T19:42:41.8545806Z
-      localDateTime: 2026-08-17T21:42:41.8545806+02:00
-      date: 2026-08-17T00:00:00.0000000
-      day: 17
-      dayOfWeek: Monday
-      dayOfYear: 229
-      hour: 19
-      millisecond: 854
-      microsecond: 580
-      nanosecond: 600
-      minute: 42
+      dateTime: 2026-08-18T10:01:58.1252212
+      utcDateTime: 2026-08-18T10:01:58.1252212Z
+      localDateTime: 2026-08-18T12:01:58.1252212+02:00
+      date: 2026-08-18T00:00:00.0000000
+      day: 18
+      dayOfWeek: Tuesday
+      dayOfYear: 230
+      hour: 10
+      millisecond: 125
+      microsecond: 221
+      nanosecond: 200
+      minute: 1
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 41
-      ticks: 639225925618545806
-      utcTicks: 639225925618545806
-      timeOfDay: 19:42:41.8545806
+      second: 58
+      ticks: 639226441181252212
+      utcTicks: 639226441181252212
+      timeOfDay: 10:01:58.1252212
       year: 2026
   portB: 
   portC:
@@ -1725,8 +1725,114 @@ projects:
         parameterStack: []
     - coordinate: 708
       enabled: false
-      sourceCode: ''
-      ramWords: []
+      sourceCode: >+
+        # 0 org
+
+        entry main
+
+
+        : main 18ibits drop >r ex main;
+
+        : obit ( dwn-dw) !b over >r delay ;
+
+        : oword ( dw-d)  leap drop  leap drop leap drop  drop ;
+
+        : obyt ( dw-dwx)  then then then  3 obit drop
+            7 for dup 1 and 3 xor obit  drop 2/ next
+            2 obit ;
+        # 0 f18var n // target node(0..last node)
+
+        : sett .loc 18ibits drop b! ; // set b register, used to select tentacle
+
+        : setn .loc 18ibits drop !n ; // set node, used to select node in a tentacle
+
+        : dec ( w-w') -1 . + ;
+
+        : w/r .loc // writes & reads words from a node. at least 1 word must be written, at least 1 word must be read
+          18ibits drop dec dup >r a! // # of words to read -1
+          18ibits drop dec dup >r // # of words to write -1
+          // write pre
+          n dup if dec for
+            A[ @p >r ]] !b r> dup >r
+            dup dup . + . + 2* over . + // multiply by 6
+            A[ @p !b unext ]] !b
+          next then
+          //
+          begin 18ibits drop !b next
+          // write post
+          n dup if dec for
+            A[ @p >r ]] !b a !b
+            A[ @b !p unext ]] !b
+          next then
+          //
+          begin @b oword next ;
+        .loc
+
+      ramWords:
+      - 0x134CB
+      - 0x3A85D
+      - 0x11400
+      - 0x08FBA
+      - 0x114C8
+      - 0x13409
+      - 0x3B609
+      - 0x3B609
+      - 0x3A255
+      - 0x05603
+      - 0x00003
+      - 0x3BDBA
+      - 0x00007
+      - 0x25DFF
+      - 0x00001
+      - 0x00003
+      - 0x39603
+      - 0x3A7B2
+      - 0x1F40D
+      - 0x05703
+      - 0x00002
+      - 0x04235
+      - 0x05555
+      - 0x00000
+      - 0x134CB
+      - 0x3AB55
+      - 0x134CB
+      - 0x3B715
+      - 0x049F5
+      - 0x3FFFF
+      - 0x134CB
+      - 0x3B61C
+      - 0x248AA
+      - 0x134CB
+      - 0x3B61C
+      - 0x248B2
+      - 0x13416
+      - 0x2532F
+      - 0x1341C
+      - 0x2E9B2
+      - 0x05B9B
+      - 0x048B2
+      - 0x2ED92
+      - 0x3C9F2
+      - 0x36FB0
+      - 0x05B78
+      - 0x05B72
+      - 0x134CB
+      - 0x3BBB2
+      - 0x1F42F
+      - 0x13416
+      - 0x2533B
+      - 0x1341C
+      - 0x2E9B2
+      - 0x05B8A
+      - 0x048B2
+      - 0x09D22
+      - 0x01972
+      - 0x1F436
+      - 0x01605
+      - 0x1F43B
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
