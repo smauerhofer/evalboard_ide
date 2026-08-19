@@ -782,7 +782,16 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     // no boot nodes at all. Full success out to each tentacle's full depth
     // points at node 300 specifically; a failure at a similar depth here
     // points at a real capacity limit in the relay-wrapper mechanism itself.
-    int[] testTentacleNumbers = [2, 3];
+    // Tentacle 1 is now included too (it is expected to fail at position 31,
+    // node 300, exactly as always) purely so its per-position Elapsed timing
+    // for positions 0-30 can be compared directly against tentacles 2 and
+    // 3's successful pacing at equal or greater depth: the new protocol
+    // interleaves a live host round trip into every hop's construction
+    // (unlike old-method erection's single precomputed burst), so if there
+    // is a timing anomaly building up specifically on the path into node
+    // 300 -- as opposed to tentacle 1 simply behaving like the others right
+    // up until node 300 itself -- this is where it would show up.
+    int[] testTentacleNumbers = [1, 2, 3];
 
     VerifyBusy = true;
     VerifyStatus = "Running node 708 tentacle-depth test…";
@@ -793,7 +802,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
           endpoint.PortName, Chip, RomLibrary, testTentacleNumbers);
 
       var summary = new System.Text.StringBuilder();
-      summary.AppendLine("Sweeping 'focus'+'writeB' out to full depth on tentacles with no boot nodes (each gets its own fresh reset + reboot):");
+      summary.AppendLine("Sweeping 'focus'+'writeB' out to full depth on all three tentacles (each gets its own fresh reset + reboot). Tentacle 1 is expected to fail at position 31 (node 300); it is included so its per-position timing up to that point can be compared against tentacles 2 and 3's successful pacing:");
       summary.AppendLine();
 
       bool anyFailed = false;
@@ -807,18 +816,30 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
             ? $"Tentacle {tentacle.TentacleNumber} ({tentacle.TentacleName}): FAILED after {reached}/{tentacle.NodeCount} positions."
             : $"Tentacle {tentacle.TentacleNumber} ({tentacle.TentacleName}): OK, all {tentacle.NodeCount}/{tentacle.NodeCount} positions succeeded.");
 
+        List<Node708TentacleDepthPositionResult> succeeded = tentacle.Positions.Where(item => item.Succeeded).ToList();
+        if (succeeded.Count > 0)
+        {
+          double[] milliseconds = succeeded.Select(item => item.Elapsed.TotalMilliseconds).ToArray();
+          summary.AppendLine($"  Per-position timing over {milliseconds.Length} successful positions: min {milliseconds.Min():F0} ms, avg {milliseconds.Average():F0} ms, max {milliseconds.Max():F0} ms.");
+
+          int tailCount = Math.Min(5, succeeded.Count);
+          IEnumerable<string> tail = succeeded.Skip(succeeded.Count - tailCount)
+              .Select(item => $"pos {item.Position} (node {item.Coordinate:000}): {item.Elapsed.TotalMilliseconds:F0} ms");
+          summary.AppendLine($"  Last {tailCount} succeeded: {string.Join(", ", tail)}.");
+        }
+
         Node708TentacleDepthPositionResult? failure = tentacle.Positions.FirstOrDefault(item => !item.Succeeded);
         if (failure is not null)
         {
-          summary.AppendLine($"  First failure: position {failure.Position} (node {failure.Coordinate:000}) -- {failure.FailureMessage}");
+          summary.AppendLine($"  First failure: position {failure.Position} (node {failure.Coordinate:000}) after {failure.Elapsed.TotalMilliseconds:F0} ms -- {failure.FailureMessage}");
         }
 
         summary.AppendLine();
       }
 
       VerifyStatus = anyFailed
-          ? "Node 708 tentacle-depth test: at least one boot-node-free tentacle FAILED (see summary)."
-          : "Node 708 tentacle-depth test: both boot-node-free tentacles reached full depth.";
+          ? "Node 708 tentacle-depth test: at least one tentacle FAILED (see summary)."
+          : "Node 708 tentacle-depth test: all three tentacles reached full depth.";
 
       MessageBox.Show(
           summary.ToString(),
