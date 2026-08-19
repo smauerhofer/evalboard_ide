@@ -75,6 +75,16 @@
                         Padding="12,6"
                         Margin="8,0,0,0"
                         ToolTip="Tests node 708's newest 'setn' source, which now falls straight through into 'sett' with no ';' of its own (same fall-through idiom as readw/oword): boots main/obit/readw/oword/obyt/setn/sett only (w/r omitted), then calls 'setn' with a node-index value followed by a tentacle/port value, twice in a row, expecting TWO echoed words per call. Reports each call's outcome separately. Resets the chip once, so this is blocked while a Kraken is erected." />
+        <Button Content="Node 708 tentacle-depth test"
+                        Command="{Binding RunNode708TentacleDepthTestCommand}"
+                        Padding="12,6"
+                        Margin="8,0,0,0"
+                        ToolTip="Diagnoses the node-300 (tentacle 1, position 31) erection failure: sweeps the exact current on-chip relay-wrapper 'focus'+'writeB' sequence out to full depth on tentacles 2 (46 nodes) and 3 (47 nodes), both of which run past position 31 and contain no boot nodes. Full success on both points at node 300 specifically; a failure at a similar depth points at a real capacity limit in the relay mechanism instead. Each tentacle gets its own fresh chip reset, so this is blocked while a Kraken is erected." />
+        <Button Content="Node 708 alternate-relay test"
+                        Command="{Binding RunNode708AlternateRelayTestCommand}"
+                        Padding="12,6"
+                        Margin="8,0,0,0"
+                        ToolTip="Isolates whether the node-300 failure belongs to node 300 itself or to node 301's own relay-via-B mechanism: erects tentacle 1 for real out to node 301 (positions 0-30), then redirects node 301's 'writeB' to node 401 (a real neighbor, already independently verified at position 1) instead of node 300, and sends a final 'focus' at the SAME relay depth (31 layers) toward node 401. Success isolates the fault to node 300 itself; failure points upstream, at node 301's own relay or 31-layer construction on this path. Resets the chip once, so this is blocked while a Kraken is erected." />
         <TextBlock Text="{Binding VerifyStatus, Mode=OneWay}"
                            VerticalAlignment="Center"
                            Margin="10,0,0,0"

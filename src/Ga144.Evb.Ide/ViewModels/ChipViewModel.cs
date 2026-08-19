@@ -35,6 +35,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     RunNode708EchoTestCommand = new AsyncRelayCommand(RunNode708EchoTestAsync, () => !_verifyBusy);
     RunNode708DispatchTestCommand = new AsyncRelayCommand(RunNode708DispatchTestAsync, () => !_verifyBusy);
     RunNode708SetNodeTestCommand = new AsyncRelayCommand(RunNode708SetNodeTestAsync, () => !_verifyBusy);
+    RunNode708TentacleDepthTestCommand = new AsyncRelayCommand(RunNode708TentacleDepthTestAsync, () => !_verifyBusy);
+    RunNode708AlternateRelayTestCommand = new AsyncRelayCommand(RunNode708AlternateRelayTestAsync, () => !_verifyBusy);
     RebuildNodes();
   }
 
@@ -53,6 +55,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public AsyncRelayCommand RunNode708EchoTestCommand { get; }
   public AsyncRelayCommand RunNode708DispatchTestCommand { get; }
   public AsyncRelayCommand RunNode708SetNodeTestCommand { get; }
+  public AsyncRelayCommand RunNode708TentacleDepthTestCommand { get; }
+  public AsyncRelayCommand RunNode708AlternateRelayTestCommand { get; }
 
   public string VerifyStatus
   {
@@ -72,6 +76,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
         RunNode708EchoTestCommand.NotifyCanExecuteChanged();
         RunNode708DispatchTestCommand.NotifyCanExecuteChanged();
         RunNode708SetNodeTestCommand.NotifyCanExecuteChanged();
+        RunNode708TentacleDepthTestCommand.NotifyCanExecuteChanged();
+        RunNode708AlternateRelayTestCommand.NotifyCanExecuteChanged();
       }
     }
   }
@@ -725,6 +731,185 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       MessageBox.Show(
           $"Node 708 setn test could not complete:\n\n{exception.Message}",
           "Node 708 setn test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Error);
+    }
+    finally
+    {
+      VerifyBusy = false;
+    }
+  }
+
+  private async Task RunNode708TentacleDepthTestAsync()
+  {
+    if (_verifyBusy)
+    {
+      return;
+    }
+
+    if (KrakenController.HardwareErected)
+    {
+      MessageBox.Show(
+          "The tentacle-depth test cannot run while a Kraken is erected on this chip. "
+          + "This probe requires resetting node 708 (once per tentacle) to load its own "
+          + "test program, and a resident Kraken must never be reset. Remove the Kraken "
+          + "first, then try again.",
+          "Node 708 tentacle-depth test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
+    if (endpoint is null)
+    {
+      MessageBox.Show(
+          "No serial endpoint is assigned to this chip. Assign a COM port before running the tentacle-depth test.",
+          "Node 708 tentacle-depth test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    // Tentacles 2 (46 nodes) and 3 (47 nodes) both run past position 31 --
+    // where erection currently fails at node 300, tentacle 1 -- and contain
+    // no boot nodes at all. Full success out to each tentacle's full depth
+    // points at node 300 specifically; a failure at a similar depth here
+    // points at a real capacity limit in the relay-wrapper mechanism itself.
+    int[] testTentacleNumbers = [2, 3];
+
+    VerifyBusy = true;
+    VerifyStatus = "Running node 708 tentacle-depth test…";
+    try
+    {
+      var probe = new Ga144Node708TentacleDepthProbe();
+      Node708TentacleDepthReport report = await probe.RunTentacleDepthProbeAsync(
+          endpoint.PortName, Chip, RomLibrary, testTentacleNumbers);
+
+      var summary = new System.Text.StringBuilder();
+      summary.AppendLine("Sweeping 'focus'+'writeB' out to full depth on tentacles with no boot nodes (each gets its own fresh reset + reboot):");
+      summary.AppendLine();
+
+      bool anyFailed = false;
+      foreach (Node708TentacleDepthTentacleResult tentacle in report.Tentacles)
+      {
+        int reached = tentacle.Positions.Count(item => item.Succeeded);
+        bool tentacleFailed = reached < tentacle.NodeCount;
+        anyFailed |= tentacleFailed;
+
+        summary.AppendLine(tentacleFailed
+            ? $"Tentacle {tentacle.TentacleNumber} ({tentacle.TentacleName}): FAILED after {reached}/{tentacle.NodeCount} positions."
+            : $"Tentacle {tentacle.TentacleNumber} ({tentacle.TentacleName}): OK, all {tentacle.NodeCount}/{tentacle.NodeCount} positions succeeded.");
+
+        Node708TentacleDepthPositionResult? failure = tentacle.Positions.FirstOrDefault(item => !item.Succeeded);
+        if (failure is not null)
+        {
+          summary.AppendLine($"  First failure: position {failure.Position} (node {failure.Coordinate:000}) -- {failure.FailureMessage}");
+        }
+
+        summary.AppendLine();
+      }
+
+      VerifyStatus = anyFailed
+          ? "Node 708 tentacle-depth test: at least one boot-node-free tentacle FAILED (see summary)."
+          : "Node 708 tentacle-depth test: both boot-node-free tentacles reached full depth.";
+
+      MessageBox.Show(
+          summary.ToString(),
+          "Node 708 tentacle-depth test",
+          MessageBoxButton.OK,
+          anyFailed ? MessageBoxImage.Warning : MessageBoxImage.Information);
+    }
+    catch (Exception exception)
+    {
+      VerifyStatus = "Node 708 tentacle-depth test failed.";
+      MessageBox.Show(
+          $"Node 708 tentacle-depth test could not complete:\n\n{exception.Message}",
+          "Node 708 tentacle-depth test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Error);
+    }
+    finally
+    {
+      VerifyBusy = false;
+    }
+  }
+
+  private async Task RunNode708AlternateRelayTestAsync()
+  {
+    if (_verifyBusy)
+    {
+      return;
+    }
+
+    if (KrakenController.HardwareErected)
+    {
+      MessageBox.Show(
+          "The alternate-relay test cannot run while a Kraken is erected on this chip. "
+          + "This probe requires resetting node 708 to load its own test program, and a "
+          + "resident Kraken must never be reset. Remove the Kraken first, then try again.",
+          "Node 708 alternate-relay test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
+    if (endpoint is null)
+    {
+      MessageBox.Show(
+          "No serial endpoint is assigned to this chip. Assign a COM port before running the alternate-relay test.",
+          "Node 708 alternate-relay test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    VerifyBusy = true;
+    VerifyStatus = "Running node 708 alternate-relay test…";
+    try
+    {
+      var probe = new Ga144Node708AlternateRelayProbe();
+      Node708AlternateRelayReport report = await probe.RunAlternateRelayProbeAsync(endpoint.PortName, Chip, RomLibrary);
+
+      var summary = new System.Text.StringBuilder();
+      summary.AppendLine("Erects tentacle 1 for real out to node 301 (positions 0-29), focuses node 301 normally, then redirects its 'writeB' to node 401 (a real neighbor, already independently verified at position 1) instead of node 300, and sends a final 'focus' at the SAME relay depth (31 layers) toward node 401 instead:");
+      summary.AppendLine();
+      summary.AppendLine(report.ChainToNode301Succeeded
+          ? "Real chain to node 301 (positions 0-30): OK."
+          : $"Real chain to node 301: FAILED -- {report.ChainFailureMessage}");
+
+      if (report.ChainToNode301Succeeded)
+      {
+        summary.AppendLine(report.RedirectedWriteBSucceeded
+            ? "Redirected 'writeB' at node 301 (-> node 401 instead of node 300): OK."
+            : $"Redirected 'writeB' at node 301: FAILED -- {report.RedirectedWriteBFailureMessage}");
+      }
+
+      if (report.RedirectedWriteBSucceeded)
+      {
+        summary.AppendLine(report.AlternateFocusSucceeded
+            ? "Alternate-target 'focus' at node 401 via redirected node 301 (same depth as the real node-300 call): OK -- node 301's relay-via-B mechanism is healthy at this depth; the fault is isolated to node 300 itself."
+            : $"Alternate-target 'focus' at node 401 via redirected node 301: FAILED -- {report.AlternateFocusFailureMessage}\nThis means the fault is upstream of node 300 -- something about node 301's own relay, or 31-layer-deep construction on this path in general.");
+      }
+
+      bool overallSucceeded = report.ChainToNode301Succeeded && report.RedirectedWriteBSucceeded && report.AlternateFocusSucceeded;
+      VerifyStatus = overallSucceeded
+          ? "Node 708 alternate-relay test: node 301's relay is healthy -- fault isolated to node 300."
+          : "Node 708 alternate-relay test: see summary for where it broke.";
+
+      MessageBox.Show(
+          summary.ToString(),
+          "Node 708 alternate-relay test",
+          MessageBoxButton.OK,
+          overallSucceeded ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+    catch (Exception exception)
+    {
+      VerifyStatus = "Node 708 alternate-relay test failed.";
+      MessageBox.Show(
+          $"Node 708 alternate-relay test could not complete:\n\n{exception.Message}",
+          "Node 708 alternate-relay test",
           MessageBoxButton.OK,
           MessageBoxImage.Error);
     }

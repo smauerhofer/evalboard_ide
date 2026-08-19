@@ -52,6 +52,24 @@ internal sealed class KrakenSession : IAsyncDisposable
   // that are not perfectly synchronized with node 708's own reset release).
   private const int BootNodeReasonablenessCheckSettleMilliseconds = 10;
 
+  // TEMPORARY DIAGNOSTIC (not a real fix): comparing against the old,
+  // pre-sett/w/r erection code showed every one of its per-position
+  // focus/writeB calls was pure fire-and-forget -- it never read or verified
+  // any reply during erection at all, for any node including node 300. Its
+  // own eventual success reaching node 300 was only ever confirmed LATER, by
+  // Check Kraken, through a structurally different carrier-clocked read. So
+  // old code reaching node 300 never actually proved node 300 replies to a
+  // 'focus'-shaped request within any particular time bound -- it only
+  // proved node 300 eventually becomes usable. Our new 'w/r' blocks on every
+  // single erection hop with a 1 s timeout (ResponseTimeoutMilliseconds),
+  // something old code never did once. Widen ONLY erection's own response
+  // timeout, well past that 1 s bound, purely to observe whether node 300's
+  // reply to 'focus' eventually shows up late (pointing at some node-300-
+  // specific delay unrelated to the datasheet's ~4.1 mS boot check) or never
+  // arrives at all (pointing at a real relay/protocol incompatibility).
+  // Revert once hardware testing answers that question either way.
+  private const int ErectionDiagnosticResponseTimeoutMilliseconds = 8_000;
+
   // Deliberately pace small FTDI transfers. The F18/Kraken side is much
   // faster than the USB VCP path, so there is no benefit in immediately
   // issuing the next host transaction. A small quiet interval substantially
@@ -584,6 +602,10 @@ internal sealed class KrakenSession : IAsyncDisposable
     // before the very first focus/writeB call below.
     Thread.Sleep(BootNodeReasonablenessCheckSettleMilliseconds);
 
+    // Reversing this to OrderByDescending (tentacle 1 last, after ~93 other
+    // successful hops) was a temporary diagnostic -- it made no difference
+    // (node 300 failed identically either way), ruling out any accumulated
+    // warm-up/ordering effect. Reverted to the normal order.
     foreach (KrakenTentacleConfiguration tentacle in _configuration.Tentacles.OrderBy(item => item.Number))
     {
       int tentacleHeadPort = KrakenTopology.PortAddress(KrakenTopology.HeadCoordinate, tentacle.Nodes[0]);
@@ -611,18 +633,33 @@ internal sealed class KrakenSession : IAsyncDisposable
 
         // Erect this node's own focus first (anchor its P on its incoming
         // port), reaching it by relaying through the 'position' nodes ahead
-        // of it that are already erected. focus's own trailing '!p' sends
-        // back whatever was on that node's T (destroying it) -- not
-        // meaningful data, just the 1 real reply word every relay hop
-        // requires; discarded here as a pure sync pulse.
+        // of it that are already erected. focus's own trailing '!p' now
+        // sends back the SAME port value we sent as the payload (see the
+        // 'dup' added to KrakenProtocol.BuildFocus), so the reply is a real
+        // acknowledgment -- verified below -- not just a bare "something
+        // came back" signal.
         int incomingPort = KrakenTopology.PortAddress(coordinate, previous);
         // Raw, un-wrapped leaf -- node 708's own 'w/r' now builds the relay
         // wrapper on-chip from 'position' (see WriteRead708's remarks), so
         // this must NOT also go through KrakenProtocol.BuildTentacle.
-        _ = WriteRead708(
+        // responseTimeoutMilliseconds widened to
+        // ErectionDiagnosticResponseTimeoutMilliseconds -- see that
+        // constant's remarks -- purely to observe whether a slow-to-reply
+        // node (e.g. node 300) eventually answers late instead of failing
+        // fast at the usual 1 s bound.
+        int[] focusReply = WriteRead708(
             port, KrakenProtocol.BuildFocus(incomingPort), wordsToRead: 1, position,
             context: $"erecting node {coordinate:000} (tentacle {tentacle.Number} position {position}), 'focus' -> port 0x{incomingPort:X3}",
-            cancellationToken);
+            cancellationToken, ErectionDiagnosticResponseTimeoutMilliseconds);
+
+        int expectedFocusReply = incomingPort & F18InstructionSet.WordMask;
+        if (focusReply[0] != expectedFocusReply)
+        {
+          throw new IOException(
+              $"Kraken focus reply mismatch (erecting node {coordinate:000} (tentacle {tentacle.Number} position {position})): " +
+              $"sent port 0x{expectedFocusReply:X5}, node echoed 0x{focusReply[0]:X5}. " +
+              "'focus' now echoes its own payload (KrakenProtocol.BuildFocus's 'dup'), so this means the word arrived but was corrupted or misrouted, not that it never arrived.");
+        }
 
         // Then this node's B, so it can relay further out once the next
         // node's focus is erected. The last node in a tentacle has nothing
@@ -633,7 +670,7 @@ internal sealed class KrakenSession : IAsyncDisposable
         _ = WriteRead708(
             port, KrakenProtocol.BuildWriteB(b), wordsToRead: 1, position,
             context: $"erecting node {coordinate:000} (tentacle {tentacle.Number} position {position}), 'writeB' -> 0x{b:X3}",
-            cancellationToken);
+            cancellationToken, ErectionDiagnosticResponseTimeoutMilliseconds);
       }
     }
 
