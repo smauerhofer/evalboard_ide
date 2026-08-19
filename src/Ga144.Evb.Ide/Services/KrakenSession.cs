@@ -35,6 +35,23 @@ internal sealed class KrakenSession : IAsyncDisposable
   private const int ResetReleaseMilliseconds = 1;
   private const int ResponseTimeoutMilliseconds = 1_000;
 
+  // Every other boot node in the array (e.g. node 300, a Synchronous Boot
+  // node per DB002 5.5.6) reacts to a high level on its OWN GPIO 17 by
+  // running its ROM's reasonableness check for a boot frame, DURING WHICH IT
+  // DOES NOT RESPOND ON ITS COMM PORTS AT ALL (DB002 5.5.5/5.5.6: "This
+  // process can consume considerable time during which the node will not
+  // respond to stimuli on its comm ports"). DB002 3.3.2/3.3.3 gives the
+  // actual bound for both the Synchronous and Asynchronous boot ROMs: the
+  // check runs for up to 262144 cycles of a timing loop (~4.1 mS) before the
+  // F18 gives up and reverts to 'warm' -- ordinary port execution, which is
+  // what the tentacle relay needs it to be in. If Kraken tries to focus a
+  // boot node before its own check has timed out, that node is simply not
+  // listening yet and the focus call gets no reply -- indistinguishable on
+  // the wire from any other silent timeout. Pad well past the 4.1 mS
+  // datasheet bound for safety margin (reset-pulse jitter, GPIO 17 states
+  // that are not perfectly synchronized with node 708's own reset release).
+  private const int BootNodeReasonablenessCheckSettleMilliseconds = 10;
+
   // Deliberately pace small FTDI transfers. The F18/Kraken side is much
   // faster than the USB VCP path, so there is no benefit in immediately
   // issuing the next host transaction. A small quiet interval substantially
@@ -558,6 +575,14 @@ internal sealed class KrakenSession : IAsyncDisposable
     (int[] headProgram, Node708HeadAddresses addresses) = BuildHeadProgram();
     SendBootFrame(port, 0x000, 0x000, headProgram);
     _headAddresses = addresses;
+
+    // Give every OTHER boot node in the array (not just 708) time to run its
+    // own reasonableness check and revert to 'warm' before the tentacle
+    // relay tries to focus it -- see BootNodeReasonablenessCheckSettleMilliseconds's
+    // own remarks. This must happen here, after node 708 is already up and
+    // running 'main' (so 708 itself is not what we are waiting on) and
+    // before the very first focus/writeB call below.
+    Thread.Sleep(BootNodeReasonablenessCheckSettleMilliseconds);
 
     foreach (KrakenTentacleConfiguration tentacle in _configuration.Tentacles.OrderBy(item => item.Number))
     {
