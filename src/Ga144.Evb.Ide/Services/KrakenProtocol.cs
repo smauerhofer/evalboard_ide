@@ -30,16 +30,25 @@ internal static class KrakenProtocol
   // host and the target.
 
   /// <summary>
-  /// 'focus = A[ @p >r !p ; ], port': jumps the currently focused node's own
-  /// P to the given address -- typically a compass port address, which
-  /// re-anchors the node to read/write through that port instead of local
-  /// RAM, but any 10-bit address works (see <see cref="KrakenSession"/>'s
-  /// use of this as the new Jump primitive). The '!p' sends back whatever
-  /// was on top of the data stack before this ran -- not meaningful data,
-  /// but a genuine 1-word reply every relay wrap needs, at the cost of
-  /// destroying the old top of stack (confirmed intentional).
+  /// 'focus = A[ @p >r ; ], port, A[ !p ]': jumps the currently focused
+  /// node's own P to the given address -- typically a compass port address,
+  /// which re-anchors the node to read/write through that port instead of
+  /// local RAM, but any 10-bit address works (see <see cref="KrakenSession"/>'s
+  /// use of this as the new Jump primitive) -- THEN sends the 1-word reply.
+  /// Order matters: '@p >r ;' fetches 'port' and immediately returns, which
+  /// is what actually performs the jump (';' pops R, freshly loaded by '>r',
+  /// into P) -- so P has already moved to the new address by the time the
+  /// separate, later 'A[ !p ]' word runs, and that reply therefore goes out
+  /// via the NEWLY focused port, not the old one. The original single packed
+  /// word 'A[ @p >r !p ; ]' packed '!p' into the SAME word as the jump, so it
+  /// ran before ';' had a chance to move P -- the reply left via whatever P
+  /// pointed at before focusing, one hop short of where it needed to go.
+  /// '!p' still sends back whatever was on top of the data stack before this
+  /// ran -- not meaningful data, but a genuine 1-word reply every relay wrap
+  /// needs, at the cost of destroying the old top of stack (confirmed
+  /// intentional, unchanged from before).
   /// </summary>
-  public static int[] BuildFocus(int port) => [Pack("@p", ">r", "!p", ";"), Mask(port)];
+  public static int[] BuildFocus(int port) => [Pack("@p", ">r", ";"), Mask(port), Pack("!p")];
 
   /// <summary>'writeA = A[ @p dup a! !p ]], value': sets A, echoes it back (1 reply word).</summary>
   public static int[] BuildWriteA(int value) => [Pack("@p", "dup", "a!", "!p"), Mask(value)];
