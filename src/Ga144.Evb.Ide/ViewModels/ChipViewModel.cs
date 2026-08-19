@@ -37,6 +37,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     RunNode708SetNodeTestCommand = new AsyncRelayCommand(RunNode708SetNodeTestAsync, () => !_verifyBusy);
     RunNode708TentacleDepthTestCommand = new AsyncRelayCommand(RunNode708TentacleDepthTestAsync, () => !_verifyBusy);
     RunNode708AlternateRelayTestCommand = new AsyncRelayCommand(RunNode708AlternateRelayTestAsync, () => !_verifyBusy);
+    RunNode708BypassTestCommand = new AsyncRelayCommand(RunNode708BypassTestAsync, () => !_verifyBusy);
     RebuildNodes();
   }
 
@@ -57,6 +58,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public AsyncRelayCommand RunNode708SetNodeTestCommand { get; }
   public AsyncRelayCommand RunNode708TentacleDepthTestCommand { get; }
   public AsyncRelayCommand RunNode708AlternateRelayTestCommand { get; }
+  public AsyncRelayCommand RunNode708BypassTestCommand { get; }
 
   public string VerifyStatus
   {
@@ -78,6 +80,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
         RunNode708SetNodeTestCommand.NotifyCanExecuteChanged();
         RunNode708TentacleDepthTestCommand.NotifyCanExecuteChanged();
         RunNode708AlternateRelayTestCommand.NotifyCanExecuteChanged();
+        RunNode708BypassTestCommand.NotifyCanExecuteChanged();
       }
     }
   }
@@ -910,6 +913,90 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       MessageBox.Show(
           $"Node 708 alternate-relay test could not complete:\n\n{exception.Message}",
           "Node 708 alternate-relay test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Error);
+    }
+    finally
+    {
+      VerifyBusy = false;
+    }
+  }
+
+  private async Task RunNode708BypassTestAsync()
+  {
+    if (_verifyBusy)
+    {
+      return;
+    }
+
+    if (KrakenController.HardwareErected)
+    {
+      MessageBox.Show(
+          "The bypass test cannot run while a Kraken is erected on this chip. "
+          + "This probe requires resetting node 708 to load its own test program, and a "
+          + "resident Kraken must never be reset. Remove the Kraken first, then try again.",
+          "Node 708 bypass test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
+    if (endpoint is null)
+    {
+      MessageBox.Show(
+          "No serial endpoint is assigned to this chip. Assign a COM port before running the bypass test.",
+          "Node 708 bypass test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    VerifyBusy = true;
+    VerifyStatus = "Running node 708 bypass test…";
+    try
+    {
+      var probe = new Ga144Node708BypassProbe();
+      Node708BypassProbeReport report = await probe.RunBypassProbeAsync(endpoint.PortName, Chip, RomLibrary);
+
+      var summary = new System.Text.StringBuilder();
+      summary.AppendLine("Erects tentacle 1 for real out to node 400 (positions 0-19), focuses node 400 normally, then redirects its 'writeB' south to node 300 (instead of east, to node 401) and sends a final 'focus' at that new relay depth (21 layers) toward node 300 -- reaching it through node 400 instead of through node 301, the real, suspect path:");
+      summary.AppendLine();
+      summary.AppendLine(report.ChainToNode400Succeeded
+          ? "Real chain to node 400 (positions 0-20): OK."
+          : $"Real chain to node 400: FAILED -- {report.ChainFailureMessage}");
+
+      if (report.ChainToNode400Succeeded)
+      {
+        summary.AppendLine(report.RedirectedWriteBSucceeded
+            ? "Redirected 'writeB' at node 400 (-> node 300 instead of node 401): OK."
+            : $"Redirected 'writeB' at node 400: FAILED -- {report.RedirectedWriteBFailureMessage}");
+      }
+
+      if (report.RedirectedWriteBSucceeded)
+      {
+        summary.AppendLine(report.BypassFocusSucceeded
+            ? "Bypass 'focus' at node 300 via redirected node 400 (bypassing node 301 entirely): OK -- node 300 is healthy and reachable; the fault is isolated to node 301's own relay mechanism."
+            : $"Bypass 'focus' at node 300 via redirected node 400: FAILED -- {report.BypassFocusFailureMessage}\nThis means node 300 cannot be relayed into from this direction either, so node 301 is not the (sole) explanation.");
+      }
+
+      bool overallSucceeded = report.ChainToNode400Succeeded && report.RedirectedWriteBSucceeded && report.BypassFocusSucceeded;
+      VerifyStatus = overallSucceeded
+          ? "Node 708 bypass test: node 300 reachable via node 400 -- fault isolated to node 301."
+          : "Node 708 bypass test: see summary for where it broke.";
+
+      MessageBox.Show(
+          summary.ToString(),
+          "Node 708 bypass test",
+          MessageBoxButton.OK,
+          overallSucceeded ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+    catch (Exception exception)
+    {
+      VerifyStatus = "Node 708 bypass test failed.";
+      MessageBox.Show(
+          $"Node 708 bypass test could not complete:\n\n{exception.Message}",
+          "Node 708 bypass test",
           MessageBoxButton.OK,
           MessageBoxImage.Error);
     }
