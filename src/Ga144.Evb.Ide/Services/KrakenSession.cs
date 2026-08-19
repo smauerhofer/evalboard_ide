@@ -953,7 +953,7 @@ internal sealed class KrakenSession : IAsyncDisposable
         entry main
         : main 18ibits drop >r ex main;
         : obit ( dwn-dw) !b over >r delay ;
-        : readw ( -dwx) dup 18ibits drop over over
+        : readw ( -dw) dup 18ibits drop over over
         : oword ( dw-d)  leap drop  leap drop leap drop  drop ;
         : obyt ( dw-dwx)  then then then  3 obit drop
             7 for dup 1 and 3 xor obit  drop 2/ next
@@ -963,17 +963,18 @@ internal sealed class KrakenSession : IAsyncDisposable
           readw drop >r // # of words to read -1
           readw drop dup >r // # of words to write -1
           // write pre
-          readw drop -if else for
+          ( w1)
+          readw drop -if else >r over begin ( d w1)
             A[ @p >r ]] !
             r> dup >r // get current node
-            dup dup . + . + 2* over . + ! // multiply by 6
+            dup dup . + . + 2* over . + ! // multiply by 6 + #write-1
             A[ @p !b unext ]] !
           next then
           //
           begin readw drop ! next
           // write post
           ( d)
-          readw drop -if drop else for
+          readw drop -if drop else for ( d)
             A[ @p >r ]] !
             r> r> dup ! >r >r  // send # of read words -1
             A[ @b !p unext ]] !
