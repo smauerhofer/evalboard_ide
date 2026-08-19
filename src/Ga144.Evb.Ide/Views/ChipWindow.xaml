@@ -39,61 +39,70 @@
                        Foreground="#555"
                        TextWrapping="Wrap" />
 
-      <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-        <Button Content="Check Kraken"
-                        Click="OnCheckKrakenClick"
-                        IsEnabled="True"
-                        Padding="12,6"
-                        Margin="0,0,8,0"
-                        ToolTip="Erect Kraken once if necessary, then verify RAM[0] outward from node 708. The COM endpoint remains reserved, but its native handle is parked whenever no Kraken operation is active." />
-        <Button Content="{Binding KrakenButtonText, Mode=OneWay}"
-                        Command="{Binding ToggleKrakenCommand}"
-                        Padding="12,6"
-                        ToolTip="Install or remove the project-side Kraken topology on this Host or Target GA144." />
-        <Button Content="Verify all node ROMs"
-                        Command="{Binding VerifyAllRomsCommand}"
-                        Padding="12,6"
-                        Margin="8,0,0,0"
-                        ToolTip="Compile each node's ROM and compare it against the ROM read from the chip via Kraken. Erects once if needed; reads all 143 reachable nodes through one session. Node 708 (Kraken head) is skipped." />
-        <Button Content="Verify node 708 ROM"
-                        Command="{Binding VerifyNode708RomCommand}"
-                        Padding="12,6"
-                        Margin="8,0,0,0"
-                        ToolTip="Direct-boot readback of node 708's own ROM (it cannot be read through Kraken). Resets the chip once to load a one-shot dump-rom program, so this is blocked while a Kraken is erected -- remove the Kraken first." />
-        <Button Content="Node 708 echo test"
-                        Command="{Binding RunNode708EchoTestCommand}"
-                        Padding="12,6"
-                        Margin="8,0,0,0"
-                        ToolTip="Tests node 708's own direct-UART obit/oword/obyt/echo routines: sends one async-encoded word, node 708 receives it via its own 18ibits/sync and transmits it straight back as real, self-timed UART bytes (no host carrier clocking). Requires node 708's ROM to define '18ibits' and 'delay'. Resets the chip once, so this is blocked while a Kraken is erected." />
-        <Button Content="Node 708 dispatch test"
-                        Command="{Binding RunNode708DispatchTestCommand}"
-                        Padding="12,6"
-                        Margin="8,0,0,0"
-                        ToolTip="Tests node 708's own main/sett dispatch loop specifically (not obit/oword/obyt/readw, already proven by the echo test): boots main/sett only, then calls 'sett' with the same port value twice in a row over Kraken's own NativeWindowsSerialPort transport, reporting each call's outcome separately. Built to isolate a hardware finding: the same sett call that succeeds once times out on a second call, unrelated to w/r's complexity. Resets the chip once, so this is blocked while a Kraken is erected." />
-        <Button Content="Node 708 setn test"
-                        Command="{Binding RunNode708SetNodeTestCommand}"
-                        Padding="12,6"
-                        Margin="8,0,0,0"
-                        ToolTip="Tests node 708's newest 'setn' source, which now falls straight through into 'sett' with no ';' of its own (same fall-through idiom as readw/oword): boots main/obit/readw/oword/obyt/setn/sett only (w/r omitted), then calls 'setn' with a node-index value followed by a tentacle/port value, twice in a row, expecting TWO echoed words per call. Reports each call's outcome separately. Resets the chip once, so this is blocked while a Kraken is erected." />
-        <Button Content="Node 708 tentacle-depth test"
-                        Command="{Binding RunNode708TentacleDepthTestCommand}"
-                        Padding="12,6"
-                        Margin="8,0,0,0"
-                        ToolTip="Diagnoses the node-300 (tentacle 1, position 31) erection failure: sweeps the exact current on-chip relay-wrapper 'focus'+'writeB' sequence out to full depth on tentacles 2 (46 nodes) and 3 (47 nodes), both of which run past position 31 and contain no boot nodes. Full success on both points at node 300 specifically; a failure at a similar depth points at a real capacity limit in the relay mechanism instead. Each tentacle gets its own fresh chip reset, so this is blocked while a Kraken is erected." />
-        <Button Content="Node 708 alternate-relay test"
-                        Command="{Binding RunNode708AlternateRelayTestCommand}"
-                        Padding="12,6"
-                        Margin="8,0,0,0"
-                        ToolTip="Isolates whether the node-300 failure belongs to node 300 itself or to node 301's own relay-via-B mechanism: erects tentacle 1 for real out to node 301 (positions 0-30), then redirects node 301's 'writeB' to node 401 (a real neighbor, already independently verified at position 1) instead of node 300, and sends a final 'focus' at the SAME relay depth (31 layers) toward node 401. Success isolates the fault to node 300 itself; failure points upstream, at node 301's own relay or 31-layer construction on this path. Resets the chip once, so this is blocked while a Kraken is erected." />
-        <Button Content="Node 708 bypass test"
-                        Command="{Binding RunNode708BypassTestCommand}"
-                        Padding="12,6"
-                        Margin="8,0,0,0"
-                        ToolTip="Follows up on the alternate-relay test: reaches node 300 through node 400 (north neighbor, already reached at position 20) instead of through node 301 (east neighbor, the real, suspect path). Erects tentacle 1 for real out to node 400, redirects its 'writeB' south to node 300 instead of east to node 401, then sends a final 'focus' at that new depth (21 layers) toward node 300. Success means node 300 is healthy and reachable, isolating the fault to node 301; failure means node 300 cannot be reached from any direction. Resets the chip once, so this is blocked while a Kraken is erected." />
-        <TextBlock Text="{Binding VerifyStatus, Mode=OneWay}"
-                           VerticalAlignment="Center"
-                           Margin="10,0,0,0"
-                           Foreground="#555" />
+      <StackPanel Grid.Column="2" Orientation="Vertical" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal">
+          <Button Content="Check Kraken"
+                          Click="OnCheckKrakenClick"
+                          IsEnabled="True"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Erect Kraken once if necessary, then verify RAM[0] outward from node 708. The COM endpoint remains reserved, but its native handle is parked whenever no Kraken operation is active." />
+          <Button Content="{Binding KrakenButtonText, Mode=OneWay}"
+                          Command="{Binding ToggleKrakenCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Install or remove the project-side Kraken topology on this Host or Target GA144." />
+          <Button Content="Verify all node ROMs"
+                          Command="{Binding VerifyAllRomsCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Compile each node's ROM and compare it against the ROM read from the chip via Kraken. Erects once if needed; reads all 143 reachable nodes through one session. Node 708 (Kraken head) is skipped." />
+          <Button Content="Verify node 708 ROM"
+                          Command="{Binding VerifyNode708RomCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Direct-boot readback of node 708's own ROM (it cannot be read through Kraken). Resets the chip once to load a one-shot dump-rom program, so this is blocked while a Kraken is erected -- remove the Kraken first." />
+          <Button Content="Node 708 echo test"
+                          Command="{Binding RunNode708EchoTestCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Tests node 708's own direct-UART obit/oword/obyt/echo routines: sends one async-encoded word, node 708 receives it via its own 18ibits/sync and transmits it straight back as real, self-timed UART bytes (no host carrier clocking). Requires node 708's ROM to define '18ibits' and 'delay'. Resets the chip once, so this is blocked while a Kraken is erected." />
+          <Button Content="Node 708 dispatch test"
+                          Command="{Binding RunNode708DispatchTestCommand}"
+                          Padding="12,6"
+                          ToolTip="Tests node 708's own main/sett dispatch loop specifically (not obit/oword/obyt/readw, already proven by the echo test): boots main/sett only, then calls 'sett' with the same port value twice in a row over Kraken's own NativeWindowsSerialPort transport, reporting each call's outcome separately. Built to isolate a hardware finding: the same sett call that succeeds once times out on a second call, unrelated to w/r's complexity. Resets the chip once, so this is blocked while a Kraken is erected." />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+          <Button Content="Node 708 setn test"
+                          Command="{Binding RunNode708SetNodeTestCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Tests node 708's newest 'setn' source, which now falls straight through into 'sett' with no ';' of its own (same fall-through idiom as readw/oword): boots main/obit/readw/oword/obyt/setn/sett only (w/r omitted), then calls 'setn' with a node-index value followed by a tentacle/port value, twice in a row, expecting TWO echoed words per call. Reports each call's outcome separately. Resets the chip once, so this is blocked while a Kraken is erected." />
+          <Button Content="Node 708 tentacle-depth test"
+                          Command="{Binding RunNode708TentacleDepthTestCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Diagnoses the node-300 (tentacle 1, position 31) erection failure: sweeps the exact current on-chip relay-wrapper 'focus'+'writeB' sequence out to full depth on tentacles 2 (46 nodes) and 3 (47 nodes), both of which run past position 31 and contain no boot nodes. Full success on both points at node 300 specifically; a failure at a similar depth points at a real capacity limit in the relay mechanism instead. Each tentacle gets its own fresh chip reset, so this is blocked while a Kraken is erected." />
+          <Button Content="Node 708 alternate-relay test"
+                          Command="{Binding RunNode708AlternateRelayTestCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Isolates whether the node-300 failure belongs to node 300 itself or to node 301's own relay-via-B mechanism: erects tentacle 1 for real out to node 301 (positions 0-30), then redirects node 301's 'writeB' to node 401 (a real neighbor, already independently verified at position 1) instead of node 300, and sends a final 'focus' at the SAME relay depth (31 layers) toward node 401. Success isolates the fault to node 300 itself; failure points upstream, at node 301's own relay or 31-layer construction on this path. Resets the chip once, so this is blocked while a Kraken is erected." />
+          <Button Content="Node 708 bypass test"
+                          Command="{Binding RunNode708BypassTestCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Follows up on the alternate-relay test: reaches node 300 through node 400 (north neighbor, already reached at position 20) instead of through node 301 (east neighbor, the real, suspect path). Erects tentacle 1 for real out to node 400, redirects its 'writeB' south to node 300 instead of east to node 401, then sends a final 'focus' at that new depth (21 layers) toward node 300. Success means node 300 is healthy and reachable, isolating the fault to node 301; failure means node 300 cannot be reached from any direction. Resets the chip once, so this is blocked while a Kraken is erected." />
+          <Button Content="Node 708 legacy erection test"
+                          Command="{Binding RunLegacyKrakenErectionTestCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Erects the real, full three-tentacle Kraken using the OLD, pre-redesign method ported directly from the uploaded old-code zip (fire-and-forget focus/writeB boot frames, no reply checked during erection), then performs two OLD-style carrier-clocked reads: node 301 (control) and node 300 (target). Tests whether 'the old code worked' actually holds under a real read, not just an unverified erection. Self-contained -- does not mark any Kraken as installed/live, since node 708 ends up running the old reply program. Resets the chip once, so this is blocked while a Kraken is erected." />
+          <TextBlock Text="{Binding VerifyStatus, Mode=OneWay}"
+                             VerticalAlignment="Center"
+                             Margin="10,0,0,0"
+                             Foreground="#555" />
+        </StackPanel>
       </StackPanel>
     </Grid>
 

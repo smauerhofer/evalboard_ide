@@ -38,6 +38,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     RunNode708TentacleDepthTestCommand = new AsyncRelayCommand(RunNode708TentacleDepthTestAsync, () => !_verifyBusy);
     RunNode708AlternateRelayTestCommand = new AsyncRelayCommand(RunNode708AlternateRelayTestAsync, () => !_verifyBusy);
     RunNode708BypassTestCommand = new AsyncRelayCommand(RunNode708BypassTestAsync, () => !_verifyBusy);
+    RunLegacyKrakenErectionTestCommand = new AsyncRelayCommand(RunLegacyKrakenErectionTestAsync, () => !_verifyBusy);
     RebuildNodes();
   }
 
@@ -59,6 +60,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public AsyncRelayCommand RunNode708TentacleDepthTestCommand { get; }
   public AsyncRelayCommand RunNode708AlternateRelayTestCommand { get; }
   public AsyncRelayCommand RunNode708BypassTestCommand { get; }
+  public AsyncRelayCommand RunLegacyKrakenErectionTestCommand { get; }
 
   public string VerifyStatus
   {
@@ -81,6 +83,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
         RunNode708TentacleDepthTestCommand.NotifyCanExecuteChanged();
         RunNode708AlternateRelayTestCommand.NotifyCanExecuteChanged();
         RunNode708BypassTestCommand.NotifyCanExecuteChanged();
+        RunLegacyKrakenErectionTestCommand.NotifyCanExecuteChanged();
       }
     }
   }
@@ -997,6 +1000,87 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       MessageBox.Show(
           $"Node 708 bypass test could not complete:\n\n{exception.Message}",
           "Node 708 bypass test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Error);
+    }
+    finally
+    {
+      VerifyBusy = false;
+    }
+  }
+
+  private async Task RunLegacyKrakenErectionTestAsync()
+  {
+    if (_verifyBusy)
+    {
+      return;
+    }
+
+    if (KrakenController.HardwareErected)
+    {
+      MessageBox.Show(
+          "The legacy erection test cannot run while a Kraken is erected on this chip. "
+          + "This probe requires resetting node 708 to load the OLD reply program, and a "
+          + "resident Kraken must never be reset. Remove the Kraken first, then try again.",
+          "Node 708 legacy erection test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
+    if (endpoint is null)
+    {
+      MessageBox.Show(
+          "No serial endpoint is assigned to this chip. Assign a COM port before running the legacy erection test.",
+          "Node 708 legacy erection test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    VerifyBusy = true;
+    VerifyStatus = "Running node 708 legacy erection test…";
+    try
+    {
+      var probe = new Ga144LegacyKrakenErectionProbe();
+      Node708LegacyKrakenReport report = await probe.RunLegacyErectionProbeAsync(endpoint.PortName);
+
+      var summary = new System.Text.StringBuilder();
+      summary.AppendLine("Erects the real, full three-tentacle Kraken using the OLD, pre-redesign method (fire-and-forget focus/writeB boot frames, no reply ever checked during erection -- exactly like the uploaded old code), then performs two OLD-style, carrier-clocked reads: node 301 (control, to prove the old read mechanism itself works here) and node 300 (the node in question).");
+      summary.AppendLine();
+      summary.AppendLine(report.ErectionCompleted
+          ? "Old-method erection (all 3 tentacles, 143 nodes): sent, unverified (as old code always was)."
+          : $"Old-method erection: FAILED -- {report.ErectionFailureMessage}");
+
+      if (report.ErectionCompleted)
+      {
+        summary.AppendLine(report.ControlReadSucceeded
+            ? $"Control read, node 301 (old carrier-clocked protocol): OK -- 0x{report.ControlReadValue:X5}."
+            : $"Control read, node 301: FAILED -- {report.ControlReadFailureMessage}\nThe old read mechanism itself did not work in this session, so the node-300 result below is not conclusive either way.");
+
+        summary.AppendLine(report.TargetReadSucceeded
+            ? $"Target read, node 300 (old carrier-clocked protocol): OK -- 0x{report.TargetReadValue:X5}. The old method reaches node 300 where the new one does not."
+            : $"Target read, node 300: FAILED -- {report.TargetReadFailureMessage}");
+      }
+
+      bool overallSucceeded = report.ErectionCompleted && report.ControlReadSucceeded && report.TargetReadSucceeded;
+      VerifyStatus = overallSucceeded
+          ? "Node 708 legacy erection test: node 300 answered under the old method."
+          : "Node 708 legacy erection test: see summary for the result.";
+
+      MessageBox.Show(
+          summary.ToString(),
+          "Node 708 legacy erection test",
+          MessageBoxButton.OK,
+          overallSucceeded ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+    catch (Exception exception)
+    {
+      VerifyStatus = "Node 708 legacy erection test failed.";
+      MessageBox.Show(
+          $"Node 708 legacy erection test could not complete:\n\n{exception.Message}",
+          "Node 708 legacy erection test",
           MessageBoxButton.OK,
           MessageBoxImage.Error);
     }
