@@ -525,7 +525,7 @@ internal sealed class KrakenSession : IAsyncDisposable
   }
 
   // Run the full erection sequence (reset pulse, node-708 head-protocol load, and
-  // tentacle focus/B setup) on an already-open port. Used both for the initial
+  // tentacle focus/A setup) on an already-open port. Used both for the initial
   // erection and to RE-erect after an idle-close reopen, because opening the COM
   // port on Port A pulses RESET- (the FTDI VCP driver briefly asserts RTS during
   // CreateFile) and wipes the resident Kraken. There is no way to reopen without
@@ -562,10 +562,18 @@ internal sealed class KrakenSession : IAsyncDisposable
     foreach (KrakenTentacleConfiguration tentacle in _configuration.Tentacles.OrderBy(item => item.Number))
     {
       int tentacleHeadPort = KrakenTopology.PortAddress(KrakenTopology.HeadCoordinate, tentacle.Nodes[0]);
-      // Node 708's B stays pointed at this tentacle's own single hop for
+      // Node 708's A stays pointed at this tentacle's own single hop for
       // every node erected along it: deeper hops are reached purely by the
-      // tentacle(n) wrapping below, not by moving B.
-      SelectTentacle708(port, tentacleHeadPort, cancellationToken);
+      // tentacle(n) wrapping below, not by moving A. 'sett' deliberately
+      // targets A, not B -- node 708's own dispatch read ('main's bare
+      // '18ibits', and 'readw's inside it) polls via 'sync'/'wait's '@b',
+      // so B must stay pointed at the io register for every post-boot
+      // receive. Pointing 'sett' at B (the original design) worked for
+      // exactly one round trip and then went silent forever, because the
+      // very first 'sett' call repointed B away from io and 'main' was
+      // still listening on it for the next dispatch word -- confirmed via
+      // Ga144Node708DispatchProbe (1st 'sett' call succeeds, 2nd times out
+      // identically regardless of target).
       SelectTentacle708(port, tentacleHeadPort, cancellationToken);
 
       for (int position = 0; position < tentacle.Nodes.Count; position++)
@@ -583,6 +591,11 @@ internal sealed class KrakenSession : IAsyncDisposable
         // meaningful data, just the 1 real reply word every relay hop
         // requires; discarded here as a pure sync pulse.
         int incomingPort = KrakenTopology.PortAddress(coordinate, previous);
+        // 'n' must track this position for both w/r calls below -- see
+        // SelectNode708's own remarks. Set once per position, not once per
+        // tentacle like SelectTentacle708/A above, since (unlike A) it needs
+        // to change at every node along the tentacle.
+        SelectNode708(port, position, cancellationToken);
         int[] focusSequence = KrakenProtocol.BuildTentacle(position, KrakenProtocol.BuildFocus(incomingPort), replyWordCountMinusOne: 0);
         _ = WriteRead708(
             port, focusSequence, wordsToRead: 1,
@@ -702,11 +715,39 @@ internal sealed class KrakenSession : IAsyncDisposable
     SendWord708AndVerify(port, portAddress, "sett: port value", cancellationToken);
   }
 
+  // Keeps node 708's own 'n' (the f18var 'w/r' tests via '-if' at the top of
+  // its write-pre/write-post sections) in sync with how many hops out the
+  // node being addressed sits along its tentacle. 'n' now boots at -1 (the
+  // "no relay depth" sentinel matched by '-if') instead of the old 0, and
+  // 'setn' no longer 'dec's what it's given -- so the value on the wire must
+  // already be position - 1: position 0 (the tentacle's own first node) is
+  // -1, position 1 is 0, position 2 is 1, and so on. Every 'w/r' call
+  // (focus, writeB, and every ordinary Transact) runs this branch
+  // unconditionally regardless of the payload, so a stale 'n' left over from
+  // a previously addressed node/position corrupts the write-pre/write-post
+  // bookkeeping even when the payload itself has nothing to do with it --
+  // hence calling this for every position, not just once per tentacle.
+  private void SelectNode708(NativeWindowsSerialPort port, int position, CancellationToken cancellationToken)
+  {
+    cancellationToken.ThrowIfCancellationRequested();
+    Node708HeadAddresses addresses = RequireHeadAddresses();
+    SendWord708(port, addresses.SetNode);
+    SendWord708AndVerify(port, position - 1, "setn: node index", cancellationToken);
+  }
+
   // Calls node 708's 'w/r': writes writeWords then reads back wordsToRead
   // words. Both counts must be at least 1, matching 'w/r's own "at least 1
-  // word must be written, at least 1 word must be read" precondition -- it
-  // unconditionally 'dec's each count to prime its loop counters, so a count
-  // of 0 would wrap to a huge loop instead of doing nothing.
+  // word must be written, at least 1 word must be read" precondition. 'w/r'
+  // itself no longer 'dec's either count (removed so the count words fit
+  // through 'readw' without an extra step) -- its own 'begin...next' loops
+  // are do-while shaped, running once for every unit of R plus one more, so
+  // the value placed on the wire must already be one less than the real
+  // count, matching the same "-1 convention" KrakenProtocol.cs already
+  // documents and uses for every leaf/tentacle-hop literal. Sending the raw
+  // (non-decremented) count here left the write-receive loop expecting one
+  // extra word that never arrives -- node 708 blocks forever inside its own
+  // 'readw', never reaching 'oword', which reads back as a silent, 0-byte
+  // timeout on the FIRST reply word regardless of how many were requested.
   //
   // 'context' is a short human-readable label (which node/tentacle/position,
   // which operation) with no effect on the wire -- it exists purely so a
@@ -741,10 +782,12 @@ internal sealed class KrakenSession : IAsyncDisposable
       // Only the call address itself goes through 'main's raw, unacknowledged
       // '18ibits'; every word 'w/r' reads for itself (wordsToRead,
       // writeWords.Count, and each forwarded payload word) now goes through
-      // 'readw' and is verified here.
+      // 'readw' and is verified here. wordsToRead and writeWords.Count are
+      // sent one less than their real values -- see this method's own
+      // remarks above -- since 'w/r' no longer 'dec's them itself.
       SendWord708(port, addresses.WriteRead);
-      SendWord708AndVerify(port, wordsToRead, $"{context}: wordsToRead", cancellationToken, responseTimeoutMilliseconds);
-      SendWord708AndVerify(port, writeWords.Count, $"{context}: writeWords.Count", cancellationToken, responseTimeoutMilliseconds);
+      SendWord708AndVerify(port, wordsToRead - 1, $"{context}: wordsToRead", cancellationToken, responseTimeoutMilliseconds);
+      SendWord708AndVerify(port, writeWords.Count - 1, $"{context}: writeWords.Count", cancellationToken, responseTimeoutMilliseconds);
       for (int index = 0; index < writeWords.Count; index++)
       {
         SendWord708AndVerify(port, writeWords[index], $"{context}: payload word {index + 1} of {writeWords.Count}", cancellationToken, responseTimeoutMilliseconds);
@@ -811,6 +854,7 @@ internal sealed class KrakenSession : IAsyncDisposable
     try
     {
       SelectTentacle708(port, headPort, cancellationToken);
+      SelectNode708(port, route.Position, cancellationToken);
       reply = WriteRead708(port, wrapped, wordsToRead, context, cancellationToken, responseTimeout);
     }
     catch (TimeoutException) when (firstAfterReopen)
@@ -818,6 +862,7 @@ internal sealed class KrakenSession : IAsyncDisposable
       try { port.PurgeInput(); } catch { }
       SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
       SelectTentacle708(port, headPort, cancellationToken);
+      SelectNode708(port, route.Position, cancellationToken);
       reply = WriteRead708(port, wrapped, wordsToRead, context, cancellationToken, responseTimeout);
     }
 
@@ -899,33 +944,33 @@ internal sealed class KrakenSession : IAsyncDisposable
         entry main
         : main 18ibits drop >r ex main;
         : obit ( dwn-dw) !b over >r delay ;
-        : readw dup 18ibits drop over over
+        : readw ( -dwx) dup 18ibits drop over over
         : oword ( dw-d)  leap drop  leap drop leap drop  drop ;
         : obyt ( dw-dwx)  then then then  3 obit drop
             7 for dup 1 and 3 xor obit  drop 2/ next
             2 obit ;
-        # 0 f18var n // target node(0..last node)
-        : sett .loc readw drop b! ; // set b register, used to select tentacle
-        : setn .loc readw drop !n ; // set node, used to select node in a tentacle
-        : dec ( w-w') -1 . + ;
+        : setn .loc readw drop // set node, used to select node in a tentacle
+        # -1 f18var n // target node(-1..last node-1)
+        : sett .loc readw drop a! ; // set A register, used to select tentacle
         : w/r .loc // writes & reads words from a node. at least 1 word must be written, at least 1 word must be read
-          readw drop dec dup >r a! // # of words to read -1
-          readw drop dec dup >r // # of words to write -1
+          readw drop >r // # of words to read -1
+          readw drop dup >r // # of words to write -1
           // write pre
-          n dup if dec for
-            A[ @p >r ]] !b r> dup >r
+          n -if readw else for
+            A[ @p >r ]] ! r> dup >r
             dup dup . + . + 2* over . + // multiply by 6
-            A[ @p !b unext ]] !b
+            A[ @p !b unext ]] !
           next then
           //
-          begin readw drop !b next
+          begin readw drop ! next
           // write post
-          n dup if dec for
-            A[ @p >r ]] !b a !b
-            A[ @b !p unext ]] !b
+          ( d)
+          n -if drop else for
+            A[ @p >r ]] ! r> r> dup ! >r >r
+            A[ @b !p unext ]] !
           next then
           //
-          begin @b oword next ;
+          begin @ oword next main ;
         .loc
         """;
 
