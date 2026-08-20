@@ -35,6 +35,15 @@ internal sealed class KrakenSession : IAsyncDisposable
   private const int ResetReleaseMilliseconds = 1;
   private const int ResponseTimeoutMilliseconds = 1_000;
 
+  // G144A12 node 708 asynchronous boot ROM continuation entry. Unlike 'cold'
+  // (0x0AA), ser-exec is the documented concatenation path for additional
+  // frames and does not rerun cold's wake/start-bit reasonableness
+  // classifier. Only used now during the old-method erection burst below --
+  // every frame sent while node 708 is still parked here MUST be a properly
+  // framed boot frame (completion/transfer/count/payload), never a bare
+  // dispatch word; see ErectOnto's remarks for why.
+  private const int AsyncSerialContinuationAddress = 0x0AE;
+
   // Every other boot node in the array (e.g. node 300, a Synchronous Boot
   // node per DB002 5.5.6) reacts to a high level on its OWN GPIO 17 by
   // running its ROM's reasonableness check for a boot frame, DURING WHICH IT
@@ -51,24 +60,6 @@ internal sealed class KrakenSession : IAsyncDisposable
   // datasheet bound for safety margin (reset-pulse jitter, GPIO 17 states
   // that are not perfectly synchronized with node 708's own reset release).
   private const int BootNodeReasonablenessCheckSettleMilliseconds = 10;
-
-  // TEMPORARY DIAGNOSTIC (not a real fix): comparing against the old,
-  // pre-sett/w/r erection code showed every one of its per-position
-  // focus/writeB calls was pure fire-and-forget -- it never read or verified
-  // any reply during erection at all, for any node including node 300. Its
-  // own eventual success reaching node 300 was only ever confirmed LATER, by
-  // Check Kraken, through a structurally different carrier-clocked read. So
-  // old code reaching node 300 never actually proved node 300 replies to a
-  // 'focus'-shaped request within any particular time bound -- it only
-  // proved node 300 eventually becomes usable. Our new 'w/r' blocks on every
-  // single erection hop with a 1 s timeout (ResponseTimeoutMilliseconds),
-  // something old code never did once. Widen ONLY erection's own response
-  // timeout, well past that 1 s bound, purely to observe whether node 300's
-  // reply to 'focus' eventually shows up late (pointing at some node-300-
-  // specific delay unrelated to the datasheet's ~4.1 mS boot check) or never
-  // arrives at all (pointing at a real relay/protocol incompatibility).
-  // Revert once hardware testing answers that question either way.
-  private const int ErectionDiagnosticResponseTimeoutMilliseconds = 8_000;
 
   // Deliberately pace small FTDI transfers. The F18/Kraken side is much
   // faster than the USB VCP path, so there is no benefit in immediately
@@ -565,6 +556,33 @@ internal sealed class KrakenSession : IAsyncDisposable
   // port on Port A pulses RESET- (the FTDI VCP driver briefly asserts RTS during
   // CreateFile) and wipes the resident Kraken. There is no way to reopen without
   // resetting on Port A, so the Kraken must be rebuilt on every reopen.
+  // Erects using the OLD (pre-redesign) method's per-hop mechanism -- a
+  // fire-and-forget, host-precomputed, single-burst boot frame per node,
+  // sent while node 708 sits in ROM's ser-exec -- instead of the current
+  // 'w/r'-based dynamic on-chip relay construction. This was adopted after
+  // extensive hardware investigation (see the project's
+  // node-300-erection-investigation notes) established: (a) the old method
+  // reliably reaches every node including node 300, confirmed by an actual
+  // carrier-clocked readback that matched node 300's own ROM's literal boot
+  // value; (b) the new method's dynamic, per-word-acknowledged construction
+  // fails to reach node 300 specifically, on every variable tried (depth,
+  // timing, order, direction) -- while old code's opcodes, port addresses,
+  // and even per-hop pacing are all byte-identical/indistinguishable from
+  // the new method's, ruling out everything except the construction
+  // mechanism itself.
+  //
+  // Node 708 still ends up running the SAME resident 'main'/'w/r' program
+  // as before, so every later read/write (ReadWord708/WriteRead708 and
+  // everything built on them) is completely unchanged -- only the ONE-TIME
+  // erection step (getting every node's P parked and B pointed at its next
+  // hop) now happens via old-style static frames instead of new-style
+  // dynamic on-chip construction. This is safe because old-style 'focus'
+  // (a direct jump instruction, EncodeSlot0Control(0x02, incomingPort)) and
+  // old-style 'writeB' (Pack("@p","b!")) leave each node in the SAME final
+  // state (P == incomingPort, B == next hop's port) as the new 'focus'/
+  // 'writeB' words do -- they just use a different instruction SHAPE to get
+  // there, and the new protocol's post-erection operations only ever depend
+  // on that final state, never on how it was reached.
   private void ErectOnto(NativeWindowsSerialPort port, CancellationToken cancellationToken)
   {
     cancellationToken.ThrowIfCancellationRequested();
@@ -576,53 +594,34 @@ internal sealed class KrakenSession : IAsyncDisposable
     port.SetRts(true);
     Thread.Sleep(ResetReleaseMilliseconds);
 
-    // The frame is accepted by node 708 through `cold`. Only ONE boot frame is
-    // ever sent for the whole Kraken session -- everything after this is
-    // 'main's own single-word dispatch loop, not another boot frame -- so the
-    // completion address must point directly at the freshly loaded payload's
-    // entry ('main', which always compiles to 0x000 here), not at ser-exec
-    // (the ROM entry that waits for yet another frame header). Pointing
-    // completion at ser-exec left the chip parked in ROM waiting for a
-    // frame that never came, silently swallowing every post-boot word as
-    // bogus follow-up-frame data instead of running 'main' at all -- this
-    // matches both observed failures: the old (pre-readw) design only
-    // noticed at 'focus', its first acknowledged reply, while the readw
-    // design notices immediately, at sett's own first echo. Confirmed against
-    // Ga144Node708EchoProbe, which boots with completion == transfer ==
-    // entry address == 0 and works (22/22 pattern-sweep match).
+    // Load the current head program into RAM, but point completion at
+    // ser-exec (NOT at 'main's entry) -- unlike the single-frame boot this
+    // replaces, more framed boot frames are still coming (the old-style
+    // per-hop erection burst below), and every one of them must be received
+    // through ROM's own boot-frame receiver, not through 'main's raw
+    // single-word dispatch loop. 'main' is only entered explicitly, by the
+    // final zero-payload frame after every node is erected.
     (int[] headProgram, Node708HeadAddresses addresses) = BuildHeadProgram();
-    SendBootFrame(port, 0x000, 0x000, headProgram);
+    SendBootFrame(port, AsyncSerialContinuationAddress, 0x000, headProgram);
     _headAddresses = addresses;
 
     // Give every OTHER boot node in the array (not just 708) time to run its
     // own reasonableness check and revert to 'warm' before the tentacle
     // relay tries to focus it -- see BootNodeReasonablenessCheckSettleMilliseconds's
-    // own remarks. This must happen here, after node 708 is already up and
-    // running 'main' (so 708 itself is not what we are waiting on) and
-    // before the very first focus/writeB call below.
+    // own remarks. Node 708 itself is not running 'main' yet at this point,
+    // but it does not need to be: it is still passively parked in ROM's
+    // ser-exec, which accepts boot frames regardless of what is sitting in
+    // RAM, so this settle only needs to happen before the first per-hop
+    // frame is sent below.
     Thread.Sleep(BootNodeReasonablenessCheckSettleMilliseconds);
 
-    // Reversing this to OrderByDescending (tentacle 1 last, after ~93 other
-    // successful hops) was a temporary diagnostic -- it made no difference
-    // (node 300 failed identically either way), ruling out any accumulated
-    // warm-up/ordering effect. Reverted to the normal order.
+    // Old-method erection: fire-and-forget, host-precomputed focus/writeB
+    // boot frames for every node, exactly mirroring the uploaded old code's
+    // own KrakenSession.ErectOnto -- no reply is read or checked for any of
+    // these, node 708 is not even running a program that COULD reply yet.
     foreach (KrakenTentacleConfiguration tentacle in _configuration.Tentacles.OrderBy(item => item.Number))
     {
       int tentacleHeadPort = KrakenTopology.PortAddress(KrakenTopology.HeadCoordinate, tentacle.Nodes[0]);
-      // Node 708's A stays pointed at this tentacle's own single hop for
-      // every node erected along it: deeper hops are reached purely by the
-      // tentacle(n) wrapping below, not by moving A. 'sett' deliberately
-      // targets A, not B -- node 708's own dispatch read ('main's bare
-      // '18ibits', and 'readw's inside it) polls via 'sync'/'wait's '@b',
-      // so B must stay pointed at the io register for every post-boot
-      // receive. Pointing 'sett' at B (the original design) worked for
-      // exactly one round trip and then went silent forever, because the
-      // very first 'sett' call repointed B away from io and 'main' was
-      // still listening on it for the next dispatch word -- confirmed via
-      // Ga144Node708DispatchProbe (1st 'sett' call succeeds, 2nd times out
-      // identically regardless of target).
-      SelectTentacle708(port, tentacleHeadPort, cancellationToken);
-
       for (int position = 0; position < tentacle.Nodes.Count; position++)
       {
         cancellationToken.ThrowIfCancellationRequested();
@@ -631,48 +630,24 @@ internal sealed class KrakenSession : IAsyncDisposable
             ? KrakenTopology.HeadCoordinate
             : tentacle.Nodes[position - 1];
 
-        // Erect this node's own focus first (anchor its P on its incoming
-        // port), reaching it by relaying through the 'position' nodes ahead
-        // of it that are already erected. focus's own trailing '!p' now
-        // sends back the SAME port value we sent as the payload (see the
-        // 'dup' added to KrakenProtocol.BuildFocus), so the reply is a real
-        // acknowledgment -- verified below -- not just a bare "something
-        // came back" signal.
         int incomingPort = KrakenTopology.PortAddress(coordinate, previous);
-        // Raw, un-wrapped leaf -- node 708's own 'w/r' now builds the relay
-        // wrapper on-chip from 'position' (see WriteRead708's remarks), so
-        // this must NOT also go through KrakenProtocol.BuildTentacle.
-        // responseTimeoutMilliseconds widened to
-        // ErectionDiagnosticResponseTimeoutMilliseconds -- see that
-        // constant's remarks -- purely to observe whether a slow-to-reply
-        // node (e.g. node 300) eventually answers late instead of failing
-        // fast at the usual 1 s bound.
-        int[] focusReply = WriteRead708(
-            port, KrakenProtocol.BuildFocus(incomingPort), wordsToRead: 1, position,
-            context: $"erecting node {coordinate:000} (tentacle {tentacle.Number} position {position}), 'focus' -> port 0x{incomingPort:X3}",
-            cancellationToken, ErectionDiagnosticResponseTimeoutMilliseconds);
+        int focusJump = F18InstructionSet.EncodeSlot0Control(0x02, incomingPort);
+        IReadOnlyList<int> focusSequence = LegacyKrakenProtocol.BuildX1(position, focusJump);
+        SendBootFrame(port, AsyncSerialContinuationAddress, tentacleHeadPort, focusSequence);
 
-        int expectedFocusReply = incomingPort & F18InstructionSet.WordMask;
-        if (focusReply[0] != expectedFocusReply)
-        {
-          throw new IOException(
-              $"Kraken focus reply mismatch (erecting node {coordinate:000} (tentacle {tentacle.Number} position {position})): " +
-              $"sent port 0x{expectedFocusReply:X5}, node echoed 0x{focusReply[0]:X5}. " +
-              "'focus' now echoes its own payload (KrakenProtocol.BuildFocus's 'dup'), so this means the word arrived but was corrupted or misrouted, not that it never arrived.");
-        }
-
-        // Then this node's B, so it can relay further out once the next
-        // node's focus is erected. The last node in a tentacle has nothing
-        // further to relay to; point it at IoAddress like the old scheme did.
         int b = position + 1 < tentacle.Nodes.Count
             ? KrakenTopology.PortAddress(coordinate, tentacle.Nodes[position + 1])
             : IoAddress;
-        _ = WriteRead708(
-            port, KrakenProtocol.BuildWriteB(b), wordsToRead: 1, position,
-            context: $"erecting node {coordinate:000} (tentacle {tentacle.Number} position {position}), 'writeB' -> 0x{b:X3}",
-            cancellationToken, ErectionDiagnosticResponseTimeoutMilliseconds);
+        IReadOnlyList<int> bSequence = LegacyKrakenProtocol.BuildW1(position, LegacyKrakenProtocol.WriteBInstruction, b);
+        SendBootFrame(port, AsyncSerialContinuationAddress, tentacleHeadPort, bSequence);
       }
     }
+
+    // Every node is now parked and wired exactly as the new protocol's own
+    // erection would have left it. Enter 'main' now, with an empty
+    // (zero-payload) frame purely to trigger the jump -- headProgram is
+    // already resident in RAM from the very first frame above.
+    SendBootFrame(port, 0x000, 0x000, []);
 
     SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
     port.PurgeInput();
