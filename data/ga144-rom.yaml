@@ -740,7 +740,7 @@ systemMacros:
   sourceCode: ": taps ( y x c - y' x') r> a! >r begin @+ @ >r a >r *.17 r> a! >r !+ r> . + r> next @ a! ;"
 - name: rom_idle
   description: ''
-  sourceCode: >+
+  sourceCode: >
     macro rom_warm
 
 
@@ -754,11 +754,11 @@ systemMacros:
 
     : idle ( m-m) @p+ ! .. nooop 0x8003 cmd noop
       120 for @p+ ! .. nooop
-        begin @b and if @ ... @ ! ! *next idle ;
+        begin @b and if @ .. @ ! ! *next idle ;
         then drop
       next @p+ ! .. nooop idle ;
     : init ( m-m)
-      0x4761 for noop next
+      4761 for noop next
       noop 0x10400 cmd noop
       0x8001 cmd noop noop
       0x8002 cmd noop noop
@@ -990,6 +990,31 @@ systemMacros:
 - name: rom_triangle
   description: ''
   sourceCode: ': triangle ( ang*4) x1.0000 over -if drop . + ; then drop inv . + inv ;'
+- name: rom_user
+  description: ''
+  sourceCode: >-
+    # 007 import
+
+
+    macro rom_warm
+
+
+    # 0xAA org
+
+    : a2rc ( pa-pbc) dup >r 2/ 2/ 2/ 2/ 2/ 2/ 2/ 2/ 2/ 2/ -if
+
+    : row! ( pr-pbc) 0x7fff and dup ..
+      0x18000 xor .. ! 0x5A48 ! ..
+      0x6000 and r> .. 0x3ff and ;
+      then over + row! ;
+    : sd@ ( pa-p) a2rc 0x28400 xor xor ! 0x5a4b ! .. down b! ..
+      A[ @ !p+ ]] !b @b r> b! !b ;
+    : sd! ( pa-p) a2rc 0x20400 xor xor ! 0x5a4d ! .. r> b! @b .. down b! ..
+      A[ @p+ db! ]] !b !b ;
+    : poll ( ru-ru) io b! @b
+      2* 2* -if >r over .. r--- over r> then
+      0x800 and . if >r .. ---u r> then
+      drop poll ;
 - name: rom_warm
   description: ''
   sourceCode: >-
@@ -1024,25 +1049,3 @@ systemMacros:
     macro rom_muldot
 
     macro rom_divide
-- name: rom_user
-  description: ''
-  sourceCode: >-
-    macro rom_warm
-
-
-    # 0xAA org
-
-    : a2rc ( pa-pbc) dup >r 2/ 2/ 2/ 2/ 2/ 2/ 2/ 2/ 2/ 2/ -if
-
-    : row! ( pr-pbc) 0x7fff and dup ..
-      0x18000 xor .. ! 0x5A48 ! ..
-      0x6000 and r> .. 0x3ff and ;
-      then over + row! ;
-    : sd@ ( pa-p) a2rc 0x28400 xor xor ! 0x5a4b ! .. down b! ..
-      A[ @ !p+ ]] !b @b r> b! !b ;
-    : sd! ( pa-p) a2rc 0x20400 xor xor ! 0x5a4d ! .. r> b! @b .. down b! ..
-      A[ @p+ db! ]] !b !b ;
-    : poll ( ru-ru) io b! @b
-      2* 2* -if >r over .. r--- over r> then
-      0x800 and . if >r .. ---u r> then
-      drop poll ;
