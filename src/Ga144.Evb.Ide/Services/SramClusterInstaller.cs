@@ -162,8 +162,12 @@ public sealed class SramClusterInstaller
 
     if (masterSupport is not null)
     {
-      string interfacePortName = KrakenTopology.PortName(InterfaceNodeCoordinate, masterCoordinate);
-
+      // Node 107's own source (SramClusterPrograms.Node107Interface) is now
+      // AN003's real, full 3-master polling node (section 4.1) -- it polls
+      // right/left/up itself, so unlike the earlier degenerate (section 6.3)
+      // reimplementation it is no longer generated per master and needs no
+      // port name baked in here.
+      //
       // Fixed, predictable order (address bus, control pins, data bus, then
       // the interface node last) rather than parallel: there is no
       // compile-time dependency between the four, but deploying the
@@ -175,7 +179,7 @@ public sealed class SramClusterInstaller
         (AddressBusNodeCoordinate, SramClusterPrograms.Node009AddressBus),
         (ControlPinsNodeCoordinate, SramClusterPrograms.Node008ControlPins),
         (DataBusNodeCoordinate, SramClusterPrograms.Node007DataBusAndControl),
-        (InterfaceNodeCoordinate, SramClusterPrograms.BuildNode107Source(interfacePortName))
+        (InterfaceNodeCoordinate, SramClusterPrograms.Node107Interface)
       ];
 
       foreach (var (coordinate, source) in plan)
@@ -206,8 +210,15 @@ public sealed class SramClusterInstaller
           break;
         }
 
+        // Every one of these four sources now places its real code with an
+        // explicit 'org' (past a data table for 008, or simply not at 0) and
+        // names its true entry point with 'entry' -- jump to whatever the
+        // compiler actually resolved, not a hardcoded 0x000 (which used to
+        // be correct only because the earlier, prose-reimplemented sources
+        // all happened to start at address 0 with no 'org'/'entry' at all).
+        int jumpTarget = compiled.Ram.EntryPoint ?? 0x000;
         await controller.WriteRamAsync(route, compiled.Ram.Words, cancellationToken);
-        await controller.JumpAsync(route, 0x000, cancellationToken);
+        await controller.JumpAsync(route, jumpTarget, cancellationToken);
         results.Add(new SramClusterInstallNodeResult(coordinate, true, compiled.Ram.Diagnostics));
       }
     }

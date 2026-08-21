@@ -141,14 +141,13 @@ public sealed class SramTentacleViewModel : ObservableObject
   /// <summary>
   /// Reference text for the mask panel: AN003 section 3's port write-signal
   /// bits, shown so the mask value doesn't have to be recalled from memory.
-  /// With this project's single-fixed-master node 107 (see the remarks on
-  /// <see cref="SramClusterPrograms.BuildNode107Source"/>), mk! is accepted
-  /// on the wire but does not actually enable/disable anything.
+  /// Node 107 is now AN003 section 4.1's real, full 3-master polling node
+  /// (see the remarks on <see cref="SramClusterPrograms.Node107Interface"/>),
+  /// so mk! genuinely enables/disables masters and posts/clears stimuli.
   /// </summary>
   public string MaskReferenceText =>
       "Port write bits (AN003 section 3): 106 = x8000, 108 = x0800, 207 = x0200. " +
-      "mk! is protocol-compatible only in this build -- there is exactly one fixed master " +
-      "per installed cluster, so nothing is actually enabled or disabled.";
+      "mk! genuinely enables/disables each master and posts or clears its stimulus.";
 
   public AsyncRelayCommand InstallCommand { get; }
   public AsyncRelayCommand ReadCommand { get; }

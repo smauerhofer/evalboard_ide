@@ -117,15 +117,15 @@ internal static class KrakenSramProtocol
   /// mask, the already-inverted flag, then the marker -- so 'sram-mask' can
   /// send x, f, then a duplicated mask, with no reordering of its own.
   ///
-  /// IMPORTANT: this project installs AN003 section 6.3's degenerate,
-  /// single-fixed-master version of node 107 (see the remarks on
-  /// <see cref="SramClusterPrograms.BuildNode107Source"/>), which recognises
-  /// and consumes an mk! request on the wire for protocol compatibility but
-  /// does not act on it -- there is exactly one master per installed cluster,
-  /// wired in at install time, so there is nothing left to enable/disable or
-  /// post a stimulus for. This leaf is provided so the SRAM Tentacle window's
-  /// mask panel round-trips cleanly against real hardware rather than
-  /// desyncing node 107's command parser; it is not a functioning mask.
+  /// This project now installs AN003 section 4.1's real, full 3-master
+  /// polling node 107 (see <see cref="SramClusterPrograms.Node107Interface"/>),
+  /// where mk! is live: it genuinely enables/disables each master's requests
+  /// and posts/clears its pending stimulus, per node 107's own maintained
+  /// mask. (An earlier revision of this project installed AN003 section
+  /// 6.3's degenerate, single-fixed-master node 107 instead, where mk! was
+  /// necessarily a deliberate protocol no-op -- there was exactly one master
+  /// per installed cluster, wired in at install time, so nothing existed for
+  /// it to enable/disable.)
   /// </summary>
   public static int[] BuildSramSetMask(int subroutineAddress, int mask, bool postStimuli) =>
   [

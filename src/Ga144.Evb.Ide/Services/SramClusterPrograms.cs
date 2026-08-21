@@ -6,325 +6,273 @@ namespace Ga144.Evb.Ide.Services;
 /// (control pins), 009 (address bus), and 107 (interface). These run
 /// standalone in each node's RAM -- loaded and started the same generic way
 /// any other node program is (<c>KrakenLiveController.WriteRamAsync</c> +
-/// <c>JumpAsync(0x000)</c>) -- and are NOT executed as puppeted Kraken
-/// leaves; contrast with <see cref="KrakenSramProtocol"/>, which builds the
-/// leaf sequences a memory-master node (106/108/207) uses to talk to the
-/// already-running node 107 once these are installed.
+/// <c>JumpAsync</c>, to whatever address the compiler resolves as the
+/// source's entry point -- see <c>SramClusterInstaller</c>) -- and are NOT
+/// executed as puppeted Kraken leaves; contrast with
+/// <see cref="KrakenSramProtocol"/>, which builds the leaf sequences a
+/// memory-master node (106/108/207) uses to talk to the already-running node
+/// 107 once these are installed.
 ///
-/// Every one of these is reimplemented from AN003's prose and protocol
-/// tables (sections 3 and 4), not transcribed byte-for-byte from the
-/// application note's own 2010-era arrayForth screen-dump assembly listing.
-/// That listing's column/screen-relative address and label numbers could not
-/// be reliably recovered from the (OCR'd, and in places visibly garbled)
-/// source PDF, so reproducing it exactly was not attempted; the protocol
-/// tables and prose descriptions are unambiguous and are what these programs
-/// were built and cross-checked against. This is a deliberate, disclosed
-/// engineering tradeoff, not an oversight -- see the remarks on each program
-/// below for specifics.
+/// All four (<see cref="Node009AddressBus"/>, <see cref="Node008ControlPins"/>,
+/// <see cref="Node007DataBusAndControl"/>, <see cref="Node107Interface"/>)
+/// are now transcribed directly from the user's own hand-translation of
+/// AN003's real color-coded arrayForth listing, rather than reimplemented
+/// from prose. Earlier revisions of this file could not recover that
+/// listing reliably from its 2010-era screen-dump OCR (visibly garbled in
+/// places) and reimplemented all four from AN003's protocol tables and prose
+/// instead -- a deliberate, disclosed tradeoff at the time, now superseded
+/// by an accurate transcription; node 107 in particular is now AN003's real
+/// FULL 3-master polling node (section 4.1), not the smaller degenerate
+/// single-master (section 6.3) reimplementation this file used to build --
+/// see the remarks on <see cref="Node107Interface"/>, including one still
+/// open question about that transcription (nothing in it sets B toward node
+/// 007).
 ///
 /// NOTE: nothing in the environment these were authored in could build or
 /// run the actual net10.0-windows/WPF project (no .NET SDK, wrong OS). Each
 /// program below WAS compiled -- with zero diagnostics, within the 64-word
-/// RAM budget, entry point at address 0 -- against this project's own
-/// <c>Compiler/F18Compiler.cs</c> in a throwaway standalone console harness
-/// that referenced the compiler sources directly. That confirms the F18
-/// syntax is valid and each image fits. It does NOT confirm the protocol
-/// timing is correct on real silicon; see the remarks on
-/// <see cref="Node007DataBusAndControl"/> for the one placeholder that most
-/// needs bench verification before relying on it.
+/// RAM budget -- against this project's own <c>Compiler/F18Compiler.cs</c>
+/// in a throwaway standalone console harness that referenced the compiler
+/// sources directly. That confirms the F18 syntax is valid and each image
+/// fits. It does NOT confirm the protocol timing is correct on real silicon;
+/// node 007's real, now-transcribed delay-loop counts replace what was
+/// previously a placeholder, but still is not bench-verified.
 /// </summary>
 internal static class SramClusterPrograms
 {
   /// <summary>
-  /// Node 009 -- address bus (AN003 section 4.3, no separate subsection
-  /// heading is given in the source, but the role and B/A register
-  /// assignment match the "009" column of Figure 1). B is fixed to 'right',
-  /// reaching node 008. On each request it reads two words from 008 -- the
-  /// 16-bit address high bits, doubled twice (i.e. shifted left 2, matching
-  /// AN003's own "(a16&lt;&lt;2)" address composition) OR'd with the low 2
-  /// bits recovered from the (possibly-inverted) page value -- and drives the
-  /// resulting 18-bit SRAM address onto its own 'data' I/O register (address
-  /// 0x141, the up-facing data port used as GPIO here, per DB001's register
-  /// map), matching the CY62167EV18LL's 18-bit (A0-A17) address bus.
+  /// Node 009 -- address bus. Transcribed directly from the user's own
+  /// hand-translation of AN003's real listing (color-coded arrayForth source,
+  /// translated by the user rather than recovered from the garbled 2010-era
+  /// screen-dump OCR this file originally had to reimplement from prose --
+  /// see the class-level remarks). 'start' pushes a permanent '3' onto the
+  /// data stack and falls through into 'cmd' without a call (no trailing
+  /// ';') -- an ordinary arrayForth idiom (DB004 7.4/DB013 4.2.4) where
+  /// execution simply continues across a new ':' definition boundary -- so
+  /// that '3' survives, untouched, underneath every iteration's working
+  /// values for 'cmd's own 'over'/'and' to reuse as a fixed mask.
+  ///
+  /// Verified against this project's own compiler in a standalone harness:
+  /// compiles with zero diagnostics, 12 words used (well inside the 64-word
+  /// RAM budget), entry point resolves to 'start' at 0x020.
   /// </summary>
   public const string Node009AddressBus = """
+      # 0x20 org
+      entry start
       : start
         right b!
-        cmd ;
-
+        ..
+        data a!
+        ..
+        3
       : cmd
         @b 2* 2*
-        @b -if inv then
-        3 and xor
-        data a! !
-        cmd ;
-      """;
-
-  /// <summary>
-  /// Node 008 -- control pins (AN003 section 4.2's "coordinates the
-  /// activities of nodes 008 and 009 in driving address and control signals"
-  /// description; node 008 itself is summarized only by its pin-control table
-  /// and dual-port role, not a separate walkthrough). B uses the "r-l-" dual
-  /// port (0x1F5, right+left simultaneously) reaching both node 007 and node
-  /// 009, matching AN003's statement that node 008 relays node 007's
-  /// a16/page words on to node 009 while also acting on them itself. A is
-  /// pinned to the I/O register once at start and never changed, since every
-  /// cmd iteration only ever drives new bits through the same register.
-  ///
-  /// 'pins' is the 8-entry (bits[4:2] of the received page value select one
-  /// of 8) WE-/CE-/A18/A19 drive-pattern table AN003 documents by hex value
-  /// (r00, r01, r10, r11, w11, w10, w01, w00): x2556E, x2557E, x3556E,
-  /// x3557E, x3557A, x3556A, x2557A, x2556A.
-  /// </summary>
-  public const string Node008ControlPins = """
-      : start
-        r-l- b!
-        io a!
-        cmd ;
-
-      label pins
-      data x2556E
-      data x2557E
-      data x3556E
-      data x3557E
-      data x3557A
-      data x3556A
-      data x2557A
-      data x2556A
-
-      : cmd
-        @b !
-        @b !b
-        @b dup !b
-        2/ 2/ 7 and
-        pins + a! @
-        io a! !
-        cmd ;
-      """;
-
-  /// <summary>
-  /// Node 007 -- data bus and control (AN003 section 4.2, "Node 007 - Data
-  /// Bus and Control"). B is fixed to 'left', reaching node 008. A alternates
-  /// between 'down' (talking to node 107) and 'data' (the 16-bit data bus
-  /// I/O register) as each phase requires, matching AN003's own description
-  /// of A's role. The node007 protocol table (a16 then +-p, then w only for
-  /// a write) is decoded directly: 'a' is always read first and relayed to
-  /// node008/009 unmodified (sign included, so their own decode of page's
-  /// sign stays intact), then the sign of the second word ('page') selects
-  /// the read or write phase.
-  ///
-  /// PLACEHOLDER TIMING -- MUST BE VERIFIED BEFORE HARDWARE USE: AN003's own
-  /// listing comments each delay loop as e.g. "40 13 for unext" / "50 40 for
-  /// unext" (roughly 45ns/55ns pulses at the F18A's ~1.4ns/instruction). The
-  /// exact numeric delay constants could not be reliably recovered from the
-  /// garbled OCR of that listing. The "63 for . unext" loops below (~64
-  /// iterations of a 1-word body) are a conservative placeholder chosen to
-  /// generously clear the CY62167EV18LL-55's 55ns access/cycle-time spec at
-  /// this project's clock rate, NOT a transcription of AN003's real,
-  /// hand-tuned values. Verify against the SRAM datasheet and a scope/logic
-  /// analyzer -- and tighten if read/write throughput needs to improve --
-  /// before depending on this in a real design.
-  /// </summary>
-  public const string Node007DataBusAndControl = """
-      : start
-        left b!
-        x3557F io a! !
-        x14555 io a! !
-        cmd ;
-
-      : cmd
-        down a!
-        @ !b
-        @ dup !b
-        -if
-          @
-          data a! !
-          x15555 io a! !
-          63 for . unext
-          x3557F !b
-          x14555 io a! !
+        over @b -if
+          inv and xor !
           cmd ;
         then
-          63 for . unext
-          x3557F !b
-          data a! @
-          down a! !
+          and xor .. !
           cmd ;
       """;
 
   /// <summary>
-  /// Node 107 -- interface (AN003 section 6.3's "degenerate sram" single-
-  /// master, no-polling, no-stimuli variant of section 4.1's node -- see that
-  /// section's own words: "single master, no polling, no stimuli. maximum
-  /// speed, minimum power"). Deliberately NOT AN003 section 4.1's full
-  /// 3-master polling version: Kraken only ever transiently puppets one
-  /// master node per SRAM transaction (see <see cref="KrakenSramProtocol"/>)
-  /// -- no resident master program is ever actually left running and idle
-  /// waiting on a stimulus in this system's usage pattern -- so the full
-  /// version's multi-master arbitration and stimulus-wake machinery could
-  /// never be functionally exercised here. AN003 section 6.3 offers exactly
-  /// this simplification for exactly this situation ("single master"), and
-  /// it is far smaller, which is what let this fit the 64-word RAM budget at
-  /// all (the full version, first implemented as directly and explicitly as
-  /// possible for verifiability, compiled to roughly 117 words).
+  /// Node 008 -- control pins. Transcribed directly from the user's own
+  /// hand-translation of AN003's real listing (see the remarks on
+  /// <see cref="Node009AddressBus"/> and the class-level remarks). B uses the
+  /// "r-l-" dual port (defined here as a local constant "'r-l-", 0x1F5,
+  /// right+left simultaneously, rather than relying on this compiler's own
+  /// predefined multiport name, to stay a faithful transcription) reaching
+  /// both node 007 and node 009. 'start' pins A to the I/O register once and
+  /// falls straight through into 'cmd' (no trailing ';'), the same
+  /// fall-through idiom used throughout this cluster.
   ///
-  /// A GA144 port read/write blocks in hardware until the other side is
-  /// ready, so -- exactly as AN003's own degenerate listing does -- 'cmd'
-  /// needs no explicit poll/wait loop of its own: its first '@b' simply
-  /// blocks until the selected master writes a request.
+  /// The 8-entry (bits[4:2] of the received page value select one of 8)
+  /// WE-/CE-/A18/A19 drive-pattern table is laid down with the raw
+  /// '[ value , value , ... ]' idiom (push each value while interpreting,
+  /// 'here'-and-advance it into memory with ',') rather than a named
+  /// 'label' + 'data' list -- and, matching the original, is placed exactly
+  /// at address 0 so 'cmd's computed 3-bit selector can be used directly as
+  /// the table address with no base-address addition.
   ///
-  /// The master port is fixed at INSTALL time, not runtime: <paramref
-  /// name="masterPortName"/> (one of "right"/"left"/"up", i.e. node 107's
-  /// local port toward 106/108/207 respectively -- see
-  /// <c>KrakenTopology.PortName(107, masterCoordinate)</c>) is baked directly
-  /// into this source before it is compiled and deployed, once, by
-  /// <c>SramClusterInstaller</c> for whichever master the SRAM Tentacle
-  /// window's Install action was run with. Re-running Install with a
-  /// different master recompiles and redeploys this node with the new port.
+  /// '7 ..' near the top of 'cmd' pushes a permanent mask constant (7) that
+  /// survives, via the same non-popping '-if'-free fall-through, to be
+  /// 'and'-ed with the shifted page value later in the same iteration.
   ///
-  /// mk! is still recognised on the wire (so a master's mk! request does not
-  /// desync 'cmd's parser mid-stream) but is a deliberate protocol no-op in
-  /// this single-fixed-master configuration -- see the remarks on
-  /// <see cref="KrakenSramProtocol.BuildSramSetMask"/>.
-  ///
-  /// Dispatch mirrors AN003 section 4.1's own description of the (shared,
-  /// unchanged-between-versions) decoding rule: "checking the signs of the
-  /// first two [words] as an economical way of decoding which of the four
-  /// primitive functions is being requested" -- ex@/mk! both start with a
-  /// non-negative first word, ex!/cx? both start with a negative first word;
-  /// the second word's sign then distinguishes the pair. Each leaf of that
-  /// 2x2 dispatch is split into its own single-word-call subroutine
-  /// (do-write/do-cx/do-discard/do-read) purely so every 'if'/'-if' forward
-  /// branch in 'cmd'/'neg-cmd'/'pos-cmd' only ever has to jump over one call
-  /// -- this compiler's packed-instruction forward transfers have a very
-  /// short reach once they land outside slot 0 (an 'align' is used ahead of
-  /// each dispatch test for the same reason, forcing it to start a fresh
-  /// word in slot 0), and splitting the branch bodies out into subroutines
-  /// keeps every jump trivially in range regardless of how large any one
-  /// leaf's own logic is.
-  ///
-  /// CORRECTED (against AN003's own real listing, hand-transcribed and
-  /// supplied by the user, plus the F18A opcode reference DB001 section 2.3.5
-  /// and the arrayForth manuals DB004/DB013 section 5.3.2.1/4.2.4.1): 'if' and
-  /// '-if' do NOT pop T. Per DB001's own wording -- "if. If T is nonzero,
-  /// continues... If T is zero, jumps" / "-if. If T is negative, continues...
-  /// If T is positive, jumps" -- neither description says the value is
-  /// consumed, in explicit contrast to every arithmetic/memory opcode in the
-  /// same reference that DOES ("or... Pops data stack", "!b... pops the data
-  /// stack"). AN003's own 'cmd' confirms this directly: it dispatches with a
-  /// bare '@ -if' and never dups a spare copy first, because -if leaves the
-  /// fetched word sitting on the stack for the branch body to use as-is.
-  ///
-  /// The first version of this file assumed ordinary (ANS-Forth-style)
-  /// popping 'if'/'-if' and so 'dup'-ed a spare copy ahead of every dispatch
-  /// test here, on the assumption the tested copy would be consumed. Under
-  /// the real, non-popping hardware behavior that dup is never consumed by
-  /// anything -- it survives BOTH branches and is left as a permanent extra
-  /// item on node 107's data stack after every single request. 'cx?' had the
-  /// matching bug: its 'xor' comparison result is tested by a non-popping
-  /// 'if' but was never explicitly dropped, so it also survived under the
-  /// restored 'r>'ed arguments in both branches. Neither leak crashes
-  /// anything outright -- the F18A data stack is a 10-deep CIRCULAR buffer
-  /// (DB001 2.3.2: pushing past the top silently overwrites the bottom), so
-  /// there is no hard overflow fault -- but every extra unconsumed word
-  /// pushes real, still-needed values one slot closer to being silently
-  /// clobbered by the next leak, and this compounds every request. Fixed by
-  /// removing the now-unnecessary 'dup' in 'cmd'/'neg-cmd'/'pos-cmd' (the
-  /// fetched word is already available to the branch body without it) and by
-  /// adding an explicit 'drop' of the comparison flag at the top of both of
-  /// 'cx?'s branches.
+  /// Verified against this project's own compiler in a standalone harness:
+  /// compiles with zero diagnostics, 20 words used, entry point resolves to
+  /// 'start' at 0x020.
   /// </summary>
-  public static string BuildNode107Source(string masterPortName)
-  {
-    if (masterPortName is not ("right" or "left" or "up"))
-    {
-      throw new ArgumentException(
-          "Node 107 only has three neighbors that may act as an SRAM memory master: " +
-          "'right' (106), 'left' (108), or 'up' (207).",
-          nameof(masterPortName));
-    }
+  public const string Node008ControlPins = """
+      # 0x1F5 const 'r-l-
+      entry start
+      # 0 org
+      [
+        0x2556E , 0x2557E ,
+        0x3556E , 0x3557E ,
+        0x3557A , 0x3556A ,
+        0x2557A , 0x2556A ,
+      ]
+      # 0x20 org
+      : start
+        'r-l- b!
+        io a!
+      : cmd
+        @b !
+        a >r
+        7 ..
+        @b !b
+        @b dup !b
+        2/ 2/
+        and a!
+        ..
+        @
+        r> a!
+        !
+        cmd ;
+      """;
 
-    return $$"""
-        : start
-          {{masterPortName}} b!
-          cmd ;
+  /// <summary>
+  /// Node 007 -- data bus and control. Transcribed directly from the user's
+  /// own hand-translation of AN003's real listing (see the remarks on
+  /// <see cref="Node009AddressBus"/> and the class-level remarks), including
+  /// the real hand-tuned delay-loop counts (0x13 and 0x40 iterations) this
+  /// file previously had to approximate with a placeholder, since the
+  /// original screen-dump OCR of those constants could not be trusted -- see
+  /// git history for that placeholder if the real counts ever need
+  /// cross-checking.
+  ///
+  /// 'cmd' falls through into 'w16' (no trailing ';') for the write phase,
+  /// and 'w16's body ends in a real call back to 'cmd'; the read phase 'r16'
+  /// is reached only by -if's forward branch (its leading 'then' resolves
+  /// that branch), the same fall-through-vs-branch idiom used throughout
+  /// this cluster (see <see cref="Node009AddressBus"/>).
+  ///
+  /// 'start's body repeats the four words 'out io data stop' twice in a row
+  /// before the only 'a! !' pair in the routine -- confirmed intentional, not
+  /// a transcription duplicate: it deliberately fills the F18A's 10-deep
+  /// CIRCULAR data stack (DB001 2.3.2 -- pushing wraps and replaces the
+  /// bottom entry rather than growing) with two full repeats of the four
+  /// values 'cmd'/'w16'/'r16' need most often. Because popping a circular
+  /// stack simply brings the next-deepest entry up rather than erasing
+  /// anything, this lets later code consume 'out'/'io'/'data'/'stop' for
+  /// free wherever they naturally resurface through ordinary stack traffic,
+  /// instead of spending a real '@p' fetch (an opcode plus a data word, at
+  /// real time cost) on each one every time it's needed. A one-time priming
+  /// cost at 'start' in exchange for cheaper repeated use afterward.
+  ///
+  /// Verified against this project's own compiler in a standalone harness:
+  /// compiles with zero diagnostics, 35 words used, entry point resolves to
+  /// 'start' at 0x020.
+  /// </summary>
+  public const string Node007DataBusAndControl = """
+      # 0x14555 const in
+      # 0x15555 const out
+      # 0x3557F const stop
+      entry start
+      # 0x20 org
+      : start
+        left b!
+        out io data stop
+        out io data stop in io a! !
+        down a! !b
+      : cmd
+        @ !b
+        @ -if
+      : w16
+        !b @ a >r >r a! r> ! a! !
+        0x13 for unext
+        !b in ! r> a!
+        cmd ;
+      : r16
+        then !b a >r a! drop drop
+        0x40 for unext
+        !b @ r> a! !
+        cmd ;
+      """;
 
-        : sram@ ( p a -- w )
-          down b!
-          !b
-          !b
-          @b ;
-
-        : sram! ( p a w -- )
-          down b!
-          >r
-          !b
-          inv !b
-          r> !b ;
-
-        : cx? ( n p a w -- f )
-          >r
-          dup >r
-          over >r
-          sram@
-          xor
-          if
-            drop
-            r> drop r> drop r> drop
-            0
-          else
-            drop
-            r> r> r>
-            sram!
-            xFFFF
-          then ;
-
-        : do-write ( p a -- )
-          @b
-          sram!
-          {{masterPortName}} b! ;
-
-        : do-cx ( n p -- )
-          @b
-          @b
-          cx?
-          {{masterPortName}} b!
-          !b ;
-
-        : neg-cmd ( p-or-n -- )
-          @b align -if
-            inv
-            do-write
-          then
-            do-cx
-          ;
-
-        : do-discard ( p -- )
-          @b drop
-          drop ;
-
-        : do-read ( p a -- )
-          sram@
-          {{masterPortName}} b!
-          !b ;
-
-        : pos-cmd ( p -- )
-          @b align -if
-            drop
-            do-discard
-          then
-            do-read
-          ;
-
-        : cmd
-          @b align -if
-            inv
-            neg-cmd
-          then
-            pos-cmd
-          cmd ;
-        """;
-  }
+  /// <summary>
+  /// Node 107 -- interface. Transcribed directly from the user's own
+  /// hand-translation of AN003's real listing: the FULL, 3-master polling
+  /// node (section 4.1's "cx"/"cmd"/"re"/"cmds"/"poll"), not the earlier
+  /// degenerate single-master (section 6.3) reimplementation this method
+  /// used to build. Because this version polls all three neighbor ports
+  /// itself ('poll's own "right"/"left"/"up ... cmds" dispatch), it is no
+  /// longer generated per master at install time -- it is the same fixed
+  /// image regardless of which of 106/108/207 is acting as master, so
+  /// <c>SramClusterInstaller</c> deploys it unparameterized. This also means
+  /// 'mk!' (see AN003's own protocol table) is live, real logic here instead
+  /// of the degenerate version's deliberate no-op.
+  ///
+  /// Two things the earlier prose-based reimplementation got wrong, both
+  /// confirmed against this real transcription and against the F18A opcode
+  /// reference (DB001 2.3.5) and the arrayForth manuals (DB004/DB013
+  /// 5.3.2.1/4.2.4.1):
+  ///
+  /// 1. 'if'/'-if' do NOT pop T. Per DB001's own wording -- "if. If T is
+  /// nonzero, continues... If T is zero, jumps" / "-if. If T is negative,
+  /// continues... If T is positive, jumps" -- neither description says the
+  /// value is consumed, in explicit contrast to every arithmetic/memory
+  /// opcode in the same reference that DOES ("or... Pops data stack", "!b...
+  /// pops the data stack"). AN003's own 'cmd' confirms this directly: it
+  /// dispatches with a bare '@ -if' and never dups a spare copy first,
+  /// because -if leaves the fetched word sitting on the stack for the branch
+  /// body to use as-is. The degenerate reimplementation had instead assumed
+  /// ordinary (ANS-Forth-style) popping 'if'/'-if' and 'dup'-ed a spare copy
+  /// ahead of every dispatch test, which under the real hardware behavior
+  /// left a permanent extra word on node 107's data stack after every single
+  /// request -- compounding every request against the F18A's 10-deep
+  /// CIRCULAR data stack (DB001 2.3.2) until real, still-needed values got
+  /// silently overwritten.
+  ///
+  /// 2. The entry point is 're', not the start of the source ('cx'). The
+  /// first attempt at wiring this transcription in used the compiler's
+  /// default entry (address 0, i.e. 'cx') because no 'entry' directive was
+  /// present in the transcribed text; the user confirmed 're' is the correct
+  /// entry word. Declared here via 'entry re' before the first 'org', which
+  /// this compiler resolves after the whole source compiles (forward
+  /// reference to a word not yet defined is fine).
+  ///
+  /// STILL OPEN: nothing in this source ever sets B toward node 007 (AN003's
+  /// 'down' direction) -- 'cx's own '!b'/'@b' calls rely on B already being
+  /// there. The degenerate version's 'start' set this explicitly ('down
+  /// b!'); this transcription has no 'start' word at all, and B's value at
+  /// the moment <c>SramClusterInstaller</c> jumps into 're' is whatever was
+  /// last left by ordinary Kraken puppet traffic before Install ran, not
+  /// necessarily 'down'. Flagging rather than guessing -- if AN003's real
+  /// listing sets B elsewhere (e.g. as part of a warm/reset entry this
+  /// transcription doesn't include), that code is still needed here.
+  ///
+  /// Verified against this project's own compiler in a standalone harness:
+  /// compiles with zero diagnostics, 60 words used (comfortably inside the
+  /// 64-word RAM budget), entry point resolves to 're'.
+  /// </summary>
+  public const string Node107Interface = """
+      entry re
+      # 0 org
+      : cx ( wp-) over >r @ dup
+        !b over !b @b r> inv xor if
+        @ dup xor 0xff ! ;
+        then drop !b inv !b @ !b 0xFFFF ! ;
+      : cmd @ -if @ [ ' cx ] -until inv !b !b @ !b ;
+        then @ -if
+        inv >r drop drop r> if
+        drop drop @ 2* over inv ahead [ swap ]
+        then drop and @ over over 2*
+        then and xor
+      : re 0x15555 dup ahead [ swap ]
+        then !b !b @b ! ;
+      : cmds a! cmd
+      : poll then io a!
+        begin drop over over @ xor and until
+        over over and if and and
+        dup 0x10000 and if right ahead [ swap ] then
+        drop 0x1000 over and if left ahead [ swap ] then
+        drop dup up then then
+        a! and xor dup ! [ ' re ] end
+        then drop 2* 2* -if right cmds ;
+        then 2* 2* 2* 2* -if left cmds ;
+        then up cmds ;
+      """;
 
   /// <summary>
   /// The memory-master node's (106/108/207) own resident AN003 support
@@ -344,11 +292,13 @@ internal static class SramClusterPrograms
   /// puppet mode with no special handling needed at either end.
   ///
   /// Every subroutine sets B to <paramref name="masterPortName"/> -- this
-  /// node's OWN local port toward node 107 (the reverse direction of node
-  /// 107's own <c>masterPortName</c> in <see cref="BuildNode107Source"/>; see
-  /// <c>KrakenTopology.PortName(masterCoordinate, 107)</c>) -- itself, every
-  /// call, rather than relying on some earlier puppet operation having left B
-  /// pointed there already.
+  /// node's OWN local port toward node 107 (see
+  /// <c>KrakenTopology.PortName(masterCoordinate, 107)</c>; node 107's own
+  /// <see cref="Node107Interface"/> is no longer parameterized per master --
+  /// it polls all three neighbor ports itself -- but this master-side port
+  /// is still fixed per master, since Kraken always puppets one specific
+  /// master node) -- itself, every call, rather than relying on some earlier
+  /// puppet operation having left B pointed there already.
   ///
   /// Argument order: <see cref="KrakenSramProtocol"/> pushes each op's
   /// arguments in the EXACT REVERSE of AN003's own wire send order, so every
