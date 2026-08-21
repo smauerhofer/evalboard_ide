@@ -15,9 +15,11 @@ public sealed record SramMasterOption(int Coordinate, string Label)
 /// (see <see cref="SramClusterInstaller"/>/<see cref="SramClusterPrograms"/>)
 /// for a chosen memory-master node, then issues ex@/ex!/cx?/mk! requests to
 /// that master through Kraken (see <see cref="KrakenSramProtocol"/>/the SRAM
-/// methods on <see cref="KrakenLiveController"/>). Mirrors
-/// <see cref="KrakenNodeControlViewModel"/>'s busy/status RunAsync shape
-/// rather than duplicating it under a different name.
+/// methods on <see cref="KrakenLiveController"/>), plus a diagnostic-only
+/// echo test (not AN003) that exercises the master's call/return plumbing in
+/// isolation from node 107. Mirrors <see cref="KrakenNodeControlViewModel"/>'s
+/// busy/status RunAsync shape rather than duplicating it under a different
+/// name.
 /// </summary>
 public sealed class SramTentacleViewModel : ObservableObject
 {
@@ -37,6 +39,7 @@ public sealed class SramTentacleViewModel : ObservableObject
   private readonly List<string> _logLines = [];
 
   private SramMasterOption _selectedMaster = MasterOptions[0];
+  private SramMasterSupportAddresses? _masterSupport;
   private bool _isInstalled;
   private bool _isBusy;
   private string _statusText = "Not installed. Choose a master node and click Install SRAM cluster.";
@@ -50,6 +53,8 @@ public sealed class SramTentacleViewModel : ObservableObject
   private string _compareExchangeResultText = "-";
   private string _maskText = "0x8A00";
   private bool _postStimuli;
+  private string _echoValueText = "0x0000";
+  private string _echoResultText = "-";
 
   public SramTentacleViewModel(
       Ga144ChipConfiguration chip,
@@ -69,6 +74,7 @@ public sealed class SramTentacleViewModel : ObservableObject
     WriteCommand = new AsyncRelayCommand(WriteAsync, CanOperate);
     CompareExchangeCommand = new AsyncRelayCommand(CompareExchangeAsync, CanOperate);
     SetMaskCommand = new AsyncRelayCommand(SetMaskAsync, CanOperate);
+    EchoTestCommand = new AsyncRelayCommand(EchoTestAsync, CanEcho);
   }
 
   public IReadOnlyList<SramMasterOption> Masters => MasterOptions;
@@ -81,6 +87,7 @@ public sealed class SramTentacleViewModel : ObservableObject
       if (SetProperty(ref _selectedMaster, value ?? MasterOptions[0]))
       {
         IsInstalled = false;
+        _masterSupport = null;
         StatusText = $"Master changed to {SelectedMaster.Label}. Install (or re-install) the SRAM cluster for this master before using it.";
         NotifyCommandStates();
       }
@@ -116,6 +123,21 @@ public sealed class SramTentacleViewModel : ObservableObject
   public string MaskText { get => _maskText; set => SetProperty(ref _maskText, value ?? string.Empty); }
   public bool PostStimuli { get => _postStimuli; set => SetProperty(ref _postStimuli, value); }
 
+  public string EchoValueText { get => _echoValueText; set => SetProperty(ref _echoValueText, value ?? string.Empty); }
+  public string EchoResultText { get => _echoResultText; private set => SetProperty(ref _echoResultText, value); }
+
+  /// <summary>
+  /// Explains the echo panel's purpose, since it looks like it belongs to
+  /// AN003 but isn't: it's a diagnostic-only call/return sanity check
+  /// against the master node itself, independent of node 107 and the SRAM
+  /// cluster. See the remarks on <see cref="KrakenSramProtocol.BuildEchoTest"/>.
+  /// </summary>
+  public string EchoReferenceText =>
+      "Not an AN003 operation. Calls the master node's own resident 'echo' subroutine, " +
+      "which adds 1 and returns it -- tests Kraken's push/call/read-back to the master " +
+      "itself, without touching node 107 or the rest of the cluster. Available as soon as " +
+      "the master's own support code installs, even if 007/008/009/107 fail.";
+
   /// <summary>
   /// Reference text for the mask panel: AN003 section 3's port write-signal
   /// bits, shown so the mask value doesn't have to be recalled from memory.
@@ -133,13 +155,23 @@ public sealed class SramTentacleViewModel : ObservableObject
   public AsyncRelayCommand WriteCommand { get; }
   public AsyncRelayCommand CompareExchangeCommand { get; }
   public AsyncRelayCommand SetMaskCommand { get; }
+  public AsyncRelayCommand EchoTestCommand { get; }
 
   public void Cancel() => _shutdown.Cancel();
 
   private KrakenNodeRoute? CurrentRoute =>
       _resolveRoutes().TryGetValue(SelectedMaster.Coordinate, out KrakenNodeRoute? route) ? route : null;
 
-  private bool CanOperate() => !IsBusy && IsInstalled && _controller.IsOperational && CurrentRoute is not null;
+  private bool CanOperate() => !IsBusy && IsInstalled && _masterSupport is not null && _controller.IsOperational && CurrentRoute is not null;
+
+  // Deliberately NOT gated on IsInstalled (full-cluster success): the echo
+  // subroutine is part of the master's own support code, which the installer
+  // deploys and resolves BEFORE attempting 007/008/009/107 (see
+  // SramClusterInstaller.InstallAsync), so _masterSupport can be non-null
+  // even when the overall Install failed partway through the rest of the
+  // cluster. That is the whole point of this diagnostic -- it needs to stay
+  // usable precisely when the rest of the cluster might not be working.
+  private bool CanEcho() => !IsBusy && _masterSupport is not null && _controller.IsOperational && CurrentRoute is not null;
 
   private async Task InstallAsync()
   {
@@ -178,8 +210,9 @@ public sealed class SramTentacleViewModel : ObservableObject
       }
 
       IsInstalled = result.Success;
+      _masterSupport = result.MasterSupport;
       StatusText = result.Success
-          ? $"SRAM cluster installed for master {SelectedMaster.Label} (nodes 007, 008, 009, 107)."
+          ? $"SRAM cluster installed for master {SelectedMaster.Label} (its own support code, plus nodes 007, 008, 009, 107)."
           : "SRAM cluster install failed; see log below.";
     }
     catch (OperationCanceledException) when (_shutdown.IsCancellationRequested)
@@ -189,6 +222,7 @@ public sealed class SramTentacleViewModel : ObservableObject
     catch (Exception exception)
     {
       IsInstalled = false;
+      _masterSupport = null;
       StatusText = activity + " failed: " + exception.Message;
       Append("  " + exception.Message);
     }
@@ -202,7 +236,8 @@ public sealed class SramTentacleViewModel : ObservableObject
   {
     int page = ParsePage(PageText);
     int address = ParseWord(AddressText, "address");
-    int value = await _controller.ReadSramWordAsync(CurrentRoute!, page, address, _shutdown.Token);
+    int value = await _controller.ReadSramWordAsync(
+        CurrentRoute!, _masterSupport!.ReadSubroutineAddress, page, address, _shutdown.Token);
     ReadResultText = Format(value);
     Append($"  ex@ page {page:X}, address 0x{address:X4} -> 0x{value:X4}");
   });
@@ -212,7 +247,8 @@ public sealed class SramTentacleViewModel : ObservableObject
     int page = ParsePage(PageText);
     int address = ParseWord(AddressText, "address");
     int value = ParseWord(ValueText, "value");
-    await _controller.WriteSramWordAsync(CurrentRoute!, page, address, value, _shutdown.Token);
+    await _controller.WriteSramWordAsync(
+        CurrentRoute!, _masterSupport!.WriteSubroutineAddress, page, address, value, _shutdown.Token);
     Append($"  ex! page {page:X}, address 0x{address:X4} <- 0x{value:X4}");
   });
 
@@ -223,7 +259,7 @@ public sealed class SramTentacleViewModel : ObservableObject
     int compareValue = ParseWord(CompareValueText, "compare value");
     int newValue = ParseWord(NewValueText, "new value");
     int result = await _controller.CompareExchangeSramWordAsync(
-        CurrentRoute!, page, address, compareValue, newValue, _shutdown.Token);
+        CurrentRoute!, _masterSupport!.CompareExchangeSubroutineAddress, page, address, compareValue, newValue, _shutdown.Token);
     bool stored = (result & 0xFFFF) == 0xFFFF;
     CompareExchangeResultText = stored ? "stored (matched)" : "unchanged (mismatch)";
     Append($"  cx? page {page:X}, address 0x{address:X4}, compare 0x{compareValue:X4}, new 0x{newValue:X4} -> {CompareExchangeResultText}");
@@ -232,8 +268,21 @@ public sealed class SramTentacleViewModel : ObservableObject
   private Task SetMaskAsync() => RunAsync("mk! (set mask)", async () =>
   {
     int mask = ParseWord(MaskText, "mask");
-    await _controller.SetSramMasterMaskAsync(CurrentRoute!, mask, PostStimuli, _shutdown.Token);
+    await _controller.SetSramMasterMaskAsync(
+        CurrentRoute!, _masterSupport!.SetMaskSubroutineAddress, mask, PostStimuli, _shutdown.Token);
     Append($"  mk! mask 0x{mask:X4}, postStimuli {PostStimuli} (protocol-compatible only; see mask reference note)");
+  });
+
+  private Task EchoTestAsync() => RunAsync("echo (node 106 support-code call/return test)", async () =>
+  {
+    int value = ParseWord(EchoValueText, "value");
+    int result = await _controller.EchoTestAsync(
+        CurrentRoute!, _masterSupport!.EchoSubroutineAddress, value, _shutdown.Token);
+    int masked = result & 0xFFFF;
+    int expected = (value + 1) & 0xFFFF;
+    bool matched = masked == expected;
+    EchoResultText = matched ? $"0x{masked:X4} (matches value+1)" : $"0x{masked:X4} (EXPECTED 0x{expected:X4} -- mismatch)";
+    Append($"  echo 0x{value:X4} -> 0x{masked:X4}, expected 0x{expected:X4} ({(matched ? "OK" : "MISMATCH")})");
   });
 
   private async Task RunAsync(string activity, Func<Task> action)
@@ -323,5 +372,6 @@ public sealed class SramTentacleViewModel : ObservableObject
     WriteCommand?.NotifyCanExecuteChanged();
     CompareExchangeCommand?.NotifyCanExecuteChanged();
     SetMaskCommand?.NotifyCanExecuteChanged();
+    EchoTestCommand?.NotifyCanExecuteChanged();
   }
 }

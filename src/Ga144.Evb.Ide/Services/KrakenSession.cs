@@ -426,22 +426,27 @@ internal sealed class KrakenSession : IAsyncDisposable
       }, cancellationToken);
 
   // ---- AN003 SRAM cluster (see KrakenSramProtocol) -----------------------
-  // These puppet _targetRoute as an SRAM memory master (106, 108, or 207).
-  // They only work once the SRAM cluster's resident firmware (nodes
-  // 007/008/009/107; see SramClusterPrograms/SramClusterInstaller) has
-  // actually been installed and is running -- there is no erection
-  // precondition for these the way there is for a fresh Kraken, since the
-  // master role itself needs no resident program of its own.
+  // These puppet _targetRoute as an SRAM memory master (106, 108, or 207),
+  // calling into ITS OWN resident support subroutine for the op (see
+  // SramClusterPrograms.BuildMasterSupportSource) -- 'subroutineAddress' is
+  // that subroutine's address, resolved once at install time from the
+  // compiled symbol table (see SramClusterInstaller.SramMasterSupportAddresses)
+  // and cached by the caller (SramTentacleViewModel). These only work once
+  // the SRAM cluster's resident firmware -- the master's own support code,
+  // AND nodes 007/008/009/107; see SramClusterPrograms/SramClusterInstaller
+  // -- has actually been installed: there is no erection precondition for
+  // these the way there is for a fresh Kraken, since the master route itself
+  // is already puppetable the moment it's reachable.
 
   /// <summary>AN003 'ex@': reads the 16-bit word at 20-bit address page:address.</summary>
-  public Task<int> ReadSramWordAsync(int page, int address, CancellationToken cancellationToken = default) =>
-      RunExclusiveAsync(() => ReadSramWord(_targetRoute, page, address, cancellationToken), cancellationToken);
+  public Task<int> ReadSramWordAsync(int subroutineAddress, int page, int address, CancellationToken cancellationToken = default) =>
+      RunExclusiveAsync(() => ReadSramWord(_targetRoute, subroutineAddress, page, address, cancellationToken), cancellationToken);
 
   /// <summary>AN003 'ex!': writes a 16-bit word to 20-bit address page:address.</summary>
-  public Task WriteSramWordAsync(int page, int address, int value, CancellationToken cancellationToken = default) =>
+  public Task WriteSramWordAsync(int subroutineAddress, int page, int address, int value, CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(() =>
       {
-        WriteSramWord(_targetRoute, page, address, value, cancellationToken);
+        WriteSramWord(_targetRoute, subroutineAddress, page, address, value, cancellationToken);
         return 0;
       }, cancellationToken);
 
@@ -451,9 +456,9 @@ internal sealed class KrakenSession : IAsyncDisposable
   /// otherwise leaves memory untouched and returns false (0).
   /// </summary>
   public Task<int> CompareExchangeSramWordAsync(
-      int page, int address, int compareValue, int newValue, CancellationToken cancellationToken = default) =>
+      int subroutineAddress, int page, int address, int compareValue, int newValue, CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(
-          () => CompareExchangeSramWord(_targetRoute, page, address, compareValue, newValue, cancellationToken),
+          () => CompareExchangeSramWord(_targetRoute, subroutineAddress, page, address, compareValue, newValue, cancellationToken),
           cancellationToken);
 
   /// <summary>
@@ -463,12 +468,23 @@ internal sealed class KrakenSession : IAsyncDisposable
   /// -- with this project's single-fixed-master node 107, this call round-trips
   /// on the wire but does not change which master is enabled.
   /// </summary>
-  public Task SetSramMasterMaskAsync(int mask, bool postStimuli, CancellationToken cancellationToken = default) =>
+  public Task SetSramMasterMaskAsync(int subroutineAddress, int mask, bool postStimuli, CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(() =>
       {
-        SetSramMasterMask(_targetRoute, mask, postStimuli, cancellationToken);
+        SetSramMasterMask(_targetRoute, subroutineAddress, mask, postStimuli, cancellationToken);
         return 0;
       }, cancellationToken);
+
+  /// <summary>
+  /// DIAGNOSTIC ONLY, not part of AN003: calls the master's own resident
+  /// 'echo' subroutine, which adds 1 to <paramref name="value"/> and returns
+  /// it, touching neither B nor node 107. Exercises exactly the same
+  /// '@p'-push / 'call' / '!p'-read-back mechanism the SRAM ops above use, in
+  /// isolation from the AN003 handshake with 107 -- see the remarks on
+  /// <see cref="KrakenSramProtocol.BuildEchoTest"/>.
+  /// </summary>
+  public Task<int> EchoTestAsync(int subroutineAddress, int value, CancellationToken cancellationToken = default) =>
+      RunExclusiveAsync(() => EchoTest(_targetRoute, subroutineAddress, value, cancellationToken), cancellationToken);
 
 
   public async Task ParkTransportAsync(CancellationToken cancellationToken = default)
@@ -987,43 +1003,45 @@ internal sealed class KrakenSession : IAsyncDisposable
   private void WriteMemory(KrakenNodeRoute route, int value, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
       Transact(route, KrakenProtocol.BuildWriteMemory(value), wordsToRead: 1, cancellationToken, settleMilliseconds);
 
-  private int ReadSramWord(KrakenNodeRoute route, int page, int address, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
+  private int ReadSramWord(KrakenNodeRoute route, int subroutineAddress, int page, int address, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
       Transact(
           route,
-          KrakenSramProtocol.BuildSramReadWord(MasterPortToNode107(route), page, address),
+          KrakenSramProtocol.BuildSramReadWord(subroutineAddress, page, address),
           wordsToRead: 1,
           cancellationToken,
           settleMilliseconds)[0];
 
-  private void WriteSramWord(KrakenNodeRoute route, int page, int address, int value, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
+  private void WriteSramWord(KrakenNodeRoute route, int subroutineAddress, int page, int address, int value, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
       Transact(
           route,
-          KrakenSramProtocol.BuildSramWriteWord(MasterPortToNode107(route), page, address, value),
+          KrakenSramProtocol.BuildSramWriteWord(subroutineAddress, page, address, value),
           wordsToRead: 1,
           cancellationToken,
           settleMilliseconds);
 
-  private int CompareExchangeSramWord(KrakenNodeRoute route, int page, int address, int compareValue, int newValue, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
+  private int CompareExchangeSramWord(KrakenNodeRoute route, int subroutineAddress, int page, int address, int compareValue, int newValue, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
       Transact(
           route,
-          KrakenSramProtocol.BuildSramCompareExchange(MasterPortToNode107(route), page, address, compareValue, newValue),
+          KrakenSramProtocol.BuildSramCompareExchange(subroutineAddress, page, address, compareValue, newValue),
           wordsToRead: 1,
           cancellationToken,
           settleMilliseconds)[0];
 
-  private void SetSramMasterMask(KrakenNodeRoute route, int mask, bool postStimuli, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
+  private void SetSramMasterMask(KrakenNodeRoute route, int subroutineAddress, int mask, bool postStimuli, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
       Transact(
           route,
-          KrakenSramProtocol.BuildSramSetMask(MasterPortToNode107(route), mask, postStimuli),
+          KrakenSramProtocol.BuildSramSetMask(subroutineAddress, mask, postStimuli),
           wordsToRead: 1,
           cancellationToken,
           settleMilliseconds);
 
-  // Node 107 is fixed at coordinate 7*100+7 = 107; the master's LOCAL port
-  // toward it depends on which of 106/108/207 route.Coordinate is (compass
-  // mirroring, per KrakenTopology.PortAddress). Throws if route.Coordinate is
-  // not actually adjacent to 107, i.e. not a valid SRAM master.
-  private static int MasterPortToNode107(KrakenNodeRoute route) => KrakenTopology.PortAddress(route.Coordinate, 107);
+  private int EchoTest(KrakenNodeRoute route, int subroutineAddress, int value, CancellationToken cancellationToken, int settleMilliseconds = OnlineTransactionSettleMilliseconds) =>
+      Transact(
+          route,
+          KrakenSramProtocol.BuildEchoTest(subroutineAddress, value),
+          wordsToRead: 1,
+          cancellationToken,
+          settleMilliseconds)[0];
 
   private KrakenRamZeroCheckResult CheckRamZero(KrakenNodeRoute route, CancellationToken cancellationToken)
   {

@@ -280,24 +280,37 @@ public sealed class KrakenLiveController : IAsyncDisposable
 
   // ---- AN003 SRAM cluster (see KrakenSramProtocol / KrakenSession) -------
   // 'route' here is the memory-master node (106, 108, or 207) being puppeted,
-  // not node 107 itself. The SRAM cluster's resident firmware must already
-  // be installed and running (see SramClusterInstaller) before these are used.
+  // not node 107 itself. 'subroutineAddress' is the address of that master's
+  // OWN resident support subroutine for this op (see
+  // SramClusterPrograms.BuildMasterSupportSource), resolved once at install
+  // time (see SramClusterInstaller.SramMasterSupportAddresses). Both the
+  // master's support code AND the cluster's other resident firmware
+  // (007/008/009/107) must already be installed and running (see
+  // SramClusterInstaller) before any of these are used.
 
-  public Task<int> ReadSramWordAsync(KrakenNodeRoute route, int page, int address, CancellationToken cancellationToken = default) =>
-      RunForRouteValueAsync(route, session => session.ReadSramWordAsync(page, address, cancellationToken), cancellationToken);
+  public Task<int> ReadSramWordAsync(KrakenNodeRoute route, int subroutineAddress, int page, int address, CancellationToken cancellationToken = default) =>
+      RunForRouteValueAsync(route, session => session.ReadSramWordAsync(subroutineAddress, page, address, cancellationToken), cancellationToken);
 
-  public Task WriteSramWordAsync(KrakenNodeRoute route, int page, int address, int value, CancellationToken cancellationToken = default) =>
-      RunForRouteAsync(route, session => session.WriteSramWordAsync(page, address, value, cancellationToken), cancellationToken);
+  public Task WriteSramWordAsync(KrakenNodeRoute route, int subroutineAddress, int page, int address, int value, CancellationToken cancellationToken = default) =>
+      RunForRouteAsync(route, session => session.WriteSramWordAsync(subroutineAddress, page, address, value, cancellationToken), cancellationToken);
 
   public Task<int> CompareExchangeSramWordAsync(
-      KrakenNodeRoute route, int page, int address, int compareValue, int newValue, CancellationToken cancellationToken = default) =>
+      KrakenNodeRoute route, int subroutineAddress, int page, int address, int compareValue, int newValue, CancellationToken cancellationToken = default) =>
       RunForRouteValueAsync(
           route,
-          session => session.CompareExchangeSramWordAsync(page, address, compareValue, newValue, cancellationToken),
+          session => session.CompareExchangeSramWordAsync(subroutineAddress, page, address, compareValue, newValue, cancellationToken),
           cancellationToken);
 
-  public Task SetSramMasterMaskAsync(KrakenNodeRoute route, int mask, bool postStimuli, CancellationToken cancellationToken = default) =>
-      RunForRouteAsync(route, session => session.SetSramMasterMaskAsync(mask, postStimuli, cancellationToken), cancellationToken);
+  public Task SetSramMasterMaskAsync(KrakenNodeRoute route, int subroutineAddress, int mask, bool postStimuli, CancellationToken cancellationToken = default) =>
+      RunForRouteAsync(route, session => session.SetSramMasterMaskAsync(subroutineAddress, mask, postStimuli, cancellationToken), cancellationToken);
+
+  /// <summary>
+  /// DIAGNOSTIC ONLY, not part of AN003: calls the master's own resident
+  /// 'echo' subroutine (adds 1, touches neither B nor node 107). See the
+  /// remarks on <see cref="KrakenSramProtocol.BuildEchoTest"/>.
+  /// </summary>
+  public Task<int> EchoTestAsync(KrakenNodeRoute route, int subroutineAddress, int value, CancellationToken cancellationToken = default) =>
+      RunForRouteValueAsync(route, session => session.EchoTestAsync(subroutineAddress, value, cancellationToken), cancellationToken);
 
   internal async Task<IReadOnlyList<KrakenRamZeroCheckResult>> CheckRamZeroAsync(
       IReadOnlyList<KrakenNodeRoute> routes,

@@ -5,7 +5,7 @@ public sealed class F18Compiler
   private static readonly HashSet<string> ReservedCompilerWords = new(StringComparer.OrdinalIgnoreCase)
     {
         ":", ";", "[", "]", "org", "entry", "const", "constant", "equ", "f18var", "label", "data", "word", ".word", ",",
-        "align", "..", "lit", "literal", "A[", "]]", "call", "jump", "jmp",
+        "align", "..", "lit", "literal", "'", "A[", "]]", "call", "jump", "jmp",
         "branch-if", "branch--if", "branch-next", "begin", "again", "until", "-until",
         "if", "-if", "zif", "else", "then", "ahead", "leap", "for", "next", "unext", "while", "-while",
         "repeat", "recurse", "exit", "import", "swap", "here", "end", "*next", "avail", "+cy", "-cy",
@@ -292,6 +292,9 @@ public sealed class F18Compiler
         return;
       case "#":
         PushHashValue(token);
+        return;
+      case "'":
+        PushTickValue(token);
         return;
       // 'lit' is the real GA144/DB013 word: postfix, same as 'literal' -- it
       // compiles whatever is already on the compile-time stack (typically left
@@ -1054,6 +1057,38 @@ public sealed class F18Compiler
         "F18C018",
         $"'{valueToken.Text}' after '#' is not a numeric value, constant, label, or named value.",
         valueToken.Location);
+  }
+
+  // ' (tick, colorForth/AN003 convention): the following word's ADDRESS is
+  // left on the compile-time stack rather than being compiled as a call --
+  // functionally the same lookup '#' already performs (PushHashValue), just
+  // spelled the way AN003's original listings write it, e.g. node 107's
+  // 'cmd @ -if @ ' cx -until ...' and 'poll ... dup ! ' re end'. Both need the
+  // ENTRY ADDRESS of an already-defined, separately ';'-terminated word so a
+  // backward branch (-until/end) can jump straight into it, rather than the
+  // 'begin' marker a plain backward branch would otherwise capture at the
+  // branch site itself. Transcribed source may write either '[ ' cx ] -until'
+  // or the equivalent bareword form '[ cx ] -until' (a name inside '[ ... ]'
+  // already resolves to its address per TryResolveInterpretValue) -- tick adds
+  // no new capability, only the original spelling.
+  private void PushTickValue(F18Token token)
+  {
+    F18Token? nameToken = ReadRequiredToken(token, "word name after '''");
+    if (nameToken is null)
+    {
+      return;
+    }
+
+    if (TryResolveInterpretValue(nameToken, out int value))
+    {
+      Interpreter.TryPushData(value, token);
+      return;
+    }
+
+    AddError(
+        "F18C060",
+        $"''' cannot find a word, constant, or label named '{nameToken.Text}'.",
+        nameToken.Location);
   }
 
   private void CompileQuotedInstruction(F18Token openingToken)

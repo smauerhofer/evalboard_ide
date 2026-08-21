@@ -202,6 +202,37 @@ internal static class SramClusterPrograms
   /// word in slot 0), and splitting the branch bodies out into subroutines
   /// keeps every jump trivially in range regardless of how large any one
   /// leaf's own logic is.
+  ///
+  /// CORRECTED (against AN003's own real listing, hand-transcribed and
+  /// supplied by the user, plus the F18A opcode reference DB001 section 2.3.5
+  /// and the arrayForth manuals DB004/DB013 section 5.3.2.1/4.2.4.1): 'if' and
+  /// '-if' do NOT pop T. Per DB001's own wording -- "if. If T is nonzero,
+  /// continues... If T is zero, jumps" / "-if. If T is negative, continues...
+  /// If T is positive, jumps" -- neither description says the value is
+  /// consumed, in explicit contrast to every arithmetic/memory opcode in the
+  /// same reference that DOES ("or... Pops data stack", "!b... pops the data
+  /// stack"). AN003's own 'cmd' confirms this directly: it dispatches with a
+  /// bare '@ -if' and never dups a spare copy first, because -if leaves the
+  /// fetched word sitting on the stack for the branch body to use as-is.
+  ///
+  /// The first version of this file assumed ordinary (ANS-Forth-style)
+  /// popping 'if'/'-if' and so 'dup'-ed a spare copy ahead of every dispatch
+  /// test here, on the assumption the tested copy would be consumed. Under
+  /// the real, non-popping hardware behavior that dup is never consumed by
+  /// anything -- it survives BOTH branches and is left as a permanent extra
+  /// item on node 107's data stack after every single request. 'cx?' had the
+  /// matching bug: its 'xor' comparison result is tested by a non-popping
+  /// 'if' but was never explicitly dropped, so it also survived under the
+  /// restored 'r>'ed arguments in both branches. Neither leak crashes
+  /// anything outright -- the F18A data stack is a 10-deep CIRCULAR buffer
+  /// (DB001 2.3.2: pushing past the top silently overwrites the bottom), so
+  /// there is no hard overflow fault -- but every extra unconsumed word
+  /// pushes real, still-needed values one slot closer to being silently
+  /// clobbered by the next leak, and this compounds every request. Fixed by
+  /// removing the now-unnecessary 'dup' in 'cmd'/'neg-cmd'/'pos-cmd' (the
+  /// fetched word is already available to the branch body without it) and by
+  /// adding an explicit 'drop' of the comparison flag at the top of both of
+  /// 'cx?'s branches.
   /// </summary>
   public static string BuildNode107Source(string masterPortName)
   {
@@ -238,9 +269,11 @@ internal static class SramClusterPrograms
           sram@
           xor
           if
+            drop
             r> drop r> drop r> drop
             0
           else
+            drop
             r> r> r>
             sram!
             xFFFF
@@ -259,7 +292,7 @@ internal static class SramClusterPrograms
           !b ;
 
         : neg-cmd ( p-or-n -- )
-          @b dup align -if
+          @b align -if
             inv
             do-write
           then
@@ -276,7 +309,7 @@ internal static class SramClusterPrograms
           !b ;
 
         : pos-cmd ( p -- )
-          @b dup align -if
+          @b align -if
             drop
             do-discard
           then
@@ -284,12 +317,99 @@ internal static class SramClusterPrograms
           ;
 
         : cmd
-          @b dup align -if
+          @b align -if
             inv
             neg-cmd
           then
             pos-cmd
           cmd ;
+        """;
+  }
+
+  /// <summary>
+  /// The memory-master node's (106/108/207) own resident AN003 support
+  /// subroutines -- one per primitive (<c>sram-read</c>/<c>sram-write</c>/
+  /// <c>sram-cx</c>/<c>sram-mask</c>). Unlike the four programs above, this is
+  /// deployed with <c>KrakenLiveController.WriteRamAsync</c> ONLY -- never
+  /// followed by <c>JumpAsync</c> -- so the master's P register stays parked
+  /// on its incoming port and the node remains puppetable indefinitely, the
+  /// same way it was before this was installed. Nothing here ever runs on
+  /// its own; each subroutine only executes when a host-built leaf (see
+  /// <see cref="KrakenSramProtocol"/>) pushes that op's arguments onto this
+  /// node's stack via '@p' and then injects a real 'call' word addressed at
+  /// the subroutine. A GA144 port address does not advance P the way a
+  /// RAM/ROM address does, so that 'call' safely pushes the still-valid port
+  /// address as its return address; each subroutine's own compiler-emitted
+  /// closing ';' pops that same address back into P, handing control back to
+  /// puppet mode with no special handling needed at either end.
+  ///
+  /// Every subroutine sets B to <paramref name="masterPortName"/> -- this
+  /// node's OWN local port toward node 107 (the reverse direction of node
+  /// 107's own <c>masterPortName</c> in <see cref="BuildNode107Source"/>; see
+  /// <c>KrakenTopology.PortName(masterCoordinate, 107)</c>) -- itself, every
+  /// call, rather than relying on some earlier puppet operation having left B
+  /// pointed there already.
+  ///
+  /// Argument order: <see cref="KrakenSramProtocol"/> pushes each op's
+  /// arguments in the EXACT REVERSE of AN003's own wire send order, so every
+  /// subroutine here can just fire off its '!b' writes strictly in stack-pop
+  /// order with no swap/rot of its own -- the first word popped is always the
+  /// first word AN003 expects on the wire. ex!/mk!, which AN003 defines no
+  /// reply for, 'dup' the value being sent before the last '!b' and leave the
+  /// duplicate on the stack as the required echoed acknowledgment (matching
+  /// KrakenProtocol.BuildWriteA/BuildWriteMemory's own convention); ex@/cx?,
+  /// which do have a real protocol reply, end in a genuine '@b' instead.
+  ///
+  /// Also includes 'echo' -- DIAGNOSTIC ONLY, not part of AN003 at all. It
+  /// never touches B or node 107; it exists purely to exercise the
+  /// '@p'-push / 'call' / '!p'-read-back mechanism itself (see
+  /// <see cref="KrakenSramProtocol.BuildEchoTest"/>) against real master-node
+  /// hardware, in isolation from the AN003 handshake with 107 -- so a failure
+  /// there can be told apart from a failure in this call/return plumbing.
+  /// Deliberately increments the pushed value ('1 +') rather than returning
+  /// it unchanged: a bare ';' would "pass" even if the call never actually
+  /// ran and the old value was simply still sitting on the stack from
+  /// something else, whereas a changed, predictable result can only come
+  /// from the subroutine's own instruction genuinely executing.
+  /// </summary>
+  public static string BuildMasterSupportSource(string masterPortName)
+  {
+    if (masterPortName is not ("right" or "left" or "up" or "down"))
+    {
+      throw new ArgumentException(
+          "A memory-master node's local port toward node 107 must be one of the four compass directions.",
+          nameof(masterPortName));
+    }
+
+    return $$"""
+        : sram-read ( addr page -- w )
+          {{masterPortName}} b!
+          !b
+          !b
+          @b ;
+
+        : sram-write ( value addr page -- value )
+          {{masterPortName}} b!
+          !b
+          !b
+          dup !b ;
+
+        : sram-cx ( w a p n -- f )
+          {{masterPortName}} b!
+          !b
+          !b
+          !b
+          !b
+          @b ;
+
+        : sram-mask ( m f x -- m )
+          {{masterPortName}} b!
+          !b
+          !b
+          dup !b ;
+
+        : echo ( n -- n+1 )
+          1 + ;
         """;
   }
 }

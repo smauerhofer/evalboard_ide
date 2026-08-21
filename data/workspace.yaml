@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-21T15:17:28.0278346
-      utcDateTime: 2026-08-21T15:17:28.0278346Z
-      localDateTime: 2026-08-21T17:17:28.0278346+02:00
+      dateTime: 2026-08-21T19:36:23.5276022
+      utcDateTime: 2026-08-21T19:36:23.5276022Z
+      localDateTime: 2026-08-21T21:36:23.5276022+02:00
       date: 2026-08-21T00:00:00.0000000
       day: 21
       dayOfWeek: Friday
       dayOfYear: 233
-      hour: 15
-      millisecond: 27
-      microsecond: 834
-      nanosecond: 600
-      minute: 17
+      hour: 19
+      millisecond: 527
+      microsecond: 602
+      nanosecond: 200
+      minute: 36
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 28
-      ticks: 639229222480278346
-      utcTicks: 639229222480278346
-      timeOfDay: 15:17:28.0278346
+      second: 23
+      ticks: 639229377835276022
+      utcTicks: 639229377835276022
+      timeOfDay: 19:36:23.5276022
       year: 2026
   portB: 
   portC:
@@ -200,11 +200,75 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 7
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: "# 0x14555 const in\r\n# 0x15555 const out\r\n# 0x3557F const stop\r\n\r\nentry start\r\n\r\n\r\n# 0x20 org\r\n: start left b! out io data stop\r\n  out io data stop in io a! !\r\n  down a! !b\r\n: cmd @ !b @ -if\r\n: w16 !b @ a >r >r a! r> ! a! ! 0x13 for unext !b in ! r> a! cmd ;\r\n: r16 then !b a >r a! drop drop 0x40 for unext !b @ r> a! ! cmd ; "
+      ramWords:
+      - 0x1DB0A
+      - 0x26A2A
+      - 0x11431
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x04B17
+      - 0x00175
+      - 0x15555
+      - 0x0015D
+      - 0x05D17
+      - 0x00141
+      - 0x3557F
+      - 0x15555
+      - 0x0015D
+      - 0x05D17
+      - 0x00141
+      - 0x3557F
+      - 0x14555
+      - 0x0015D
+      - 0x2BA12
+      - 0x00115
+      - 0x2BBB2
+      - 0x03B0A
+      - 0x1B43C
+      - 0x09E8A
+      - 0x2E8AA
+      - 0x27AAA
+      - 0x0BDBA
+      - 0x00013
+      - 0x1DB12
+      - 0x14555
+      - 0x0ACAA
+      - 0x11431
+      - 0x08EBA
+      - 0x2A2EF
+      - 0x00040
+      - 0x2E9B2
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x020
         p: 0x000
         a: 0x000
         b: 0x000
@@ -212,8 +276,32 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 8
-      enabled: false
-      sourceCode: ''
+      enabled: true
+      sourceCode: >-
+        # 0x1F5 const 'r-l-
+
+
+        entry start
+
+
+        # 0 org
+
+        // 'start' pin control table 0-7
+
+        [
+          0x2556E , 2557E ,
+          0x3556E , 3557E ,
+          0x3557A , 3556A ,
+          0x2557A , 2556A ,
+        ]
+
+        # 0x20 org
+
+        : start 'r-l- b! io a!
+
+        : cmd @b ! a >r 7 ..
+          @b !b @b dup !b
+          2/ 2/ and a! .. @ r> a! ! cmd ;
       ramWords: []
       startup:
         entryPoint: 0x000
@@ -226,19 +314,84 @@ projects:
     - coordinate: 9
       enabled: true
       sourceCode: >-
-        : start
-          right b!
-          cmd ;
+        # 0x20 org
 
-        : cmd
-          @b 2* 2*
-          @b -if inv then
-          3 and xor
-          data a! !
-          cmd ;
-      ramWords: []
+
+        entry start
+
+
+        : start right b! .. data a! .. 3
+
+        : cmd @b 2* 2* over @b -if
+          inv and xor ! cmd ;
+          then and xor .. ! cmd ;
+      ramWords:
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x04BB2
+      - 0x001D5
+      - 0x04AB2
+      - 0x00141
+      - 0x049B2
+      - 0x00003
+      - 0x004DA
+      - 0x21F6A
+      - 0x320E2
+      - 0x0B726
+      - 0x3E3B2
+      - 0x0B726
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x020
         p: 0x000
         a: 0x000
         b: 0x000
@@ -414,8 +567,36 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 106
-      enabled: false
-      sourceCode: ''
+      enabled: true
+      sourceCode: >-
+        : sram-read ( addr page -- w )
+          right b!
+          !b
+          !b
+          @b ;
+
+        : sram-write ( value addr page -- value )
+          right b!
+          !b
+          !b
+          dup !b ;
+
+        : sram-cx ( w a p n -- f )
+          right b!
+          !b
+          !b
+          !b
+          !b
+          @b ;
+
+        : sram-mask ( m f x -- m )
+          right b!
+          !b
+          !b
+          dup !b ;
+
+        : echo ( n -- n+1 )
+          1 + ;
       ramWords: []
       startup:
         entryPoint: 0x000
@@ -426,9 +607,100 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 107
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >-
+        # 0 org
+
+        : cx ( wp-) over >r @ dup
+          !b over !b @b r> inv xor if
+          @ dup xor 0xff ! ;
+          then drop !b inv !b @ !b 0xFFFF ! ;
+
+        : cmd @ -if @ [ ' cx ] -until inv !b !b @ !b ;
+          then @ -if 
+          inv >r drop drop r> if
+          drop drop @ 2* over inv ahead [ swap ]
+          then drop and @ over over 2*
+          then and xor
+        : re 0x15555 dup ahead [ swap ]
+          then !b !b @b ! ;
+        : cmds a! cmd
+
+        : poll then io a!
+          begin drop over over @ xor and until
+          over over and if and and
+          dup 0x10000 and if right ahead [ swap ] then
+          drop 0x1000 over and if left ahead [ swap ] then
+          drop dup up then then
+          a! and xor dup ! [ ' re ] end
+          then drop 2* 2* -if right cmds ;
+          then 2* 2* 2* 2* -if left cmds ;
+          then up cmds ;
+      ramWords:
+      - 0x2080B
+      - 0x08F22
+      - 0x00CCA
+      - 0x39307
+      - 0x02DE7
+      - 0x000FF
+      - 0x0B555
+      - 0x3BBCA
+      - 0x09E27
+      - 0x0FFFF
+      - 0x0B555
+      - 0x0320F
+      - 0x03200
+      - 0x33B22
+      - 0x03B55
+      - 0x0321A
+      - 0x328EA
+      - 0x3AC65
+      - 0x3A20A
+      - 0x36FCA
+      - 0x11417
+      - 0x3A00A
+      - 0x20FDA
+      - 0x3E3B2
+      - 0x04D45
+      - 0x15555
+      - 0x09B02
+      - 0x0B555
+      - 0x2B60B
+      - 0x04AB2
+      - 0x0015D
+      - 0x3AF82
+      - 0x023FA
+      - 0x1941F
+      - 0x20FFA
+      - 0x19432
+      - 0x3E097
+      - 0x10000
+      - 0x3F329
+      - 0x05730
+      - 0x001D5
+      - 0x3BD82
+      - 0x01000
+      - 0x3F32E
+      - 0x05730
+      - 0x00175
+      - 0x3AD12
+      - 0x00145
+      - 0x2A0E3
+      - 0x0B718
+      - 0x3A4DA
+      - 0x1B436
+      - 0x0571C
+      - 0x001D5
+      - 0x364DA
+      - 0x3723A
+      - 0x0571C
+      - 0x00175
+      - 0x0571C
+      - 0x00145
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
