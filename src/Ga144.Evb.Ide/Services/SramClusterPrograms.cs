@@ -148,18 +148,38 @@ internal static class SramClusterPrograms
   /// that branch), the same fall-through-vs-branch idiom used throughout
   /// this cluster (see <see cref="Node009AddressBus"/>).
   ///
-  /// 'start's body repeats the four words 'out io data stop' twice in a row
-  /// before the only 'a! !' pair in the routine -- confirmed intentional, not
-  /// a transcription duplicate: it deliberately fills the F18A's 10-deep
-  /// CIRCULAR data stack (DB001 2.3.2 -- pushing wraps and replaces the
-  /// bottom entry rather than growing) with two full repeats of the four
-  /// values 'cmd'/'w16'/'r16' need most often. Because popping a circular
-  /// stack simply brings the next-deepest entry up rather than erasing
-  /// anything, this lets later code consume 'out'/'io'/'data'/'stop' for
-  /// free wherever they naturally resurface through ordinary stack traffic,
+  /// 'start', word by word (per the user's own commentary on this
+  /// transcription): 'left b!' points B at node 008 (the control-pins node),
+  /// the port 'cmd'/'w16'/'r16' keep using for the rest of the routine. The
+  /// two repeats of 'out io data stop' that follow are confirmed
+  /// intentional, not a transcription duplicate -- they deliberately fill
+  /// eight of the F18A's ten CIRCULAR data-stack slots (DB001 2.3.2 --
+  /// pushing always lands on the ring's next slot and overwrites whatever
+  /// was there ten pushes ago, rather than growing; popping simply exposes
+  /// the previous slot's still-resident value rather than erasing anything)
+  /// with two full repeats of the four literal values 'cmd'/'w16'/'r16' need
+  /// most often, so later code can consume 'out'/'io'/'data'/'stop' for free
+  /// wherever they naturally resurface through ordinary 'drop'/pop traffic,
   /// instead of spending a real '@p' fetch (an opcode plus a data word, at
-  /// real time cost) on each one every time it's needed. A one-time priming
-  /// cost at 'start' in exchange for cheaper repeated use afterward.
+  /// real time cost) on each one every time it's needed -- a one-time
+  /// priming cost at 'start' in exchange for cheaper repeated use
+  /// afterward. 'in io a! !' then points A at this node's own I/O register
+  /// ('io') and stores 'in' there, switching the external SRAM data bus to
+  /// INPUT mode. Finally 'down a! !b' points A at 'down' -- the local port
+  /// toward node 107, which is this routine's own resting/default value for
+  /// A between requests (not the F18A hardware reset default DB013's '/a'
+  /// directive describes) -- and '!b' sends the value newly exposed on top
+  /// of the stack, 'stop', out to node 008 over B. Those last two 'a!'
+  /// targets ('io', then 'down') are one-time transient values that land in
+  /// two of the ring's ten slots and get naturally overwritten again by
+  /// 'cmd'/'w16'/'r16's own ordinary push traffic soon after execution
+  /// begins; the primed 'out'/'io'/'data'/'stop' 4-cycle occupying the other
+  /// eight slots is never touched by that traffic and so persists
+  /// indefinitely. That is the steady-state pattern the user describes, S
+  /// and T on the right: "[io data stop out io data stop out | io data]" --
+  /// an 8-word repeating cycle read around the ring's full 10-slot view,
+  /// advanced through with plain 'drop's wherever 'cmd'/'w16'/'r16' need the
+  /// next literal in the cycle.
   ///
   /// Verified against this project's own compiler in a standalone harness:
   /// compiles with zero diagnostics, 35 words used, entry point resolves to
