@@ -5,7 +5,7 @@ public sealed class F18Compiler
   private static readonly HashSet<string> ReservedCompilerWords = new(StringComparer.OrdinalIgnoreCase)
     {
         ":", ";", "[", "]", "org", "entry", "const", "constant", "equ", "f18var", "label", "data", "word", ".word", ",",
-        "align", "..", "lit", "literal", "'", "A[", "]]", "call", "jump", "jmp",
+        "align", "..", "lit", "literal", "'", "/a", "/b", "/io", "/p", "/stack", "A[", "]]", "call", "jump", "jmp",
         "branch-if", "branch--if", "branch-next", "begin", "again", "until", "-until",
         "if", "-if", "zif", "else", "then", "ahead", "leap", "for", "next", "unext", "while", "-while",
         "repeat", "recurse", "exit", "import", "swap", "here", "end", "*next", "avail", "+cy", "-cy",
@@ -33,6 +33,12 @@ public sealed class F18Compiler
   private string? _currentDefinition;
   private int? _firstDefinitionAddress;
   private F18Token? _entryToken;
+  private int? _explicitInitialP;
+  private F18Token? _explicitInitialPToken;
+  private int? _initialA;
+  private int? _initialB;
+  private int? _initialIo;
+  private IReadOnlyList<int>? _initialStack;
   private F18CompilerOptions _options = F18CompilerOptions.ForRam();
 
   public F18CompileResult Compile(string source, F18CompilerOptions? options = null)
@@ -85,7 +91,11 @@ public sealed class F18Compiler
       EntryPoint = entryPoint,
       UsedWordCount = Builder.UsedWordCount,
       InterpreterDataStack = Interpreter.DataStack.ToArray(),
-      InterpreterReturnStack = Interpreter.ReturnStack.ToArray()
+      InterpreterReturnStack = Interpreter.ReturnStack.ToArray(),
+      InitialA = _initialA,
+      InitialB = _initialB,
+      InitialIo = _initialIo,
+      InitialStack = _initialStack ?? []
     };
   }
 
@@ -199,6 +209,12 @@ public sealed class F18Compiler
     _currentDefinition = null;
     _firstDefinitionAddress = null;
     _entryToken = null;
+    _explicitInitialP = null;
+    _explicitInitialPToken = null;
+    _initialA = null;
+    _initialB = null;
+    _initialIo = null;
+    _initialStack = null;
     _builder = null;
     _interpreter = new F18CompileTimeInterpreter(AddDiagnostic);
   }
@@ -238,6 +254,21 @@ public sealed class F18Compiler
         return;
       case "entry":
         CompileEntry(token);
+        return;
+      case "/a":
+        CompileInitialA(token);
+        return;
+      case "/b":
+        CompileInitialB(token);
+        return;
+      case "/io":
+        CompileInitialIo(token);
+        return;
+      case "/p":
+        CompileInitialP(token);
+        return;
+      case "/stack":
+        CompileInitialStack(token);
         return;
       case "const":
       case "constant":
@@ -978,7 +1009,147 @@ public sealed class F18Compiler
       return;
     }
 
+    if (_explicitInitialP is not null)
+    {
+      AddError(
+          "F18C061",
+          $"'entry' cannot be combined with '/p' in the same source -- '/p' at {_explicitInitialPToken!.Location} already set the node's initial P.",
+          token.Location);
+      return;
+    }
+
     _entryToken = ReadRequiredToken(token, "entry-point symbol or address");
+  }
+
+  // DB013 "node configuration" directives: '/a', '/b', '/io', '/p', '/stack'.
+  // Unlike ordinary source, these describe how a DEPLOYER should configure a
+  // node's registers/stack when LOADING this image -- not F18A opcodes, and
+  // not compiled into Words at all (there is no "set B" instruction; a real
+  // loader/boot protocol sets registers directly as part of bringing the
+  // node up). Each pops its value(s) from the compile-time stack, so usage
+  // matches every other value-taking directive in this file's dialect (e.g.
+  // 'org'): push explicitly with '#' first, e.g. '# xA9 /p'.
+  //
+  // All five are module-level, matching 'entry': a node's startup
+  // configuration is a property of the whole image, not something that makes
+  // sense mid-definition.
+  private void CompileInitialA(F18Token token)
+  {
+    if (_inDefinition)
+    {
+      AddError("F18C062", "'/a' is a module-level startup-configuration directive and cannot appear inside a definition.", token.Location);
+      return;
+    }
+
+    if (Interpreter.TryPopData(token, out int value))
+    {
+      _initialA = value;
+    }
+  }
+
+  private void CompileInitialB(F18Token token)
+  {
+    if (_inDefinition)
+    {
+      AddError("F18C063", "'/b' is a module-level startup-configuration directive and cannot appear inside a definition.", token.Location);
+      return;
+    }
+
+    if (Interpreter.TryPopData(token, out int value))
+    {
+      _initialB = value;
+    }
+  }
+
+  private void CompileInitialIo(F18Token token)
+  {
+    if (_inDefinition)
+    {
+      AddError("F18C064", "'/io' is a module-level startup-configuration directive and cannot appear inside a definition.", token.Location);
+      return;
+    }
+
+    if (Interpreter.TryPopData(token, out int value))
+    {
+      _initialIo = value;
+    }
+  }
+
+  // '/p (a)': an initial value for P, taken directly as a resolved address
+  // rather than a symbol name -- the direct counterpart to 'entry <word>',
+  // which resolves a name (possibly forward-referenced) to an address
+  // instead. The two are mutually exclusive (see CompileEntry above) since
+  // both ultimately set the same thing.
+  private void CompileInitialP(F18Token token)
+  {
+    if (_inDefinition)
+    {
+      AddError("F18C065", "'/p' is a module-level startup-configuration directive and cannot appear inside a definition.", token.Location);
+      return;
+    }
+
+    if (_entryToken is not null)
+    {
+      AddError(
+          "F18C066",
+          $"'/p' cannot be combined with 'entry' in the same source -- 'entry' at {_entryToken.Location} already set the node's initial P.",
+          token.Location);
+      return;
+    }
+
+    if (Interpreter.TryPopData(token, out int value))
+    {
+      _explicitInitialP = value;
+      _explicitInitialPToken = token;
+    }
+  }
+
+  // '/stack (<n values> n)': the top of the compile-time stack is a COUNT,
+  // not one of the values -- '# 30 # 20 # 10 # 3 /stack' preloads a 3-deep
+  // runtime stack of [30 20 10] (10 on top), "the same effect as though a
+  // program had executed code 30 20 10". Matches DB013's own example
+  // exactly: the trailing count is consumed first, then that many further
+  // values below it.
+  private void CompileInitialStack(F18Token token)
+  {
+    if (_inDefinition)
+    {
+      AddError("F18C067", "'/stack' is a module-level startup-configuration directive and cannot appear inside a definition.", token.Location);
+      return;
+    }
+
+    if (_initialStack is not null)
+    {
+      AddError("F18C068", "'/stack' was already specified once in this source.", token.Location);
+      return;
+    }
+
+    if (!Interpreter.TryPopData(token, out int count))
+    {
+      return;
+    }
+
+    if (count < 0 || count > F18CompileTimeInterpreter.DataStackCapacity)
+    {
+      AddError(
+          "F18C069",
+          $"'/stack' count must be between 0 and {F18CompileTimeInterpreter.DataStackCapacity} (the F18A-compatible data stack limit), got {count}.",
+          token.Location);
+      return;
+    }
+
+    var values = new int[count];
+    for (int i = count - 1; i >= 0; i--)
+    {
+      if (!Interpreter.TryPopData(token, out int value))
+      {
+        return;
+      }
+
+      values[i] = value;
+    }
+
+    _initialStack = values;
   }
 
   private void CompileLabel(F18Token token)
@@ -1721,6 +1892,11 @@ public sealed class F18Compiler
 
   private int? ResolveEntryPoint()
   {
+    if (_explicitInitialP is not null)
+    {
+      return _explicitInitialP;
+    }
+
     if (_entryToken is null)
     {
       return _firstDefinitionAddress;

@@ -167,6 +167,18 @@ public sealed class F18CompileResult
   public IReadOnlyList<int> InterpreterDataStack { get; init; } = [];
   public IReadOnlyList<int> InterpreterReturnStack { get; init; } = [];
 
+  // Startup/boot configuration (DB013 "node configuration" directives --
+  // '/b', '/a', '/io', '/stack'; '/p' feeds EntryPoint above, alongside
+  // 'entry'). Null/empty means the directive was not used in this source, so
+  // the node's reset default applies (B = the IO register address, A
+  // unspecified, IO register untouched, P = 0xA9/warm, an empty initial data
+  // stack) -- these are metadata about how a deployer should configure the
+  // node when loading this image, not instructions compiled into Words.
+  public int? InitialA { get; init; }
+  public int? InitialB { get; init; }
+  public int? InitialIo { get; init; }
+  public IReadOnlyList<int> InitialStack { get; init; } = [];
+
   // Backward-compatible name used by the current node editor.
   public IReadOnlyList<int> RamWords => Words;
 

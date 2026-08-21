@@ -44,10 +44,13 @@ public sealed record SramClusterInstallResult(
 /// nodes 007, 008, 009, and 107. Mirrors how the Node Editor already loads
 /// and starts a single node's program -- compile via
 /// <see cref="F18NodeCompilationService"/>, then
-/// <c>KrakenLiveController.WriteRamAsync</c> (+ <c>JumpAsync(0x000)</c> for
-/// the four cluster nodes, but not the master) -- just run across all five
-/// nodes in one action, with node 107's source (and the master's own support
-/// source) generated for the requested master immediately before compiling.
+/// <c>KrakenLiveController.WriteRamAsync</c>, then any DB013 startup
+/// register configuration the source requested via '/a'/'/b'/'/io'
+/// (<c>WriteAAsync</c>/<c>WriteBAsync</c>/<c>WriteIoAsync</c>), then
+/// <c>JumpAsync</c> to the compiler-resolved entry point (for the four
+/// cluster nodes, but not the master) -- just run across all five nodes in
+/// one action, with node 107's source (and the master's own support source)
+/// generated for the requested master immediately before compiling.
 ///
 /// The bundled source is written into each node's own
 /// <see cref="Ga144NodeConfiguration.SourceCode"/> first (not compiled from a
@@ -218,6 +221,34 @@ public sealed class SramClusterInstaller
         // all happened to start at address 0 with no 'org'/'entry' at all).
         int jumpTarget = compiled.Ram.EntryPoint ?? 0x000;
         await controller.WriteRamAsync(route, compiled.Ram.Words, cancellationToken);
+
+        // Apply DB013's node-configuration directives ('/a', '/b', '/io'),
+        // when the source used them, before jumping -- these are the node's
+        // startup register state, so they must land while the node is still
+        // parked and puppetable, not after JumpAsync hands control to its own
+        // resident program. Node 107 (see SramClusterPrograms.Node107Interface)
+        // uses '/b' to point B at node 007 ('down') for exactly this reason:
+        // its own source never sets B itself. '/stack' (up to ten startup
+        // data-stack values) is not applied here yet -- KrakenSession's
+        // WriteParameterStackAsync expects exactly nine words (S plus eight
+        // circular cells, T handled separately), and none of this cluster's
+        // four sources use '/stack', so that reconciliation is deferred until
+        // a source actually needs it rather than guessed at now.
+        if (compiled.Ram.InitialA is int initialA)
+        {
+          await controller.WriteAAsync(route, initialA, cancellationToken);
+        }
+
+        if (compiled.Ram.InitialB is int initialB)
+        {
+          await controller.WriteBAsync(route, initialB, cancellationToken);
+        }
+
+        if (compiled.Ram.InitialIo is int initialIo)
+        {
+          await controller.WriteIoAsync(route, initialIo, cancellationToken);
+        }
+
         await controller.JumpAsync(route, jumpTarget, cancellationToken);
         results.Add(new SramClusterInstallNodeResult(coordinate, true, compiled.Ram.Diagnostics));
       }

@@ -24,9 +24,10 @@ namespace Ga144.Evb.Ide.Services;
 /// by an accurate transcription; node 107 in particular is now AN003's real
 /// FULL 3-master polling node (section 4.1), not the smaller degenerate
 /// single-master (section 6.3) reimplementation this file used to build --
-/// see the remarks on <see cref="Node107Interface"/>, including one still
-/// open question about that transcription (nothing in it sets B toward node
-/// 007).
+/// see the remarks on <see cref="Node107Interface"/>. Its startup B value
+/// (toward node 007) is set via the compiler's '/b' startup-configuration
+/// directive (DB013 "node configuration" directives) rather than any code in
+/// the transcription itself -- see <see cref="Node107Interface"/>'s remarks.
 ///
 /// NOTE: nothing in the environment these were authored in could build or
 /// run the actual net10.0-windows/WPF project (no .NET SDK, wrong OS). Each
@@ -232,22 +233,27 @@ internal static class SramClusterPrograms
   /// this compiler resolves after the whole source compiles (forward
   /// reference to a word not yet defined is fine).
   ///
-  /// STILL OPEN: nothing in this source ever sets B toward node 007 (AN003's
-  /// 'down' direction) -- 'cx's own '!b'/'@b' calls rely on B already being
-  /// there. The degenerate version's 'start' set this explicitly ('down
-  /// b!'); this transcription has no 'start' word at all, and B's value at
-  /// the moment <c>SramClusterInstaller</c> jumps into 're' is whatever was
-  /// last left by ordinary Kraken puppet traffic before Install ran, not
-  /// necessarily 'down'. Flagging rather than guessing -- if AN003's real
-  /// listing sets B elsewhere (e.g. as part of a warm/reset entry this
-  /// transcription doesn't include), that code is still needed here.
+  /// RESOLVED (previously flagged "STILL OPEN"): this transcription never
+  /// sets B toward node 007 (AN003's 'down' direction) in-line -- 'cx's own
+  /// '!b'/'@b' calls rely on B already being there, and unlike the
+  /// degenerate version's explicit 'down b!' in its own 'start' word, this
+  /// real transcription has no 'start' word at all. The user confirmed this
+  /// is intentional: AN003's real node configuration is supplied as
+  /// deployment-time metadata via DB013's node-configuration directives, not
+  /// as compiled code. '# down /b' below tells the compiler this node's
+  /// startup B value is 'down' (the local port toward node 007); the
+  /// compiler surfaces that as <c>F18CompileResult.InitialB</c>, and
+  /// <see cref="SramClusterInstaller"/> applies it via
+  /// <c>KrakenLiveController.WriteBAsync</c> before jumping into 're'.
   ///
   /// Verified against this project's own compiler in a standalone harness:
   /// compiles with zero diagnostics, 60 words used (comfortably inside the
-  /// 64-word RAM budget), entry point resolves to 're'.
+  /// 64-word RAM budget), entry point resolves to 're' (0x018), InitialB
+  /// resolves to 'down' (0x115).
   /// </summary>
   public const string Node107Interface = """
       entry re
+      # down /b
       # 0 org
       : cx ( wp-) over >r @ dup
         !b over !b @b r> inv xor if
