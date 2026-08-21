@@ -1,7 +1,6 @@
 using Ga144.Evb.Ide.Compiler;
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.Services;
-using System.Collections.ObjectModel;
 
 namespace Ga144.Evb.Ide.ViewModels;
 
@@ -35,11 +34,13 @@ public sealed class SramTentacleViewModel : ObservableObject
   private readonly KrakenLiveController _controller;
   private readonly Func<IReadOnlyDictionary<int, KrakenNodeRoute>> _resolveRoutes;
   private readonly CancellationTokenSource _shutdown = new();
+  private readonly List<string> _logLines = [];
 
   private SramMasterOption _selectedMaster = MasterOptions[0];
   private bool _isInstalled;
   private bool _isBusy;
   private string _statusText = "Not installed. Choose a master node and click Install SRAM cluster.";
+  private string _logText = string.Empty;
   private string _pageText = "0x0";
   private string _addressText = "0x0000";
   private string _valueText = "0x0000";
@@ -98,7 +99,10 @@ public sealed class SramTentacleViewModel : ObservableObject
   public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) NotifyCommandStates(); } }
   public string StatusText { get => _statusText; private set => SetProperty(ref _statusText, value); }
 
-  public ObservableCollection<string> Log { get; } = [];
+  // Plain, read-only, selectable text (bound into a read-only TextBox, not a
+  // ListBox) so the user can click-drag and Ctrl+C an error message out of
+  // the window -- a ListBox/TextBlock's text cannot be selected in WPF.
+  public string LogText { get => _logText; private set => SetProperty(ref _logText, value); }
 
   public string PageText { get => _pageText; set => SetProperty(ref _pageText, value ?? string.Empty); }
   public string AddressText { get => _addressText; set => SetProperty(ref _addressText, value ?? string.Empty); }
@@ -155,11 +159,16 @@ public sealed class SramTentacleViewModel : ObservableObject
     string activity = $"Installing SRAM cluster (master {SelectedMaster.Label})";
     StatusText = activity + "...";
     Append(activity + "...");
+    Append("  Reorganizing Tentacle 3 to a short, direct path from 608 to "
+        + $"{SelectedMaster.Label} + the cluster nodes (007/008/009/107); "
+        + "other nodes on the old Tentacle 3 become inaccessible this session. "
+        + "If Tentacle 3 is not already erected this way, this re-erects Kraken, "
+        + "which resets the whole chip (Tentacles 1/2 keep their full node lists).");
     try
     {
       var installer = new SramClusterInstaller(_chip, _romLibrary, _userMacros);
       SramClusterInstallResult result = await installer.InstallAsync(
-          _controller, _resolveRoutes(), SelectedMaster.Coordinate, _shutdown.Token);
+          _controller, SelectedMaster.Coordinate, _shutdown.Token);
 
       foreach (SramClusterInstallNodeResult node in result.Nodes)
       {
@@ -269,11 +278,13 @@ public sealed class SramTentacleViewModel : ObservableObject
 
   private void Append(string line)
   {
-    Log.Add(line);
-    while (Log.Count > 200)
+    _logLines.Add(line);
+    while (_logLines.Count > 200)
     {
-      Log.RemoveAt(0);
+      _logLines.RemoveAt(0);
     }
+
+    LogText = string.Join(Environment.NewLine, _logLines);
   }
 
   private static string DescribeFirstError(IReadOnlyList<F18Diagnostic> diagnostics)

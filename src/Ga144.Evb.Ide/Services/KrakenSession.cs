@@ -400,11 +400,19 @@ internal sealed class KrakenSession : IAsyncDisposable
         return 0;
       }, cancellationToken);
 
-  // 'focus' is the same "pop a word, jump P to it" primitive whether the
-  // popped word is a compass port address (erection) or an arbitrary 10-bit
-  // RAM address (this Jump). Reused directly rather than duplicated. Note
-  // its trailing '!p' destroys whatever was on the target's top of stack
-  // (see KrakenProtocol.BuildFocus) -- an accepted side effect of a jump.
+  // NOT 'focus' (KrakenProtocol.BuildFocus): confirmed against real hardware
+  // that reusing 'focus' for this timed out. 'focus' sends its reply via the
+  // NEWLY focused port, which is correct ONLY when the target is a compass
+  // port the node keeps relaying/replying through (erection) -- but a Jump
+  // is generally used to hand a node its own resident program, moving P to
+  // a RAM address (typically 0x000), not a port, which removes the node
+  // from the tentacle. Once P moves there, nothing is left able to answer a
+  // '!p' sent afterward the way a port can, so the host blocks forever
+  // waiting on a reply that will never come. 'jump' (KrakenProtocol.BuildJump)
+  // sends the reply over the CURRENT (still-attached) port BEFORE the jump
+  // happens instead. Like 'focus', its reply destroys whatever was really on
+  // the target's top of stack (see BuildJump's own remarks) -- an accepted
+  // side effect of a jump, unchanged from 'focus'.
   public Task JumpAsync(int destination, CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(() =>
       {
@@ -413,7 +421,7 @@ internal sealed class KrakenSession : IAsyncDisposable
           throw new ArgumentOutOfRangeException(nameof(destination), "P is a 10-bit address.");
         }
 
-        _ = Transact(_targetRoute, KrakenProtocol.BuildFocus(destination), wordsToRead: 1, cancellationToken);
+        _ = Transact(_targetRoute, KrakenProtocol.BuildJump(destination), wordsToRead: 1, cancellationToken);
         return 0;
       }, cancellationToken);
 

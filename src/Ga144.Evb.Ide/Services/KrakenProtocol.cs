@@ -56,6 +56,33 @@ internal static class KrakenProtocol
   /// </summary>
   public static int[] BuildFocus(int port) => [Pack("@p", "dup", ">r", ";"), Mask(port), Pack("!p")];
 
+  /// <summary>
+  /// 'jump = A[ @p dup >r ]], address, A[ !p ; ]]': moves the currently
+  /// focused node's P to <paramref name="address"/> and sends the 1-word
+  /// reply BEFORE the jump happens, over whatever port is CURRENTLY focused
+  /// -- the reverse order from <see cref="BuildFocus"/>. Confirmed against
+  /// real hardware: this is NOT interchangeable with 'focus'. 'focus' is
+  /// correct when the target is itself a compass port the node will keep
+  /// relaying/replying through afterward (erection) -- its reply
+  /// deliberately goes out via the NEWLY focused port so the relay chain
+  /// continues correctly. A Jump is different in kind: it is generally used
+  /// to hand a node its own resident RAM program (<see cref="KrakenSession.JumpAsync"/>
+  /// -- typically address 0x000), which removes the node from the tentacle
+  /// entirely. Once P has moved there, nothing is left able to answer a
+  /// later '!p' the way a port can, so reusing 'focus' here left the host
+  /// blocking forever on a reply that would never arrive (observed as a
+  /// timeout). 'jump' avoids that by never sending after the move: '@p dup
+  /// >r' fetches 'address', duplicates it, and pushes ONE copy to R -- but
+  /// does NOT return, so P has not moved yet. The single packed word
+  /// '!p ; ' then sends the OTHER copy of 'address' back over the port still
+  /// in effect, and only then does ';' pop R (the stashed address) into P,
+  /// so the jump happens strictly after the reply is already on the wire.
+  /// Like 'focus', the reply value is the literal address, not whatever was
+  /// genuinely on the target's data stack -- the same accepted
+  /// destroy-top-of-stack side effect 'focus' already has, unchanged.
+  /// </summary>
+  public static int[] BuildJump(int address) => [Pack("@p", "dup", ">r"), Mask(address), Pack("!p", ";")];
+
   /// <summary>'writeA = A[ @p dup a! !p ]], value': sets A, echoes it back (1 reply word).</summary>
   public static int[] BuildWriteA(int value) => [Pack("@p", "dup", "a!", "!p"), Mask(value)];
 

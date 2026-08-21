@@ -101,6 +101,95 @@ public static class KrakenTopology
     015, 016
   ];
 
+  // ---- AN003 SRAM cluster: short, purpose-built Tentacle 3 ----------------
+  // The fixed Tentacle3Nodes array above places the AN003 interface nodes
+  // (007/107) ahead of several other nodes (108, 008, 009, 010-016) in relay
+  // order. Once 007/107 are jumped into the SRAM cluster's own resident
+  // firmware they stop relaying Kraken's "sett"/"w-r" traffic, which strands
+  // everything the fixed array happens to place after them -- this is the
+  // "Kraken word acknowledgment timed out" failure reaching node 107/108
+  // after the cluster is installed.
+  //
+  // Per the fix: instead of trying to reorder the full 47-node array (proven,
+  // by exhaustive search over its induced grid subgraph, unable to keep all
+  // three candidate masters simultaneously reachable), Tentacle 3 is
+  // reorganized into a short, direct path from 608 straight to whichever
+  // node (106, 108 or 207) is chosen as SRAM memory master, continuing on
+  // past the master to the four cluster nodes. Reaching the master BEFORE
+  // any cluster node is jumped keeps it puppetable for the rest of the
+  // session (Kraken never needs to relay through a cluster node to reach
+  // it); the cluster nodes are then jumped tail-first (see
+  // SramClusterInstaller), each one "redacted" from the live chain the
+  // moment it is programmed, since nothing beyond it is still needed.
+  //
+  // Only Tentacle 3 is ever touched this way -- Tentacles 1 and 2 keep their
+  // full fixed arrays untouched, and every node this short path omits simply
+  // never gets wired into relay mode in the first place (nothing to strand:
+  // it was never reachable this session), matching the user's own
+  // "unchanged nodes simply get inaccessible" framing. See
+  // BuildSramMasterPath/ApplySramMasterTentacle.
+  private static readonly int[] SramMasterPath106 = [608, 607, 606, 506, 406, 306, 206, 106, 107, 007, 008, 009];
+  private static readonly int[] SramMasterPath108 = [608, 508, 408, 308, 208, 108, 107, 007, 008, 009];
+  private static readonly int[] SramMasterPath207 = [608, 607, 507, 407, 307, 207, 107, 007, 008, 009];
+
+  /// <summary>
+  /// The short, direct Tentacle-3 path (starting at 608, the fixed Tentacle-3
+  /// head-adjacent node -- same convention as Tentacle3Nodes above) to
+  /// <paramref name="masterCoordinate"/> (106, 108 or 207), continuing on to
+  /// the AN003 cluster nodes 007/008/009/107 in an order that keeps the
+  /// master reachable for the whole session -- see the remarks above.
+  /// </summary>
+  public static int[] BuildSramMasterPath(int masterCoordinate) => masterCoordinate switch
+  {
+    106 => [.. SramMasterPath106],
+    108 => [.. SramMasterPath108],
+    207 => [.. SramMasterPath207],
+    _ => throw new ArgumentOutOfRangeException(
+        nameof(masterCoordinate), masterCoordinate, "SRAM memory master must be node 106, 108, or 207.")
+  };
+
+  /// <summary>
+  /// Reorganizes ONLY Tentacle 3 of <paramref name="configuration"/> in
+  /// place, replacing its node list with <see cref="BuildSramMasterPath"/>
+  /// for <paramref name="masterCoordinate"/>. Tentacles 1 and 2 are never
+  /// touched. Returns true if the tentacle's node list actually changed
+  /// (false if it already matched, e.g. re-installing for the same master).
+  /// This mutates the live <see cref="KrakenConfiguration"/> in place -- per
+  /// its own remarks the structure is never persisted, so this is
+  /// session-scoped, exactly like the transient hardware erection state that
+  /// must follow it (the physical relay wiring can only be set at erection
+  /// time; callers must re-erect after calling this if a Kraken is already
+  /// resident).
+  /// </summary>
+  public static bool ApplySramMasterTentacle(KrakenConfiguration configuration, int masterCoordinate)
+  {
+    ArgumentNullException.ThrowIfNull(configuration);
+    int[] desired = BuildSramMasterPath(masterCoordinate);
+
+    KrakenTentacleConfiguration tentacle3 = configuration.Tentacles.SingleOrDefault(item => item.Number == 3)
+        ?? throw new InvalidOperationException("Kraken configuration has no Tentacle 3.");
+
+    int previous = HeadCoordinate;
+    foreach (int coordinate in desired)
+    {
+      if (!AreAdjacent(previous, coordinate))
+      {
+        throw new InvalidOperationException(
+            $"SRAM master path for node {masterCoordinate:000} is not a valid adjacency chain (node {coordinate:000}).");
+      }
+
+      previous = coordinate;
+    }
+
+    if (tentacle3.Nodes.SequenceEqual(desired))
+    {
+      return false;
+    }
+
+    tentacle3.Nodes = [.. desired];
+    return true;
+  }
+
   public static List<KrakenTentacleConfiguration> CreateDefaultTentacles()
   {
     var result = new List<KrakenTentacleConfiguration>

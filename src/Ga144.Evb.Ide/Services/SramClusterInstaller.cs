@@ -54,21 +54,20 @@ public sealed class SramClusterInstaller
   }
 
   /// <summary>
-  /// Compiles and deploys all four cluster nodes for <paramref name="masterCoordinate"/>.
-  /// Stops at the first node whose compile fails (leaving it and every node
-  /// after it out of the result) rather than deploying a partial/inconsistent
-  /// cluster silently; a node that compiled but could not be reached over
-  /// Kraken (no route, or a transport failure) is reported as failed too, via
-  /// the calling <c>WriteRamAsync</c>/<c>JumpAsync</c> exception propagating out.
+  /// Reorganizes Tentacle 3 (if needed) for <paramref name="masterCoordinate"/>,
+  /// then compiles and deploys all four cluster nodes. Stops at the first
+  /// node whose compile fails (leaving it and every node after it out of the
+  /// result) rather than deploying a partial/inconsistent cluster silently;
+  /// a node that compiled but could not be reached over Kraken (no route, or
+  /// a transport failure) is reported as failed too, via the calling
+  /// <c>WriteRamAsync</c>/<c>JumpAsync</c> exception propagating out.
   /// </summary>
   public async Task<SramClusterInstallResult> InstallAsync(
       KrakenLiveController controller,
-      IReadOnlyDictionary<int, KrakenNodeRoute> routes,
       int masterCoordinate,
       CancellationToken cancellationToken = default)
   {
     ArgumentNullException.ThrowIfNull(controller);
-    ArgumentNullException.ThrowIfNull(routes);
     if (!ValidMasterCoordinates.Contains(masterCoordinate))
     {
       throw new ArgumentException(
@@ -76,6 +75,9 @@ public sealed class SramClusterInstaller
           string.Join(", ", ValidMasterCoordinates.Select(coordinate => coordinate.ToString("000"))) + ".",
           nameof(masterCoordinate));
     }
+
+    await ReorganizeTentacleForMasterAsync(controller, masterCoordinate, cancellationToken);
+    IReadOnlyDictionary<int, KrakenNodeRoute> routes = KrakenTopology.BuildRouteMap(_chip.Kraken);
 
     string masterPortName = KrakenTopology.PortName(InterfaceNodeCoordinate, masterCoordinate);
 
@@ -128,5 +130,50 @@ public sealed class SramClusterInstaller
     }
 
     return new SramClusterInstallResult(results);
+  }
+
+  /// <summary>
+  /// Ensures Tentacle 3 is the short, direct path to <paramref name="masterCoordinate"/>
+  /// (see <see cref="KrakenTopology.ApplySramMasterTentacle"/>) and that a Kraken is
+  /// erected against it. The physical relay wiring is only set at erection time, so
+  /// switching which nodes Tentacle 3 covers -- or switching masters, which changes
+  /// where the cluster nodes sit relative to the new master -- requires tearing down
+  /// and re-erecting: this uses the one sanctioned re-erection path
+  /// (<see cref="KrakenLiveController.ResetTransientErectionAsync"/> followed by
+  /// <see cref="KrakenLiveController.EnsureOnlineAsync"/>), the same one the Chip
+  /// window's own "Install Kraken" button uses. This resets the WHOLE chip (every
+  /// node's resident RAM program, not just Tentacle 3's), exactly as any Kraken
+  /// erection always has -- Tentacles 1 and 2 keep their full node lists and are
+  /// simply re-erected unchanged alongside the new, short Tentacle 3.
+  /// A no-op if Tentacle 3 already matches this master's path and a Kraken is
+  /// already erected (re-Install for the same master does not reset the chip again).
+  /// </summary>
+  private async Task ReorganizeTentacleForMasterAsync(
+      KrakenLiveController controller, int masterCoordinate, CancellationToken cancellationToken)
+  {
+    bool changed = KrakenTopology.ApplySramMasterTentacle(_chip.Kraken, masterCoordinate);
+    if (!changed && controller.HardwareErected)
+    {
+      return;
+    }
+
+    if (controller.HardwareErected)
+    {
+      await controller.ResetTransientErectionAsync(cancellationToken);
+    }
+
+    IReadOnlyDictionary<int, KrakenNodeRoute> routes = KrakenTopology.BuildRouteMap(_chip.Kraken);
+    KrakenNodeRoute? anchor = routes.Values
+        .Where(route => !route.IsHead)
+        .OrderBy(route => route.TentacleNumber)
+        .ThenBy(route => route.Position)
+        .FirstOrDefault();
+    if (anchor is null)
+    {
+      throw new InvalidOperationException("No Kraken route is available to erect the SRAM tentacle.");
+    }
+
+    await controller.EnsureOnlineAsync(anchor, verifyTarget: false, allowErect: true, cancellationToken);
+    await controller.ParkTransportAsync(cancellationToken);
   }
 }

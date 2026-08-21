@@ -24,4 +24,7 @@ public partial class SramTentacleWindow : Window
     Closed -= OnClosed;
     _viewModel.Cancel();
   }
+
+  private void OnLogTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) =>
+      LogTextBox.ScrollToEnd();
 }
