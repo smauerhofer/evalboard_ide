@@ -214,6 +214,50 @@ public partial class ChipWindow : Window
     }).Task;
   }
 
+  private SramTentacleWindow? _sramTentacleWindow;
+
+  private void OnOpenSramTentacleClick(object sender, RoutedEventArgs e)
+  {
+    // One reusable, non-modal window per ChipWindow, same reasoning as the
+    // Kraken check window: SRAM read/write is something the user will do
+    // repeatedly while iterating, not a one-shot dialog.
+    if (_sramTentacleWindow is not null)
+    {
+      if (_sramTentacleWindow.WindowState == WindowState.Minimized)
+      {
+        _sramTentacleWindow.WindowState = WindowState.Normal;
+      }
+
+      _sramTentacleWindow.Activate();
+      return;
+    }
+
+    var viewModel = new SramTentacleViewModel(
+        _viewModel.Chip,
+        _viewModel.RomLibrary,
+        _viewModel.Project.Model.UserMacros,
+        _viewModel.KrakenController,
+        () => _viewModel.KrakenRoutes);
+    var window = new SramTentacleWindow(viewModel)
+    {
+      Owner = this
+    };
+
+    _sramTentacleWindow = window;
+    window.Closed += OnSramTentacleWindowClosed;
+    window.Show();
+  }
+
+  private void OnSramTentacleWindowClosed(object? sender, EventArgs e)
+  {
+    if (sender is SramTentacleWindow window)
+    {
+      window.Closed -= OnSramTentacleWindowClosed;
+    }
+
+    _sramTentacleWindow = null;
+  }
+
   private void OnKrakenCheckWindowClosed(object? sender, EventArgs e)
   {
     if (sender is KrakenCheckWindow window)

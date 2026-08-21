@@ -98,6 +98,12 @@
                           Padding="12,6"
                           Margin="0,0,8,0"
                           ToolTip="Erects the real, full three-tentacle Kraken using the OLD, pre-redesign method ported directly from the uploaded old-code zip (fire-and-forget focus/writeB boot frames, no reply checked during erection), then performs two OLD-style carrier-clocked reads: node 301 (control) and node 300 (target). Tests whether 'the old code worked' actually holds under a real read, not just an unverified erection. Self-contained -- does not mark any Kraken as installed/live, since node 708 ends up running the old reply program. Resets the chip once, so this is blocked while a Kraken is erected." />
+          <Button Content="SRAM Tentacle"
+                          Click="OnOpenSramTentacleClick"
+                          IsEnabled="True"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Opens the SRAM Tentacle window: installs AN003's SRAM Control Cluster (nodes 007/008/009/107) for a chosen memory-master node (106, 108, or 207), then reads/writes/compare-exchanges words in the eval board's external SRAM and sets node 107's master mask through that master. Requires an online Kraken; the window reports if it is not available." />
           <TextBlock Text="{Binding VerifyStatus, Mode=OneWay}"
                              VerticalAlignment="Center"
                              Margin="10,0,0,0"

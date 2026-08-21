@@ -1,0 +1,117 @@
+<Window x:Class="Ga144.Evb.Ide.Views.SramTentacleWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SRAM Tentacle"
+        Width="720"
+        Height="760"
+        MinWidth="620"
+        MinHeight="560"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0">
+            <TextBlock Text="SRAM Tentacle" FontSize="22" FontWeight="SemiBold" />
+            <TextBlock Margin="0,3,0,0" Foreground="#555" TextWrapping="Wrap"
+                       Text="Reads and writes the eval board's external SRAM through the AN003 cluster (nodes 007/008/009/107), puppeted from one memory-master node via Kraken." />
+        </StackPanel>
+
+        <Border Grid.Row="1" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="9" Margin="0,10,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Master node:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <ComboBox Grid.Column="1" Width="180" VerticalAlignment="Center"
+                          ItemsSource="{Binding Masters}"
+                          SelectedItem="{Binding SelectedMaster}" />
+                <Button Grid.Column="2" Content="Install SRAM cluster" Command="{Binding InstallCommand}" Padding="10,4" Margin="14,0,0,0" />
+                <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="14,0,0,0" FontStyle="Italic"
+                           Text="{Binding IsInstalled, StringFormat='installed for this session: {0}'}" />
+            </Grid>
+        </Border>
+
+        <GroupBox Grid.Row="2" Header="ex@ / ex! -- read and write one word" Margin="0,10,0,0" Padding="8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="90" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="110" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="110" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Page (0-F):" VerticalAlignment="Center" />
+                <TextBox Grid.Column="1" Text="{Binding PageText, UpdateSourceTrigger=PropertyChanged}" Margin="4,0" />
+                <TextBlock Grid.Column="2" Text="Address:" VerticalAlignment="Center" Margin="10,0,0,0" />
+                <TextBox Grid.Column="3" Text="{Binding AddressText, UpdateSourceTrigger=PropertyChanged}" Margin="4,0" />
+                <TextBlock Grid.Column="4" Text="Value:" VerticalAlignment="Center" Margin="10,0,0,0" />
+                <TextBox Grid.Column="5" Text="{Binding ValueText, UpdateSourceTrigger=PropertyChanged}" Margin="4,0" />
+                <Button Grid.Column="6" Content="Read" Command="{Binding ReadCommand}" Padding="10,4" Margin="10,0,0,0" />
+                <Button Grid.Column="7" Content="Write" Command="{Binding WriteCommand}" Padding="10,4" Margin="6,0,0,0" />
+                <TextBlock Grid.Column="9" VerticalAlignment="Center" Margin="10,0,0,0" FontFamily="Consolas" FontWeight="SemiBold"
+                           Text="{Binding ReadResultText}" />
+            </Grid>
+        </GroupBox>
+
+        <GroupBox Grid.Row="3" Header="cx? -- compare-and-exchange (uses Page/Address above)" Margin="0,10,0,0" Padding="8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="110" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="110" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Compare to:" VerticalAlignment="Center" />
+                <TextBox Grid.Column="1" Text="{Binding CompareValueText, UpdateSourceTrigger=PropertyChanged}" Margin="4,0" />
+                <TextBlock Grid.Column="2" Text="Store if equal:" VerticalAlignment="Center" Margin="10,0,0,0" />
+                <TextBox Grid.Column="3" Text="{Binding NewValueText, UpdateSourceTrigger=PropertyChanged}" Margin="4,0" />
+                <Button Grid.Column="4" Content="Compare-and-exchange" Command="{Binding CompareExchangeCommand}" Padding="10,4" Margin="10,0,0,0" />
+                <TextBlock Grid.Column="5" VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="SemiBold"
+                           Text="{Binding CompareExchangeResultText}" />
+            </Grid>
+        </GroupBox>
+
+        <GroupBox Grid.Row="4" Header="mk! -- master enable / stimulus mask" Margin="0,10,0,0" Padding="8">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="110" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Mask:" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="1" Text="{Binding MaskText, UpdateSourceTrigger=PropertyChanged}" Margin="4,0" />
+                    <CheckBox Grid.Column="2" Content="Post stimuli (f=1)" VerticalAlignment="Center" Margin="14,0,0,0"
+                              IsChecked="{Binding PostStimuli}" />
+                    <Button Grid.Column="3" Content="Set mask" Command="{Binding SetMaskCommand}" Padding="10,4" Margin="14,0,0,0" />
+                </Grid>
+                <TextBlock Margin="0,6,0,0" Foreground="#555" TextWrapping="Wrap" FontSize="11"
+                           Text="{Binding MaskReferenceText}" />
+            </StackPanel>
+        </GroupBox>
+
+        <TextBlock Grid.Row="5" Margin="0,10,0,4" Text="{Binding StatusText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+
+        <ListBox Grid.Row="6" ItemsSource="{Binding Log}" FontFamily="Consolas" FontSize="11" />
+    </Grid>
+</Window>

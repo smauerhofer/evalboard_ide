@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-20T20:13:26.8053865
-      utcDateTime: 2026-08-20T20:13:26.8053865Z
-      localDateTime: 2026-08-20T22:13:26.8053865+02:00
-      date: 2026-08-20T00:00:00.0000000
-      day: 20
-      dayOfWeek: Thursday
-      dayOfYear: 232
-      hour: 20
-      millisecond: 805
-      microsecond: 386
-      nanosecond: 500
-      minute: 13
+      dateTime: 2026-08-21T13:22:29.1897324
+      utcDateTime: 2026-08-21T13:22:29.1897324Z
+      localDateTime: 2026-08-21T15:22:29.1897324+02:00
+      date: 2026-08-21T00:00:00.0000000
+      day: 21
+      dayOfWeek: Friday
+      dayOfYear: 233
+      hour: 13
+      millisecond: 189
+      microsecond: 732
+      nanosecond: 400
+      minute: 22
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 26
-      ticks: 639228536068053865
-      utcTicks: 639228536068053865
-      timeOfDay: 20:13:26.8053865
+      second: 29
+      ticks: 639229153491897324
+      utcTicks: 639229153491897324
+      timeOfDay: 13:22:29.1897324
       year: 2026
   portB: 
   portC:
@@ -224,8 +224,18 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 9
-      enabled: false
-      sourceCode: ''
+      enabled: true
+      sourceCode: >-
+        : start
+          right b!
+          cmd ;
+
+        : cmd
+          @b 2* 2*
+          @b -if inv then
+          3 and xor
+          data a! !
+          cmd ;
       ramWords: []
       startup:
         entryPoint: 0x000
