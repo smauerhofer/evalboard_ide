@@ -226,14 +226,18 @@ public sealed class SramClusterInstaller
         // when the source used them, before jumping -- these are the node's
         // startup register state, so they must land while the node is still
         // parked and puppetable, not after JumpAsync hands control to its own
-        // resident program. Node 107 (see SramClusterPrograms.Node107Interface)
-        // uses '/b' to point B at node 007 ('down') for exactly this reason:
-        // its own source never sets B itself. '/stack' (up to ten startup
-        // data-stack values) is not applied here yet -- KrakenSession's
+        // resident program. None of this cluster's four sources currently use
+        // '/a'/'/b'/'/io' -- each sets its own registers directly in its own
+        // 'start' word instead (including node 107's, which sets B toward
+        // node 007 via a plain 'down b!') -- so these three are no-ops today,
+        // kept here so a future source that DOES rely on one of them (or a
+        // hand-edit to one of these four) is honored automatically rather
+        // than silently ignored. '/stack' (up to ten startup data-stack
+        // values) is not applied here at all yet -- KrakenSession's
         // WriteParameterStackAsync expects exactly nine words (S plus eight
-        // circular cells, T handled separately), and none of this cluster's
-        // four sources use '/stack', so that reconciliation is deferred until
-        // a source actually needs it rather than guessed at now.
+        // circular cells, T handled separately), and no source here uses
+        // '/stack' either, so that reconciliation is deferred until a source
+        // actually needs it rather than guessed at now.
         if (compiled.Ram.InitialA is int initialA)
         {
           await controller.WriteAAsync(route, initialA, cancellationToken);

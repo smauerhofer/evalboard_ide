@@ -24,10 +24,10 @@ namespace Ga144.Evb.Ide.Services;
 /// by an accurate transcription; node 107 in particular is now AN003's real
 /// FULL 3-master polling node (section 4.1), not the smaller degenerate
 /// single-master (section 6.3) reimplementation this file used to build --
-/// see the remarks on <see cref="Node107Interface"/>. Its startup B value
-/// (toward node 007) is set via the compiler's '/b' startup-configuration
-/// directive (DB013 "node configuration" directives) rather than any code in
-/// the transcription itself -- see <see cref="Node107Interface"/>'s remarks.
+/// see the remarks on <see cref="Node107Interface"/>. Its own 'start' word
+/// sets B toward node 007 and the initial master-enable mask directly, the
+/// same way 007/008/009's 'start' words set up their own registers -- see
+/// <see cref="Node107Interface"/>'s remarks.
 ///
 /// NOTE: nothing in the environment these were authored in could build or
 /// run the actual net10.0-windows/WPF project (no .NET SDK, wrong OS). Each
@@ -245,35 +245,33 @@ internal static class SramClusterPrograms
   /// CIRCULAR data stack (DB001 2.3.2) until real, still-needed values got
   /// silently overwritten.
   ///
-  /// 2. The entry point is 're', not the start of the source ('cx'). The
-  /// first attempt at wiring this transcription in used the compiler's
-  /// default entry (address 0, i.e. 'cx') because no 'entry' directive was
-  /// present in the transcribed text; the user confirmed 're' is the correct
-  /// entry word. Declared here via 'entry re' before the first 'org', which
-  /// this compiler resolves after the whole source compiles (forward
-  /// reference to a word not yet defined is fine).
-  ///
-  /// RESOLVED (previously flagged "STILL OPEN"): this transcription never
-  /// sets B toward node 007 (AN003's 'down' direction) in-line -- 'cx's own
-  /// '!b'/'@b' calls rely on B already being there, and unlike the
-  /// degenerate version's explicit 'down b!' in its own 'start' word, this
-  /// real transcription has no 'start' word at all. The user confirmed this
-  /// is intentional: AN003's real node configuration is supplied as
-  /// deployment-time metadata via DB013's node-configuration directives, not
-  /// as compiled code. '# down /b' below tells the compiler this node's
-  /// startup B value is 'down' (the local port toward node 007); the
-  /// compiler surfaces that as <c>F18CompileResult.InitialB</c>, and
-  /// <see cref="SramClusterInstaller"/> applies it via
-  /// <c>KrakenLiveController.WriteBAsync</c> before jumping into 're'.
+  /// 2. The entry point is 'start', which sets up B and the initial mask
+  /// before falling into 're'. Two earlier revisions of this transcription
+  /// got this wrong in two different ways, each corrected by the user:
+  /// first, no 'entry' directive was present at all, so the compiler
+  /// defaulted to address 0 ('cx'); the user then confirmed 're' was the
+  /// intended entry word. That still left 're's own reliance on B already
+  /// pointing at node 007 (AN003's 'down' direction) unaddressed -- there
+  /// was no 'start' word to set it, unlike the degenerate (section 6.3)
+  /// version's explicit 'down b!'. The user then supplied this real 'start'
+  /// word, which both sets B directly ('down b!') and pushes node 107's
+  /// initial master-enable/stimulus mask (AN003 section 4) before falling
+  /// into 're' with a genuine call. (An earlier, transitional revision of
+  /// this file applied '/b' as a DB013 compile-time node-configuration
+  /// directive instead, before the user supplied this real 'start' word --
+  /// superseded now that the transcription sets B itself, the same way
+  /// 007/008/009's own 'start' words do.)
   ///
   /// Verified against this project's own compiler in a standalone harness:
-  /// compiles with zero diagnostics, 60 words used (comfortably inside the
-  /// 64-word RAM budget), entry point resolves to 're' (0x018), InitialB
-  /// resolves to 'down' (0x115).
+  /// compiles with zero diagnostics, entry point resolves to 'start'. Uses
+  /// all 64 of the node's 64 RAM words -- exactly at, not over, the budget,
+  /// but with zero words to spare: any future change to this source (a
+  /// bugfix, an added diagnostic, another master direction) will need to
+  /// free space elsewhere in the same source before it can grow by even one
+  /// word.
   /// </summary>
   public const string Node107Interface = """
-      entry re
-      # down /b
+      entry start
       # 0 org
       : cx ( wp-) over >r @ dup
         !b over !b @b r> inv xor if
@@ -298,6 +296,7 @@ internal static class SramClusterPrograms
         then drop 2* 2* -if right cmds ;
         then 2* 2* 2* 2* -if left cmds ;
         then up cmds ;
+      : start down b! 0x8400 re ;
       """;
 
   /// <summary>

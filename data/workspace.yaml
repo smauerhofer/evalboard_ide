@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-21T20:31:10.5725541
-      utcDateTime: 2026-08-21T20:31:10.5725541Z
-      localDateTime: 2026-08-21T22:31:10.5725541+02:00
-      date: 2026-08-21T00:00:00.0000000
-      day: 21
-      dayOfWeek: Friday
-      dayOfYear: 233
-      hour: 20
-      millisecond: 572
-      microsecond: 554
-      nanosecond: 100
-      minute: 31
+      dateTime: 2026-08-22T17:56:28.8882357
+      utcDateTime: 2026-08-22T17:56:28.8882357Z
+      localDateTime: 2026-08-22T19:56:28.8882357+02:00
+      date: 2026-08-22T00:00:00.0000000
+      day: 22
+      dayOfWeek: Saturday
+      dayOfYear: 234
+      hour: 17
+      millisecond: 888
+      microsecond: 235
+      nanosecond: 700
+      minute: 56
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 10
-      ticks: 639229410705725541
-      utcTicks: 639229410705725541
-      timeOfDay: 20:31:10.5725541
+      second: 28
+      ticks: 639230181888882357
+      utcTicks: 639230181888882357
+      timeOfDay: 17:56:28.8882357
       year: 2026
   portB: 
   portC:
@@ -201,7 +201,35 @@ projects:
         parameterStack: []
     - coordinate: 7
       enabled: true
-      sourceCode: "# 0x14555 const in\r\n# 0x15555 const out\r\n# 0x3557F const stop\r\n\r\nentry start\r\n\r\n\r\n# 0x20 org\r\n: start left b! out io data stop\r\n  out io data stop in io a! !\r\n  down a! !b\r\n: cmd @ !b @ -if\r\n: w16 !b @ a >r >r a! r> ! a! ! 0x13 for unext !b in ! r> a! cmd ;\r\n: r16 then !b a >r a! drop drop 0x40 for unext !b @ r> a! ! cmd ; "
+      sourceCode: >-
+        # 0x14555 const in
+
+        # 0x15555 const out
+
+        # 0x3557F const stop
+
+        entry start
+
+        # 0x20 org
+
+        : start
+          left b!
+          out io data stop
+          out io data stop in io a! !
+          down a! !b
+        : cmd
+          @ !b
+          @ -if
+        : w16
+          !b @ a >r >r a! r> ! a! !
+          0x13 for unext
+          !b in ! r> a!
+          cmd ;
+        : r16
+          then !b a >r a! drop drop
+          0x40 for unext
+          !b @ r> a! !
+          cmd ;
       ramWords:
       - 0x1DB0A
       - 0x26A2A
@@ -280,28 +308,35 @@ projects:
       sourceCode: >-
         # 0x1F5 const 'r-l-
 
-
         entry start
-
 
         # 0 org
 
-        // 'start' pin control table 0-7
-
         [
-          0x2556E , 2557E ,
-          0x3556E , 3557E ,
-          0x3557A , 3556A ,
-          0x2557A , 2556A ,
+          0x2556E , 0x2557E ,
+          0x3556E , 0x3557E ,
+          0x3557A , 0x3556A ,
+          0x2557A , 0x2556A ,
         ]
 
         # 0x20 org
 
-        : start 'r-l- b! io a!
-
-        : cmd @b ! a >r 7 ..
-          @b !b @b dup !b
-          2/ 2/ and a! .. @ r> a! ! cmd ;
+        : start
+          'r-l- b!
+          io a!
+        : cmd
+          @b !
+          a >r
+          7 ..
+          @b !b
+          @b dup !b
+          2/ 2/
+          and a!
+          ..
+          @
+          r> a!
+          !
+          cmd ;
       ramWords: []
       startup:
         entryPoint: 0x000
@@ -316,15 +351,22 @@ projects:
       sourceCode: >-
         # 0x20 org
 
-
         entry start
 
-
-        : start right b! .. data a! .. 3
-
-        : cmd @b 2* 2* over @b -if
-          inv and xor ! cmd ;
-          then and xor .. ! cmd ;
+        : start
+          right b!
+          ..
+          data a!
+          ..
+          3
+        : cmd
+          @b 2* 2*
+          over @b -if
+            inv and xor !
+            cmd ;
+          then
+            and xor .. !
+            cmd ;
       ramWords:
       - 0x15555
       - 0x15555
@@ -609,7 +651,7 @@ projects:
     - coordinate: 107
       enabled: true
       sourceCode: >
-        entry re
+        entry start
 
         # 0 org
 
@@ -638,6 +680,7 @@ projects:
           then drop 2* 2* -if right cmds ;
           then 2* 2* 2* 2* -if left cmds ;
           then up cmds ;
+        : start down b! 0x8400 re ;
       ramWords:
       - 0x2080B
       - 0x08F22
@@ -699,12 +742,12 @@ projects:
       - 0x00175
       - 0x0571C
       - 0x00145
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x04B12
+      - 0x00115
+      - 0x08400
+      - 0x11418
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x03C
         p: 0x000
         a: 0x000
         b: 0x000
