@@ -6,7 +6,7 @@ settings:
   activeProbeNewFtdiPorts: true
   scanIntervalMs: 1500
   baudRate: 921600
-  krakenIdlePolicy: HoldOpen
+  krakenIdlePolicy: CloseAfterIdleTimeout
 boards:
 - id: d6e6f99b-8d7d-4604-9709-4d6a0b6820f7
   name: EVB001 S0121 board
@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-23T17:32:53.6166854
-      utcDateTime: 2026-08-23T17:32:53.6166854Z
-      localDateTime: 2026-08-23T19:32:53.6166854+02:00
+      dateTime: 2026-08-23T18:42:55.5098624
+      utcDateTime: 2026-08-23T18:42:55.5098624Z
+      localDateTime: 2026-08-23T20:42:55.5098624+02:00
       date: 2026-08-23T00:00:00.0000000
       day: 23
       dayOfWeek: Sunday
       dayOfYear: 235
-      hour: 17
-      millisecond: 616
-      microsecond: 685
+      hour: 18
+      millisecond: 509
+      microsecond: 862
       nanosecond: 400
-      minute: 32
+      minute: 42
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 53
-      ticks: 639231031736166854
-      utcTicks: 639231031736166854
-      timeOfDay: 17:32:53.6166854
+      second: 55
+      ticks: 639231073755098624
+      utcTicks: 639231073755098624
+      timeOfDay: 18:42:55.5098624
       year: 2026
   portB: 
   portC:

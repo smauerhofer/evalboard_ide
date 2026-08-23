@@ -149,6 +149,43 @@ public sealed class SramTentacleViewModel : ObservableObject
       "Port write bits (AN003 section 3): 106 = x8000, 108 = x0800, 207 = x0200. " +
       "mk! genuinely enables/disables each master and posts or clears its stimulus.";
 
+  /// <summary>
+  /// True when this session's Kraken controller is NOT holding its transport
+  /// open ("Hold open while resident") -- i.e. it will close the port after a
+  /// timeout or between transactions. That matters specifically for this
+  /// window because a resident, already-erected Kraken keeps whatever idle
+  /// policy it erected under for its whole life (see
+  /// <c>MainWindowViewModel.SelectedKrakenIdlePolicy</c>'s own remarks: a live
+  /// Kraken is left untouched when the dropdown changes, and only adopts a
+  /// new policy the next time it erects) -- so this reflects what will
+  /// actually happen for the rest of THIS session, not just whatever the
+  /// dropdown currently shows. Any pause between operations under a closing
+  /// policy reopens the transport, which on a Host-role endpoint pulses
+  /// RESET- and silently wipes the whole chip -- including the SRAM cluster
+  /// firmware this window just installed -- with nothing in this window's own
+  /// state (<see cref="IsInstalled"/>, the cached subroutine addresses)
+  /// reflecting that it happened. Reproduced live: the very first operation
+  /// after a several-second pause failed with "Kraken word acknowledgment
+  /// timed out (sett: port value...)"; switching to Hold Open resolved it.
+  /// </summary>
+  public bool HasIdlePolicyWarning => _controller.IdlePolicy != KrakenIdlePolicy.HoldOpen;
+
+  public string IdlePolicyWarningText => HasIdlePolicyWarning
+      ? $"Warning: Kraken idle policy is '{DescribeIdlePolicy(_controller.IdlePolicy)}', not 'Hold open " +
+        "while resident'. Any pause between operations in this window can silently reopen the transport -- " +
+        "which resets the whole chip on this connection and wipes the installed SRAM cluster firmware -- " +
+        "with no visible error until something later fails or misbehaves. Switch the main window's Kraken " +
+        "idle-policy dropdown to 'Hold open while resident' before installing or using this cluster."
+      : string.Empty;
+
+  private static string DescribeIdlePolicy(KrakenIdlePolicy policy) => policy switch
+  {
+    KrakenIdlePolicy.CloseAfterIdleTimeout => "Close after 1 s idle",
+    KrakenIdlePolicy.CloseWhileIdle => "Close between transactions",
+    KrakenIdlePolicy.HoldOpen => "Hold open while resident",
+    _ => policy.ToString()
+  };
+
   public AsyncRelayCommand InstallCommand { get; }
   public AsyncRelayCommand ReadCommand { get; }
   public AsyncRelayCommand WriteCommand { get; }
@@ -206,6 +243,15 @@ public sealed class SramTentacleViewModel : ObservableObject
         Append(node.Success
             ? $"  node {node.Coordinate:000}: installed."
             : $"  node {node.Coordinate:000}: FAILED - {DescribeFirstError(node.Diagnostics)}");
+      }
+
+      if (HasIdlePolicyWarning)
+      {
+        // Also into the log (not just the banner above): the log is a plain,
+        // copyable TextBox (see the remarks on LogText), so this survives if
+        // the user pastes the session's history elsewhere, and it lands right
+        // next to the install it actually applies to.
+        Append("  " + IdlePolicyWarningText);
       }
 
       IsInstalled = result.Success;
@@ -372,5 +418,12 @@ public sealed class SramTentacleViewModel : ObservableObject
     CompareExchangeCommand?.NotifyCanExecuteChanged();
     SetMaskCommand?.NotifyCanExecuteChanged();
     EchoTestCommand?.NotifyCanExecuteChanged();
+
+    // Re-evaluate the idle-policy warning every time command states are
+    // re-evaluated (IsBusy toggling -- including right after Install
+    // finishes -- and SelectedMaster changing, which is when a fresh
+    // erection under a possibly-different controller/policy could occur).
+    OnPropertyChanged(nameof(HasIdlePolicyWarning));
+    OnPropertyChanged(nameof(IdlePolicyWarningText));
   }
 }

@@ -7,6 +7,9 @@
         MinWidth="620"
         MinHeight="620"
         WindowStartupLocation="CenterOwner">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+  </Window.Resources>
   <Grid Margin="12">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -26,21 +29,36 @@
     </StackPanel>
 
     <Border Grid.Row="1" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="9" Margin="0,10,0,0">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-        <TextBlock Text="Master node:" VerticalAlignment="Center" Margin="0,0,8,0" />
-        <ComboBox Grid.Column="1" Width="180" VerticalAlignment="Center"
-                          ItemsSource="{Binding Masters}"
-                          SelectedItem="{Binding SelectedMaster}" />
-        <Button Grid.Column="2" Content="Install SRAM cluster" Command="{Binding InstallCommand}" Padding="10,4" Margin="14,0,0,0" />
-        <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="14,0,0,0" FontStyle="Italic"
-                           Text="{Binding IsInstalled, StringFormat='installed for this session: {0}'}" />
-      </Grid>
+      <StackPanel>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Text="Master node:" VerticalAlignment="Center" Margin="0,0,8,0" />
+          <ComboBox Grid.Column="1" Width="180" VerticalAlignment="Center"
+                              ItemsSource="{Binding Masters}"
+                              SelectedItem="{Binding SelectedMaster}" />
+          <Button Grid.Column="2" Content="Install SRAM cluster" Command="{Binding InstallCommand}" Padding="10,4" Margin="14,0,0,0" />
+          <TextBlock Grid.Column="3" VerticalAlignment="Center" Margin="14,0,0,0" FontStyle="Italic"
+                               Text="{Binding IsInstalled, StringFormat='installed for this session: {0}'}" />
+        </Grid>
+        <!--
+                    Safeguard for the "Kraken word acknowledgment timed out (sett: port
+                    value...)" failure mode: a resident Kraken keeps whatever idle policy
+                    it erected under for its whole life, so a closing policy left in place
+                    lets a pause between operations silently reopen (and, on this
+                    connection, reset) the chip, wiping the installed cluster firmware
+                    with no visible error. See SramTentacleViewModel.IdlePolicyWarningText.
+                -->
+        <Border Margin="0,7,0,0" Padding="7" Background="#FFF3CD" BorderBrush="#E0C266" BorderThickness="1"
+                        Visibility="{Binding HasIdlePolicyWarning, Converter={StaticResource BoolToVis}}">
+          <TextBlock TextWrapping="Wrap" FontSize="11" FontWeight="SemiBold" Foreground="#7A5200"
+                               Text="{Binding IdlePolicyWarningText}" />
+        </Border>
+      </StackPanel>
     </Border>
 
     <GroupBox Grid.Row="2" Header="echo -- node 106/108/207 call/return test (not AN003)" Margin="0,10,0,0" Padding="8">
