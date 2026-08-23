@@ -6,7 +6,7 @@ settings:
   activeProbeNewFtdiPorts: true
   scanIntervalMs: 1500
   baudRate: 921600
-  krakenIdlePolicy: CloseAfterIdleTimeout
+  krakenIdlePolicy: HoldOpen
 boards:
 - id: d6e6f99b-8d7d-4604-9709-4d6a0b6820f7
   name: EVB001 S0121 board
@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-22T17:56:28.8882357
-      utcDateTime: 2026-08-22T17:56:28.8882357Z
-      localDateTime: 2026-08-22T19:56:28.8882357+02:00
-      date: 2026-08-22T00:00:00.0000000
-      day: 22
-      dayOfWeek: Saturday
-      dayOfYear: 234
+      dateTime: 2026-08-23T17:32:53.6166854
+      utcDateTime: 2026-08-23T17:32:53.6166854Z
+      localDateTime: 2026-08-23T19:32:53.6166854+02:00
+      date: 2026-08-23T00:00:00.0000000
+      day: 23
+      dayOfWeek: Sunday
+      dayOfYear: 235
       hour: 17
-      millisecond: 888
-      microsecond: 235
-      nanosecond: 700
-      minute: 56
+      millisecond: 616
+      microsecond: 685
+      nanosecond: 400
+      minute: 32
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 28
-      ticks: 639230181888882357
-      utcTicks: 639230181888882357
-      timeOfDay: 17:56:28.8882357
+      second: 53
+      ticks: 639231031736166854
+      utcTicks: 639231031736166854
+      timeOfDay: 17:32:53.6166854
       year: 2026
   portB: 
   portC:
@@ -650,7 +650,7 @@ projects:
         parameterStack: []
     - coordinate: 107
       enabled: true
-      sourceCode: >
+      sourceCode: >-
         entry start
 
         # 0 org
@@ -659,9 +659,8 @@ projects:
           !b over !b @b r> inv xor if
           @ dup xor 0xff ! ;
           then drop !b inv !b @ !b 0xFFFF ! ;
-
         : cmd @ -if @ [ ' cx ] -until inv !b !b @ !b ;
-          then @ -if 
+          then @ -if
           inv >r drop drop r> if
           drop drop @ 2* over inv ahead [ swap ]
           then drop and @ over over 2*

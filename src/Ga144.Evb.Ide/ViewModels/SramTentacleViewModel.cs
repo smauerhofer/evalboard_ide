@@ -269,7 +269,7 @@ public sealed class SramTentacleViewModel : ObservableObject
     int mask = ParseWord(MaskText, "mask");
     await _controller.SetSramMasterMaskAsync(
         CurrentRoute!, _masterSupport!.SetMaskSubroutineAddress, mask, PostStimuli, _shutdown.Token);
-    Append($"  mk! mask 0x{mask:X4}, postStimuli {PostStimuli} (protocol-compatible only; see mask reference note)");
+    Append($"  mk! mask 0x{mask:X4}, postStimuli {PostStimuli}");
   });
 
   private Task EchoTestAsync() => RunAsync("echo (node 106 support-code call/return test)", async () =>
