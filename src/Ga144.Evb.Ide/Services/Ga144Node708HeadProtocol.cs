@@ -266,14 +266,14 @@ public sealed class Ga144Node708HeadProtocol : IDisposable
           18ibits drop dec dup >r a!
           18ibits drop dec dup >r
           n dup if dec for
-            A[ @p >r ]] !b r> dup >r
+            A[ @p >r ]] lit !b r> dup >r
             dup dup . + . + 2* over . +
-            A[ @p !b unext ]] !b
+            A[ @p !b unext ]] lit !b
           next then
           begin 18ibits drop !b next
           n dup if dec for
-            A[ @p >r ]] !b a !b
-            A[ @b !p unext ]] !b
+            A[ @p >r ]] lit !b a !b
+            A[ @b !p unext ]] lit !b
           next then
           begin @b oword next ;
         .loc

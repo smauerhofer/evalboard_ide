@@ -24,39 +24,6 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-23T18:42:55.5098624
-      utcDateTime: 2026-08-23T18:42:55.5098624Z
-      localDateTime: 2026-08-23T20:42:55.5098624+02:00
-      date: 2026-08-23T00:00:00.0000000
-      day: 23
-      dayOfWeek: Sunday
-      dayOfYear: 235
-      hour: 18
-      millisecond: 509
-      microsecond: 862
-      nanosecond: 400
-      minute: 42
-      month: 8
-      offset: 00:00:00
-      totalOffsetMinutes: 0
-      second: 55
-      ticks: 639231073755098624
-      utcTicks: 639231073755098624
-      timeOfDay: 18:42:55.5098624
-      year: 2026
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -77,6 +44,19 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -947,10 +927,142 @@ projects:
         parameterStack: []
     - coordinate: 206
       enabled: false
-      sourceCode: ''
-      ramWords: []
+      sourceCode: >
+        # 207 import
+
+        entry main
+
+        # 0 org
+
+        : noff inv
+
+        : off a . + ;
+
+        : local drop ex
+
+        : main A[ 2* !p !p ]] lit !b @b
+        	@b xff and >r # local -until
+        	2* -if 2* -if 2* -if r> off
+        : la ( a-) A[ @p /r! ; ]] , !b !b main ;
+        	then r> noff la ;
+        	then 2* -if r> off
+        : ld A[ @p /1@ ]] , !b !b A[ /r! ; ]] , !b main ;
+        	then r> noff ld ;
+        	then 2* -if 2* -if r> off
+        : st ( a-) A[ /r@ ]] , !b A[ @p /1! ; ]] , @p !b !b main ;
+        	then r> noff st ;
+        	then 2* -if
+        : cleanup A[ @p /pop ]] lit !b a !b A[ !p 'ret ]] lit !b @b a! r>
+
+        : adjust A[ @p . + ; ]] lit !b !b main ;
+
+        : enter then A[ @p /push ]] lit !b a !b A[ dup !p ]] lit !b @b a! r> inv adjust ;
+
+        : 'xf ( s-s) a A[ @p /r@ ]] lit !b !b A[ !p /r! ; ]] lit !b @b a! ;
+
+        : 'exit 1 A[ @p a! ]] lit !b !b
+
+        : 'wait A[ @b drop ; ]] lit !b ;
+
+
+        (
+
+
+        noff negative offset
+
+        off positive offset
+
+        local call local word
+
+        main starting point
+
+        la
+
+        ld
+
+        st
+
+        cleanup exit stack frame, return and cleanup
+
+        adjust
+
+        enter enter stack frame
+
+        &apos;xf exchanges frame pointer with r
+
+        &apos;wait waits for a stimulus from the memory controller
+
+        &apos;exit waits for a stimulus and start from location 1
+
+
+        )
+      ramWords:
+      - 0x329B2
+      - 0x229F5
+      - 0x3B455
+      - 0x05B02
+      - 0x37932
+      - 0x01DFA
+      - 0x000FF
+      - 0x2F202
+      - 0x37219
+      - 0x37211
+      - 0x3720F
+      - 0x27601
+      - 0x05715
+      - 0x09BB2
+      - 0x11403
+      - 0x27600
+      - 0x1140C
+      - 0x37217
+      - 0x27601
+      - 0x05607
+      - 0x09BB2
+      - 0x11415
+      - 0x09703
+      - 0x27600
+      - 0x11413
+      - 0x37223
+      - 0x37221
+      - 0x27601
+      - 0x13400
+      - 0x089B2
+      - 0x05712
+      - 0x05B22
+      - 0x11403
+      - 0x27600
+      - 0x1141C
+      - 0x3722C
+      - 0x05B8A
+      - 0x05604
+      - 0x09D22
+      - 0x0D62E
+      - 0x00A9A
+      - 0x05B22
+      - 0x049F5
+      - 0x11403
+      - 0x05B8A
+      - 0x0560F
+      - 0x09D22
+      - 0x259B2
+      - 0x00A9A
+      - 0x33729
+      - 0x23D22
+      - 0x05600
+      - 0x09D22
+      - 0x0D715
+      - 0x00A55
+      - 0x05D22
+      - 0x00001
+      - 0x04AB2
+      - 0x089B2
+      - 0x05B55
+      - 0x00255
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x003
         p: 0x000
         a: 0x000
         b: 0x000
@@ -959,10 +1071,128 @@ projects:
         parameterStack: []
     - coordinate: 207
       enabled: false
-      sourceCode: ''
-      ramWords: []
+      sourceCode: >
+        # 0 org
+
+        entry main
+
+        : /r@ ( s-sw) dup dup xor dup -d-- ;
+
+        : /cx? ( wabn-f) inv !b !b ahead
+
+        : /pop ( p-pt) dup >r 1 . + r>
+
+        : /1@ ( a-w) 1
+
+        : /@ ( ab-w) then !b !b @b ;
+
+        : /! ( wab) inv !b inv !b !b ;
+
+        : /next ( s-sx) a /pop >r a! r> ;
+
+        : 'plit ( s-s) /next
+
+        : /push ( pt-p) >r -1 . + r> over
+
+        : /1! ( wa) 1 /! ;
+
+        : 'lit ( s-s) /next
+
+        : /r! ( sw-s) 3 dup -d-- ;
+
+        : 'pop ( s-s) /pop /r! ;
+
+        : 'push ( s-s) /r@ /push ;
+
+        : exec ( sxy-s)
+        	2* -if -d-- ; then
+        	2* -if
+        		2* -if --l- ; then r--- ;
+        	then 2* -if
+        		2* -if /r@
+        			if drop drop drop ; then drop
+        		then >r drop r> 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! ;
+        	then drop >r ;
+        : 'ret ( s-s) /pop a! ;
+
+        : 'xs ( s-s') >r /r@ r> /r! ;
+
+        : 'xp ( s-s) a /r@ a! /r! ;
+
+        : 'tjmp ( s-s) a /r@ + /next + a! ;
+
+        : 'pc ( s-s) a /r! ;
+
+        : /call ( sxy-s) drop >r a /push r> a!
+
+        : main ( s-s) /next dup 2* 2* # /call -until exec main ;
+      ramWords:
+      - 0x24DE3
+      - 0x11515
+      - 0x33B22
+      - 0x11409
+      - 0x24812
+      - 0x00001
+      - 0x3CCB2
+      - 0x049B2
+      - 0x00001
+      - 0x09B05
+      - 0x33BCA
+      - 0x09B55
+      - 0x23604
+      - 0x2EA9D
+      - 0x1340C
+      - 0x2FDB0
+      - 0x3FFFF
+      - 0x26FB2
+      - 0x0570A
+      - 0x00001
+      - 0x1340C
+      - 0x04DB2
+      - 0x00003
+      - 0x11515
+      - 0x13404
+      - 0x11415
+      - 0x13400
+      - 0x1140F
+      - 0x3721E
+      - 0x11515
+      - 0x37222
+      - 0x37221
+      - 0x11575
+      - 0x115D5
+      - 0x3722D
+      - 0x37228
+      - 0x13400
+      - 0x19427
+      - 0x3A2ED
+      - 0x3A9B2
+      - 0x2E29A
+      - 0x367C2
+      - 0x307C2
+      - 0x3078A
+      - 0x3CA55
+      - 0x3A855
+      - 0x13404
+      - 0x2B555
+      - 0x2F600
+      - 0x27715
+      - 0x23600
+      - 0x2B715
+      - 0x23600
+      - 0x3D60C
+      - 0x3CA55
+      - 0x23715
+      - 0x3A88A
+      - 0x1340F
+      - 0x26AB2
+      - 0x1340C
+      - 0x244DA
+      - 0x1B438
+      - 0x1341C
+      - 0x1143B
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x03B
         p: 0x000
         a: 0x000
         b: 0x000
@@ -971,7 +1201,88 @@ projects:
         parameterStack: []
     - coordinate: 208
       enabled: false
-      sourceCode: ''
+      sourceCode: >-
+        ( cvm2 1011 global)
+
+        # 207 import
+
+        # 0 org
+
+        entry main
+
+        : adr ( w) A[ @p /r@ ]] lit !b !b A[ + /r! ]] lit !b ;
+
+        : x3 a r> a! @+ !b @+ !b @ !b a! ahead
+
+        : 'ld x3 A[ /r@ ]] , A[ /1@ ]] , A[ /r! ; ]] ,
+
+        : 'st x3 A[ /pop ]] , A[ /r@ ]] , A[ /1! ; ]] ,
+
+        : 'ldph x3 A[ /r@ ]] , A[ /1@ ]] , A[ /push ; ]] ,
+
+        : leave A[ ; ]] lit !b @p
+
+        : local drop ex
+
+        : main then A[ 2* !p !p ]] lit !b @b
+          @b x1ff and >r # local -until
+          2* -if 2* -if
+        : la r> adr leave ; then
+
+        : ldo r> adr 'ld ; then 2* -if
+
+        : sto r> adr 'st ; then
+
+        : glob a r> . + A[ @p /r! ; ]] lit !b !b main ;
+
+        : 'xg A[ @p /r@ ]] lit !b a !b A[ !p /r! ; ]] lit !b @b a! ;
+
+        : 'ldx A[ /r@ ]] lit !b A[ /pop ]] lit !b A[ /@ ]] lit !b A[ /r! ; ]] lit !b ;
+
+        : 'stx leap A[ /! ; ]] lit !b ;
+
+        : long then A[ /pop ]] lit !b A[ >r /pop ]] lit !b
+          A[ r> /r@ ]] lit !b ;
+        : 'mk! long A[ inv /! ; ]] lit !b ;
+
+
+        (
+
+        adr  adds TOS to R
+
+        x3  writes the next 3 words from the return address
+        	to node 207 and jum to main.
+        &apos;ld  loads word with address in R.
+
+        &apos;st  pops and stores word with address in R.
+
+        &apos;ldph  push word with address in R.
+
+        leave  gives control back to node 207.
+
+        local  calls local instruction.
+
+        main  entry point.
+
+        la  loads address with offset.
+
+        ldo  loads word with offset.
+
+        sto  pops and stores word with offset.
+
+        glob  address of global variable.
+
+        'xg  exchanges global pointer with R.
+
+        'ldx  lodads word from extended address.
+
+        'stx  stores word to extended address
+
+        long  word shared by 'stx and 'mk.
+
+        'mk  used t manage memory access.
+
+        )
       ramWords: []
       startup:
         entryPoint: 0x000
@@ -1163,8 +1474,118 @@ projects:
         parameterStack: []
     - coordinate: 306
       enabled: false
-      sourceCode: ''
-      ramWords: []
+      sourceCode: >-
+        # 307 import
+
+        # 0 org
+
+        entry main
+
+        : main A[ drop !p ]] lit !b @b >r ex
+
+        : leave A[ ; ]] lit !b main ;
+
+        : spop ( -w) A[ s/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : spush ( w) A[ @p s/push ]] lit !b !b ;
+
+        : r@ ( -w) A[ a !p ]] lit !b @b ;
+
+        : r! ( w) A[ @p a! ]] lit !b !b ;
+
+        : 'zext dup xor a! ;
+
+        : sr16 7 for 2/ 2/ unext ;
+
+        : '+c a spop + r@ + dup r!
+
+        : csr16 sr16
+
+        : c! 1 and a! ;
+
+        : sl16 7 for 2* 2* unext ;
+
+        : 'ldd a r! ;
+
+        : 'std r@ a! ;
+
+        : 'xd a r@ a! r! ;
+
+        : 'lsh r@ 2* a xor dup r! csr16 ;
+
+        : 'rsh r@ a sl16 xor dup 2/ r! c! ;
+
+        : 'sext r@ 2* 2* 2/ 2/ sr16
+
+        : mask xffff and a! ;
+
+        : 'umul spop dup r@ a! dup xor 8 for +* . +* unext
+        	2* 2* a xffff and r! a sr16 3 and xor mask ;
+      ramWords:
+      - 0x05B02
+      - 0x3B9B2
+      - 0x2F455
+      - 0x05B40
+      - 0x15555
+      - 0x05B12
+      - 0x13410
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05608
+      - 0x05B05
+      - 0x239B2
+      - 0x05B25
+      - 0x04AB2
+      - 0x243AD
+      - 0x048B2
+      - 0x00007
+      - 0x30775
+      - 0x23605
+      - 0x3D60B
+      - 0x3CDB2
+      - 0x1340D
+      - 0x13410
+      - 0x040AD
+      - 0x00001
+      - 0x048B2
+      - 0x00007
+      - 0x36475
+      - 0x2370D
+      - 0x1340B
+      - 0x2B555
+      - 0x2360B
+      - 0x2B70D
+      - 0x1340B
+      - 0x36EE3
+      - 0x1340D
+      - 0x11417
+      - 0x1340B
+      - 0x2361A
+      - 0x38DC2
+      - 0x1340D
+      - 0x11418
+      - 0x1340B
+      - 0x364C2
+      - 0x31610
+      - 0x040AD
+      - 0x0FFFF
+      - 0x13405
+      - 0x2560B
+      - 0x2ADE7
+      - 0x00008
+      - 0x2E9B2
+      - 0x349D4
+      - 0x3648F
+      - 0x0FFFF
+      - 0x3F60D
+      - 0x23610
+      - 0x040E2
+      - 0x00003
+      - 0x1142E
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -1175,10 +1596,175 @@ projects:
         parameterStack: []
     - coordinate: 307
       enabled: false
-      sourceCode: ''
-      ramWords: []
+      sourceCode: >
+        # 207 import
+
+        # 0 org
+
+        entry main
+
+        : s/r@ A[ @p ]] lit !b a dup !b ;
+
+        : s/r! A[ !p ]] lit !b @b ;
+
+        : s/2put ( ww) leap
+
+        : s/put ( w) then A[ @p ]] lit !b !b ;
+
+        : s/push ( w) A[ @p /push ]] lit !b !b ;
+
+        : s/@ ( ba-w) s/2put A[ /@ ]] lit !b @b ;
+
+        : s/! ( baw) s/2put A[ @p /! ]] lit !b !b ;
+
+        : s/pop ( -w) A[ /pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : binary s/pop
+
+        : unary a ex
+
+        : leave xffff and a!
+
+        : ctrl A[ ; ]] lit !b
+
+        : main A[ !p !p ]] lit !b @b >r @b r> ..
+        	2* -if 2* -if --l- a leave ;
+        	then 2* -if ---u a leave ;
+        	then r--- a leave ;
+        	then 2* -if // short literal
+        	2* 2/ 2/ 2/ 2/ 2/ 2/ leave ;
+        	then over >r 2* # unary -until binary ;
+        : 'usl for 2* unext ;
+
+        : 'ssr >r 2* 2* 2/ 2/ r>;
+
+        : 'usr for 2/ unext ;
+
+        : '+ + ;
+
+        : 'and and ;
+
+        : 'xor xor ;
+
+        : 'or inv over inv and inv ;
+
+        : 'cx? A[ @p /pop ]] lit dup !b
+        	>r !b r> !b !b A[ /cx? ]] lit !b
+        	A[ !p ]] lit !b @b ;
+
+        (
+
+        s/r@  used by 207 to read R.
+
+        s/r!  used by 207 to write R.
+
+        s/pop  pops cell from stack.
+
+        s/push  pushs cell on stack.
+
+        s/put  pushs cell on stack of control node 207.
+
+        s/@  read cell from any page.
+
+        s/!  write cell to any page.
+
+        binary  calls binary function.
+
+        unary  calls unary function.
+
+        leave  store cell in R and exit arithmetic operation.
+
+        ctrl  returns control to node 207.
+
+        main  start address.
+
+        'usl  binary. unsigned shift left.
+
+
+        'ssr  binary. signed shift right.
+
+        'usr  binary. unsigned shift right.
+
+        '+  binary. add.
+
+        'and  binary. bitwise and
+
+        'xor  binary. bitwise exclusive or
+
+        'or  binary. bitwise or
+
+        'pop  unary. pops cell to R.
+
+        'cx?  binary. atomically compares and exchanges a cell in memory and return true if successful.
+
+        )
+      ramWords:
+      - 0x05B8B
+      - 0x049B2
+      - 0x09555
+      - 0x05B05
+      - 0x0C9B2
+      - 0x13406
+      - 0x05B25
+      - 0x049B2
+      - 0x05B25
+      - 0x0560F
+      - 0x13405
+      - 0x05B05
+      - 0x13409
+      - 0x13405
+      - 0x05B25
+      - 0x0560A
+      - 0x05B12
+      - 0x13404
+      - 0x0C9B2
+      - 0x09F55
+      - 0x13410
+      - 0x23455
+      - 0x040AA
+      - 0x0FFFF
+      - 0x05BB2
+      - 0x15555
+      - 0x05B02
+      - 0x0D9B2
+      - 0x2FF9A
+      - 0x37226
+      - 0x37221
+      - 0x13575
+      - 0x23716
+      - 0x37224
+      - 0x13545
+      - 0x23716
+      - 0x135D5
+      - 0x23716
+      - 0x3722A
+      - 0x367C2
+      - 0x307C2
+      - 0x31716
+      - 0x208DA
+      - 0x1B415
+      - 0x11414
+      - 0x2E9B2
+      - 0x37155
+      - 0x2E4DA
+      - 0x3079D
+      - 0x2E9B2
+      - 0x31155
+      - 0x3D555
+      - 0x3F555
+      - 0x39555
+      - 0x32FCA
+      - 0x3E655
+      - 0x04D22
+      - 0x05604
+      - 0x2FB9A
+      - 0x09B12
+      - 0x13402
+      - 0x09D22
+      - 0x0C9B2
+      - 0x01555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x01A
         p: 0x000
         a: 0x000
         b: 0x000
@@ -2078,17 +2664,17 @@ projects:
           readw drop dup >r // # of words to write -1
           // write pre
           n -if readw else for
-            A[ @p >r ]] ! r> dup >r
+            A[ @p >r ]] , ! r> dup >r
             dup dup . + . + 2* over . + // multiply by 6
-            A[ @p !b unext ]] !
+            A[ @p !b unext ]] , !
           next then
           //
           begin readw drop ! next
           // write post
           ( d)
           n -if drop else for
-            A[ @p >r ]] ! r> r> dup ! >r >r
-            A[ @b !p unext ]] !
+            A[ @p >r ]] , ! r> r> dup ! >r >r
+            A[ @b !p unext ]] , !
           next then
           //
           begin @ oword next main ;

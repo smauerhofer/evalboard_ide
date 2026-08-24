@@ -362,19 +362,19 @@ public sealed class Ga144Node708TentacleDepthProbe
           // write pre
           ( w1)
           readw drop -if else >r over begin ( d w1)
-            A[ @p >r ]] !
+            A[ @p >r ]] lit !
             r> dup >r // get current node
             dup dup . + . + 2* over . + ! // multiply by 6 + #write-1
-            A[ @p !b unext ]] !
+            A[ @p !b unext ]] lit !
           next then
           //
           begin readw drop ! next
           // write post
           ( d)
           readw drop -if drop else for ( d)
-            A[ @p >r ]] !
+            A[ @p >r ]] lit !
             r> r> dup ! >r >r  // send # of read words -1
-            A[ @b !p unext ]] !
+            A[ @b !p unext ]] lit !
           next then
           //
           ( d)

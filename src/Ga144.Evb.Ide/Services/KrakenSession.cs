@@ -843,10 +843,13 @@ internal sealed class KrakenSession : IAsyncDisposable
   //
   // When 'n' is non-negative, 'w/r's write-pre/write-post loops build a
   // relay wrapper on node 708 itself, one 6-word entry per hop: the
-  // 'A[ @p >r ]] !' / 'A[ @p !b unext ]] !' pairs compile the literal
-  // opcode words 'Pack("@p", ">r")' / 'Pack("@p", "!b", "unext")' -- the
-  // exact same opcodes KrakenProtocol.WrapTentacleHop packs -- directly into
-  // scratch RAM and store them via A. This replaces WrapTentacleHop's own
+  // 'A[ @p >r ]] lit !' / 'A[ @p !b unext ]] lit !' triples compile the
+  // literal opcode words 'Pack("@p", ">r")' / 'Pack("@p", "!b", "unext")'
+  // -- the exact same opcodes KrakenProtocol.WrapTentacleHop packs -- via
+  // an explicit 'lit' (A[ ... ]] itself only ASSEMBLES the raw word onto
+  // the compile-time stack now; 'lit' is what actually compiles it as a
+  // literal here) directly into scratch RAM, stored via A. This replaces
+  // WrapTentacleHop's own
   // software-side wrapping: 'writeWords' below is now the RAW, un-wrapped
   // leaf (e.g. KrakenProtocol.BuildFocus's own 3 words), never passed
   // through KrakenProtocol.BuildTentacle -- wrapping it in software AND
@@ -1111,19 +1114,19 @@ internal sealed class KrakenSession : IAsyncDisposable
           // write pre
           ( w1)
           readw drop -if else >r over begin ( d w1)
-            A[ @p >r ]] !
+            A[ @p >r ]] lit !
             r> dup >r // get current node
             dup dup . + . + 2* over . + ! // multiply by 6 + #write-1
-            A[ @p !b unext ]] !
+            A[ @p !b unext ]] lit !
           next then
           //
           begin readw drop ! next
           // write post
           ( d)
           readw drop -if drop else for ( d)
-            A[ @p >r ]] !
+            A[ @p >r ]] lit !
             r> r> dup ! >r >r  // send # of read words -1
-            A[ @b !p unext ]] !
+            A[ @b !p unext ]] lit !
           next then
           //
           ( d)

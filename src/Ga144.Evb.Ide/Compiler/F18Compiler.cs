@@ -1267,13 +1267,25 @@ public sealed class F18Compiler
     var opcodes = new List<byte>();
     var terminated = false;
 
-    // A[ ... ]] normally assembles a plain instruction word from up to four
-    // primitive opcodes. But a quoted word may also embed a CALL to a resolved
-    // word -- local or (per DB002 3.1) imported from another node -- when the
-    // whole point of the word is to be shipped elsewhere over a port and executed
-    // there: the target node has no way to reach this node's dictionary, so the
-    // call target must be assembled as raw bits here, in this node's compiler,
-    // before transmission. A bare (unquoted) reference to a cross-node name still
+    // A[ ... ]] assembles a plain instruction word from up to four primitive
+    // opcodes and leaves it on the COMPILE-TIME STACK -- it only ASSEMBLES
+    // the raw word, it never decides what happens to it (same division of
+    // labor as '#'/''': see the remarks at the end of this method). Compile
+    // it as a real literal in the current word with 'lit'/'literal'
+    // (A[ ... ]] lit), or lay it down raw at 'here' with ',' (A[ ... ]] ,),
+    // the same way node008's own pin-control table already does; anything
+    // else that consumes a compile-time-stack value works too (arithmetic,
+    // another A[ ... ]], etc.). This used to auto-compile a literal
+    // whenever already inside a colon definition, which made A[ ... ]]
+    // usable for nothing but that one immediate use.
+    //
+    // A quoted word may also embed a CALL (or, per the 'name ;' tail-call
+    // idiom below, a JUMP) to a resolved word -- local or (per DB002 3.1)
+    // imported from another node -- when the whole point of the word is to
+    // be shipped elsewhere over a port and executed there: the target node
+    // has no way to reach this node's dictionary, so the call target must
+    // be assembled as raw bits here, in this node's compiler, before
+    // transmission. A bare (unquoted) reference to a cross-node name still
     // pushes its address as a literal (see EmitWordReference) -- that rule is
     // about ordinary code in THIS node, which can never execute a call into
     // another node's address space. Inside a quote the resulting word is data,
@@ -1283,6 +1295,7 @@ public sealed class F18Compiler
     F18Token? callToken = null;
     var callTarget = 0;
     var hasCall = false;
+    var isTailJump = false;
 
     while (_tokenIndex < _tokens.Count)
     {
@@ -1295,6 +1308,25 @@ public sealed class F18Compiler
 
       if (hasCall)
       {
+        // 'name ;' immediately before the closing ']]' is the standard
+        // Forth/arrayForth tail-call idiom: nothing runs after 'name'
+        // returns, so there is no reason to pay for a real CALL (which
+        // pushes a return address here that this word's own trailing ']]'
+        // never reaches, let alone pops) when a plain JUMP reaches the same
+        // place -- and lets 'name's own closing ';' pop straight back to
+        // whoever called the word THIS quoted instruction lives in, exactly
+        // as a hand-optimized tail call would. Only a bare ';' directly
+        // followed by ']]' qualifies; anything else after the word
+        // reference is still the real error below (there is no slot budget
+        // left for it once the reference's address field claims the rest
+        // of the word).
+        if (token.Text == ";" && !isTailJump &&
+            _tokenIndex < _tokens.Count && _tokens[_tokenIndex].Text == "]]")
+        {
+          isTailJump = true;
+          continue;
+        }
+
         AddError(
             "F18C057",
             $"'{token.Text}' cannot follow '{callToken!.Text}' inside A[ ... ]]; a word reference occupies the rest of the quoted word.",
@@ -1367,9 +1399,16 @@ public sealed class F18Compiler
     int encoded;
     if (hasCall)
     {
+      // A trailing 'name ;' (isTailJump) compiles as a plain JUMP (0x02),
+      // not a CALL (0x03) -- see the remarks above in the token loop. Any
+      // other reference still compiles as a real CALL, matching every
+      // other use of a bare word reference inside A[ ... ]] (see the
+      // class-level remarks on this method: shipping a call to another
+      // node's code that this node itself cannot execute directly).
+      byte controlOpcode = isTailJump ? (byte)0x02 : (byte)0x03;
       try
       {
-        encoded = F18InstructionSet.EncodePackedControl(opcodes, 0x03, callTarget, opcodes.Count);
+        encoded = F18InstructionSet.EncodePackedControl(opcodes, controlOpcode, callTarget, opcodes.Count);
       }
       catch (ArgumentException exception)
       {
@@ -1401,14 +1440,20 @@ public sealed class F18Compiler
       }
     }
 
-    if (_compileMode)
-    {
-      Builder.EmitLiteral(encoded, openingToken);
-    }
-    else
-    {
-      Interpreter.TryPushData(encoded, openingToken);
-    }
+    // A[ ... ]] only ASSEMBLES the raw word; it never decides what happens
+    // to it. Always leave it on the compile-time stack -- same convention
+    // as '#'/''' (PushHashValue/PushTickValue), which push unconditionally
+    // regardless of _compileMode rather than guessing what the caller wants
+    // done with the value. The caller says so explicitly: 'lit'/'literal'
+    // (CompileStackLiteral) compiles it as a real @p literal in the current
+    // word, and ',' (InterpretComma) lays it down raw at 'here' the way
+    // node008's own pin-control table already does. This used to
+    // auto-compile a literal whenever _compileMode was true, which made
+    // 'A[ ... ]]' unusable for anything BUT immediately compiling a literal
+    // -- e.g. it could not feed an arithmetic/lookup expression the way
+    // '[ ... ]' can, since the value was already gone from the stack by the
+    // time the next token ran.
+    Interpreter.TryPushData(encoded, openingToken);
   }
 
   private void CompileExplicitControl(F18Token token, byte opcode, string description)
