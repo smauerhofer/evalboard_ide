@@ -258,6 +258,48 @@ public partial class ChipWindow : Window
     _sramTentacleWindow = null;
   }
 
+  private SramSimulatorWindow? _sramSimulatorWindow;
+
+  private void OnOpenSramSimulatorClick(object sender, RoutedEventArgs e)
+  {
+    // Same reusable, non-modal window pattern as SRAM Tentacle / Check Kraken.
+    if (_sramSimulatorWindow is not null)
+    {
+      if (_sramSimulatorWindow.WindowState == WindowState.Minimized)
+      {
+        _sramSimulatorWindow.WindowState = WindowState.Normal;
+      }
+
+      _sramSimulatorWindow.Activate();
+      return;
+    }
+
+    var viewModel = new SramSimulatorViewModel(
+        _viewModel.Chip,
+        _viewModel.RomLibrary,
+        _viewModel.Project.Model.UserMacros,
+        _viewModel.KrakenController,
+        () => _viewModel.KrakenRoutes);
+    var window = new SramSimulatorWindow(viewModel)
+    {
+      Owner = this
+    };
+
+    _sramSimulatorWindow = window;
+    window.Closed += OnSramSimulatorWindowClosed;
+    window.Show();
+  }
+
+  private void OnSramSimulatorWindowClosed(object? sender, EventArgs e)
+  {
+    if (sender is SramSimulatorWindow window)
+    {
+      window.Closed -= OnSramSimulatorWindowClosed;
+    }
+
+    _sramSimulatorWindow = null;
+  }
+
   private void OnKrakenCheckWindowClosed(object? sender, EventArgs e)
   {
     if (sender is KrakenCheckWindow window)
