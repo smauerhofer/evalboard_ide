@@ -33,6 +33,19 @@ public sealed class NodeViewModel
   public Visibility SouthVisibility => Row > 0 ? Visibility.Visible : Visibility.Collapsed;
   public Visibility WestVisibility => Column > 0 ? Visibility.Visible : Visibility.Collapsed;
   public Visibility EastVisibility => Column < 17 ? Visibility.Visible : Visibility.Collapsed;
+
+  // Single-letter local F18 port names (u/d/l/r) for the neighbour reached
+  // geographically north/south/west/east of this node. Not the same as
+  // compass direction: GA144 mirrors cell orientation on alternating
+  // rows/columns (KrakenTopology.PortName), so e.g. geographic north is
+  // local "up" on some rows and local "down" on others. Shown on the chip
+  // grid so the mapping doesn't have to be memorized or recomputed by hand.
+  public string NorthPortLabel => Row < 7 ? PortLetter(Model.Coordinate, Model.Coordinate + 100) : string.Empty;
+  public string SouthPortLabel => Row > 0 ? PortLetter(Model.Coordinate, Model.Coordinate - 100) : string.Empty;
+  public string WestPortLabel => Column > 0 ? PortLetter(Model.Coordinate, Model.Coordinate - 1) : string.Empty;
+  public string EastPortLabel => Column < 17 ? PortLetter(Model.Coordinate, Model.Coordinate + 1) : string.Empty;
+
+  private static string PortLetter(int from, int to) => KrakenTopology.PortName(from, to)[..1];
   public Visibility ExternalIoVisibility => IsEdge ? Visibility.Visible : Visibility.Collapsed;
   public bool IsEdge => Row is 0 or 7 || Column is 0 or 17;
 

@@ -1773,8 +1773,137 @@ projects:
         parameterStack: []
     - coordinate: 308
       enabled: false
-      sourceCode: ''
-      ramWords: []
+      sourceCode: >-
+        ( cvm2 cmparison)
+
+        # 307 import
+
+        # 0 org
+
+        entry main
+
+        : main A[ drop !p a !p ]] lit !b @b >r @b ex
+
+        : r! ( w) A[ @p a! ; ]] lit !b !b main ;
+
+        : '- ( w-w)
+
+        : u@- ( w-w) inv A[ s/pop ]] lit !b
+        	A[ !p ]] lit !b @b . +
+        : 'inc 1 . + ; : 'dec -1 . + ;
+
+        : 'eq u@- : 'eq0 if : 'false dup xor ; : 'true then 1 ;
+
+        : 'ne u@- : 'ne0 if 'true ; then dup xor ;
+
+        : 'ugt u@- : gt0 # 'false until
+
+        : ge0 # 'true -until dup xor ;
+
+        : 'gt u@- : 'gt0 2* 2* gt0 ;
+
+        : 'ge u@- : 'ge0 2* 2* ge0 ;
+
+        : 'ule u@- : le0 # 'true until
+
+        : lt0 # 'false -until 'true ;
+
+        : 'le u@- : 'le0 2* 2* le0 ;
+
+        : 'lt u@- : 'lt0 2* 2* lt0 ;
+
+        : 'ult u@- lt0 ; : 'uge u@- ge0 ;
+
+        : '2* 2* ; :'u2/ 2/ ;
+
+        : '2/ 2* 2* 2/ 2/ 2/ ;
+
+        : 'abs 2* 2* 2/ 2/ -if : 'negate inv 'inc ; : 'nop then ;
+
+        : 'invert inv ; : 'xt a over a! ;
+
+        : 'ldt a ; : 'stt dup a! ;
+
+        : 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;
+
+        (
+
+        &apos;- &apos;@-  subtract
+
+        &apos; xt exchanges T with R.
+
+        &apos;ldt  loads R from T.
+
+        &apos;stt  stores R in T.
+
+        &apos;bitcnt  count 1 bits.
+
+        )
+      ramWords:
+      - 0x05B02
+      - 0x3B98E
+      - 0x2FF5D
+      - 0x05B22
+      - 0x04A55
+      - 0x11400
+      - 0x33D27
+      - 0x13410
+      - 0x0C9B2
+      - 0x09FB0
+      - 0x049F5
+      - 0x00001
+      - 0x049F5
+      - 0x3FFFF
+      - 0x13406
+      - 0x19411
+      - 0x24355
+      - 0x05555
+      - 0x00001
+      - 0x13406
+      - 0x19416
+      - 0x11411
+      - 0x24355
+      - 0x13406
+      - 0x19410
+      - 0x1B411
+      - 0x24355
+      - 0x13406
+      - 0x36440
+      - 0x13406
+      - 0x36441
+      - 0x13406
+      - 0x19411
+      - 0x1B410
+      - 0x11411
+      - 0x13406
+      - 0x36440
+      - 0x13406
+      - 0x36441
+      - 0x13406
+      - 0x11421
+      - 0x13406
+      - 0x11419
+      - 0x37555
+      - 0x31555
+      - 0x364C2
+      - 0x30755
+      - 0x364C2
+      - 0x31232
+      - 0x3370A
+      - 0x15555
+      - 0x33555
+      - 0x22FAD
+      - 0x23555
+      - 0x24A55
+      - 0x24DE2
+      - 0x2E9B2
+      - 0x1943E
+      - 0x2760A
+      - 0x2EDB2
+      - 0x1340C
+      - 0x3F739
+      - 0x27555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
