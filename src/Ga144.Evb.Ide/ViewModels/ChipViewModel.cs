@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using Ga144.Evb.Ide.Cvm;
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.Services;
 
@@ -35,10 +36,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     RunNode708EchoTestCommand = new AsyncRelayCommand(RunNode708EchoTestAsync, () => !_verifyBusy);
     RunNode708DispatchTestCommand = new AsyncRelayCommand(RunNode708DispatchTestAsync, () => !_verifyBusy);
     RunNode708SetNodeTestCommand = new AsyncRelayCommand(RunNode708SetNodeTestAsync, () => !_verifyBusy);
-    RunNode708TentacleDepthTestCommand = new AsyncRelayCommand(RunNode708TentacleDepthTestAsync, () => !_verifyBusy);
-    RunNode708AlternateRelayTestCommand = new AsyncRelayCommand(RunNode708AlternateRelayTestAsync, () => !_verifyBusy);
-    RunNode708BypassTestCommand = new AsyncRelayCommand(RunNode708BypassTestAsync, () => !_verifyBusy);
-    RunLegacyKrakenErectionTestCommand = new AsyncRelayCommand(RunLegacyKrakenErectionTestAsync, () => !_verifyBusy);
+    InstallCvmCommand = new AsyncRelayCommand(InstallCvmAsync, () => !_verifyBusy);
     RebuildNodes();
   }
 
@@ -57,10 +55,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public AsyncRelayCommand RunNode708EchoTestCommand { get; }
   public AsyncRelayCommand RunNode708DispatchTestCommand { get; }
   public AsyncRelayCommand RunNode708SetNodeTestCommand { get; }
-  public AsyncRelayCommand RunNode708TentacleDepthTestCommand { get; }
-  public AsyncRelayCommand RunNode708AlternateRelayTestCommand { get; }
-  public AsyncRelayCommand RunNode708BypassTestCommand { get; }
-  public AsyncRelayCommand RunLegacyKrakenErectionTestCommand { get; }
+  public AsyncRelayCommand InstallCvmCommand { get; }
 
   public string VerifyStatus
   {
@@ -80,10 +75,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
         RunNode708EchoTestCommand.NotifyCanExecuteChanged();
         RunNode708DispatchTestCommand.NotifyCanExecuteChanged();
         RunNode708SetNodeTestCommand.NotifyCanExecuteChanged();
-        RunNode708TentacleDepthTestCommand.NotifyCanExecuteChanged();
-        RunNode708AlternateRelayTestCommand.NotifyCanExecuteChanged();
-        RunNode708BypassTestCommand.NotifyCanExecuteChanged();
-        RunLegacyKrakenErectionTestCommand.NotifyCanExecuteChanged();
+        InstallCvmCommand.NotifyCanExecuteChanged();
       }
     }
   }
@@ -746,362 +738,71 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     }
   }
 
-  private async Task RunNode708TentacleDepthTestAsync()
+  // Compile-and-display dry run only -- no hardware I/O. Delivering these
+  // images and register/stack initializations across the mesh (a per-hop
+  // relay through 707/607/507, since 607 and 507 each have to sit in a
+  // temporary pass-through role while their own children load -- see
+  // CvmBootStreamBuilder's remarks) is a separate, not-yet-built step. This
+  // command exists so the confirmed load order and each node's compiled
+  // image can be inspected and sanity-checked before that wire work starts.
+  private async Task InstallCvmAsync()
   {
     if (_verifyBusy)
     {
       return;
     }
 
-    if (KrakenController.HardwareErected)
-    {
-      MessageBox.Show(
-          "The tentacle-depth test cannot run while a Kraken is erected on this chip. "
-          + "This probe requires resetting node 708 (once per tentacle) to load its own "
-          + "test program, and a resident Kraken must never be reset. Remove the Kraken "
-          + "first, then try again.",
-          "Node 708 tentacle-depth test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
-    if (endpoint is null)
-    {
-      MessageBox.Show(
-          "No serial endpoint is assigned to this chip. Assign a COM port before running the tentacle-depth test.",
-          "Node 708 tentacle-depth test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    // Tentacles 2 (46 nodes) and 3 (47 nodes) both run past position 31 --
-    // where erection currently fails at node 300, tentacle 1 -- and contain
-    // no boot nodes at all. Full success out to each tentacle's full depth
-    // points at node 300 specifically; a failure at a similar depth here
-    // points at a real capacity limit in the relay-wrapper mechanism itself.
-    // Tentacle 1 is now included too (it is expected to fail at position 31,
-    // node 300, exactly as always) purely so its per-position Elapsed timing
-    // for positions 0-30 can be compared directly against tentacles 2 and
-    // 3's successful pacing at equal or greater depth: the new protocol
-    // interleaves a live host round trip into every hop's construction
-    // (unlike old-method erection's single precomputed burst), so if there
-    // is a timing anomaly building up specifically on the path into node
-    // 300 -- as opposed to tentacle 1 simply behaving like the others right
-    // up until node 300 itself -- this is where it would show up.
-    int[] testTentacleNumbers = [1, 2, 3];
-
     VerifyBusy = true;
-    VerifyStatus = "Running node 708 tentacle-depth test…";
+    VerifyStatus = "Compiling CVM boot stream…";
     try
     {
-      var probe = new Ga144Node708TentacleDepthProbe();
-      Node708TentacleDepthReport report = await probe.RunTentacleDepthProbeAsync(
-          endpoint.PortName, Chip, RomLibrary, testTentacleNumbers);
+      IReadOnlyList<(CvmBootLoadStep Step, CvmBootDescriptor? Descriptor)> plan =
+          await Task.Run(() => CvmBootStreamBuilder.BuildLoadPlan());
 
       var summary = new System.Text.StringBuilder();
-      summary.AppendLine("Sweeping 'focus'+'writeB' out to full depth on all three tentacles (each gets its own fresh reset + reboot). Tentacle 1 is expected to fail at position 31 (node 300); it is included so its per-position timing up to that point can be compared against tentacles 2 and 3's successful pacing:");
+      summary.AppendLine("CVM boot stream -- compile + dry run only, no hardware I/O yet. Confirmed load order, leaves first / root last:");
       summary.AppendLine();
 
-      bool anyFailed = false;
-      foreach (Node708TentacleDepthTentacleResult tentacle in report.Tentacles)
+      bool anyMissing = false;
+      foreach ((CvmBootLoadStep step, CvmBootDescriptor? descriptor) in plan)
       {
-        int reached = tentacle.Positions.Count(item => item.Succeeded);
-        bool tentacleFailed = reached < tentacle.NodeCount;
-        anyFailed |= tentacleFailed;
-
-        summary.AppendLine(tentacleFailed
-            ? $"Tentacle {tentacle.TentacleNumber} ({tentacle.TentacleName}): FAILED after {reached}/{tentacle.NodeCount} positions."
-            : $"Tentacle {tentacle.TentacleNumber} ({tentacle.TentacleName}): OK, all {tentacle.NodeCount}/{tentacle.NodeCount} positions succeeded.");
-
-        List<Node708TentacleDepthPositionResult> succeeded = tentacle.Positions.Where(item => item.Succeeded).ToList();
-        if (succeeded.Count > 0)
+        string via = step.ViaNodeCoordinate.HasValue ? $"via {step.ViaNodeCoordinate.Value:000}" : "(boot node, no via)";
+        if (descriptor is null)
         {
-          double[] milliseconds = succeeded.Select(item => item.Elapsed.TotalMilliseconds).ToArray();
-          summary.AppendLine($"  Per-position timing over {milliseconds.Length} successful positions: min {milliseconds.Min():F0} ms, avg {milliseconds.Average():F0} ms, max {milliseconds.Max():F0} ms.");
-
-          int tailCount = Math.Min(5, succeeded.Count);
-          IEnumerable<string> tail = succeeded.Skip(succeeded.Count - tailCount)
-              .Select(item => $"pos {item.Position} (node {item.Coordinate:000}): {item.Elapsed.TotalMilliseconds:F0} ms");
-          summary.AppendLine($"  Last {tailCount} succeeded: {string.Join(", ", tail)}.");
+          anyMissing = true;
+          summary.AppendLine($"Node {step.NodeCoordinate:000} {via} -- not yet available (no resident source).");
+          continue;
         }
 
-        Node708TentacleDepthPositionResult? failure = tentacle.Positions.FirstOrDefault(item => !item.Succeeded);
-        if (failure is not null)
-        {
-          summary.AppendLine($"  First failure: position {failure.Position} (node {failure.Coordinate:000}) after {failure.Elapsed.TotalMilliseconds:F0} ms -- {failure.FailureMessage}");
-        }
-
-        summary.AppendLine();
+        summary.AppendLine(
+            $"Node {step.NodeCoordinate:000} {via} -- {descriptor.Words.Count} words, entry "
+            + $"{(descriptor.EntryPoint.HasValue ? $"0x{descriptor.EntryPoint.Value:X3}" : "<none>")}, "
+            + $"A={(descriptor.InitialA.HasValue ? $"0x{descriptor.InitialA.Value:X3}" : "-")} "
+            + $"B={(descriptor.InitialB.HasValue ? $"0x{descriptor.InitialB.Value:X3}" : "-")} "
+            + $"IO={(descriptor.InitialIo.HasValue ? $"0x{descriptor.InitialIo.Value:X3}" : "-")} "
+            + $"stack=[{string.Join(",", descriptor.InitialStack)}]");
       }
 
-      VerifyStatus = anyFailed
-          ? "Node 708 tentacle-depth test: at least one tentacle FAILED (see summary)."
-          : "Node 708 tentacle-depth test: all three tentacles reached full depth.";
-
-      MessageBox.Show(
-          summary.ToString(),
-          "Node 708 tentacle-depth test",
-          MessageBoxButton.OK,
-          anyFailed ? MessageBoxImage.Warning : MessageBoxImage.Information);
-    }
-    catch (Exception exception)
-    {
-      VerifyStatus = "Node 708 tentacle-depth test failed.";
-      MessageBox.Show(
-          $"Node 708 tentacle-depth test could not complete:\n\n{exception.Message}",
-          "Node 708 tentacle-depth test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Error);
-    }
-    finally
-    {
-      VerifyBusy = false;
-    }
-  }
-
-  private async Task RunNode708AlternateRelayTestAsync()
-  {
-    if (_verifyBusy)
-    {
-      return;
-    }
-
-    if (KrakenController.HardwareErected)
-    {
-      MessageBox.Show(
-          "The alternate-relay test cannot run while a Kraken is erected on this chip. "
-          + "This probe requires resetting node 708 to load its own test program, and a "
-          + "resident Kraken must never be reset. Remove the Kraken first, then try again.",
-          "Node 708 alternate-relay test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
-    if (endpoint is null)
-    {
-      MessageBox.Show(
-          "No serial endpoint is assigned to this chip. Assign a COM port before running the alternate-relay test.",
-          "Node 708 alternate-relay test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    VerifyBusy = true;
-    VerifyStatus = "Running node 708 alternate-relay test…";
-    try
-    {
-      var probe = new Ga144Node708AlternateRelayProbe();
-      Node708AlternateRelayReport report = await probe.RunAlternateRelayProbeAsync(endpoint.PortName, Chip, RomLibrary);
-
-      var summary = new System.Text.StringBuilder();
-      summary.AppendLine("Erects tentacle 1 for real out to node 301 (positions 0-29), focuses node 301 normally, then redirects its 'writeB' to node 401 (a real neighbor, already independently verified at position 1) instead of node 300, and sends a final 'focus' at the SAME relay depth (31 layers) toward node 401 instead:");
       summary.AppendLine();
-      summary.AppendLine(report.ChainToNode301Succeeded
-          ? "Real chain to node 301 (positions 0-30): OK."
-          : $"Real chain to node 301: FAILED -- {report.ChainFailureMessage}");
-
-      if (report.ChainToNode301Succeeded)
-      {
-        summary.AppendLine(report.RedirectedWriteBSucceeded
-            ? "Redirected 'writeB' at node 301 (-> node 401 instead of node 300): OK."
-            : $"Redirected 'writeB' at node 301: FAILED -- {report.RedirectedWriteBFailureMessage}");
-      }
-
-      if (report.RedirectedWriteBSucceeded)
-      {
-        summary.AppendLine(report.AlternateFocusSucceeded
-            ? "Alternate-target 'focus' at node 401 via redirected node 301 (same depth as the real node-300 call): OK -- node 301's relay-via-B mechanism is healthy at this depth; the fault is isolated to node 300 itself."
-            : $"Alternate-target 'focus' at node 401 via redirected node 301: FAILED -- {report.AlternateFocusFailureMessage}\nThis means the fault is upstream of node 300 -- something about node 301's own relay, or 31-layer-deep construction on this path in general.");
-      }
-
-      bool overallSucceeded = report.ChainToNode301Succeeded && report.RedirectedWriteBSucceeded && report.AlternateFocusSucceeded;
-      VerifyStatus = overallSucceeded
-          ? "Node 708 alternate-relay test: node 301's relay is healthy -- fault isolated to node 300."
-          : "Node 708 alternate-relay test: see summary for where it broke.";
-
-      MessageBox.Show(
-          summary.ToString(),
-          "Node 708 alternate-relay test",
-          MessageBoxButton.OK,
-          overallSucceeded ? MessageBoxImage.Information : MessageBoxImage.Warning);
-    }
-    catch (Exception exception)
-    {
-      VerifyStatus = "Node 708 alternate-relay test failed.";
-      MessageBox.Show(
-          $"Node 708 alternate-relay test could not complete:\n\n{exception.Message}",
-          "Node 708 alternate-relay test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Error);
-    }
-    finally
-    {
-      VerifyBusy = false;
-    }
-  }
-
-  private async Task RunNode708BypassTestAsync()
-  {
-    if (_verifyBusy)
-    {
-      return;
-    }
-
-    if (KrakenController.HardwareErected)
-    {
-      MessageBox.Show(
-          "The bypass test cannot run while a Kraken is erected on this chip. "
-          + "This probe requires resetting node 708 to load its own test program, and a "
-          + "resident Kraken must never be reset. Remove the Kraken first, then try again.",
-          "Node 708 bypass test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
-    if (endpoint is null)
-    {
-      MessageBox.Show(
-          "No serial endpoint is assigned to this chip. Assign a COM port before running the bypass test.",
-          "Node 708 bypass test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    VerifyBusy = true;
-    VerifyStatus = "Running node 708 bypass test…";
-    try
-    {
-      var probe = new Ga144Node708BypassProbe();
-      Node708BypassProbeReport report = await probe.RunBypassProbeAsync(endpoint.PortName, Chip, RomLibrary);
-
-      var summary = new System.Text.StringBuilder();
-      summary.AppendLine("Erects tentacle 1 for real out to node 400 (positions 0-19), focuses node 400 normally, then redirects its 'writeB' south to node 300 (instead of east, to node 401) and sends a final 'focus' at that new relay depth (21 layers) toward node 300 -- reaching it through node 400 instead of through node 301, the real, suspect path:");
+      summary.AppendLine(anyMissing
+          ? "7 of 9 nodes are ready (607, 507, 506, 508, 407, 606, 608); 707 and 708 have no resident source yet."
+          : "All 9 nodes are ready.");
       summary.AppendLine();
-      summary.AppendLine(report.ChainToNode400Succeeded
-          ? "Real chain to node 400 (positions 0-20): OK."
-          : $"Real chain to node 400: FAILED -- {report.ChainFailureMessage}");
+      summary.AppendLine("This does not touch hardware. Delivering these images across the mesh is a separate step, not yet built.");
 
-      if (report.ChainToNode400Succeeded)
-      {
-        summary.AppendLine(report.RedirectedWriteBSucceeded
-            ? "Redirected 'writeB' at node 400 (-> node 300 instead of node 401): OK."
-            : $"Redirected 'writeB' at node 400: FAILED -- {report.RedirectedWriteBFailureMessage}");
-      }
-
-      if (report.RedirectedWriteBSucceeded)
-      {
-        summary.AppendLine(report.BypassFocusSucceeded
-            ? "Bypass 'focus' at node 300 via redirected node 400 (bypassing node 301 entirely): OK -- node 300 is healthy and reachable; the fault is isolated to node 301's own relay mechanism."
-            : $"Bypass 'focus' at node 300 via redirected node 400: FAILED -- {report.BypassFocusFailureMessage}\nThis means node 300 cannot be relayed into from this direction either, so node 301 is not the (sole) explanation.");
-      }
-
-      bool overallSucceeded = report.ChainToNode400Succeeded && report.RedirectedWriteBSucceeded && report.BypassFocusSucceeded;
-      VerifyStatus = overallSucceeded
-          ? "Node 708 bypass test: node 300 reachable via node 400 -- fault isolated to node 301."
-          : "Node 708 bypass test: see summary for where it broke.";
-
+      VerifyStatus = "CVM boot stream compiled -- see summary.";
       MessageBox.Show(
           summary.ToString(),
-          "Node 708 bypass test",
+          "Install CVM (dry run)",
           MessageBoxButton.OK,
-          overallSucceeded ? MessageBoxImage.Information : MessageBoxImage.Warning);
+          MessageBoxImage.Information);
     }
     catch (Exception exception)
     {
-      VerifyStatus = "Node 708 bypass test failed.";
+      VerifyStatus = "CVM boot stream compile failed.";
       MessageBox.Show(
-          $"Node 708 bypass test could not complete:\n\n{exception.Message}",
-          "Node 708 bypass test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Error);
-    }
-    finally
-    {
-      VerifyBusy = false;
-    }
-  }
-
-  private async Task RunLegacyKrakenErectionTestAsync()
-  {
-    if (_verifyBusy)
-    {
-      return;
-    }
-
-    if (KrakenController.HardwareErected)
-    {
-      MessageBox.Show(
-          "The legacy erection test cannot run while a Kraken is erected on this chip. "
-          + "This probe requires resetting node 708 to load the OLD reply program, and a "
-          + "resident Kraken must never be reset. Remove the Kraken first, then try again.",
-          "Node 708 legacy erection test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
-    if (endpoint is null)
-    {
-      MessageBox.Show(
-          "No serial endpoint is assigned to this chip. Assign a COM port before running the legacy erection test.",
-          "Node 708 legacy erection test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    VerifyBusy = true;
-    VerifyStatus = "Running node 708 legacy erection test…";
-    try
-    {
-      var probe = new Ga144LegacyKrakenErectionProbe();
-      Node708LegacyKrakenReport report = await probe.RunLegacyErectionProbeAsync(endpoint.PortName);
-
-      var summary = new System.Text.StringBuilder();
-      summary.AppendLine("Erects the real, full three-tentacle Kraken using the OLD, pre-redesign method (fire-and-forget focus/writeB boot frames, no reply ever checked during erection -- exactly like the uploaded old code), then performs two OLD-style, carrier-clocked reads: node 301 (control, to prove the old read mechanism itself works here) and node 300 (the node in question).");
-      summary.AppendLine();
-      summary.AppendLine(report.ErectionCompleted
-          ? "Old-method erection (all 3 tentacles, 143 nodes): sent, unverified (as old code always was)."
-          : $"Old-method erection: FAILED -- {report.ErectionFailureMessage}");
-
-      if (report.ErectionCompleted)
-      {
-        summary.AppendLine(report.ControlReadSucceeded
-            ? $"Control read, node 301 (old carrier-clocked protocol): OK -- 0x{report.ControlReadValue:X5}."
-            : $"Control read, node 301: FAILED -- {report.ControlReadFailureMessage}\nThe old read mechanism itself did not work in this session, so the node-300 result below is not conclusive either way.");
-
-        summary.AppendLine(report.TargetReadSucceeded
-            ? $"Target read, node 300 (old carrier-clocked protocol): OK -- 0x{report.TargetReadValue:X5}. The old method reaches node 300 where the new one does not."
-            : $"Target read, node 300: FAILED -- {report.TargetReadFailureMessage}");
-      }
-
-      bool overallSucceeded = report.ErectionCompleted && report.ControlReadSucceeded && report.TargetReadSucceeded;
-      VerifyStatus = overallSucceeded
-          ? "Node 708 legacy erection test: node 300 answered under the old method."
-          : "Node 708 legacy erection test: see summary for the result.";
-
-      MessageBox.Show(
-          summary.ToString(),
-          "Node 708 legacy erection test",
-          MessageBoxButton.OK,
-          overallSucceeded ? MessageBoxImage.Information : MessageBoxImage.Warning);
-    }
-    catch (Exception exception)
-    {
-      VerifyStatus = "Node 708 legacy erection test failed.";
-      MessageBox.Show(
-          $"Node 708 legacy erection test could not complete:\n\n{exception.Message}",
-          "Node 708 legacy erection test",
+          $"The CVM boot stream could not be compiled:\n\n{exception.Message}",
+          "Install CVM (dry run)",
           MessageBoxButton.OK,
           MessageBoxImage.Error);
     }
