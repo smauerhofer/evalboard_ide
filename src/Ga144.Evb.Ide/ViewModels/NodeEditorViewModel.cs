@@ -261,7 +261,10 @@ public sealed class NodeEditorViewModel : ObservableObject
     var body = rom.Diagnostics.Count == 0
         ? "No diagnostics."
         : string.Join(Environment.NewLine, rom.Diagnostics.Select(diagnostic => diagnostic.ToString()));
-    return "ROM" + Environment.NewLine + "---" + Environment.NewLine + body;
+    return "ROM" + Environment.NewLine + "---" + Environment.NewLine + body +
+           Environment.NewLine + Environment.NewLine +
+           "ROM memory" + Environment.NewLine + "----------" + Environment.NewLine +
+           rom.CreateMemoryDump();
   }
 
 
@@ -319,7 +322,11 @@ public sealed class NodeEditorViewModel : ObservableObject
       var body = result.Diagnostics.Count == 0
           ? "No diagnostics."
           : string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic => diagnostic.ToString()));
-      return name + Environment.NewLine + new string('-', name.Length) + Environment.NewLine + body;
+      var memoryHeader = name + " memory";
+      return name + Environment.NewLine + new string('-', name.Length) + Environment.NewLine + body +
+             Environment.NewLine + Environment.NewLine +
+             memoryHeader + Environment.NewLine + new string('-', memoryHeader.Length) + Environment.NewLine +
+             result.CreateMemoryDump();
     }
 
     return Section("ROM", rom) + Environment.NewLine + Environment.NewLine + Section("RAM", ram);

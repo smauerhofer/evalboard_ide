@@ -932,6 +932,10 @@ projects:
 
         entry main
 
+        # 0 /a // frame pointer init
+
+        # right /b // master node
+
         # 0 org
 
         : noff inv
@@ -943,13 +947,13 @@ projects:
         : main A[ 2* !p !p ]] lit !b @b
         	@b xff and >r # local -until
         	2* -if 2* -if 2* -if r> off
-        : la ( a-) A[ @p /r! ; ]] , !b !b main ;
+        : la ( a-) A[ @p /r! ; ]] lit !b !b main ;
         	then r> noff la ;
         	then 2* -if r> off
-        : ld A[ @p /1@ ]] , !b !b A[ /r! ; ]] , !b main ;
+        : ld A[ @p /1@ ]] lit !b !b A[ /r! ; ]] lit !b main ;
         	then r> noff ld ;
         	then 2* -if 2* -if r> off
-        : st ( a-) A[ /r@ ]] , !b A[ @p /1! ; ]] , @p !b !b main ;
+        : st ( a-) A[ /r@ ]] , !b A[ @p /1! ; ]] lit @p !b !b main ;
         	then r> noff st ;
         	then 2* -if
         : cleanup A[ @p /pop ]] lit !b a !b A[ !p 'ret ]] lit !b @b a! r>
@@ -988,11 +992,11 @@ projects:
 
         enter enter stack frame
 
-        &apos;xf exchanges frame pointer with r
+        'xf exchanges frame pointer with r
 
-        &apos;wait waits for a stimulus from the memory controller
+        'wait waits for a stimulus from the memory controller
 
-        &apos;exit waits for a stimulus and start from location 1
+        'exit waits for a stimulus and start from location 1
 
 
         )
@@ -1009,15 +1013,15 @@ projects:
       - 0x37211
       - 0x3720F
       - 0x27601
+      - 0x05B22
       - 0x05715
-      - 0x09BB2
       - 0x11403
       - 0x27600
       - 0x1140C
       - 0x37217
       - 0x27601
+      - 0x05B27
       - 0x05607
-      - 0x09BB2
       - 0x11415
       - 0x09703
       - 0x27600
@@ -1026,9 +1030,9 @@ projects:
       - 0x37221
       - 0x27601
       - 0x13400
-      - 0x089B2
+      - 0x09D12
       - 0x05712
-      - 0x05B22
+      - 0x09BB2
       - 0x11403
       - 0x27600
       - 0x1141C
@@ -1208,17 +1212,21 @@ projects:
 
         # 0 org
 
+        # 0 /a
+
+        # left /b
+
         entry main
 
         : adr ( w) A[ @p /r@ ]] lit !b !b A[ + /r! ]] lit !b ;
 
-        : x3 a r> a! @+ !b @+ !b @ !b a! ahead
+        : 'x3 .loc a r> a! @+ !b @+ !b @ !b a! ahead
 
-        : 'ld x3 A[ /r@ ]] , A[ /1@ ]] , A[ /r! ; ]] ,
+        : 'ld .loc 'x3 A[ /r@ ]] , A[ /1@ ]] , A[ /r! ; ]] ,
 
-        : 'st x3 A[ /pop ]] , A[ /r@ ]] , A[ /1! ; ]] ,
+        : 'st .loc 'x3 A[ /pop ]] , A[ /r@ ]] , A[ /1! ; ]] ,
 
-        : 'ldph x3 A[ /r@ ]] , A[ /1@ ]] , A[ /push ; ]] ,
+        : 'ldph .loc 'x3 A[ /r@ ]] , A[ /1@ ]] , A[ /push ; ]] ,
 
         : leave A[ ; ]] lit !b @p
 
@@ -1241,22 +1249,22 @@ projects:
 
         : 'stx leap A[ /! ; ]] lit !b ;
 
-        : long then A[ /pop ]] lit !b A[ >r /pop ]] lit !b
-          A[ r> /r@ ]] lit !b ;
-        : 'mk! long A[ inv /! ; ]] lit !b ;
+        : 'long then A[ /pop ]] lit !b A[ >r /pop ]] lit !b A[ r> /r@ ]] lit !b ;
+
+        : 'mk! 'long A[ inv /! ; ]] lit !b ;
 
 
         (
 
-        adr  adds TOS to R
+        adr  adds T to R
 
-        x3  writes the next 3 words from the return address
-        	to node 207 and jum to main.
-        &apos;ld  loads word with address in R.
+        'x3  writes the next 3 words from the return address
+        	to node 207 and jumps to main.
+        'ld  loads word with address in R.
 
-        &apos;st  pops and stores word with address in R.
+        'st  pops and stores word with address in R.
 
-        &apos;ldph  push word with address in R.
+        'ldph  push word with address in R.
 
         leave  gives control back to node 207.
 
@@ -1274,18 +1282,82 @@ projects:
 
         'xg  exchanges global pointer with R.
 
-        'ldx  lodads word from extended address.
+        'ldx  loads word from extended address.
 
         'stx  stores word to extended address
 
         long  word shared by 'stx and 'mk.
 
-        'mk  used t manage memory access.
+        'mk  used to manage memory access.
 
         )
-      ramWords: []
+      ramWords:
+      - 0x05B27
+      - 0x05600
+      - 0x3D615
+      - 0x09555
+      - 0x22CAA
+      - 0x07B1A
+      - 0x09E22
+      - 0x2B717
+      - 0x13404
+      - 0x13400
+      - 0x13407
+      - 0x11415
+      - 0x13404
+      - 0x13404
+      - 0x13400
+      - 0x11412
+      - 0x13404
+      - 0x13400
+      - 0x13407
+      - 0x1140F
+      - 0x05B12
+      - 0x15555
+      - 0x3B455
+      - 0x05B02
+      - 0x37932
+      - 0x01DFA
+      - 0x001FF
+      - 0x2F216
+      - 0x37222
+      - 0x37220
+      - 0x27600
+      - 0x11414
+      - 0x27600
+      - 0x11408
+      - 0x37225
+      - 0x27600
+      - 0x1140C
+      - 0x22CB0
+      - 0x05B22
+      - 0x05715
+      - 0x11417
+      - 0x05B8A
+      - 0x05600
+      - 0x09D22
+      - 0x0D715
+      - 0x00A55
+      - 0x13404
+      - 0x13400
+      - 0x13404
+      - 0x13409
+      - 0x05B55
+      - 0x11415
+      - 0x13437
+      - 0x05B55
+      - 0x1140A
+      - 0x05B12
+      - 0x13404
+      - 0x2F604
+      - 0x09D25
+      - 0x27600
+      - 0x13437
+      - 0x05B55
+      - 0x3370A
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x017
         p: 0x000
         a: 0x000
         b: 0x000
@@ -1481,6 +1553,10 @@ projects:
 
         entry main
 
+        # 0 /a
+
+        # right /b
+
         : main A[ drop !p ]] lit !b @b >r ex
 
         : leave A[ ; ]] lit !b main ;
@@ -1602,6 +1678,10 @@ projects:
         # 0 org
 
         entry main
+
+        # 0 /a
+
+        # down /b
 
         : s/r@ A[ @p ]] lit !b a dup !b ;
 
@@ -1774,7 +1854,7 @@ projects:
     - coordinate: 308
       enabled: false
       sourceCode: >-
-        ( cvm2 cmparison)
+        ( cvm2 comparison)
 
         # 307 import
 
@@ -1782,14 +1862,19 @@ projects:
 
         entry main
 
+        # 0 /a
+
+        # left /b
+
+
         : main A[ drop !p a !p ]] lit !b @b >r @b ex
 
         : r! ( w) A[ @p a! ; ]] lit !b !b main ;
 
         : '- ( w-w)
 
-        : u@- ( w-w) inv A[ s/pop ]] lit !b
-        	A[ !p ]] lit !b @b . +
+        : u@- ( w-w) inv A[ s/pop ]] lit !b A[ !p ]] lit !b @b . +
+
         : 'inc 1 . + ; : 'dec -1 . + ;
 
         : 'eq u@- : 'eq0 if : 'false dup xor ; : 'true then 1 ;
@@ -1828,15 +1913,15 @@ projects:
 
         (
 
-        &apos;- &apos;@-  subtract
+        '- &apos;@-  subtract
 
-        &apos; xt exchanges T with R.
+        'xt exchanges T with R.
 
-        &apos;ldt  loads R from T.
+        'ldt  loads R from T.
 
-        &apos;stt  stores R in T.
+        'stt  stores R in T.
 
-        &apos;bitcnt  count 1 bits.
+        'bitcnt  count 1 bits.
 
         )
       ramWords:
@@ -2106,8 +2191,134 @@ projects:
         parameterStack: []
     - coordinate: 407
       enabled: false
-      sourceCode: ''
-      ramWords: []
+      sourceCode: >-
+        # 307 import
+
+        # 0 org
+
+        entry main
+
+        # 0 # 1 /stack
+
+        # left /a
+
+        # up /b
+
+
+        : main A[ drop !p ]] lit !b @b >r ex
+
+        : leave A[ ; ]] lit !b main ;
+
+        : sr16 ( w-w) 7 for 2/ 2/ unext
+
+        : c! 3 and ;
+
+        : sl16 ( w-w) 7 for 2* 2* unext ;
+
+        : r@ ( -w) A[ a !p ]] lit !b @b ;
+
+        : 'hi@ dup sr16
+
+        : r! ( w) A[ @p a! ]] lit !b !b ;
+
+        : 'xpt a r@ a! r! ;
+
+        : 'out dup ! ;
+
+        : 'in @ ;
+
+        : 'lo@ dup r! ;
+
+        : 'hi! xffff and r@ sl16 xor ;
+
+        : 'lo! x30000 and r@ xor ;
+
+        : spop ( -w) A[ s/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : spush ( w) A[ @p s/push ]] lit !b !b ;
+
+        (
+
+        'xpt  exchanges port register with R.
+
+        'out  writes 18 bit value to port.
+
+        'in  reads 18 bit value from port.
+
+        'hi@  moves hi 2 bits from value to R.
+
+        'lo@  moves lo 16 bit from value to R.
+
+        'hi!  moves 2 bits from R to hi value.
+
+        'lo!  moves 16 bits from R to lo value.
+
+        )
+      ramWords:
+      - 0x05B02
+      - 0x3B9B2
+      - 0x2F455
+      - 0x05B40
+      - 0x15555
+      - 0x048B2
+      - 0x00007
+      - 0x30772
+      - 0x04055
+      - 0x00003
+      - 0x048B2
+      - 0x00007
+      - 0x36475
+      - 0x05B05
+      - 0x239B2
+      - 0x25605
+      - 0x05B25
+      - 0x04AB2
+      - 0x2360D
+      - 0x2B710
+      - 0x25A55
+      - 0x03555
+      - 0x25710
+      - 0x040B2
+      - 0x0FFFF
+      - 0x1340D
+      - 0x1340A
+      - 0x39555
+      - 0x040B2
+      - 0x30000
+      - 0x1340D
+      - 0x39555
+      - 0x05B12
+      - 0x13410
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05608
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000

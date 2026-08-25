@@ -204,6 +204,34 @@ public sealed class F18CompileResult
             $"{MemoryBaseAddress + index:X3}: 0x{word & F18InstructionSet.WordMask:X5}"));
   }
 
+  /// <summary>
+  /// Renders the compiled memory as a 3-column table -- address, hex value, and decimal
+  /// value -- one row per word, with a header row. Companion to <see cref="CreateListing()"/>
+  /// (address:hex only, no decimal column, no header); this is what the node editor appends
+  /// after the diagnostics (errors/warnings) section in its compilation log, so the resulting
+  /// memory image is visible right alongside whatever errors or warnings produced it.
+  /// </summary>
+  public string CreateMemoryDump()
+  {
+    if (Words.Count == 0)
+    {
+      return $"No {MemorySpace.ToString().ToUpperInvariant()} words generated.";
+    }
+
+    var header = $"{"Address",-8}{"Hex",-9}{"Decimal",8}";
+    var separator = new string('-', header.Length);
+    var rows = Words.Select((word, index) =>
+    {
+      var address = $"{MemoryBaseAddress + index:X3}";
+      var masked = word & F18InstructionSet.WordMask;
+      var hex = $"0x{masked:X5}";
+      return $"{address,-8}{hex,-9}{masked,8}";
+    });
+
+    return header + Environment.NewLine + separator + Environment.NewLine +
+           string.Join(Environment.NewLine, rows);
+  }
+
   public string CreateSymbolListing()
   {
     var rows = new List<(string Name, int Value, F18ExportKind Kind)>();
