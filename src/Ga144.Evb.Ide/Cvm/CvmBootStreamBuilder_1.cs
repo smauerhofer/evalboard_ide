@@ -24,24 +24,26 @@ namespace Ga144.Evb.Ide.Cvm;
 /// mirrors the exact chain every per-node verification harness in this project has already used
 /// (607 -&gt; 507 -&gt; {506, 508, 407}; 607 -&gt; 606; 607 -&gt; 608).
 ///
-/// <b>Compile order is not load order -- an open design question, not yet resolved here.</b> The
-/// mesh topology these seven nodes sit in is a branching tree, not a simple chain: 607 has THREE
-/// children (507 via its up port, 606 via right, 608 via left), and 507 itself has three more
-/// (506, 508, 407). Every node this project has erected so far for the (unrelated) Kraken
-/// tentacles was a simple linear chain -- one predecessor, one successor -- and
-/// <c>KrakenSession.ErectOnto</c>'s old-style, hardware-proven per-hop relay technique
-/// (<c>focus</c> + <c>writeB</c>, sent as host-precomputed boot frames while every intermediate
-/// node still sits in its ROM default) is built around that assumption. Loading a BRANCHING node
-/// like 607 or 507 needs something extra: per DB013 6.1.2.4 ("Root Node Programming"), a branch
-/// node must first be held in a temporary pass-through/relay role while each of its children is
-/// loaded in turn (re-pointing its B register at a different child before each child's payload),
-/// and only as the LAST step be given its own real resident program and entry jump -- otherwise
-/// loading a later sibling would require relaying back through a node that has already switched
-/// over to running its own unrelated CVM firmware. This builder does not attempt that sequencing
-/// yet; <see cref="BuildDescriptors"/> below returns descriptors in compile order only. Turning
-/// this into an actual delivery sequence (and deciding whether to reuse
+/// <b>Compile order is not load order.</b> The mesh topology these seven nodes sit in is a
+/// branching tree, not a simple chain: 607 has THREE children (507 via its up port, 606 via
+/// right, 608 via left), and 507 itself has three more (506, 508, 407). Every node this project
+/// has erected so far for the (unrelated) Kraken tentacles was a simple linear chain -- one
+/// predecessor, one successor -- and <c>KrakenSession.ErectOnto</c>'s old-style, hardware-proven
+/// per-hop relay technique (<c>focus</c> + <c>writeB</c>, sent as host-precomputed boot frames
+/// while every intermediate node still sits in its ROM default) is built around that assumption.
+/// Loading a BRANCHING node like 607 or 507 needs something extra: per DB013 6.1.2.4 ("Root Node
+/// Programming"), a branch node must first be held in a temporary pass-through/relay role while
+/// each of its children is loaded in turn (re-pointing its B register at a different child before
+/// each child's payload), and only as the LAST step be given its own real resident program and
+/// entry jump -- otherwise loading a later sibling would require relaying back through a node
+/// that has already switched over to running its own unrelated CVM firmware.
+/// <see cref="BuildDescriptors"/> below still returns descriptors in COMPILE order (the order
+/// each source's own imports force); see <see cref="BuildLoadOrder"/> and
+/// <see cref="CvmBootLoadStep"/> for the separate, definitive LOAD order Stefan confirmed
+/// (2026-08-25) -- leaves first, root last, a post-order walk of the physical tree. Turning that
+/// load order into an actual delivery sequence (and deciding whether to reuse
 /// <c>KrakenSession</c>/<c>LegacyKrakenProtocol</c>'s relay primitives for it) is the next step,
-/// once node 707 exists and this load-order approach has been reviewed.
+/// once node 707 exists.
 /// </summary>
 public static class CvmBootStreamBuilder
 {
@@ -80,6 +82,50 @@ public static class CvmBootStreamBuilder
       CvmBootDescriptor.FromCompileResult(result508),
       CvmBootDescriptor.FromCompileResult(result407),
     ];
+  }
+
+  /// <summary>
+  /// The definitive boot LOAD order for this cluster, confirmed by Stefan (2026-08-25): a
+  /// post-order walk of the physical tree, leaves first / root last, so that every child is
+  /// fully loaded and running its own real program before its parent gives up its temporary
+  /// relay role. See <see cref="CvmBootLoadStep"/>'s remarks for the full tree diagram and the
+  /// DB013 6.1.2.4 rationale. Nodes 707 and 708 are included here because they are part of the
+  /// confirmed sequence's shape, even though neither has a resident program yet -- see
+  /// <see cref="BuildLoadPlan"/> for how that absence is surfaced rather than guessed at.
+  /// </summary>
+  public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
+  [
+    new CvmBootLoadStep(407, 507),
+    new CvmBootLoadStep(506, 507),
+    new CvmBootLoadStep(508, 507),
+    new CvmBootLoadStep(507, 607),
+    new CvmBootLoadStep(606, 607),
+    new CvmBootLoadStep(608, 607),
+    new CvmBootLoadStep(607, 707),
+    new CvmBootLoadStep(707, 708),
+    new CvmBootLoadStep(708, null),
+  ];
+
+  /// <summary>
+  /// Pairs <see cref="BuildLoadOrder"/>'s confirmed sequence with each step's compiled
+  /// <see cref="CvmBootDescriptor"/> from <see cref="BuildDescriptors"/>. The descriptor is
+  /// <c>null</c> for nodes 707 and 708 -- neither has a resident source yet ("node 707 will come
+  /// later" / "node 708 should come later") -- so a caller can already see and reason about the
+  /// full 9-step sequence's shape without this builder pretending to know content that has not
+  /// been dictated.
+  /// </summary>
+  public static IReadOnlyList<(CvmBootLoadStep Step, CvmBootDescriptor? Descriptor)> BuildLoadPlan()
+  {
+    Dictionary<int, CvmBootDescriptor> descriptorsByCoordinate =
+        BuildDescriptors().ToDictionary(descriptor => descriptor.NodeCoordinate);
+
+    return BuildLoadOrder()
+        .Select(step => (
+            step,
+            descriptorsByCoordinate.TryGetValue(step.NodeCoordinate, out CvmBootDescriptor? descriptor)
+                ? descriptor
+                : null))
+        .ToList();
   }
 
   private static F18CompileResult Compile(F18Compiler compiler, string source, F18CompilerOptions options) =>
