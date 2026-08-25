@@ -21,4 +21,8 @@
     <Resource Include="Assets\Boards\evb001_board.png" />
     <Resource Include="Assets\Boards\evb002_board.png" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Cvm\" />
+  </ItemGroup>
 </Project>
