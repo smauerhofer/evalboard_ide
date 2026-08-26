@@ -349,7 +349,7 @@ internal static class Node508Program
       // The plain F18A '2*' (left shift) and '2/' (right shift, sign-preserving
       // on real hardware, though this bare single-step form is exposed under
       // the CVM's "unsigned" shift-right name).
-      : '2* 2* ; :'u2/ 2/ ;
+      : '2* 2* ; : 'u2/ 2/ ;
 
       // ----------------------------------------------------------------------
       // '2/  --  signed divide by 2 (inferred)

@@ -345,7 +345,7 @@ internal static class Node507Program
       // arithmetic/sign-preserving right shift -- divide back down by four net
       // of the two 2*'s), 'r>' restores the count. The double 2*/2/ pairing is
       // how this project realises a signed shift, as opposed to 'usr below.
-      : 'ssr >r 2* 2* 2/ 2/ r>;
+      : 'ssr >r 2* 2* 2/ 2/ r> ;
 
       // ----------------------------------------------------------------------
       // 'usr  --  binary. unsigned shift right (Stefan's own description)

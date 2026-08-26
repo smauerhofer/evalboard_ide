@@ -88,18 +88,24 @@ internal static class F18Tokenizer
         continue;
       }
 
-      if (current is ':' or ';' or ',' or '=' or '[' or ']')
-      {
-        tokens.Add(new F18Token(current.ToString(), tokenLine, tokenColumn, index, 1));
-        Advance(current, ref index, ref line, ref column);
-        continue;
-      }
-
+      // ':', ';', ',', '=', '[', ']' are NOT self-delimiting -- matching strict
+      // Forth semantics, where every token (including these) is just a maximal
+      // run of non-whitespace characters. A properly spaced "main ;" still
+      // tokenizes as two tokens ("main" and ";") because whitespace already
+      // separates them below; a glued "main;" tokenizes as the single word
+      // "main;", which then fails to resolve as any known word -- exactly like
+      // a real Forth system would reject it, rather than silently splitting it
+      // the way a C-like tokenizer would. (The "A[" and "]]" two-character
+      // sequences above are this project's own packed-literal notation, not
+      // standard Forth syntax, and are unaffected by this rule -- they are
+      // recognized by their own explicit lookahead before this point is ever
+      // reached, and are always written adjacent to whitespace on the other
+      // side by convention, not by requirement.)
       var start = index;
       while (index < source.Length)
       {
         current = source[index];
-        if (char.IsWhiteSpace(current) || current is '(' or ')' or ':' or ';' or ',' or '[' or ']')
+        if (char.IsWhiteSpace(current) || current is '(' or ')')
         {
           break;
         }

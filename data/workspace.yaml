@@ -24,39 +24,6 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-25T19:38:33.0123327
-      utcDateTime: 2026-08-25T19:38:33.0123327Z
-      localDateTime: 2026-08-25T21:38:33.0123327+02:00
-      date: 2026-08-25T00:00:00.0000000
-      day: 25
-      dayOfWeek: Tuesday
-      dayOfYear: 237
-      hour: 19
-      millisecond: 12
-      microsecond: 332
-      nanosecond: 700
-      minute: 38
-      month: 8
-      offset: 00:00:00
-      totalOffsetMinutes: 0
-      second: 33
-      ticks: 639232835130123327
-      utcTicks: 639232835130123327
-      timeOfDay: 19:38:33.0123327
-      year: 2026
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -77,6 +44,19 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
