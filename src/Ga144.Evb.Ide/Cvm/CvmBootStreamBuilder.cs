@@ -7,16 +7,17 @@ namespace Ga144.Evb.Ide.Cvm;
 /// source's own <c># NNN import</c> directive requires -- and produces one
 /// <see cref="CvmBootDescriptor"/> per node.
 ///
-/// <b>Scope of this pass.</b> Covers exactly the seven nodes with a finished, hand-verified
-/// resident program as of 2026-08-25: 607, 507, 506, 508, 407, 606, 608. Nodes 707 and 708 are
-/// deliberately NOT covered (Stefan: "node 707 will come later. leave it empty for now" /
-/// "node 708 should come later"). This builder produces boot-descriptor DATA only -- the compiled
-/// RAM image, register/stack init, and entry point for each of those seven nodes -- and says
-/// nothing yet about how that data reaches its node across the mesh. Delivery depends on both
-/// deferred pieces: node 707 (currently a bare, unprogrammed relay position between 708 and 607 --
-/// see <see cref="Node607Program"/>'s own remarks, "707 has no local storage of its own... a
-/// stateless interface") and node 708 (the only node in this topology with an external boot
-/// interface -- the sole possible entry point for any of this data).
+/// <b>Scope of this pass.</b> Covers eight of the cluster's nine nodes: the seven with a finished,
+/// hand-verified resident program as of 2026-08-25 (607, 507, 506, 508, 407, 606, 608), plus node
+/// 708 (added 2026-08-26 -- Stefan supplied 708's resident source, its trailing documentation
+/// comment and an unused, unterminated <c>readw</c> word were reviewed and fixed with his
+/// confirmation; see <see cref="Node708Program"/>'s remarks). Node 707 remains deliberately NOT
+/// covered (Stefan: "node 707 will come later. leave it empty for now"). This builder produces
+/// boot-descriptor DATA only -- the compiled RAM image, register/stack init, and entry point for
+/// each of those eight nodes -- and says nothing yet about how that data reaches its node across
+/// the mesh. Delivery still depends on node 707: it is currently a bare, unprogrammed relay
+/// position between 708 and 607 -- see <see cref="Node607Program"/>'s own remarks, "707 has no
+/// local storage of its own... a stateless interface".
 ///
 /// <b>Compile order</b> (forced by import dependencies, cross-checked against every node's own
 /// class remarks): 607 first (no imports); then 507, 606, and 608, each of which does
@@ -72,6 +73,17 @@ public static class CvmBootStreamBuilder
     F18CompileResult result407 = Compile(compiler, Node407Program.Source, ImportingRam(Node407Program.Coordinate, result507));
     ThrowIfFailed(result407);
 
+    // 708 needs no cross-node import (nothing in its source imports another CVM node's
+    // exports), but unlike every node above it is not an ordinary internal F18A node: it is
+    // the real, unmirrored async serial boot node, so its RAM compile needs ITS OWN real
+    // factory ROM's exports (18ibits, delay) in scope -- the same same-node ROM-then-RAM
+    // pairing F18NodeCompilationService uses, not a cross-node ImportResolver.
+    F18CompileResult rom708 = CompileNode708Rom(compiler);
+    ThrowIfFailed(rom708);
+
+    F18CompileResult result708 = Compile(compiler, Node708Program.Source, ImportingRom(Node708Program.Coordinate, rom708));
+    ThrowIfFailed(result708);
+
     return
     [
       CvmBootDescriptor.FromCompileResult(result607),
@@ -81,6 +93,7 @@ public static class CvmBootStreamBuilder
       CvmBootDescriptor.FromCompileResult(result506),
       CvmBootDescriptor.FromCompileResult(result508),
       CvmBootDescriptor.FromCompileResult(result407),
+      CvmBootDescriptor.FromCompileResult(result708),
     ];
   }
 
@@ -89,8 +102,8 @@ public static class CvmBootStreamBuilder
   /// post-order walk of the physical tree, leaves first / root last, so that every child is
   /// fully loaded and running its own real program before its parent gives up its temporary
   /// relay role. See <see cref="CvmBootLoadStep"/>'s remarks for the full tree diagram and the
-  /// DB013 6.1.2.4 rationale. Nodes 707 and 708 are included here because they are part of the
-  /// confirmed sequence's shape, even though neither has a resident program yet -- see
+  /// DB013 6.1.2.4 rationale. Node 707 is included here because it is part of the confirmed
+  /// sequence's shape, even though it has no resident program yet -- see
   /// <see cref="BuildLoadPlan"/> for how that absence is surfaced rather than guessed at.
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
@@ -109,10 +122,9 @@ public static class CvmBootStreamBuilder
   /// <summary>
   /// Pairs <see cref="BuildLoadOrder"/>'s confirmed sequence with each step's compiled
   /// <see cref="CvmBootDescriptor"/> from <see cref="BuildDescriptors"/>. The descriptor is
-  /// <c>null</c> for nodes 707 and 708 -- neither has a resident source yet ("node 707 will come
-  /// later" / "node 708 should come later") -- so a caller can already see and reason about the
-  /// full 9-step sequence's shape without this builder pretending to know content that has not
-  /// been dictated.
+  /// <c>null</c> only for node 707 -- it has no resident source yet ("node 707 will come
+  /// later") -- so a caller can already see and reason about the full 9-step sequence's shape
+  /// without this builder pretending to know content that has not been dictated.
   /// </summary>
   public static IReadOnlyList<(CvmBootLoadStep Step, CvmBootDescriptor? Descriptor)> BuildLoadPlan()
   {
@@ -144,6 +156,54 @@ public static class CvmBootStreamBuilder
     ImportResolver = importedCoordinate => importedCoordinate == upstream.NodeCoordinate
         ? F18ImportResolution.FromExports(upstream.Exports)
         : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+  };
+
+  // Compiles node 708's real factory ROM (Node708Rom -- this project's own byte-for-byte copy
+  // of data/ga144-rom.yaml's node 708 entry, "macro rom_async_boot"), including the same
+  // predefined 'await' symbol injection F18NodeCompilationService.CompileRom uses for every
+  // node's ROM compile.
+  private static F18CompileResult CompileNode708Rom(F18Compiler compiler)
+  {
+    var predefinedSymbols = new Dictionary<string, F18ExportedSymbol>(StringComparer.OrdinalIgnoreCase)
+    {
+      ["await"] = new F18ExportedSymbol(
+          "await",
+          F18AwaitAddresses.ForNode(Node708Program.Coordinate),
+          F18ExportKind.Word,
+          Node708Program.Coordinate,
+          F18MemorySpace.Rom),
+    };
+
+    var options = new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Rom,
+      NodeCoordinate = Node708Program.Coordinate,
+      MemoryBaseAddress = 0x080,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = false,
+      PredefinedSymbols = predefinedSymbols,
+      MacroResolver = Node708Rom.ResolveSystemMacro,
+      MacroLookupScope = F18MacroLookupScope.SystemOnly,
+    };
+
+    return compiler.Compile(Node708Rom.RomAsyncBootSource, options);
+  }
+
+  // Pairs a node's RAM compile with its OWN already-compiled ROM's exports -- the same-node
+  // ROM-then-RAM pattern F18NodeCompilationService.CompileRam uses -- as opposed to
+  // ImportingRam above, which pairs a node's RAM compile with a DIFFERENT node's exports via
+  // that different node's own '# NNN import' directive. Node 708 needs this one: it has no
+  // '# NNN import' directive of its own, but its RAM source calls words (18ibits, delay) that
+  // live in its own real ROM, not in the compiler's built-in common ROM words.
+  private static F18CompilerOptions ImportingRom(int coordinate, F18CompileResult ownRom) => new()
+  {
+    MemorySpace = F18MemorySpace.Ram,
+    NodeCoordinate = coordinate,
+    MemoryBaseAddress = 0x000,
+    MemoryWordCount = 64,
+    IncludeCommonRomWords = true,
+    PredefinedConstants = ownRom.Constants,
+    PredefinedSymbols = ownRom.Symbols,
   };
 
   private static void ThrowIfFailed(F18CompileResult result)

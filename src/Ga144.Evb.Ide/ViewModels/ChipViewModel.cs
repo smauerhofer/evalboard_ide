@@ -38,7 +38,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     RunNode708EchoTestCommand = new AsyncRelayCommand(RunNode708EchoTestAsync, () => !_verifyBusy);
     RunNode708DispatchTestCommand = new AsyncRelayCommand(RunNode708DispatchTestAsync, () => !_verifyBusy);
     RunNode708SetNodeTestCommand = new AsyncRelayCommand(RunNode708SetNodeTestAsync, () => !_verifyBusy);
-    InstallCvmCommand = new AsyncRelayCommand(InstallCvmAsync, () => !_verifyBusy);
+    InstallCvmTestCommand = new AsyncRelayCommand(InstallCvmTestAsync, () => !_verifyBusy);
     RebuildNodes();
   }
 
@@ -64,7 +64,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public AsyncRelayCommand RunNode708EchoTestCommand { get; }
   public AsyncRelayCommand RunNode708DispatchTestCommand { get; }
   public AsyncRelayCommand RunNode708SetNodeTestCommand { get; }
-  public AsyncRelayCommand InstallCvmCommand { get; }
+  public AsyncRelayCommand InstallCvmTestCommand { get; }
 
   public string VerifyStatus
   {
@@ -84,7 +84,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
         RunNode708EchoTestCommand.NotifyCanExecuteChanged();
         RunNode708DispatchTestCommand.NotifyCanExecuteChanged();
         RunNode708SetNodeTestCommand.NotifyCanExecuteChanged();
-        InstallCvmCommand.NotifyCanExecuteChanged();
+        InstallCvmTestCommand.NotifyCanExecuteChanged();
       }
     }
   }
@@ -751,10 +751,24 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   // images and register/stack initializations across the mesh (a per-hop
   // relay through 707/607/507, since 607 and 507 each have to sit in a
   // temporary pass-through role while their own children load -- see
-  // CvmBootStreamBuilder's remarks) is a separate, not-yet-built step. This
-  // command exists so the confirmed load order and each node's compiled
-  // image can be inspected and sanity-checked before that wire work starts.
-  private async Task InstallCvmAsync()
+  // CvmBootStreamBuilder's remarks) is a separate, not-yet-built step.
+  //
+  // Unlike CvmBootStreamBuilder (which compiles this project's team's fixed
+  // reference sources -- Node607Program.Source and so on, baked into the
+  // assembly), this compiles the CURRENTLY SELECTED PROJECT's own node
+  // sources for these coordinates (Chip.GetNode(coordinate).SourceCode),
+  // through the same F18NodeCompilationService/RomLibrary path the node
+  // editor's own "Compile ROM + RAM" button uses. That is the point of
+  // "test": bring a CVM node into this project (e.g. via the node editor's
+  // "Copy to project…" from the reference source), edit it here, and this
+  // button compiles exactly what is currently in the project, live -- not a
+  // frozen reference copy -- so a change can be tried immediately without
+  // touching the shipped Node*Program.cs files at all.
+  //
+  // The confirmed load order/tree shape (leaves first, root last) still
+  // comes from CvmBootStreamBuilder.BuildLoadOrder(), since that shape is
+  // about the physical mesh topology, not about which source compiled it.
+  private async Task InstallCvmTestAsync()
   {
     if (_verifyBusy)
     {
@@ -762,56 +776,79 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     }
 
     VerifyBusy = true;
-    VerifyStatus = "Compiling CVM boot stream…";
+    VerifyStatus = "Compiling CVM boot stream from this project's nodes…";
     try
     {
-      IReadOnlyList<(CvmBootLoadStep Step, CvmBootDescriptor? Descriptor)> plan =
-          await Task.Run(() => CvmBootStreamBuilder.BuildLoadPlan());
+      IReadOnlyList<CvmBootLoadStep> loadOrder = CvmBootStreamBuilder.BuildLoadOrder();
+      var compileService = new Compiler.F18NodeCompilationService(Chip, RomLibrary, Project.Model.UserMacros);
 
       var summary = new System.Text.StringBuilder();
-      summary.AppendLine("CVM boot stream -- compile + dry run only, no hardware I/O yet. Confirmed load order, leaves first / root last:");
+      summary.AppendLine(
+          $"CVM boot stream -- compiled from \"{Project.Name}\" ({Chip.Name})'s own node sources, "
+          + "not the fixed reference copy. Compile + dry run only, no hardware I/O yet. Confirmed "
+          + "load order, leaves first / root last:");
       summary.AppendLine();
 
       bool anyMissing = false;
-      foreach ((CvmBootLoadStep step, CvmBootDescriptor? descriptor) in plan)
-      {
-        string via = step.ViaNodeCoordinate.HasValue ? $"via {step.ViaNodeCoordinate.Value:000}" : "(boot node, no via)";
-        if (descriptor is null)
-        {
-          anyMissing = true;
-          summary.AppendLine($"Node {step.NodeCoordinate:000} {via} -- not yet available (no resident source).");
-          continue;
-        }
+      bool anyFailed = false;
 
-        summary.AppendLine(
-            $"Node {step.NodeCoordinate:000} {via} -- {descriptor.Words.Count} words, entry "
-            + $"{(descriptor.EntryPoint.HasValue ? $"0x{descriptor.EntryPoint.Value:X3}" : "<none>")}, "
-            + $"A={(descriptor.InitialA.HasValue ? $"0x{descriptor.InitialA.Value:X3}" : "-")} "
-            + $"B={(descriptor.InitialB.HasValue ? $"0x{descriptor.InitialB.Value:X3}" : "-")} "
-            + $"IO={(descriptor.InitialIo.HasValue ? $"0x{descriptor.InitialIo.Value:X3}" : "-")} "
-            + $"stack=[{string.Join(",", descriptor.InitialStack)}]");
-      }
+      await Task.Run(() =>
+      {
+        foreach (CvmBootLoadStep step in loadOrder)
+        {
+          string via = step.ViaNodeCoordinate.HasValue ? $"via {step.ViaNodeCoordinate.Value:000}" : "(boot node, no via)";
+          Ga144NodeConfiguration node = Chip.GetNode(step.NodeCoordinate);
+
+          if (string.IsNullOrWhiteSpace(node.SourceCode))
+          {
+            anyMissing = true;
+            summary.AppendLine($"Node {step.NodeCoordinate:000} {via} -- not configured in this project (no RAM source). Use \"Copy to project…\" in the node editor to bring in the reference source.");
+            continue;
+          }
+
+          Compiler.F18NodeCompilationResult compiled = compileService.CompileNode(step.NodeCoordinate);
+          if (!compiled.Success)
+          {
+            anyFailed = true;
+            int errorCount = compiled.Rom.Diagnostics.Concat(compiled.Ram.Diagnostics)
+                .Count(diagnostic => diagnostic.Severity == Compiler.F18DiagnosticSeverity.Error);
+            summary.AppendLine($"Node {step.NodeCoordinate:000} {via} -- COMPILE FAILED ({errorCount} error(s)). Open this node in the editor and press \"Compile ROM + RAM\" for full diagnostics.");
+            continue;
+          }
+
+          CvmBootDescriptor descriptor = CvmBootDescriptor.FromCompileResult(compiled.Ram);
+          summary.AppendLine(
+              $"Node {step.NodeCoordinate:000} {via} -- {descriptor.Words.Count} words, entry "
+              + $"{(descriptor.EntryPoint.HasValue ? $"0x{descriptor.EntryPoint.Value:X3}" : "<none>")}, "
+              + $"A={(descriptor.InitialA.HasValue ? $"0x{descriptor.InitialA.Value:X3}" : "-")} "
+              + $"B={(descriptor.InitialB.HasValue ? $"0x{descriptor.InitialB.Value:X3}" : "-")} "
+              + $"IO={(descriptor.InitialIo.HasValue ? $"0x{descriptor.InitialIo.Value:X3}" : "-")} "
+              + $"stack=[{string.Join(",", descriptor.InitialStack)}]");
+        }
+      });
 
       summary.AppendLine();
-      summary.AppendLine(anyMissing
-          ? "7 of 9 nodes are ready (607, 507, 506, 508, 407, 606, 608); 707 and 708 have no resident source yet."
-          : "All 9 nodes are ready.");
+      summary.AppendLine(anyMissing || anyFailed
+          ? "Not every node in this project is ready yet -- see above."
+          : "All 9 nodes in this project compiled successfully.");
       summary.AppendLine();
       summary.AppendLine("This does not touch hardware. Delivering these images across the mesh is a separate step, not yet built.");
 
-      VerifyStatus = "CVM boot stream compiled -- see summary.";
+      VerifyStatus = anyFailed
+          ? "CVM boot stream compiled with errors -- see summary."
+          : "CVM boot stream compiled -- see summary.";
       MessageBox.Show(
           summary.ToString(),
-          "Install CVM (dry run)",
+          "Install CVM test (dry run)",
           MessageBoxButton.OK,
-          MessageBoxImage.Information);
+          anyFailed ? MessageBoxImage.Warning : MessageBoxImage.Information);
     }
     catch (Exception exception)
     {
       VerifyStatus = "CVM boot stream compile failed.";
       MessageBox.Show(
           $"The CVM boot stream could not be compiled:\n\n{exception.Message}",
-          "Install CVM (dry run)",
+          "Install CVM test (dry run)",
           MessageBoxButton.OK,
           MessageBoxImage.Error);
     }
