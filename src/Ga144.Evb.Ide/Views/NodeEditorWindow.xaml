@@ -119,8 +119,8 @@
               <RowDefinition Height="Auto" />
               <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <TextBlock Text="Expanded ROM source" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,5" />
-            <TextBox Grid.Row="1" Text="{Binding ExpandedRomSource, Mode=OneWay}" IsReadOnly="True"
+            <TextBlock Text="Expanded RAM source" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,5" />
+            <TextBox Grid.Row="1" Text="{Binding ExpandedRamSource, Mode=OneWay}" IsReadOnly="True"
                                  AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="13"
                                  TextWrapping="NoWrap" />
@@ -131,8 +131,8 @@
               <RowDefinition Height="Auto" />
               <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <TextBlock Text="Expanded RAM source" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,5" />
-            <TextBox Grid.Row="1" Text="{Binding ExpandedRamSource, Mode=OneWay}" IsReadOnly="True"
+            <TextBlock Text="Expanded ROM source" FontWeight="SemiBold" FontSize="15" Margin="0,0,0,5" />
+            <TextBox Grid.Row="1" Text="{Binding ExpandedRomSource, Mode=OneWay}" IsReadOnly="True"
                                  AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="13"
                                  TextWrapping="NoWrap" />

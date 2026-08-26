@@ -27,7 +27,14 @@ public sealed class NodeViewModel
   public int Column => Model.Coordinate % 100;
   public string CoordinateText => Model.Coordinate.ToString("000");
   public string StateText => Model.Enabled ? "configured" : string.Empty;
-  public bool IsConfigured => Model.Enabled || !string.IsNullOrWhiteSpace(Model.SourceCode) || Model.RamWords.Count > 0;
+  // Deliberately does NOT look at Model.RamWords: a compiled RAM image is
+  // always the full 64-word memory span (F18Compiler.CreateImage pads every
+  // unwritten word with the fixed fill value), so RamWords.Count is always
+  // 64 after any successful compile and never goes back to empty just
+  // because the source was cleared. Counting it here made the yellow
+  // "configured" highlight sticky forever after a node's first compile,
+  // even once the source was deleted and the boot checkbox unchecked.
+  public bool IsConfigured => Model.Enabled || !string.IsNullOrWhiteSpace(Model.SourceCode);
 
   public Visibility NorthVisibility => Row < 7 ? Visibility.Visible : Visibility.Collapsed;
   public Visibility SouthVisibility => Row > 0 ? Visibility.Visible : Visibility.Collapsed;
