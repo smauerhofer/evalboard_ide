@@ -100,4 +100,35 @@ public partial class NodeEditorWindow : Window
   {
     DialogResult = true;
   }
+
+  private void OnCopyToProjectClick(object sender, RoutedEventArgs e)
+  {
+    if (_viewModel.OtherProjects.Count == 0)
+    {
+      MessageBox.Show(
+          this,
+          "There are no other projects open to copy into. Create another project first.",
+          "Copy to project",
+          MessageBoxButton.OK,
+          MessageBoxImage.Information);
+      return;
+    }
+
+    var pickerViewModel = new CopyNodeToProjectViewModel(
+        _viewModel.OtherProjects,
+        _viewModel.ChipRole,
+        _viewModel.NodeCoordinate);
+    var picker = new CopyNodeToProjectWindow(pickerViewModel)
+    {
+      Owner = this
+    };
+
+    if (picker.ShowDialog() != true || pickerViewModel.SelectedProject is null)
+    {
+      return;
+    }
+
+    string message = _viewModel.CopyCurrentSourceTo(pickerViewModel.SelectedProject, pickerViewModel.SelectedRole);
+    MessageBox.Show(this, message, "Copy to project", MessageBoxButton.OK, MessageBoxImage.Information);
+  }
 }

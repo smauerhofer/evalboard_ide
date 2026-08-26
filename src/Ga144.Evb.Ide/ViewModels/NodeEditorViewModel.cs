@@ -41,7 +41,8 @@ public sealed class NodeEditorViewModel : ObservableObject
       Ga144ChipRole chipRole,
       KrakenNodeRoute? krakenRoute,
       Func<KrakenEndpointInfo?> krakenEndpointResolver,
-      KrakenLiveController krakenController)
+      KrakenLiveController krakenController,
+      IReadOnlyList<ProjectViewModel> otherProjects)
   {
     Node = node;
     _chip = chip;
@@ -52,6 +53,7 @@ public sealed class NodeEditorViewModel : ObservableObject
     KrakenRoute = krakenRoute;
     KrakenEndpointResolver = krakenEndpointResolver;
     KrakenController = krakenController;
+    OtherProjects = otherProjects ?? [];
 
     node.Normalize();
     chip.Normalize();
@@ -92,6 +94,13 @@ public sealed class NodeEditorViewModel : ObservableObject
   public KrakenConfiguration KrakenConfiguration => _chip.Kraken;
   public Func<KrakenEndpointInfo?> KrakenEndpointResolver { get; }
   public KrakenLiveController KrakenController { get; }
+
+  /// <summary>
+  /// Every other project currently open in this workspace (this node's own
+  /// project excluded by the caller). Used to populate the "Copy to
+  /// project…" picker.
+  /// </summary>
+  public IReadOnlyList<ProjectViewModel> OtherProjects { get; }
   public bool KrakenOnlineAvailable => KrakenRoute is { IsHead: false };
   public string KrakenOnlineHint => KrakenRoute switch
   {
@@ -313,6 +322,44 @@ public sealed class NodeEditorViewModel : ObservableObject
 
     return !string.Equals(_originalRomSource, RomSourceCode, StringComparison.Ordinal) ||
            !string.Equals(_originalRomWords, RomWordsText, StringComparison.Ordinal);
+  }
+
+  /// <summary>
+  /// Copies this editor's current (possibly unsaved) RAM source and startup
+  /// state into the same node coordinate in a different project/chip. This is
+  /// how the same physical node coordinate carries a different program across
+  /// projects: each project owns its own independent Ga144NodeConfiguration
+  /// per coordinate, so nothing here is shared until explicitly copied.
+  ///
+  /// ROM is deliberately not copied: the ROM library is shared workspace-wide
+  /// across every project and both chip roles already (it represents the
+  /// fixed factory ROM burned into the silicon, not project data).
+  ///
+  /// Does not touch this editor's own node or the "Apply on Save" flow; the
+  /// target project is marked dirty so the workspace autosave picks it up.
+  /// </summary>
+  public string CopyCurrentSourceTo(ProjectViewModel targetProject, Ga144ChipRole targetRole)
+  {
+    ArgumentNullException.ThrowIfNull(targetProject);
+
+    Ga144ChipConfiguration targetChip = targetProject.GetChip(targetRole);
+    Ga144NodeConfiguration targetNode = targetChip.GetNode(Node.Coordinate);
+
+    targetNode.Enabled = Enabled;
+    targetNode.SourceCode = SourceCode;
+    targetNode.RamWords = Split(RamWordsText, 64);
+    targetNode.Startup.EntryPoint = NormalizeWord(EntryPoint, "0x000");
+    targetNode.Startup.P = NormalizeWord(P, "0x000");
+    targetNode.Startup.A = NormalizeWord(A, "0x000");
+    targetNode.Startup.B = NormalizeWord(B, "0x000");
+    targetNode.Startup.Io = NormalizeWord(Io, "0x00000");
+    targetNode.Startup.ReturnStack = Split(ReturnStackText, 9);
+    targetNode.Startup.ParameterStack = Split(ParameterStackText, 10);
+
+    targetProject.NotifyProjectChanged();
+
+    string roleName = targetRole == Ga144ChipRole.Host ? "Host" : "Target";
+    return $"Node {NodeCoordinate} copied to \"{targetProject.DisplayName}\" ({roleName}).";
   }
 
   private static string FormatDiagnostics(F18CompileResult rom, F18CompileResult ram)

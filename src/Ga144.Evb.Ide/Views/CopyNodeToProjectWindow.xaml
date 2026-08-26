@@ -1,0 +1,35 @@
+<Window x:Class="Ga144.Evb.Ide.Views.CopyNodeToProjectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Copy node to project"
+        Width="440"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Grid.Row="0" Text="{Binding IntroText}" TextWrapping="Wrap" Margin="0,0,0,10" />
+
+    <ListBox Grid.Row="1" ItemsSource="{Binding AvailableProjects}"
+                     SelectedItem="{Binding SelectedProject, Mode=TwoWay}"
+                     DisplayMemberPath="DisplayName"
+                     MaxHeight="220" />
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,0">
+      <TextBlock Text="Into chip: " VerticalAlignment="Center" Margin="0,0,8,0" />
+      <RadioButton Content="Host" IsChecked="{Binding CopyToHost}" VerticalAlignment="Center" Margin="0,0,16,0" />
+      <RadioButton Content="Target" IsChecked="{Binding CopyToTarget}" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+      <Button Content="Cancel" IsCancel="True" MinWidth="90" Margin="0,0,8,0" />
+      <Button Content="Copy" IsDefault="True" Click="OnCopyClick" MinWidth="90" />
+    </StackPanel>
+  </Grid>
+</Window>

@@ -19,7 +19,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     string romLibraryPath,
     Func<Task> saveRomLibraryAsync,
     Func<KrakenEndpointInfo?> krakenEndpointResolver,
-    KrakenLiveController krakenController)
+    KrakenLiveController krakenController,
+    IReadOnlyList<ProjectViewModel> allProjects)
   {
     Project = project;
     Role = role;
@@ -29,6 +30,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     SaveRomLibraryAsync = saveRomLibraryAsync;
     KrakenEndpointResolver = krakenEndpointResolver;
     KrakenController = krakenController ?? throw new ArgumentNullException(nameof(krakenController));
+    AllProjects = allProjects ?? throw new ArgumentNullException(nameof(allProjects));
     KrakenController.StateChanged += OnKrakenControllerStateChanged;
     ToggleKrakenCommand = new AsyncRelayCommand(ToggleKrakenAsync);
     VerifyAllRomsCommand = new AsyncRelayCommand(VerifyAllRomsAsync, () => !_verifyBusy);
@@ -48,6 +50,13 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public Func<Task> SaveRomLibraryAsync { get; }
   public Func<KrakenEndpointInfo?> KrakenEndpointResolver { get; }
   public KrakenLiveController KrakenController { get; }
+
+  /// <summary>
+  /// Every project currently open in the workspace, including this chip
+  /// window's own project. Used by the node editor's "Copy to project…"
+  /// action to offer the other projects a node's source can be copied into.
+  /// </summary>
+  public IReadOnlyList<ProjectViewModel> AllProjects { get; }
   public ObservableCollection<NodeViewModel> Nodes { get; } = [];
   public AsyncRelayCommand ToggleKrakenCommand { get; }
   public AsyncRelayCommand VerifyAllRomsCommand { get; }

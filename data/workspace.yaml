@@ -2982,7 +2982,7 @@ projects:
 
         entry main
 
-        : main 18ibits drop >r ex main;
+        : main 18ibits drop >r ex main ;
 
         : obit ( dwn-dw) !b over >r delay ;
 
@@ -3057,32 +3057,32 @@ projects:
       - 0x1341A
       - 0x1B426
       - 0x13405
-      - 0x1142F
+      - 0x1142E
       - 0x2E9B2
-      - 0x05A9B
       - 0x048B2
+      - 0x0AC92
       - 0x2ED92
       - 0x3C9F2
       - 0x36FB0
-      - 0x05AB2
       - 0x05B72
-      - 0x1F427
+      - 0x0B027
       - 0x13405
       - 0x3BAB2
-      - 0x1F42F
+      - 0x1F42E
       - 0x1341A
-      - 0x1B435
-      - 0x3B73C
+      - 0x1B434
+      - 0x3B73A
       - 0x2E9B2
-      - 0x05A9A
       - 0x048B2
-      - 0x26D2A
-      - 0x2E812
+      - 0x0AC9B
+      - 0x0A8BA
       - 0x01972
-      - 0x0B036
+      - 0x0B035
       - 0x03607
-      - 0x1F43C
+      - 0x1F43A
       - 0x11400
+      - 0x15555
+      - 0x15555
       - 0x15555
       startup:
         entryPoint: 0x000

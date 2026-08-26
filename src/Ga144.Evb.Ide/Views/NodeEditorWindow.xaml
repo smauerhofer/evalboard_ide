@@ -23,6 +23,8 @@
         <TextBlock Text="{Binding KrakenOnlineHint}" Foreground="#555" Margin="0,2,0,0" />
       </StackPanel>
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button Content="Copy to project…" Click="OnCopyToProjectClick" Padding="10,5" Margin="0,0,12,0"
+                        ToolTip="Copy this node's RAM source and startup state into the same node coordinate in another open project. ROM is shared across all projects and is not copied." />
         <Button Content="Online Kraken…" Click="OnOnlineKrakenClick"
                         IsEnabled="{Binding KrakenOnlineAvailable}" Padding="10,5" Margin="0,0,12,0"
                         ToolTip="Open live RAM/ROM/register/stack/I/O control through the installed Kraken tentacle." />
