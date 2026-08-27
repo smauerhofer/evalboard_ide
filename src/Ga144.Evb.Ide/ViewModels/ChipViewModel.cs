@@ -38,7 +38,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     RunNode708EchoTestCommand = new AsyncRelayCommand(RunNode708EchoTestAsync, () => !_verifyBusy);
     RunNode708DispatchTestCommand = new AsyncRelayCommand(RunNode708DispatchTestAsync, () => !_verifyBusy);
     RunNode708SetNodeTestCommand = new AsyncRelayCommand(RunNode708SetNodeTestAsync, () => !_verifyBusy);
-    InstallCvmTestCommand = new AsyncRelayCommand(InstallCvmTestAsync, () => !_verifyBusy);
+    CompileCvmTestCommand = new AsyncRelayCommand(CompileCvmTestAsync, () => !_verifyBusy);
+    InstallAndRunCvmTestCommand = new AsyncRelayCommand(InstallAndRunCvmTestAsync, () => !_verifyBusy);
     RebuildNodes();
   }
 
@@ -64,7 +65,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public AsyncRelayCommand RunNode708EchoTestCommand { get; }
   public AsyncRelayCommand RunNode708DispatchTestCommand { get; }
   public AsyncRelayCommand RunNode708SetNodeTestCommand { get; }
-  public AsyncRelayCommand InstallCvmTestCommand { get; }
+  public AsyncRelayCommand CompileCvmTestCommand { get; }
+  public AsyncRelayCommand InstallAndRunCvmTestCommand { get; }
 
   public string VerifyStatus
   {
@@ -84,7 +86,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
         RunNode708EchoTestCommand.NotifyCanExecuteChanged();
         RunNode708DispatchTestCommand.NotifyCanExecuteChanged();
         RunNode708SetNodeTestCommand.NotifyCanExecuteChanged();
-        InstallCvmTestCommand.NotifyCanExecuteChanged();
+        CompileCvmTestCommand.NotifyCanExecuteChanged();
+        InstallAndRunCvmTestCommand.NotifyCanExecuteChanged();
       }
     }
   }
@@ -768,7 +771,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   // The confirmed load order/tree shape (leaves first, root last) still
   // comes from CvmBootStreamBuilder.BuildLoadOrder(), since that shape is
   // about the physical mesh topology, not about which source compiled it.
-  private async Task InstallCvmTestAsync()
+  private async Task CompileCvmTestAsync()
   {
     if (_verifyBusy)
     {
@@ -849,6 +852,125 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       MessageBox.Show(
           $"The CVM boot stream could not be compiled:\n\n{exception.Message}",
           "Install CVM test (dry run)",
+          MessageBoxButton.OK,
+          MessageBoxImage.Error);
+    }
+    finally
+    {
+      VerifyBusy = false;
+    }
+  }
+
+  // Real hardware delivery: compiles this project's own 9 CVM node sources (same live-project
+  // compile CompileCvmTestAsync above uses, not the frozen reference copy), resets the chip,
+  // loads all 9 nodes across the branching mesh through node 708 (see
+  // Ga144CvmHardwareInstaller's own remarks for the technique -- a tree-shaped generalization of
+  // KrakenSession.ErectOnto's hardware-proven fire-and-forget boot-frame erection), then runs the
+  // first live functional test Stefan described: wake node 708's 'start with one word, then read
+  // back the CVM's first memory request (expected: two words, both 0).
+  //
+  // This is genuinely new, first-of-its-kind hardware code for a BRANCHING topology in this
+  // project -- every prior hardware feature here (Kraken's tentacles, the SRAM Tentacle) needed
+  // multiple rounds of real-hardware bring-up even for simpler, linear topologies. Expect the
+  // same here; the per-frame CvmInstallReport below is meant to help localize exactly where a
+  // first attempt goes wrong, not to promise it won't.
+  private async Task InstallAndRunCvmTestAsync()
+  {
+    if (_verifyBusy)
+    {
+      return;
+    }
+
+    if (KrakenController.HardwareErected)
+    {
+      MessageBox.Show(
+          "Install & run CVM test cannot run while a Kraken is erected on this chip. This test "
+          + "resets the whole chip to load the CVM cluster, and a resident Kraken must never be "
+          + "reset. Remove the Kraken first, then try again.",
+          "Install & run CVM test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
+    if (endpoint is null)
+    {
+      MessageBox.Show(
+          "No serial endpoint is assigned to this chip. Assign a COM port before installing the CVM test on hardware.",
+          "Install & run CVM test",
+          MessageBoxButton.OK,
+          MessageBoxImage.Warning);
+      return;
+    }
+
+    VerifyBusy = true;
+    VerifyStatus = "Installing CVM cluster on hardware…";
+    try
+    {
+      var compileService = new Compiler.F18NodeCompilationService(Chip, RomLibrary, Project.Model.UserMacros);
+      var installer = new Ga144CvmHardwareInstaller();
+      CvmInstallAndTestReport report = await installer.InstallAndRunAsync(endpoint.PortName, Chip, compileService);
+
+      var summary = new System.Text.StringBuilder();
+      summary.AppendLine($"CVM install -- compiled from \"{Project.Name}\" ({Chip.Name})'s own node sources, reset the chip, and delivered all 9 nodes across the mesh through node 708.");
+      summary.AppendLine();
+
+      if (!report.Install.Success)
+      {
+        summary.AppendLine($"INSTALL FAILED before any hardware was touched: {report.Install.FailureMessage}");
+        VerifyStatus = "CVM install failed (nothing sent to hardware).";
+      }
+      else
+      {
+        summary.AppendLine($"Install: {report.Install.Steps.Count} boot frame(s) sent, fire-and-forget (no reply is read during install -- this matches the technique KrakenSession.ErectOnto already proved on real hardware).");
+        summary.AppendLine();
+        summary.AppendLine("Runtime test:");
+        bool anyFailed = false;
+        bool anyInconclusive = false;
+        foreach (CvmTestStepResult step in report.TestSteps)
+        {
+          string outcome = step.Passed switch
+          {
+            true => "PASSED",
+            false => "FAILED",
+            null => "INCONCLUSIVE"
+          };
+          if (step.Passed == false)
+          {
+            anyFailed = true;
+          }
+          else if (step.Passed is null)
+          {
+            anyInconclusive = true;
+          }
+
+          summary.AppendLine($"  [{outcome}] {step.Description}");
+          if (step.Detail is not null)
+          {
+            summary.AppendLine($"      {step.Detail}");
+          }
+        }
+
+        VerifyStatus = anyFailed
+            ? "CVM installed; runtime test FAILED -- see summary."
+            : anyInconclusive
+                ? "CVM installed; runtime test inconclusive -- see summary."
+                : "CVM installed and runtime test passed.";
+      }
+
+      MessageBox.Show(
+          summary.ToString(),
+          "Install & run CVM test",
+          MessageBoxButton.OK,
+          report.Install.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+    catch (Exception exception)
+    {
+      VerifyStatus = "Install & run CVM test failed.";
+      MessageBox.Show(
+          $"Install & run CVM test could not complete:\n\n{exception.Message}",
+          "Install & run CVM test",
           MessageBoxButton.OK,
           MessageBoxImage.Error);
     }

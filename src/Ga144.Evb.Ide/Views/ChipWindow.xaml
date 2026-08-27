@@ -90,11 +90,16 @@
                           Padding="12,6"
                           Margin="0,0,8,0"
                           ToolTip="Opens the SRAM Simulator window: installs a software stand-in for the real SRAM cluster entirely on node 707 (Tentacle 1, position 0), speaking the same ex@/ex!/cx?/mk!/echo protocol over a small local backing array instead of the real external SRAM chip. Built for CVM (C virtual machine) development -- exercises SRAM-shaped memory traffic over Kraken without the real SRAM Tentacle installed or wired up. Requires an online Kraken; the window reports if it is not available." />
-          <Button Content="Install CVM test"
-                          Command="{Binding InstallCvmTestCommand}"
+          <Button Content="Compile CVM test"
+                          Command="{Binding CompileCvmTestCommand}"
                           Padding="12,6"
                           Margin="0,0,8,0"
-                          ToolTip="Compiles the CVM test cluster's node programs (607, 507, 506, 508, 407, 606, 608, 707, 708) FROM THIS PROJECT's own node sources (not the fixed reference copy -- use each node's editor and 'Copy to project…' to bring a reference node in, then edit and test it here), and shows the confirmed load order (leaves first, root last: 407/506/508 via 507, 507 via 607, 606/608 via 607, 607 via 707, 707 via 708, 708) along with each node's compiled word count, entry point, and register/stack init. Compile-and-display only -- does not touch hardware; delivering these images across the mesh is a separate, not-yet-built step." />
+                          ToolTip="Compiles the CVM test cluster's node programs (607, 507, 506, 508, 407, 606, 608, 707, 708) FROM THIS PROJECT's own node sources (not the fixed reference copy -- use each node's editor and 'Copy to project…' to bring a reference node in, then edit and test it here), and shows the confirmed load order (leaves first, root last: 407/506/508 via 507, 507 via 607, 606/608 via 607, 607 via 707, 707 via 708, 708) along with each node's compiled word count, entry point, and register/stack init. Compile-and-display only -- does not touch hardware. Use 'Install &amp; run CVM test' to actually load and exercise the cluster on real silicon." />
+          <Button Content="Install &amp; run CVM test"
+                          Command="{Binding InstallAndRunCvmTestCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Compiles the CVM test cluster from this project's own node sources, resets the chip, loads all 9 nodes' compiled images across the mesh through node 708 (leaves first, root last), then runs the first live test: wake 708's 'start (send it one word), then read back the CVM's first memory request through 707 -- expected to be node 607's very first instruction fetch, address 0, which should arrive as two words both equal to 0. Blocked while a Kraken is erected (this resets the whole chip, exactly like erecting a Kraken does)." />
           <TextBlock Text="{Binding VerifyStatus, Mode=OneWay}"
                              VerticalAlignment="Center"
                              Margin="10,0,0,0"

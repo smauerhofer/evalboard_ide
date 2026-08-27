@@ -141,11 +141,42 @@ public static class F18InstructionSet
 
   public static bool IsSlot3Compatible(byte opcode) => (opcode & 0x03) == 0;
 
+  // Throwing entry point, kept for the existing callers outside the F18 compiler itself
+  // (KrakenProtocol, KrakenSramProtocol, Ga144LegacyKrakenErectionProbe, KrakenSession) that
+  // build a raw instruction word from opcodes they already know are valid and have no
+  // recovery path to fall back to if they somehow are not. F18Compiler's own callers use
+  // TryEncodePackedInstruction below instead: a malformed slot-3 opcode there is an ordinary,
+  // anticipated outcome (the source packed something illegal), not a programming bug, so it is
+  // reported as a compiler diagnostic rather than thrown and caught.
   public static int EncodePackedInstruction(IReadOnlyList<byte> opcodes)
   {
+    if (!TryEncodePackedInstruction(opcodes, out int encoded, out string? error))
+    {
+      throw error == SlotCountErrorMessage
+          ? new ArgumentOutOfRangeException(nameof(opcodes), error)
+          : new ArgumentException(error, nameof(opcodes));
+    }
+
+    return encoded;
+  }
+
+  private const string SlotCountErrorMessage = "An F18A instruction word has at most four slots.";
+
+  /// <summary>
+  /// Exception-free counterpart to <see cref="EncodePackedInstruction"/>: returns
+  /// <c>false</c> (with <paramref name="encoded"/> zero and <paramref name="error"/> describing
+  /// why) instead of throwing when <paramref name="opcodes"/> cannot be encoded, so a caller
+  /// that expects this to be a routine, anticipated outcome -- not a bug -- never pays for a
+  /// thrown-and-caught exception to detect it.
+  /// </summary>
+  public static bool TryEncodePackedInstruction(IReadOnlyList<byte> opcodes, out int encoded, out string? error)
+  {
+    encoded = 0;
+
     if (opcodes.Count > 4)
     {
-      throw new ArgumentOutOfRangeException(nameof(opcodes), "An F18A instruction word has at most four slots.");
+      error = SlotCountErrorMessage;
+      return false;
     }
 
     // Unused trailing slots are filled with nop ('.', 0x1C) so that, if execution
@@ -165,7 +196,8 @@ public static class F18InstructionSet
 
     if (!IsSlot3Compatible(slots[3]))
     {
-      throw new ArgumentException("The selected slot 3 opcode is not encodable in slot 3.", nameof(opcodes));
+      error = "The selected slot 3 opcode is not encodable in slot 3.";
+      return false;
     }
 
     var raw =
@@ -174,19 +206,49 @@ public static class F18InstructionSet
         (slots[2] << 3) |
         (slots[3] >> 2);
 
-    return (raw ^ EncodingXor) & WordMask;
+    encoded = (raw ^ EncodingXor) & WordMask;
+    error = null;
+    return true;
   }
 
+  public static bool TryEncodePackedInstruction(IReadOnlyList<byte> opcodes, out int encoded) =>
+      TryEncodePackedInstruction(opcodes, out encoded, out _);
+
+  // Throwing entry point, kept for the same external (Kraken protocol) callers described on
+  // EncodePackedInstruction above. F18Compiler uses TryEncodeSlot0Control instead.
   public static int EncodeSlot0Control(byte opcode, int destination)
   {
+    if (!TryEncodeSlot0Control(opcode, destination, out int encoded, out string? error))
+    {
+      throw new ArgumentOutOfRangeException(
+          error == OpcodeRangeErrorMessage ? nameof(opcode) : nameof(destination),
+          error);
+    }
+
+    return encoded;
+  }
+
+  private const string OpcodeRangeErrorMessage = "The opcode is not a slot-0 control-transfer opcode.";
+
+  /// <summary>
+  /// Exception-free counterpart to <see cref="EncodeSlot0Control"/> -- see that method's
+  /// remarks and <see cref="TryEncodePackedInstruction(IReadOnlyList{byte}, out int, out string)"/>
+  /// for why F18Compiler prefers this form.
+  /// </summary>
+  public static bool TryEncodeSlot0Control(byte opcode, int destination, out int encoded, out string? error)
+  {
+    encoded = 0;
+
     if (opcode is < 0x02 or > 0x07)
     {
-      throw new ArgumentOutOfRangeException(nameof(opcode), "The opcode is not a slot-0 control-transfer opcode.");
+      error = OpcodeRangeErrorMessage;
+      return false;
     }
 
     if (destination is < 0 or > 0x3FF)
     {
-      throw new ArgumentOutOfRangeException(nameof(destination), "An F18A P address is ten bits.");
+      error = "An F18A P address is ten bits.";
+      return false;
     }
 
     // Slot-0 jump format (DB001 Figure 4): opcode in bits 13..17, an UNUSED region
@@ -198,8 +260,13 @@ public static class F18InstructionSet
     // (Masking to 0x3E000 instead, i.e. zeroing bits 10..12, was wrong: it dropped
     // the XOR pattern there, e.g. turning warm's 0x11595 into 0x10195.)
     var encodedOpcode = ((opcode << 13) ^ EncodingXor) & 0x3FC00;
-    return (encodedOpcode | (destination & 0x3FF)) & WordMask;
+    encoded = (encodedOpcode | (destination & 0x3FF)) & WordMask;
+    error = null;
+    return true;
   }
+
+  public static bool TryEncodeSlot0Control(byte opcode, int destination, out int encoded) =>
+      TryEncodeSlot0Control(opcode, destination, out encoded, out _);
 
   // ---- Packed control transfers (DB001 2.3.1) --------------------------------
   // A jump-class opcode (jump/call/next/if/-if) may occupy slot 0, 1, or 2. When
@@ -255,30 +322,67 @@ public static class F18InstructionSet
     return wordCount > 0 && difference % wordCount == 0;
   }
 
-  // Encode a word whose slots 0..slotIndex-1 hold ordinary (non-transfer) opcodes
-  // and whose slot slotIndex holds a jump-class opcode with 'destination' in the
-  // low AddressFieldWidth(slotIndex) bits. slotIndex must be 0, 1, or 2.
+  // Throwing entry point, kept for the same external (Kraken protocol) callers described on
+  // EncodePackedInstruction above. F18Compiler uses TryEncodePackedControl instead -- a caller
+  // packing a forward or backward transfer routinely tries this speculatively (does it fit
+  // here?) and falls back to a different slot/strategy on failure, which is exactly the
+  // "anticipated outcome" case a Try method should serve rather than a throw/catch.
   public static int EncodePackedControl(
       IReadOnlyList<byte> leadingSlots,
       byte transferOpcode,
       int destination,
       int slotIndex)
   {
+    if (!TryEncodePackedControl(leadingSlots, transferOpcode, destination, slotIndex, out int encoded, out string? error, out string? errorParameterName))
+    {
+      throw errorParameterName == nameof(leadingSlots)
+          ? new ArgumentException(error, errorParameterName)
+          : new ArgumentOutOfRangeException(errorParameterName, error);
+    }
+
+    return encoded;
+  }
+
+  /// <summary>
+  /// Exception-free counterpart to <see cref="EncodePackedControl"/> -- see that method's
+  /// remarks. <paramref name="errorParameterName"/> identifies which argument was invalid
+  /// (matching the parameter name the throwing overload would have used), for callers that
+  /// want to report it themselves.
+  /// </summary>
+  public static bool TryEncodePackedControl(
+      IReadOnlyList<byte> leadingSlots,
+      byte transferOpcode,
+      int destination,
+      int slotIndex,
+      out int encoded,
+      out string? error,
+      out string? errorParameterName)
+  {
+    encoded = 0;
+    errorParameterName = null;
+
     if (slotIndex is < 0 or > 2)
     {
-      throw new ArgumentOutOfRangeException(nameof(slotIndex), "A transfer opcode may only occupy slot 0, 1, or 2.");
+      error = "A transfer opcode may only occupy slot 0, 1, or 2.";
+      errorParameterName = nameof(slotIndex);
+      return false;
     }
 
     if (leadingSlots.Count != slotIndex)
     {
-      throw new ArgumentException("The leading slots must exactly fill slots 0..slotIndex-1.", nameof(leadingSlots));
+      error = "The leading slots must exactly fill slots 0..slotIndex-1.";
+      errorParameterName = nameof(leadingSlots);
+      return false;
     }
 
     if (transferOpcode is < 0x02 or > 0x07)
     {
-      throw new ArgumentOutOfRangeException(nameof(transferOpcode), "The opcode is not a control-transfer opcode.");
+      error = "The opcode is not a control-transfer opcode.";
+      errorParameterName = nameof(transferOpcode);
+      return false;
     }
 
+    error = null;
     var width = AddressFieldWidth(slotIndex);
     var mask = (1 << width) - 1;
 
@@ -315,6 +419,11 @@ public static class F18InstructionSet
     }
 
     var encodedOpcodes = (opcodeBits ^ EncodingXor) & opcodeMask;
-    return (encodedOpcodes | (destination & mask)) & WordMask;
+    encoded = (encodedOpcodes | (destination & mask)) & WordMask;
+    return true;
   }
+
+  public static bool TryEncodePackedControl(
+      IReadOnlyList<byte> leadingSlots, byte transferOpcode, int destination, int slotIndex, out int encoded) =>
+      TryEncodePackedControl(leadingSlots, transferOpcode, destination, slotIndex, out encoded, out _, out _);
 }
