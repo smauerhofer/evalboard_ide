@@ -7,17 +7,16 @@ namespace Ga144.Evb.Ide.Cvm;
 /// source's own <c># NNN import</c> directive requires -- and produces one
 /// <see cref="CvmBootDescriptor"/> per node.
 ///
-/// <b>Scope of this pass.</b> Covers eight of the cluster's nine nodes: the seven with a finished,
-/// hand-verified resident program as of 2026-08-25 (607, 507, 506, 508, 407, 606, 608), plus node
-/// 708 (added 2026-08-26 -- Stefan supplied 708's resident source, its trailing documentation
-/// comment and an unused, unterminated <c>readw</c> word were reviewed and fixed with his
-/// confirmation; see <see cref="Node708Program"/>'s remarks). Node 707 remains deliberately NOT
-/// covered (Stefan: "node 707 will come later. leave it empty for now"). This builder produces
-/// boot-descriptor DATA only -- the compiled RAM image, register/stack init, and entry point for
-/// each of those eight nodes -- and says nothing yet about how that data reaches its node across
-/// the mesh. Delivery still depends on node 707: it is currently a bare, unprogrammed relay
-/// position between 708 and 607 -- see <see cref="Node607Program"/>'s own remarks, "707 has no
-/// local storage of its own... a stateless interface".
+/// <b>Scope of this pass.</b> Covers all nine of the cluster's nodes: the seven with a finished,
+/// hand-verified resident program as of 2026-08-25 (607, 507, 506, 508, 407, 606, 608), node 708
+/// (added 2026-08-26, then updated 2026-08-27 to a new <c>send</c>/<c>send2</c>/<c>recv</c>
+/// protocol with a <c>'cx</c> compare-and-exchange operation -- see
+/// <see cref="Node708Program"/>'s remarks), and node 707 (added 2026-08-27, Stefan's first
+/// resident source for it -- the memory/PC interface node that imports 708; see
+/// <see cref="Node707Program"/>'s remarks, including two harmless
+/// <c>'warm'</c>/<c>'cold'</c>-shadowing import warnings). This builder produces boot-descriptor
+/// DATA only -- the compiled RAM image, register/stack init, and entry point for each of these
+/// nine nodes -- and says nothing yet about how that data reaches its node across the mesh.
 ///
 /// <b>Compile order</b> (forced by import dependencies, cross-checked against every node's own
 /// class remarks): 607 first (no imports); then 507, 606, and 608, each of which does
@@ -42,9 +41,9 @@ namespace Ga144.Evb.Ide.Cvm;
 /// each source's own imports force); see <see cref="BuildLoadOrder"/> and
 /// <see cref="CvmBootLoadStep"/> for the separate, definitive LOAD order Stefan confirmed
 /// (2026-08-25) -- leaves first, root last, a post-order walk of the physical tree. Turning that
-/// load order into an actual delivery sequence (and deciding whether to reuse
-/// <c>KrakenSession</c>/<c>LegacyKrakenProtocol</c>'s relay primitives for it) is the next step,
-/// once node 707 exists.
+/// load order into an actual delivery sequence is the next step (and deciding whether to reuse
+/// <c>KrakenSession</c>/<c>LegacyKrakenProtocol</c>'s relay primitives for it), now that all nine
+/// nodes' resident programs exist.
 /// </summary>
 public static class CvmBootStreamBuilder
 {
@@ -84,6 +83,14 @@ public static class CvmBootStreamBuilder
     F18CompileResult result708 = Compile(compiler, Node708Program.Source, ImportingRom(Node708Program.Coordinate, rom708));
     ThrowIfFailed(result708);
 
+    // 707 has an ordinary '# 708 import' directive, but 708 is not an ordinary node: its
+    // exports come from BOTH its own custom ROM (warm, cold, 18ibits, delay, ...) and its RAM
+    // ('left, 'wr, 'cx, 'rd, ...), so 707's import needs both combined -- the same merge
+    // F18NodeCompilationService.ResolveRamImport performs (TryCombineExports) for every
+    // cross-node import, reproduced here as CombineExports.
+    F18CompileResult result707 = Compile(compiler, Node707Program.Source, ImportingCombinedRam(Node707Program.Coordinate, rom708, result708));
+    ThrowIfFailed(result707);
+
     return
     [
       CvmBootDescriptor.FromCompileResult(result607),
@@ -94,6 +101,7 @@ public static class CvmBootStreamBuilder
       CvmBootDescriptor.FromCompileResult(result508),
       CvmBootDescriptor.FromCompileResult(result407),
       CvmBootDescriptor.FromCompileResult(result708),
+      CvmBootDescriptor.FromCompileResult(result707),
     ];
   }
 
@@ -102,9 +110,8 @@ public static class CvmBootStreamBuilder
   /// post-order walk of the physical tree, leaves first / root last, so that every child is
   /// fully loaded and running its own real program before its parent gives up its temporary
   /// relay role. See <see cref="CvmBootLoadStep"/>'s remarks for the full tree diagram and the
-  /// DB013 6.1.2.4 rationale. Node 707 is included here because it is part of the confirmed
-  /// sequence's shape, even though it has no resident program yet -- see
-  /// <see cref="BuildLoadPlan"/> for how that absence is surfaced rather than guessed at.
+  /// DB013 6.1.2.4 rationale. All nine steps now have a resident program (707's arrived
+  /// 2026-08-27 -- see <see cref="Node707Program"/>).
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
   [
@@ -121,10 +128,8 @@ public static class CvmBootStreamBuilder
 
   /// <summary>
   /// Pairs <see cref="BuildLoadOrder"/>'s confirmed sequence with each step's compiled
-  /// <see cref="CvmBootDescriptor"/> from <see cref="BuildDescriptors"/>. The descriptor is
-  /// <c>null</c> only for node 707 -- it has no resident source yet ("node 707 will come
-  /// later") -- so a caller can already see and reason about the full 9-step sequence's shape
-  /// without this builder pretending to know content that has not been dictated.
+  /// <see cref="CvmBootDescriptor"/> from <see cref="BuildDescriptors"/>. Every step now
+  /// resolves to a real descriptor -- all nine nodes have a resident program as of 2026-08-27.
   /// </summary>
   public static IReadOnlyList<(CvmBootLoadStep Step, CvmBootDescriptor? Descriptor)> BuildLoadPlan()
   {
@@ -205,6 +210,61 @@ public static class CvmBootStreamBuilder
     PredefinedConstants = ownRom.Constants,
     PredefinedSymbols = ownRom.Symbols,
   };
+
+  // 707's '# 708 import' is an ordinary cross-node RAM import, EXCEPT that 708's own exports
+  // span both its custom ROM and its RAM (unlike every other node ImportingRam above already
+  // handles, none of which layer real custom ROM under their RAM). Reproduces
+  // F18NodeCompilationService.ResolveRamImport's exact combine-then-import sequence for that one
+  // case: merge 708's ROM exports with its RAM exports (CombineExports, mirroring that service's
+  // private TryCombineExports), then hand the merged set to 707 as its resolved import.
+  private static F18CompilerOptions ImportingCombinedRam(int coordinate, F18CompileResult rom, F18CompileResult ram) => new()
+  {
+    MemorySpace = F18MemorySpace.Ram,
+    NodeCoordinate = coordinate,
+    MemoryBaseAddress = 0x000,
+    MemoryWordCount = 64,
+    IncludeCommonRomWords = true,
+    ImportResolver = importedCoordinate => importedCoordinate == ram.NodeCoordinate
+        ? CombineExports(ram.NodeCoordinate, rom.Exports, ram.Exports)
+        : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+  };
+
+  // Merges a node's ROM export set and RAM export set into one, RAM names taking precedence on a
+  // name that (unexpectedly) appears in both -- same rule and same failure-on-genuine-conflict
+  // behavior as F18NodeCompilationService's private TryCombineExports, which this reproduces for
+  // node 708's combined (ROM + RAM) export set.
+  private static F18ImportResolution CombineExports(int coordinate, F18ExportSet rom, F18ExportSet ram)
+  {
+    var constants = new Dictionary<string, int>(rom.Constants, StringComparer.OrdinalIgnoreCase);
+    var symbols = new Dictionary<string, F18ExportedSymbol>(rom.Symbols, StringComparer.OrdinalIgnoreCase);
+
+    foreach (KeyValuePair<string, int> pair in ram.Constants)
+    {
+      if (constants.ContainsKey(pair.Key) || symbols.ContainsKey(pair.Key))
+      {
+        return F18ImportResolution.Failure($"Node {coordinate:000} exports '{pair.Key}' from both ROM and RAM.");
+      }
+
+      constants[pair.Key] = pair.Value;
+    }
+
+    foreach (KeyValuePair<string, F18ExportedSymbol> pair in ram.Symbols)
+    {
+      if (constants.ContainsKey(pair.Key) || symbols.ContainsKey(pair.Key))
+      {
+        return F18ImportResolution.Failure($"Node {coordinate:000} exports '{pair.Key}' from both ROM and RAM.");
+      }
+
+      symbols[pair.Key] = pair.Value;
+    }
+
+    return F18ImportResolution.FromExports(new F18ExportSet
+    {
+      NodeCoordinate = coordinate,
+      Constants = constants,
+      Symbols = symbols
+    });
+  }
 
   private static void ThrowIfFailed(F18CompileResult result)
   {

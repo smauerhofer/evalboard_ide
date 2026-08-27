@@ -11339,9 +11339,111 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 707
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >+
+        ( cvm test node 707 )
+
+        # 708 import
+
+        # 0 org
+
+        # down /b
+
+        # left /a
+
+        entry main
+
+        : main
+          @b
+          A[ 'left ]] lit !
+          // we hase something to do
+          -if
+            @b -if
+              // ( ~p ~a )  write word
+              A[ 'wr ; ]] lit !
+              @b ! ! !
+            else
+              // ( ~n p ) compare and exchange
+              A[ 'cx ; ]] lit !
+              @b @b ! ! ! ! @ !b
+            then
+          else
+            @b -if
+              // ( x ~op ) mark
+              inv if
+              then
+            else
+              // ( p a ) read
+              A[ 'rd ; ]] lit !
+              ! ! @ !b
+            then
+          then
+          main ;
+      ramWords:
+      - 0x01D2A
+      - 0x1341A
+      - 0x1B40E
+      - 0x01208
+      - 0x05A02
+      - 0x11423
+      - 0x0BA2A
+      - 0x1140D
+      - 0x05A02
+      - 0x1142E
+      - 0x01A2A
+      - 0x0BA0A
+      - 0x089B2
+      - 0x11414
+      - 0x01211
+      - 0x33310
+      - 0x11414
+      - 0x05A2A
+      - 0x11428
+      - 0x0BE22
+      - 0x11400
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -11367,17 +11469,23 @@ projects:
         : obyt ( dw-dwx)  then then then  3 obit drop
             7 for dup 1 and 3 xor obit  drop 2/ next
             2 obit ;
-        # 0 f18var bitdelay
+        # 0 f18var bitdelay 
 
-        : 'start io b! 18ibits drop drop !bitdelay r-l- ;
+        : 'start io b! 18ibits drop drop !bitdelay  r-l- ;
 
         : 'left left a! --l- ;
 
         : 'right right a! r--- ;
 
-        : 'wr bitdelay @ oword bitdelay @ oword bitdelay @ oword r-l- ;
+        : send2 ahead
 
-        : 'rd bitdelay @ oword bitdelay @ oword 18ibits drop ! !bitdelay r-l- ;
+        : send then bitdelay  oword ;
+
+        : 'wr @ @ @ send2 send oword r-l- ;
+
+        : 'rd @ @ send2 : recv 18ibits drop ! !bitdelay  r-l- ;
+
+        : 'cx @ @ @ @ send2 send2 recv ;
 
 
         (
@@ -11395,6 +11503,8 @@ projects:
         'wr write to PC, write 3 words, read 0 words
 
         'rd read from PC, write 2 words, read 1 word
+
+        'cx compare and exchange with PC, write 4 words, read 1 word
 
         )
       ramWords:
@@ -11430,24 +11540,24 @@ projects:
       - 0x04AB2
       - 0x001D5
       - 0x115D5
+      - 0x11421
       - 0x13412
-      - 0x03602
-      - 0x13412
-      - 0x03602
-      - 0x13412
-      - 0x03602
+      - 0x11402
+      - 0x03E0A
+      - 0x13420
+      - 0x13421
+      - 0x13402
       - 0x115F5
-      - 0x13412
-      - 0x03602
-      - 0x13412
-      - 0x03602
+      - 0x03EB2
+      - 0x13420
       - 0x134CB
       - 0x3BAB2
       - 0x13411
       - 0x115F5
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x03E0A
+      - 0x03620
+      - 0x13420
+      - 0x1142A
       - 0x15555
       - 0x15555
       - 0x15555
