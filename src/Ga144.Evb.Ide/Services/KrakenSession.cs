@@ -1100,7 +1100,7 @@ internal sealed class KrakenSession : IAsyncDisposable
     const string source = """
         # 0 org
         entry main
-        : main 18ibits drop >r ex main;
+        : main 18ibits drop >r ex main ;
         : obit ( dwn-dw) !b over >r delay ;
         : readw ( -dw) dup 18ibits drop over over
         : oword ( dw-d)  leap drop  leap drop leap drop  drop ;

@@ -224,7 +224,7 @@ public sealed class Ga144Node708DispatchProbe
         # 0 org
         entry main
 
-        : main 18ibits drop >r ex main;
+        : main 18ibits drop >r ex main ;
         : obit ( dwn-dw) !b over >r delay ;
         : readw dup 18ibits drop over over
         : oword ( dw-d)  leap drop  leap drop leap drop  drop ;
