@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-27T19:37:13.1182115
-      utcDateTime: 2026-08-27T19:37:13.1182115Z
-      localDateTime: 2026-08-27T21:37:13.1182115+02:00
+      dateTime: 2026-08-27T21:04:10.0156545
+      utcDateTime: 2026-08-27T21:04:10.0156545Z
+      localDateTime: 2026-08-27T23:04:10.0156545+02:00
       date: 2026-08-27T00:00:00.0000000
       day: 27
       dayOfWeek: Thursday
       dayOfYear: 239
-      hour: 19
-      millisecond: 118
-      microsecond: 211
+      hour: 21
+      millisecond: 15
+      microsecond: 654
       nanosecond: 500
-      minute: 37
+      minute: 4
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 13
-      ticks: 639234562331182115
-      utcTicks: 639234562331182115
-      timeOfDay: 19:37:13.1182115
+      second: 10
+      ticks: 639234614500156545
+      utcTicks: 639234614500156545
+      timeOfDay: 21:04:10.0156545
       year: 2026
   portB: 
   portC:
@@ -10342,9 +10342,7 @@ projects:
 
         : 'or inv over inv and inv ;
 
-        : 'cx? A[ @p /pop ]] lit dup !b
-        	>r !b r> !b !b A[ /cx? ]] lit !b
-        	A[ !p ]] lit !b @b ;
+
 
         (
 
@@ -10402,15 +10400,15 @@ projects:
       - 0x05B25
       - 0x049B2
       - 0x05B25
-      - 0x0560F
+      - 0x0560D
       - 0x13405
       - 0x05B05
-      - 0x13409
+      - 0x13407
       - 0x13405
       - 0x05B25
-      - 0x0560A
+      - 0x05612
       - 0x05B12
-      - 0x13404
+      - 0x13402
       - 0x0C9B2
       - 0x09F55
       - 0x13410
@@ -10449,14 +10447,14 @@ projects:
       - 0x39555
       - 0x32FCA
       - 0x3E655
-      - 0x04D22
-      - 0x05604
-      - 0x2FB9A
-      - 0x09B12
-      - 0x13402
-      - 0x09D22
-      - 0x0C9B2
-      - 0x01555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x01A
         p: 0x000
@@ -10942,29 +10940,35 @@ projects:
     - coordinate: 607
       enabled: true
       sourceCode: >
+        ( node 607 main CVM node )
+
         # 0 org
 
         entry main
 
-        : /r@ ( s-sw) dup dup xor dup -d-- ;
+        # 0 /a
 
-        : /cx? ( wabn-f) inv !b !b ahead
+        # down /b
+
+        [ 0 0 0 0 0 0 0 0 0 9 ] /stack
+
+        : /r@ ( s-sw) over dup -d-- ;
 
         : /pop ( p-pt) dup >r 1 . + r>
 
-        : /1@ ( a-w) 1
+        : /1@ 1
 
-        : /@ ( ab-w) then !b !b @b ;
+        : /@ ( ab-w) !b !b @b ;
 
-        : /! ( wab) inv !b inv !b !b ;
-
-        : /next ( s-sx) a /pop >r a! r> ;
+        : /next ( s-sx) a dup 1 . + a! dup dup xor /@ ;
 
         : 'plit ( s-s) /next
 
         : /push ( pt-p) >r -1 . + r> over
 
-        : /1! ( wa) 1 /! ;
+        : /1! 1
+
+        : /! ( wab) inv !b inv !b !b ;
 
         : 'lit ( s-s) /next
 
@@ -10997,34 +11001,34 @@ projects:
 
         : main ( s-s) /next dup 2* 2* # /call -until exec main ;
       ramWords:
-      - 0x24DE3
+      - 0x20DB2
       - 0x11515
-      - 0x33B22
-      - 0x11409
       - 0x24812
       - 0x00001
       - 0x3CCB2
       - 0x049B2
       - 0x00001
       - 0x09B05
-      - 0x33BCA
-      - 0x09B55
-      - 0x23604
-      - 0x2EA9D
-      - 0x1340C
+      - 0x22D12
+      - 0x00001
+      - 0x3CA93
+      - 0x39707
+      - 0x13408
       - 0x2FDB0
       - 0x3FFFF
       - 0x26FB2
-      - 0x0570A
+      - 0x049B2
       - 0x00001
-      - 0x1340C
+      - 0x33BCA
+      - 0x09B55
+      - 0x13408
       - 0x04DB2
       - 0x00003
       - 0x11515
-      - 0x13404
+      - 0x13402
       - 0x11415
       - 0x13400
-      - 0x1140F
+      - 0x1140D
       - 0x3721E
       - 0x11515
       - 0x37222
@@ -11043,20 +11047,20 @@ projects:
       - 0x3078A
       - 0x3CA55
       - 0x3A855
-      - 0x13404
+      - 0x13402
       - 0x2B555
       - 0x2F600
       - 0x27715
       - 0x23600
       - 0x2B715
       - 0x23600
-      - 0x3D60C
+      - 0x3D608
       - 0x3CA55
       - 0x23715
       - 0x3A88A
-      - 0x1340F
+      - 0x1340D
       - 0x26AB2
-      - 0x1340C
+      - 0x13408
       - 0x244DA
       - 0x1B438
       - 0x1341C
@@ -11482,30 +11486,24 @@ projects:
         entry 'start
 
 
-        : obit ( dwn-dw) !b over >r delay ;
+        : obit ( dwn-dwx) !b over >r delay ;
 
-        : oword ( dw-d)  leap drop  leap drop leap drop  drop ;
+        : oword ( dw-d) leap drop leap drop leap drop drop ;
 
-        : obyt ( dw-dwx)  then then then  3 obit drop
-            7 for dup 1 and 3 xor obit  drop 2/ next
+        : obyt ( dw-dwx) then then then 3 obit drop
+            7 for dup 1 and 3 xor obit drop 2/ next
             2 obit ;
-        # 0 f18var bitdelay 
-
-        : 'start io b! 18ibits drop drop !bitdelay  r-l- ;
+        : 'start ( -d) io b! 18ibits drop drop r-l- ;
 
         : 'left left a! --l- ;
 
         : 'right right a! r--- ;
 
-        : send2 ahead
+        : 'wr ( d-d) @ oword @ oword @ oword r-l- ;
 
-        : send then bitdelay  oword ;
+        : 'rd ( d-d) @ oword @ oword : recv 18ibits drop ! r-l- ;
 
-        : 'wr @ @ @ send2 send oword r-l- ;
-
-        : 'rd @ @ send2 : recv 18ibits drop ! !bitdelay  r-l- ;
-
-        : 'cx @ @ @ @ send2 send2 recv ;
+        : 'cx ( d-d) @ oword @ oword @ oword @ oword recv ;
 
 
         (
@@ -11545,14 +11543,10 @@ projects:
       - 0x3A77A
       - 0x05700
       - 0x00002
-      - 0x04235
-      - 0x05555
-      - 0x00000
       - 0x04BB2
       - 0x0015D
       - 0x134CB
       - 0x3A2B2
-      - 0x13411
       - 0x115F5
       - 0x04AB2
       - 0x00175
@@ -11560,24 +11554,28 @@ projects:
       - 0x04AB2
       - 0x001D5
       - 0x115D5
-      - 0x11421
-      - 0x13412
-      - 0x11402
-      - 0x03E0A
-      - 0x13420
-      - 0x13421
-      - 0x13402
+      - 0x03602
+      - 0x03602
+      - 0x03602
       - 0x115F5
-      - 0x03EB2
-      - 0x13420
+      - 0x03602
+      - 0x03602
       - 0x134CB
       - 0x3BAB2
-      - 0x13411
       - 0x115F5
-      - 0x03E0A
-      - 0x03620
-      - 0x13420
-      - 0x1142A
+      - 0x03602
+      - 0x03602
+      - 0x03602
+      - 0x03602
+      - 0x11422
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -11593,7 +11591,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x014
+        entryPoint: 0x011
         p: 0x000
         a: 0x000
         b: 0x000

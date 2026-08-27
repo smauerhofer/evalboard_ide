@@ -1689,10 +1689,10 @@ systemMacros:
     : rp-- ( a-a') -1 . + ;
 
     : bs@ : 'else ( a-w)
-      A[ @p+ x@ ]] !b !b . A[ . . . !p+ ]] !b @b ;
+      A[ @p+ x@ ]] lit !b !b . A[ . . . !p+ ]] lit !b @b ;
     : rp@ ( ri-ri) over rp--
 
-    : pshbs ( w-) A[ @p+ pshw ]] !b !b ;
+    : pshbs ( w-) A[ @p+ pshw ]] lit !b !b ;
 
     : 'r@ ( ri-ri) over rp--
 
@@ -1700,9 +1700,9 @@ systemMacros:
 
     : rfrom ( ri-r'i) over rp-- over over @w ;
 
-    : popbs ( -w) A[ !p+ pops ]] !b @b ;
+    : popbs ( -w) A[ !p+ pops ]] lit !b @b ;
 
-    : pshr ( aw-a) A[ @p+ . . @p+ ]] !b !b dup !b A[ x! ]] !b .
+    : pshr ( aw-a) A[ @p+ . . @p+ ]] lit !b !b dup !b A[ x! ]] lit !b .
 
     : rp++ : ip++ ( a-a') 1 . + ;
 
@@ -2032,9 +2032,9 @@ systemMacros:
       0x6000 and r> .. 0x3ff and ;
       then over + row! ;
     : sd@ ( pa-p) a2rc 0x28400 xor xor ! 0x5a4b ! .. down b! ..
-      A[ @ !p+ ]] !b @b r> b! !b ;
+      A[ @ !p+ ]] lit !b @b r> b! !b ;
     : sd! ( pa-p) a2rc 0x20400 xor xor ! 0x5a4d ! .. r> b! @b .. down b! ..
-      A[ @p+ db! ]] !b !b ;
+      A[ @p+ db! ]] lit !b !b ;
     : poll ( ru-ru) io b! @b
       2* 2* -if >r over .. r--- over r> then
       0x800 and . if >r .. ---u r> then

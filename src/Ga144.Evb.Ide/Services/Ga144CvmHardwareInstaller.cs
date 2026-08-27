@@ -10,8 +10,15 @@ public sealed record CvmInstallStep(string Description, int NodeCoordinate, int 
 /// <summary>Everything one CVM hardware install attempt produced.</summary>
 public sealed record CvmInstallReport(bool Success, string? FailureMessage, IReadOnlyList<CvmInstallStep> Steps);
 
-/// <summary>One post-install runtime test step's outcome. <see cref="Passed"/> is null when the step could not be evaluated (e.g. a timeout) rather than run and found wanting.</summary>
-public sealed record CvmTestStepResult(string Description, bool Attempted, bool? Passed, IReadOnlyList<int> ReceivedWords, string? Detail);
+/// <summary>
+/// One post-install runtime test step's outcome. <see cref="Passed"/> is null when the step could
+/// not be evaluated (e.g. a timeout) rather than run and found wanting. <see cref="SentWords"/> and
+/// <see cref="ReceivedWords"/> record every word actually put on the wire and actually decoded for
+/// this step, in order, EVEN when the step ends in a timeout partway through -- a timeout on word 2
+/// no longer discards word 1's already-received value, so a failing run's summary always shows
+/// exactly how far the exchange actually got, not just that it failed.
+/// </summary>
+public sealed record CvmTestStepResult(string Description, bool Attempted, bool? Passed, IReadOnlyList<int> SentWords, IReadOnlyList<int> ReceivedWords, string? Detail);
 
 /// <summary>Everything one "Install &amp; run CVM test" attempt produced, install and runtime test together.</summary>
 public sealed record CvmInstallAndTestReport(CvmInstallReport Install, IReadOnlyList<CvmTestStepResult> TestSteps);
@@ -300,58 +307,82 @@ public sealed class Ga144CvmHardwareInstaller
     var results = new List<CvmTestStepResult>();
 
     // Step 1: node 708's own 'start (its compiled entry, just jumped into above) begins with
-    // "io b! 18ibits drop drop !bitdelay r-l-" -- 18ibits is the calibrated async word receive
-    // every node-708 program in this project uses to receive its first word, so ANY single word
-    // sent now satisfies that wait (its exact value only calibrates bit timing, per this
-    // project's other node-708 probes -- it is not otherwise interpreted). Per Stefan: once
-    // 'start has woken, the next traffic on the wire should be the CVM's own first memory
-        // request -- node 607's very first instruction fetch, address 0 -- relayed back up through
-    // 707 and out via 708, arriving as two words that should both read 0.
-    const int wakeValue = 0x00000;
+    // "io b! 18ibits drop drop !bitdelay r-l-" -- 18ibits both RECEIVES this first word and
+    // CALIBRATES 'bitdelay' from its own bit timing (see 'start's remarks in Node708Program).
+    // That calibration -- not the word's payload value -- is what obit/oword/obyt's own transmit
+    // delay loop uses for every reply this node ever sends afterward. An all-zero word (0x00000)
+    // has no bit transitions of its own to calibrate against; 0x15555 (alternating bits) is the
+    // one word this project's own hand-confirmed-on-real-hardware note (see
+    // Ga144Node708EchoProbe.SpeedTestWord's remarks: "0x15555 -> 55 55 01 on real hardware,
+    // confirmed separately by hand") is actually known to calibrate correctly, so it is used here
+    // too rather than an untested all-zero wake. Per Stefan: once 'start has woken, the next
+    // traffic on the wire should be the CVM's own first memory request -- node 607's very first
+    // instruction fetch, address 0 -- relayed back up through 707 and out via 708, arriving as
+    // two words that should both read 0.
+    const int wakeValue = 0x15555;
+    const string description = "Wake 'start with one word, then read the CVM's first memory request (expect two words, both 0)";
+    const int expectedReplyWords = 2;
+
+    var sentWords = new List<int>();
+    var receivedWords = new List<int>();
+    string? failureNote = null;
+
     try
     {
       byte[] wakeBytes = new byte[3];
       Ga144Node708Probe.EncodeAsynchronousWord(wakeValue, wakeBytes);
       port.Write(wakeBytes);
+      sentWords.Add(wakeValue);
       WaitForTransmitDrain(port, wakeBytes.Length);
       Thread.Sleep(InterWordSettleMilliseconds);
 
-      int first = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
-      int second = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
-      bool passed = first == 0 && second == 0;
-      results.Add(new CvmTestStepResult(
-          "Wake 'start with one word, then read the CVM's first memory request (expect two words, both 0)",
-          Attempted: true,
-          Passed: passed,
-          ReceivedWords: [first, second],
-          Detail: passed
-              ? "Received 0x00000, 0x00000 as expected -- node 607's first instruction fetch (address 0)."
-              : $"Received 0x{first:X5}, 0x{second:X5} -- expected both to be 0."));
+      // Each ReadWord is its own timeout window. A timeout on word 2 still leaves word 1 (if it
+      // was already decoded) sitting in receivedWords below -- the catch blocks only set
+      // failureNote, they never discard progress the try block already made.
+      for (int index = 0; index < expectedReplyWords; index++)
+      {
+        receivedWords.Add(ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken));
+      }
     }
     catch (TimeoutException exception)
     {
-      results.Add(new CvmTestStepResult(
-          "Wake 'start with one word, then read the CVM's first memory request (expect two words, both 0)",
-          Attempted: true,
-          Passed: null,
-          ReceivedWords: [],
-          Detail: $"Timed out waiting for a reply: {exception.Message}"));
+      failureNote = $"Timed out waiting for a reply: {exception.Message}";
     }
     catch (IOException exception)
     {
-      results.Add(new CvmTestStepResult(
-          "Wake 'start with one word, then read the CVM's first memory request (expect two words, both 0)",
-          Attempted: true,
-          Passed: null,
-          ReceivedWords: [],
-          Detail: $"Serial I/O failed: {exception.Message}"));
+      failureNote = $"Serial I/O failed: {exception.Message}";
     }
+
+    bool? passed = failureNote is not null
+        ? null
+        : receivedWords.Count == expectedReplyWords && receivedWords.All(word => word == 0);
+
+    string transcript = $"Sent [{FormatWords(sentWords)}]. Received [{FormatWords(receivedWords)}] "
+        + $"({receivedWords.Count} of {expectedReplyWords} expected word(s)).";
+    string detail = failureNote is null
+        ? transcript + (passed == true
+            ? " Matches expectation -- node 607's first instruction fetch (address 0)."
+            : " Expected both received words to be 0.")
+        : transcript + " " + failureNote;
+
+    results.Add(new CvmTestStepResult(
+        description,
+        Attempted: true,
+        Passed: passed,
+        SentWords: sentWords,
+        ReceivedWords: receivedWords,
+        Detail: detail));
 
     return results;
   }
 
   private static CvmInstallAndTestReport Failed(string message) =>
       new(new CvmInstallReport(false, message, []), []);
+
+  // "none" rather than an empty "[]" -- an empty pair of brackets in the middle of a longer
+  // transcript line reads as a rendering glitch; a word, this makes the zero case unambiguous.
+  private static string FormatWords(IReadOnlyList<int> words) =>
+      words.Count == 0 ? "none" : string.Join(", ", words.Select(word => $"0x{word:X5}"));
 
   private static void SendBootFrame(NativeWindowsSerialPort port, int transferAddress, IReadOnlyList<int> payload) =>
       SendBootFrame(port, AsyncSerialContinuationAddress, transferAddress, payload);

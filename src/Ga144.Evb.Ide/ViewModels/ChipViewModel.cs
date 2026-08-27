@@ -12,6 +12,12 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   private bool _verifyBusy;
   private string _verifyStatus = "";
 
+  // Reused (not re-created per run) so repeated "Install & run CVM test" attempts refresh the same
+  // window instead of stacking new ones -- same convention as NodeEditorWindow's own
+  // CompileDiagnosticsWindow instance. Non-modal (Show(), not ShowDialog()) so the chip window
+  // stays usable while a long sent/received transcript is still open for reading or copying.
+  private Views.CompileDiagnosticsWindow? _cvmTestResultWindow;
+
   public ChipViewModel(
     ProjectViewModel project,
     Ga144ChipRole role,
@@ -959,25 +965,42 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
                 : "CVM installed and runtime test passed.";
       }
 
-      MessageBox.Show(
-          summary.ToString(),
-          "Install & run CVM test",
-          MessageBoxButton.OK,
-          report.Install.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+      ShowCvmTestResult("Install & run CVM test", summary.ToString());
     }
     catch (Exception exception)
     {
       VerifyStatus = "Install & run CVM test failed.";
-      MessageBox.Show(
-          $"Install & run CVM test could not complete:\n\n{exception.Message}",
-          "Install & run CVM test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Error);
+      ShowCvmTestResult("Install & run CVM test -- could not complete", exception.ToString());
     }
     finally
     {
       VerifyBusy = false;
     }
+  }
+
+  // MessageBox's own text is selectable with Ctrl+C on Windows, but that copies the whole dialog
+  // (title, buttons, everything) as one undiscoverable trick rather than letting Stefan select
+  // just the transcript he wants -- and this report only grows as more test steps get added later.
+  // A real read-only, selectable TextBox with an explicit "Copy all" button (the same window
+  // NodeEditorWindow already uses for compile diagnostics) fixes that directly.
+  private void ShowCvmTestResult(string header, string body)
+  {
+    if (_cvmTestResultWindow is null)
+    {
+      _cvmTestResultWindow = new Views.CompileDiagnosticsWindow
+      {
+        Owner = Application.Current?.Windows
+            .OfType<Window>()
+            .FirstOrDefault(window => window.IsActive)
+      };
+
+      // The window's own "Close" button only Hide()s it (so ShowDiagnostics can reuse it next
+      // run), but the native title-bar X still Close()s it -- a closed WPF window throws if
+      // reused, so drop the cached reference then and let the next call create a fresh one.
+      _cvmTestResultWindow.Closed += (_, _) => _cvmTestResultWindow = null;
+    }
+
+    _cvmTestResultWindow.ShowDiagnostics(header, body);
   }
 
   private void RebuildNodes()

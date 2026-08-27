@@ -18,6 +18,7 @@ public partial class CompileDiagnosticsWindow : Window
 
   public void ShowDiagnostics(string header, string diagnostics)
   {
+    Title = header;
     HeaderText.Text = header;
     DiagnosticsText.Text = diagnostics;
     if (!IsVisible)
