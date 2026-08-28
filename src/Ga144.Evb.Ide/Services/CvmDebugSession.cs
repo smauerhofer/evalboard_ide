@@ -1,3 +1,4 @@
+using Ga144.Cvm.Toolchain;
 using Ga144.Evb.Ide.Compiler;
 using Ga144.Evb.Ide.Cvm;
 
@@ -38,10 +39,11 @@ public sealed record CvmDebugTransaction(
 /// <summary>
 /// Drives a live CVM install interactively instead of running it to completion:
 /// <see cref="Ga144CvmHardwareInstaller.StartDebugSessionAsync"/> compiles and boots the mesh, loads
-/// the shared test program into a fresh <see cref="CvmSimulatedSram"/>, and wakes node 708's
-/// <c>'start</c> exactly like the automatic "Install &amp; run CVM test" does -- but hands back this
-/// session, with the serial port left open, instead of servicing the resulting traffic to
-/// completion.
+/// the debugger's own test program (<see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/> --
+/// deliberately its own variant, not the one the automatic "Install &amp; run CVM test" uses; see
+/// that method's remarks) into a fresh <see cref="CvmSimulatedSram"/>, and wakes node 708's
+/// <c>'start</c> -- but hands back this session, with the serial port left open, instead of
+/// servicing the resulting traffic to completion.
 ///
 /// <b>How stepping and breakpoints actually pause real hardware.</b> There is no debug/halt line on
 /// this design -- the CVM's only synchronization point with the host is the memory interface itself
@@ -94,7 +96,15 @@ public sealed class CvmDebugSession : IDisposable
   /// <summary>How the install itself went -- boot frame count, etc. Always successful by the time a session exists (a failed install never produces one).</summary>
   public CvmInstallReport Install { get; }
 
-  /// <summary>The fixed test program (5 'nop, 'plit, literal, 'pop, 'push, 8 trailing 'nop) loaded into page 0 of the simulated SRAM at session start.</summary>
+  /// <summary>
+  /// The debugger's own fixed test program, loaded into page 0 of the simulated SRAM at session
+  /// start: the shared 5 'nop/'plit/literal/'pop/'push/8 trailing 'nop sequence, except word address
+  /// <see cref="CvmMemoryProtocol.DebuggerCallTestAddress"/> is a <c>call</c> to
+  /// <see cref="CvmMemoryProtocol.DebuggerCallTestTarget"/> instead of a plain 'nop, and word address
+  /// <see cref="CvmMemoryProtocol.DebuggerCallTestTarget"/> itself is a real 'ret -- confirmed working
+  /// against real hardware -- completing the call/return round trip. See
+  /// <see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/>'s own remarks.
+  /// </summary>
   public IReadOnlyList<int> Program => _program;
 
   public int TransactionCount { get; private set; }
@@ -154,9 +164,10 @@ public sealed class CvmDebugSession : IDisposable
   /// <summary>
   /// Linearly disassembles page 0 (the only page that is ever code) from address 0 up to but not
   /// including <paramref name="endAddressExclusive"/>, into CVM assembly language mnemonics
-  /// (<see cref="CvmAssemblyLanguage"/>) resolved against node 607's own current compile. This MUST
-  /// be a stateful scan starting at 0, never an independent per-word decode: pushlit is followed by
-  /// a literal operand word that would otherwise be mistaken for its own opcode if a word were
+  /// (<see cref="CvmAssemblyLanguage"/>) resolved against node 607's own current compile, plus a
+  /// direct bit-pattern rule for <c>call</c> (see below) that needs no compile/symbol at all. This
+  /// MUST be a stateful scan starting at 0, never an independent per-word decode: pushlit is followed
+  /// by a literal operand word that would otherwise be mistaken for its own opcode if a word were
   /// decoded in isolation.
   ///
   /// Returns a sparse map from flat address to a listing line: an instruction's own address gets
@@ -175,6 +186,19 @@ public sealed class CvmDebugSession : IDisposable
     while (address < endAddressExclusive)
     {
       int word = _sram.Read(CvmMemoryProtocol.CombineAddress(0, address));
+
+      // "call" has no tag bit and no F18 symbol to resolve (CvmInstructionSet.CvmInstructionShape.
+      // EncodesAddressDirectly) -- any word with bit 15 clear (0x0000-0x7FFF, CvmInstructionSet.
+      // CallAddressMask) directly IS a call to that address, a pure bit-pattern rule independent of
+      // node 607's live compile, so this is checked before consulting the (symbol-driven) decode
+      // table at all.
+      if (word <= CvmInstructionSet.CallAddressMask)
+      {
+        notes[address] = $"{CvmInstructionSet.CallMnemonic} 0x{word:X4}";
+        address += 1;
+        continue;
+      }
+
       if (decodeTable.TryGetValue(word, out (string Mnemonic, int WordLength) instruction))
       {
         int operandCount = instruction.WordLength - 1;

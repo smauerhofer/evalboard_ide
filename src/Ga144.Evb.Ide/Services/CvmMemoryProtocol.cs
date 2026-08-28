@@ -37,6 +37,11 @@ internal static class CvmMemoryProtocol
   public const string PopSymbolName = "'pop";
   public const string PushSymbolName = "'push";
 
+  // Also node 607's own convention (0x8000 | wordAddress) -- confirmed against real hardware
+  // together with 'nop/'plit/'pop/'push above. Node607.f18's own 'ret ( s-s) pops the return address
+  // /call pushed and installs it into A (i.e. P), completing a call/return round trip.
+  public const string RetSymbolName = "'ret";
+
   // How many leading 'nop opcodes the shared test program starts with before 'plit, and how much
   // trailing 'nop padding follows 'pop/'push -- see Ga144CvmHardwareInstaller.RunSramBackedProgramStep
   // for why the padding exists (so the interpreter has more of its own, already-understood 'nop
@@ -99,8 +104,72 @@ internal static class CvmMemoryProtocol
     return (program, null);
   }
 
+  // Where the interactive debugger's own test program (below) exercises the CVM's "call" opcode,
+  // and which address it calls. Per Stefan: a call's opcode word has no tag bit at all -- unlike
+  // 'nop/'plit/'pop/'push (0x8000 | address-of-the-primitive-in-node-607), the word IS the callee's
+  // address directly, 0x0000-0x7FFF (CvmInstructionSet.CallAddressMask), so writing the word is just
+  // writing the target address.
+  public const int DebuggerCallTestAddress = 1;
+  public const int DebuggerCallTestTarget = 0x20;
+
+  /// <summary>
+  /// The interactive debugger's own test program: <see cref="TryBuildTestProgram"/>'s shared sequence,
+  /// with word <see cref="DebuggerCallTestAddress"/> overwritten to <c>call <see cref="DebuggerCallTestTarget"/></c>
+  /// (a raw word equal to the target address -- see that constant's own remarks) instead of the plain
+  /// 'nop that word held before, and with word <see cref="DebuggerCallTestTarget"/> itself holding a
+  /// real <c>'ret</c> opcode -- confirmed working against real hardware together with the call above
+  /// -- so the round trip is complete: control jumps to <see cref="DebuggerCallTestTarget"/>, 'ret
+  /// pops the return address the call pushed and installs it back into P, and execution resumes right
+  /// after the call (address <see cref="DebuggerCallTestAddress"/> + 1) exactly as if the call had
+  /// never happened, continuing through the rest of the shared sequence's own 'nop/'plit/'pop/'push.
+  /// The words between the end of that sequence and <see cref="DebuggerCallTestTarget"/> are never
+  /// fetched by this flow (control jumps straight there and back) but are padded with 'nop opcodes
+  /// anyway, matching <see cref="TrailingNopCount"/>'s own rationale: safer than leaving
+  /// zero-initialized memory a stray fetch could misread as a call to address 0.
+  ///
+  /// Deliberately NOT used by <see cref="Ga144CvmHardwareInstaller.InstallAndRunAsync"/>'s automatic
+  /// "Install &amp; run CVM test" step (that step still calls <see cref="TryBuildTestProgram"/>
+  /// directly): that step's own pass/fail check requires every page-0 read to land at exactly the
+  /// next sequential address, and a call is a deliberate jump away from that sequence -- folding this
+  /// into the shared program would make the automatic test report a read-order "failure" that isn't
+  /// actually a regression, just a check that doesn't know about jumps yet. Per Stefan's own choice,
+  /// this stays a debugger-only variant instead.
+  /// </summary>
+  public static (List<int>? Program, string? MissingSymbolDescription) TryBuildDebuggerTestProgram(
+      IReadOnlyDictionary<int, F18CompileResult> compiledRam)
+  {
+    (List<int>? program, string? missing) = TryBuildTestProgram(compiledRam);
+    if (program is null)
+    {
+      return (null, missing);
+    }
+
+    if (!compiledRam.TryGetValue(NopSourceNodeCoordinate, out F18CompileResult? mainCompile) ||
+        !mainCompile.Symbols.TryGetValue(RetSymbolName, out F18ExportedSymbol? retSymbol))
+    {
+      return (null, $"\"{RetSymbolName}\"");
+    }
+
+    // TryBuildTestProgram above already succeeded, so NopSymbolName is guaranteed present here too.
+    int nopOpcode = 0x8000 | (mainCompile.Symbols[NopSymbolName].Value & CvmWordCodec.WordMask);
+    int retOpcode = 0x8000 | (retSymbol.Value & CvmWordCodec.WordMask);
+
+    while (program.Count <= DebuggerCallTestTarget)
+    {
+      program.Add(nopOpcode);
+    }
+
+    program[DebuggerCallTestAddress] = DebuggerCallTestTarget;
+    program[DebuggerCallTestTarget] = retOpcode;
+    return (program, null);
+  }
+
   public static string DescribeRequiredSymbols() =>
       $"\"{NopSymbolName}\", \"{PlitSymbolName}\", \"{PopSymbolName}\", and \"{PushSymbolName}\"";
+
+  /// <summary>Same as <see cref="DescribeRequiredSymbols"/> plus <see cref="RetSymbolName"/> -- everything <see cref="TryBuildDebuggerTestProgram"/> requires, for the debugger's own "could not build the test program" message.</summary>
+  public static string DescribeDebuggerRequiredSymbols() =>
+      $"{DescribeRequiredSymbols()}, and \"{RetSymbolName}\"";
 
   public static int CombineAddress(int page, int addressInPage) =>
       ((page << 16) | (addressInPage & 0xFFFF)) & (CvmSimulatedSram.WordCapacity - 1);

@@ -19,6 +19,8 @@ namespace Ga144.Cvm.Toolchain;
 ///   pushlit loop            ; or a label/import name -- assembles to that symbol's final address
 ///   pop
 ///   push
+///   call loop               ; call a label/import -- resolves to that symbol's own address
+///   call 0x0100             ; or a literal address, 0x0000-0x7FFF only (bit 15 is reserved)
 /// loop:
 ///   nop
 ///
@@ -26,11 +28,15 @@ namespace Ga144.Cvm.Toolchain;
 /// table: .word 1, 2, 3      ; raw data words -- each may also be numeric or a label/import name
 /// </code>
 ///
-/// All 4 built-in CVM instructions (<see cref="CvmInstructionSet.Instructions"/>) are always
+/// All 5 built-in CVM instructions (<see cref="CvmInstructionSet.Instructions"/>) are always
 /// available without needing <c>.import</c> -- this assembler never bakes in their numeric opcode
-/// (it doesn't know node 607's F18 source at all); every instruction word is emitted as a placeholder
-/// with a <see cref="CvmRelocationType.CvmOpcode"/> relocation against an external symbol named after
-/// the mnemonic, for the linker to resolve against a primitive table exported from the IDE.
+/// (it doesn't know any node's F18 source at all). <c>nop</c>/<c>pushlit</c>/<c>push</c>/<c>pop</c>
+/// each emit their instruction word as a placeholder with a <see cref="CvmRelocationType.CvmOpcode"/>
+/// relocation against an external symbol named after the mnemonic, for the linker to resolve against a
+/// primitive table exported from the IDE. <c>call</c> is different: its one word directly IS the
+/// callee's address (<see cref="CvmInstructionSet.CvmInstructionShape.EncodesAddressDirectly"/>), so it
+/// gets a plain <see cref="CvmRelocationType.AbsoluteAddress"/> relocation against its own operand
+/// instead -- the same relocation a <c>.word</c> or <c>pushlit</c> label/import operand would get.
 ///
 /// This is a two-pass assembler: pass 1 walks every line purely to compute section layout (every
 /// instruction's word length is fixed by its mnemonic alone, so a label's final offset never depends
@@ -178,6 +184,22 @@ public static class CvmAssembler
         default:
           CvmInstructionSet.CvmInstructionShape shape = CvmInstructionSet.TryGetShape(line.Directive)!;
           CvmSection codeSection = objectFile.GetOrAddSection(section);
+
+          if (shape.EncodesAddressDirectly)
+          {
+            // "call"-style: there is no tag word at all here -- the instruction's one and only word
+            // IS the (eventually resolved) target address, exactly the same relocation a ".word"/
+            // "pushlit" label or import operand would get (AbsoluteAddress: "write the resolved
+            // address into this word as-is"), just narrower -- 15 bits, not 16, since bit 15 must
+            // stay clear so a linked program's interpreter can tell a call word apart from a tagged
+            // instruction word by that bit alone.
+            EmitOperandWord(
+                objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors,
+                maxValue: CvmInstructionSet.CallAddressMask,
+                rangeDescription: "a 15-bit call target (0x0000-0x7FFF -- bit 15 is reserved to tell a call word apart from a tagged instruction word)");
+            break;
+          }
+
           int opcodeOffset = codeSection.Words.Count;
           // Self-describing placeholder -- not a bare 0. 0x8000 | shape.Id is stable and unique per
           // mnemonic regardless of which node(s)/opcode-range actually implement it, so a tool that
@@ -236,16 +258,18 @@ public static class CvmAssembler
       IReadOnlyDictionary<string, (string Section, int Offset)> labelOffsets,
       ISet<string> imported,
       ISet<string> externalSymbols,
-      List<string> errors)
+      List<string> errors,
+      int maxValue = CvmWordCodec.WordMask,
+      string rangeDescription = "a 16-bit CVM word (0..0xFFFF)")
   {
     CvmSection targetSection = objectFile.GetOrAddSection(section);
     int offset = targetSection.Words.Count;
 
     if (TryParseNumericLiteral(operand, out int literal))
     {
-      if ((uint)literal > CvmWordCodec.WordMask)
+      if ((uint)literal > (uint)maxValue)
       {
-        errors.Add($"line {lineNumber}: {operand} does not fit in a 16-bit CVM word (0..0x{CvmWordCodec.WordMask:X4}).");
+        errors.Add($"line {lineNumber}: {operand} does not fit in {rangeDescription}.");
         targetSection.Words.Add(0);
         return;
       }

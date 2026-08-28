@@ -1,7 +1,7 @@
 # CVM toolchain: assembler, librarian, linker
 
 This is the design for a real toolchain around the CVM assembly language (`nop`, `pushlit <data>`,
-`push`, `pop`, and whatever gets added later), sized for being fed by a future C compiler backend as
+`push`, `pop`, `call <address>`, and whatever gets added later), sized for being fed by a future C compiler backend as
 well as by hand-written source. It lives outside the IDE project so it can run as ordinary
 command-line tools, while still sharing its core logic (the instruction set table, the file formats)
 with the IDE through one common library, so the two can never quietly drift apart on what the CVM
@@ -57,6 +57,8 @@ main:                     ; a label -- may share a line with an instruction, or 
   pushlit loop            ; or a label/import name -- assembles to that symbol's final address
   pop
   push
+  call loop               ; call a label/import -- resolves to that symbol's own address
+  call 0x0100             ; or a literal address, 0x0000-0x7FFF only (bit 15 is reserved)
 loop:
   nop
 
@@ -64,17 +66,18 @@ loop:
 table: .word 1, 2, 3      ; raw data words -- each may also be numeric or a label/import name
 ```
 
-All four built-in instructions are always available without `.import` -- the assembler never bakes
+All five built-in instructions are always available without `.import` -- the assembler never bakes
 in a numeric opcode for them (it has no notion of any node's F18 source at all); every instruction
 word is emitted as a placeholder with a relocation against an external symbol named after the
-mnemonic, for the linker to resolve later. Every non-numeric operand (a `pushlit` or `.word` operand
-that isn't a literal) must be either a label defined in the same file or a name declared with
-`.import` -- an operand that's neither is a hard assemble error, not a silent external.
+mnemonic (`nop`/`pushlit`/`push`/`pop`) or against the callee itself (`call`), for the linker to
+resolve later. Every non-numeric operand (a `pushlit`, `call`, or `.word` operand that isn't a
+literal) must be either a label defined in the same file or a name declared with `.import` -- an
+operand that's neither is a hard assemble error, not a silent external.
 
-**The placeholder word itself is `0x8000 | Id`, not a bare `0`.** Every entry in
+**The placeholder word itself is `0x8000 | Id`, not a bare `0` -- except for `call`.** Every entry in
 `CvmInstructionSet.Instructions` carries a small, stable, append-only numeric `Id` (`nop`=0,
-`pushlit`=1, `push`=2, `pop`=3 today), assigned once and never renumbered or reused, because it gets
-baked into the raw words of every `.gaobj` ever produced. Before the linker resolves the
+`pushlit`=1, `push`=2, `pop`=3, `call`=4 today), assigned once and never renumbered or reused, because
+it gets baked into the raw words of every `.gaobj` ever produced. Before the linker resolves the
 `CvmRelocationType.CvmOpcode` relocation sitting on that word, the word already says which
 instruction it's meant to become -- so a tool that dumps an unlinked object file's raw section words
 (or a person reading a hex dump) can identify every instruction without cross-referencing the
@@ -86,7 +89,19 @@ portable stand-in that doesn't presume any particular node or address layout, un
 single-node convention of `0x8000 | address`. A `.word`/`pushlit` operand that refers to a label or
 `.import`ed name (an `AbsoluteAddress` relocation) still gets a plain `0` placeholder -- only
 instruction-opcode words (`CvmOpcode` relocations) use the `0x8000 | Id` scheme, since only those have
-a `CvmInstructionShape.Id` to encode.
+a tag to decode `Id` back out of.
+
+`call` doesn't fit that scheme at all, by design: it has no tag word to place an `Id` into, because
+its single opcode word directly IS the target address (`CvmInstructionShape.EncodesAddressDirectly`).
+`call`'s placeholder is therefore a plain `0`, resolved via an ordinary `AbsoluteAddress` relocation
+against its operand -- the same relocation kind (and the same resolution logic) a `.word` or `pushlit`
+label/import operand gets, just restricted to 15 bits (`CvmInstructionSet.CallAddressMask = 0x7FFF`)
+so bit 15 stays clear once linked. That's the whole point of the encoding: a linked program's
+interpreter can tell "this word is a call to the address it contains" (bit 15 clear) apart from
+"this word is a tagged instruction dispatch" (bit 15 set) using nothing but that one bit, regardless
+of which node(s) end up implementing the tagged side. A literal `call` target out of that 15-bit range
+(`call 0x8000` or higher) is a hard assemble error, not silent truncation -- ambiguity with the tag
+bit would otherwise corrupt a linked program in a way nothing downstream could detect.
 
 This is a two-pass assembler: pass 1 walks the source purely to compute section layout (every
 instruction's word length is fixed by its mnemonic alone, so no label's offset ever depends on any
@@ -126,8 +141,10 @@ Chunks, in the order `gaasm` writes them (a reader may encounter them in any ord
   section) }`.
 - **RELO** -- one entry per relocation: `{ sectionIndex: int32, wordOffset: int32, symbolIndex:
   int32, type: byte (0 = AbsoluteAddress, 1 = CvmOpcode) }`. `AbsoluteAddress` writes the symbol's
-  resolved address into the word as-is; `CvmOpcode` writes `0x8000 | resolvedAddress` -- the CVM's
-  own opcode convention, used for every built-in instruction.
+  resolved address into the word as-is -- used for a `.word`/`pushlit` label or import operand, and
+  for `call`'s own single opcode word (see "Assembly language" above); `CvmOpcode` writes
+  `0x8000 | resolvedOpcode` -- the CVM's own tagged-dispatch convention, used for `nop`/`pushlit`/
+  `push`/`pop`.
 
 ## Library (.galib)
 

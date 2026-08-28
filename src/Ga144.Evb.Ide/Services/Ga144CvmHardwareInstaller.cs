@@ -128,12 +128,13 @@ public sealed class Ga144CvmHardwareInstaller
 
   /// <summary>
   /// Starts an interactive <see cref="CvmDebugSession"/> against real hardware: compiles and boots
-  /// the mesh exactly like <see cref="InstallAndRunAsync"/> does, then builds and loads the same
-  /// shared test program (<see cref="CvmMemoryProtocol.TryBuildTestProgram"/>) into a fresh
-  /// <see cref="CvmSimulatedSram"/> and wakes node 708's <c>'start</c> -- but stops there instead of
-  /// automatically servicing the resulting read/write traffic to completion, leaving the port open
-  /// and handing back a session the CVM Debugger window drives one transaction (or one breakpoint
-  /// run) at a time.
+  /// the mesh exactly like <see cref="InstallAndRunAsync"/> does, then builds and loads the
+  /// debugger's own test program (<see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/> --
+  /// deliberately NOT the same one <see cref="InstallAndRunAsync"/>'s automatic test uses; see that
+  /// method's remarks for why) into a fresh <see cref="CvmSimulatedSram"/> and wakes node 708's
+  /// <c>'start</c> -- but stops there instead of automatically servicing the resulting read/write
+  /// traffic to completion, leaving the port open and handing back a session the CVM Debugger window
+  /// drives one transaction (or one breakpoint run) at a time.
   /// </summary>
   public Task<CvmDebugSession> StartDebugSessionAsync(
       string portName,
@@ -163,12 +164,12 @@ public sealed class Ga144CvmHardwareInstaller
 
     try
     {
-      (List<int>? program, string? missing) = CvmMemoryProtocol.TryBuildTestProgram(compiledRam);
+      (List<int>? program, string? missing) = CvmMemoryProtocol.TryBuildDebuggerTestProgram(compiledRam);
       if (program is null)
       {
         throw new InvalidOperationException(
             $"Could not build the test program: {missing} was not found. Check node {CvmMemoryProtocol.NopSourceNodeCoordinate:000}'s " +
-            $"source still defines {CvmMemoryProtocol.DescribeRequiredSymbols()} before starting the debugger.");
+            $"source still defines {CvmMemoryProtocol.DescribeDebuggerRequiredSymbols()} before starting the debugger.");
       }
 
       var sram = new CvmSimulatedSram();
