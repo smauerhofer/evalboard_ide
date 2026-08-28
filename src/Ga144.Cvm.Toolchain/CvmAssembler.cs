@@ -179,7 +179,13 @@ public static class CvmAssembler
           CvmInstructionSet.CvmInstructionShape shape = CvmInstructionSet.TryGetShape(line.Directive)!;
           CvmSection codeSection = objectFile.GetOrAddSection(section);
           int opcodeOffset = codeSection.Words.Count;
-          codeSection.Words.Add(0); // placeholder -- the real opcode is a link-time concern.
+          // Self-describing placeholder -- not a bare 0. 0x8000 | shape.Id is stable and unique per
+          // mnemonic regardless of which node(s)/opcode-range actually implement it, so a tool that
+          // dumps an unlinked object file's raw words (or a linker that hasn't resolved this
+          // relocation yet) can still tell which instruction a word was meant to become. The linker
+          // still resolves the real opcode via the CvmOpcode relocation below, keyed by SymbolName --
+          // this placeholder value itself is never load-bearing for linking, only for readability.
+          codeSection.Words.Add(0x8000 | shape.Id);
           externalSymbols.Add(shape.Mnemonic);
           objectFile.Relocations.Add(new CvmRelocation
           {
