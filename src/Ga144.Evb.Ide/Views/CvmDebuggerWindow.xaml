@@ -89,7 +89,15 @@
                   VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Auto" />
 
-    <TextBlock Grid.Row="6" Margin="0,10,0,4" FontWeight="SemiBold" Text="Transaction log (read-only)" />
+    <Grid Grid.Row="6" Margin="0,10,0,4">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <TextBlock FontWeight="SemiBold" Text="Transaction log (read-only)" VerticalAlignment="Center" />
+      <Button Grid.Column="1" Content="Copy log" Padding="10,2" Click="OnCopyLogClick"
+                      ToolTip="Copies the full transaction log to the clipboard." />
+    </Grid>
     <TextBox x:Name="LogTextBox" Grid.Row="7" Text="{Binding LogText, Mode=OneWay}"
                   IsReadOnly="True" IsReadOnlyCaretVisible="True"
                   FontFamily="Consolas" FontSize="11"

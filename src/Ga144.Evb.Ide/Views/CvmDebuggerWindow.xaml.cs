@@ -26,4 +26,19 @@ public partial class CvmDebuggerWindow : Window
 
   private void OnLogTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) =>
       LogTextBox.ScrollToEnd();
+
+  // Same pattern as CompileDiagnosticsWindow's own "Copy all": the transaction log keeps growing and
+  // auto-scrolling while a Continue is in flight, which makes manually click-dragging a selection
+  // over it impractical -- a single button that grabs the whole log is the reliable way to copy it.
+  private void OnCopyLogClick(object sender, RoutedEventArgs e)
+  {
+    try
+    {
+      Clipboard.SetText(LogTextBox.Text ?? string.Empty);
+    }
+    catch
+    {
+      // Clipboard can transiently fail if another process holds it; ignore.
+    }
+  }
 }
