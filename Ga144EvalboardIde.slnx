@@ -1,3 +1,7 @@
 <Solution>
+  <Project Path="src/Ga144.Cvm.Assembler/Ga144.Cvm.Assembler.csproj" />
+  <Project Path="src/Ga144.Cvm.Librarian/Ga144.Cvm.Librarian.csproj" />
+  <Project Path="src/Ga144.Cvm.Linker/Ga144.Cvm.Linker.csproj" />
+  <Project Path="src/Ga144.Cvm.Toolchain/Ga144.Cvm.Toolchain.csproj" />
   <Project Path="src/Ga144.Evb.Ide/Ga144.Evb.Ide.csproj" />
 </Solution>

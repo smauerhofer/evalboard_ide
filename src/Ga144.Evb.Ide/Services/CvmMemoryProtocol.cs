@@ -1,3 +1,4 @@
+using Ga144.Cvm.Toolchain;
 using Ga144.Evb.Ide.Compiler;
 using Ga144.Evb.Ide.Cvm;
 
@@ -81,10 +82,12 @@ internal static class CvmMemoryProtocol
       return (null, $"\"{PushSymbolName}\"");
     }
 
-    int nopOpcode = 0x8000 | (nopSymbol.Value & F18InstructionSet.WordMask);
-    int plitOpcode = 0x8000 | (plitSymbol.Value & F18InstructionSet.WordMask);
-    int popOpcode = 0x8000 | (popSymbol.Value & F18InstructionSet.WordMask);
-    int pushOpcode = 0x8000 | (pushSymbol.Value & F18InstructionSet.WordMask);
+    // 0x8000 | address is a CVM opcode -- a 16-bit CVM word (CvmWordCodec.WordMask), not the wider
+    // 18-bit F18 wire word the symbol's own address happens to be stored as.
+    int nopOpcode = 0x8000 | (nopSymbol.Value & CvmWordCodec.WordMask);
+    int plitOpcode = 0x8000 | (plitSymbol.Value & CvmWordCodec.WordMask);
+    int popOpcode = 0x8000 | (popSymbol.Value & CvmWordCodec.WordMask);
+    int pushOpcode = 0x8000 | (pushSymbol.Value & CvmWordCodec.WordMask);
 
     var program = new List<int>();
     program.AddRange(Enumerable.Repeat(nopOpcode, LeadingNopCount));

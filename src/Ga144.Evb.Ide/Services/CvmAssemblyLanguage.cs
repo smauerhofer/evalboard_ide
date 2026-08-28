@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ga144.Cvm.Toolchain;
 using Ga144.Evb.Ide.Compiler;
 
 namespace Ga144.Evb.Ide.Services;
@@ -13,31 +14,48 @@ namespace Ga144.Evb.Ide.Services;
 /// are node 607's own interpreter labels and won't change; the mnemonics here are what a person
 /// reads and writes, and the two are free to diverge (as pushlit already has from 'plit).
 ///
+/// The mnemonic/word-length/operand-arity SHAPE of each instruction now lives in the standalone
+/// Ga144.Cvm.Toolchain project's <see cref="CvmInstructionSet"/> (shared with the freestanding
+/// gaasm/galib/galink command-line tools, so both sides of the toolchain agree on what the
+/// instruction set even is); this file's own job is pairing each of those shapes with node 607's F18
+/// symbol, which only makes sense against a live IDE compile and has no business in that shared,
+/// IDE-independent project.
+///
 /// Both directions -- <see cref="BuildDecodeTable"/> for disassembly and <see cref="BuildEncodeTable"/>/
 /// <see cref="Assemble"/> for assembly -- are built from the single <see cref="Instructions"/> table,
-/// so they can never drift apart: adding a fifth opcode there is the only change either direction
-/// needs. "For now we have 4 opcodes" is expected to grow.
+/// so they can never drift apart: adding a fifth opcode to <see cref="CvmInstructionSet"/> plus one
+/// line here (the F18 symbol it resolves to) is the only change either direction needs.
 /// </summary>
 internal static class CvmAssemblyLanguage
 {
-  public const string NopMnemonic = "nop";
-  public const string PushLitMnemonic = "pushlit";
-  public const string PushMnemonic = "push";
-  public const string PopMnemonic = "pop";
+  public const string NopMnemonic = CvmInstructionSet.NopMnemonic;
+  public const string PushLitMnemonic = CvmInstructionSet.PushLitMnemonic;
+  public const string PushMnemonic = CvmInstructionSet.PushMnemonic;
+  public const string PopMnemonic = CvmInstructionSet.PopMnemonic;
+
+  // Node 607's F18 symbol for each shared-toolchain mnemonic. Every mnemonic in
+  // CvmInstructionSet.Instructions must have an entry here, or BuildDecodeTable/BuildEncodeTable
+  // simply won't find it in a live compile -- this is the one place that link, kept as a small,
+  // easy-to-audit map rather than folded back into the shared table (which has no notion of "F18
+  // symbol" at all, on purpose: gaasm never needs one).
+  private static readonly IReadOnlyDictionary<string, string> F18SymbolByMnemonic = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+  {
+    [NopMnemonic] = CvmMemoryProtocol.NopSymbolName,
+    [PushLitMnemonic] = CvmMemoryProtocol.PlitSymbolName,
+    [PushMnemonic] = CvmMemoryProtocol.PushSymbolName,
+    [PopMnemonic] = CvmMemoryProtocol.PopSymbolName,
+  };
 
   /// <summary>
   /// Every known CVM asm mnemonic, the node 607 F18 symbol it resolves to, and how many words
   /// (its own opcode word included) it occupies once assembled. <c>pushlit</c> is the only
-  /// instruction with a trailing operand word today -- extend this list, in this order, as more
-  /// opcodes are defined; nothing else in this file needs to change.
+  /// instruction with a trailing operand word today -- extend <see cref="CvmInstructionSet"/> plus
+  /// <see cref="F18SymbolByMnemonic"/> as more opcodes are defined; nothing else in this file needs
+  /// to change.
   /// </summary>
   public static readonly IReadOnlyList<(string Mnemonic, string SymbolName, int WordLength, bool HasOperand)> Instructions =
-  [
-    (NopMnemonic, CvmMemoryProtocol.NopSymbolName, 1, false),
-    (PushLitMnemonic, CvmMemoryProtocol.PlitSymbolName, 2, true),
-    (PushMnemonic, CvmMemoryProtocol.PushSymbolName, 1, false),
-    (PopMnemonic, CvmMemoryProtocol.PopSymbolName, 1, false),
-  ];
+      [.. CvmInstructionSet.Instructions.Select(shape =>
+          (shape.Mnemonic, F18SymbolByMnemonic[shape.Mnemonic], shape.WordLength, shape.HasOperand))];
 
   /// <summary>One parsed line of CVM assembly: a mnemonic plus its operand, when required (pushlit only, today).</summary>
   public sealed record CvmAsmInstruction(string Mnemonic, int? Operand);
@@ -62,7 +80,9 @@ internal static class CvmAssemblyLanguage
     {
       if (compile.Symbols.TryGetValue(symbolName, out F18ExportedSymbol? symbol))
       {
-        int opcode = 0x8000 | (symbol.Value & F18InstructionSet.WordMask);
+        // A CVM opcode is a 16-bit CVM word (CvmWordCodec.WordMask), not the wider 18-bit F18 wire
+        // word the symbol's own address happens to be stored as.
+        int opcode = 0x8000 | (symbol.Value & CvmWordCodec.WordMask);
         table[opcode] = (mnemonic, wordLength);
       }
     }
@@ -88,7 +108,9 @@ internal static class CvmAssemblyLanguage
     {
       if (compile.Symbols.TryGetValue(symbolName, out F18ExportedSymbol? symbol))
       {
-        int opcode = 0x8000 | (symbol.Value & F18InstructionSet.WordMask);
+        // A CVM opcode is a 16-bit CVM word (CvmWordCodec.WordMask), not the wider 18-bit F18 wire
+        // word the symbol's own address happens to be stored as.
+        int opcode = 0x8000 | (symbol.Value & CvmWordCodec.WordMask);
         table[mnemonic] = (opcode, wordLength, hasOperand);
       }
     }
@@ -132,7 +154,7 @@ internal static class CvmAssemblyLanguage
       words.Add(entry.Opcode);
       if (entry.HasOperand)
       {
-        words.Add(instruction.Operand!.Value & F18InstructionSet.WordMask);
+        words.Add(instruction.Operand!.Value & CvmWordCodec.WordMask);
       }
     }
 

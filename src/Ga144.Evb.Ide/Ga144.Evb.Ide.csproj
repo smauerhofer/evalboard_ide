@@ -23,6 +23,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Cvm\" />
-  </ItemGroup>
+		<ProjectReference Include="..\Ga144.Cvm.Toolchain\Ga144.Cvm.Toolchain.csproj" />
+	</ItemGroup>
 </Project>

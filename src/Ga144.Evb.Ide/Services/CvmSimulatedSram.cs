@@ -1,10 +1,10 @@
-using Ga144.Evb.Ide.Compiler;
+using Ga144.Cvm.Toolchain;
 
 namespace Ga144.Evb.Ide.Services;
 
 /// <summary>
-/// Host-side stand-in for the CVM's backing memory: a 1 Mword (2^20), 18-bit-word address space.
-/// Real EVB01/EVB02 hardware for this CVM design would wire an actual SRAM chip behind node 708's
+/// Host-side stand-in for the CVM's backing memory: a 1 Mword (2^20) address space of 16-bit CVM
+/// words. Real EVB01/EVB02 hardware for this CVM design would wire an actual SRAM chip behind node 708's
 /// async serial link (the same general shape AN003's SRAM Control Cluster describes, just talked
 /// to more directly by this newer design); this class is what answers node 607's read/write
 /// requests during testing, with no physical SRAM attached -- see
@@ -26,7 +26,8 @@ public sealed class CvmSimulatedSram
   /// <summary>
   /// Copies <paramref name="program"/> into the simulated SRAM starting at <paramref name="startAddress"/>
   /// (0 by default) -- Stefan's step 1, done once before the CVM is started. Each word is masked to
-  /// 18 bits on the way in, same as everywhere else words cross this project's own host/chip boundary.
+  /// 16 bits on the way in -- a CVM word, unlike the 18-bit F18 wire words that carry it across the
+  /// serial link, is 16 bits wide (see <see cref="CvmWordCodec"/>).
   /// </summary>
   public void LoadProgram(IReadOnlyList<int> program, int startAddress = 0)
   {
@@ -39,13 +40,13 @@ public sealed class CvmSimulatedSram
 
     for (int index = 0; index < program.Count; index++)
     {
-      _words[startAddress + index] = program[index] & F18InstructionSet.WordMask;
+      _words[startAddress + index] = program[index] & CvmWordCodec.WordMask;
     }
   }
 
   public int Read(int address) => _words[CheckAddress(address)];
 
-  public void Write(int address, int value) => _words[CheckAddress(address)] = value & F18InstructionSet.WordMask;
+  public void Write(int address, int value) => _words[CheckAddress(address)] = value & CvmWordCodec.WordMask;
 
   /// <summary>
   /// Copies out <paramref name="count"/> consecutive words starting at <paramref name="startAddress"/>
