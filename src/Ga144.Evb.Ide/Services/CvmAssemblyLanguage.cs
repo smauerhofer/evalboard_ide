@@ -33,11 +33,14 @@ namespace Ga144.Evb.Ide.Services;
 /// that, none of them need a live compile to recognize: <see cref="CvmDebugSession.DisassemblePage0"/>
 /// checks for them directly via <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> BEFORE ever
 /// consulting this file's own symbol-driven decode table, so they already show up correctly in the
-/// memory inspector. What's still separate, later work is the OTHER direction -- assembling hand-typed
-/// CVM asm source that uses <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c> via this file's own
-/// <see cref="Assemble"/>/<see cref="ParseSource"/> -- and extending this file to the other 6 primitive
-/// nodes for the tagged mnemonics; until then this file's own <see cref="Instructions"/> simply omits
-/// all four, since they would have nothing to pair them with.
+/// memory inspector. <see cref="Assemble"/> mirrors that same dual dispatch on the OTHER direction --
+/// hand-typed CVM asm source that uses <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c> is encoded
+/// directly from <see cref="CvmInstructionSet"/> and the operand alone, bypassing this file's own
+/// <see cref="Instructions"/>/<see cref="F18SymbolByMnemonic"/> pairing entirely (see
+/// <see cref="Assemble"/>'s own remarks) -- so <see cref="Instructions"/> itself still omits all four,
+/// since they would have nothing to pair them with, without that meaning they can't be assembled.
+/// Extending this file to the other 6 primitive nodes for the TAGGED mnemonics remains separate,
+/// later work.
 ///
 /// Both directions -- <see cref="BuildDecodeTable"/> for disassembly and <see cref="BuildEncodeTable"/>/
 /// <see cref="Assemble"/> for assembly -- are built from the single <see cref="Instructions"/> table,
@@ -145,13 +148,21 @@ internal static class CvmAssemblyLanguage
   }
 
   /// <summary>
-  /// Assembles a sequence of CVM asm instructions into opcode/operand words, resolving each
-  /// mnemonic against THIS run's own node 607 compile via <see cref="BuildEncodeTable"/>. Returns a
-  /// null word list with a 1-based-line error message (never throws) when a mnemonic isn't
-  /// recognized (or node 607's current source doesn't define its symbol), an operand is missing
-  /// where one is required, or one is supplied where none is allowed -- ready to eventually replace
-  /// <see cref="CvmMemoryProtocol.TryBuildTestProgram"/>'s hardcoded instruction sequence with a
-  /// program someone actually wrote.
+  /// Assembles a sequence of CVM asm instructions into opcode/operand words. Two families of
+  /// mnemonic are resolved completely differently, mirroring <see cref="CvmDebugSession.DisassemblePage0"/>'s
+  /// own dual dispatch: <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>
+  /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>/<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>)
+  /// are self-describing -- encoded directly from <see cref="CvmInstructionSet"/> and the operand
+  /// alone, no live compile involved -- while every other mnemonic is resolved against THIS run's own
+  /// node 607 compile via <see cref="BuildEncodeTable"/>. Returns a null word list with a
+  /// 1-based-line error message (never throws) when a mnemonic isn't recognized (or, for a tagged
+  /// one, node 607's current source doesn't define its symbol), an operand is missing where one is
+  /// required or out of range, or one is supplied where none is allowed. This is what
+  /// <see cref="CvmDebugSession.AssembleAndLoadProgram"/> uses to turn the CVM Debugger's own
+  /// Assembly Code editor into a program loaded straight into the simulated SRAM -- there are no
+  /// labels or sections here (unlike the freestanding <c>gaasm</c>/<see cref="CvmAssembler"/>): every
+  /// operand must already be a literal, since this assembles one flat, immediately-loaded program,
+  /// never a relocatable object file bound for a linker.
   /// </summary>
   public static (List<int>? Words, string? Error) Assemble(
       IReadOnlyList<CvmAsmInstruction> instructions,
@@ -162,6 +173,19 @@ internal static class CvmAssemblyLanguage
     for (int line = 0; line < instructions.Count; line++)
     {
       CvmAsmInstruction instruction = instructions[line];
+      CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
+      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue })
+      {
+        (int? word, string? selfDescribingError) = EncodeSelfDescribingWord(selfDescribingShape, instruction.Operand, line + 1);
+        if (word is null)
+        {
+          return (null, selfDescribingError);
+        }
+
+        words.Add(word.Value);
+        continue;
+      }
+
       if (!encodeTable.TryGetValue(instruction.Mnemonic, out (int Opcode, int WordLength, bool HasOperand) entry))
       {
         return (null, $"line {line + 1}: \"{instruction.Mnemonic}\" is not a known CVM asm mnemonic, or node {CvmMemoryProtocol.NopSourceNodeCoordinate:000}'s current compile doesn't define its symbol.");
@@ -185,6 +209,43 @@ internal static class CvmAssemblyLanguage
     }
 
     return (words, null);
+  }
+
+  /// <summary>
+  /// Encodes one <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c> word directly from
+  /// <paramref name="shape"/> and its literal operand -- the same arithmetic
+  /// <see cref="CvmAssembler.EmitEmbeddedSignedValue"/> uses for <c>br</c>/<c>ifbr</c>/<c>slit</c>
+  /// (mask-derived min/max, tag OR'd with the value's low bits) and <see cref="CvmAssembler"/>'s own
+  /// <c>EmbeddedAddress</c> case uses for <c>call</c>, kept as a small duplicate here rather than
+  /// shared: that assembler resolves a label/import operand through relocations against a
+  /// <see cref="CvmObjectFile"/>, which has no place in this simpler, label-free, immediately-loaded
+  /// assembler.
+  /// </summary>
+  private static (int? Word, string? Error) EncodeSelfDescribingWord(CvmInstructionSet.CvmInstructionShape shape, int? operand, int lineNumber)
+  {
+    if (operand is not int value)
+    {
+      return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" requires a literal operand, e.g. \"{shape.Mnemonic} 1\".");
+    }
+
+    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress)
+    {
+      if ((uint)value > (uint)CvmInstructionSet.CallAddressMask)
+      {
+        return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s 15-bit call target (0x0000-0x7FFF -- bit 15 is reserved).");
+      }
+
+      return (value, null);
+    }
+
+    int maxValue = shape.ValueBitMask >> 1;
+    int minValue = -(maxValue + 1);
+    if (value < minValue || value > maxValue)
+    {
+      return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s signed value ({minValue}..{maxValue}).");
+    }
+
+    return (shape.Tag | (value & shape.ValueBitMask), null);
   }
 
   /// <summary>
@@ -234,8 +295,17 @@ internal static class CvmAssemblyLanguage
     return cut < 0 ? line : line[..cut];
   }
 
+  // Handles a leading '-' before EITHER a "0x"-prefixed hex magnitude or a plain decimal one -- the
+  // decimal case alone would already parse via NumberStyles.Integer's own AllowLeadingSign, but hex
+  // needs this to support a negative literal at all (needed for br/ifbr/slit operands, e.g. "-0x400").
   private static bool TryParseOperand(string text, out int value)
   {
+    if (text.StartsWith('-') && TryParseOperand(text[1..], out int magnitude))
+    {
+      value = -magnitude;
+      return true;
+    }
+
     if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
     {
       return int.TryParse(text.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);

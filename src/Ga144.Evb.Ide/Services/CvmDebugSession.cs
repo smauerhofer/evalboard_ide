@@ -43,7 +43,10 @@ public sealed record CvmDebugTransaction(
 /// deliberately its own variant, not the one the automatic "Install &amp; run CVM test" uses; see
 /// that method's remarks) into a fresh <see cref="CvmSimulatedSram"/>, and wakes node 708's
 /// <c>'start</c> -- but hands back this session, with the serial port left open, instead of
-/// servicing the resulting traffic to completion.
+/// servicing the resulting traffic to completion. That initial program is only a starting point, not
+/// permanent: <see cref="AssembleAndLoadProgram"/> lets the CVM Debugger's own Assembly Code editor
+/// overwrite it with hand-written source at any time, so trying out a new opcode no longer requires
+/// editing <see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/> and rebuilding the IDE.
 ///
 /// <b>How stepping and breakpoints actually pause real hardware.</b> There is no debug/halt line on
 /// this design -- the CVM's only synchronization point with the host is the memory interface itself
@@ -66,7 +69,7 @@ public sealed class CvmDebugSession : IDisposable
 {
   private readonly NativeWindowsSerialPort _port;
   private readonly CvmSimulatedSram _sram;
-  private readonly IReadOnlyList<int> _program;
+  private IReadOnlyList<int> _program;
   private readonly IReadOnlyDictionary<int, F18CompileResult> _compiledRam;
   private readonly HashSet<int> _breakpoints = [];
   private readonly List<string> _transactionLog = [];
@@ -97,19 +100,57 @@ public sealed class CvmDebugSession : IDisposable
   public CvmInstallReport Install { get; }
 
   /// <summary>
-  /// The debugger's own fixed test program, loaded into page 0 of the simulated SRAM at session
-  /// start: the shared 5 'nop/'plit/literal/'pop/'push/8 trailing 'nop sequence, except word address
-  /// <see cref="CvmMemoryProtocol.DebuggerCallTestAddress"/> is a <c>call</c> to
+  /// The program currently loaded into page 0 of the simulated SRAM. Initially the debugger's own
+  /// fixed test program (the shared 5 'nop/'plit/literal/'pop/'push/8 trailing 'nop sequence, except
+  /// word address <see cref="CvmMemoryProtocol.DebuggerCallTestAddress"/> is a <c>call</c> to
   /// <see cref="CvmMemoryProtocol.DebuggerCallTestTarget"/> instead of a plain 'nop, word address
   /// <see cref="CvmMemoryProtocol.DebuggerCallTestTarget"/> itself is a real 'ret -- confirmed working
   /// against real hardware -- completing the call/return round trip, and word address
   /// <see cref="CvmMemoryProtocol.DebuggerBranchTestAddress"/> (exactly where that round trip resumes)
   /// is a raw <c>br <see cref="CvmMemoryProtocol.DebuggerBranchTestOffset"/></c> opcode word instead
-  /// of its own plain 'nop -- node 607 doesn't have F18-side interpreter logic for it yet, so this is
-  /// only the toolchain/wire-level side of that next test. See
-  /// <see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/>'s own remarks.
+  /// of its own plain 'nop; see <see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/>'s own
+  /// remarks) -- but replaceable at any time via <see cref="AssembleAndLoadProgram"/>, which is what
+  /// the CVM Debugger's own Assembly Code editor does.
   /// </summary>
   public IReadOnlyList<int> Program => _program;
+
+  /// <summary>
+  /// Assembles <paramref name="sourceText"/> (<see cref="CvmAssemblyLanguage.ParseSource"/> then
+  /// <see cref="CvmAssemblyLanguage.Assemble"/>, resolved against THIS run's own node 607 compile)
+  /// and, on success, overwrites the simulated SRAM's page 0 with the result starting at address 0,
+  /// zero-filling any leftover tail from a previous, longer <see cref="Program"/> so no stale opcode
+  /// lingers past the new program's end, then replaces <see cref="Program"/> with it. This is a live
+  /// reprogram, not a reset: the simulated SRAM is what a connected real CVM chip is actually reading
+  /// its next instruction fetch from (see <see cref="CvmSimulatedSram"/>'s own remarks), so the chip's
+  /// own P register, breakpoints, and transaction log are all left exactly as they were -- only the
+  /// content the chip's NEXT fetch will see has changed. Returns an error message (never throws) on a
+  /// parse/assemble failure, in which case neither the simulated SRAM nor <see cref="Program"/> is
+  /// touched at all.
+  /// </summary>
+  public (bool Success, string? Error) AssembleAndLoadProgram(string sourceText)
+  {
+    (List<CvmAssemblyLanguage.CvmAsmInstruction>? instructions, string? parseError) = CvmAssemblyLanguage.ParseSource(sourceText);
+    if (instructions is null)
+    {
+      return (false, parseError);
+    }
+
+    (List<int>? words, string? assembleError) = CvmAssemblyLanguage.Assemble(instructions, _compiledRam);
+    if (words is null)
+    {
+      return (false, assembleError);
+    }
+
+    int previousLength = _program.Count;
+    _sram.LoadProgram(words);
+    if (words.Count < previousLength)
+    {
+      _sram.LoadProgram(new int[previousLength - words.Count], words.Count);
+    }
+
+    _program = words;
+    return (true, null);
+  }
 
   public int TransactionCount { get; private set; }
 
@@ -211,7 +252,7 @@ public sealed class CvmDebugSession : IDisposable
         if (operandCount == 1 && address + 1 < endAddressExclusive)
         {
           int operandValue = _sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1));
-          notes[address] = $"{instruction.Mnemonic} 0x{operandValue:X5}";
+          notes[address] = $"{instruction.Mnemonic} 0x{operandValue:X4}";
         }
         else
         {
@@ -306,7 +347,7 @@ public sealed class CvmDebugSession : IDisposable
         LastFetchAddress = pending.FlatAddress;
       }
 
-      string releasedLine = $"[READ ] {CvmMemoryProtocol.FormatPageAddress(pending.Page, pending.AddressInPage)} -> 0x{replyValue:X5}  " +
+      string releasedLine = $"[READ ] {CvmMemoryProtocol.FormatPageAddress(pending.Page, pending.AddressInPage)} -> {replyValue:X4}  " +
           $"(raw [{CvmMemoryProtocol.FormatWords([pending.PageWord, pending.AddressInPage])}])  (breakpoint reply released)";
       Log(releasedLine);
 
@@ -337,7 +378,7 @@ public sealed class CvmDebugSession : IDisposable
       // request; the physical chip stalls there on its own very soon after, almost always at its
       // next instruction fetch.
       bool hitBreakpoint = honorBreakpoints && IsBreakpoint(address);
-      string writeLine = $"[WRITE] {CvmMemoryProtocol.FormatPageAddress(page, addressInPage)} <- 0x{value:X5}  " +
+      string writeLine = $"[WRITE] {CvmMemoryProtocol.FormatPageAddress(page, addressInPage)} <- {value:X4}  " +
           $"(raw [{CvmMemoryProtocol.FormatWords([pageWord, rawAddressInPage, value])}])" +
           (hitBreakpoint ? "  (breakpoint)" : string.Empty);
       Log(writeLine);
@@ -368,7 +409,7 @@ public sealed class CvmDebugSession : IDisposable
       LastFetchAddress = readAddress;
     }
 
-    string readLine = $"[READ ] {CvmMemoryProtocol.FormatPageAddress(readPage, readAddressInPage)} -> 0x{readReplyValue:X5}  " +
+    string readLine = $"[READ ] {CvmMemoryProtocol.FormatPageAddress(readPage, readAddressInPage)} -> {readReplyValue:X4}  " +
         $"(raw [{CvmMemoryProtocol.FormatWords([pageWord, readAddressInPage])}])";
     Log(readLine);
     return new CvmDebugTransaction(false, readPage, readAddressInPage, readAddress, readReplyValue, [pageWord, readAddressInPage], false, readLine);

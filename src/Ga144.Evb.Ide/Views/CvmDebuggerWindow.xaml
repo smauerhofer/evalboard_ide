@@ -3,12 +3,13 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="CVM Debugger"
         Width="1040"
-        Height="820"
+        Height="1040"
         MinWidth="820"
-        MinHeight="600"
+        MinHeight="760"
         WindowStartupLocation="CenterOwner">
   <Grid Margin="12">
     <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
@@ -69,7 +70,21 @@
       </Grid>
     </GroupBox>
 
-    <GroupBox Grid.Row="3" Header="Simulated SRAM inspector" Margin="0,10,0,0" Padding="8">
+    <GroupBox Grid.Row="3" Header="Assembly Code (edit, then Assemble to load into the simulated SRAM)" Margin="0,10,0,0" Padding="8">
+      <StackPanel>
+        <TextBox Text="{Binding AssemblyCodeText, UpdateSourceTrigger=PropertyChanged}"
+                        AcceptsReturn="True" AcceptsTab="True"
+                        FontFamily="Consolas" FontSize="12"
+                        Height="220"
+                        TextWrapping="NoWrap"
+                        VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Auto" />
+        <Button Content="Assemble" Command="{Binding AssembleCommand}" Padding="12,6" Margin="0,7,0,0" HorizontalAlignment="Left"
+                        ToolTip="Assembles this source against the current node 607 compile and overwrites the simulated SRAM's page 0 with the result, starting at address 0. This is a live reprogram of whatever the connected chip is actually reading from -- the debugger then operates on this code." />
+      </StackPanel>
+    </GroupBox>
+
+    <GroupBox Grid.Row="4" Header="Simulated SRAM inspector" Margin="0,10,0,0" Padding="8">
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
@@ -82,14 +97,14 @@
       </Grid>
     </GroupBox>
 
-    <TextBlock Grid.Row="4" Margin="0,10,0,4" FontWeight="SemiBold" Text="Simulated SRAM (read-only)" />
-    <TextBox Grid.Row="5" Text="{Binding MemoryViewText, Mode=OneWay}"
+    <TextBlock Grid.Row="5" Margin="0,10,0,4" FontWeight="SemiBold" Text="Simulated SRAM (read-only)" />
+    <TextBox Grid.Row="6" Text="{Binding MemoryViewText, Mode=OneWay}"
                   IsReadOnly="True" IsReadOnlyCaretVisible="True"
                   FontFamily="Consolas" FontSize="11"
                   VerticalScrollBarVisibility="Auto"
                   HorizontalScrollBarVisibility="Auto" />
 
-    <Grid Grid.Row="6" Margin="0,10,0,4">
+    <Grid Grid.Row="7" Margin="0,10,0,4">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
@@ -98,7 +113,7 @@
       <Button Grid.Column="1" Content="Copy log" Padding="10,2" Click="OnCopyLogClick"
                       ToolTip="Copies the full transaction log to the clipboard." />
     </Grid>
-    <TextBox x:Name="LogTextBox" Grid.Row="7" Text="{Binding LogText, Mode=OneWay}"
+    <TextBox x:Name="LogTextBox" Grid.Row="8" Text="{Binding LogText, Mode=OneWay}"
                   IsReadOnly="True" IsReadOnlyCaretVisible="True"
                   FontFamily="Consolas" FontSize="11"
                   TextWrapping="Wrap"

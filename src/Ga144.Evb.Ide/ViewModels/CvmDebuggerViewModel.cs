@@ -11,7 +11,10 @@ namespace Ga144.Evb.Ide.ViewModels;
 /// hardware (compile + boot the mesh, load the shared test program, wake node 708's <c>'start</c>,
 /// same as "Install &amp; run CVM test"), then lets Stefan single-step or run to a breakpoint,
 /// inspect the simulated SRAM, and watch the transaction log build up one memory-interface request
-/// at a time instead of the automatic test's all-at-once summary.
+/// at a time instead of the automatic test's all-at-once summary. The Assembly Code editor
+/// (<see cref="AssemblyCodeText"/>/<see cref="AssembleCommand"/>) lets that starting program be
+/// replaced by hand-written CVM asm at any time -- trying a new opcode against the connected chip no
+/// longer needs a code change and a rebuild, just an edit and a click.
 /// </summary>
 public sealed class CvmDebuggerViewModel : ObservableObject
 {
@@ -29,6 +32,47 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   private readonly KrakenLiveController _krakenController;
   private readonly Func<KrakenEndpointInfo?> _resolveEndpoint;
 
+  // Source-form equivalent of CvmMemoryProtocol.TryBuildDebuggerTestProgram's own hardcoded words --
+  // assembling this unedited reproduces exactly the program Start already loads today (call 0x20 at
+  // address 1, br 1 at address 2, 'ret at address 0x20, 'nop padding everywhere else), so clicking
+  // Assemble right after Start is a no-op on the simulated SRAM's contents. Edit it and click
+  // Assemble to try a different program against the connected hardware without a rebuild.
+  private const string DefaultAssemblyCode =
+      "; CVM Debugger test program -- matches what Start loads by default.\n" +
+      "; Edit this, then click Assemble to load your own program into the simulated SRAM.\n" +
+      "nop\n" +
+      "call 0x20   ; address 1\n" +
+      "br 1        ; address 2 -- branches past address 3 once the call above returns here\n" +
+      "nop\n" +
+      "nop\n" +
+      "pushlit 0x1234\n" +
+      "pop\n" +
+      "push\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "nop\n" +
+      "ret         ; address 0x20\n";
+
   private CvmDebugSession? _session;
   private CancellationTokenSource? _continueCts;
   private bool _isBusy;
@@ -40,6 +84,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   private string _programCounterText = "-";
   private string _newBreakpointText = "0:0005";
   private string? _selectedBreakpoint;
+  private string _assemblyCodeText = DefaultAssemblyCode;
 
   public CvmDebuggerViewModel(
       Ga144ChipConfiguration chip,
@@ -62,6 +107,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     RemoveBreakpointCommand = new RelayCommand(RemoveSelectedBreakpoint, () => IsSessionActive && SelectedBreakpoint is not null);
     ClearBreakpointsCommand = new RelayCommand(ClearBreakpoints, () => IsSessionActive && Breakpoints.Count > 0);
     RefreshMemoryCommand = new RelayCommand(RefreshMemoryView, () => IsSessionActive);
+    AssembleCommand = new RelayCommand(Assemble, () => !IsBusy && IsSessionActive);
   }
 
   public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) NotifyCommandStates(); } }
@@ -86,6 +132,14 @@ public sealed class CvmDebuggerViewModel : ObservableObject
 
   public string NewBreakpointText { get => _newBreakpointText; set => SetProperty(ref _newBreakpointText, value ?? string.Empty); }
 
+  /// <summary>
+  /// The CVM Debugger's own Assembly Code editor contents -- prefilled with <see cref="DefaultAssemblyCode"/>,
+  /// which assembles to byte-identical words as the hardcoded test program Start already loads, so
+  /// clicking Assemble unedited right after Start is a no-op. Freely editable; <see cref="AssembleCommand"/>
+  /// is what actually does anything with it.
+  /// </summary>
+  public string AssemblyCodeText { get => _assemblyCodeText; set => SetProperty(ref _assemblyCodeText, value ?? string.Empty); }
+
   // Bound to the breakpoint ListBox's SelectedItem so RemoveBreakpointCommand knows which entry to
   // remove -- kept as a plain RelayCommand (no parameterized command type exists elsewhere in this
   // codebase) rather than introducing a new generic command class for this one use.
@@ -105,6 +159,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   public RelayCommand RemoveBreakpointCommand { get; }
   public RelayCommand ClearBreakpointsCommand { get; }
   public RelayCommand RefreshMemoryCommand { get; }
+  public RelayCommand AssembleCommand { get; }
 
   /// <summary>Tied to the debugger window's Closed event -- stops any in-flight Continue and releases the port.</summary>
   public void Cancel()
@@ -275,6 +330,28 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     RefreshMemoryView();
   }
 
+  /// <summary>
+  /// Assembles <see cref="AssemblyCodeText"/> (<see cref="CvmDebugSession.AssembleAndLoadProgram"/>)
+  /// and, on success, overwrites the simulated SRAM's page 0 with the result -- a live reprogram of
+  /// whatever the connected chip is actually reading from, not a reset (see that method's own
+  /// remarks), so breakpoints, the transaction log, and the chip's own run state are all left alone.
+  /// </summary>
+  private void Assemble()
+  {
+    if (_session is null)
+    {
+      return;
+    }
+
+    (bool success, string? error) = _session.AssembleAndLoadProgram(AssemblyCodeText);
+    StatusText = success
+        ? $"Assembled {_session.Program.Count} word(s) and loaded them into the simulated SRAM starting at address 0."
+        : $"Assemble failed: {error}";
+
+    RefreshMemoryView();
+    RefreshProgramCounter();
+  }
+
   private void RefreshMemoryView()
   {
     if (_session is null)
@@ -308,7 +385,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
         : new Dictionary<int, string>();
 
     var builder = new StringBuilder();
-    builder.Append("Address   Value      Notes").Append('\n');
+    builder.Append("Address   Value   Notes").Append('\n');
     for (int index = 0; index < words.Count; index++)
     {
       int flatAddress = baseAddress + index;
@@ -328,8 +405,10 @@ public sealed class CvmDebuggerViewModel : ObservableObject
         notes.Add(note);
       }
 
+      // The SRAM is 16-bit (CvmWordCodec.WordMask = 0xFFFF), so 4 hex digits always suffice; the
+      // leading "0x" is dropped since every value in this column is already known to be hex.
       builder.Append(DescribeFlatAddress(flatAddress).PadRight(10))
-          .Append($"0x{words[index]:X5}".PadRight(11))
+          .Append($"{words[index]:X4}".PadRight(8))
           .Append(string.Join(' ', notes))
           .Append('\n');
     }
@@ -432,6 +511,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     RemoveBreakpointCommand.NotifyCanExecuteChanged();
     ClearBreakpointsCommand.NotifyCanExecuteChanged();
     RefreshMemoryCommand.NotifyCanExecuteChanged();
+    AssembleCommand.NotifyCanExecuteChanged();
     OnPropertyChanged(nameof(IsContinuing));
     OnPropertyChanged(nameof(IsSessionActive));
   }
