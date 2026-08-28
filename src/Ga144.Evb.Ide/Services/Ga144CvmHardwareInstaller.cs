@@ -433,6 +433,12 @@ public sealed class Ga144CvmHardwareInstaller
   private static int CombineAddress(int page, int addressInPage) =>
       ((page << 16) | (addressInPage & 0xFFFF)) & (CvmSimulatedSram.WordCapacity - 1);
 
+  // Compact "p:aaaa" rendering of a page/address-in-page pair for the transaction log -- page is
+  // the 4-bit page number (a single hex digit, 0-F) and aaaa is the 16-bit address-in-page (always
+  // 4 hex digits), matching how the two words actually split up inside CombineAddress above.
+  private static string FormatPageAddress(int page, int addressInPage) =>
+      $"{page:X}:{addressInPage:X4}";
+
   // Hard stop on how many read/write transactions this step will service, so a real hardware
   // condition that makes the CVM chatter indefinitely cannot hang this test forever. Comfortably
   // above the transactions the test program below is expected to produce (one page-0 read per
@@ -502,7 +508,7 @@ public sealed class Ga144CvmHardwareInstaller
           int addressInPage = (~rawAddressInPage) & F18InstructionSet.WordMask;
           int address = CombineAddress(page, addressInPage);
           sram.Write(address, value);
-          transactionLog.Add($"[WRITE] page 0x{page:X5} address-in-page 0x{addressInPage:X5} (flat 0x{address:X6}) <- 0x{value:X5}  " +
+          transactionLog.Add($"[WRITE] {FormatPageAddress(page, addressInPage)} <- 0x{value:X5}  " +
               $"(raw [{FormatWords([pageWord, rawAddressInPage, value])}])");
         }
         else
@@ -532,8 +538,9 @@ public sealed class Ga144CvmHardwareInstaller
           {
             bool matchesExpectedAddress = address == expectedNextReadAddress;
             allReadsMatchedExpectedAddress &= matchesExpectedAddress;
-            transactionLog.Add($"[READ ] page 0x{page:X5} address-in-page 0x{addressInPage:X5} (flat 0x{address:X6}) -> 0x{replyValue:X5}" +
-                (matchesExpectedAddress ? string.Empty : $"  (expected flat address 0x{expectedNextReadAddress:X6})"));
+            transactionLog.Add($"[READ ] {FormatPageAddress(page, addressInPage)} -> 0x{replyValue:X5}" +
+                (matchesExpectedAddress ? string.Empty : $"  (expected flat address 0x{expectedNextReadAddress:X6})") +
+                $"  (raw [{FormatWords([pageWord, addressInPage])}])");
             expectedNextReadAddress = address + 1;
 
             // Every deliberately loaded word has now been read back at least once -- stop here
@@ -545,8 +552,8 @@ public sealed class Ga144CvmHardwareInstaller
           }
           else
           {
-            transactionLog.Add($"[READ ] page 0x{page:X5} address-in-page 0x{addressInPage:X5} (flat 0x{address:X6}) -> 0x{replyValue:X5}  " +
-                "(non-zero page -- recorded for review only, not judged against program order)");
+            transactionLog.Add($"[READ ] {FormatPageAddress(page, addressInPage)} -> 0x{replyValue:X5}" +
+                $"  (raw [{FormatWords([pageWord, addressInPage])}])");
           }
         }
       }

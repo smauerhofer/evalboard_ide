@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-28T09:15:52.3755400
-      utcDateTime: 2026-08-28T09:15:52.3755400Z
-      localDateTime: 2026-08-28T11:15:52.3755400+02:00
+      dateTime: 2026-08-28T12:21:55.8334794
+      utcDateTime: 2026-08-28T12:21:55.8334794Z
+      localDateTime: 2026-08-28T14:21:55.8334794+02:00
       date: 2026-08-28T00:00:00.0000000
       day: 28
       dayOfWeek: Friday
       dayOfYear: 240
-      hour: 9
-      millisecond: 375
-      microsecond: 540
-      nanosecond: 0
-      minute: 15
+      hour: 12
+      millisecond: 833
+      microsecond: 479
+      nanosecond: 400
+      minute: 21
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 52
-      ticks: 639235053523755400
-      utcTicks: 639235053523755400
-      timeOfDay: 09:15:52.3755400
+      second: 55
+      ticks: 639235165158334794
+      utcTicks: 639235165158334794
+      timeOfDay: 12:21:55.8334794
       year: 2026
   portB: 
   portC:
@@ -10287,6 +10287,8 @@ projects:
     - coordinate: 507
       enabled: true
       sourceCode: >
+        ( node 507 second CVM node, opcode 0xc??? 0xd??? 0xe??? 0xf??? )
+
         # 607 import
 
         # 0 org
@@ -10297,9 +10299,9 @@ projects:
 
         # up /b
 
-        : s/r@ A[ @p ]] lit !b a dup !b ;
+        : s/r@ .loc A[ @p ]] lit !b a dup !b ;
 
-        : s/r! A[ !p ]] lit !b @b ;
+        : s/r! .loc A[ !p ]] lit !b @b a! ;
 
         : s/2put ( ww) leap
 
@@ -10323,17 +10325,19 @@ projects:
 
         : main A[ !p !p ]] lit !b @b >r @b r> ..
           2* -if
-            2* -if // 0xfxxx node 508
+            2* -if // 0xf??? node 508
               --l- a leave ;
-            then
-              2* -if
-               -d-- a leave ;
-              then r--- a leave ;
-            then
-            2* -if
-              // short literal
-              2* 2/ 2/ 2/ 2/ 2/ 2/ leave ;
-            then over >r 2* # unary -until binary ;
+            then // 0xe???
+            2* -if // 0xe8??
+              -d-- a leave ;
+            then // 0xe0??
+            r--- a leave ;
+          then
+          2* -if
+            // short literal
+            2* 2/ 2/ 2/ 2/ 2/ 2/ leave ;
+          then
+            over >r 2* -if drop unary ; then drop binary ;
         : 'usl for 2* unext ;
 
         : 'ssr >r 2* 2* 2/ 2/ r> ;
@@ -10440,8 +10444,9 @@ projects:
       - 0x307C2
       - 0x31716
       - 0x208DA
-      - 0x1B415
-      - 0x11414
+      - 0x1B42D
+      - 0x3B715
+      - 0x3B714
       - 0x2E9B2
       - 0x37155
       - 0x2E4DA
@@ -10453,7 +10458,6 @@ projects:
       - 0x39555
       - 0x32FCA
       - 0x3E655
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -10990,9 +10994,9 @@ projects:
 
         [ 0xffff 1 ] /stack
 
-        : /r@ ( s-sw) over dup -d-- ;
+        : /r@ ( s-sw) dup dup xor dup ---u ;
 
-        : /pop ( p-pt) dup >r 1 . + r>
+        : /pop ( s-sw) dup >r 1 . + r>
 
         : /1@ 1
 
@@ -11000,9 +11004,9 @@ projects:
 
         : /next ( s-sx) a dup 1 . + a! dup dup xor /@ ;
 
-        : 'plit ( s-s) /next
+        : 'plit .loc ( s-s) /next // push literal
 
-        : /push ( sw-s) >r -1 . + r> over
+        : /push .loc ( sw-s) >r -1 . + r> over
 
         : /1! 1
 
@@ -11010,11 +11014,11 @@ projects:
 
         : 'lit ( s-s) /next
 
-        : /r! ( sw-s) 3 dup -d-- ;
+        : /r! ( sw-s) 3 dup ---u ;
 
         : 'pop .loc ( s-s) /pop /r! ;
 
-        : 'push ( s-s) /r@ /push ;
+        : 'push .loc ( s-s) /r@ /push ;
 
         : exec ( sxy-s)
           2* -if -d-- ; then
@@ -11038,9 +11042,21 @@ projects:
         : /call ( sxy-s) drop >r a /push r> a!
 
         : 'nop ( s-s) /next dup 2* 2* # /call -until exec 'nop ;
+
+        (
+
+        'plit push literal to stack
+
+        'lit store literal to register r
+
+        'pop pop a value from stack and writes it to register r.
+
+        'push push the register r onto the stack. does not change register r.
+
+        )
       ramWords:
-      - 0x20DB2
-      - 0x11515
+      - 0x24DE3
+      - 0x11545
       - 0x24812
       - 0x00001
       - 0x3CCB2
@@ -11062,7 +11078,7 @@ projects:
       - 0x13408
       - 0x04DB2
       - 0x00003
-      - 0x11515
+      - 0x11545
       - 0x13402
       - 0x11415
       - 0x13400
