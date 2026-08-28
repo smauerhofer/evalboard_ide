@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-28T06:49:31.6811857
-      utcDateTime: 2026-08-28T06:49:31.6811857Z
-      localDateTime: 2026-08-28T08:49:31.6811857+02:00
+      dateTime: 2026-08-28T07:48:07.2390214
+      utcDateTime: 2026-08-28T07:48:07.2390214Z
+      localDateTime: 2026-08-28T09:48:07.2390214+02:00
       date: 2026-08-28T00:00:00.0000000
       day: 28
       dayOfWeek: Friday
       dayOfYear: 240
-      hour: 6
-      millisecond: 681
-      microsecond: 185
-      nanosecond: 700
-      minute: 49
+      hour: 7
+      millisecond: 239
+      microsecond: 21
+      nanosecond: 400
+      minute: 48
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 31
-      ticks: 639234965716811857
-      utcTicks: 639234965716811857
-      timeOfDay: 06:49:31.6811857
+      second: 7
+      ticks: 639235000872390214
+      utcTicks: 639235000872390214
+      timeOfDay: 07:48:07.2390214
       year: 2026
   portB: 
   portC:
@@ -11017,14 +11017,14 @@ projects:
         : 'push ( s-s) /r@ /push ;
 
         : exec ( sxy-s)
-        	2* -if -d-- ; then
-        	2* -if
-        		2* -if --l- ; then r--- ;
-        	then 2* -if
-        		2* -if /r@
-        			if drop drop drop ; then drop
-        		then >r drop r> 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! ;
-        	then drop >r ;
+          2* -if -d-- ; then
+          2* -if
+            2* -if --l- ; then r--- ;
+          then 2* -if
+            2* -if /r@
+              if drop drop drop ; then drop
+            then >r drop r> 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! ;
+          then drop >r ;
         : 'ret ( s-s) /pop a! ;
 
         : 'xs ( s-s') >r /r@ r> /r! ;
@@ -11537,11 +11537,11 @@ projects:
 
         : 'right right a! r--- ;
 
-        : 'wr ( d-d) @ oword @ oword @ oword r-l- ;
+        : 'wr ( d-d) @ >r @ >r @ oword r> oword r> oword r-l- ;
 
-        : 'rd ( d-d) @ oword @ oword : recv 18ibits drop ! r-l- ;
+        : 'rd ( d-d) @ >r @ oword r> oword : recv 18ibits drop ! r-l- ;
 
-        : 'cx ( d-d) @ oword @ oword @ oword @ oword recv ;
+        : 'cx ( d-d) @ >r @ >r @ >r @ oword r> oword r> oword r> oword recv ;
 
 
         (
@@ -11592,25 +11592,25 @@ projects:
       - 0x04AB2
       - 0x001D5
       - 0x115D5
-      - 0x03602
-      - 0x03602
-      - 0x03602
+      - 0x0280A
+      - 0x2FEB2
+      - 0x13402
+      - 0x27602
+      - 0x27602
       - 0x115F5
-      - 0x03602
-      - 0x03602
+      - 0x0280A
+      - 0x13402
+      - 0x27602
       - 0x134CB
       - 0x3BAB2
       - 0x115F5
+      - 0x0280A
+      - 0x2FEBA
       - 0x03602
-      - 0x03602
-      - 0x03602
-      - 0x03602
-      - 0x11422
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x27602
+      - 0x27602
+      - 0x27602
+      - 0x11425
       - 0x15555
       - 0x15555
       - 0x15555

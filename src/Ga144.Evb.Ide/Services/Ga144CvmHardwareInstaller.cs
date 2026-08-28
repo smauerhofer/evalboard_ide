@@ -310,10 +310,23 @@ public sealed class Ga144CvmHardwareInstaller
   // ---- post-install runtime test -------------------------------------------------------------
   // Structured as an ordered list of independent steps so more can be appended later (per
   // Stefan's own stated intent: "from there we can go on adding more instructions to the test")
-  // without reworking anything above. Step 2 only runs if step 1 actually confirmed the CVM is
-  // sitting at its first fetch (address 0:0) -- otherwise a reply word would just be talking into
-  // a channel that isn't in the state this step assumes, and its own timeout would just be a
-  // confusing echo of step 1's failure rather than new information.
+  // without reworking anything above. The nop-echo steps only run at all if step 1 actually
+  // confirmed the CVM is sitting at its first fetch (address 0:0) -- otherwise a reply word would
+  // just be talking into a channel that isn't in the state these steps assume, and their own
+  // timeout would just be a confusing echo of step 1's failure rather than new information.
+  //
+  // The two-word request's layout WAS briefly in doubt: the very first nop-echo run this session
+  // (against the then-current node 708 source) got back [0x00001, 0x00000] where [address, offset]
+  // = [0x00000, 0x00001] was expected, so these steps were made deliberately assertion-free while
+  // several consecutive echoes were read raw to find the real order. Stefan then fixed node 708's
+  // own obyt/oword transmit sequencing, and re-running the same echoes came back exactly as
+  // originally expected -- [0x00000, 0x00001], [0x00000, 0x00002], [0x00000, 0x00003], ... -- i.e.
+  // the earlier reversed reading was a symptom of that node 708 bug, not a wrong protocol
+  // assumption. [address, offset] is confirmed, so each echo below now asserts its own expected
+  // pair (address 0, offset == the echo's own attempt number) instead of just recording raw words.
+  // The loop still does not stop on a single mismatch -- only on an echo failing to get its full
+  // two-word reply back at all (a real hardware/timeout problem) -- since a later echo's own
+  // result remains useful data even if an earlier one didn't match.
   private static List<CvmTestStepResult> RunTests(
       NativeWindowsSerialPort port,
       CancellationToken cancellationToken,
@@ -324,9 +337,39 @@ public sealed class Ga144CvmHardwareInstaller
     CvmTestStepResult step1 = RunWakeAndFirstFetchStep(port, cancellationToken);
     results.Add(step1);
 
-    if (step1.Passed == true)
+    if (step1.Passed != true)
     {
-      results.Add(RunNopReplyStep(port, cancellationToken, compiledRam));
+      return results;
+    }
+
+    if (!compiledRam.TryGetValue(NopSourceNodeCoordinate, out F18CompileResult? nopSourceCompile) ||
+        !nopSourceCompile.Symbols.TryGetValue(NopSymbolName, out F18ExportedSymbol? nopSymbol))
+    {
+      string missing = $"Node {NopSourceNodeCoordinate:000}'s just-compiled program has no exported symbol \"{NopSymbolName}\" -- cannot derive its opcode. " +
+          $"Check that node {NopSourceNodeCoordinate:000}'s source still defines this word (and under this exact name) before re-running the test.";
+      results.Add(new CvmTestStepResult(
+          $"Reply with node {NopSourceNodeCoordinate:000}'s 'nop opcode, then read whatever the CVM requests next",
+          Attempted: false,
+          Passed: null,
+          SentWords: [],
+          ReceivedWords: [],
+          Detail: missing));
+      return results;
+    }
+
+    // Resolved once, live, from this run's own compile -- not per echo -- since 'nop's address
+    // cannot change mid-run and there is no reason to repeat the same dictionary lookup five times.
+    int nopOpcode = 0x8000 | (nopSymbol.Value & F18InstructionSet.WordMask);
+
+    for (int attempt = 1; attempt <= NopEchoStepCount; attempt++)
+    {
+      CvmTestStepResult echo = RunNopEchoStep(port, cancellationToken, nopOpcode, attempt);
+      results.Add(echo);
+
+      if (echo.ReceivedWords.Count < FetchRequestWordCount)
+      {
+        break; // the CVM stopped answering -- further replies would just time out too.
+      }
     }
 
     return results;
@@ -403,17 +446,17 @@ public sealed class Ga144CvmHardwareInstaller
   }
 
   // Step 1 just confirmed the CVM's fetch loop is parked at address 0:0 waiting for an
-  // instruction. Reply with the opcode for node 607's own 'nop -- a true no-op that this main CVM
-  // node now defines directly (Stefan: "opcode 0x8???", entry 'nop; ": 'nop ( s-s) /next dup 2*
-  // 2* # /call -until exec 'nop ;") -- and expect the fetch loop to advance exactly one slot,
-  // i.e. its next request should read address 0, offset 1.
+  // instruction. From here, each echo below replies with the opcode for node 607's own 'nop --
+  // a true no-op that this main CVM node now defines directly (Stefan: "opcode 0x8???", entry
+  // 'nop; ": 'nop ( s-s) /next dup 2* 2* # /call -until exec 'nop ;") -- and reads back whatever
+  // two-word request the CVM's fetch loop sends next.
   //
   // The opcode is NEVER hardcoded and NEVER read from a frozen reference copy: 'nop's word
   // address comes from node 607's own compiled symbol table (compiledRam[607].Symbols), the
   // exact same compile of the project's CURRENT sources that InstallAndRun already produced and
   // actually loaded onto the chip a moment ago -- 607 is always compiled first in the load order,
   // with no imports, so its own symbols never depend on any other node's compile. 'nop moved from
-  // node 508 to node 607 once already this session as Stefan's sources evolved, so this step must
+  // node 508 to node 607 once already this session as Stefan's sources evolved, so this must
   // always re-derive both the source node and the address live rather than trust anything written
   // down earlier. Per Stefan, node 607's own opcode convention is opcode = 0x8000 | wordAddress
   // (matching Node607Program.cs's own verified doc comments, e.g. 'plit at word 0x00E -> opcode
@@ -421,23 +464,21 @@ public sealed class Ga144CvmHardwareInstaller
   private const int NopSourceNodeCoordinate = 607;
   private const string NopSymbolName = "'nop";
 
-  private static CvmTestStepResult RunNopReplyStep(
+  // How many times to reply 'nop and read the CVM's next request, back to back. Each echo N
+  // should land on address 0, offset N -- see the big comment on RunTests for how that expectation
+  // was confirmed (node 708's obyt/oword fix), after this project briefly ran these steps with no
+  // fixed expectation while the real word order was still in doubt.
+  private const int NopEchoStepCount = 5;
+  private const int FetchRequestWordCount = 2;
+
+  private static CvmTestStepResult RunNopEchoStep(
       NativeWindowsSerialPort port,
       CancellationToken cancellationToken,
-      IReadOnlyDictionary<int, F18CompileResult> compiledRam)
+      int nopOpcode,
+      int attemptNumber)
   {
-    const string description = "Reply with node 607's 'nop opcode, then read the CVM's next instruction fetch (expect address 0, offset 1)";
-    int[] expectedReplyWords = [0x00000, 0x00001];
-
-    if (!compiledRam.TryGetValue(NopSourceNodeCoordinate, out F18CompileResult? nopSourceCompile) ||
-        !nopSourceCompile.Symbols.TryGetValue(NopSymbolName, out F18ExportedSymbol? nopSymbol))
-    {
-      string missing = $"Node {NopSourceNodeCoordinate:000}'s just-compiled program has no exported symbol \"{NopSymbolName}\" -- cannot derive its opcode. " +
-          $"Check that node {NopSourceNodeCoordinate:000}'s source still defines this word (and under this exact name) before re-running the test.";
-      return new CvmTestStepResult(description, Attempted: false, Passed: null, SentWords: [], ReceivedWords: [], Detail: missing);
-    }
-
-    int nopOpcode = 0x8000 | (nopSymbol.Value & F18InstructionSet.WordMask);
+    string description = $"Echo {attemptNumber} of {NopEchoStepCount}: reply with node {NopSourceNodeCoordinate:000}'s 'nop opcode, then read the CVM's next instruction fetch (expect address 0, offset {attemptNumber})";
+    int[] expectedReplyWords = [0x00000, attemptNumber];
 
     var sentWords = new List<int>();
     var receivedWords = new List<int>();
@@ -452,7 +493,7 @@ public sealed class Ga144CvmHardwareInstaller
       WaitForTransmitDrain(port, replyBytes.Length);
       Thread.Sleep(InterWordSettleMilliseconds);
 
-      for (int index = 0; index < expectedReplyWords.Length; index++)
+      for (int index = 0; index < FetchRequestWordCount; index++)
       {
         receivedWords.Add(ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken));
       }
@@ -471,10 +512,10 @@ public sealed class Ga144CvmHardwareInstaller
         : receivedWords.SequenceEqual(expectedReplyWords);
 
     string transcript = $"Sent [{FormatWords(sentWords)}]. Received [{FormatWords(receivedWords)}] "
-        + $"({receivedWords.Count} of {expectedReplyWords.Length} expected word(s)).";
+        + $"({receivedWords.Count} of {FetchRequestWordCount} expected word(s)).";
     string detail = failureNote is null
         ? transcript + (passed == true
-            ? " Matches expectation -- the CVM's fetch loop advanced to address 0, offset 1."
+            ? $" Matches expectation -- the CVM's fetch loop advanced to address 0, offset {attemptNumber}."
             : $" Expected [{FormatWords(expectedReplyWords)}].")
         : transcript + " " + failureNote;
 
