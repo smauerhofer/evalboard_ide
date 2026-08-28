@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-27T21:04:10.0156545
-      utcDateTime: 2026-08-27T21:04:10.0156545Z
-      localDateTime: 2026-08-27T23:04:10.0156545+02:00
-      date: 2026-08-27T00:00:00.0000000
-      day: 27
-      dayOfWeek: Thursday
-      dayOfYear: 239
-      hour: 21
-      millisecond: 15
-      microsecond: 654
-      nanosecond: 500
-      minute: 4
+      dateTime: 2026-08-28T06:49:31.6811857
+      utcDateTime: 2026-08-28T06:49:31.6811857Z
+      localDateTime: 2026-08-28T08:49:31.6811857+02:00
+      date: 2026-08-28T00:00:00.0000000
+      day: 28
+      dayOfWeek: Friday
+      dayOfYear: 240
+      hour: 6
+      millisecond: 681
+      microsecond: 185
+      nanosecond: 700
+      minute: 49
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 10
-      ticks: 639234614500156545
-      utcTicks: 639234614500156545
-      timeOfDay: 21:04:10.0156545
+      second: 31
+      ticks: 639234965716811857
+      utcTicks: 639234965716811857
+      timeOfDay: 06:49:31.6811857
       year: 2026
   portB: 
   portC:
@@ -10322,12 +10322,18 @@ projects:
         : ctrl A[ ; ]] lit !b
 
         : main A[ !p !p ]] lit !b @b >r @b r> ..
-        	2* -if 2* -if --l- a leave ;
-        	then 2* -if -d-- a leave ;
-        	then r--- a leave ;
-        	then 2* -if // short literal
-        	2* 2/ 2/ 2/ 2/ 2/ 2/ leave ;
-        	then over >r 2* # unary -until binary ;
+          2* -if
+            2* -if // 0xfxxx node 508
+              --l- a leave ;
+            then
+              2* -if
+               -d-- a leave ;
+              then r--- a leave ;
+            then
+            2* -if
+              // short literal
+              2* 2/ 2/ 2/ 2/ 2/ 2/ leave ;
+            then over >r 2* # unary -until binary ;
         : 'usl for 2* unext ;
 
         : 'ssr >r 2* 2* 2/ 2/ r> ;
@@ -10487,39 +10493,71 @@ projects:
 
         : u@- ( w-w) inv A[ s/pop ]] lit !b A[ !p ]] lit !b @b . +
 
-        : 'inc 1 . + ; : 'dec -1 . + ;
+        : 'inc 1 . + ;
 
-        : 'eq u@- : 'eq0 if : 'false dup xor ; : 'true then 1 ;
+        : 'dec -1 . + ;
 
-        : 'ne u@- : 'ne0 if 'true ; then dup xor ;
+        : 'eq u@- : 'eq0 if
 
-        : 'ugt u@- : gt0 # 'false until
+        : 'false dup xor ;
+
+        : 'true then 1 ;
+
+        : 'ne u@-
+
+        : 'ne0 if 'true ; then dup xor ;
+
+        : 'ugt u@-
+
+        : gt0 # 'false until
 
         : ge0 # 'true -until dup xor ;
 
-        : 'gt u@- : 'gt0 2* 2* gt0 ;
+        : 'gt u@-
 
-        : 'ge u@- : 'ge0 2* 2* ge0 ;
+        : 'gt0 2* 2* gt0 ;
 
-        : 'ule u@- : le0 # 'true until
+        : 'ge u@-
+
+        : 'ge0 2* 2* ge0 ;
+
+        : 'ule u@-
+
+        : le0 # 'true until
 
         : lt0 # 'false -until 'true ;
 
-        : 'le u@- : 'le0 2* 2* le0 ;
+        : 'le u@-
 
-        : 'lt u@- : 'lt0 2* 2* lt0 ;
+        : 'le0 2* 2* le0 ;
 
-        : 'ult u@- lt0 ; : 'uge u@- ge0 ;
+        : 'lt u@-
 
-        : '2* 2* ; : 'u2/ 2/ ;
+        : 'lt0 2* 2* lt0 ;
+
+        : 'ult u@- lt0 ;
+
+        : 'uge u@- ge0 ;
+
+        : '2* 2* ;
+
+        : 'u2/ 2/ ;
 
         : '2/ 2* 2* 2/ 2/ 2/ ;
 
-        : 'abs 2* 2* 2/ 2/ -if : 'negate inv 'inc ; : 'nop then ;
+        : 'abs 2* 2* 2/ 2/ -if
 
-        : 'invert inv ; : 'xt a over a! ;
+        : 'negate inv 'inc ;
 
-        : 'ldt a ; : 'stt dup a! ;
+        : 'nop then ;
+
+        : 'invert inv ;
+
+        : 'xt a over a! ;
+
+        : 'ldt a ;
+
+        : 'stt dup a! ;
 
         : 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;
 
@@ -10940,11 +10978,11 @@ projects:
     - coordinate: 607
       enabled: true
       sourceCode: >
-        ( node 607 main CVM node )
+        ( node 607 main CVM node, opcode 0x8??? )
 
         # 0 org
 
-        entry main
+        entry 'nop
 
         # 0 /a
 
@@ -10999,7 +11037,7 @@ projects:
 
         : /call ( sxy-s) drop >r a /push r> a!
 
-        : main ( s-s) /next dup 2* 2* # /call -until exec main ;
+        : 'nop ( s-s) /next dup 2* 2* # /call -until exec 'nop ;
       ramWords:
       - 0x20DB2
       - 0x11515

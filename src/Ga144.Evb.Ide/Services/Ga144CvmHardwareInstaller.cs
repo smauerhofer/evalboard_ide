@@ -114,6 +114,14 @@ public sealed class Ga144CvmHardwareInstaller
     // the chip.
     IReadOnlyList<CvmBootLoadStep> loadOrder = CvmBootStreamBuilder.BuildLoadOrder();
     var descriptors = new Dictionary<int, CvmBootDescriptor>();
+
+    // Every node's own compiled RAM result (symbol table included) is kept here too, alongside
+    // the boot descriptors above -- not just used to derive a memory image. The runtime test
+    // below (e.g. deriving 'nop's opcode from node 508) reads addresses out of THIS live compile
+    // of the project's actual current sources, never a frozen/reference copy, so a source edit
+    // (label renamed, address shifted by a rebuild of the underlying ga144-rom.yaml, etc.) is
+    // picked up automatically the next time this method runs.
+    var compiledRam = new Dictionary<int, F18CompileResult>();
     foreach (CvmBootLoadStep step in loadOrder)
     {
       Ga144NodeConfiguration node = chip.GetNode(step.NodeCoordinate);
@@ -142,6 +150,7 @@ public sealed class Ga144CvmHardwareInstaller
       }
 
       descriptors[step.NodeCoordinate] = descriptor;
+      compiledRam[step.NodeCoordinate] = compiled.Ram;
     }
 
     // Parent-of map, derived from the load order itself (not hardcoded), so a future change to
@@ -247,7 +256,7 @@ public sealed class Ga144CvmHardwareInstaller
       port.PurgeInput();
 
       var install = new CvmInstallReport(true, null, steps);
-      List<CvmTestStepResult> testSteps = RunTests(port, cancellationToken);
+      List<CvmTestStepResult> testSteps = RunTests(port, cancellationToken, compiledRam);
       return new CvmInstallAndTestReport(install, testSteps);
     }
     finally
@@ -301,24 +310,43 @@ public sealed class Ga144CvmHardwareInstaller
   // ---- post-install runtime test -------------------------------------------------------------
   // Structured as an ordered list of independent steps so more can be appended later (per
   // Stefan's own stated intent: "from there we can go on adding more instructions to the test")
-  // without reworking anything above. Only one step exists so far.
-  private static List<CvmTestStepResult> RunTests(NativeWindowsSerialPort port, CancellationToken cancellationToken)
+  // without reworking anything above. Step 2 only runs if step 1 actually confirmed the CVM is
+  // sitting at its first fetch (address 0:0) -- otherwise a reply word would just be talking into
+  // a channel that isn't in the state this step assumes, and its own timeout would just be a
+  // confusing echo of step 1's failure rather than new information.
+  private static List<CvmTestStepResult> RunTests(
+      NativeWindowsSerialPort port,
+      CancellationToken cancellationToken,
+      IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
     var results = new List<CvmTestStepResult>();
 
-    // Step 1: node 708's own 'start (its compiled entry, just jumped into above) begins with
-    // "io b! 18ibits drop drop !bitdelay r-l-" -- 18ibits both RECEIVES this first word and
-    // CALIBRATES 'bitdelay' from its own bit timing (see 'start's remarks in Node708Program).
-    // That calibration -- not the word's payload value -- is what obit/oword/obyt's own transmit
-    // delay loop uses for every reply this node ever sends afterward. An all-zero word (0x00000)
-    // has no bit transitions of its own to calibrate against; 0x15555 (alternating bits) is the
-    // one word this project's own hand-confirmed-on-real-hardware note (see
-    // Ga144Node708EchoProbe.SpeedTestWord's remarks: "0x15555 -> 55 55 01 on real hardware,
-    // confirmed separately by hand") is actually known to calibrate correctly, so it is used here
-    // too rather than an untested all-zero wake. Per Stefan: once 'start has woken, the next
-    // traffic on the wire should be the CVM's own first memory request -- node 607's very first
-    // instruction fetch, address 0 -- relayed back up through 707 and out via 708, arriving as
-    // two words that should both read 0.
+    CvmTestStepResult step1 = RunWakeAndFirstFetchStep(port, cancellationToken);
+    results.Add(step1);
+
+    if (step1.Passed == true)
+    {
+      results.Add(RunNopReplyStep(port, cancellationToken, compiledRam));
+    }
+
+    return results;
+  }
+
+  // Step 1: node 708's own 'start (its compiled entry, just jumped into above) begins with
+  // "io b! 18ibits drop drop !bitdelay r-l-" -- 18ibits both RECEIVES this first word and
+  // CALIBRATES 'bitdelay' from its own bit timing (see 'start's remarks in Node708Program).
+  // That calibration -- not the word's payload value -- is what obit/oword/obyt's own transmit
+  // delay loop uses for every reply this node ever sends afterward. An all-zero word (0x00000)
+  // has no bit transitions of its own to calibrate against; 0x15555 (alternating bits) is the
+  // one word this project's own hand-confirmed-on-real-hardware note (see
+  // Ga144Node708EchoProbe.SpeedTestWord's remarks: "0x15555 -> 55 55 01 on real hardware,
+  // confirmed separately by hand") is actually known to calibrate correctly, so it is used here
+  // too rather than an untested all-zero wake. Per Stefan: once 'start has woken, the next
+  // traffic on the wire should be the CVM's own first memory request -- node 607's very first
+  // instruction fetch, address 0 -- relayed back up through 707 and out via 708, arriving as
+  // two words that should both read 0.
+  private static CvmTestStepResult RunWakeAndFirstFetchStep(NativeWindowsSerialPort port, CancellationToken cancellationToken)
+  {
     const int wakeValue = 0x15555;
     const string description = "Wake 'start with one word, then read the CVM's first memory request (expect two words, both 0)";
     const int expectedReplyWords = 2;
@@ -365,15 +393,98 @@ public sealed class Ga144CvmHardwareInstaller
             : " Expected both received words to be 0.")
         : transcript + " " + failureNote;
 
-    results.Add(new CvmTestStepResult(
+    return new CvmTestStepResult(
         description,
         Attempted: true,
         Passed: passed,
         SentWords: sentWords,
         ReceivedWords: receivedWords,
-        Detail: detail));
+        Detail: detail);
+  }
 
-    return results;
+  // Step 1 just confirmed the CVM's fetch loop is parked at address 0:0 waiting for an
+  // instruction. Reply with the opcode for node 607's own 'nop -- a true no-op that this main CVM
+  // node now defines directly (Stefan: "opcode 0x8???", entry 'nop; ": 'nop ( s-s) /next dup 2*
+  // 2* # /call -until exec 'nop ;") -- and expect the fetch loop to advance exactly one slot,
+  // i.e. its next request should read address 0, offset 1.
+  //
+  // The opcode is NEVER hardcoded and NEVER read from a frozen reference copy: 'nop's word
+  // address comes from node 607's own compiled symbol table (compiledRam[607].Symbols), the
+  // exact same compile of the project's CURRENT sources that InstallAndRun already produced and
+  // actually loaded onto the chip a moment ago -- 607 is always compiled first in the load order,
+  // with no imports, so its own symbols never depend on any other node's compile. 'nop moved from
+  // node 508 to node 607 once already this session as Stefan's sources evolved, so this step must
+  // always re-derive both the source node and the address live rather than trust anything written
+  // down earlier. Per Stefan, node 607's own opcode convention is opcode = 0x8000 | wordAddress
+  // (matching Node607Program.cs's own verified doc comments, e.g. 'plit at word 0x00E -> opcode
+  // 0x800E).
+  private const int NopSourceNodeCoordinate = 607;
+  private const string NopSymbolName = "'nop";
+
+  private static CvmTestStepResult RunNopReplyStep(
+      NativeWindowsSerialPort port,
+      CancellationToken cancellationToken,
+      IReadOnlyDictionary<int, F18CompileResult> compiledRam)
+  {
+    const string description = "Reply with node 607's 'nop opcode, then read the CVM's next instruction fetch (expect address 0, offset 1)";
+    int[] expectedReplyWords = [0x00000, 0x00001];
+
+    if (!compiledRam.TryGetValue(NopSourceNodeCoordinate, out F18CompileResult? nopSourceCompile) ||
+        !nopSourceCompile.Symbols.TryGetValue(NopSymbolName, out F18ExportedSymbol? nopSymbol))
+    {
+      string missing = $"Node {NopSourceNodeCoordinate:000}'s just-compiled program has no exported symbol \"{NopSymbolName}\" -- cannot derive its opcode. " +
+          $"Check that node {NopSourceNodeCoordinate:000}'s source still defines this word (and under this exact name) before re-running the test.";
+      return new CvmTestStepResult(description, Attempted: false, Passed: null, SentWords: [], ReceivedWords: [], Detail: missing);
+    }
+
+    int nopOpcode = 0x8000 | (nopSymbol.Value & F18InstructionSet.WordMask);
+
+    var sentWords = new List<int>();
+    var receivedWords = new List<int>();
+    string? failureNote = null;
+
+    try
+    {
+      byte[] replyBytes = new byte[3];
+      Ga144Node708Probe.EncodeAsynchronousWord(nopOpcode, replyBytes);
+      port.Write(replyBytes);
+      sentWords.Add(nopOpcode);
+      WaitForTransmitDrain(port, replyBytes.Length);
+      Thread.Sleep(InterWordSettleMilliseconds);
+
+      for (int index = 0; index < expectedReplyWords.Length; index++)
+      {
+        receivedWords.Add(ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken));
+      }
+    }
+    catch (TimeoutException exception)
+    {
+      failureNote = $"Timed out waiting for a reply: {exception.Message}";
+    }
+    catch (IOException exception)
+    {
+      failureNote = $"Serial I/O failed: {exception.Message}";
+    }
+
+    bool? passed = failureNote is not null
+        ? null
+        : receivedWords.SequenceEqual(expectedReplyWords);
+
+    string transcript = $"Sent [{FormatWords(sentWords)}]. Received [{FormatWords(receivedWords)}] "
+        + $"({receivedWords.Count} of {expectedReplyWords.Length} expected word(s)).";
+    string detail = failureNote is null
+        ? transcript + (passed == true
+            ? " Matches expectation -- the CVM's fetch loop advanced to address 0, offset 1."
+            : $" Expected [{FormatWords(expectedReplyWords)}].")
+        : transcript + " " + failureNote;
+
+    return new CvmTestStepResult(
+        description,
+        Attempted: true,
+        Passed: passed,
+        SentWords: sentWords,
+        ReceivedWords: receivedWords,
+        Detail: detail);
   }
 
   private static CvmInstallAndTestReport Failed(string message) =>
