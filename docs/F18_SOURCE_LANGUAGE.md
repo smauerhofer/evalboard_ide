@@ -165,7 +165,7 @@ All of these forms are accepted:
 
 ## Debug directives
 
-`.loc` reports the current compile address as an informational diagnostic and has no effect on the compiled output -- it doesn't emit a word, define a symbol, or force word alignment, so it's safe to drop anywhere, including mid-word inside a definition:
+`.loc` reports the current compile address as an informational diagnostic and has no effect on the compiled output -- it doesn't emit a word, define a symbol, or force word alignment, so it's safe to drop anywhere, including mid-word inside a definition. If a label or word already defined earlier in the same compile shares that address, its name (and whether it's a label or word) is listed alongside the address:
 
 ```forth
 : foo
@@ -173,6 +173,9 @@ All of these forms are accepted:
     .loc        \ reports the current address; compiles nothing
     drop
 ;
+
+label bar
+.loc            \ reports the current address, plus "bar (label)" since it shares bar's address
 ```
 
 ## Current scope

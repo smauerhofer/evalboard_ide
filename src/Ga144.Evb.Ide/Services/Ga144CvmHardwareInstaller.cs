@@ -345,13 +345,27 @@ public sealed class Ga144CvmHardwareInstaller
       return results;
     }
 
+    if (!mainCompile.Symbols.TryGetValue(PopSymbolName, out F18ExportedSymbol? popSymbol))
+    {
+      results.Add(MissingSymbolStep($"\"{PopSymbolName}\""));
+      return results;
+    }
+
+    if (!mainCompile.Symbols.TryGetValue(PushSymbolName, out F18ExportedSymbol? pushSymbol))
+    {
+      results.Add(MissingSymbolStep($"\"{PushSymbolName}\""));
+      return results;
+    }
+
     // Resolved once, live, from this run's own compile -- never hardcoded, never a frozen
-    // reference copy -- since both symbols' addresses can move as Stefan's sources evolve (as
+    // reference copy -- since every symbol's address can move as Stefan's sources evolve (as
     // 'nop's own address already has, more than once, this session).
     int nopOpcode = 0x8000 | (nopSymbol.Value & F18InstructionSet.WordMask);
     int plitOpcode = 0x8000 | (plitSymbol.Value & F18InstructionSet.WordMask);
+    int popOpcode = 0x8000 | (popSymbol.Value & F18InstructionSet.WordMask);
+    int pushOpcode = 0x8000 | (pushSymbol.Value & F18InstructionSet.WordMask);
 
-    results.Add(RunSramBackedProgramStep(port, cancellationToken, nopOpcode, plitOpcode));
+    results.Add(RunSramBackedProgramStep(port, cancellationToken, nopOpcode, plitOpcode, popOpcode, pushOpcode));
     return results;
   }
 
@@ -361,16 +375,18 @@ public sealed class Ga144CvmHardwareInstaller
           Passed: null,
           SentWords: [],
           ReceivedWords: [],
-          Detail: $"Could not build the test program: {what} was not found. Check node {NopSourceNodeCoordinate:000}'s source still defines both " +
-              $"\"{NopSymbolName}\" and \"{PlitSymbolName}\" before re-running the test.");
+          Detail: $"Could not build the test program: {what} was not found. Check node {NopSourceNodeCoordinate:000}'s source still defines " +
+              $"\"{NopSymbolName}\", \"{PlitSymbolName}\", \"{PopSymbolName}\", and \"{PushSymbolName}\" before re-running the test.");
 
   // Node 607's own opcode convention, confirmed by Stefan against this project's real
   // Node607Program.cs remarks (e.g. 'plit at word 0x00E -> opcode 0x800E): opcode = 0x8000 |
-  // wordAddress. Both 'nop and 'plit live in this same node 607 source.
+  // wordAddress. 'nop, 'plit, 'pop, and 'push all live in this same node 607 source.
   private const int NopSourceNodeCoordinate = 607;
   private const string NopSymbolName = "'nop";
   private const string PlitSymbolName = "'plit";
   private const int PlitLiteralValue = 0x1234;
+  private const string PopSymbolName = "'pop";
+  private const string PushSymbolName = "'push";
 
   private const int WakeValue = 0x15555;
 
@@ -378,11 +394,11 @@ public sealed class Ga144CvmHardwareInstaller
   private const int LeadingNopCount = 5;
 
   // Padding appended after the interesting part of the test program (LeadingNopCount 'nop, then
-  // 'plit + its literal) so the interpreter has more of its own, already-understood 'nop opcode to
-  // fetch for a while afterward, rather than running into zero-initialized simulated SRAM the
-  // moment the deliberately loaded words run out -- 0x00000 does not have bit 0x8000 set, so
-  // 'nop's own decode logic would treat it as something other than a plain call and this test has
-  // no hypothesis yet for what that would do.
+  // 'plit + its literal, then 'pop and 'push) so the interpreter has more of its own,
+  // already-understood 'nop opcode to fetch for a while afterward, rather than running into
+  // zero-initialized simulated SRAM the moment the deliberately loaded words run out -- 0x00000
+  // does not have bit 0x8000 set, so 'nop's own decode logic would treat it as something other
+  // than a plain call and this test has no hypothesis yet for what that would do.
   private const int TrailingNopCount = 8;
 
   // A READ command is two words: [page, address-in-page]. This was established across 6+ real
@@ -401,15 +417,17 @@ public sealed class Ga144CvmHardwareInstaller
   // prompted this fix. The host performs the write against the simulated SRAM and sends NO reply
   // at all (unlike a read).
   //
-  // Per Stefan, bit 17 (0x20000) set on the page word marks a WRITE, and that word's actual page
-  // value is then its bitwise complement over all 18 bits -- confirmed against the one real write
-  // sample seen so far: page word 0x3FFFE inverts to 0x00001, address-in-page 0x00000, value
-  // 0x01234 (the literal 'plit had just fetched, most likely being pushed onto an SRAM-backed data
-  // stack in page 1, separate from the program's own page 0 -- not yet confirmed, just the leading
-  // hypothesis). The address-in-page and value words are plain, never inverted, on either command
-  // kind. Page and address-in-page are combined the same way AN003's own SRAM Control Cluster
-  // combines its 4-bit page with a 16-bit in-page address (4 + 16 = 20 bits, exactly this class's
-  // declared 1 Mword/2^20 capacity) -- see CombineAddress below.
+  // Per Stefan, bit 17 (0x20000) set on the page word marks a WRITE, and BOTH address words --
+  // page and address-in-page -- are then bitwise-complemented over all 18 bits to recover their
+  // real values; only the value word stays plain. This matches AN003's own SRAM Control Cluster,
+  // which likewise inverts its whole two-word address for a write and leaves it positive for a
+  // read. Confirmed against two real write samples: page word 0x3FFFE always inverts to page
+  // 0x00001 (a stack area separate from the program's own page 0); address-in-page 0x30001
+  // inverted to 0x0FFFE (== 0xFFFE) exactly matches a stack pointer initialized at 0xFFFF and
+  // decremented once by the first push -- 'plit's own literal (0x01234) as the plain value word
+  // both times. Page and address-in-page are combined the same way AN003 combines its 4-bit page
+  // with a 16-bit in-page address (4 + 16 = 20 bits, exactly this class's declared 1 Mword/2^20
+  // capacity) -- see CombineAddress below.
   private const int SramWriteFlagBit = 0x20000; // bit 17.
 
   private static int CombineAddress(int page, int addressInPage) =>
@@ -417,15 +435,18 @@ public sealed class Ga144CvmHardwareInstaller
 
   // Hard stop on how many read/write transactions this step will service, so a real hardware
   // condition that makes the CVM chatter indefinitely cannot hang this test forever. Comfortably
-  // above the ~16 transactions the test program below is expected to produce (15 reads -- one per
-  // loaded word -- plus the one write already observed).
-  private const int SramTransactionCap = 64;
+  // above the transactions the test program below is expected to produce (one page-0 read per
+  // loaded word, plus whatever mix of page-1 stack reads/writes 'plit/'pop/'push generate --
+  // already observed to include at least one stack write from 'plit alone).
+  private const int SramTransactionCap = 96;
 
   private static CvmTestStepResult RunSramBackedProgramStep(
       NativeWindowsSerialPort port,
       CancellationToken cancellationToken,
       int nopOpcode,
-      int plitOpcode)
+      int plitOpcode,
+      int popOpcode,
+      int pushOpcode)
   {
     // Stefan's step 1: build and load the test program into a simulated SRAM, starting at
     // address 0, before the CVM is started.
@@ -433,12 +454,14 @@ public sealed class Ga144CvmHardwareInstaller
     program.AddRange(Enumerable.Repeat(nopOpcode, LeadingNopCount));
     program.Add(plitOpcode);
     program.Add(PlitLiteralValue);
+    program.Add(popOpcode);
+    program.Add(pushOpcode);
     program.AddRange(Enumerable.Repeat(nopOpcode, TrailingNopCount));
 
     var sram = new CvmSimulatedSram();
     sram.LoadProgram(program);
 
-    string description = $"Load a {program.Count}-word test program ({LeadingNopCount} 'nop, 'plit, literal 0x{PlitLiteralValue:X5}, {TrailingNopCount} trailing 'nop) " +
+    string description = $"Load a {program.Count}-word test program ({LeadingNopCount} 'nop, 'plit, literal 0x{PlitLiteralValue:X5}, 'pop, 'push, {TrailingNopCount} trailing 'nop) " +
         $"into a simulated {CvmSimulatedSram.WordCapacity:N0}-word SRAM, wake 'start, then service every read/write command as that SRAM would";
 
     var sentWords = new List<int>();
@@ -468,17 +491,19 @@ public sealed class Ga144CvmHardwareInstaller
 
         if (isWrite)
         {
-          // Three words in, no reply out.
+          // Three words in, no reply out. Both address words -- page and address-in-page -- are
+          // inverted for a write; only the value word is plain.
           int page = (~pageWord) & F18InstructionSet.WordMask;
-          int addressInPage = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
+          int rawAddressInPage = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
           int value = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
-          receivedWords.Add(addressInPage);
+          receivedWords.Add(rawAddressInPage);
           receivedWords.Add(value);
 
+          int addressInPage = (~rawAddressInPage) & F18InstructionSet.WordMask;
           int address = CombineAddress(page, addressInPage);
           sram.Write(address, value);
           transactionLog.Add($"[WRITE] page 0x{page:X5} address-in-page 0x{addressInPage:X5} (flat 0x{address:X6}) <- 0x{value:X5}  " +
-              $"(raw [{FormatWords([pageWord, addressInPage, value])}])");
+              $"(raw [{FormatWords([pageWord, rawAddressInPage, value])}])");
         }
         else
         {
@@ -496,17 +521,32 @@ public sealed class Ga144CvmHardwareInstaller
           WaitForTransmitDrain(port, replyBytes.Length);
           Thread.Sleep(InterWordSettleMilliseconds);
 
-          bool matchesExpectedAddress = address == expectedNextReadAddress;
-          allReadsMatchedExpectedAddress &= matchesExpectedAddress;
-          transactionLog.Add($"[READ ] page 0x{page:X5} address-in-page 0x{addressInPage:X5} (flat 0x{address:X6}) -> 0x{replyValue:X5}" +
-              (matchesExpectedAddress ? string.Empty : $"  (expected flat address 0x{expectedNextReadAddress:X6})"));
-          expectedNextReadAddress = address + 1;
-
-          // Every deliberately loaded word has now been read back at least once -- stop here
-          // rather than run past the trailing padding into undefined, zero-initialized territory.
-          if (address >= program.Count - 1)
+          // Only page 0 (the program itself) is expected to be fetched in strict, sequential
+          // order -- that is node 607's own instruction-fetch loop walking forward one word at a
+          // time. Page 1 (and any other non-zero page) is the stack area 'plit/'pop/'push read
+          // and write against, which has its own addressing (e.g. a decrementing stack pointer)
+          // with no relationship to program order, so a page-1 read is recorded for review only,
+          // exactly like a write already is -- neither judged against expectedNextReadAddress nor
+          // eligible to trigger the "program fully read back" stop condition below.
+          if (page == 0)
           {
-            break;
+            bool matchesExpectedAddress = address == expectedNextReadAddress;
+            allReadsMatchedExpectedAddress &= matchesExpectedAddress;
+            transactionLog.Add($"[READ ] page 0x{page:X5} address-in-page 0x{addressInPage:X5} (flat 0x{address:X6}) -> 0x{replyValue:X5}" +
+                (matchesExpectedAddress ? string.Empty : $"  (expected flat address 0x{expectedNextReadAddress:X6})"));
+            expectedNextReadAddress = address + 1;
+
+            // Every deliberately loaded word has now been read back at least once -- stop here
+            // rather than run past the trailing padding into undefined, zero-initialized territory.
+            if (address >= program.Count - 1)
+            {
+              break;
+            }
+          }
+          else
+          {
+            transactionLog.Add($"[READ ] page 0x{page:X5} address-in-page 0x{addressInPage:X5} (flat 0x{address:X6}) -> 0x{replyValue:X5}  " +
+                "(non-zero page -- recorded for review only, not judged against program order)");
           }
         }
       }

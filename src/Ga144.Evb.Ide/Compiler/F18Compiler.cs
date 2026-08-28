@@ -1172,8 +1172,30 @@ public sealed class F18Compiler
   // silently changing the compiled ROM/RAM layout. Builder.PendingAddress
   // reports the in-progress word's own address instead, safe to read whether
   // or not a partial word is pending.
-  private void ShowLocation(F18Token token) =>
-      AddInfo("F18I010", $"'.loc': current address 0x{Builder.PendingAddress:X3}.", token.Location);
+  private void ShowLocation(F18Token token)
+  {
+    int address = Builder.PendingAddress;
+    string names = DescribeSymbolsAtAddress(address);
+    AddInfo("F18I010", $"'.loc': current address 0x{address:X3}{names}.", token.Location);
+  }
+
+  // Names any already-defined label or word that shares '.loc's current address,
+  // so dropping '.loc' right after a colon definition's own header (or a
+  // 'label) doubles as a quick "what's here" lookup instead of requiring a
+  // separate cross-reference against the symbol listing. Only this node's own
+  // _symbols are searched -- '.loc' reports this compile's own position, so an
+  // imported/external name's address belongs to a different node or memory
+  // space and any match there would be coincidental, not meaningful.
+  private string DescribeSymbolsAtAddress(int address)
+  {
+    List<string> matches = _symbols.Values
+        .Where(symbol => symbol.Value == address)
+        .OrderBy(symbol => symbol.Name, StringComparer.OrdinalIgnoreCase)
+        .Select(symbol => $"{symbol.Name} ({symbol.Kind.ToString().ToLowerInvariant()})")
+        .ToList();
+
+    return matches.Count == 0 ? string.Empty : $" ({string.Join(", ", matches)})";
+  }
 
   private void CompileRawData(F18Token token)
   {
