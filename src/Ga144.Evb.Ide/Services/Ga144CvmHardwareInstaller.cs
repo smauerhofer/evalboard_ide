@@ -117,10 +117,10 @@ public sealed class Ga144CvmHardwareInstaller
 
     // Every node's own compiled RAM result (symbol table included) is kept here too, alongside
     // the boot descriptors above -- not just used to derive a memory image. The runtime test
-    // below (e.g. deriving 'nop's opcode from node 508) reads addresses out of THIS live compile
-    // of the project's actual current sources, never a frozen/reference copy, so a source edit
-    // (label renamed, address shifted by a rebuild of the underlying ga144-rom.yaml, etc.) is
-    // picked up automatically the next time this method runs.
+    // below reads addresses out of THIS live compile of the project's actual current sources,
+    // never a frozen/reference copy, so a source edit (label renamed, address shifted by a rebuild
+    // of the underlying ga144-rom.yaml, etc.) is picked up automatically the next time this method
+    // runs.
     var compiledRam = new Dictionary<int, F18CompileResult>();
     foreach (CvmBootLoadStep step in loadOrder)
     {
@@ -308,25 +308,18 @@ public sealed class Ga144CvmHardwareInstaller
   }
 
   // ---- post-install runtime test -------------------------------------------------------------
-  // Structured as an ordered list of independent steps so more can be appended later (per
-  // Stefan's own stated intent: "from there we can go on adding more instructions to the test")
-  // without reworking anything above. The nop-echo steps only run at all if step 1 actually
-  // confirmed the CVM is sitting at its first fetch (address 0:0) -- otherwise a reply word would
-  // just be talking into a channel that isn't in the state these steps assume, and their own
-  // timeout would just be a confusing echo of step 1's failure rather than new information.
+  // Earlier versions of this test hand-crafted one canned reply per expected request (wake, then
+  // five 'nop echoes, then one 'plit-plus-literal exchange). That stopped scaling the moment a
+  // WRITE command showed up unannounced in the middle of the 'plit exchange -- node 607 doesn't
+  // just fetch its program one word at a time, it also reads and writes the same external memory
+  // for other purposes (a stack push, in that instance), and there was no canned step for that.
   //
-  // The two-word request's layout WAS briefly in doubt: the very first nop-echo run this session
-  // (against the then-current node 708 source) got back [0x00001, 0x00000] where [address, offset]
-  // = [0x00000, 0x00001] was expected, so these steps were made deliberately assertion-free while
-  // several consecutive echoes were read raw to find the real order. Stefan then fixed node 708's
-  // own obyt/oword transmit sequencing, and re-running the same echoes came back exactly as
-  // originally expected -- [0x00000, 0x00001], [0x00000, 0x00002], [0x00000, 0x00003], ... -- i.e.
-  // the earlier reversed reading was a symptom of that node 708 bug, not a wrong protocol
-  // assumption. [address, offset] is confirmed, so each echo below now asserts its own expected
-  // pair (address 0, offset == the echo's own attempt number) instead of just recording raw words.
-  // The loop still does not stop on a single mismatch -- only on an echo failing to get its full
-  // two-word reply back at all (a real hardware/timeout problem) -- since a later echo's own
-  // result remains useful data even if an earlier one didn't match.
+  // Per Stefan, this now behaves like the real memory instead of scripting each individual
+  // request: (1) build a small test program and load it into a simulated 1 Mword SRAM
+  // (CvmSimulatedSram) up front; (2) start the CVM with one wake word; (3) service whatever mix of
+  // reads and writes actually comes back over the wire, exactly as real SRAM behind node 708
+  // would, recording every transaction. See RunSramBackedProgramStep for the decode convention
+  // (bit 17 / inversion) and how each transaction is checked.
   private static List<CvmTestStepResult> RunTests(
       NativeWindowsSerialPort port,
       CancellationToken cancellationToken,
@@ -334,168 +327,188 @@ public sealed class Ga144CvmHardwareInstaller
   {
     var results = new List<CvmTestStepResult>();
 
-    CvmTestStepResult step1 = RunWakeAndFirstFetchStep(port, cancellationToken);
-    results.Add(step1);
-
-    if (step1.Passed != true)
+    if (!compiledRam.TryGetValue(NopSourceNodeCoordinate, out F18CompileResult? mainCompile))
     {
+      results.Add(MissingSymbolStep($"node {NopSourceNodeCoordinate:000}'s compiled program is not available"));
       return results;
     }
 
-    if (!compiledRam.TryGetValue(NopSourceNodeCoordinate, out F18CompileResult? nopSourceCompile) ||
-        !nopSourceCompile.Symbols.TryGetValue(NopSymbolName, out F18ExportedSymbol? nopSymbol))
+    if (!mainCompile.Symbols.TryGetValue(NopSymbolName, out F18ExportedSymbol? nopSymbol))
     {
-      string missing = $"Node {NopSourceNodeCoordinate:000}'s just-compiled program has no exported symbol \"{NopSymbolName}\" -- cannot derive its opcode. " +
-          $"Check that node {NopSourceNodeCoordinate:000}'s source still defines this word (and under this exact name) before re-running the test.";
-      results.Add(new CvmTestStepResult(
-          $"Reply with node {NopSourceNodeCoordinate:000}'s 'nop opcode, then read whatever the CVM requests next",
+      results.Add(MissingSymbolStep($"\"{NopSymbolName}\""));
+      return results;
+    }
+
+    if (!mainCompile.Symbols.TryGetValue(PlitSymbolName, out F18ExportedSymbol? plitSymbol))
+    {
+      results.Add(MissingSymbolStep($"\"{PlitSymbolName}\""));
+      return results;
+    }
+
+    // Resolved once, live, from this run's own compile -- never hardcoded, never a frozen
+    // reference copy -- since both symbols' addresses can move as Stefan's sources evolve (as
+    // 'nop's own address already has, more than once, this session).
+    int nopOpcode = 0x8000 | (nopSymbol.Value & F18InstructionSet.WordMask);
+    int plitOpcode = 0x8000 | (plitSymbol.Value & F18InstructionSet.WordMask);
+
+    results.Add(RunSramBackedProgramStep(port, cancellationToken, nopOpcode, plitOpcode));
+    return results;
+  }
+
+  private static CvmTestStepResult MissingSymbolStep(string what) =>
+      new($"Load a test program built from node {NopSourceNodeCoordinate:000}'s own compiled words",
           Attempted: false,
           Passed: null,
           SentWords: [],
           ReceivedWords: [],
-          Detail: missing));
-      return results;
-    }
+          Detail: $"Could not build the test program: {what} was not found. Check node {NopSourceNodeCoordinate:000}'s source still defines both " +
+              $"\"{NopSymbolName}\" and \"{PlitSymbolName}\" before re-running the test.");
 
-    // Resolved once, live, from this run's own compile -- not per echo -- since 'nop's address
-    // cannot change mid-run and there is no reason to repeat the same dictionary lookup five times.
-    int nopOpcode = 0x8000 | (nopSymbol.Value & F18InstructionSet.WordMask);
-
-    for (int attempt = 1; attempt <= NopEchoStepCount; attempt++)
-    {
-      CvmTestStepResult echo = RunNopEchoStep(port, cancellationToken, nopOpcode, attempt);
-      results.Add(echo);
-
-      if (echo.ReceivedWords.Count < FetchRequestWordCount)
-      {
-        break; // the CVM stopped answering -- further replies would just time out too.
-      }
-    }
-
-    return results;
-  }
-
-  // Step 1: node 708's own 'start (its compiled entry, just jumped into above) begins with
-  // "io b! 18ibits drop drop !bitdelay r-l-" -- 18ibits both RECEIVES this first word and
-  // CALIBRATES 'bitdelay' from its own bit timing (see 'start's remarks in Node708Program).
-  // That calibration -- not the word's payload value -- is what obit/oword/obyt's own transmit
-  // delay loop uses for every reply this node ever sends afterward. An all-zero word (0x00000)
-  // has no bit transitions of its own to calibrate against; 0x15555 (alternating bits) is the
-  // one word this project's own hand-confirmed-on-real-hardware note (see
-  // Ga144Node708EchoProbe.SpeedTestWord's remarks: "0x15555 -> 55 55 01 on real hardware,
-  // confirmed separately by hand") is actually known to calibrate correctly, so it is used here
-  // too rather than an untested all-zero wake. Per Stefan: once 'start has woken, the next
-  // traffic on the wire should be the CVM's own first memory request -- node 607's very first
-  // instruction fetch, address 0 -- relayed back up through 707 and out via 708, arriving as
-  // two words that should both read 0.
-  private static CvmTestStepResult RunWakeAndFirstFetchStep(NativeWindowsSerialPort port, CancellationToken cancellationToken)
-  {
-    const int wakeValue = 0x15555;
-    const string description = "Wake 'start with one word, then read the CVM's first memory request (expect two words, both 0)";
-    const int expectedReplyWords = 2;
-
-    var sentWords = new List<int>();
-    var receivedWords = new List<int>();
-    string? failureNote = null;
-
-    try
-    {
-      byte[] wakeBytes = new byte[3];
-      Ga144Node708Probe.EncodeAsynchronousWord(wakeValue, wakeBytes);
-      port.Write(wakeBytes);
-      sentWords.Add(wakeValue);
-      WaitForTransmitDrain(port, wakeBytes.Length);
-      Thread.Sleep(InterWordSettleMilliseconds);
-
-      // Each ReadWord is its own timeout window. A timeout on word 2 still leaves word 1 (if it
-      // was already decoded) sitting in receivedWords below -- the catch blocks only set
-      // failureNote, they never discard progress the try block already made.
-      for (int index = 0; index < expectedReplyWords; index++)
-      {
-        receivedWords.Add(ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken));
-      }
-    }
-    catch (TimeoutException exception)
-    {
-      failureNote = $"Timed out waiting for a reply: {exception.Message}";
-    }
-    catch (IOException exception)
-    {
-      failureNote = $"Serial I/O failed: {exception.Message}";
-    }
-
-    bool? passed = failureNote is not null
-        ? null
-        : receivedWords.Count == expectedReplyWords && receivedWords.All(word => word == 0);
-
-    string transcript = $"Sent [{FormatWords(sentWords)}]. Received [{FormatWords(receivedWords)}] "
-        + $"({receivedWords.Count} of {expectedReplyWords} expected word(s)).";
-    string detail = failureNote is null
-        ? transcript + (passed == true
-            ? " Matches expectation -- node 607's first instruction fetch (address 0)."
-            : " Expected both received words to be 0.")
-        : transcript + " " + failureNote;
-
-    return new CvmTestStepResult(
-        description,
-        Attempted: true,
-        Passed: passed,
-        SentWords: sentWords,
-        ReceivedWords: receivedWords,
-        Detail: detail);
-  }
-
-  // Step 1 just confirmed the CVM's fetch loop is parked at address 0:0 waiting for an
-  // instruction. From here, each echo below replies with the opcode for node 607's own 'nop --
-  // a true no-op that this main CVM node now defines directly (Stefan: "opcode 0x8???", entry
-  // 'nop; ": 'nop ( s-s) /next dup 2* 2* # /call -until exec 'nop ;") -- and reads back whatever
-  // two-word request the CVM's fetch loop sends next.
-  //
-  // The opcode is NEVER hardcoded and NEVER read from a frozen reference copy: 'nop's word
-  // address comes from node 607's own compiled symbol table (compiledRam[607].Symbols), the
-  // exact same compile of the project's CURRENT sources that InstallAndRun already produced and
-  // actually loaded onto the chip a moment ago -- 607 is always compiled first in the load order,
-  // with no imports, so its own symbols never depend on any other node's compile. 'nop moved from
-  // node 508 to node 607 once already this session as Stefan's sources evolved, so this must
-  // always re-derive both the source node and the address live rather than trust anything written
-  // down earlier. Per Stefan, node 607's own opcode convention is opcode = 0x8000 | wordAddress
-  // (matching Node607Program.cs's own verified doc comments, e.g. 'plit at word 0x00E -> opcode
-  // 0x800E).
+  // Node 607's own opcode convention, confirmed by Stefan against this project's real
+  // Node607Program.cs remarks (e.g. 'plit at word 0x00E -> opcode 0x800E): opcode = 0x8000 |
+  // wordAddress. Both 'nop and 'plit live in this same node 607 source.
   private const int NopSourceNodeCoordinate = 607;
   private const string NopSymbolName = "'nop";
+  private const string PlitSymbolName = "'plit";
+  private const int PlitLiteralValue = 0x1234;
 
-  // How many times to reply 'nop and read the CVM's next request, back to back. Each echo N
-  // should land on address 0, offset N -- see the big comment on RunTests for how that expectation
-  // was confirmed (node 708's obyt/oword fix), after this project briefly ran these steps with no
-  // fixed expectation while the real word order was still in doubt.
-  private const int NopEchoStepCount = 5;
-  private const int FetchRequestWordCount = 2;
+  private const int WakeValue = 0x15555;
 
-  private static CvmTestStepResult RunNopEchoStep(
+  // How many leading 'nop opcodes the test program starts with before 'plit.
+  private const int LeadingNopCount = 5;
+
+  // Padding appended after the interesting part of the test program (LeadingNopCount 'nop, then
+  // 'plit + its literal) so the interpreter has more of its own, already-understood 'nop opcode to
+  // fetch for a while afterward, rather than running into zero-initialized simulated SRAM the
+  // moment the deliberately loaded words run out -- 0x00000 does not have bit 0x8000 set, so
+  // 'nop's own decode logic would treat it as something other than a plain call and this test has
+  // no hypothesis yet for what that would do.
+  private const int TrailingNopCount = 8;
+
+  // A READ command is two words: [page, address-in-page]. This was established across 6+ real
+  // hardware round trips as node 607's own fetch loop advanced through a run of 'nop opcodes (each
+  // one a plain read: page 0, address-in-page = the fetch offset, incrementing by exactly one per
+  // fetch) -- see this project's own nop-echo history for how that [address-word-is-second]
+  // ordering was confirmed (a real bug in node 708's old obyt/oword transmit code briefly made it
+  // look reversed; fixing that bug restored the expected order). The host answers a read with one
+  // reply word: the simulated SRAM's contents at the combined address.
+  //
+  // A WRITE command is THREE words: [page, address-in-page, value] -- per Stefan: "A write must
+  // read 3 words: first is page, then address inside page and then the value. no value is
+  // written [back]." The first real write this test captured (page word 0x3FFFE, i.e. bit 17 set)
+  // was originally misread as only two words, which desynchronized the rest of the exchange and
+  // produced a spurious extra reply the CVM was never waiting for -- see the transcript that
+  // prompted this fix. The host performs the write against the simulated SRAM and sends NO reply
+  // at all (unlike a read).
+  //
+  // Per Stefan, bit 17 (0x20000) set on the page word marks a WRITE, and that word's actual page
+  // value is then its bitwise complement over all 18 bits -- confirmed against the one real write
+  // sample seen so far: page word 0x3FFFE inverts to 0x00001, address-in-page 0x00000, value
+  // 0x01234 (the literal 'plit had just fetched, most likely being pushed onto an SRAM-backed data
+  // stack in page 1, separate from the program's own page 0 -- not yet confirmed, just the leading
+  // hypothesis). The address-in-page and value words are plain, never inverted, on either command
+  // kind. Page and address-in-page are combined the same way AN003's own SRAM Control Cluster
+  // combines its 4-bit page with a 16-bit in-page address (4 + 16 = 20 bits, exactly this class's
+  // declared 1 Mword/2^20 capacity) -- see CombineAddress below.
+  private const int SramWriteFlagBit = 0x20000; // bit 17.
+
+  private static int CombineAddress(int page, int addressInPage) =>
+      ((page << 16) | (addressInPage & 0xFFFF)) & (CvmSimulatedSram.WordCapacity - 1);
+
+  // Hard stop on how many read/write transactions this step will service, so a real hardware
+  // condition that makes the CVM chatter indefinitely cannot hang this test forever. Comfortably
+  // above the ~16 transactions the test program below is expected to produce (15 reads -- one per
+  // loaded word -- plus the one write already observed).
+  private const int SramTransactionCap = 64;
+
+  private static CvmTestStepResult RunSramBackedProgramStep(
       NativeWindowsSerialPort port,
       CancellationToken cancellationToken,
       int nopOpcode,
-      int attemptNumber)
+      int plitOpcode)
   {
-    string description = $"Echo {attemptNumber} of {NopEchoStepCount}: reply with node {NopSourceNodeCoordinate:000}'s 'nop opcode, then read the CVM's next instruction fetch (expect address 0, offset {attemptNumber})";
-    int[] expectedReplyWords = [0x00000, attemptNumber];
+    // Stefan's step 1: build and load the test program into a simulated SRAM, starting at
+    // address 0, before the CVM is started.
+    var program = new List<int>();
+    program.AddRange(Enumerable.Repeat(nopOpcode, LeadingNopCount));
+    program.Add(plitOpcode);
+    program.Add(PlitLiteralValue);
+    program.AddRange(Enumerable.Repeat(nopOpcode, TrailingNopCount));
+
+    var sram = new CvmSimulatedSram();
+    sram.LoadProgram(program);
+
+    string description = $"Load a {program.Count}-word test program ({LeadingNopCount} 'nop, 'plit, literal 0x{PlitLiteralValue:X5}, {TrailingNopCount} trailing 'nop) " +
+        $"into a simulated {CvmSimulatedSram.WordCapacity:N0}-word SRAM, wake 'start, then service every read/write command as that SRAM would";
 
     var sentWords = new List<int>();
     var receivedWords = new List<int>();
+    var transactionLog = new List<string>();
     string? failureNote = null;
+    int expectedNextReadAddress = 0;
+    bool allReadsMatchedExpectedAddress = true;
 
     try
     {
-      byte[] replyBytes = new byte[3];
-      Ga144Node708Probe.EncodeAsynchronousWord(nopOpcode, replyBytes);
-      port.Write(replyBytes);
-      sentWords.Add(nopOpcode);
-      WaitForTransmitDrain(port, replyBytes.Length);
+      // Stefan's step 2: start the CVM by writing a word.
+      byte[] wakeBytes = new byte[3];
+      Ga144Node708Probe.EncodeAsynchronousWord(WakeValue, wakeBytes);
+      port.Write(wakeBytes);
+      sentWords.Add(WakeValue);
+      WaitForTransmitDrain(port, wakeBytes.Length);
       Thread.Sleep(InterWordSettleMilliseconds);
 
-      for (int index = 0; index < FetchRequestWordCount; index++)
+      // Stefan's step 3: act like a SRAM and record all read & write commands.
+      for (int transactionCount = 0; transactionCount < SramTransactionCap; transactionCount++)
       {
-        receivedWords.Add(ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken));
+        int pageWord = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
+        receivedWords.Add(pageWord);
+
+        bool isWrite = (pageWord & SramWriteFlagBit) != 0;
+
+        if (isWrite)
+        {
+          // Three words in, no reply out.
+          int page = (~pageWord) & F18InstructionSet.WordMask;
+          int addressInPage = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
+          int value = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
+          receivedWords.Add(addressInPage);
+          receivedWords.Add(value);
+
+          int address = CombineAddress(page, addressInPage);
+          sram.Write(address, value);
+          transactionLog.Add($"[WRITE] page 0x{page:X5} address-in-page 0x{addressInPage:X5} (flat 0x{address:X6}) <- 0x{value:X5}  " +
+              $"(raw [{FormatWords([pageWord, addressInPage, value])}])");
+        }
+        else
+        {
+          // Two words in, one reply word out.
+          int page = pageWord & F18InstructionSet.WordMask;
+          int addressInPage = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
+          receivedWords.Add(addressInPage);
+
+          int address = CombineAddress(page, addressInPage);
+          int replyValue = sram.Read(address);
+          byte[] replyBytes = new byte[3];
+          Ga144Node708Probe.EncodeAsynchronousWord(replyValue, replyBytes);
+          port.Write(replyBytes);
+          sentWords.Add(replyValue);
+          WaitForTransmitDrain(port, replyBytes.Length);
+          Thread.Sleep(InterWordSettleMilliseconds);
+
+          bool matchesExpectedAddress = address == expectedNextReadAddress;
+          allReadsMatchedExpectedAddress &= matchesExpectedAddress;
+          transactionLog.Add($"[READ ] page 0x{page:X5} address-in-page 0x{addressInPage:X5} (flat 0x{address:X6}) -> 0x{replyValue:X5}" +
+              (matchesExpectedAddress ? string.Empty : $"  (expected flat address 0x{expectedNextReadAddress:X6})"));
+          expectedNextReadAddress = address + 1;
+
+          // Every deliberately loaded word has now been read back at least once -- stop here
+          // rather than run past the trailing padding into undefined, zero-initialized territory.
+          if (address >= program.Count - 1)
+          {
+            break;
+          }
+        }
       }
     }
     catch (TimeoutException exception)
@@ -507,17 +520,29 @@ public sealed class Ga144CvmHardwareInstaller
       failureNote = $"Serial I/O failed: {exception.Message}";
     }
 
-    bool? passed = failureNote is not null
-        ? null
-        : receivedWords.SequenceEqual(expectedReplyWords);
+    bool? passed = failureNote is not null ? null : allReadsMatchedExpectedAddress;
 
-    string transcript = $"Sent [{FormatWords(sentWords)}]. Received [{FormatWords(receivedWords)}] "
-        + $"({receivedWords.Count} of {FetchRequestWordCount} expected word(s)).";
-    string detail = failureNote is null
-        ? transcript + (passed == true
-            ? $" Matches expectation -- the CVM's fetch loop advanced to address 0, offset {attemptNumber}."
-            : $" Expected [{FormatWords(expectedReplyWords)}].")
-        : transcript + " " + failureNote;
+    var detail = new System.Text.StringBuilder();
+    detail.Append($"Sent [{FormatWords(sentWords)}]. Received [{FormatWords(receivedWords)}] ({transactionLog.Count} transaction(s)).");
+    foreach (string transaction in transactionLog)
+    {
+      detail.Append('\n').Append("    ").Append(transaction);
+    }
+
+    detail.Append('\n');
+    if (failureNote is not null)
+    {
+      detail.Append(failureNote);
+    }
+    else if (passed == true)
+    {
+      detail.Append("All read commands landed on the expected address in program order. Any write(s) above are recorded for review only " +
+          "-- there is no fixed expectation yet for their target address or value.");
+    }
+    else
+    {
+      detail.Append("At least one read command's address did not match the expected program order -- see the marked line(s) above.");
+    }
 
     return new CvmTestStepResult(
         description,
@@ -525,7 +550,7 @@ public sealed class Ga144CvmHardwareInstaller
         Passed: passed,
         SentWords: sentWords,
         ReceivedWords: receivedWords,
-        Detail: detail);
+        Detail: detail.ToString());
   }
 
   private static CvmInstallAndTestReport Failed(string message) =>
