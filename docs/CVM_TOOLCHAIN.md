@@ -1,7 +1,8 @@
 # CVM toolchain: assembler, librarian, linker
 
 This is the design for a real toolchain around the CVM assembly language (`nop`, `pushlit <data>`,
-`push`, `pop`, `call <address>`, `ret`, `br <offset>`, `ifbr <offset>`, and whatever gets added later), sized for being fed by a future C compiler backend as
+`push`, `pop`, `call <address>`, `ret`, `br <offset>`, `ifbr <offset>`, `slit <value>`, and whatever
+gets added later), sized for being fed by a future C compiler backend as
 well as by hand-written source. It lives outside the IDE project so it can run as ordinary
 command-line tools, while still sharing its core logic (the instruction set table, the file formats)
 with the IDE through one common library, so the two can never quietly drift apart on what the CVM
@@ -63,31 +64,35 @@ loop:
   nop
   ret                     ; return -- pops the address a call pushed and jumps back to it
   br -3                   ; branch by a literal signed offset, -0x400..0x3FF (11 bits)
-  ifbr 5                  ; conditional branch -- same offset encoding, a different tag
+  ifbr 5                  ; conditional branch -- same offset shape, a different tag and width
+  slit -100               ; load a literal signed value into R, -0x800..0x7FF (12 bits)
 
 .section DATA
 table: .word 1, 2, 3      ; raw data words -- each may also be numeric or a label/import name
 ```
 
-All eight built-in instructions are always available without `.import` -- the assembler never bakes
+All nine built-in instructions are always available without `.import` -- the assembler never bakes
 in a numeric opcode for them (it has no notion of any node's F18 source at all); every instruction
 word is emitted as a placeholder with a relocation against an external symbol named after the
 mnemonic (`nop`/`pushlit`/`push`/`pop`/`ret`), against the callee itself (`call`), or -- for `br`/
-`ifbr` -- with no relocation at all, since their whole word is already fully known once their
+`ifbr`/`slit` -- with no relocation at all, since their whole word is already fully known once their
 literal operand is (see below), for the linker to resolve later. Every non-numeric operand (a
 `pushlit`, `call`, or `.word` operand that isn't a literal) must be either a label defined in the
 same file or a name declared with `.import` -- an operand that's neither is a hard assemble error,
-not a silent external. `br`/`ifbr` are stricter still: their operand must be a literal signed
-offset today -- a label or import name is a hard assemble error ("does not (yet) support a
-label/import operand"). This was originally deferred because what the offset is relative to (the
-branch's own address vs. the next instruction's) was an open question that didn't need answering to
-support the literal case correctly -- it's since been confirmed against real hardware (see "Branch
-target addressing, confirmed" below) to be the next instruction's address, so a label operand is now
-a known, mechanical computation; it just hasn't been wired into the assembler yet.
+not a silent external. `br`/`ifbr`/`slit` are stricter still: their operand must be a literal signed
+value today -- a label or import name is a hard assemble error ("does not (yet) support a
+label/import operand"). For `br`/`ifbr` this was originally deferred because what the offset is
+relative to (the branch's own address vs. the next instruction's) was an open question that didn't
+need answering to support the literal case correctly -- it's since been confirmed against real
+hardware (see "Branch target addressing, confirmed" below) to be the next instruction's address, so
+a label operand is now a known, mechanical computation; it just hasn't been wired into the assembler
+yet. `slit` never had that question to begin with -- its value isn't an address computation at all
+(see "slit: a plain signed literal" below), so a label/import operand there wouldn't mean anything
+regardless of whether the assembler supported one.
 
-**The placeholder word itself is `0x8000 | Id`, not a bare `0` -- except for `call`/`br`/`ifbr`.**
+**The placeholder word itself is `0x8000 | Id`, not a bare `0` -- except for `call`/`br`/`ifbr`/`slit`.**
 Every entry in `CvmInstructionSet.Instructions` carries a small, stable, append-only numeric `Id`
-(`nop`=0, `pushlit`=1, `push`=2, `pop`=3, `call`=4, `ret`=5, `br`=6, `ifbr`=7 today), assigned once and never renumbered or reused, because
+(`nop`=0, `pushlit`=1, `push`=2, `pop`=3, `call`=4, `ret`=5, `br`=6, `ifbr`=7, `slit`=8 today), assigned once and never renumbered or reused, because
 it gets baked into the raw words of every `.gaobj` ever produced. Before the linker resolves the
 `CvmRelocationType.CvmOpcode` relocation sitting on that word, the word already says which
 instruction it's meant to become -- so a tool that dumps an unlinked object file's raw section words
@@ -102,9 +107,9 @@ single-node convention of `0x8000 | address`. A `.word`/`pushlit` operand that r
 instruction-opcode words (`CvmOpcode` relocations) use the `0x8000 | Id` scheme, since only those have
 a tag to decode `Id` back out of.
 
-`call`, `br`, and `ifbr` don't fit that scheme at all, by design: none of them has a tag word to
-place an `Id` into, because each one's single opcode word is instead fully determined by its own
-operand (`CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress`/`EmbeddedSignedOffset`, as opposed
+`call`, `br`, `ifbr`, and `slit` don't fit that scheme at all, by design: none of them has a tag word
+to place an `Id` into, because each one's single opcode word is instead fully determined by its own
+operand (`CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress`/`EmbeddedSignedValue`, as opposed
 to the tagged mnemonics' `None`/`TrailingWord`).
 
 `call`'s single word directly IS the target address. Its placeholder is therefore a plain `0`,
@@ -127,6 +132,23 @@ program ends up, so the assembler computes the final word outright, the moment i
 An offset outside the signed 11-bit range (`BranchOffsetMinValue = -0x400` to
 `BranchOffsetMaxValue = 0x3FF`) is a hard assemble error, not silent truncation, same rationale as
 `call`'s range check.
+
+**`slit`: a plain signed literal, not an address.** `slit`'s word is the same shape as `br`/`ifbr`
+-- a fixed tag OR'd with a signed value in the low bits -- but with a *narrower* tag and a *wider*
+value field: `CvmInstructionSet.SlitTag = 0xD000` occupies only the top 4 bits (bits 15-12), leaving
+12 bits (`SlitValueBitMask = 0xFFF`) for the value, giving `slit` a wider range than `br`/`ifbr`
+(`SlitValueMinValue = -0x800` to `SlitValueMaxValue = 0x7FF`, i.e. -2048..2047) at the cost of only
+8 possible tags in that nibble instead of `br`/`ifbr`'s 32. Semantically `slit` isn't an address
+computation at all -- per Stefan, executing it loads its signed value directly into the F18
+interpreter's own R register, node 607's own runtime behavior and no concern of this toolchain's.
+Because `br`/`ifbr` and `slit` share the identical "tag + signed field, no relocation" shape despite
+their different bit widths, `CvmInstructionShape` carries a `ValueBitMask` field (in addition to
+`Tag`) so one assembler method (`EmitEmbeddedSignedValue`) and one decoder
+(`TryDescribeSelfDecodingWord`) serve all three mnemonics -- and any future one shaped the same way
+-- without a per-mnemonic branch: the value's range and bit width are always derived from
+`ValueBitMask` alone (`maxValue = mask >> 1`, `minValue = -(maxValue + 1)`), so adding a fourth
+"tag + signed value" opcode someday is exactly the one-line `CvmInstructionSet.Instructions` entry
+this doc's earlier "adding a new CVM opcode" remarks promise, nothing more.
 
 **Branch target addressing, confirmed against real hardware.** A `br <offset>` (or `ifbr`) word's
 target address is `(this word's own address + 1) + offset` -- relative to the address of the word

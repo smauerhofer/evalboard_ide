@@ -24,7 +24,8 @@ namespace Ga144.Cvm.Toolchain;
 /// loop:
 ///   ret                     ; return -- pops the address a call pushed and jumps back to it
 ///   br -3                   ; branch by a literal signed offset, -0x400..0x3FF (11 bits)
-///   ifbr 5                  ; conditional branch -- same offset encoding, a different tag
+///   ifbr 5                  ; conditional branch -- same offset shape, a different tag and width
+///   slit -100                ; load a literal signed value into R, -0x800..0x7FF (12 bits)
 ///
 /// .section DATA
 /// table: .word 1, 2, 3      ; raw data words -- each may also be numeric or a label/import name
@@ -40,13 +41,16 @@ namespace Ga144.Cvm.Toolchain;
 /// IS the callee's address (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>), so it
 /// gets a plain <see cref="CvmRelocationType.AbsoluteAddress"/> relocation against its own operand
 /// instead -- the same relocation a <c>.word</c> or <c>pushlit</c> label/import operand would get.
-/// <c>br</c>/<c>ifbr</c> are different again (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset"/>):
-/// their one word is a fixed tag OR'd with a signed 11-bit offset that must be a literal, known
-/// completely at assemble time -- no relocation, no node, and (not yet implemented -- see
-/// <see cref="EmitEmbeddedSignedOffset"/>'s own remarks) no label/import operand either, even though
-/// what the offset is relative to is no longer an open question (confirmed against real hardware:
-/// the address of the word right after the branch's own opcode word, plus the offset -- see
-/// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset"/>'s own remarks).
+/// <c>br</c>/<c>ifbr</c>/<c>slit</c> are different again
+/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>): each one's word is a
+/// fixed tag OR'd with a signed value that must be a literal, known completely at assemble time --
+/// no relocation, no node, and (not yet implemented -- see <see cref="EmitEmbeddedSignedValue"/>'s
+/// own remarks) no label/import operand either. <c>br</c>/<c>ifbr</c> pack an 11-bit offset (what it's
+/// relative to is no longer an open question -- confirmed against real hardware: the address of the
+/// word right after the branch's own opcode word, plus the offset -- see
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>'s own remarks); <c>slit</c>
+/// packs a wider 12-bit value with a narrower tag, and isn't an address computation at all -- per
+/// Stefan, it loads its value directly into the F18 interpreter's own R register.
 ///
 /// This is a two-pass assembler: pass 1 walks every line purely to compute section layout (every
 /// instruction's word length is fixed by its mnemonic alone, so a label's final offset never depends
@@ -210,13 +214,15 @@ public static class CvmAssembler
             break;
           }
 
-          if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset)
+          if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue)
           {
-            // "br"/"ifbr"-style: also no separate tag word -- the instruction's one and only word is
-            // shape.Tag (its own fixed high bits) OR'd with a signed offset packed into the low 11
-            // bits. Fully self-describing from a literal operand alone, so unlike the tagged mnemonics
-            // below this needs no placeholder/relocation/external symbol at all.
-            EmitEmbeddedSignedOffset(codeSection, shape, line.Args[0], line.LineNumber, errors);
+            // "br"/"ifbr"/"slit"-style: also no separate tag word -- the instruction's one and only
+            // word is shape.Tag (its own fixed high bits) OR'd with a signed value packed into
+            // shape.ValueBitMask's low bits (11 bits for br/ifbr, 12 for slit -- EmitEmbeddedSignedValue
+            // reads the width straight off the shape, so it needs no per-mnemonic special-casing here
+            // or there). Fully self-describing from a literal operand alone, so unlike the tagged
+            // mnemonics below this needs no placeholder/relocation/external symbol at all.
+            EmitEmbeddedSignedValue(codeSection, shape, line.Args[0], line.LineNumber, errors);
             break;
           }
 
@@ -337,41 +343,51 @@ public static class CvmAssembler
   }
 
   /// <summary>
-  /// Emits a <c>br</c>/<c>ifbr</c> word: <paramref name="shape"/>.Tag OR'd with a signed literal
-  /// offset packed into <see cref="CvmInstructionSet.BranchOffsetBitMask"/>'s low 11 bits. Unlike
-  /// <see cref="EmitOperandWord"/>, this does NOT (yet) accept a label or import name. What the
-  /// offset would need to be relative to is no longer an open question -- confirmed against real
-  /// hardware to be the address right after the branch's own opcode word (see
-  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset"/>'s own remarks) -- so a
-  /// future label operand here is now a known, mechanical computation
+  /// Emits a <c>br</c>/<c>ifbr</c>/<c>slit</c> word: <paramref name="shape"/>.Tag OR'd with a signed
+  /// literal value packed into <paramref name="shape"/>.ValueBitMask's low bits -- reading the field
+  /// width straight off the shape (11 bits for br/ifbr, 12 for slit) is what lets one method serve
+  /// every <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/> mnemonic without a
+  /// per-mnemonic branch here; adding a fourth one someday needs no change to this method at all, only
+  /// a new <see cref="CvmInstructionSet.Instructions"/> entry with its own tag and mask. Unlike
+  /// <see cref="EmitOperandWord"/>, this does NOT (yet) accept a label or import name -- for br/ifbr
+  /// specifically, what the offset would need to be relative to is no longer an open question
+  /// (confirmed against real hardware to be the address right after the branch's own opcode word --
+  /// see <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>'s own remarks), so a
+  /// future label operand there is a known, mechanical computation
   /// (<c>targetLabelOffset - (thisInstructionOffset + 1)</c>), just not yet written: it needs pass 2
   /// to know a label's final offset (already true for every other operand kind) AND a fixed point
-  /// (this instruction's own offset, which pass 1's cursor already tracks per line but pass 2's
-  /// switch does not currently thread through to here). A non-numeric or out-of-range literal operand
-  /// is a hard error, never a silently truncated or zero-filled word.
+  /// (this instruction's own offset, which pass 1's cursor already tracks per line but pass 2's switch
+  /// does not currently thread through to here). <c>slit</c> isn't an address computation at all, so a
+  /// label/import operand there wouldn't mean anything regardless. A non-numeric or out-of-range
+  /// literal operand is a hard error, never a silently truncated or zero-filled word.
   /// </summary>
-  private static void EmitEmbeddedSignedOffset(
+  private static void EmitEmbeddedSignedValue(
       CvmSection targetSection,
       CvmInstructionSet.CvmInstructionShape shape,
       string operand,
       int lineNumber,
       List<string> errors)
   {
-    if (!TryParseSignedNumericLiteral(operand, out int offset))
+    int valueBitMask = shape.ValueBitMask;
+    int maxValue = valueBitMask >> 1;
+    int minValue = -(maxValue + 1);
+    int bitWidth = System.Numerics.BitOperations.PopCount((uint)valueBitMask);
+
+    if (!TryParseSignedNumericLiteral(operand, out int value))
     {
-      errors.Add($"line {lineNumber}: \"{operand}\" is not a literal signed offset -- \"{shape.Mnemonic}\" does not (yet) support a label/import operand.");
+      errors.Add($"line {lineNumber}: \"{operand}\" is not a literal signed value -- \"{shape.Mnemonic}\" does not (yet) support a label/import operand.");
       targetSection.Words.Add(shape.Tag);
       return;
     }
 
-    if (offset < CvmInstructionSet.BranchOffsetMinValue || offset > CvmInstructionSet.BranchOffsetMaxValue)
+    if (value < minValue || value > maxValue)
     {
-      errors.Add($"line {lineNumber}: {offset} does not fit in \"{shape.Mnemonic}\"'s signed 11-bit offset ({CvmInstructionSet.BranchOffsetMinValue}..{CvmInstructionSet.BranchOffsetMaxValue}).");
+      errors.Add($"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s signed {bitWidth}-bit value ({minValue}..{maxValue}).");
       targetSection.Words.Add(shape.Tag);
       return;
     }
 
-    targetSection.Words.Add(shape.Tag | (offset & CvmInstructionSet.BranchOffsetBitMask));
+    targetSection.Words.Add(shape.Tag | (value & valueBitMask));
   }
 
   /// <summary>Like <see cref="TryParseNumericLiteral"/>, but also accepts a leading '-' for a negative decimal or hex magnitude.</summary>

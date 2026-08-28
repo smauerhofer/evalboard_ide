@@ -8,8 +8,8 @@ namespace Ga144.Evb.Ide.Services;
 /// The CVM's own small assembly language: Stefan's mnemonics (<c>nop</c>, <c>pushlit &lt;data&gt;</c>,
 /// <c>push</c>, <c>pop</c>, <c>ret</c>) layered on top of the wire-level opcode convention
 /// (opcode = 0x8000 | wordAddress) that <see cref="CvmMemoryProtocol"/> already established. (<c>call</c>,
-/// <c>br</c>, and <c>ifbr</c> are the exceptions -- see this class's own remarks on why they aren't part
-/// of this tagged-opcode layer.)
+/// <c>br</c>, <c>ifbr</c>, and <c>slit</c> are the exceptions -- see this class's own remarks on why
+/// they aren't part of this tagged-opcode layer.)
 ///
 /// This is deliberately a SEPARATE naming layer from node 607's own F18 source symbols
 /// ('nop, 'plit, 'pop, 'push, still defined in <see cref="CvmMemoryProtocol"/>) -- those tick-names
@@ -26,18 +26,18 @@ namespace Ga144.Evb.Ide.Services;
 /// Shapes whose <see cref="CvmInstructionSet.CvmInstructionShape.Encoding"/> is anything other than
 /// <see cref="CvmInstructionSet.CvmOperandEncoding.None"/>/<see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>
 /// are deliberately left out of that pairing: <c>call</c>
-/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>) and <c>br</c>/<c>ifbr</c>
-/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset"/>) have no F18 symbol at all
-/// to resolve, since none of their opcode words are a tagged dispatch to a named primitive routine --
-/// each one's whole word is fully determined by its own operand alone. Because of that, none of them
-/// need a live compile to recognize: <see cref="CvmDebugSession.DisassemblePage0"/> checks for them
-/// directly via <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> BEFORE ever consulting this
-/// file's own symbol-driven decode table, so they already show up correctly in the memory inspector.
-/// What's still separate, later work is the OTHER direction -- assembling hand-typed CVM asm source
-/// that uses <c>call</c>/<c>br</c>/<c>ifbr</c> via this file's own <see cref="Assemble"/>/
-/// <see cref="ParseSource"/> -- and extending this file to the other 6 primitive nodes for the tagged
-/// mnemonics; until then this file's own <see cref="Instructions"/> simply omits all three, since they
-/// would have nothing to pair them with.
+/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>) and <c>br</c>/<c>ifbr</c>/
+/// <c>slit</c> (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>) have no F18
+/// symbol at all to resolve, since none of their opcode words are a tagged dispatch to a named
+/// primitive routine -- each one's whole word is fully determined by its own operand alone. Because of
+/// that, none of them need a live compile to recognize: <see cref="CvmDebugSession.DisassemblePage0"/>
+/// checks for them directly via <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> BEFORE ever
+/// consulting this file's own symbol-driven decode table, so they already show up correctly in the
+/// memory inspector. What's still separate, later work is the OTHER direction -- assembling hand-typed
+/// CVM asm source that uses <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c> via this file's own
+/// <see cref="Assemble"/>/<see cref="ParseSource"/> -- and extending this file to the other 6 primitive
+/// nodes for the tagged mnemonics; until then this file's own <see cref="Instructions"/> simply omits
+/// all four, since they would have nothing to pair them with.
 ///
 /// Both directions -- <see cref="BuildDecodeTable"/> for disassembly and <see cref="BuildEncodeTable"/>/
 /// <see cref="Assemble"/> for assembly -- are built from the single <see cref="Instructions"/> table,
@@ -74,8 +74,8 @@ internal static class CvmAssemblyLanguage
   /// this file needs to change. A shape whose
   /// <see cref="CvmInstructionSet.CvmInstructionShape.Encoding"/> is
   /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/> (<c>call</c>) or
-  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset"/> (<c>br</c>, <c>ifbr</c>)
-  /// has no F18 symbol by design and is filtered out here rather than added to
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/> (<c>br</c>, <c>ifbr</c>,
+  /// <c>slit</c>) has no F18 symbol by design and is filtered out here rather than added to
   /// <see cref="F18SymbolByMnemonic"/> -- see this class's own remarks for why.
   /// </summary>
   public static readonly IReadOnlyList<(string Mnemonic, string SymbolName, int WordLength, bool HasOperand)> Instructions =

@@ -169,8 +169,9 @@ public sealed class CvmDebugSession : IDisposable
   /// Linearly disassembles page 0 (the only page that is ever code) from address 0 up to but not
   /// including <paramref name="endAddressExclusive"/>, into CVM assembly language mnemonics
   /// (<see cref="CvmAssemblyLanguage"/>) resolved against node 607's own current compile, plus direct
-  /// bit-pattern rules for <c>call</c>/<c>br</c>/<c>ifbr</c> (<see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/>,
-  /// see below) that need no compile/symbol at all. This
+  /// bit-pattern rules for <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>
+  /// (<see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/>, see below) that need no
+  /// compile/symbol at all. This
   /// MUST be a stateful scan starting at 0, never an independent per-word decode: pushlit is followed
   /// by a literal operand word that would otherwise be mistaken for its own opcode if a word were
   /// decoded in isolation.
@@ -192,10 +193,10 @@ public sealed class CvmDebugSession : IDisposable
     {
       int word = _sram.Read(CvmMemoryProtocol.CombineAddress(0, address));
 
-      // "call", "br", and "ifbr" have no F18 symbol to resolve -- each one's whole word is fully
-      // determined by its own bit pattern and operand alone (CvmInstructionSet.CvmOperandEncoding.
-      // EmbeddedAddress / EmbeddedSignedOffset), independent of node 607's live compile, so all three
-      // are checked before consulting the (symbol-driven) decode table at all.
+      // "call", "br", "ifbr", and "slit" have no F18 symbol to resolve -- each one's whole word is
+      // fully determined by its own bit pattern and operand alone (CvmInstructionSet.
+      // CvmOperandEncoding.EmbeddedAddress / EmbeddedSignedValue), independent of node 607's live
+      // compile, so all four are checked before consulting the (symbol-driven) decode table at all.
       string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word);
       if (selfDescribing is not null)
       {
