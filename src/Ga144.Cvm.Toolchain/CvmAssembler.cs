@@ -22,21 +22,31 @@ namespace Ga144.Cvm.Toolchain;
 ///   call loop               ; call a label/import -- resolves to that symbol's own address
 ///   call 0x0100             ; or a literal address, 0x0000-0x7FFF only (bit 15 is reserved)
 /// loop:
-///   nop
+///   ret                     ; return -- pops the address a call pushed and jumps back to it
+///   br -3                   ; branch by a literal signed offset, -0x400..0x3FF (11 bits)
+///   ifbr 5                  ; conditional branch -- same offset encoding, a different tag
 ///
 /// .section DATA
 /// table: .word 1, 2, 3      ; raw data words -- each may also be numeric or a label/import name
 /// </code>
 ///
-/// All 5 built-in CVM instructions (<see cref="CvmInstructionSet.Instructions"/>) are always
-/// available without needing <c>.import</c> -- this assembler never bakes in their numeric opcode
-/// (it doesn't know any node's F18 source at all). <c>nop</c>/<c>pushlit</c>/<c>push</c>/<c>pop</c>
-/// each emit their instruction word as a placeholder with a <see cref="CvmRelocationType.CvmOpcode"/>
-/// relocation against an external symbol named after the mnemonic, for the linker to resolve against a
-/// primitive table exported from the IDE. <c>call</c> is different: its one word directly IS the
-/// callee's address (<see cref="CvmInstructionSet.CvmInstructionShape.EncodesAddressDirectly"/>), so it
+/// All built-in CVM instructions (<see cref="CvmInstructionSet.Instructions"/>) are always
+/// available without needing <c>.import</c> -- this assembler never bakes in a real numeric opcode for
+/// any of them. Three different operand encodings are in play (<see cref="CvmInstructionSet.CvmOperandEncoding"/>):
+/// <c>nop</c>/<c>pushlit</c>/<c>push</c>/<c>pop</c>/<c>ret</c> emit their instruction word as a
+/// placeholder with a <see cref="CvmRelocationType.CvmOpcode"/> relocation against an external symbol
+/// named after the mnemonic, for the linker to resolve against a primitive table exported from the
+/// IDE (it doesn't know any node's F18 source at all). <c>call</c> is different: its one word directly
+/// IS the callee's address (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>), so it
 /// gets a plain <see cref="CvmRelocationType.AbsoluteAddress"/> relocation against its own operand
 /// instead -- the same relocation a <c>.word</c> or <c>pushlit</c> label/import operand would get.
+/// <c>br</c>/<c>ifbr</c> are different again (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset"/>):
+/// their one word is a fixed tag OR'd with a signed 11-bit offset that must be a literal, known
+/// completely at assemble time -- no relocation, no node, and (not yet implemented -- see
+/// <see cref="EmitEmbeddedSignedOffset"/>'s own remarks) no label/import operand either, even though
+/// what the offset is relative to is no longer an open question (confirmed against real hardware:
+/// the address of the word right after the branch's own opcode word, plus the offset -- see
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset"/>'s own remarks).
 ///
 /// This is a two-pass assembler: pass 1 walks every line purely to compute section layout (every
 /// instruction's word length is fixed by its mnemonic alone, so a label's final offset never depends
@@ -185,7 +195,7 @@ public static class CvmAssembler
           CvmInstructionSet.CvmInstructionShape shape = CvmInstructionSet.TryGetShape(line.Directive)!;
           CvmSection codeSection = objectFile.GetOrAddSection(section);
 
-          if (shape.EncodesAddressDirectly)
+          if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress)
           {
             // "call"-style: there is no tag word at all here -- the instruction's one and only word
             // IS the (eventually resolved) target address, exactly the same relocation a ".word"/
@@ -197,6 +207,16 @@ public static class CvmAssembler
                 objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors,
                 maxValue: CvmInstructionSet.CallAddressMask,
                 rangeDescription: "a 15-bit call target (0x0000-0x7FFF -- bit 15 is reserved to tell a call word apart from a tagged instruction word)");
+            break;
+          }
+
+          if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset)
+          {
+            // "br"/"ifbr"-style: also no separate tag word -- the instruction's one and only word is
+            // shape.Tag (its own fixed high bits) OR'd with a signed offset packed into the low 11
+            // bits. Fully self-describing from a literal operand alone, so unlike the tagged mnemonics
+            // below this needs no placeholder/relocation/external symbol at all.
+            EmitEmbeddedSignedOffset(codeSection, shape, line.Args[0], line.LineNumber, errors);
             break;
           }
 
@@ -217,7 +237,7 @@ public static class CvmAssembler
             Type = CvmRelocationType.CvmOpcode,
           });
 
-          if (shape.HasOperand)
+          if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.TrailingWord)
           {
             EmitOperandWord(objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
           }
@@ -314,6 +334,56 @@ public static class CvmAssembler
     }
 
     return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+  }
+
+  /// <summary>
+  /// Emits a <c>br</c>/<c>ifbr</c> word: <paramref name="shape"/>.Tag OR'd with a signed literal
+  /// offset packed into <see cref="CvmInstructionSet.BranchOffsetBitMask"/>'s low 11 bits. Unlike
+  /// <see cref="EmitOperandWord"/>, this does NOT (yet) accept a label or import name. What the
+  /// offset would need to be relative to is no longer an open question -- confirmed against real
+  /// hardware to be the address right after the branch's own opcode word (see
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset"/>'s own remarks) -- so a
+  /// future label operand here is now a known, mechanical computation
+  /// (<c>targetLabelOffset - (thisInstructionOffset + 1)</c>), just not yet written: it needs pass 2
+  /// to know a label's final offset (already true for every other operand kind) AND a fixed point
+  /// (this instruction's own offset, which pass 1's cursor already tracks per line but pass 2's
+  /// switch does not currently thread through to here). A non-numeric or out-of-range literal operand
+  /// is a hard error, never a silently truncated or zero-filled word.
+  /// </summary>
+  private static void EmitEmbeddedSignedOffset(
+      CvmSection targetSection,
+      CvmInstructionSet.CvmInstructionShape shape,
+      string operand,
+      int lineNumber,
+      List<string> errors)
+  {
+    if (!TryParseSignedNumericLiteral(operand, out int offset))
+    {
+      errors.Add($"line {lineNumber}: \"{operand}\" is not a literal signed offset -- \"{shape.Mnemonic}\" does not (yet) support a label/import operand.");
+      targetSection.Words.Add(shape.Tag);
+      return;
+    }
+
+    if (offset < CvmInstructionSet.BranchOffsetMinValue || offset > CvmInstructionSet.BranchOffsetMaxValue)
+    {
+      errors.Add($"line {lineNumber}: {offset} does not fit in \"{shape.Mnemonic}\"'s signed 11-bit offset ({CvmInstructionSet.BranchOffsetMinValue}..{CvmInstructionSet.BranchOffsetMaxValue}).");
+      targetSection.Words.Add(shape.Tag);
+      return;
+    }
+
+    targetSection.Words.Add(shape.Tag | (offset & CvmInstructionSet.BranchOffsetBitMask));
+  }
+
+  /// <summary>Like <see cref="TryParseNumericLiteral"/>, but also accepts a leading '-' for a negative decimal or hex magnitude.</summary>
+  private static bool TryParseSignedNumericLiteral(string text, out int value)
+  {
+    if (text.StartsWith('-') && TryParseNumericLiteral(text[1..], out int magnitude))
+    {
+      value = -magnitude;
+      return true;
+    }
+
+    return TryParseNumericLiteral(text, out value);
   }
 
   private sealed record ParsedLine(int LineNumber, string? Label, string? Directive, IReadOnlyList<string> Args);

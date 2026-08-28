@@ -7,8 +7,9 @@ namespace Ga144.Evb.Ide.Services;
 /// <summary>
 /// The CVM's own small assembly language: Stefan's mnemonics (<c>nop</c>, <c>pushlit &lt;data&gt;</c>,
 /// <c>push</c>, <c>pop</c>, <c>ret</c>) layered on top of the wire-level opcode convention
-/// (opcode = 0x8000 | wordAddress) that <see cref="CvmMemoryProtocol"/> already established. (<c>call</c>
-/// is the exception -- see this class's own remarks on why it isn't part of this tagged-opcode layer.)
+/// (opcode = 0x8000 | wordAddress) that <see cref="CvmMemoryProtocol"/> already established. (<c>call</c>,
+/// <c>br</c>, and <c>ifbr</c> are the exceptions -- see this class's own remarks on why they aren't part
+/// of this tagged-opcode layer.)
 ///
 /// This is deliberately a SEPARATE naming layer from node 607's own F18 source symbols
 /// ('nop, 'plit, 'pop, 'push, still defined in <see cref="CvmMemoryProtocol"/>) -- those tick-names
@@ -22,22 +23,26 @@ namespace Ga144.Evb.Ide.Services;
 /// symbol, which only makes sense against a live IDE compile and has no business in that shared,
 /// IDE-independent project.
 ///
-/// One shape is deliberately left out of that pairing: <c>call</c>
-/// (<see cref="CvmInstructionSet.CvmInstructionShape.EncodesAddressDirectly"/>) has no F18 symbol at
-/// all to resolve, since its opcode word is never a tagged dispatch to a named primitive routine -- it
-/// directly IS the target address. Because of that, <c>call</c> doesn't need a live compile to
-/// recognize at all: <see cref="CvmDebugSession.DisassemblePage0"/> checks for it directly (any word
-/// with bit 15 clear is a call to the address it contains) BEFORE ever consulting this file's own
-/// symbol-driven decode table, so it already shows up correctly in the memory inspector. What's still
-/// separate, later work is the OTHER direction -- assembling hand-typed CVM asm source that uses
-/// <c>call</c> via this file's own <see cref="Assemble"/>/<see cref="ParseSource"/> -- and extending
-/// this file to the other 6 primitive nodes for the tagged mnemonics; until then this file's own
-/// <see cref="Instructions"/> simply omits <c>call</c>, since it would have nothing to pair it with.
+/// Shapes whose <see cref="CvmInstructionSet.CvmInstructionShape.Encoding"/> is anything other than
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.None"/>/<see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>
+/// are deliberately left out of that pairing: <c>call</c>
+/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>) and <c>br</c>/<c>ifbr</c>
+/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset"/>) have no F18 symbol at all
+/// to resolve, since none of their opcode words are a tagged dispatch to a named primitive routine --
+/// each one's whole word is fully determined by its own operand alone. Because of that, none of them
+/// need a live compile to recognize: <see cref="CvmDebugSession.DisassemblePage0"/> checks for them
+/// directly via <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> BEFORE ever consulting this
+/// file's own symbol-driven decode table, so they already show up correctly in the memory inspector.
+/// What's still separate, later work is the OTHER direction -- assembling hand-typed CVM asm source
+/// that uses <c>call</c>/<c>br</c>/<c>ifbr</c> via this file's own <see cref="Assemble"/>/
+/// <see cref="ParseSource"/> -- and extending this file to the other 6 primitive nodes for the tagged
+/// mnemonics; until then this file's own <see cref="Instructions"/> simply omits all three, since they
+/// would have nothing to pair them with.
 ///
 /// Both directions -- <see cref="BuildDecodeTable"/> for disassembly and <see cref="BuildEncodeTable"/>/
 /// <see cref="Assemble"/> for assembly -- are built from the single <see cref="Instructions"/> table,
-/// so they can never drift apart: adding a fifth opcode to <see cref="CvmInstructionSet"/> plus one
-/// line here (the F18 symbol it resolves to) is the only change either direction needs.
+/// so they can never drift apart: adding a new TAGGED opcode to <see cref="CvmInstructionSet"/> plus
+/// one line here (the F18 symbol it resolves to) is the only change either direction needs.
 /// </summary>
 internal static class CvmAssemblyLanguage
 {
@@ -66,14 +71,16 @@ internal static class CvmAssemblyLanguage
   /// words (its own opcode word included) it occupies once assembled. <c>pushlit</c> is the only such
   /// instruction with a trailing operand word today -- extend <see cref="CvmInstructionSet"/> plus
   /// <see cref="F18SymbolByMnemonic"/> as more tagged-dispatch opcodes are defined; nothing else in
-  /// this file needs to change. A shape with
-  /// <see cref="CvmInstructionSet.CvmInstructionShape.EncodesAddressDirectly"/> set (<c>call</c>
-  /// today) has no F18 symbol by design and is filtered out here rather than added to
+  /// this file needs to change. A shape whose
+  /// <see cref="CvmInstructionSet.CvmInstructionShape.Encoding"/> is
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/> (<c>call</c>) or
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedOffset"/> (<c>br</c>, <c>ifbr</c>)
+  /// has no F18 symbol by design and is filtered out here rather than added to
   /// <see cref="F18SymbolByMnemonic"/> -- see this class's own remarks for why.
   /// </summary>
   public static readonly IReadOnlyList<(string Mnemonic, string SymbolName, int WordLength, bool HasOperand)> Instructions =
       [.. CvmInstructionSet.Instructions
-          .Where(shape => !shape.EncodesAddressDirectly)
+          .Where(shape => shape.Encoding is CvmInstructionSet.CvmOperandEncoding.None or CvmInstructionSet.CvmOperandEncoding.TrailingWord)
           .Select(shape => (shape.Mnemonic, F18SymbolByMnemonic[shape.Mnemonic], shape.WordLength, shape.HasOperand))];
 
   /// <summary>One parsed line of CVM assembly: a mnemonic plus its operand, when required (pushlit only, today).</summary>

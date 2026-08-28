@@ -112,20 +112,34 @@ internal static class CvmMemoryProtocol
   public const int DebuggerCallTestAddress = 1;
   public const int DebuggerCallTestTarget = 0x20;
 
+  // Where the interactive debugger's own test program places a "br" opcode, and by what literal
+  // offset -- address 2 is exactly where execution resumes after the call/ret round trip above (the
+  // call at DebuggerCallTestAddress=1 returns to address 2), so this word is the very next thing
+  // node 607 fetches once 'ret installs the return address back into P. Unlike call/ret, "br"'s own
+  // F18-side interpreter logic (decoding the CvmInstructionSet.BranchTag/ConditionalBranchTag family
+  // at runtime) has not been written into Node607.f18 yet -- this constant only places the raw CVM
+  // opcode word for the toolchain/debugger side of the test; what node 607 actually does when it
+  // fetches a word with this bit pattern, today, is whatever its existing (br-unaware) dispatch
+  // already does with a tagged-looking word, which is Stefan's own thing to observe on real hardware.
+  public const int DebuggerBranchTestAddress = 2;
+  public const int DebuggerBranchTestOffset = 1;
+
   /// <summary>
   /// The interactive debugger's own test program: <see cref="TryBuildTestProgram"/>'s shared sequence,
   /// with word <see cref="DebuggerCallTestAddress"/> overwritten to <c>call <see cref="DebuggerCallTestTarget"/></c>
   /// (a raw word equal to the target address -- see that constant's own remarks) instead of the plain
-  /// 'nop that word held before, and with word <see cref="DebuggerCallTestTarget"/> itself holding a
-  /// real <c>'ret</c> opcode -- confirmed working against real hardware together with the call above
-  /// -- so the round trip is complete: control jumps to <see cref="DebuggerCallTestTarget"/>, 'ret
-  /// pops the return address the call pushed and installs it back into P, and execution resumes right
-  /// after the call (address <see cref="DebuggerCallTestAddress"/> + 1) exactly as if the call had
-  /// never happened, continuing through the rest of the shared sequence's own 'nop/'plit/'pop/'push.
-  /// The words between the end of that sequence and <see cref="DebuggerCallTestTarget"/> are never
-  /// fetched by this flow (control jumps straight there and back) but are padded with 'nop opcodes
-  /// anyway, matching <see cref="TrailingNopCount"/>'s own rationale: safer than leaving
-  /// zero-initialized memory a stray fetch could misread as a call to address 0.
+  /// 'nop that word held before, word <see cref="DebuggerCallTestTarget"/> itself holding a real
+  /// <c>'ret</c> opcode -- confirmed working against real hardware together with the call above -- so
+  /// the round trip is complete: control jumps to <see cref="DebuggerCallTestTarget"/>, 'ret pops the
+  /// return address the call pushed and installs it back into P, and execution resumes right after
+  /// the call (address <see cref="DebuggerCallTestAddress"/> + 1, i.e.
+  /// <see cref="DebuggerBranchTestAddress"/>) -- and, as of that resumed address, a raw
+  /// <c>br <see cref="DebuggerBranchTestOffset"/></c> opcode word (see that constant's own remarks)
+  /// instead of the plain 'nop it held before. The words between the end of the shared sequence and
+  /// <see cref="DebuggerCallTestTarget"/> are never fetched by this flow (control jumps straight there
+  /// and back) but are padded with 'nop opcodes anyway, matching <see cref="TrailingNopCount"/>'s own
+  /// rationale: safer than leaving zero-initialized memory a stray fetch could misread as a call to
+  /// address 0.
   ///
   /// Deliberately NOT used by <see cref="Ga144CvmHardwareInstaller.InstallAndRunAsync"/>'s automatic
   /// "Install &amp; run CVM test" step (that step still calls <see cref="TryBuildTestProgram"/>
@@ -161,6 +175,8 @@ internal static class CvmMemoryProtocol
 
     program[DebuggerCallTestAddress] = DebuggerCallTestTarget;
     program[DebuggerCallTestTarget] = retOpcode;
+    program[DebuggerBranchTestAddress] =
+        CvmInstructionSet.BranchTag | (DebuggerBranchTestOffset & CvmInstructionSet.BranchOffsetBitMask);
     return (program, null);
   }
 

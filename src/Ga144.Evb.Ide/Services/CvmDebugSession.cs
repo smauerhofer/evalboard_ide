@@ -100,9 +100,13 @@ public sealed class CvmDebugSession : IDisposable
   /// The debugger's own fixed test program, loaded into page 0 of the simulated SRAM at session
   /// start: the shared 5 'nop/'plit/literal/'pop/'push/8 trailing 'nop sequence, except word address
   /// <see cref="CvmMemoryProtocol.DebuggerCallTestAddress"/> is a <c>call</c> to
-  /// <see cref="CvmMemoryProtocol.DebuggerCallTestTarget"/> instead of a plain 'nop, and word address
+  /// <see cref="CvmMemoryProtocol.DebuggerCallTestTarget"/> instead of a plain 'nop, word address
   /// <see cref="CvmMemoryProtocol.DebuggerCallTestTarget"/> itself is a real 'ret -- confirmed working
-  /// against real hardware -- completing the call/return round trip. See
+  /// against real hardware -- completing the call/return round trip, and word address
+  /// <see cref="CvmMemoryProtocol.DebuggerBranchTestAddress"/> (exactly where that round trip resumes)
+  /// is a raw <c>br <see cref="CvmMemoryProtocol.DebuggerBranchTestOffset"/></c> opcode word instead
+  /// of its own plain 'nop -- node 607 doesn't have F18-side interpreter logic for it yet, so this is
+  /// only the toolchain/wire-level side of that next test. See
   /// <see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/>'s own remarks.
   /// </summary>
   public IReadOnlyList<int> Program => _program;
@@ -164,8 +168,9 @@ public sealed class CvmDebugSession : IDisposable
   /// <summary>
   /// Linearly disassembles page 0 (the only page that is ever code) from address 0 up to but not
   /// including <paramref name="endAddressExclusive"/>, into CVM assembly language mnemonics
-  /// (<see cref="CvmAssemblyLanguage"/>) resolved against node 607's own current compile, plus a
-  /// direct bit-pattern rule for <c>call</c> (see below) that needs no compile/symbol at all. This
+  /// (<see cref="CvmAssemblyLanguage"/>) resolved against node 607's own current compile, plus direct
+  /// bit-pattern rules for <c>call</c>/<c>br</c>/<c>ifbr</c> (<see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/>,
+  /// see below) that need no compile/symbol at all. This
   /// MUST be a stateful scan starting at 0, never an independent per-word decode: pushlit is followed
   /// by a literal operand word that would otherwise be mistaken for its own opcode if a word were
   /// decoded in isolation.
@@ -187,14 +192,14 @@ public sealed class CvmDebugSession : IDisposable
     {
       int word = _sram.Read(CvmMemoryProtocol.CombineAddress(0, address));
 
-      // "call" has no tag bit and no F18 symbol to resolve (CvmInstructionSet.CvmInstructionShape.
-      // EncodesAddressDirectly) -- any word with bit 15 clear (0x0000-0x7FFF, CvmInstructionSet.
-      // CallAddressMask) directly IS a call to that address, a pure bit-pattern rule independent of
-      // node 607's live compile, so this is checked before consulting the (symbol-driven) decode
-      // table at all.
-      if (word <= CvmInstructionSet.CallAddressMask)
+      // "call", "br", and "ifbr" have no F18 symbol to resolve -- each one's whole word is fully
+      // determined by its own bit pattern and operand alone (CvmInstructionSet.CvmOperandEncoding.
+      // EmbeddedAddress / EmbeddedSignedOffset), independent of node 607's live compile, so all three
+      // are checked before consulting the (symbol-driven) decode table at all.
+      string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word);
+      if (selfDescribing is not null)
       {
-        notes[address] = $"{CvmInstructionSet.CallMnemonic} 0x{word:X4}";
+        notes[address] = selfDescribing;
         address += 1;
         continue;
       }
