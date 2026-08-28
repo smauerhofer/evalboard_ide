@@ -102,6 +102,53 @@ internal static class CvmMemoryProtocol
   public static int CombineAddress(int page, int addressInPage) =>
       ((page << 16) | (addressInPage & 0xFFFF)) & (CvmSimulatedSram.WordCapacity - 1);
 
+  // Only page 0 (the low 16 bits of the flat address space) is ever code -- page 1 is the stack,
+  // and node 607's own instruction fetches never leave page 0. This is exactly the point at which
+  // CombineAddress's own page/address-in-page packing rolls over into page 1.
+  public const int Page0WordCount = 0x10000;
+
+  // The disassembler's opcode table: each known node-607 opcode's mnemonic and how many words
+  // (its own opcode word included) the instruction occupies in memory. 'plit is the only
+  // multi-word instruction right now -- its second word is the literal it pushes, which must be
+  // skipped as DATA by the disassembler rather than decoded as if it were itself another opcode.
+  // Extend this list as more opcodes become relevant to the debugger; nothing else needs to change.
+  public static readonly IReadOnlyList<(string SymbolName, int WordLength)> KnownOpcodes =
+  [
+    (NopSymbolName, 1),
+    (PlitSymbolName, 2),
+    (PopSymbolName, 1),
+    (PushSymbolName, 1),
+  ];
+
+  /// <summary>
+  /// Resolves each of <see cref="KnownOpcodes"/> against THIS run's own node 607 compile (never a
+  /// frozen reference copy -- every address can move as the source evolves) and returns a map from
+  /// the opcode's actual wire/memory value (0x8000 | wordAddress) to its mnemonic and word length,
+  /// for <see cref="CvmDebugSession.DisassemblePage0"/> to consume. An opcode whose symbol isn't
+  /// defined in the current source is simply omitted -- "for now only a few opcodes are defined" is
+  /// expected to grow over time without this method needing to change.
+  /// </summary>
+  public static IReadOnlyDictionary<int, (string Mnemonic, int WordLength)> BuildOpcodeTable(
+      IReadOnlyDictionary<int, F18CompileResult> compiledRam)
+  {
+    var table = new Dictionary<int, (string, int)>();
+    if (!compiledRam.TryGetValue(NopSourceNodeCoordinate, out F18CompileResult? compile))
+    {
+      return table;
+    }
+
+    foreach ((string symbolName, int wordLength) in KnownOpcodes)
+    {
+      if (compile.Symbols.TryGetValue(symbolName, out F18ExportedSymbol? symbol))
+      {
+        int opcode = 0x8000 | (symbol.Value & F18InstructionSet.WordMask);
+        table[opcode] = (symbolName, wordLength);
+      }
+    }
+
+    return table;
+  }
+
   // Compact "p:aaaa" rendering of a page/address-in-page pair -- page is the 4-bit page number (a
   // single hex digit, 0-F) and aaaa is the 16-bit address-in-page (always 4 hex digits), matching
   // how the two words actually split up inside CombineAddress above.

@@ -300,6 +300,13 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     HashSet<int> breakpoints = [.. _session.Breakpoints];
     int? programCounter = _session.LastFetchAddress;
 
+    // The disassembly is only meaningful on page 0 (the only page that is ever code) and it MUST
+    // be re-scanned from address 0 every time -- 'plit's trailing literal is only recognizable as
+    // DATA, not another opcode, because of the stateful scan that walked over its opcode word first.
+    IReadOnlyDictionary<int, string> disassembly = baseAddress < CvmMemoryProtocol.Page0WordCount
+        ? _session.DisassemblePage0(Math.Min(baseAddress + count, CvmMemoryProtocol.Page0WordCount))
+        : new Dictionary<int, string>();
+
     var builder = new StringBuilder();
     builder.Append("Address   Value      Notes").Append('\n');
     for (int index = 0; index < words.Count; index++)
@@ -316,10 +323,9 @@ public sealed class CvmDebuggerViewModel : ObservableObject
         notes.Add("[BP]");
       }
 
-      string? symbol = _session.DescribeProgramSymbol(flatAddress);
-      if (symbol is not null)
+      if (disassembly.TryGetValue(flatAddress, out string? note))
       {
-        notes.Add(symbol);
+        notes.Add(note);
       }
 
       builder.Append(DescribeFlatAddress(flatAddress).PadRight(10))
@@ -335,8 +341,8 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   {
     if (_session?.LastFetchAddress is int address)
     {
-      string? symbol = _session.DescribeProgramSymbol(address);
-      ProgramCounterText = symbol is null ? DescribeFlatAddress(address) : $"{DescribeFlatAddress(address)} ({symbol})";
+      string? mnemonic = _session.DisassemblePage0(address + 1).GetValueOrDefault(address);
+      ProgramCounterText = mnemonic is null ? DescribeFlatAddress(address) : $"{DescribeFlatAddress(address)} ({mnemonic})";
     }
     else
     {

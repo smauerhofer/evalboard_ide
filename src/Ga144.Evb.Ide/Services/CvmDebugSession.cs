@@ -152,6 +152,46 @@ public sealed class CvmDebugSession : IDisposable
   }
 
   /// <summary>
+  /// Linearly disassembles page 0 (the only page that is ever code) from address 0 up to but not
+  /// including <paramref name="endAddressExclusive"/>, using node 607's own compiled opcode table
+  /// (<see cref="CvmMemoryProtocol.BuildOpcodeTable"/>). This MUST be a stateful scan starting at 0,
+  /// never an independent per-word decode: a multi-word instruction like 'plit is followed by a
+  /// literal DATA word that would otherwise be mistaken for its own opcode if a word were decoded in
+  /// isolation. Returns a sparse map from flat address to either the instruction's mnemonic (at the
+  /// address it starts on) or "(data)" (at every word an instruction consumes after its own opcode
+  /// word); an address that doesn't fall on a recognized instruction boundary -- typically because
+  /// it holds an opcode this debugger doesn't know about yet -- is simply absent from the result
+  /// rather than mislabeled.
+  /// </summary>
+  public IReadOnlyDictionary<int, string> DisassemblePage0(int endAddressExclusive)
+  {
+    IReadOnlyDictionary<int, (string Mnemonic, int WordLength)> opcodeTable =
+        CvmMemoryProtocol.BuildOpcodeTable(_compiledRam);
+    var notes = new Dictionary<int, string>();
+    int address = 0;
+    while (address < endAddressExclusive)
+    {
+      int word = _sram.Read(CvmMemoryProtocol.CombineAddress(0, address));
+      if (opcodeTable.TryGetValue(word, out (string Mnemonic, int WordLength) instruction))
+      {
+        notes[address] = instruction.Mnemonic;
+        for (int dataOffset = 1; dataOffset < instruction.WordLength && address + dataOffset < endAddressExclusive; dataOffset++)
+        {
+          notes[address + dataOffset] = "(data)";
+        }
+
+        address += instruction.WordLength;
+      }
+      else
+      {
+        address += 1;
+      }
+    }
+
+    return notes;
+  }
+
+  /// <summary>
   /// Services exactly one transaction, ignoring breakpoints entirely -- a manual Step always
   /// executes the next full instruction fetch (or stack access) worth of wire traffic, breakpoint
   /// or not, resuming a withheld reply first if one is currently pending.
