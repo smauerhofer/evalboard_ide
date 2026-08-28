@@ -1,0 +1,101 @@
+<Window x:Class="Ga144.Evb.Ide.Views.CvmDebuggerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CVM Debugger"
+        Width="1040"
+        Height="820"
+        MinWidth="820"
+        MinHeight="600"
+        WindowStartupLocation="CenterOwner">
+  <Grid Margin="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="2*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="3*" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0">
+      <TextBlock Text="CVM Debugger" FontSize="22" FontWeight="SemiBold" />
+      <TextBlock Margin="0,3,0,0" Foreground="#555" TextWrapping="Wrap"
+                       Text="Compiles and boots the CVM cluster exactly like &quot;Install &amp; run CVM test&quot;, loads the same shared test program into a simulated 1 Mword SRAM, wakes node 708's 'start -- but instead of servicing the resulting traffic to completion, pauses so you can step one memory-interface transaction at a time, run to a breakpoint, and inspect the simulated SRAM. Real hardware: a breakpointed read is paused by withholding its reply, which is what the physical CVM is actually blocked on." />
+    </StackPanel>
+
+    <Border Grid.Row="1" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="9" Margin="0,10,0,0">
+      <StackPanel>
+        <StackPanel Orientation="Horizontal">
+          <Button Content="Start / Reinstall" Command="{Binding StartCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Compiles this project's own CVM node sources, resets the chip, boots the mesh, loads the shared test program into simulated SRAM, and wakes node 708's 'start. Blocked while a Kraken is erected." />
+          <Button Content="Step" Command="{Binding StepCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Services exactly one memory-interface transaction (one read or one write), ignoring breakpoints -- always executes the next full instruction fetch or stack access." />
+          <Button Content="Continue" Command="{Binding ContinueCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Services transactions back-to-back until an armed breakpoint's read reply is withheld, the transaction cap is reached, or you click Pause." />
+          <Button Content="Pause" Command="{Binding PauseCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Stops the current Continue after its transaction in progress finishes." />
+          <TextBlock Text="PC:" VerticalAlignment="Center" Margin="14,0,4,0" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding ProgramCounterText}" VerticalAlignment="Center" FontFamily="Consolas" FontWeight="SemiBold" />
+        </StackPanel>
+        <TextBox Margin="0,7,0,0" Text="{Binding StatusText, Mode=OneWay}"
+                        IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                        BorderThickness="0" Background="Transparent"
+                        FontWeight="SemiBold" TextWrapping="Wrap" />
+        <TextBox Margin="0,2,0,0" Text="{Binding InstallSummaryText, Mode=OneWay}"
+                        IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                        BorderThickness="0" Background="Transparent"
+                        Foreground="#555" FontSize="11" TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
+    <GroupBox Grid.Row="2" Header="Breakpoints (page:address, e.g. 1:FFFE -- or a flat hex address)" Margin="0,10,0,0" Padding="8">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="140" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="180" />
+        </Grid.ColumnDefinitions>
+        <TextBox Text="{Binding NewBreakpointText, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <Button Grid.Column="1" Content="Add" Command="{Binding AddBreakpointCommand}" Padding="10,4" Margin="0,0,8,0" />
+        <Button Grid.Column="2" Content="Remove selected" Command="{Binding RemoveBreakpointCommand}" Padding="10,4" Margin="0,0,8,0" />
+        <Button Grid.Column="3" Content="Clear all" Command="{Binding ClearBreakpointsCommand}" Padding="10,4" Margin="0,0,8,0" />
+        <ListBox Grid.Column="5" ItemsSource="{Binding Breakpoints}" SelectedItem="{Binding SelectedBreakpoint}"
+                         Height="60" FontFamily="Consolas" />
+      </Grid>
+    </GroupBox>
+
+    <GroupBox Grid.Row="3" Header="Simulated SRAM inspector" Margin="0,10,0,0" Padding="8">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="140" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="Show from:" VerticalAlignment="Center" />
+        <TextBox Grid.Column="1" Text="{Binding MemoryBaseText, UpdateSourceTrigger=PropertyChanged}" Margin="6,0" />
+        <Button Grid.Column="2" Content="Refresh" Command="{Binding RefreshMemoryCommand}" Padding="10,4" />
+      </Grid>
+    </GroupBox>
+
+    <TextBlock Grid.Row="4" Margin="0,10,0,4" FontWeight="SemiBold" Text="Simulated SRAM (read-only)" />
+    <TextBox Grid.Row="5" Text="{Binding MemoryViewText, Mode=OneWay}"
+                  IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                  FontFamily="Consolas" FontSize="11"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Auto" />
+
+    <TextBlock Grid.Row="6" Margin="0,10,0,4" FontWeight="SemiBold" Text="Transaction log (read-only)" />
+    <TextBox x:Name="LogTextBox" Grid.Row="7" Text="{Binding LogText, Mode=OneWay}"
+                  IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                  FontFamily="Consolas" FontSize="11"
+                  TextWrapping="Wrap"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Auto"
+                  TextChanged="OnLogTextChanged" />
+  </Grid>
+</Window>

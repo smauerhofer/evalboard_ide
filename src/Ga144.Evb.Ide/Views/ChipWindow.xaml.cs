@@ -301,6 +301,51 @@ public partial class ChipWindow : Window
     _sramSimulatorWindow = null;
   }
 
+  private CvmDebuggerWindow? _cvmDebuggerWindow;
+
+  private void OnOpenCvmDebuggerClick(object sender, RoutedEventArgs e)
+  {
+    // Same reusable, non-modal window pattern as SRAM Tentacle / SRAM Simulator -- but unlike those,
+    // this window's session holds a real serial port open for its whole life (see
+    // CvmDebuggerViewModel.Cancel), so closing it must actually tear that down, not just cancel a
+    // pending Kraken request.
+    if (_cvmDebuggerWindow is not null)
+    {
+      if (_cvmDebuggerWindow.WindowState == WindowState.Minimized)
+      {
+        _cvmDebuggerWindow.WindowState = WindowState.Normal;
+      }
+
+      _cvmDebuggerWindow.Activate();
+      return;
+    }
+
+    var viewModel = new CvmDebuggerViewModel(
+        _viewModel.Chip,
+        _viewModel.RomLibrary,
+        _viewModel.Project.Model.UserMacros,
+        _viewModel.KrakenController,
+        _viewModel.KrakenEndpointResolver);
+    var window = new CvmDebuggerWindow(viewModel)
+    {
+      Owner = this
+    };
+
+    _cvmDebuggerWindow = window;
+    window.Closed += OnCvmDebuggerWindowClosed;
+    window.Show();
+  }
+
+  private void OnCvmDebuggerWindowClosed(object? sender, EventArgs e)
+  {
+    if (sender is CvmDebuggerWindow window)
+    {
+      window.Closed -= OnCvmDebuggerWindowClosed;
+    }
+
+    _cvmDebuggerWindow = null;
+  }
+
   private void OnKrakenCheckWindowClosed(object? sender, EventArgs e)
   {
     if (sender is KrakenCheckWindow window)

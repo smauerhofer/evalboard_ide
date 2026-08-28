@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-28T12:21:55.8334794
-      utcDateTime: 2026-08-28T12:21:55.8334794Z
-      localDateTime: 2026-08-28T14:21:55.8334794+02:00
+      dateTime: 2026-08-28T14:57:16.3045669
+      utcDateTime: 2026-08-28T14:57:16.3045669Z
+      localDateTime: 2026-08-28T16:57:16.3045669+02:00
       date: 2026-08-28T00:00:00.0000000
       day: 28
       dayOfWeek: Friday
       dayOfYear: 240
-      hour: 12
-      millisecond: 833
-      microsecond: 479
-      nanosecond: 400
-      minute: 21
+      hour: 14
+      millisecond: 304
+      microsecond: 566
+      nanosecond: 900
+      minute: 57
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 55
-      ticks: 639235165158334794
-      utcTicks: 639235165158334794
-      timeOfDay: 12:21:55.8334794
+      second: 16
+      ticks: 639235258363045669
+      utcTicks: 639235258363045669
+      timeOfDay: 14:57:16.3045669
       year: 2026
   portB: 
   portC:
@@ -10324,6 +10324,7 @@ projects:
         : ctrl A[ ; ]] lit !b
 
         : main A[ !p !p ]] lit !b @b >r @b r> ..
+          ( xy )
           2* -if
             2* -if // 0xf??? node 508
               --l- a leave ;
@@ -10333,11 +10334,13 @@ projects:
             then // 0xe0??
             r--- a leave ;
           then
+          ( xy )
           2* -if
             // short literal
             2* 2/ 2/ 2/ 2/ 2/ 2/ leave ;
           then
-            over >r 2* -if drop unary ; then drop binary ;
+          ( xy )
+          2* -if drop >r unary ; then drop >r binary ;
         : 'usl for 2* unext ;
 
         : 'ssr >r 2* 2* 2/ 2/ r> ;
@@ -10404,24 +10407,25 @@ projects:
       - 0x05B8B
       - 0x049B2
       - 0x09555
-      - 0x05B05
+      - 0x05B02
       - 0x0C9B2
-      - 0x13406
+      - 0x2B555
+      - 0x13407
       - 0x05B25
       - 0x049B2
       - 0x05B25
       - 0x0560D
-      - 0x13405
+      - 0x13406
       - 0x05B05
       - 0x13407
-      - 0x13405
+      - 0x13406
       - 0x05B25
       - 0x05612
       - 0x05B12
       - 0x13402
       - 0x0C9B2
       - 0x09F55
-      - 0x13410
+      - 0x13411
       - 0x23455
       - 0x040AA
       - 0x0FFFF
@@ -10430,23 +10434,24 @@ projects:
       - 0x05B02
       - 0x0D9B2
       - 0x2FF9A
-      - 0x37226
-      - 0x37221
+      - 0x37227
+      - 0x37222
       - 0x13575
-      - 0x23716
-      - 0x37224
+      - 0x23717
+      - 0x37225
       - 0x13515
-      - 0x23716
+      - 0x23717
       - 0x135D5
-      - 0x23716
-      - 0x3722A
+      - 0x23717
+      - 0x3722B
       - 0x367C2
       - 0x307C2
-      - 0x31716
-      - 0x208DA
-      - 0x1B42D
-      - 0x3B715
-      - 0x3B714
+      - 0x31717
+      - 0x3722E
+      - 0x3A8B2
+      - 0x11416
+      - 0x3A8B2
+      - 0x11415
       - 0x2E9B2
       - 0x37155
       - 0x2E4DA
@@ -10463,10 +10468,8 @@ projects:
       - 0x15555
       - 0x15555
       - 0x15555
-      - 0x15555
-      - 0x15555
       startup:
-        entryPoint: 0x01A
+        entryPoint: 0x01B
         p: 0x000
         a: 0x000
         b: 0x000

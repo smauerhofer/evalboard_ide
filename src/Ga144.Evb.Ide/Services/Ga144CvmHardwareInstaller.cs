@@ -73,8 +73,6 @@ public sealed class Ga144CvmHardwareInstaller
   private const int AsyncSerialContinuationAddress = 0x0AE;
 
   private const int OnlineTransactionSettleMilliseconds = 5;
-  private const int InterWordSettleMilliseconds = 20;
-  private const int ResponseTimeoutMilliseconds = 1_000;
 
   // Same value as Ga144Serial.MaximumBaudRate / KrakenSession.OnlineBaudRate -- inlined directly
   // rather than depending on either class, so this installer only couples to the low-level
@@ -108,6 +106,105 @@ public sealed class Ga144CvmHardwareInstaller
       F18NodeCompilationService compileService,
       CancellationToken cancellationToken)
   {
+    NativeWindowsSerialPort? port = OpenAndBootMesh(
+        portName, chip, compileService, cancellationToken, out CvmInstallReport install, out var compiledRam);
+    if (port is null)
+    {
+      return new CvmInstallAndTestReport(install, []);
+    }
+
+    try
+    {
+      List<CvmTestStepResult> testSteps = RunTests(port, cancellationToken, compiledRam);
+      return new CvmInstallAndTestReport(install, testSteps);
+    }
+    finally
+    {
+      try { port.SetRts(true); } catch { }
+      try { port.SetDtr(true); } catch { }
+      port.Dispose();
+    }
+  }
+
+  /// <summary>
+  /// Starts an interactive <see cref="CvmDebugSession"/> against real hardware: compiles and boots
+  /// the mesh exactly like <see cref="InstallAndRunAsync"/> does, then builds and loads the same
+  /// shared test program (<see cref="CvmMemoryProtocol.TryBuildTestProgram"/>) into a fresh
+  /// <see cref="CvmSimulatedSram"/> and wakes node 708's <c>'start</c> -- but stops there instead of
+  /// automatically servicing the resulting read/write traffic to completion, leaving the port open
+  /// and handing back a session the CVM Debugger window drives one transaction (or one breakpoint
+  /// run) at a time.
+  /// </summary>
+  public Task<CvmDebugSession> StartDebugSessionAsync(
+      string portName,
+      Ga144ChipConfiguration chip,
+      F18NodeCompilationService compileService,
+      CancellationToken cancellationToken = default)
+  {
+    ArgumentException.ThrowIfNullOrWhiteSpace(portName);
+    ArgumentNullException.ThrowIfNull(chip);
+    ArgumentNullException.ThrowIfNull(compileService);
+
+    return Task.Run(() => StartDebugSession(portName, chip, compileService, cancellationToken), cancellationToken);
+  }
+
+  private static CvmDebugSession StartDebugSession(
+      string portName,
+      Ga144ChipConfiguration chip,
+      F18NodeCompilationService compileService,
+      CancellationToken cancellationToken)
+  {
+    NativeWindowsSerialPort? port = OpenAndBootMesh(
+        portName, chip, compileService, cancellationToken, out CvmInstallReport install, out var compiledRam);
+    if (port is null)
+    {
+      throw new InvalidOperationException(install.FailureMessage ?? "CVM install failed; the debug session cannot start.");
+    }
+
+    try
+    {
+      (List<int>? program, string? missing) = CvmMemoryProtocol.TryBuildTestProgram(compiledRam);
+      if (program is null)
+      {
+        throw new InvalidOperationException(
+            $"Could not build the test program: {missing} was not found. Check node {CvmMemoryProtocol.NopSourceNodeCoordinate:000}'s " +
+            $"source still defines {CvmMemoryProtocol.DescribeRequiredSymbols()} before starting the debugger.");
+      }
+
+      var sram = new CvmSimulatedSram();
+      sram.LoadProgram(program);
+
+      byte[] wakeBytes = new byte[3];
+      Ga144Node708Probe.EncodeAsynchronousWord(CvmMemoryProtocol.WakeValue, wakeBytes);
+      port.Write(wakeBytes);
+      CvmMemoryProtocol.WaitForTransmitDrain(port, wakeBytes.Length);
+      Thread.Sleep(CvmMemoryProtocol.InterWordSettleMilliseconds);
+
+      return new CvmDebugSession(port, sram, program, install, compiledRam);
+    }
+    catch
+    {
+      try { port.SetRts(true); } catch { }
+      try { port.SetDtr(true); } catch { }
+      port.Dispose();
+      throw;
+    }
+  }
+
+  // Everything InstallAndRun and StartDebugSession share: compile all 9 nodes from the project's own
+  // current sources (fail closed before any hardware is touched), reset the chip, and deliver every
+  // node across the mesh through node 708. On success the returned port is left OPEN and reset-pin
+  // cleanup is the caller's responsibility -- InstallAndRun disposes it once RunTests finishes;
+  // StartDebugSession hands it to a long-lived CvmDebugSession instead. On a compile/validation
+  // failure (before any hardware is touched) this returns null and no port was ever opened.
+  private static NativeWindowsSerialPort? OpenAndBootMesh(
+      string portName,
+      Ga144ChipConfiguration chip,
+      F18NodeCompilationService compileService,
+      CancellationToken cancellationToken,
+      out CvmInstallReport install,
+      out IReadOnlyDictionary<int, F18CompileResult> compiledRam)
+  {
     // Compile every node from the PROJECT's own current sources first -- entirely offline, no
     // hardware touched yet -- and require every one of the 9 to succeed with a full 64-word RAM
     // image before any reset/relay happens. Fail closed: a half-compiled cluster must never reach
@@ -121,13 +218,15 @@ public sealed class Ga144CvmHardwareInstaller
     // never a frozen/reference copy, so a source edit (label renamed, address shifted by a rebuild
     // of the underlying ga144-rom.yaml, etc.) is picked up automatically the next time this method
     // runs.
-    var compiledRam = new Dictionary<int, F18CompileResult>();
+    var compiledRamDictionary = new Dictionary<int, F18CompileResult>();
     foreach (CvmBootLoadStep step in loadOrder)
     {
       Ga144NodeConfiguration node = chip.GetNode(step.NodeCoordinate);
       if (string.IsNullOrWhiteSpace(node.SourceCode))
       {
-        return Failed($"Node {step.NodeCoordinate:000} has no source in this project. Use \"Copy to project…\" in the node editor for every CVM node before installing on hardware.");
+        install = FailedInstall($"Node {step.NodeCoordinate:000} has no source in this project. Use \"Copy to project…\" in the node editor for every CVM node before installing on hardware.");
+        compiledRam = compiledRamDictionary;
+        return null;
       }
 
       F18NodeCompilationResult compiled = compileService.CompileNode(step.NodeCoordinate);
@@ -135,22 +234,28 @@ public sealed class Ga144CvmHardwareInstaller
       {
         int errorCount = compiled.Rom.Diagnostics.Concat(compiled.Ram.Diagnostics)
             .Count(diagnostic => diagnostic.Severity == F18DiagnosticSeverity.Error);
-        return Failed($"Node {step.NodeCoordinate:000} failed to compile ({errorCount} error(s)). Fix it in the node editor before installing on hardware.");
+        install = FailedInstall($"Node {step.NodeCoordinate:000} failed to compile ({errorCount} error(s)). Fix it in the node editor before installing on hardware.");
+        compiledRam = compiledRamDictionary;
+        return null;
       }
 
       var descriptor = CvmBootDescriptor.FromCompileResult(compiled.Ram);
       if (descriptor.Words.Count != 64)
       {
-        return Failed($"Node {step.NodeCoordinate:000} compiled to {descriptor.Words.Count} RAM words, not the required 64. Not installing.");
+        install = FailedInstall($"Node {step.NodeCoordinate:000} compiled to {descriptor.Words.Count} RAM words, not the required 64. Not installing.");
+        compiledRam = compiledRamDictionary;
+        return null;
       }
 
       if (descriptor.EntryPoint is null)
       {
-        return Failed($"Node {step.NodeCoordinate:000} has no entry point. Not installing.");
+        install = FailedInstall($"Node {step.NodeCoordinate:000} has no entry point. Not installing.");
+        compiledRam = compiledRamDictionary;
+        return null;
       }
 
       descriptors[step.NodeCoordinate] = descriptor;
-      compiledRam[step.NodeCoordinate] = compiled.Ram;
+      compiledRamDictionary[step.NodeCoordinate] = compiled.Ram;
     }
 
     // Parent-of map, derived from the load order itself (not hardcoded), so a future change to
@@ -182,7 +287,7 @@ public sealed class Ga144CvmHardwareInstaller
       return chain;
     }
 
-    using NativeWindowsSerialPort port = NativeWindowsSerialPort.Open(
+    NativeWindowsSerialPort port = NativeWindowsSerialPort.Open(
         portName,
         BaudRate,
         readTimeoutMilliseconds: 50,
@@ -255,14 +360,16 @@ public sealed class Ga144CvmHardwareInstaller
       SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
       port.PurgeInput();
 
-      var install = new CvmInstallReport(true, null, steps);
-      List<CvmTestStepResult> testSteps = RunTests(port, cancellationToken, compiledRam);
-      return new CvmInstallAndTestReport(install, testSteps);
+      install = new CvmInstallReport(true, null, steps);
+      compiledRam = compiledRamDictionary;
+      return port;
     }
-    finally
+    catch
     {
       try { port.SetRts(true); } catch { }
       try { port.SetDtr(true); } catch { }
+      port.Dispose();
+      throw;
     }
   }
 
@@ -325,81 +432,23 @@ public sealed class Ga144CvmHardwareInstaller
       CancellationToken cancellationToken,
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
-    var results = new List<CvmTestStepResult>();
-
-    if (!compiledRam.TryGetValue(NopSourceNodeCoordinate, out F18CompileResult? mainCompile))
+    (List<int>? program, string? missing) = CvmMemoryProtocol.TryBuildTestProgram(compiledRam);
+    if (program is null)
     {
-      results.Add(MissingSymbolStep($"node {NopSourceNodeCoordinate:000}'s compiled program is not available"));
-      return results;
+      return [MissingSymbolStep(missing!)];
     }
 
-    if (!mainCompile.Symbols.TryGetValue(NopSymbolName, out F18ExportedSymbol? nopSymbol))
-    {
-      results.Add(MissingSymbolStep($"\"{NopSymbolName}\""));
-      return results;
-    }
-
-    if (!mainCompile.Symbols.TryGetValue(PlitSymbolName, out F18ExportedSymbol? plitSymbol))
-    {
-      results.Add(MissingSymbolStep($"\"{PlitSymbolName}\""));
-      return results;
-    }
-
-    if (!mainCompile.Symbols.TryGetValue(PopSymbolName, out F18ExportedSymbol? popSymbol))
-    {
-      results.Add(MissingSymbolStep($"\"{PopSymbolName}\""));
-      return results;
-    }
-
-    if (!mainCompile.Symbols.TryGetValue(PushSymbolName, out F18ExportedSymbol? pushSymbol))
-    {
-      results.Add(MissingSymbolStep($"\"{PushSymbolName}\""));
-      return results;
-    }
-
-    // Resolved once, live, from this run's own compile -- never hardcoded, never a frozen
-    // reference copy -- since every symbol's address can move as Stefan's sources evolve (as
-    // 'nop's own address already has, more than once, this session).
-    int nopOpcode = 0x8000 | (nopSymbol.Value & F18InstructionSet.WordMask);
-    int plitOpcode = 0x8000 | (plitSymbol.Value & F18InstructionSet.WordMask);
-    int popOpcode = 0x8000 | (popSymbol.Value & F18InstructionSet.WordMask);
-    int pushOpcode = 0x8000 | (pushSymbol.Value & F18InstructionSet.WordMask);
-
-    results.Add(RunSramBackedProgramStep(port, cancellationToken, nopOpcode, plitOpcode, popOpcode, pushOpcode));
-    return results;
+    return [RunSramBackedProgramStep(port, cancellationToken, program)];
   }
 
   private static CvmTestStepResult MissingSymbolStep(string what) =>
-      new($"Load a test program built from node {NopSourceNodeCoordinate:000}'s own compiled words",
+      new($"Load a test program built from node {CvmMemoryProtocol.NopSourceNodeCoordinate:000}'s own compiled words",
           Attempted: false,
           Passed: null,
           SentWords: [],
           ReceivedWords: [],
-          Detail: $"Could not build the test program: {what} was not found. Check node {NopSourceNodeCoordinate:000}'s source still defines " +
-              $"\"{NopSymbolName}\", \"{PlitSymbolName}\", \"{PopSymbolName}\", and \"{PushSymbolName}\" before re-running the test.");
-
-  // Node 607's own opcode convention, confirmed by Stefan against this project's real
-  // Node607Program.cs remarks (e.g. 'plit at word 0x00E -> opcode 0x800E): opcode = 0x8000 |
-  // wordAddress. 'nop, 'plit, 'pop, and 'push all live in this same node 607 source.
-  private const int NopSourceNodeCoordinate = 607;
-  private const string NopSymbolName = "'nop";
-  private const string PlitSymbolName = "'plit";
-  private const int PlitLiteralValue = 0x1234;
-  private const string PopSymbolName = "'pop";
-  private const string PushSymbolName = "'push";
-
-  private const int WakeValue = 0x15555;
-
-  // How many leading 'nop opcodes the test program starts with before 'plit.
-  private const int LeadingNopCount = 5;
-
-  // Padding appended after the interesting part of the test program (LeadingNopCount 'nop, then
-  // 'plit + its literal, then 'pop and 'push) so the interpreter has more of its own,
-  // already-understood 'nop opcode to fetch for a while afterward, rather than running into
-  // zero-initialized simulated SRAM the moment the deliberately loaded words run out -- 0x00000
-  // does not have bit 0x8000 set, so 'nop's own decode logic would treat it as something other
-  // than a plain call and this test has no hypothesis yet for what that would do.
-  private const int TrailingNopCount = 8;
+          Detail: $"Could not build the test program: {what} was not found. Check node {CvmMemoryProtocol.NopSourceNodeCoordinate:000}'s source still defines " +
+              $"{CvmMemoryProtocol.DescribeRequiredSymbols()} before re-running the test.");
 
   // A READ command is two words: [page, address-in-page]. This was established across 6+ real
   // hardware round trips as node 607's own fetch loop advanced through a run of 'nop opcodes (each
@@ -427,17 +476,10 @@ public sealed class Ga144CvmHardwareInstaller
   // decremented once by the first push -- 'plit's own literal (0x01234) as the plain value word
   // both times. Page and address-in-page are combined the same way AN003 combines its 4-bit page
   // with a 16-bit in-page address (4 + 16 = 20 bits, exactly this class's declared 1 Mword/2^20
-  // capacity) -- see CombineAddress below.
-  private const int SramWriteFlagBit = 0x20000; // bit 17.
-
-  private static int CombineAddress(int page, int addressInPage) =>
-      ((page << 16) | (addressInPage & 0xFFFF)) & (CvmSimulatedSram.WordCapacity - 1);
-
-  // Compact "p:aaaa" rendering of a page/address-in-page pair for the transaction log -- page is
-  // the 4-bit page number (a single hex digit, 0-F) and aaaa is the 16-bit address-in-page (always
-  // 4 hex digits), matching how the two words actually split up inside CombineAddress above.
-  private static string FormatPageAddress(int page, int addressInPage) =>
-      $"{page:X}:{addressInPage:X4}";
+  // capacity) -- see CvmMemoryProtocol.CombineAddress. This whole decode convention -- and the
+  // ReadWord/WaitForTransmitDrain/FormatPageAddress/FormatWords helpers used below -- now lives in
+  // CvmMemoryProtocol, shared with the interactive CvmDebugSession debugger, so both talk to the
+  // wire (and log transactions) exactly the same way.
 
   // Hard stop on how many read/write transactions this step will service, so a real hardware
   // condition that makes the CVM chatter indefinitely cannot hang this test forever. Comfortably
@@ -449,25 +491,14 @@ public sealed class Ga144CvmHardwareInstaller
   private static CvmTestStepResult RunSramBackedProgramStep(
       NativeWindowsSerialPort port,
       CancellationToken cancellationToken,
-      int nopOpcode,
-      int plitOpcode,
-      int popOpcode,
-      int pushOpcode)
+      IReadOnlyList<int> program)
   {
-    // Stefan's step 1: build and load the test program into a simulated SRAM, starting at
-    // address 0, before the CVM is started.
-    var program = new List<int>();
-    program.AddRange(Enumerable.Repeat(nopOpcode, LeadingNopCount));
-    program.Add(plitOpcode);
-    program.Add(PlitLiteralValue);
-    program.Add(popOpcode);
-    program.Add(pushOpcode);
-    program.AddRange(Enumerable.Repeat(nopOpcode, TrailingNopCount));
-
+    // Stefan's step 1: load the shared test program into a simulated SRAM, starting at address 0,
+    // before the CVM is started.
     var sram = new CvmSimulatedSram();
     sram.LoadProgram(program);
 
-    string description = $"Load a {program.Count}-word test program ({LeadingNopCount} 'nop, 'plit, literal 0x{PlitLiteralValue:X5}, 'pop, 'push, {TrailingNopCount} trailing 'nop) " +
+    string description = $"Load a {program.Count}-word test program ({CvmMemoryProtocol.LeadingNopCount} 'nop, 'plit, literal 0x{CvmMemoryProtocol.PlitLiteralValue:X5}, 'pop, 'push, {CvmMemoryProtocol.TrailingNopCount} trailing 'nop) " +
         $"into a simulated {CvmSimulatedSram.WordCapacity:N0}-word SRAM, wake 'start, then service every read/write command as that SRAM would";
 
     var sentWords = new List<int>();
@@ -481,51 +512,51 @@ public sealed class Ga144CvmHardwareInstaller
     {
       // Stefan's step 2: start the CVM by writing a word.
       byte[] wakeBytes = new byte[3];
-      Ga144Node708Probe.EncodeAsynchronousWord(WakeValue, wakeBytes);
+      Ga144Node708Probe.EncodeAsynchronousWord(CvmMemoryProtocol.WakeValue, wakeBytes);
       port.Write(wakeBytes);
-      sentWords.Add(WakeValue);
-      WaitForTransmitDrain(port, wakeBytes.Length);
-      Thread.Sleep(InterWordSettleMilliseconds);
+      sentWords.Add(CvmMemoryProtocol.WakeValue);
+      CvmMemoryProtocol.WaitForTransmitDrain(port, wakeBytes.Length);
+      Thread.Sleep(CvmMemoryProtocol.InterWordSettleMilliseconds);
 
       // Stefan's step 3: act like a SRAM and record all read & write commands.
       for (int transactionCount = 0; transactionCount < SramTransactionCap; transactionCount++)
       {
-        int pageWord = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
+        int pageWord = CvmMemoryProtocol.ReadWord(port, CvmMemoryProtocol.ResponseTimeoutMilliseconds, cancellationToken);
         receivedWords.Add(pageWord);
 
-        bool isWrite = (pageWord & SramWriteFlagBit) != 0;
+        bool isWrite = (pageWord & CvmMemoryProtocol.SramWriteFlagBit) != 0;
 
         if (isWrite)
         {
           // Three words in, no reply out. Both address words -- page and address-in-page -- are
           // inverted for a write; only the value word is plain.
           int page = (~pageWord) & F18InstructionSet.WordMask;
-          int rawAddressInPage = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
-          int value = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
+          int rawAddressInPage = CvmMemoryProtocol.ReadWord(port, CvmMemoryProtocol.ResponseTimeoutMilliseconds, cancellationToken);
+          int value = CvmMemoryProtocol.ReadWord(port, CvmMemoryProtocol.ResponseTimeoutMilliseconds, cancellationToken);
           receivedWords.Add(rawAddressInPage);
           receivedWords.Add(value);
 
           int addressInPage = (~rawAddressInPage) & F18InstructionSet.WordMask;
-          int address = CombineAddress(page, addressInPage);
+          int address = CvmMemoryProtocol.CombineAddress(page, addressInPage);
           sram.Write(address, value);
-          transactionLog.Add($"[WRITE] {FormatPageAddress(page, addressInPage)} <- 0x{value:X5}  " +
-              $"(raw [{FormatWords([pageWord, rawAddressInPage, value])}])");
+          transactionLog.Add($"[WRITE] {CvmMemoryProtocol.FormatPageAddress(page, addressInPage)} <- 0x{value:X5}  " +
+              $"(raw [{CvmMemoryProtocol.FormatWords([pageWord, rawAddressInPage, value])}])");
         }
         else
         {
           // Two words in, one reply word out.
           int page = pageWord & F18InstructionSet.WordMask;
-          int addressInPage = ReadWord(port, ResponseTimeoutMilliseconds, cancellationToken);
+          int addressInPage = CvmMemoryProtocol.ReadWord(port, CvmMemoryProtocol.ResponseTimeoutMilliseconds, cancellationToken);
           receivedWords.Add(addressInPage);
 
-          int address = CombineAddress(page, addressInPage);
+          int address = CvmMemoryProtocol.CombineAddress(page, addressInPage);
           int replyValue = sram.Read(address);
           byte[] replyBytes = new byte[3];
           Ga144Node708Probe.EncodeAsynchronousWord(replyValue, replyBytes);
           port.Write(replyBytes);
           sentWords.Add(replyValue);
-          WaitForTransmitDrain(port, replyBytes.Length);
-          Thread.Sleep(InterWordSettleMilliseconds);
+          CvmMemoryProtocol.WaitForTransmitDrain(port, replyBytes.Length);
+          Thread.Sleep(CvmMemoryProtocol.InterWordSettleMilliseconds);
 
           // Only page 0 (the program itself) is expected to be fetched in strict, sequential
           // order -- that is node 607's own instruction-fetch loop walking forward one word at a
@@ -538,9 +569,9 @@ public sealed class Ga144CvmHardwareInstaller
           {
             bool matchesExpectedAddress = address == expectedNextReadAddress;
             allReadsMatchedExpectedAddress &= matchesExpectedAddress;
-            transactionLog.Add($"[READ ] {FormatPageAddress(page, addressInPage)} -> 0x{replyValue:X5}" +
+            transactionLog.Add($"[READ ] {CvmMemoryProtocol.FormatPageAddress(page, addressInPage)} -> 0x{replyValue:X5}" +
                 (matchesExpectedAddress ? string.Empty : $"  (expected flat address 0x{expectedNextReadAddress:X6})") +
-                $"  (raw [{FormatWords([pageWord, addressInPage])}])");
+                $"  (raw [{CvmMemoryProtocol.FormatWords([pageWord, addressInPage])}])");
             expectedNextReadAddress = address + 1;
 
             // Every deliberately loaded word has now been read back at least once -- stop here
@@ -552,8 +583,8 @@ public sealed class Ga144CvmHardwareInstaller
           }
           else
           {
-            transactionLog.Add($"[READ ] {FormatPageAddress(page, addressInPage)} -> 0x{replyValue:X5}" +
-                $"  (raw [{FormatWords([pageWord, addressInPage])}])");
+            transactionLog.Add($"[READ ] {CvmMemoryProtocol.FormatPageAddress(page, addressInPage)} -> 0x{replyValue:X5}" +
+                $"  (raw [{CvmMemoryProtocol.FormatWords([pageWord, addressInPage])}])");
           }
         }
       }
@@ -570,7 +601,7 @@ public sealed class Ga144CvmHardwareInstaller
     bool? passed = failureNote is not null ? null : allReadsMatchedExpectedAddress;
 
     var detail = new System.Text.StringBuilder();
-    detail.Append($"Sent [{FormatWords(sentWords)}]. Received [{FormatWords(receivedWords)}] ({transactionLog.Count} transaction(s)).");
+    detail.Append($"Sent [{CvmMemoryProtocol.FormatWords(sentWords)}]. Received [{CvmMemoryProtocol.FormatWords(receivedWords)}] ({transactionLog.Count} transaction(s)).");
     foreach (string transaction in transactionLog)
     {
       detail.Append('\n').Append("    ").Append(transaction);
@@ -600,13 +631,7 @@ public sealed class Ga144CvmHardwareInstaller
         Detail: detail.ToString());
   }
 
-  private static CvmInstallAndTestReport Failed(string message) =>
-      new(new CvmInstallReport(false, message, []), []);
-
-  // "none" rather than an empty "[]" -- an empty pair of brackets in the middle of a longer
-  // transcript line reads as a rendering glitch; a word, this makes the zero case unambiguous.
-  private static string FormatWords(IReadOnlyList<int> words) =>
-      words.Count == 0 ? "none" : string.Join(", ", words.Select(word => $"0x{word:X5}"));
+  private static CvmInstallReport FailedInstall(string message) => new(false, message, []);
 
   private static void SendBootFrame(NativeWindowsSerialPort port, int transferAddress, IReadOnlyList<int> payload) =>
       SendBootFrame(port, AsyncSerialContinuationAddress, transferAddress, payload);
@@ -615,7 +640,7 @@ public sealed class Ga144CvmHardwareInstaller
   {
     byte[] frame = EncodeBootFrame(completionAddress, transferAddress, payload);
     port.Write(frame);
-    WaitForTransmitDrain(port, frame.Length);
+    CvmMemoryProtocol.WaitForTransmitDrain(port, frame.Length);
     SettleUsb(OnlineTransactionSettleMilliseconds, CancellationToken.None);
   }
 
@@ -637,42 +662,6 @@ public sealed class Ga144CvmHardwareInstaller
     }
 
     return bytes;
-  }
-
-  private static int ReadWord(NativeWindowsSerialPort port, int timeoutMilliseconds, CancellationToken cancellationToken)
-  {
-    byte[] bytes = ReadExactly(port, 3, timeoutMilliseconds, cancellationToken);
-    int value = bytes[0] | (bytes[1] << 8) | ((bytes[2] & 0x03) << 16);
-    return value & F18InstructionSet.WordMask;
-  }
-
-  private static byte[] ReadExactly(NativeWindowsSerialPort port, int count, int timeoutMilliseconds, CancellationToken cancellationToken)
-  {
-    var result = new byte[count];
-    int offset = 0;
-    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-    while (offset < count && stopwatch.ElapsedMilliseconds < timeoutMilliseconds)
-    {
-      cancellationToken.ThrowIfCancellationRequested();
-      int read = port.Read(result, offset, count - offset);
-      if (read > 0)
-      {
-        offset += read;
-      }
-    }
-
-    if (offset != count)
-    {
-      throw new TimeoutException($"Timed out after receiving {offset} of {count} bytes.");
-    }
-
-    return result;
-  }
-
-  private static void WaitForTransmitDrain(NativeWindowsSerialPort port, int byteCount)
-  {
-    double milliseconds = (byteCount * 10.0 * 1000.0 / port.BaudRate) + 3.0;
-    Thread.Sleep((int)Math.Ceiling(milliseconds));
   }
 
   private static void SettleUsb(int milliseconds, CancellationToken cancellationToken)

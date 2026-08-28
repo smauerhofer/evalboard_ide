@@ -100,6 +100,12 @@
                           Padding="12,6"
                           Margin="0,0,8,0"
                           ToolTip="Compiles the CVM test cluster from this project's own node sources, resets the chip, loads all 9 nodes' compiled images across the mesh through node 708 (leaves first, root last), then runs the first live test: wake 708's 'start (send it one word), then read back the CVM's first memory request through 707 -- expected to be node 607's very first instruction fetch, address 0, which should arrive as two words both equal to 0. Blocked while a Kraken is erected (this resets the whole chip, exactly like erecting a Kraken does)." />
+          <Button Content="CVM Debugger"
+                          Click="OnOpenCvmDebuggerClick"
+                          IsEnabled="True"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Opens the CVM Debugger window: same compile-boot-load-wake sequence as 'Install &amp; run CVM test', but interactive -- step one memory-interface transaction at a time, run to a breakpoint (paused by withholding a read's reply, exactly what the physical CVM is blocked on), and inspect the simulated SRAM. Blocked while a Kraken is erected (this resets the whole chip)." />
           <TextBlock Text="{Binding VerifyStatus, Mode=OneWay}"
                              VerticalAlignment="Center"
                              Margin="10,0,0,0"

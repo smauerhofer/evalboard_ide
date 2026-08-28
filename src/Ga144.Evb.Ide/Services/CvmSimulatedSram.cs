@@ -47,6 +47,25 @@ public sealed class CvmSimulatedSram
 
   public void Write(int address, int value) => _words[CheckAddress(address)] = value & F18InstructionSet.WordMask;
 
+  /// <summary>
+  /// Copies out <paramref name="count"/> consecutive words starting at <paramref name="startAddress"/>
+  /// -- built for the CVM Debugger's memory inspector, which needs to display a whole visible range
+  /// at once rather than one <see cref="Read"/> call per cell. Read-only: never marks anything as
+  /// having been "accessed" by the CVM the way a real wire transaction would.
+  /// </summary>
+  public IReadOnlyList<int> ReadRange(int startAddress, int count)
+  {
+    if (startAddress < 0 || count < 0 || (long)startAddress + count > WordCapacity)
+    {
+      throw new ArgumentOutOfRangeException(nameof(startAddress),
+          $"A {count}-word range starting at 0x{startAddress:X6} does not fit in the {WordCapacity:N0}-word simulated SRAM.");
+    }
+
+    var result = new int[count];
+    Array.Copy(_words, startAddress, result, 0, count);
+    return result;
+  }
+
   private static int CheckAddress(int address)
   {
     if (address < 0 || address >= WordCapacity)
