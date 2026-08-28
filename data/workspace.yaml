@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-28T17:01:16.4712262
-      utcDateTime: 2026-08-28T17:01:16.4712262Z
-      localDateTime: 2026-08-28T19:01:16.4712262+02:00
+      dateTime: 2026-08-28T17:12:39.9434315
+      utcDateTime: 2026-08-28T17:12:39.9434315Z
+      localDateTime: 2026-08-28T19:12:39.9434315+02:00
       date: 2026-08-28T00:00:00.0000000
       day: 28
       dayOfWeek: Friday
       dayOfYear: 240
       hour: 17
-      millisecond: 471
-      microsecond: 226
-      nanosecond: 200
-      minute: 1
+      millisecond: 943
+      microsecond: 431
+      nanosecond: 500
+      minute: 12
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 16
-      ticks: 639235332764712262
-      utcTicks: 639235332764712262
-      timeOfDay: 17:01:16.4712262
+      second: 39
+      ticks: 639235339599434315
+      utcTicks: 639235339599434315
+      timeOfDay: 17:12:39.9434315
       year: 2026
   portB: 
   portC:
@@ -10299,9 +10299,9 @@ projects:
 
         # up /b
 
-        : s/r@ .loc A[ @p ]] lit !b a dup !b ;
+        : s/r@ ( t) .loc A[ @p ]] lit !b dup !b ;
 
-        : s/r! .loc A[ !p ]] lit !b @b a! ;
+        : s/r! ( t) .loc A[ !p ]] lit !b @b ;
 
         : s/2put ( ww) leap
 
@@ -10324,15 +10324,15 @@ projects:
         : ctrl A[ ; ]] lit !b
 
         : main A[ !p !p ]] lit !b @b >r @b r> ..
-          ( xy )
+          ( xy)
           2* -if
             2* -if // 0xf??? node 508
-              --l- a leave ;
+              ( xy) --l- a leave ;
             then // 0xe???
             2* -if // 0xe8??
-              -d-- a leave ;
+              ( xy) -d-- a leave ;
             then // 0xe0??
-            r--- a leave ;
+            ( xy) r--- a leave ;
           then
           ( xy )
           2* -if
@@ -10340,7 +10340,7 @@ projects:
             2* 2/ 2/ 2/ 2/ 2/ 2/ leave ;
           then
           ( xy )
-          2* -if drop >r unary ; then drop >r binary ;
+          2* -if drop >r binary ; then drop >r unary ;
         : 'usl for 2* unext ;
 
         : 'ssr >r 2* 2* 2/ 2/ r> ;
@@ -10404,28 +10404,27 @@ projects:
 
         )
       ramWords:
-      - 0x05B8B
+      - 0x05B92
       - 0x049B2
       - 0x09555
-      - 0x05B02
+      - 0x05B05
       - 0x0C9B2
-      - 0x2B555
-      - 0x13407
+      - 0x13406
       - 0x05B25
       - 0x049B2
       - 0x05B25
       - 0x0560D
-      - 0x13406
+      - 0x13405
       - 0x05B05
       - 0x13407
-      - 0x13406
+      - 0x13405
       - 0x05B25
       - 0x05612
       - 0x05B12
       - 0x13402
       - 0x0C9B2
       - 0x09F55
-      - 0x13411
+      - 0x13410
       - 0x23455
       - 0x040AA
       - 0x0FFFF
@@ -10434,22 +10433,22 @@ projects:
       - 0x05B02
       - 0x0D9B2
       - 0x2FF9A
-      - 0x37227
-      - 0x37222
+      - 0x37226
+      - 0x37221
       - 0x13575
-      - 0x23717
-      - 0x37225
+      - 0x23716
+      - 0x37224
       - 0x13515
-      - 0x23717
+      - 0x23716
       - 0x135D5
-      - 0x23717
-      - 0x3722B
+      - 0x23716
+      - 0x3722A
       - 0x367C2
       - 0x307C2
-      - 0x31717
-      - 0x3722E
+      - 0x31716
+      - 0x3722D
       - 0x3A8B2
-      - 0x11416
+      - 0x11414
       - 0x3A8B2
       - 0x11415
       - 0x2E9B2
@@ -10468,8 +10467,9 @@ projects:
       - 0x15555
       - 0x15555
       - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x01B
+        entryPoint: 0x01A
         p: 0x000
         a: 0x000
         b: 0x000
@@ -11017,21 +11017,21 @@ projects:
 
         : 'lit ( s-s) /next
 
-        : /r! ( sw-s) 3 dup ---u ;
+        : /r! ( sw-s) 3 dup ( swxy) ---u ;
 
         : 'pop .loc ( s-s) /pop /r! ;
 
         : 'push .loc ( s-s) /r@ /push ;
 
         : exec ( sxy-s)
-          2* -if -d-- ; then
+          2* -if ( sxy) -d-- ; then
           2* -if
-            2* -if --l- ; then r--- ;
-          then 2* -if
-            2* -if /r@
-              if drop drop drop ; then drop
-            then >r drop r> 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! ;
-          then drop >r ;
+            2* -if ( sxy) --l- ; then ( sxy) r--- ;
+          then ( sxy) 2* -if
+          2* -if ( sxy) /r@
+            if drop drop drop ; then drop
+            then  ( sxy) >r drop r> 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! ;
+          then  ( sxy) drop >r ( s) ;
         : 'ret ( s-s) /pop a! ;
 
         : 'xs ( s-s') >r /r@ r> /r! ;

@@ -153,31 +153,39 @@ public sealed class CvmDebugSession : IDisposable
 
   /// <summary>
   /// Linearly disassembles page 0 (the only page that is ever code) from address 0 up to but not
-  /// including <paramref name="endAddressExclusive"/>, using node 607's own compiled opcode table
-  /// (<see cref="CvmMemoryProtocol.BuildOpcodeTable"/>). This MUST be a stateful scan starting at 0,
-  /// never an independent per-word decode: a multi-word instruction like 'plit is followed by a
-  /// literal DATA word that would otherwise be mistaken for its own opcode if a word were decoded in
-  /// isolation. Returns a sparse map from flat address to either the instruction's mnemonic (at the
-  /// address it starts on) or "(data)" (at every word an instruction consumes after its own opcode
-  /// word); an address that doesn't fall on a recognized instruction boundary -- typically because
-  /// it holds an opcode this debugger doesn't know about yet -- is simply absent from the result
-  /// rather than mislabeled.
+  /// including <paramref name="endAddressExclusive"/>, into CVM assembly language mnemonics
+  /// (<see cref="CvmAssemblyLanguage"/>) resolved against node 607's own current compile. This MUST
+  /// be a stateful scan starting at 0, never an independent per-word decode: pushlit is followed by
+  /// a literal operand word that would otherwise be mistaken for its own opcode if a word were
+  /// decoded in isolation.
+  ///
+  /// Returns a sparse map from flat address to a listing line: an instruction's own address gets
+  /// its mnemonic, folded together with its operand when it has one (e.g. "pushlit 0x01234") so the
+  /// memory inspector reads like a real disassembly rather than two disconnected rows; the operand
+  /// word's own address is left out of the map entirely (no note at all), same as any other address
+  /// that doesn't fall on a recognized instruction boundary -- typically because it holds an opcode
+  /// this debugger doesn't know about yet.
   /// </summary>
   public IReadOnlyDictionary<int, string> DisassemblePage0(int endAddressExclusive)
   {
-    IReadOnlyDictionary<int, (string Mnemonic, int WordLength)> opcodeTable =
-        CvmMemoryProtocol.BuildOpcodeTable(_compiledRam);
+    IReadOnlyDictionary<int, (string Mnemonic, int WordLength)> decodeTable =
+        CvmAssemblyLanguage.BuildDecodeTable(_compiledRam);
     var notes = new Dictionary<int, string>();
     int address = 0;
     while (address < endAddressExclusive)
     {
       int word = _sram.Read(CvmMemoryProtocol.CombineAddress(0, address));
-      if (opcodeTable.TryGetValue(word, out (string Mnemonic, int WordLength) instruction))
+      if (decodeTable.TryGetValue(word, out (string Mnemonic, int WordLength) instruction))
       {
-        notes[address] = instruction.Mnemonic;
-        for (int dataOffset = 1; dataOffset < instruction.WordLength && address + dataOffset < endAddressExclusive; dataOffset++)
+        int operandCount = instruction.WordLength - 1;
+        if (operandCount == 1 && address + 1 < endAddressExclusive)
         {
-          notes[address + dataOffset] = "(data)";
+          int operandValue = _sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1));
+          notes[address] = $"{instruction.Mnemonic} 0x{operandValue:X5}";
+        }
+        else
+        {
+          notes[address] = instruction.Mnemonic;
         }
 
         address += instruction.WordLength;

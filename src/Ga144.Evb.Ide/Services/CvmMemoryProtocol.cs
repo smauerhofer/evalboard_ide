@@ -107,47 +107,11 @@ internal static class CvmMemoryProtocol
   // CombineAddress's own page/address-in-page packing rolls over into page 1.
   public const int Page0WordCount = 0x10000;
 
-  // The disassembler's opcode table: each known node-607 opcode's mnemonic and how many words
-  // (its own opcode word included) the instruction occupies in memory. 'plit is the only
-  // multi-word instruction right now -- its second word is the literal it pushes, which must be
-  // skipped as DATA by the disassembler rather than decoded as if it were itself another opcode.
-  // Extend this list as more opcodes become relevant to the debugger; nothing else needs to change.
-  public static readonly IReadOnlyList<(string SymbolName, int WordLength)> KnownOpcodes =
-  [
-    (NopSymbolName, 1),
-    (PlitSymbolName, 2),
-    (PopSymbolName, 1),
-    (PushSymbolName, 1),
-  ];
-
-  /// <summary>
-  /// Resolves each of <see cref="KnownOpcodes"/> against THIS run's own node 607 compile (never a
-  /// frozen reference copy -- every address can move as the source evolves) and returns a map from
-  /// the opcode's actual wire/memory value (0x8000 | wordAddress) to its mnemonic and word length,
-  /// for <see cref="CvmDebugSession.DisassemblePage0"/> to consume. An opcode whose symbol isn't
-  /// defined in the current source is simply omitted -- "for now only a few opcodes are defined" is
-  /// expected to grow over time without this method needing to change.
-  /// </summary>
-  public static IReadOnlyDictionary<int, (string Mnemonic, int WordLength)> BuildOpcodeTable(
-      IReadOnlyDictionary<int, F18CompileResult> compiledRam)
-  {
-    var table = new Dictionary<int, (string, int)>();
-    if (!compiledRam.TryGetValue(NopSourceNodeCoordinate, out F18CompileResult? compile))
-    {
-      return table;
-    }
-
-    foreach ((string symbolName, int wordLength) in KnownOpcodes)
-    {
-      if (compile.Symbols.TryGetValue(symbolName, out F18ExportedSymbol? symbol))
-      {
-        int opcode = 0x8000 | (symbol.Value & F18InstructionSet.WordMask);
-        table[opcode] = (symbolName, wordLength);
-      }
-    }
-
-    return table;
-  }
+  // The wire/memory-level opcode table (node 607's own F18 symbols -> opcode word + word length)
+  // moved to CvmAssemblyLanguage, which layers the CVM assembly language's own mnemonics (nop,
+  // pushlit, push, pop) on top of it for both assembly and disassembly. See that file's remarks for
+  // why the two naming layers -- F18 source symbols here, CVM asm mnemonics there -- are kept
+  // separate.
 
   // Compact "p:aaaa" rendering of a page/address-in-page pair -- page is the 4-bit page number (a
   // single hex digit, 0-F) and aaaa is the 16-bit address-in-page (always 4 hex digits), matching
