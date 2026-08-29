@@ -37,6 +37,8 @@
                           ToolTip="Services transactions back-to-back until an armed breakpoint's read reply is withheld, the transaction cap is reached, or you click Pause." />
           <Button Content="Pause" Command="{Binding PauseCommand}" Padding="12,6" Margin="0,0,8,0"
                           ToolTip="Stops the current Continue after its transaction in progress finishes." />
+          <Button Content="Stop" Command="{Binding StopCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Ends this debugging session: cancels any run in progress and closes the serial port to the chip. The window stays open -- click Start / Reinstall to reconnect." />
           <TextBlock Text="PC:" VerticalAlignment="Center" Margin="14,0,4,0" FontWeight="SemiBold" />
           <TextBlock Text="{Binding ProgramCounterText}" VerticalAlignment="Center" FontFamily="Consolas" FontWeight="SemiBold" />
         </StackPanel>
@@ -79,8 +81,16 @@
                         TextWrapping="NoWrap"
                         VerticalScrollBarVisibility="Auto"
                         HorizontalScrollBarVisibility="Auto" />
-        <Button Content="Assemble" Command="{Binding AssembleCommand}" Padding="12,6" Margin="0,7,0,0" HorizontalAlignment="Left"
-                        ToolTip="Assembles this source against the current node 607 compile and overwrites the simulated SRAM's page 0 with the result, starting at address 0. This is a live reprogram of whatever the connected chip is actually reading from -- the debugger then operates on this code." />
+        <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+          <Button Content="Assemble" Command="{Binding AssembleCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Assembles this source against node 607's current compile and loads the result into a simulated SRAM's page 0, starting at address 0. With a chip connected, this is a live reprogram of whatever it's actually reading from. With none, it assembles into a standalone simulated SRAM instead -- so you can write and check a program before ever clicking Start; Start then applies it to the chip automatically." />
+          <Button Content="Save" Command="{Binding SaveCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Saves this text onto this chip's own project data, so it's still here next time you open the CVM Debugger. Rides the IDE's normal auto-save -- no separate file to manage." />
+          <Button Content="Load" Command="{Binding LoadCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Replaces this text with whatever Save last saved for this chip. Disabled until something has been saved." />
+          <Button Content="Restore" Command="{Binding RestoreCommand}" Padding="12,6"
+                          ToolTip="Replaces this text with the original built-in test program -- the same source Start loads by default -- discarding whatever was saved." />
+        </StackPanel>
       </StackPanel>
     </GroupBox>
 

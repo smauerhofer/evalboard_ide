@@ -212,6 +212,110 @@ internal static class CvmAssemblyLanguage
   }
 
   /// <summary>
+  /// Shared by <see cref="CvmDebugSession.AssembleAndLoadProgram"/> (a live session's own port-backed
+  /// simulated SRAM) and <see cref="ViewModels.CvmDebuggerViewModel"/>'s standalone Assembly Code path
+  /// (a plain in-memory <see cref="CvmSimulatedSram"/> that exists whether or not a chip is connected):
+  /// parses then assembles <paramref name="sourceText"/> against <paramref name="compiledRam"/> and, on
+  /// success, overwrites <paramref name="sram"/>'s page 0 with the result starting at address 0,
+  /// zero-filling any leftover tail from <paramref name="previousProgram"/> if it was longer, so no
+  /// stale opcode lingers past the new program's end. Returns the new word list (the caller's own job
+  /// to remember as its "currently loaded program") and never touches <paramref name="sram"/> at all on
+  /// a parse/assemble failure.
+  /// </summary>
+  public static (List<int>? Words, string? Error) AssembleAndLoadProgram(
+      string sourceText,
+      CvmSimulatedSram sram,
+      IReadOnlyList<int> previousProgram,
+      IReadOnlyDictionary<int, F18CompileResult> compiledRam)
+  {
+    (List<CvmAsmInstruction>? instructions, string? parseError) = ParseSource(sourceText);
+    if (instructions is null)
+    {
+      return (null, parseError);
+    }
+
+    (List<int>? words, string? assembleError) = Assemble(instructions, compiledRam);
+    if (words is null)
+    {
+      return (null, assembleError);
+    }
+
+    int previousLength = previousProgram.Count;
+    sram.LoadProgram(words);
+    if (words.Count < previousLength)
+    {
+      sram.LoadProgram(new int[previousLength - words.Count], words.Count);
+    }
+
+    return (words, null);
+  }
+
+  /// <summary>
+  /// Shared by <see cref="CvmDebugSession.DisassemblePage0"/> and <see cref="ViewModels.CvmDebuggerViewModel"/>'s
+  /// standalone path: linearly disassembles <paramref name="sram"/>'s page 0 from address 0 up to but
+  /// not including <paramref name="endAddressExclusive"/>, into CVM assembly language mnemonics
+  /// resolved against <paramref name="compiledRam"/>, plus direct bit-pattern rules for
+  /// <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c> (<see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/>)
+  /// that need no compile/symbol at all. This MUST be a stateful scan starting at 0, never an
+  /// independent per-word decode: pushlit is followed by a literal operand word that would otherwise be
+  /// mistaken for its own opcode if a word were decoded in isolation.
+  ///
+  /// Returns a sparse map from flat address to a listing line: an instruction's own address gets its
+  /// mnemonic, folded together with its operand when it has one (e.g. "pushlit 0x1234") so the memory
+  /// inspector reads like a real disassembly rather than two disconnected rows; the operand word's own
+  /// address is left out of the map entirely (no note at all), same as any other address that doesn't
+  /// fall on a recognized instruction boundary -- typically because it holds an opcode this debugger
+  /// doesn't know about yet.
+  /// </summary>
+  public static IReadOnlyDictionary<int, string> DisassemblePage0(
+      CvmSimulatedSram sram,
+      IReadOnlyDictionary<int, F18CompileResult> compiledRam,
+      int endAddressExclusive)
+  {
+    IReadOnlyDictionary<int, (string Mnemonic, int WordLength)> decodeTable = BuildDecodeTable(compiledRam);
+    var notes = new Dictionary<int, string>();
+    int address = 0;
+    while (address < endAddressExclusive)
+    {
+      int word = sram.Read(CvmMemoryProtocol.CombineAddress(0, address));
+
+      // "call", "br", "ifbr", and "slit" have no F18 symbol to resolve -- each one's whole word is
+      // fully determined by its own bit pattern and operand alone (CvmInstructionSet.
+      // CvmOperandEncoding.EmbeddedAddress / EmbeddedSignedValue), independent of node 607's live
+      // compile, so all four are checked before consulting the (symbol-driven) decode table at all.
+      string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word);
+      if (selfDescribing is not null)
+      {
+        notes[address] = selfDescribing;
+        address += 1;
+        continue;
+      }
+
+      if (decodeTable.TryGetValue(word, out (string Mnemonic, int WordLength) instruction))
+      {
+        int operandCount = instruction.WordLength - 1;
+        if (operandCount == 1 && address + 1 < endAddressExclusive)
+        {
+          int operandValue = sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1));
+          notes[address] = $"{instruction.Mnemonic} 0x{operandValue:X4}";
+        }
+        else
+        {
+          notes[address] = instruction.Mnemonic;
+        }
+
+        address += instruction.WordLength;
+      }
+      else
+      {
+        address += 1;
+      }
+    }
+
+    return notes;
+  }
+
+  /// <summary>
   /// Encodes one <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c> word directly from
   /// <paramref name="shape"/> and its literal operand -- the same arithmetic
   /// <see cref="CvmAssembler.EmitEmbeddedSignedValue"/> uses for <c>br</c>/<c>ifbr</c>/<c>slit</c>

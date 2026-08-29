@@ -3,19 +3,23 @@ namespace Ga144.Cvm.Toolchain;
 /// <summary>
 /// The CVM assembly language's own instruction set -- Stefan's mnemonics (<c>nop</c>,
 /// <c>pushlit &lt;data&gt;</c>, <c>push</c>, <c>pop</c>, <c>call &lt;address&gt;</c>, <c>ret</c>,
-/// <c>br &lt;offset&gt;</c>, <c>ifbr &lt;offset&gt;</c>, <c>slit &lt;value&gt;</c>) and, for each, how
-/// many words it occupies once assembled, how its operand (if any) is encoded, and a stable numeric
-/// <see cref="CvmInstructionShape.Id"/>. This is the SHAPE of each instruction only -- for the five
-/// tagged-dispatch mnemonics (<see cref="CvmOperandEncoding.None"/>/<see cref="CvmOperandEncoding.TrailingWord"/>:
-/// <c>nop</c>, <c>pushlit</c>, <c>push</c>, <c>pop</c>, <c>ret</c>), never a real numeric opcode: a real
-/// opcode there depends on which node(s) the CVM's primitives are actually compiled into (originally
-/// just node 607; Stefan has since said the full instruction set is spread across node 607 plus
-/// 606/608/507/506/508/407, each primitive living in exactly one of them, distinguished by
-/// opcode-value ranges like 0xA??? / 0xB??? whose exact assignment he'll provide separately) -- so
-/// resolving one of those mnemonics to its real opcode is entirely the linker's job, once that
-/// per-node/range mapping exists. This project deliberately never needs to know any node's F18 source
-/// to assemble a program: <see cref="CvmAssembler"/> treats every tagged-dispatch mnemonic as an
-/// external symbol, portable across however many nodes and whatever ranges end up implementing it.
+/// <c>br &lt;offset&gt;</c>, <c>ifbr &lt;offset&gt;</c>, <c>slit &lt;value&gt;</c>, plus node 507's ALU
+/// ops -- <c>usl</c>, <c>ssr</c>, <c>usr</c>, <c>add</c>, <c>sub</c>, <c>and</c>, <c>xor</c>, <c>or</c>
+/// (binary: register r and the top of the CVM data stack), and <c>inv</c>, <c>inc</c>, <c>dec</c>
+/// (unary: register r alone)) and, for each, how many words it occupies once assembled, how its
+/// operand (if any) is encoded, and a stable numeric <see cref="CvmInstructionShape.Id"/>. This is the
+/// SHAPE of each instruction only -- for the tagged-dispatch mnemonics
+/// (<see cref="CvmOperandEncoding.None"/>/<see cref="CvmOperandEncoding.TrailingWord"/>: <c>nop</c>,
+/// <c>pushlit</c>, <c>push</c>, <c>pop</c>, <c>ret</c>, and all eleven ALU ops above -- none of the ALU
+/// ops takes an assembled operand, unary or binary alike, since their values come from register r and/or
+/// the CVM data stack rather than the instruction word itself), never a real numeric opcode: a real
+/// opcode there depends on which node(s) the CVM's primitives are actually compiled into (node 607 for
+/// the first five; node 507, reached from 607's dispatch, for the eleven ALU ops -- each primitive
+/// living in exactly one node, distinguished by opcode-value ranges) -- so resolving one of those
+/// mnemonics to its real opcode is entirely the linker's job, once that per-node/range mapping exists.
+/// This project deliberately never needs to know any node's F18 source to assemble a program:
+/// <see cref="CvmAssembler"/> treats every tagged-dispatch mnemonic as an external symbol, portable
+/// across however many nodes and whatever ranges end up implementing it.
 /// The two self-describing encodings (<see cref="CvmOperandEncoding.EmbeddedAddress"/>,
 /// <see cref="CvmOperandEncoding.EmbeddedSignedValue"/>) need no such resolution at all -- their whole
 /// opcode word is fully known the moment the operand is, with no node/linker involvement.
@@ -39,6 +43,22 @@ public static class CvmInstructionSet
   public const string BranchMnemonic = "br";
   public const string ConditionalBranchMnemonic = "ifbr";
   public const string SlitMnemonic = "slit";
+
+  // Node 507's ALU ops, added per Stefan's node 507 source: eight binary ops (register r combined with
+  // the top of the CVM data stack) and three unary ops (register r alone). None of the eleven takes an
+  // assembled operand -- like nop/push/pop/ret, each is a single bare tagged opcode word; the operands
+  // they act on already live in r and/or on the CVM data stack by the time the opcode runs.
+  public const string UnsignedShiftLeftMnemonic = "usl";
+  public const string SignedShiftRightMnemonic = "ssr";
+  public const string UnsignedShiftRightMnemonic = "usr";
+  public const string AddMnemonic = "add";
+  public const string SubtractMnemonic = "sub";
+  public const string AndMnemonic = "and";
+  public const string XorMnemonic = "xor";
+  public const string OrMnemonic = "or";
+  public const string InvertMnemonic = "inv";
+  public const string IncrementMnemonic = "inc";
+  public const string DecrementMnemonic = "dec";
 
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
@@ -186,6 +206,17 @@ public static class CvmInstructionSet
     new(Id: 6, BranchMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: BranchTag, ValueBitMask: BranchOffsetBitMask),
     new(Id: 7, ConditionalBranchMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: ConditionalBranchTag, ValueBitMask: BranchOffsetBitMask),
     new(Id: 8, SlitMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: SlitTag, ValueBitMask: SlitValueBitMask),
+    new(Id: 9, UnsignedShiftLeftMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 10, SignedShiftRightMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 11, UnsignedShiftRightMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 12, AddMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 13, SubtractMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 14, AndMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 15, XorMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 16, OrMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 17, InvertMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 18, IncrementMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 19, DecrementMnemonic, 1, CvmOperandEncoding.None),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

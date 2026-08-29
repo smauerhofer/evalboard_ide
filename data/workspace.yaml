@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-28T23:26:09.5647428
-      utcDateTime: 2026-08-28T23:26:09.5647428Z
-      localDateTime: 2026-08-29T01:26:09.5647428+02:00
-      date: 2026-08-28T00:00:00.0000000
-      day: 28
-      dayOfWeek: Friday
-      dayOfYear: 240
-      hour: 23
-      millisecond: 564
-      microsecond: 742
-      nanosecond: 800
-      minute: 26
+      dateTime: 2026-08-29T13:35:40.1200619
+      utcDateTime: 2026-08-29T13:35:40.1200619Z
+      localDateTime: 2026-08-29T15:35:40.1200619+02:00
+      date: 2026-08-29T00:00:00.0000000
+      day: 29
+      dayOfWeek: Saturday
+      dayOfYear: 241
+      hour: 13
+      millisecond: 120
+      microsecond: 61
+      nanosecond: 900
+      minute: 35
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 9
-      ticks: 639235563695647428
-      utcTicks: 639235563695647428
-      timeOfDay: 23:26:09.5647428
+      second: 40
+      ticks: 639236073401200619
+      utcTicks: 639236073401200619
+      timeOfDay: 13:35:40.1200619
       year: 2026
   portB: 
   portC:
@@ -3220,6 +3220,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
+    debuggerAssemblyCode: 
   - role: Target
     name: Target GA144
     nodes:
@@ -4951,6 +4952,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
+    debuggerAssemblyCode: 
   userMacros:
   - name: macro1
     description: ''
@@ -6690,6 +6692,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
+    debuggerAssemblyCode: 
   - role: Target
     name: Target GA144
     nodes:
@@ -8421,6 +8424,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
+    debuggerAssemblyCode: 
   userMacros:
   - name: macro2
     description: ''
@@ -10325,25 +10329,29 @@ projects:
 
         : main A[ !p !p ]] lit !b @b >r @b r> ..
           ( xy)
-          2* -if
-            2* -if // 0xf??? node 508
-              ( xy) --l- a leave ;
-            then // 0xe???
-            2* -if // 0xe8??
+          // 11??_????_????_????
+          2* -if // 111?_????_????_????
+            2* -if // 1111_????_????_???? node 407
               ( xy) -d-- a leave ;
-            then // 0xe0??
+            then // 1110_????_????_????
+            2* -if  // 1110_1???_????_???? node 508
+              ( xy) --l- a leave ;
+            then // 1110_0???_????_???? node 506
             ( xy) r--- a leave ;
-          then
+          then // 110?_????_????_????
           ( xy )
-          2* -if
+          2* -if // 1101_????_????_????
             // short literal
             2* 2/ 2/ 2/ 2/ 2/ 2/ leave ;
-          then
+          then // 1100_????_????_????
           ( xy )
-          2* -if drop >r binary ; then drop >r unary ;
+          2* -if // 1100_1???_????_????
+            drop >r binary ;
+          then  // 1100_0???_????_????
+            drop >r unary ;
         : 'usl for 2* unext ;
 
-        : 'ssr >r 2* 2* 2/ 2/ r> ;
+        : 'ssr >r 2* 2* 2/ 2/ r>
 
         : 'usr for 2/ unext ;
 
@@ -10353,8 +10361,15 @@ projects:
 
         : 'xor xor ;
 
-        : 'or inv over inv and inv ;
+        : 'or inv over inv and
 
+        : 'inv inv ;
+
+        : '- inv . +
+
+        : 'inc 1 . + ;
+
+        : 'dec -1 . + ;
 
 
         (
@@ -10373,9 +10388,9 @@ projects:
 
         s/!  write cell to any page.
 
-        binary  calls binary function.
+        binary  calls binary function. the values are in register r and top of stack.
 
-        unary  calls unary function.
+        unary  calls unary function. the value is in register r.
 
         leave  store cell in R and exit arithmetic operation.
 
@@ -10383,24 +10398,28 @@ projects:
 
         main  start address.
 
-        'usl  binary. unsigned shift left.
+        'usl  binary. unsigned shift left. mnemonic usl
 
+        'ssr  binary. signed shift right.  mnemonic ssr
 
-        'ssr  binary. signed shift right.
+        'usr  binary. unsigned shift right. mnemonic usr
 
-        'usr  binary. unsigned shift right.
+        '+  binary add. mnemonic add
 
-        '+  binary. add.
+        '-  binary subtract. mnemonic sub
 
-        'and  binary. bitwise and
+        'and  binary. bitwise and. mnemonic and
 
-        'xor  binary. bitwise exclusive or
+        'xor  binary. bitwise exclusive or.  mnemonic xor
 
-        'or  binary. bitwise or
+        'or  binary. bitwise or.  mnemonic or
 
-        'pop  unary. pops cell to R.
+        'inv unary. bitwise invert. mnemonic inv
 
-        'cx?  binary. atomically compares and exchanges a cell in memory and return true if successful.
+        'inc unary. increment. mnemonic inc
+
+        'dec unary. increment. mnemonic dec
+
 
         )
       ramWords:
@@ -10435,10 +10454,10 @@ projects:
       - 0x2FF9A
       - 0x37226
       - 0x37221
-      - 0x13575
+      - 0x13515
       - 0x23716
       - 0x37224
-      - 0x13515
+      - 0x13575
       - 0x23716
       - 0x135D5
       - 0x23716
@@ -10454,20 +10473,20 @@ projects:
       - 0x2E9B2
       - 0x37155
       - 0x2E4DA
-      - 0x3079D
+      - 0x3079A
       - 0x2E9B2
       - 0x31155
       - 0x3D555
       - 0x3F555
       - 0x39555
       - 0x32FCA
-      - 0x3E655
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x3E9B2
+      - 0x33555
+      - 0x329F2
+      - 0x049F5
+      - 0x00001
+      - 0x049F5
+      - 0x3FFFF
       startup:
         entryPoint: 0x01A
         p: 0x000
@@ -11024,14 +11043,25 @@ projects:
         : 'push .loc ( s-s) /r@ /push ;
 
         : exec ( sxy-s)
-          2* -if ( sxy) -d-- ; then
-          2* -if
-            2* -if ( sxy) --l- ; then ( sxy) r--- ;
-          then ( sxy) 2* -if
-          2* -if ( sxy) /r@
-            if drop drop drop ; then drop
-            then  ( sxy) >r drop r> 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! ;
-          then  ( sxy) drop >r ( s) ;
+          2* -if  // 11??_????_????_????
+            ( sxy) ---u ;
+          then
+          // 10??_????_????_????
+          2* -if  // 101?_????_????_????
+            2* -if // 1011_????_????_????
+              ( sxy) --l- ;
+            then // 1010_????_????_????
+              ( sxy) r--- ;
+          then
+          ( sxy) // 100?_????_????_????
+          2* -if  // 1001_????_????_????
+            2* -if // 1001_1???_????_????
+              ( sxy) /r@
+              if drop drop drop ; then drop
+            then  // 1001_0???_????_????
+              ( sxy) >r drop r> 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! ;
+          then // 1000_????_????_????
+          ( sxy) drop >r ( s) ;
         : 'ret ( s-s) /pop a! ;
 
         : 'xs ( s-s') >r /r@ r> /r! ;
@@ -11763,6 +11793,32 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
+    debuggerAssemblyCode: >
+      nop
+
+      slit 100
+
+      push
+
+      nop
+
+      nop
+
+      nop
+
+      nop
+
+      nop
+
+      nop
+
+      nop
+
+      nop
+
+      nop
+
+      nop
   - role: Target
     name: Target GA144
     nodes:
@@ -13494,4 +13550,5 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
+    debuggerAssemblyCode: 
   userMacros: []

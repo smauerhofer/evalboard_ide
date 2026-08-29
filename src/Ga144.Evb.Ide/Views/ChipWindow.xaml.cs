@@ -325,7 +325,8 @@ public partial class ChipWindow : Window
         _viewModel.RomLibrary,
         _viewModel.Project.Model.UserMacros,
         _viewModel.KrakenController,
-        _viewModel.KrakenEndpointResolver);
+        _viewModel.KrakenEndpointResolver,
+        _viewModel.Project.NotifyProjectChanged);
     var window = new CvmDebuggerWindow(viewModel)
     {
       Owner = this

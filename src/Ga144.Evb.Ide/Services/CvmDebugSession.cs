@@ -129,23 +129,10 @@ public sealed class CvmDebugSession : IDisposable
   /// </summary>
   public (bool Success, string? Error) AssembleAndLoadProgram(string sourceText)
   {
-    (List<CvmAssemblyLanguage.CvmAsmInstruction>? instructions, string? parseError) = CvmAssemblyLanguage.ParseSource(sourceText);
-    if (instructions is null)
-    {
-      return (false, parseError);
-    }
-
-    (List<int>? words, string? assembleError) = CvmAssemblyLanguage.Assemble(instructions, _compiledRam);
+    (List<int>? words, string? error) = CvmAssemblyLanguage.AssembleAndLoadProgram(sourceText, _sram, _program, _compiledRam);
     if (words is null)
     {
-      return (false, assembleError);
-    }
-
-    int previousLength = _program.Count;
-    _sram.LoadProgram(words);
-    if (words.Count < previousLength)
-    {
-      _sram.LoadProgram(new int[previousLength - words.Count], words.Count);
+      return (false, error);
     }
 
     _program = words;
@@ -208,67 +195,12 @@ public sealed class CvmDebugSession : IDisposable
 
   /// <summary>
   /// Linearly disassembles page 0 (the only page that is ever code) from address 0 up to but not
-  /// including <paramref name="endAddressExclusive"/>, into CVM assembly language mnemonics
-  /// (<see cref="CvmAssemblyLanguage"/>) resolved against node 607's own current compile, plus direct
-  /// bit-pattern rules for <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>
-  /// (<see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/>, see below) that need no
-  /// compile/symbol at all. This
-  /// MUST be a stateful scan starting at 0, never an independent per-word decode: pushlit is followed
-  /// by a literal operand word that would otherwise be mistaken for its own opcode if a word were
-  /// decoded in isolation.
-  ///
-  /// Returns a sparse map from flat address to a listing line: an instruction's own address gets
-  /// its mnemonic, folded together with its operand when it has one (e.g. "pushlit 0x01234") so the
-  /// memory inspector reads like a real disassembly rather than two disconnected rows; the operand
-  /// word's own address is left out of the map entirely (no note at all), same as any other address
-  /// that doesn't fall on a recognized instruction boundary -- typically because it holds an opcode
-  /// this debugger doesn't know about yet.
+  /// including <paramref name="endAddressExclusive"/> -- see <see cref="CvmAssemblyLanguage.DisassemblePage0"/>,
+  /// which does the actual work against this session's own <see cref="_sram"/>/<see cref="_compiledRam"/>
+  /// (and is shared with <see cref="ViewModels.CvmDebuggerViewModel"/>'s standalone, no-session path).
   /// </summary>
-  public IReadOnlyDictionary<int, string> DisassemblePage0(int endAddressExclusive)
-  {
-    IReadOnlyDictionary<int, (string Mnemonic, int WordLength)> decodeTable =
-        CvmAssemblyLanguage.BuildDecodeTable(_compiledRam);
-    var notes = new Dictionary<int, string>();
-    int address = 0;
-    while (address < endAddressExclusive)
-    {
-      int word = _sram.Read(CvmMemoryProtocol.CombineAddress(0, address));
-
-      // "call", "br", "ifbr", and "slit" have no F18 symbol to resolve -- each one's whole word is
-      // fully determined by its own bit pattern and operand alone (CvmInstructionSet.
-      // CvmOperandEncoding.EmbeddedAddress / EmbeddedSignedValue), independent of node 607's live
-      // compile, so all four are checked before consulting the (symbol-driven) decode table at all.
-      string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word);
-      if (selfDescribing is not null)
-      {
-        notes[address] = selfDescribing;
-        address += 1;
-        continue;
-      }
-
-      if (decodeTable.TryGetValue(word, out (string Mnemonic, int WordLength) instruction))
-      {
-        int operandCount = instruction.WordLength - 1;
-        if (operandCount == 1 && address + 1 < endAddressExclusive)
-        {
-          int operandValue = _sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1));
-          notes[address] = $"{instruction.Mnemonic} 0x{operandValue:X4}";
-        }
-        else
-        {
-          notes[address] = instruction.Mnemonic;
-        }
-
-        address += instruction.WordLength;
-      }
-      else
-      {
-        address += 1;
-      }
-    }
-
-    return notes;
-  }
+  public IReadOnlyDictionary<int, string> DisassemblePage0(int endAddressExclusive) =>
+      CvmAssemblyLanguage.DisassemblePage0(_sram, _compiledRam, endAddressExclusive);
 
   /// <summary>
   /// Services exactly one transaction, ignoring breakpoints entirely -- a manual Step always

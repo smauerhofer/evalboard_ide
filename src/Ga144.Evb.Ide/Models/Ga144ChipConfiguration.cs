@@ -9,6 +9,15 @@ public sealed class Ga144ChipConfiguration
   public List<Ga144NodeConfiguration> Nodes { get; set; } = [];
 
   /// <summary>
+  /// The CVM Debugger's own Assembly Code editor contents, last saved for this chip by its "Save"
+  /// button (<see cref="ViewModels.CvmDebuggerViewModel"/>) -- null until Stefan saves for the first
+  /// time, at which point it rides this project's normal auto-save (same as every node's own
+  /// <see cref="Ga144NodeConfiguration.SourceCode"/>). "Load" reads it back; "Restore" bypasses it
+  /// entirely and goes straight to the built-in default test program.
+  /// </summary>
+  public string? DebuggerAssemblyCode { get; set; }
+
+  /// <summary>
   /// The Kraken structure (head 708 + three fixed tentacles) is a constant of the
   /// GA144 array and the boot protocol, not per-chip configuration. It is never
   /// persisted: it is always the one fixed topology, recreated in memory. Whether
