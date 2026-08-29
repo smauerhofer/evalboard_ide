@@ -10913,7 +10913,7 @@ projects:
           A[ @p /push ]] lit !b a !b A[ dup !p ]] lit !b @b a! r> inv adjust ;
         : 'xf ( s-s) a A[ @p /r@ ]] lit !b !b A[ !p /r! ; ]] lit !b @b a! ;
 
-        : 'leave A[ @p /pop ]] lit !b a !b A[ !p ; ]] lit !b @b a! main ;
+        : 'leave A[ @p /pop ]] lit !b a !b A[ !p ; ]] lit !b @b a! ;
 
 
         (
@@ -11180,7 +11180,7 @@ projects:
     - coordinate: 608
       enabled: true
       sourceCode: >-
-        ( cvm2 1011 global)
+        ( cvm2 1011 global, opcode 1011_????_????_???? )
 
         # 607 import
 
@@ -11204,28 +11204,31 @@ projects:
 
         : leave A[ ; ]] lit !b @p
 
-        : local drop ex
-
-        : main then A[ 2* !p !p ]] lit !b @b
+        : local // 1011_0???_????_????
+          drop ex
+        : main
+          then // 1011_????_????_????
+          A[ 2* !p !p ]] lit !b @b
           @b x1ff and >r # local -until
-          2* -if 2* -if
-        : la r> adr leave ; then
-
-        : ldo r> adr 'ld ; then 2* -if
-
-        : sto r> adr 'st ; then
-
+          // 1011_1???_????_????
+          2* -if // 1011_11??_????_????
+          2* -if // 1011_111?_????_????
+        : la r> adr leave ;
+          then  // 1011_110?_????_????
+        : ldo r> adr 'ld ;
+          then // 1011_10??_????_????
+          2* -if // 1011_101?_????_????
+        : sto r> adr 'st ;
+          then // 1011_100?_????_????
         : glob a r> . + A[ @p /r! ; ]] lit !b !b main ;
 
         : 'xg A[ @p /r@ ]] lit !b a !b A[ !p /r! ; ]] lit !b @b a! ;
 
         : 'ldx A[ /r@ ]] lit !b A[ /pop ]] lit !b A[ /@ ]] lit !b A[ /r! ; ]] lit !b ;
 
-        : 'stx leap A[ /! ; ]] lit !b ;
+        : 'stx leap A[ /! ; ]] lit !b ; then
 
-        : 'long then A[ /pop ]] lit !b A[ >r /pop ]] lit !b A[ r> /r@ ]] lit !b ;
-
-        : 'mk! 'long A[ inv /! ; ]] lit !b ;
+        : /long A[ /pop ]] lit !b A[ >r /pop ]] lit !b A[ r> /r@ ]] lit !b ;
 
 
         (
@@ -11234,11 +11237,11 @@ projects:
 
         'x3  writes the next 3 words from the return address
         	to node 207 and jumps to main.
-        'ld  loads word with address in R.
+        'ld  loads word with address in R. mnemonic ld
 
-        'st  pops and stores word with address in R.
+        'st  pops and stores word with address in R.  mnemonic st
 
-        'ldph  push word with address in R.
+        'ldph  push word with address in R.  mnemonic pushi
 
         leave  gives control back to node 207.
 
@@ -11254,20 +11257,82 @@ projects:
 
         glob  address of global variable.
 
-        'xg  exchanges global pointer with R.
+        'xg  exchanges global pointer with R. mnemonic xg
 
-        'ldx  loads word from extended address.
+        'ldx  loads word from extended address. mnemonic ldx
 
-        'stx  stores word to extended address
+        'stx  stores word to extended address mnemonic stx
 
-        long  word shared by 'stx and 'mk.
-
-        'mk  used to manage memory access.
+        /long  word used by 'stx.
 
         )
-      ramWords: []
+      ramWords:
+      - 0x05B27
+      - 0x05600
+      - 0x3D615
+      - 0x09555
+      - 0x22CAA
+      - 0x07B1A
+      - 0x09E22
+      - 0x2B717
+      - 0x13404
+      - 0x13400
+      - 0x13405
+      - 0x11415
+      - 0x13404
+      - 0x13402
+      - 0x13400
+      - 0x11410
+      - 0x13404
+      - 0x13400
+      - 0x13405
+      - 0x1140D
+      - 0x05B12
+      - 0x15555
+      - 0x3B455
+      - 0x05B02
+      - 0x37932
+      - 0x01DFA
+      - 0x001FF
+      - 0x2F216
+      - 0x37222
+      - 0x37220
+      - 0x27600
+      - 0x11414
+      - 0x27600
+      - 0x11408
+      - 0x37225
+      - 0x27600
+      - 0x1140C
+      - 0x22CB0
+      - 0x05B22
+      - 0x05715
+      - 0x11417
+      - 0x05B8A
+      - 0x05600
+      - 0x09D22
+      - 0x0D715
+      - 0x00A55
+      - 0x05B12
+      - 0x13400
+      - 0x13402
+      - 0x09D27
+      - 0x13407
+      - 0x11415
+      - 0x09555
+      - 0x13438
+      - 0x05B55
+      - 0x11412
+      - 0x05B12
+      - 0x13402
+      - 0x2F602
+      - 0x09D25
+      - 0x27600
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x017
         p: 0x000
         a: 0x000
         b: 0x000
