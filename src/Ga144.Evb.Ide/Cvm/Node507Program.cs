@@ -7,13 +7,13 @@ namespace Ga144.Evb.Ide.Cvm;
 ///
 /// <b>Not a pure servant.</b> Unlike 606/608 (which only ever ship raw instruction words for 607
 /// to execute, with no computation of their own -- see <see cref="Node606Program"/>'s remarks),
-/// 507 does genuine local work: every CVM binary/unary ALU opcode (shift, add, and, or, xor,
-/// atomic compare-exchange) actually executes here, on 507's own native F18 data stack, using
-/// 507's own r value. 507 is also, in several of its own words, a relay in the other direction:
-/// <c>s/push</c>/<c>s/@</c>/<c>s/!</c>/<c>s/pop</c>/<c>'cx?</c> each end their packed payload with
-/// a CALL into one of 607's OWN exported words (<c>/push</c>, <c>/@</c>, <c>/!</c>, <c>/pop</c>,
-/// <c>/cx?</c>, resolved via <c># 607 import</c> per DB002 3.1) so that, once shipped back to 607
-/// over the port, 607 finishes a memory-class operation using the value 507 just supplied.
+/// 507 does genuine local work: every CVM binary/unary ALU opcode (shift, add, subtract, and, or,
+/// xor, invert) actually executes here, on 507's own native F18 data stack, using 507's own r
+/// value. 507 is also, in several of its own words, a relay in the other direction:
+/// <c>s/push</c>/<c>s/@</c>/<c>s/!</c>/<c>s/pop</c> each end their packed payload with a CALL into
+/// one of 607's OWN exported words (<c>/push</c>, <c>/@</c>, <c>/!</c>, <c>/pop</c>, resolved via
+/// <c># 607 import</c> per DB002 3.1) so that, once shipped back to 607 over the port, 607
+/// finishes a memory-class operation using the value 507 just supplied.
 ///
 /// <b>Local port directions on 507</b> (row 5 is odd, column 07 is odd, per this project's
 /// <c>KrakenTopology.PortAddress</c> mirroring rules):
@@ -41,23 +41,29 @@ namespace Ga144.Evb.Ide.Cvm;
 /// one call to <c>s/2put</c>: s/put's single-cell relay happens twice, consuming two stack cells
 /// with one call -- e.g. an extended address's two halves.
 ///
-/// <b>Verification.</b> Compiled with zero errors (<c>Success = true</c>) against this project's
-/// real <c>Compiler/F18Compiler.cs</c>, importing node 607's exported symbols via
-/// <c># 607 import</c>. 64 of 64 RAM words used, entry point <c>main</c> at word address 0x01A.
-/// The same benign F18C050 "'main' redefines the name imported from node 607" warning appears as
-/// it does for every other node in this cluster, for the same reason (each node defines its own
-/// independent <c>main</c> loop). Adding the per-word documentation comments to
-/// <see cref="Source"/> was re-verified to produce byte-for-byte identical compiled output to the
-/// plain, uncommented version.
+/// <b>This revision replaces an earlier one</b> (which still had <c>'cx?</c>, compare-and-exchange):
+/// <c>'cx?</c> has been removed entirely, and eight new ALU ops have been added -- <c>'-</c>,
+/// <c>'inv</c>, <c>'inc</c>, <c>'dec</c> join the existing <c>'usl</c>/<c>'ssr</c>/<c>'usr</c>/
+/// <c>'+</c>/<c>'and</c>/<c>'xor</c>/<c>'or</c>, and Stefan's own trailing comment block now gives
+/// each one an explicit CVM assembler mnemonic (<c>usl</c>, <c>ssr</c>, <c>usr</c>, <c>add</c>,
+/// <c>sub</c>, <c>and</c>, <c>xor</c>, <c>or</c>, <c>inv</c>, <c>inc</c>, <c>dec</c>) -- all eleven
+/// are registered as tagged CVM instructions in <c>Ga144.Cvm.Toolchain.CvmInstructionSet</c> (Ids
+/// 9-19), the same way <c>nop</c>/<c>pushlit</c>/<c>push</c>/<c>pop</c>/<c>ret</c> are, so
+/// <c>gaasm</c> accepts them with no operand: the values they act on already live in r and/or on
+/// the CVM data stack, not in the instruction word. <c>main</c>'s own dispatch is also rewritten --
+/// the unary/binary split (the last two branches) is now an explicit bit test with its own inline
+/// comments, rather than the previous "-until override" idiom, so the bit-level reading is
+/// Stefan's own this time, not inferred.
 ///
-/// <b>A note on confidence.</b> Every word below carries one of Stefan's own given descriptions.
-/// The s/2put/s/put mechanism above was confirmed directly by Stefan. The 4-way dispatch inside
-/// <c>main</c> and the shared "a ex" dispatch tail <c>binary</c> falls through into <c>unary</c>
-/// were traced against the compiled word addresses (all 4 <c>-if</c>/<c>then</c> pairs balance,
-/// the same LIFO nesting node 607's own <c>exec</c> uses) but are not independently described by
-/// Stefan beyond "start address" / "calls unary function" / "calls binary function" -- a
-/// well-supported reading, not independently bit-traced against running hardware, in the same
-/// spirit as the lower-confidence notes on node 607's own <c>exec</c> and node 606's <c>enter</c>.
+/// <b>Verification.</b> Compiled with zero errors and zero warnings (<c>Success = true</c>, no
+/// diagnostics beyond the debug-only <c>.loc</c> info notes) against this project's real
+/// <c>Compiler/F18Compiler.cs</c>, importing node 607's exported symbols via <c># 607 import</c>.
+/// An EARLIER revision of this file would have produced an F18C050 warning here ("'main'
+/// redefines the name imported from node 607") -- that warning no longer fires because node 607's
+/// own fetch/decode/execute loop was itself renamed from <c>main</c> to <c>'nop</c> (see
+/// <see cref="Node607Program"/>'s own remarks), so node 607 no longer exports anything named
+/// <c>main</c> for this file's own <c>main</c> to shadow. This is exactly the same effect the
+/// same 607 rename has on <see cref="Node606Program"/>'s own doc history.
 /// </summary>
 internal static class Node507Program
 {
@@ -89,11 +95,11 @@ internal static class Node507Program
       // genuine local work: it runs its own arithmetic on its own native F18 data
       // stack, using its own r value, and only touches 607 to fetch operands and
       // deliver results. It is also, in several of its own words, a second kind of
-      // servant -- see s/push/s/@/s/!/s/pop/'cx? below, each of which ends its
-      // packed payload with a CALL into one of 607's OWN exported words (/push,
-      // /@, /!, /pop, /cx?, resolved via '# 607 import' per DB002 3.1) so that,
-      // once shipped back to 607 over the port, 607 finishes a memory-class
-      // operation using the value 507 just supplied.
+      // servant -- see s/push/s/@/s/! below, each of which ends its packed payload
+      // with a CALL into one of 607's OWN exported words (/push, /@, /!, resolved
+      // via '# 607 import' per DB002 3.1) so that, once shipped back to 607 over
+      // the port, 607 finishes a memory-class operation using the value 507 just
+      // supplied.
       //
       // Local port directions on 507 (row 5 is odd, column 07 is odd, per this
       // project's KrakenTopology.PortAddress mirroring rules):
@@ -118,13 +124,28 @@ internal static class Node507Program
       // to relay both halves of an extended (page, address) pair with one call.
       //
       // Verified: this source compiles against the real F18Compiler with 0 errors
-      // (Success=true), importing node 607's exported symbols via '# 607 import'.
-      // 64 of 64 RAM words used, entry point 'main' at word address 0x01A. One
-      // informational warning is expected and benign: F18C050, "'main' redefines
-      // the name imported from node 607" -- both 607 and 507 each define their
-      // own local word called 'main' (their own, independent loops), and 507
-      // never needs to call INTO 607's main by name, so the shadowing is
-      // intentional, not a conflict.
+      // and 0 warnings (Success=true, no diagnostics beyond debug-only '.loc' info
+      // notes), importing node 607's exported symbols via '# 607 import'. An
+      // EARLIER revision of this file would have produced an F18C050 warning here
+      // ("'main' redefines the name imported from node 607") -- that warning no
+      // longer fires because node 607's own fetch/decode/execute loop was itself
+      // renamed from 'main' to 'nop (see Node607Program.cs's own remarks), so node
+      // 607 no longer exports anything named 'main' for this file's own 'main' to
+      // shadow.
+      //
+      // This version replaces an earlier one: 'cx? (compare-and-exchange) has been
+      // removed, and eight new ALU ops have been added -- '-, 'inv, 'inc, 'dec join
+      // the existing 'usl/'ssr/'usr/'+/'and/'xor/'or, and Stefan's own trailing
+      // comment block below now gives each one an explicit CVM assembler mnemonic
+      // (usl, ssr, usr, add, sub, and, xor, or, inv, inc, dec) -- all eleven are now
+      // registered as tagged CVM instructions in Ga144.Cvm.Toolchain.CvmInstructionSet
+      // (Ids 9-19), the same way nop/pushlit/push/pop/ret are, so gaasm accepts them
+      // with no operand: the values they act on already live in r and/or on the CVM
+      // data stack, not in the instruction word. 'main's own dispatch is also
+      // rewritten below -- the unary/binary split (the last two branches) is now an
+      // explicit bit test with its own inline comments, rather than the previous
+      // "-until override" idiom, so the bit-level reading is Stefan's own this time,
+      // not inferred.
       // ============================================================================
 
       # 607 import
@@ -232,11 +253,11 @@ internal static class Node507Program
       // ----------------------------------------------------------------------
       // Ships {CALL /pop} to 607 -- '/pop' resolves to 607's own exported
       // ( p-pt) extended-memory pop, so 607 reads and advances its own p and
-      // returns the popped word t over the port. A second packed word ships
-      // {!p} -- what runs on 607's OWN side of this same handshake, matching
-      // the s/r@/s/r! pattern above -- and '@b' on 507's side is what actually
-      // receives 607's popped value w, leaving it on 507's own stack (the
-      // (-w) effect).
+      // returns the popped word t over the port. A second packed word, {!p},
+      // then has 507 write out a value 607 sent back... no -- {!p} is what runs
+      // on 607's OWN side of this same handshake pair, matching the s/r@/s/r!
+      // pattern above: '@b' on 507's side is what actually receives 607's
+      // popped value w, leaving it on 507's stack ((-w) effect).
       : s/pop ( -w) A[ /pop ]] lit !b A[ !p ]] lit !b @b ;
 
       // ----------------------------------------------------------------------
@@ -244,10 +265,11 @@ internal static class Node507Program
       // ----------------------------------------------------------------------
       // Compiles to a single word: a CALL to s/pop above, fetching the second
       // operand a binary ALU opcode needs (the first is already on 507's own
-      // stack). Has no ';' of its own -- s/pop's own return address (the word
+      // stack, r). Has no ';' of its own -- s/pop's own return address (the word
       // immediately after this one-word CALL) lands exactly on 'unary' below, so
       // once s/pop returns, execution falls straight through into unary's own
       // "a ex" dispatch tail (see 'unary' below) to reach the actual ALU word.
+      // Reached from 'main's own "1100_1???" branch (drop >r binary ;) above.
       : binary s/pop
 
       // ----------------------------------------------------------------------
@@ -256,15 +278,15 @@ internal static class Node507Program
       // 'a' pushes 507's own A (its working register) onto the data stack; 'ex'
       // (F18A opcode 0x01, the same "jump to whatever address was parked on the
       // return stack with '>r'" idiom used throughout this project) then jumps
-      // to the ALU word address parked on R just before dispatching here (see
-      // main's own closing line below) -- reaching whichever of
-      // 'usl/'ssr/'usr/'+/'and/'xor/'or/'cx? that address selected. Reached
-      // either directly (main's -until loop-back, for a genuinely unary op) or
-      // by falling through from 'binary' above (after s/pop supplies a second
-      // operand, for a binary op) -- both paths converge on this same "a ex"
-      // tail, which is exactly what "unary calls unary function" / "binary
-      // calls binary function" describe: the actual dispatch machinery is
-      // shared, only the operand count differs.
+      // to the ALU word address 'main' parked on R just before dispatching here
+      // (see main's own two ALU branches above) -- reaching whichever of
+      // 'usl/'ssr/'usr/'+/'-/'and/'xor/'or/'inv/'inc/'dec that address selected.
+      // Reached either directly (main's "1100_0???" branch, drop >r unary ;, for a
+      // genuinely unary op) or by falling through from 'binary' above (after
+      // s/pop supplies a second operand, for a binary op) -- both paths converge
+      // on this same "a ex" tail, which is exactly what "unary calls unary
+      // function" / "binary calls binary function" describe: the actual dispatch
+      // machinery is shared, only the operand count differs.
       : unary a ex
 
       // ----------------------------------------------------------------------
@@ -299,38 +321,50 @@ internal static class Node507Program
       // another, 'r>' recovers the first -- collecting the two-word request 607
       // sent when it multiport-called into 507 (via ---u).
       //
-      // What follows is a 4-way dispatch, traced directly against the compiled
-      // addresses (all 4 '-if'/'then' pairs balance, the same LIFO nesting
-      // 607's own 'exec' uses). Exact bit meanings are inferred from this
-      // structure -- Stefan's description only says "start address" -- so
-      // treat the bit-level reading below as inferred, not as given:
-      //   1) Outer bit set: a further 2-bit choice between three of 507's own
-      //      children -- 508 (--l-, register t), 407 (-d--, register w), or 506
-      //      (r---, register d, the fallback of the inner pair) -- each
-      //      followed by 'a leave ;' (push A, mask+store the port reply into A,
-      //      ship the return signal, and return).
-      //   2) Outer bit clear, next bit set: a "short literal" case (Stefan's own
-      //      inline comment, kept verbatim below) -- shifts the value down
-      //      (2* then six 2/'s) to extract an immediate literal encoded directly
-      //      in the opcode bits, then 'leave ;' as above.
-      //   3) Neither: the ALU fallback -- 'over >r' parks a jump-table target
-      //      address (computed from the opcode's low bits by whatever produced
-      //      this dispatch value) onto R for 'unary'/'ex' to consume, '2*'
-      //      shifts and tests one more bit, and '# unary -until' overrides the
-      //      following '-until' to loop BACK to 'unary' (above) when that bit
-      //      is clear -- reaching it as a genuine unary op -- or fall through to
-      //      'binary' (also above) when set, for a binary op, before the
-      //      explicit trailing ';' returns.
+      // What follows is a 4-way dispatch on the received word's own top bits --
+      // Stefan's own inline comments (kept verbatim below) give the bit pattern
+      // each branch matches, so unlike the previous version this reading is given,
+      // not inferred:
+      //   1) 11??: a further 2-bit choice among three of 507's own children --
+      //      407 (-d--, register w, pattern 1111), 508 (--l-, register t, pattern
+      //      1110_1), or 506 (r---, register d, the fallback pattern 1110_0) --
+      //      each followed by 'a leave ;' (push A, mask+store the port reply into
+      //      A, ship the return signal, and return).
+      //   2) 1101: the "short literal" case -- shifts the value down (2* then six
+      //      2/'s) to extract an immediate literal encoded directly in the opcode
+      //      bits, then 'leave ;' as above.
+      //   3) 1100_1???: a binary ALU op -- 'drop' discards the now-fully-consumed
+      //      tag, '>r' parks the jump-table target address (computed from the
+      //      opcode's low bits) for 'unary'/'ex' to consume, and 'binary' fetches
+      //      the second operand (s/pop) before falling through into 'unary's own
+      //      "a ex" dispatch tail.
+      //   4) 1100_0???: a unary ALU op -- same 'drop >r', but straight into
+      //      'unary' (no second operand to fetch first).
       : main A[ !p !p ]] lit !b @b >r @b r> ..
-      	2* -if 2* -if --l- a leave ;
-      	then 2* -if -d-- a leave ;
-      	then r--- a leave ;
-      	then 2* -if // short literal
-      	2* 2/ 2/ 2/ 2/ 2/ 2/ leave ;
-      	then over >r 2* # unary -until binary ;
+      	( xy)
+      	// 11??_????_????_????
+      	2* -if // 111?_????_????_????
+      		2* -if // 1111_????_????_???? node 407
+      			( xy) -d-- a leave ;
+      		then // 1110_????_????_????
+      		2* -if  // 1110_1???_????_???? node 508
+      			( xy) --l- a leave ;
+      		then // 1110_0???_????_???? node 506
+      		( xy) r--- a leave ;
+      	then // 110?_????_????_????
+      	( xy )
+      	2* -if // 1101_????_????_????
+      		// short literal
+      		2* 2/ 2/ 2/ 2/ 2/ 2/ leave ;
+      	then // 1100_????_????_????
+      	( xy )
+      	2* -if // 1100_1???_????_????
+      		drop >r binary ;
+      	then  // 1100_0???_????_????
+      		drop >r unary ;
 
       // ----------------------------------------------------------------------
-      // 'usl  --  binary. unsigned shift left (Stefan's own description)
+      // 'usl  --  binary. unsigned shift left. CVM assembler mnemonic: usl
       // ----------------------------------------------------------------------
       // 'for'/'unext' is this dialect's counted-loop idiom: repeats '2*'
       // (shift left one bit) a number of times taken from the loop counter,
@@ -338,65 +372,89 @@ internal static class Node507Program
       : 'usl for 2* unext ;
 
       // ----------------------------------------------------------------------
-      // 'ssr  --  binary. signed shift right (Stefan's own description)
+      // 'ssr  --  binary. signed shift right. CVM assembler mnemonic: ssr
       // ----------------------------------------------------------------------
       // '>r 2* 2*' moves the shift count aside and doubles the value being
       // shifted twice (aligning it so the following pair of '2/'s -- F18A's
       // arithmetic/sign-preserving right shift -- divide back down by four net
       // of the two 2*'s), 'r>' restores the count. The double 2*/2/ pairing is
-      // how this project realises a signed shift, as opposed to 'usr below.
-      : 'ssr >r 2* 2* 2/ 2/ r> ;
+      // how this project realises a signed shift, as opposed to 'usr below. Has
+      // no ';' of its own: falls straight through into 'usr immediately below,
+      // whose own 'unext' loop-closer supplies the actual return both words
+      // share -- 'ssr's own trailing 'r>' just needs to run before that shared
+      // tail, not before a return of its own.
+      : 'ssr >r 2* 2* 2/ 2/ r>
 
       // ----------------------------------------------------------------------
-      // 'usr  --  binary. unsigned shift right (Stefan's own description)
+      // 'usr  --  binary. unsigned shift right. CVM assembler mnemonic: usr
       // ----------------------------------------------------------------------
       // Same 'for'/'unext' counted-loop idiom as 'usl, but with '2/' (logical
-      // shift right, no sign extension) instead of '2*'.
+      // shift right, no sign extension) instead of '2*'. Its own 'unext' is also
+      // 'ssr's return (see 'ssr's remarks above).
       : 'usr for 2/ unext ;
 
       // ----------------------------------------------------------------------
-      // '+  --  binary. add (Stefan's own description)
+      // '+  --  binary. add. CVM assembler mnemonic: add
       // ----------------------------------------------------------------------
       // The plain F18A '+' opcode.
       : '+ + ;
 
       // ----------------------------------------------------------------------
-      // 'and  --  binary. bitwise and (Stefan's own description)
+      // 'and  --  binary. bitwise and. CVM assembler mnemonic: and
       // ----------------------------------------------------------------------
       // The plain F18A 'and' opcode.
       : 'and and ;
 
       // ----------------------------------------------------------------------
-      // 'xor  --  binary. bitwise exclusive or (Stefan's own description)
+      // 'xor  --  binary. bitwise exclusive or. CVM assembler mnemonic: xor
       // ----------------------------------------------------------------------
       // The plain F18A 'xor' opcode.
       : 'xor xor ;
 
       // ----------------------------------------------------------------------
-      // 'or  --  binary. bitwise or (Stefan's own description)
+      // 'or  --  binary. bitwise or. CVM assembler mnemonic: or
       // ----------------------------------------------------------------------
-      // F18A has no native 'or' opcode, so this builds one from the ones it
-      // does have, via De Morgan's law: 'inv over inv and inv' inverts the top,
-      // inverts a copy of the item below it, ands the two inversions together
-      // (giving inv(a) and inv(b) = inv(a or b)), then inverts the result once
-      // more to recover the plain bitwise or.
-      : 'or inv over inv and inv ;
+      // F18A has no native 'or' opcode, so this builds one from the ones it does
+      // have, via De Morgan's law: 'inv over inv and' inverts the top, inverts a
+      // copy of the item below it, ands the two inversions together (giving
+      // inv(a) and inv(b) = inv(a or b)) -- leaving one inversion still to apply
+      // to recover the plain bitwise or. Has no ';' of its own: falls straight
+      // through into 'inv immediately below, whose single 'inv ;' supplies
+      // exactly that last inversion AND 'or's own return in one shared word,
+      // the same sharing trick as 'ssr/'usr above.
+      : 'or inv over inv and
 
       // ----------------------------------------------------------------------
-      // 'cx?  --  binary. atomically compares and exchanges a cell in memory and
-      // return true if successful (Stefan's own description)
+      // 'inv  --  unary. bitwise invert. CVM assembler mnemonic: inv
       // ----------------------------------------------------------------------
-      // Ships {CALL /pop} to 607 first (fetching one of the extended-address
-      // components /cx? needs, duplicating and parking a copy of it via
-      // 'dup >r' for use after the reply comes back), receives it via '!b', then
-      // 'r> !b' relays the parked copy too. A further packed word ships
-      // {CALL /cx?} -- '/cx?' resolves (via '# 607 import') to 607's own
-      // exported ( wabn-f) compare-and-exchange word, so 607 completes the
-      // atomic operation using the components 507 just relayed. The final
-      // packed word {!p} plus '@b' on 507's side receives the resulting flag f
-      // back over the port, matching the s/r@/s/pop reply pattern above.
-      : 'cx? A[ @p /pop ]] lit dup !b
-      	>r !b r> !b !b A[ /cx? ]] lit !b
-      	A[ !p ]] lit !b @b ;
+      // The plain F18A '-' (not/invert) opcode. Also serves as 'or's own shared
+      // return (see 'or's remarks above) -- 'inv is reached both as a genuine
+      // unary op in its own right and as the tail end of 'or's body.
+      : 'inv inv ;
+
+      // ----------------------------------------------------------------------
+      // '-  --  binary. subtract. CVM assembler mnemonic: sub
+      // ----------------------------------------------------------------------
+      // Two's-complement subtraction without a native subtract opcode: 'inv'
+      // negates T (bitwise, one's complement), '+' adds S and the inverted T.
+      // Has no ';' of its own -- falls straight through into 'inc immediately
+      // below, whose '1 . +' adds the missing "+1" that turns one's-complement
+      // negation into two's-complement negation, completing S - T in one shared
+      // tail (the same sharing trick as 'ssr/'usr and 'or/'inv above).
+      : '- inv . +
+
+      // ----------------------------------------------------------------------
+      // 'inc  --  unary. increment. CVM assembler mnemonic: inc
+      // ----------------------------------------------------------------------
+      // Adds the literal 1 to T. Also serves as '-'s own shared return (see '-'s
+      // remarks above) -- reached both as a genuine unary op in its own right and
+      // as the tail end of '-'s body.
+      : 'inc 1 . + ;
+
+      // ----------------------------------------------------------------------
+      // 'dec  --  unary. decrement. CVM assembler mnemonic: dec
+      // ----------------------------------------------------------------------
+      // Adds the literal -1 to T.
+      : 'dec -1 . + ;
       """;
 }

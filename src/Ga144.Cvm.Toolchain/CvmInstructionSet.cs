@@ -11,8 +11,13 @@ namespace Ga144.Cvm.Toolchain;
 /// <c>ldl &lt;offset&gt;</c>, <c>ldp &lt;offset&gt;</c>, <c>lal &lt;offset&gt;</c>,
 /// <c>lap &lt;offset&gt;</c> (each self-describing, an 8-bit tag OR'd with an 8-bit unsigned value), plus
 /// node 606's ninth mnemonic <c>leave</c> (a tagged mnemonic like nop/push/pop/ret, NOT self-describing
-/// -- see <see cref="LeaveMnemonic"/>'s own remarks)) and, for each, how many words it occupies once
-/// assembled, how its
+/// -- see <see cref="LeaveMnemonic"/>'s own remarks)), plus node 508's 27 comparison/arithmetic ops --
+/// <c>eq</c>, <c>eq0</c>, <c>false</c>, <c>true</c>, <c>ne</c>, <c>ne0</c>, <c>ugt</c>, <c>gt</c>,
+/// <c>gt0</c>, <c>ge</c>, <c>ge0</c>, <c>ule</c>, <c>le</c>, <c>le0</c>, <c>lt</c>, <c>lt0</c>,
+/// <c>ult</c>, <c>uge</c>, <c>mul2</c>, <c>udiv2</c>, <c>div2</c>, <c>abs</c>, <c>negate</c>, <c>xt</c>,
+/// <c>ldt</c>, <c>stt</c>, <c>bitcnt</c> (tagged mnemonics exactly like <c>leave</c>, resolved against
+/// node 508's own live compile -- see <see cref="EqualMnemonic"/>'s own remarks)) and, for each, how
+/// many words it occupies once assembled, how its
 /// operand (if any) is encoded, and a stable numeric <see cref="CvmInstructionShape.Id"/>. This is the
 /// SHAPE of each instruction only -- for the tagged-dispatch mnemonics
 /// (<see cref="CvmOperandEncoding.None"/>/<see cref="CvmOperandEncoding.TrailingWord"/>: <c>nop</c>,
@@ -98,6 +103,47 @@ public static class CvmInstructionSet
   // same way node 607's own tagged nop/push/pop/pushlit/ret were added one at a time from that node's
   // own "0x8000 | address" family.
   public const string LeaveMnemonic = "leave";
+
+  // Node 508's comparison/arithmetic ops, added per Stefan's node 508 source and his own naming rule
+  // for that message ("all words that begin with a ' are an opcode for the CVM with the mnemonic using
+  // the same name without the leading '"). Every one of these 27 is shaped exactly like 'leave above
+  // (and like node 607's own nop/push/pop/pushlit/ret, and node 507's eleven ALU ops) -- a single bare
+  // TAGGED opcode word (CvmOperandEncoding.None), never self-describing: node 508's own 'main' receives
+  // a dispatch address directly over the port and jumps straight to it ("A[ drop !p a !p ]] lit !b @b
+  // >r @b ex"), so each named word's real opcode is simply node 508's own confirmed opcode-class tag
+  // (0xE800-0xEFFF, "register t", per this project's own cvm-toolchain-design.md) OR'd with wherever
+  // that word lands in node 508's own compiled RAM -- resolved only against a live compile, exactly
+  // like 'leave, never self-describing like enter/adjust/stl/stp/ldl/ldp/lal/lap. None of the 27 takes
+  // an assembled operand: every comparison/arithmetic op here acts on register r (already on the CVM
+  // data stack by the time 'main dispatches to it) and, where relevant, a second value 507/607 relay
+  // over the port -- never on a literal baked into the instruction word itself.
+  public const string EqualMnemonic = "eq";
+  public const string EqualToZeroMnemonic = "eq0";
+  public const string FalseMnemonic = "false";
+  public const string TrueMnemonic = "true";
+  public const string NotEqualMnemonic = "ne";
+  public const string NotEqualToZeroMnemonic = "ne0";
+  public const string UnsignedGreaterThanMnemonic = "ugt";
+  public const string GreaterThanMnemonic = "gt";
+  public const string GreaterThanZeroMnemonic = "gt0";
+  public const string GreaterOrEqualMnemonic = "ge";
+  public const string GreaterOrEqualToZeroMnemonic = "ge0";
+  public const string UnsignedLessOrEqualMnemonic = "ule";
+  public const string LessOrEqualMnemonic = "le";
+  public const string LessOrEqualToZeroMnemonic = "le0";
+  public const string LessThanMnemonic = "lt";
+  public const string LessThanZeroMnemonic = "lt0";
+  public const string UnsignedLessThanMnemonic = "ult";
+  public const string UnsignedGreaterOrEqualMnemonic = "uge";
+  public const string MultiplyByTwoMnemonic = "mul2";
+  public const string UnsignedDivideByTwoMnemonic = "udiv2";
+  public const string DivideByTwoMnemonic = "div2";
+  public const string AbsoluteValueMnemonic = "abs";
+  public const string NegateMnemonic = "negate";
+  public const string ExchangeTMnemonic = "xt";
+  public const string LoadTMnemonic = "ldt";
+  public const string StoreTMnemonic = "stt";
+  public const string BitCountMnemonic = "bitcnt";
 
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
@@ -320,6 +366,33 @@ public static class CvmInstructionSet
     new(Id: 26, LoadAddressOfLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadAddressOfLocalTag, ValueBitMask: Node606ValueBitMask),
     new(Id: 27, LoadAddressOfParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadAddressOfParameterTag, ValueBitMask: Node606ValueBitMask),
     new(Id: 28, LeaveMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 29, EqualMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 30, EqualToZeroMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 31, FalseMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 32, TrueMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 33, NotEqualMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 34, NotEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 35, UnsignedGreaterThanMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 36, GreaterThanMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 37, GreaterThanZeroMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 38, GreaterOrEqualMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 39, GreaterOrEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 40, UnsignedLessOrEqualMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 41, LessOrEqualMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 42, LessOrEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 43, LessThanMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 44, LessThanZeroMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 45, UnsignedLessThanMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 46, UnsignedGreaterOrEqualMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 47, MultiplyByTwoMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 48, UnsignedDivideByTwoMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 49, DivideByTwoMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 50, AbsoluteValueMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 51, NegateMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 52, ExchangeTMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 53, LoadTMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 54, StoreTMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 55, BitCountMnemonic, 1, CvmOperandEncoding.None),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

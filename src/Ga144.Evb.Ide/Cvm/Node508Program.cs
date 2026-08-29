@@ -29,10 +29,9 @@ namespace Ga144.Evb.Ide.Cvm;
 /// store-into-507's-r, the return-to-507 signal, AND the loop-back into one word, since (as far as
 /// this source shows) every dispatch into this node ultimately needs its result stored into r via
 /// <c>r!</c> before 507 is done with it. None of the comparison/arithmetic words below call
-/// <c>r!</c> or <c>main</c> themselves -- consistent with 506's op-words never calling
-/// <c>leave</c> either -- so this reading follows the same shape Stefan already confirmed for 506
-/// ("cold start with main is ok"), just with <c>r!</c> standing in for <c>leave</c>. This is
-/// inferred, not given.
+/// <c>r!</c> or <c>main</c> themselves -- consistent with 506's op-words never calling <c>leave</c>
+/// either -- so this reading follows the same shape Stefan already confirmed for 506 ("cold start
+/// with main is ok"), just with <c>r!</c> standing in for <c>leave</c>. This is inferred, not given.
 ///
 /// <b>"if"/"-if"/"until"/"-until" semantics</b> are quoted directly from this project's own DB001
 /// (F18A Technology Reference) and DB013 (arrayForth User's Manual), not guessed: <c>if</c>
@@ -43,38 +42,56 @@ namespace Ga144.Evb.Ide.Cvm;
 /// these pop T.
 ///
 /// <b>A naming convention worth noting:</b> the UNticked helper words below (<c>gt0</c>,
-/// <c>ge0</c>, <c>le0</c>, <c>lt0</c>) are the raw, unsigned comparison primitives, shared by both
-/// the unsigned CVM words (<c>'ugt</c>/<c>'uge</c>/<c>'ule</c>/<c>'ult</c>, which call them
-/// directly) and the signed CVM words (<c>'gt</c>/<c>'ge</c>/<c>'le</c>/<c>'lt</c>, whose own
-/// ticked <c>'*0</c> wrappers first re-normalize the sign bit with a "2* 2*" shift -- the same
-/// idiom used by node 506's <c>'sext</c> and node 507's <c>'ssr</c> for a value that is logically
-/// 16 bits wide sitting in an 18-bit F18 word -- before delegating to the shared helper).
+/// <c>ge0</c>, <c>le0</c>, <c>lt0</c>, and -- as of this revision -- <c>/inc</c>/<c>/dec</c> too)
+/// are the raw internal primitives, shared by both the unsigned CVM words
+/// (<c>'ugt</c>/<c>'uge</c>/<c>'ule</c>/<c>'ult</c>, which call <c>gt0</c>/<c>ge0</c>/<c>le0</c>/
+/// <c>lt0</c> directly) and the signed CVM words (<c>'gt</c>/<c>'ge</c>/<c>'le</c>/<c>'lt</c>,
+/// whose own ticked <c>'*0</c> wrappers first re-normalize the sign bit with a "2* 2*" shift -- the
+/// same idiom used by node 506's <c>'sext</c> and node 507's <c>'ssr</c> for a value that is
+/// logically 16 bits wide sitting in an 18-bit F18 word -- before delegating to the shared helper).
+/// <c>main</c>, <c>r!</c>, and <c>u@-</c> are UNticked too, per Stefan's own rule for this revision
+/// (see the revision note below) -- they are this node's own internal plumbing, never dispatched
+/// to directly from the CVM's own opcode space.
 ///
-/// <b>The typo fix applied in this version.</b> The source as given used <c>\a</c>/<c>\b</c>
-/// instead of <c>/a</c>/<c>/b</c> for the node-configuration directives, and had a duplicated
-/// <c>entry main</c> line. Both are confirmed typos (Stefan). The backslash is significant here:
-/// this compiler treats a bare <c>\</c> as a line-comment starter (same as <c>//</c>), so
-/// <c># 0 \a</c> tokenized as just <c># 0</c> with the rest of the line silently swallowed as a
-/// comment -- confirmed empirically against the compiled result's own <c>InitialA</c>/
-/// <c>InitialB</c> metadata, which came back unset with the original text (every other node in
-/// this cluster has them populated). With <c>/a</c>/<c>/b</c> restored and the duplicate
-/// <c>entry main</c> removed, <c>InitialA</c> is 0 and <c>InitialB</c> is 0x175 ("left"), and the
-/// compiled words are otherwise byte-identical to the original (uncorrected) text.
+/// <b>This revision, per Stefan's own naming rule</b> ("this is node 508. all words that begin with
+/// a [tick] are an opcode for the CVM with the mnemonic using the same name without the leading
+/// [tick]"). Five changes from the prior revision, all confirmed against a real compile (0 errors,
+/// 0 unexpected warnings) before this file was updated:
+/// <list type="number">
+/// <item><c># 0 org</c> -&gt; <c># 6 org</c>: the compiler's address counter now starts at word 6,
+/// not 0, leaving addresses 0x000-0x005 unused and pushing <c>main</c> to 0x006 (previously
+/// 0x000) -- every other word's address shifts by the same 6 words. Not yet explained beyond
+/// "given".</item>
+/// <item><c>r!</c> now masks its argument with <c>0xffff and</c> before shipping it to 507
+/// (previously unmasked) -- keeping a stored result to the CVM's own 16-bit word width even though
+/// the F18 wire word underneath is 18 bits wide.</item>
+/// <item><c>/inc</c>/<c>/dec</c> (this revision's un-ticked spellings, previously ticked as
+/// <c>'inc</c>/<c>'dec</c>) are DEMOTED from CVM opcodes to plain internal helpers per Stefan's own
+/// naming rule -- no longer individually dispatchable, only used internally by <c>'negate</c> and
+/// <c>'bitcnt</c>.</item>
+/// <item><c>'2*</c>/<c>'u2/</c>/<c>'2/</c> are renamed to <c>'mul2</c>/<c>'udiv2</c>/<c>'div2</c> --
+/// same bodies, clearer CVM-facing names.</item>
+/// <item><c>'abs</c>/<c>'negate</c> no longer has a separate, empty <c>'nop</c> word for the
+/// already-positive case -- <c>'negate</c>'s own trailing <c>;</c> now closes the <c>then</c>
+/// branch directly, one word shorter than before.</item>
+/// </list>
+/// Also removed entirely (not merely renamed): the <c>'-</c> alias for <c>u@-</c> (Stefan's own
+/// "subtract" description now attaches to <see cref="Source"/>'s own <c>u@-</c> directly) and
+/// <c>'invert</c> (the bare <c>'inv</c> opcode, no longer separately exposed as a CVM mnemonic on
+/// this node).
 ///
-/// <b>A note on confidence.</b> Stefan's own trailing comment block covers only <c>'-</c>/
-/// <c>u@-</c> ("subtract"), <c>'xt</c>, <c>'ldt</c>, <c>'stt</c>, and <c>'bitcnt</c>. Everything
-/// else below is inferred from the code, cross-checked against the compiled addresses and against
-/// node 506/507's already-confirmed idioms -- treat it with the same lower confidence as node
-/// 607's <c>exec</c> or node 506's own word-by-word notes.
+/// <b>A note on confidence.</b> Stefan's own trailing comment block covers only <c>'xt</c>,
+/// <c>'ldt</c>, <c>'stt</c>, and <c>'bitcnt</c>. Everything else below is inferred from the code,
+/// cross-checked against the compiled addresses and against node 506/507's already-confirmed
+/// idioms -- treat it with the same lower confidence as node 607's <c>exec</c> or node 506's own
+/// word-by-word notes.
 ///
 /// <b>Verification.</b> Compiled with zero errors (<c>Success = true</c>) against this project's
 /// real <c>Compiler/F18Compiler.cs</c>, importing node 507's exported symbols via
-/// <c># 507 import</c>. 63 of 64 RAM words used, entry point <c>main</c> at word address 0x000.
-/// One informational warning is expected and benign: F18C050, "'main' redefines the name imported
-/// from node 507" -- both nodes define their own independent <c>main</c>, and 508 never needs to
-/// call INTO 507's by name, so the shadowing is intentional. Adding the per-word documentation
-/// comments to <see cref="Source"/> was re-verified to produce byte-for-byte identical compiled
-/// output to the plain, typo-corrected version.
+/// <c># 507 import</c>. All 64 RAM words used, entry point <c>main</c> at word address 0x006 (per
+/// the <c># 6 org</c> shift above). One informational warning is expected and benign: F18C050,
+/// "'main' redefines the name imported from node 507" -- both nodes define their own independent
+/// <c>main</c>, and 508 never needs to call INTO 507's by name, so the shadowing is intentional.
 /// </summary>
 internal static class Node508Program
 {
@@ -83,14 +100,14 @@ internal static class Node508Program
 
   /// <summary>
   /// Node 508's full resident F18 source, fully commented per-word (Stefan's own descriptions are
-  /// quoted where given -- '-/u@-, 'xt, 'ldt, 'stt, 'bitcnt -- everything else is inferred) with a
-  /// traced control-flow walkthrough of every comparison word's shared-helper structure. See the
-  /// class remarks for the compile verification this source was checked against, including its
-  /// cross-node import of node 507's symbol table via <c># 507 import</c>, and the
-  /// <c>\a</c>/<c>\b</c>-&gt;<c>/a</c>/<c>/b</c> typo fix.
+  /// quoted where given -- 'xt, 'ldt, 'stt, 'bitcnt -- everything else is inferred) with a traced
+  /// control-flow walkthrough of every comparison word's shared-helper structure. See the class
+  /// remarks for the compile verification this source was checked against, including its
+  /// cross-node import of node 507's symbol table via <c># 507 import</c>, and the revision note
+  /// covering the five changes from the prior revision.
   /// </summary>
   public const string Source = """
-      ( cvm2 comparison)
+      ( cvm2 comparison, 1110_1???_????_????)
       // ============================================================================
       // Node 508 -- CVM test-cluster register-t / comparison node (test-mirror of
       // real design node 308, register t)
@@ -99,8 +116,8 @@ internal static class Node508Program
       // Real hardware role (per cvm_2.txt): node 308 holds t, a third working
       // register alongside r (307/507) and d (306/506), and is where the CVM's
       // comparison and single-operand ALU opcodes live: signed/unsigned equality
-      // and ordering tests, absolute value/negate, invert, T<->register exchange,
-      // and population count. Node 508 is that same node, test-mirrored (row' =
+      // and ordering tests, absolute value/negate, T<->register exchange, and
+      // population count. Node 508 is that same node, test-mirrored (row' =
       // 8-row, column unchanged) -- see Node607Program.cs's remarks for the full
       // mirror-mapping table.
       //
@@ -150,29 +167,69 @@ internal static class Node508Program
       // re-normalize the sign bit with a "2* 2*" shift -- the same idiom used by
       // node 506's 'sext and node 507's 'ssr for a value that is logically 16 bits
       // wide sitting in an 18-bit F18 word -- before delegating to the shared
-      // helper).
+      // helper). 'main', 'r!', 'u@-', and the new '/inc'/'/dec' below are UNticked
+      // too, per Stefan's own rule for this revision ("all words that begin with a
+      // [tick] are an opcode for the CVM ... using the same name without the
+      // leading [tick]") -- they are this node's own internal plumbing, never
+      // dispatched to directly from the CVM's own opcode space.
       //
       // No per-word descriptions were given for most of this drop; Stefan's own
-      // trailing comment block covers only '-/u@- ("subtract"), 'xt, 'ldt, 'stt,
-      // and 'bitcnt. Everything else below is inferred from the code, cross-
-      // checked against the compiled addresses and against node 506/507's already-
-      // confirmed idioms -- treat it with the same lower confidence as node 607's
-      // 'exec or node 506's own word-by-word notes.
+      // trailing comment block covers only 'xt, 'ldt, 'stt, and 'bitcnt (this
+      // revision no longer separately calls out '-/u@- as "subtract" -- see the
+      // revision note below). Everything else below is inferred from the code,
+      // cross-checked against the compiled addresses and against node 506/507's
+      // already-confirmed idioms -- treat it with the same lower confidence as
+      // node 607's 'exec or node 506's own word-by-word notes.
       //
-      // Verified: this source (with '\a'/'\b' corrected to '/a'/'/b', and the
-      // duplicate 'entry main' line removed -- both confirmed as typos by Stefan)
-      // compiles against the real F18Compiler with 0 errors (Success=true),
-      // importing node 507's exported symbols via '# 507 import'. 63 of 64 RAM
-      // words used, entry point 'main' at word address 0x000. One informational
-      // warning is expected and benign: F18C050, "'main' redefines the name
-      // imported from node 507" -- both nodes define their own independent
-      // 'main', and 508 never needs to call INTO 507's by name, so the shadowing
-      // is intentional.
+      // ----------------------------------------------------------------------
+      // Revision note (this drop, per Stefan: "this is node 508. all words that
+      // begin with a [tick] are an opcode for the CVM with the mnemonic using the
+      // same name without the leading [tick]")
+      // ----------------------------------------------------------------------
+      // Five changes from the prior revision of this file, all confirmed against a
+      // real compile (0 errors, 0 unexpected warnings) before being written here:
+      //   1. '# 0 org' -> '# 6 org': the compiler's address counter now starts at
+      //      word 6, not 0, leaving addresses 0x000-0x005 unused and pushing
+      //      'main' to 0x006 (previously 0x000) -- every other word's address
+      //      shifts by the same 6 words. Not yet explained beyond "given"; may be
+      //      reserved space for a future word, mirroring some other node's own
+      //      layout, or simply how Stefan is laying this node out going forward.
+      //   2. 'r!' now masks its argument with '0xffff and' before shipping it to
+      //      507 (previously shipped the raw value unmasked) -- keeping a stored
+      //      result to 16 bits, matching the CVM's own 16-bit word width
+      //      (CvmWordCodec.WordMask) even though the F18 wire word underneath is
+      //      18 bits wide.
+      //   3. '/inc'/'/dec' (this revision's un-ticked spellings, previously
+      //      ticked as 'inc'/'dec') are DEMOTED from CVM opcodes to plain
+      //      internal helpers per Stefan's own naming rule -- they are no longer
+      //      individually dispatchable CVM instructions, only used internally by
+      //      'negate and 'bitcnt below.
+      //   4. '2*/'u2//'2/ are renamed to 'mul2/'udiv2/'div2 -- same bodies, same
+      //      addresses relative to their neighbors, just clearer CVM-facing
+      //      names ("multiply by 2" / "unsigned divide by 2" / "signed divide by
+      //      2").
+      //   5. 'abs/'negate no longer has a separate, empty 'nop word for its
+      //      already-positive case -- 'negate's own trailing ';' now closes the
+      //      'then' branch directly ('then ;'), one word shorter than before.
+      // Also removed entirely (not merely renamed): the '- alias for u@- (Stefan's
+      // own "subtract" comment on the prior revision described this pair, not
+      // u@- alone -- with '- gone, that description is folded into u@-'s own
+      // remarks below) and 'invert (the bare 'inv opcode, no longer separately
+      // exposed as a CVM mnemonic on this node).
+      //
+      // Verified: this source compiles against the real F18Compiler with 0 errors
+      // (Success=true) and 0 unexpected warnings, importing node 507's exported
+      // symbols via '# 507 import'. All 64 RAM words used (0x006-0x03E hold code,
+      // 0x000-0x005 unused per the '# 6 org' shift above), entry point 'main' at
+      // word address 0x006. One informational warning is expected and benign:
+      // F18C050, "'main' redefines the name imported from node 507" -- both nodes
+      // define their own independent 'main', and 508 never needs to call INTO
+      // 507's by name, so the shadowing is intentional.
       // ============================================================================
 
       # 507 import
 
-      # 0 org
+      # 6 org
       entry main
 
       //  A holds this node's own working register, t. Initialised to 0 at cold
@@ -204,31 +261,27 @@ internal static class Node508Program
       // r! ( w)  --  store w into 507's own register r, signal 507 that this
       // operation is done, then wait for the next one (inferred)
       // ----------------------------------------------------------------------
-      // Ships {@p, a!, return} to 507 in a single packed word: 507's own '@p'
-      // fetches the literal w this word's own trailing '!b' carried across,
-      // 'a!' stores it into 507's A (r), and the packed 'return' opcode is what
-      // 507 executes next (still fetching over the port) to pop ITS OWN R and
-      // resume its own local cleanup code -- the same mechanism worked out for
-      // node 506, just combined with the store into one word here instead of
-      // two separate packed sends. Then CALLs 'main' again: this is what
-      // re-primes 508's own R with a fresh return address (this word's own
-      // trailing ';') before 'main's '>r'/'ex' pair consumes just the dispatch
-      // entry on top of it, so whichever word runs next returns correctly back
-      // here.
-      : r! ( w) A[ @p a! ; ]] lit !b !b main ;
-
-      // ----------------------------------------------------------------------
-      // '-  --  subtract (Stefan's own description, paired with u@- below)
-      // ----------------------------------------------------------------------
-      // Compiles to nothing: an empty body, so this name is a pure alias --
-      // calling '- is identical to calling u@- immediately below (same
-      // compiled address). Given as a separate, CVM-facing name for the same
-      // subtraction u@- implements internally for every comparison word below.
-      : '- ( w-w)
+      // '0xffff and' masks w down to 16 bits before shipping it -- new in this
+      // revision (see the revision note above), keeping a stored result to the
+      // CVM's own 16-bit word width even though the F18 wire word underneath is
+      // 18 bits wide. Then ships {@p, a!, return} to 507 in a single packed
+      // word: 507's own '@p' fetches the (now-masked) literal w this word's own
+      // trailing '!b' carried across, 'a!' stores it into 507's A (r), and the
+      // packed 'return' opcode is what 507 executes next (still fetching over
+      // the port) to pop ITS OWN R and resume its own local cleanup code -- the
+      // same mechanism worked out for node 506, just combined with the store
+      // into one word here instead of two separate packed sends. Then CALLs
+      // 'main' again: this is what re-primes 508's own R with a fresh return
+      // address (this word's own trailing ';') before 'main's '>r'/'ex' pair
+      // consumes just the dispatch entry on top of it, so whichever word runs
+      // next returns correctly back here.
+      : r! ( w) 0xffff and A[ @p a! ; ]] lit !b !b main ;
 
       // ----------------------------------------------------------------------
       // u@-  --  subtract: [value popped via 507/607] - [507's own r, already
-      // on the stack from main's dispatch] (Stefan's own description, "subtract")
+      // on the stack from main's dispatch] (Stefan's own description, "subtract"
+      // -- this revision folds in what the prior revision's separate '- alias
+      // carried, since that alias has been removed)
       // ----------------------------------------------------------------------
       // 'inv' inverts whatever main's dispatch left on top of the stack (r's
       // value) -- the first step of a two's-complement negation, preparing to
@@ -239,16 +292,19 @@ internal static class Node508Program
       // to send that popped value back down over the port, received here via
       // '@b'. '. +' pads and adds the inverted r to the fetched w, completing
       // the two's-complement subtraction: result = w + (-r) = w - r. Every
-      // comparison word below calls this (directly or via '-) to get that
-      // difference, then tests its sign/zero-ness.
+      // comparison word below calls this (directly or through the shared
+      // helpers) to get that difference, then tests its sign/zero-ness.
       : u@- ( w-w) inv A[ s/pop ]] lit !b A[ !p ]] lit !b @b . +
 
       // ----------------------------------------------------------------------
-      // 'inc / 'dec  --  add/subtract 1 (inferred)
+      // /inc / /dec  --  add/subtract 1 (inferred) -- UNticked, internal helpers
+      // only (demoted from CVM opcodes in this revision; see the revision note
+      // above), used below by 'negate and 'bitcnt
       // ----------------------------------------------------------------------
       // '. +' pads and adds a signed literal (1 or -1) to whatever is on top of
       // the stack.
-      : 'inc 1 . + ; : 'dec -1 . + ;
+      : /inc 1 . + ;
+      : /dec -1 . + ;
 
       // ----------------------------------------------------------------------
       // 'eq / 'eq0 / 'false / 'true  --  signed/unsigned equality test, and the
@@ -256,22 +312,26 @@ internal static class Node508Program
       // (inferred)
       // ----------------------------------------------------------------------
       // 'eq calls u@- to get the difference D, then enters 'eq0: 'if' continues
-      // (falls through) when D is NONZERO, executing ''false's body ('dup xor',
+      // (falls through) when D is NONZERO, executing 'false's body ('dup xor',
       // always 0) and returning via 'false's own ';' -- or, when D IS ZERO,
       // jumps forward to the matching 'then', which is exactly where 'true's
       // own body starts ('then 1 ;'), returning 1. Net effect: 'eq returns 1
       // when the two operands are equal (D==0), 0 otherwise -- and 'true/'false
-      // (0x011/0x010) remain independently callable words, reused by 'ne below.
-      : 'eq u@- : 'eq0 if : 'false dup xor ; : 'true then 1 ;
+      // remain independently callable words, reused by 'ne below.
+      : 'eq u@-
+      : 'eq0 if
+      : 'false dup xor ;
+      : 'true then 1 ;
 
       // ----------------------------------------------------------------------
       // 'ne / 'ne0  --  not-equal test, reusing 'true above (inferred)
       // ----------------------------------------------------------------------
       // 'ne0: 'if' continues when D is nonzero, CALLing the already-defined
       // 'true (pushing 1) and returning via this word's own ';' -- or, when D
-      // is zero, jumps to 'then' (right here, opening the else-branch: 'dup
+      // is zero, jumps to 'then (right here, opening the else-branch: 'dup
       // xor ;', pushing 0). Net effect: the exact opposite of 'eq, as expected.
-      : 'ne u@- : 'ne0 if 'true ; then dup xor ;
+      : 'ne u@-
+      : 'ne0 if 'true ; then dup xor ;
 
       // ----------------------------------------------------------------------
       // 'ugt / gt0 / ge0  --  unsigned greater-than, and the shared "D>0" /
@@ -287,7 +347,8 @@ internal static class Node508Program
       // gt0's gate, is known nonzero, so strictly positive), jumps to 'true.
       // Net effect: 'ugt is true iff D>0 strictly. 'ge0 alone (skipping gt0's
       // equal-gate) is reused directly by 'uge below for ">=": true iff D>=0.
-      : 'ugt u@- : gt0 # 'false until
+      : 'ugt u@-
+      : gt0 # 'false until
       : ge0 # 'true -until dup xor ;
 
       // ----------------------------------------------------------------------
@@ -298,13 +359,15 @@ internal static class Node508Program
       // value (the same idiom node 506's 'sext and node 507's 'ssr use), then
       // calls the UNticked 'gt0' helper above -- reusing its D>0-strictly logic
       // with a properly sign-normalized D.
-      : 'gt u@- : 'gt0 2* 2* gt0 ;
+      : 'gt u@-
+      : 'gt0 2* 2* gt0 ;
 
       // ----------------------------------------------------------------------
       // 'ge / 'ge0  --  signed greater-or-equal: same sign re-normalization,
       // delegating to the shared ge0 helper above (inferred)
       // ----------------------------------------------------------------------
-      : 'ge u@- : 'ge0 2* 2* ge0 ;
+      : 'ge u@-
+      : 'ge0 2* 2* ge0 ;
 
       // ----------------------------------------------------------------------
       // 'ule / le0 / lt0  --  unsigned less-or-equal, and the shared "D<=0" /
@@ -321,62 +384,67 @@ internal static class Node508Program
       // 'false. Net effect: 'ule is true iff D<=0. lt0 alone (skipping le0's
       // equal-gate) is reused directly by 'ult below for strict "<": true iff
       // D<0.
-      : 'ule u@- : le0 # 'true until
+      : 'ule u@-
+      : le0 # 'true until
       : lt0 # 'false -until 'true ;
 
       // ----------------------------------------------------------------------
       // 'le / 'le0  --  signed less-or-equal: sign re-normalization, delegating
       // to the shared le0 helper above (inferred)
       // ----------------------------------------------------------------------
-      : 'le u@- : 'le0 2* 2* le0 ;
+      : 'le u@-
+      : 'le0 2* 2* le0 ;
 
       // ----------------------------------------------------------------------
       // 'lt / 'lt0  --  signed less-than: sign re-normalization, delegating to
       // the shared lt0 helper above (inferred)
       // ----------------------------------------------------------------------
-      : 'lt u@- : 'lt0 2* 2* lt0 ;
+      : 'lt u@-
+      : 'lt0 2* 2* lt0 ;
 
       // ----------------------------------------------------------------------
       // 'ult / 'uge  --  unsigned strict less-than / greater-or-equal: delegate
       // straight to the shared helpers above with NO sign re-normalization,
       // since these test the raw unsigned difference directly (inferred)
       // ----------------------------------------------------------------------
-      : 'ult u@- lt0 ; : 'uge u@- ge0 ;
+      : 'ult u@- lt0 ;
+      : 'uge u@- ge0 ;
 
       // ----------------------------------------------------------------------
-      // '2* / 'u2/  --  multiply/divide by 2 (inferred)
+      // 'mul2 / 'udiv2  --  multiply/divide by 2 (inferred) -- renamed this
+      // revision from '2*/'u2/ (see the revision note above); same bodies
       // ----------------------------------------------------------------------
       // The plain F18A '2*' (left shift) and '2/' (right shift, sign-preserving
       // on real hardware, though this bare single-step form is exposed under
-      // the CVM's "unsigned" shift-right name).
-      : '2* 2* ; : 'u2/ 2/ ;
+      // the CVM's "unsigned" divide name).
+      : 'mul2 2* ;
+      : 'udiv2 2/ ;
 
       // ----------------------------------------------------------------------
-      // '2/  --  signed divide by 2 (inferred)
+      // 'div2  --  signed divide by 2 (inferred) -- renamed this revision from
+      // '2/ (see the revision note above); same body
       // ----------------------------------------------------------------------
       // '2* 2*' then '2/ 2/ 2/': the same "shift up 2, then shift down 3" net
       // -1 idiom as node 507's 'ssr and this file's own 'gt0/'ge0/'le0/'lt0 --
       // the extra up-then-down pair re-floods the correct sign bit for a
       // logically-16-bit value before the arithmetic right shift, so the sign
       // extends correctly across the 16/18-bit boundary.
-      : '2/ 2* 2* 2/ 2/ 2/ ;
+      : 'div2 2* 2* 2/ 2/ 2/ ;
 
       // ----------------------------------------------------------------------
-      // 'abs / 'negate / 'nop  --  absolute value (inferred)
+      // 'abs / 'negate  --  absolute value (inferred) -- this revision drops the
+      // separate, empty 'nop word the prior revision had for the
+      // already-positive case (see the revision note above): 'negate's own
+      // trailing ';' now closes the 'then' branch directly
       // ----------------------------------------------------------------------
       // '2* 2* 2/ 2/' re-floods the correct sign bit (net zero shift, purely
       // to refresh sign-extension) then '-if' tests it: continues (falls
-      // through to 'negate) when NEGATIVE, executing 'inv 'inc' (two's-
-      // complement negation) and returning; otherwise (non-negative) jumps to
-      // 'then, which opens 'nop's empty body -- already positive, nothing to
-      // do.
-      : 'abs 2* 2* 2/ 2/ -if : 'negate inv 'inc ; : 'nop then ;
-
-      // ----------------------------------------------------------------------
-      // 'invert  --  bitwise NOT (inferred)
-      // ----------------------------------------------------------------------
-      // The plain F18A 'inv' opcode.
-      : 'invert inv ;
+      // through to 'negate) when NEGATIVE, executing 'inv /inc' (two's-
+      // complement negation, using this revision's unticked /inc helper) and
+      // returning; otherwise (non-negative) jumps straight to 'then, which now
+      // closes the word immediately -- already positive, nothing to do.
+      : 'abs 2* 2* 2/ 2/ -if
+      : 'negate inv /inc ; then ;
 
       // ----------------------------------------------------------------------
       // 'xt  --  exchange T with this node's own register (t, held in A)
@@ -417,18 +485,19 @@ internal static class Node508Program
       // this cluster); '>r' parks that 0 on R as the running bit-count. 'begin'
       // marks the loop's backward-branch target. 'if' tests T: continues
       // (enters the loop body) while T is NONZERO; jumps to 'then (exiting the
-      // loop) once T reaches zero. Loop body: 'r> 'inc >r' increments the
-      // parked count; 'dup 'dec and' computes T & (T-1) -- the standard trick
-      // that clears exactly the lowest set bit -- replacing T with that result
-      // for the next pass. '[ swap ]' is a COMPILE-TIME-only step (switches to
-      // interpret mode, swaps the two pending compile-time control handles,
-      // switches back): 'begin' and 'if' each pushed a handle, in that order,
-      // so without the swap 'again' (which expects a 'begin'-style handle on
-      // top) would grab 'if's forward-branch handle by mistake. After the
-      // swap, 'again' correctly jumps back to 'begin', and the later 'then'
-      // correctly resolves 'if's forward branch, closing a loop with a
-      // mid-body conditional exit. Once T reaches 0, 'if' jumps to 'then' and
-      // 'r>' pops the final count as the result.
-      : 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;
+      // loop) once T reaches zero. Loop body: 'r> /inc >r' increments the
+      // parked count (using this revision's unticked /inc helper); 'dup /dec
+      // and' computes T & (T-1) -- the standard trick that clears exactly the
+      // lowest set bit -- replacing T with that result for the next pass.
+      // '[ swap ]' is a COMPILE-TIME-only step (switches to interpret mode,
+      // swaps the two pending compile-time control handles, switches back):
+      // 'begin' and 'if' each pushed a handle, in that order, so without the
+      // swap 'again' (which expects a 'begin'-style handle on top) would grab
+      // 'if's forward-branch handle by mistake. After the swap, 'again'
+      // correctly jumps back to 'begin', and the later 'then' correctly
+      // resolves 'if's forward branch, closing a loop with a mid-body
+      // conditional exit. Once T reaches 0, 'if' jumps to 'then' and 'r>' pops
+      // the final count as the result.
+      : 'bitcnt dup dup xor >r begin if r> /inc >r dup /dec and [ swap ] again then r> ;
       """;
 }

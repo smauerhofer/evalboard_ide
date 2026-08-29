@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-29T19:22:33.5047024
-      utcDateTime: 2026-08-29T19:22:33.5047024Z
-      localDateTime: 2026-08-29T21:22:33.5047024+02:00
+      dateTime: 2026-08-29T21:30:27.0812453
+      utcDateTime: 2026-08-29T21:30:27.0812453Z
+      localDateTime: 2026-08-29T23:30:27.0812453+02:00
       date: 2026-08-29T00:00:00.0000000
       day: 29
       dayOfWeek: Saturday
       dayOfYear: 241
-      hour: 19
-      millisecond: 504
-      microsecond: 702
-      nanosecond: 400
-      minute: 22
+      hour: 21
+      millisecond: 81
+      microsecond: 245
+      nanosecond: 300
+      minute: 30
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 33
-      ticks: 639236281535047024
-      utcTicks: 639236281535047024
-      timeOfDay: 19:22:33.5047024
+      second: 27
+      ticks: 639236358270812453
+      utcTicks: 639236358270812453
+      timeOfDay: 21:30:27.0812453
       year: 2026
   portB: 
   portC:
@@ -10498,11 +10498,11 @@ projects:
     - coordinate: 508
       enabled: true
       sourceCode: >-
-        ( cvm2 comparison)
+        ( cvm2 comparison, 1110_1???_????_????)
 
         # 507 import
 
-        # 0 org
+        # 6 org
 
         entry main
 
@@ -10513,17 +10513,17 @@ projects:
 
         : main A[ drop !p a !p ]] lit !b @b >r @b ex
 
-        : r! ( w) A[ @p a! ; ]] lit !b !b main ;
-
-        : '- ( w-w)
+        : r! ( w) 0xffff and A[ @p a! ; ]] lit !b !b main ;
 
         : u@- ( w-w) inv A[ s/pop ]] lit !b A[ !p ]] lit !b @b . +
 
-        : 'inc 1 . + ;
+        : /inc 1 . + ;
 
-        : 'dec -1 . + ;
+        : /dec -1 . + ;
 
-        : 'eq u@- : 'eq0 if
+        : 'eq u@-
+
+        : 'eq0 if
 
         : 'false dup xor ;
 
@@ -10565,19 +10565,15 @@ projects:
 
         : 'uge u@- ge0 ;
 
-        : '2* 2* ;
+        : 'mul2 2* ;
 
-        : 'u2/ 2/ ;
+        : 'udiv2 2/ ;
 
-        : '2/ 2* 2* 2/ 2/ 2/ ;
+        : 'div2 2* 2* 2/ 2/ 2/ ;
 
         : 'abs 2* 2* 2/ 2/ -if
 
-        : 'negate inv 'inc ;
-
-        : 'nop then ;
-
-        : 'invert inv ;
+        : 'negate inv /inc ; then ;
 
         : 'xt a over a! ;
 
@@ -10585,11 +10581,9 @@ projects:
 
         : 'stt dup a! ;
 
-        : 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;
+        : 'bitcnt dup dup xor >r begin if r> /inc >r dup /dec and [ swap ] again then r> ;
 
         (
-
-        '- &apos;@-  subtract
 
         'xt exchanges T with R.
 
@@ -10601,12 +10595,20 @@ projects:
 
         )
       ramWords:
+      - 0x19445
+      - 0x27612
+      - 0x2EDB2
+      - 0x13414
+      - 0x3F740
+      - 0x27555
       - 0x05B02
       - 0x3B98E
       - 0x2FF5D
-      - 0x05B22
+      - 0x04012
+      - 0x0FFFF
       - 0x04A55
-      - 0x11400
+      - 0x09BB2
+      - 0x11406
       - 0x33D27
       - 0x13410
       - 0x0C9B2
@@ -10615,58 +10617,50 @@ projects:
       - 0x00001
       - 0x049F5
       - 0x3FFFF
-      - 0x13406
-      - 0x19411
+      - 0x1340E
+      - 0x19419
       - 0x24355
       - 0x05555
       - 0x00001
-      - 0x13406
-      - 0x19416
-      - 0x11411
-      - 0x24355
-      - 0x13406
-      - 0x19410
-      - 0x1B411
-      - 0x24355
-      - 0x13406
-      - 0x36440
-      - 0x13406
-      - 0x36441
-      - 0x13406
-      - 0x19411
-      - 0x1B410
-      - 0x11411
-      - 0x13406
-      - 0x36440
-      - 0x13406
-      - 0x36441
-      - 0x13406
-      - 0x11421
-      - 0x13406
+      - 0x1340E
+      - 0x1941E
       - 0x11419
+      - 0x24355
+      - 0x1340E
+      - 0x19418
+      - 0x1B419
+      - 0x24355
+      - 0x1340E
+      - 0x36440
+      - 0x1340E
+      - 0x36441
+      - 0x1340E
+      - 0x19419
+      - 0x1B418
+      - 0x11419
+      - 0x1340E
+      - 0x36440
+      - 0x1340E
+      - 0x36441
+      - 0x1340E
+      - 0x11429
+      - 0x1340E
+      - 0x11421
       - 0x37555
       - 0x31555
       - 0x364C2
       - 0x30755
       - 0x364C2
-      - 0x31232
-      - 0x3370A
+      - 0x3123A
+      - 0x33712
       - 0x15555
-      - 0x33555
       - 0x22FAD
       - 0x23555
       - 0x24A55
       - 0x24DE2
       - 0x2E9B2
-      - 0x1943E
-      - 0x2760A
-      - 0x2EDB2
-      - 0x1340C
-      - 0x3F739
-      - 0x27555
-      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x006
         p: 0x000
         a: 0x000
         b: 0x000
@@ -11884,9 +11878,21 @@ projects:
 
       push
 
-      enter 10
+      enter 5
 
-      push
+      slit 11
+
+      stl 1
+
+      slit 12
+
+      stl 2
+
+      slit 13
+
+      stl 3
+
+      ldl 1
 
       push
 

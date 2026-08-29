@@ -488,27 +488,32 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   }
 
   // Every node CvmAssemblyLanguage's tagged mnemonics can resolve against today: 607 (nop/pushlit/
-  // push/pop/ret), 507 (the eleven usl/ssr/usr/add/sub/and/xor/or/inv/inc/dec ALU ops), and 606
+  // push/pop/ret), 507 (the eleven usl/ssr/usr/add/sub/and/xor/or/inv/inc/dec ALU ops), 606
   // (leave -- node 606's eight enter/adjust/stl/stp/ldl/ldp/lal/lap ops are self-describing and never
-  // need this list at all, but leave is tagged/node-resolved exactly like 607's own primitives) -- see
+  // need this list at all, but leave is tagged/node-resolved exactly like 607's own primitives), and
+  // 508 (its 27 comparison/arithmetic ops -- eq, eq0, false, true, ne, ne0, ugt, gt, gt0, ge, ge0,
+  // ule, le, le0, lt, lt0, ult, uge, mul2, udiv2, div2, abs, negate, xt, ldt, stt, bitcnt -- every one
+  // of them tagged/node-resolved exactly like leave, none self-describing) -- see
   // CvmAssemblyLanguage's own remarks. A live chip session's compiledRam already has every node in
-  // the boot tree, 507/606 included (Ga144CvmHardwareInstaller compiles the whole install tree up
+  // the boot tree, 507/606/508 included (Ga144CvmHardwareInstaller compiles the whole install tree up
   // front), so this list only matters for the standalone (no-chip-connected) path below.
   private static readonly IReadOnlyList<int> StandaloneCvmNodeCoordinates =
   [
     CvmMemoryProtocol.NopSourceNodeCoordinate,
     Node507Program.Coordinate,
     Node606Program.Coordinate,
+    Node508Program.Coordinate,
   ];
 
   /// <summary>
   /// Compiles every node in <see cref="StandaloneCvmNodeCoordinates"/> (<see cref="F18NodeCompilationService"/>)
   /// purely in software -- no serial port, no connected chip -- for <see cref="AssembleStandalone"/>
-  /// and the memory inspector's no-session disassembly to resolve tagged mnemonics against. Node 507's
-  /// and node 606's own RAM sources both import node 607 (<c># 607 import</c>), so compiling either
-  /// alone would already pull 607's compile in as an import -- but only that node's OWN
+  /// and the memory inspector's no-session disassembly to resolve tagged mnemonics against. Node 507's,
+  /// node 606's, and node 508's own RAM sources all (transitively, for 508 -&gt; 507 -&gt; 607) import
+  /// node 607 (<c># 607 import</c>/<c># 507 import</c>), so compiling any one of them would already
+  /// pull the chain's compile in as an import -- but only that node's OWN
   /// <see cref="F18NodeCompilationResult"/> comes back from that call, so each node in the list is
-  /// still compiled and stored individually here to end up with all three in <c>compiledRam</c>.
+  /// still compiled and stored individually here to end up with all four in <c>compiledRam</c>.
   /// Self-describing opcodes (<c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>, and node 606's own eight
   /// enter/adjust/stl/stp/ldl/ldp/lal/lap ops) never need this at all. Returns an empty table and a
   /// descriptive error (never throws) naming whichever node's source doesn't currently compile.
