@@ -1,27 +1,34 @@
 using System.Globalization;
 using Ga144.Cvm.Toolchain;
 using Ga144.Evb.Ide.Compiler;
+using Ga144.Evb.Ide.Cvm;
 
 namespace Ga144.Evb.Ide.Services;
 
 /// <summary>
 /// The CVM's own small assembly language: Stefan's mnemonics (<c>nop</c>, <c>pushlit &lt;data&gt;</c>,
-/// <c>push</c>, <c>pop</c>, <c>ret</c>) layered on top of the wire-level opcode convention
-/// (opcode = 0x8000 | wordAddress) that <see cref="CvmMemoryProtocol"/> already established. (<c>call</c>,
-/// <c>br</c>, <c>ifbr</c>, and <c>slit</c> are the exceptions -- see this class's own remarks on why
-/// they aren't part of this tagged-opcode layer.)
+/// <c>push</c>, <c>pop</c>, <c>ret</c>, and node 507's eleven ALU ops) layered on top of the
+/// wire-level opcode convention (opcode = 0x8000 | wordAddress) that <see cref="CvmMemoryProtocol"/>
+/// already established for node 607 -- node 507's ALU ops carry a DIFFERENT tag of their own, not
+/// 0x8000 (see <see cref="Node507UnaryTagBits"/>/<see cref="Node507BinaryTagBits"/>'s own remarks).
+/// (<c>call</c>, <c>br</c>, <c>ifbr</c>, and <c>slit</c> are the exceptions -- see this class's own
+/// remarks on why they aren't part of this tagged-opcode layer.)
 ///
-/// This is deliberately a SEPARATE naming layer from node 607's own F18 source symbols
-/// ('nop, 'plit, 'pop, 'push, still defined in <see cref="CvmMemoryProtocol"/>) -- those tick-names
-/// are node 607's own interpreter labels and won't change; the mnemonics here are what a person
-/// reads and writes, and the two are free to diverge (as pushlit already has from 'plit).
+/// This is deliberately a SEPARATE naming layer from any node's own F18 source symbols ('nop, 'plit,
+/// 'pop, 'push on node 607; 'usl, 'ssr, 'usr, '+, '-, 'and, 'xor, 'or, 'inv, 'inc, 'dec on node 507) --
+/// those tick-names are each node's own interpreter labels and won't change; the mnemonics here are
+/// what a person reads and writes, and the two are free to diverge (as pushlit already has from 'plit).
 ///
 /// The mnemonic/word-length/operand-arity SHAPE of each instruction now lives in the standalone
 /// Ga144.Cvm.Toolchain project's <see cref="CvmInstructionSet"/> (shared with the freestanding
 /// gaasm/galib/galink command-line tools, so both sides of the toolchain agree on what the
-/// instruction set even is); this file's own job is pairing each of those shapes with node 607's F18
-/// symbol, which only makes sense against a live IDE compile and has no business in that shared,
-/// IDE-independent project.
+/// instruction set even is); this file's own job is pairing each of those shapes with the SPECIFIC
+/// node that implements it and that node's own F18 symbol, which only makes sense against a live IDE
+/// compile and has no business in that shared, IDE-independent project. A mnemonic is no longer
+/// assumed to live on node 607 -- <see cref="NodeSymbolByMnemonic"/> below records, per mnemonic,
+/// which node's compile to resolve it against, so <c>nop</c>/<c>pushlit</c>/<c>push</c>/<c>pop</c>/
+/// <c>ret</c> resolve against node 607 while <c>usl</c>/<c>ssr</c>/<c>usr</c>/<c>add</c>/<c>sub</c>/
+/// <c>and</c>/<c>xor</c>/<c>or</c>/<c>inv</c>/<c>inc</c>/<c>dec</c> resolve against node 507.
 ///
 /// Shapes whose <see cref="CvmInstructionSet.CvmInstructionShape.Encoding"/> is anything other than
 /// <see cref="CvmInstructionSet.CvmOperandEncoding.None"/>/<see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>
@@ -36,16 +43,22 @@ namespace Ga144.Evb.Ide.Services;
 /// memory inspector. <see cref="Assemble"/> mirrors that same dual dispatch on the OTHER direction --
 /// hand-typed CVM asm source that uses <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c> is encoded
 /// directly from <see cref="CvmInstructionSet"/> and the operand alone, bypassing this file's own
-/// <see cref="Instructions"/>/<see cref="F18SymbolByMnemonic"/> pairing entirely (see
+/// <see cref="Instructions"/>/<see cref="NodeSymbolByMnemonic"/> pairing entirely (see
 /// <see cref="Assemble"/>'s own remarks) -- so <see cref="Instructions"/> itself still omits all four,
 /// since they would have nothing to pair them with, without that meaning they can't be assembled.
-/// Extending this file to the other 6 primitive nodes for the TAGGED mnemonics remains separate,
-/// later work.
+/// Extending this file to the remaining primitive nodes (606/608/707/407/508/506) for the TAGGED
+/// mnemonics they might one day expose remains separate, later work -- 607 and 507 are simply the two
+/// nodes that have tagged mnemonics of their own today.
 ///
 /// Both directions -- <see cref="BuildDecodeTable"/> for disassembly and <see cref="BuildEncodeTable"/>/
 /// <see cref="Assemble"/> for assembly -- are built from the single <see cref="Instructions"/> table,
 /// so they can never drift apart: adding a new TAGGED opcode to <see cref="CvmInstructionSet"/> plus
-/// one line here (the F18 symbol it resolves to) is the only change either direction needs.
+/// one line here (the node and F18 symbol it resolves to) is the only change either direction needs.
+/// Each is also resolved against WHICHEVER of that mnemonic's own node happens to be present in the
+/// caller's <c>compiledRam</c> -- a live chip session's <c>compiledRam</c> already has every node in
+/// the boot tree (607, 507, and the rest), while the standalone (no-chip-connected) path compiles only
+/// the specific nodes <see cref="ViewModels.CvmDebuggerViewModel"/> asks for
+/// (<see cref="ViewModels.CvmDebuggerViewModel"/>'s own remarks cover which).
 /// </summary>
 internal static class CvmAssemblyLanguage
 {
@@ -55,63 +68,117 @@ internal static class CvmAssemblyLanguage
   public const string PopMnemonic = CvmInstructionSet.PopMnemonic;
   public const string RetMnemonic = CvmInstructionSet.RetMnemonic;
 
-  // Node 607's F18 symbol for each shared-toolchain mnemonic. Every mnemonic in
-  // CvmInstructionSet.Instructions must have an entry here, or BuildDecodeTable/BuildEncodeTable
-  // simply won't find it in a live compile -- this is the one place that link, kept as a small,
-  // easy-to-audit map rather than folded back into the shared table (which has no notion of "F18
-  // symbol" at all, on purpose: gaasm never needs one).
-  private static readonly IReadOnlyDictionary<string, string> F18SymbolByMnemonic = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-  {
-    [NopMnemonic] = CvmMemoryProtocol.NopSymbolName,
-    [PushLitMnemonic] = CvmMemoryProtocol.PlitSymbolName,
-    [PushMnemonic] = CvmMemoryProtocol.PushSymbolName,
-    [PopMnemonic] = CvmMemoryProtocol.PopSymbolName,
-    [RetMnemonic] = CvmMemoryProtocol.RetSymbolName,
-  };
+  // Node 607's own tag: "0x8000 | wordAddress" (CvmMemoryProtocol's documented convention for its five
+  // tagged primitives).
+  private const int Node607TagBits = 0x8000;
+
+  // Node 507's OWN dispatch convention is NOT node 607's flat 0x8000 tag -- per Stefan, and per 507's
+  // own 'main' bit-test comments (Node507.f18): the 0xC000-0xFFFF class as a whole is what node 607's
+  // own exec hands off to 507 (its first branch, "2* -if ---u ; then", tests exactly that top bit
+  // pair); WITHIN that class, 507's own further bit tests split unary ALU ops (tag pattern
+  // 1100_0???_????_???? = 0xC000) from binary ALU ops (1100_1???_????_???? = 0xC800) before finally
+  // jumping to the specific word via the address bits in the low 11 bits. Using 607's flat 0x8000 tag
+  // for these (an earlier bug) put every ALU op's opcode in totally the wrong range -- and, since a
+  // node-507 word address and a node-607 word address can coincide numerically, silently collided some
+  // ALU ops with unrelated node-607 primitives that happened to share the same low bits (confirmed:
+  // "'-"/sub on 507 and a same-address word on 607 both encoded as 0x803B under the old, wrong tag).
+  private const int Node507UnaryTagBits = 0xC000;
+  private const int Node507BinaryTagBits = 0xC800;
+
+  // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
+  // tag bits its opcode word must carry (see Node607TagBits/Node507UnaryTagBits/Node507BinaryTagBits
+  // above -- these are NOT all the same value). Every mnemonic in CvmInstructionSet.Instructions must
+  // have an entry here, or BuildDecodeTable/BuildEncodeTable simply won't find it in a live compile --
+  // this is the one place that link, kept as a small, easy-to-audit map rather than folded back into
+  // the shared table (which has no notion of "node", "F18 symbol", or "tag" at all, on purpose: gaasm
+  // never needs any of them). Node 607's five original tagged mnemonics resolve against 607's own
+  // symbols (still defined in CvmMemoryProtocol, node 607's own wire-protocol convention); node 507's
+  // eleven ALU ops resolve against 507's own tick-named words (Node507Program/Node507.f18), using the
+  // literal F18 symbol names straight from that source rather than adding node-507-specific constants
+  // to CvmMemoryProtocol, which is documented as node 607's own convention. The eight binary ALU ops
+  // (usl/ssr/usr/add/sub/and/xor/or) and three unary ones (inv/inc/dec) are split per Node507.f18's own
+  // 'main' dispatch comments -- see Node507BinaryTagBits/Node507UnaryTagBits's own remarks.
+  private static readonly IReadOnlyDictionary<string, (int NodeCoordinate, string SymbolName, int Tag)> NodeSymbolByMnemonic =
+      new Dictionary<string, (int NodeCoordinate, string SymbolName, int Tag)>(StringComparer.OrdinalIgnoreCase)
+      {
+        [NopMnemonic] = (CvmMemoryProtocol.NopSourceNodeCoordinate, CvmMemoryProtocol.NopSymbolName, Node607TagBits),
+        [PushLitMnemonic] = (CvmMemoryProtocol.NopSourceNodeCoordinate, CvmMemoryProtocol.PlitSymbolName, Node607TagBits),
+        [PushMnemonic] = (CvmMemoryProtocol.NopSourceNodeCoordinate, CvmMemoryProtocol.PushSymbolName, Node607TagBits),
+        [PopMnemonic] = (CvmMemoryProtocol.NopSourceNodeCoordinate, CvmMemoryProtocol.PopSymbolName, Node607TagBits),
+        [RetMnemonic] = (CvmMemoryProtocol.NopSourceNodeCoordinate, CvmMemoryProtocol.RetSymbolName, Node607TagBits),
+        [CvmInstructionSet.UnsignedShiftLeftMnemonic] = (Node507Program.Coordinate, "'usl", Node507BinaryTagBits),
+        [CvmInstructionSet.SignedShiftRightMnemonic] = (Node507Program.Coordinate, "'ssr", Node507BinaryTagBits),
+        [CvmInstructionSet.UnsignedShiftRightMnemonic] = (Node507Program.Coordinate, "'usr", Node507BinaryTagBits),
+        [CvmInstructionSet.AddMnemonic] = (Node507Program.Coordinate, "'+", Node507BinaryTagBits),
+        [CvmInstructionSet.SubtractMnemonic] = (Node507Program.Coordinate, "'-", Node507BinaryTagBits),
+        [CvmInstructionSet.AndMnemonic] = (Node507Program.Coordinate, "'and", Node507BinaryTagBits),
+        [CvmInstructionSet.XorMnemonic] = (Node507Program.Coordinate, "'xor", Node507BinaryTagBits),
+        [CvmInstructionSet.OrMnemonic] = (Node507Program.Coordinate, "'or", Node507BinaryTagBits),
+        [CvmInstructionSet.InvertMnemonic] = (Node507Program.Coordinate, "'inv", Node507UnaryTagBits),
+        [CvmInstructionSet.IncrementMnemonic] = (Node507Program.Coordinate, "'inc", Node507UnaryTagBits),
+        [CvmInstructionSet.DecrementMnemonic] = (Node507Program.Coordinate, "'dec", Node507UnaryTagBits),
+      };
 
   /// <summary>
-  /// Every known CVM asm mnemonic THAT RESOLVES TO A NODE 607 F18 SYMBOL, that symbol, and how many
-  /// words (its own opcode word included) it occupies once assembled. <c>pushlit</c> is the only such
-  /// instruction with a trailing operand word today -- extend <see cref="CvmInstructionSet"/> plus
-  /// <see cref="F18SymbolByMnemonic"/> as more tagged-dispatch opcodes are defined; nothing else in
-  /// this file needs to change. A shape whose
+  /// Every known CVM asm mnemonic THAT RESOLVES TO SOME NODE'S F18 SYMBOL, which node and symbol that
+  /// is, and how many words (its own opcode word included) it occupies once assembled. <c>pushlit</c>
+  /// is the only such instruction with a trailing operand word today -- extend
+  /// <see cref="CvmInstructionSet"/> plus <see cref="NodeSymbolByMnemonic"/> as more tagged-dispatch
+  /// opcodes are defined on any node; nothing else in this file needs to change. A shape whose
   /// <see cref="CvmInstructionSet.CvmInstructionShape.Encoding"/> is
   /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/> (<c>call</c>) or
   /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/> (<c>br</c>, <c>ifbr</c>,
   /// <c>slit</c>) has no F18 symbol by design and is filtered out here rather than added to
-  /// <see cref="F18SymbolByMnemonic"/> -- see this class's own remarks for why.
+  /// <see cref="NodeSymbolByMnemonic"/> -- see this class's own remarks for why.
+  ///
+  /// A tagged (<c>None</c>/<c>TrailingWord</c>) mnemonic that ISN'T in <see cref="NodeSymbolByMnemonic"/>
+  /// is also filtered out here, rather than looked up with a throwing indexer -- a genuinely new
+  /// mnemonic on a node this file hasn't been taught to pair yet. A throwing indexer here made the
+  /// whole class fail to load the moment ANY such gap existed (a static field initializer that throws
+  /// is fatal for the rest of the process), which is exactly what happened when <c>usl</c> etc. were
+  /// first added to <see cref="CvmInstructionSet"/> without a matching entry here -- filtering instead
+  /// of indexing keeps a mnemonic gap on one node from taking down every other node's disassembly.
   /// </summary>
-  public static readonly IReadOnlyList<(string Mnemonic, string SymbolName, int WordLength, bool HasOperand)> Instructions =
+  public static readonly IReadOnlyList<(string Mnemonic, int NodeCoordinate, string SymbolName, int Tag, int WordLength, bool HasOperand)> Instructions =
       [.. CvmInstructionSet.Instructions
           .Where(shape => shape.Encoding is CvmInstructionSet.CvmOperandEncoding.None or CvmInstructionSet.CvmOperandEncoding.TrailingWord)
-          .Select(shape => (shape.Mnemonic, F18SymbolByMnemonic[shape.Mnemonic], shape.WordLength, shape.HasOperand))];
+          .Where(shape => NodeSymbolByMnemonic.ContainsKey(shape.Mnemonic))
+          .Select(shape =>
+          {
+            (int nodeCoordinate, string symbolName, int tag) = NodeSymbolByMnemonic[shape.Mnemonic];
+            return (shape.Mnemonic, nodeCoordinate, symbolName, tag, shape.WordLength, shape.HasOperand);
+          })];
 
   /// <summary>One parsed line of CVM assembly: a mnemonic plus its operand, when required (pushlit only, today).</summary>
   public sealed record CvmAsmInstruction(string Mnemonic, int? Operand);
 
   /// <summary>
-  /// Resolves <see cref="Instructions"/> against THIS run's own node 607 compile (never a frozen
-  /// reference copy -- every address can move as the source evolves) and returns the decode
-  /// direction: a map from a word's actual wire/memory VALUE to its mnemonic and word length, for
-  /// <see cref="CvmDebugSession.DisassemblePage0"/> to consume. An instruction whose F18 symbol
-  /// isn't defined in the current source is simply omitted.
+  /// Resolves <see cref="Instructions"/> against THIS run's own compiles (never a frozen reference
+  /// copy -- every address can move as any node's source evolves) and returns the decode direction: a
+  /// map from a word's actual wire/memory VALUE to its mnemonic and word length, for
+  /// <see cref="CvmDebugSession.DisassemblePage0"/> to consume. Each mnemonic is looked up against its
+  /// OWN node's compile (<see cref="NodeSymbolByMnemonic"/>) -- a mnemonic whose node isn't present in
+  /// <paramref name="compiledRam"/> at all, or whose F18 symbol isn't defined in that node's current
+  /// source, is simply omitted.
   /// </summary>
   public static IReadOnlyDictionary<int, (string Mnemonic, int WordLength)> BuildDecodeTable(
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
     var table = new Dictionary<int, (string, int)>();
-    if (!compiledRam.TryGetValue(CvmMemoryProtocol.NopSourceNodeCoordinate, out F18CompileResult? compile))
+    foreach ((string mnemonic, int nodeCoordinate, string symbolName, int tag, int wordLength, _) in Instructions)
     {
-      return table;
-    }
+      if (!compiledRam.TryGetValue(nodeCoordinate, out F18CompileResult? compile))
+      {
+        continue;
+      }
 
-    foreach ((string mnemonic, string symbolName, int wordLength, _) in Instructions)
-    {
       if (compile.Symbols.TryGetValue(symbolName, out F18ExportedSymbol? symbol))
       {
         // A CVM opcode is a 16-bit CVM word (CvmWordCodec.WordMask), not the wider 18-bit F18 wire
-        // word the symbol's own address happens to be stored as.
-        int opcode = 0x8000 | (symbol.Value & CvmWordCodec.WordMask);
+        // word the symbol's own address happens to be stored as. The tag depends on which node/opcode
+        // class the mnemonic belongs to -- see NodeSymbolByMnemonic's own remarks -- never a flat
+        // 0x8000 for every mnemonic.
+        int opcode = tag | (symbol.Value & CvmWordCodec.WordMask);
         table[opcode] = (mnemonic, wordLength);
       }
     }
@@ -121,25 +188,28 @@ internal static class CvmAssemblyLanguage
 
   /// <summary>
   /// The encode direction, for <see cref="Assemble"/>: resolves <see cref="Instructions"/> against
-  /// THIS run's own node 607 compile and returns a map from mnemonic (case-insensitive) to its
+  /// THIS run's own compiles -- each mnemonic against its own node
+  /// (<see cref="NodeSymbolByMnemonic"/>) -- and returns a map from mnemonic (case-insensitive) to its
   /// opcode word, word length, and whether it takes an operand.
   /// </summary>
   public static IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand)> BuildEncodeTable(
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
     var table = new Dictionary<string, (int, int, bool)>(StringComparer.OrdinalIgnoreCase);
-    if (!compiledRam.TryGetValue(CvmMemoryProtocol.NopSourceNodeCoordinate, out F18CompileResult? compile))
+    foreach ((string mnemonic, int nodeCoordinate, string symbolName, int tag, int wordLength, bool hasOperand) in Instructions)
     {
-      return table;
-    }
+      if (!compiledRam.TryGetValue(nodeCoordinate, out F18CompileResult? compile))
+      {
+        continue;
+      }
 
-    foreach ((string mnemonic, string symbolName, int wordLength, bool hasOperand) in Instructions)
-    {
       if (compile.Symbols.TryGetValue(symbolName, out F18ExportedSymbol? symbol))
       {
         // A CVM opcode is a 16-bit CVM word (CvmWordCodec.WordMask), not the wider 18-bit F18 wire
-        // word the symbol's own address happens to be stored as.
-        int opcode = 0x8000 | (symbol.Value & CvmWordCodec.WordMask);
+        // word the symbol's own address happens to be stored as. The tag depends on which node/opcode
+        // class the mnemonic belongs to -- see NodeSymbolByMnemonic's own remarks -- never a flat
+        // 0x8000 for every mnemonic.
+        int opcode = tag | (symbol.Value & CvmWordCodec.WordMask);
         table[mnemonic] = (opcode, wordLength, hasOperand);
       }
     }
@@ -154,10 +224,11 @@ internal static class CvmAssemblyLanguage
   /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>/<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>)
   /// are self-describing -- encoded directly from <see cref="CvmInstructionSet"/> and the operand
   /// alone, no live compile involved -- while every other mnemonic is resolved against THIS run's own
-  /// node 607 compile via <see cref="BuildEncodeTable"/>. Returns a null word list with a
-  /// 1-based-line error message (never throws) when a mnemonic isn't recognized (or, for a tagged
-  /// one, node 607's current source doesn't define its symbol), an operand is missing where one is
-  /// required or out of range, or one is supplied where none is allowed. This is what
+  /// compile of ITS OWN node (<see cref="NodeSymbolByMnemonic"/>) via <see cref="BuildEncodeTable"/>.
+  /// Returns a null word list with a 1-based-line error message (never throws) when a mnemonic isn't
+  /// recognized (or, for a tagged one, its own node's current source doesn't define its symbol), an
+  /// operand is missing where one is required or out of range, or one is supplied where none is
+  /// allowed. This is what
   /// <see cref="CvmDebugSession.AssembleAndLoadProgram"/> uses to turn the CVM Debugger's own
   /// Assembly Code editor into a program loaded straight into the simulated SRAM -- there are no
   /// labels or sections here (unlike the freestanding <c>gaasm</c>/<see cref="CvmAssembler"/>): every
@@ -188,7 +259,14 @@ internal static class CvmAssemblyLanguage
 
       if (!encodeTable.TryGetValue(instruction.Mnemonic, out (int Opcode, int WordLength, bool HasOperand) entry))
       {
-        return (null, $"line {line + 1}: \"{instruction.Mnemonic}\" is not a known CVM asm mnemonic, or node {CvmMemoryProtocol.NopSourceNodeCoordinate:000}'s current compile doesn't define its symbol.");
+        // A mnemonic that IS a genuine tagged instruction (NodeSymbolByMnemonic knows it) just
+        // couldn't be resolved against a live compile -- name its own node and symbol so the message
+        // points at the right source file, rather than always blaming node 607 regardless of which
+        // node actually implements the mnemonic that failed.
+        string detail = NodeSymbolByMnemonic.TryGetValue(instruction.Mnemonic, out (int NodeCoordinate, string SymbolName, int Tag) pairing)
+            ? $"or node {pairing.NodeCoordinate:000}'s current compile doesn't define its symbol \"{pairing.SymbolName}\""
+            : "and no node's current compile defines a matching symbol";
+        return (null, $"line {line + 1}: \"{instruction.Mnemonic}\" is not a known CVM asm mnemonic, {detail}.");
       }
 
       if (entry.HasOperand && instruction.Operand is null)

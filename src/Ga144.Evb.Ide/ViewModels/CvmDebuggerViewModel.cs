@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Text;
 using Ga144.Evb.Ide.Compiler;
+using Ga144.Evb.Ide.Cvm;
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.Services;
 
@@ -50,8 +51,8 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // A plain in-memory simulated SRAM that exists for this view model's whole lifetime -- unlike
   // CvmDebugSession's own SRAM, it is NOT tied to a live session, so Assemble (and the memory
   // inspector) always have somewhere to write/read even before the first Start or after a Stop.
-  // There is nothing hardware-specific about assembling: node 607's source compiles the same way
-  // whether or not a chip is connected (CompileStandaloneNode607), so there is no real reason
+  // There is nothing hardware-specific about assembling: every CVM node's source compiles the same
+  // way whether or not a chip is connected (CompileStandaloneCvmNodes), so there is no real reason
   // Assemble should ever have needed a session in the first place. Mirrored from the live session's
   // own program after every successful Start/Assemble (MirrorSessionProgramIntoStandaloneSram) so
   // that Stop leaves the memory inspector showing the last real state instead of stale pre-Start
@@ -459,18 +460,18 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   }
 
   /// <summary>
-  /// The no-session half of <see cref="Assemble"/>: compiles node 607's CURRENT source locally
-  /// (<see cref="CompileStandaloneNode607"/> -- a pure software compile, no port or connected chip
-  /// needed) and, on success, assembles <see cref="AssemblyCodeText"/> against it straight into
-  /// <see cref="_standaloneSram"/>/<see cref="_standaloneProgram"/> via the same
+  /// The no-session half of <see cref="Assemble"/>: compiles every standalone-relevant node's CURRENT
+  /// source locally (<see cref="CompileStandaloneCvmNodes"/> -- a pure software compile, no port or
+  /// connected chip needed) and, on success, assembles <see cref="AssemblyCodeText"/> against it
+  /// straight into <see cref="_standaloneSram"/>/<see cref="_standaloneProgram"/> via the same
   /// <see cref="CvmAssemblyLanguage.AssembleAndLoadProgram"/> a live session uses.
   /// </summary>
   private (bool Success, string? Error, int WordCount) AssembleStandalone()
   {
-    (bool compileSuccess, IReadOnlyDictionary<int, F18CompileResult> compiledRam) = CompileStandaloneNode607();
+    (bool compileSuccess, IReadOnlyDictionary<int, F18CompileResult> compiledRam, string? compileError) = CompileStandaloneCvmNodes();
     if (!compileSuccess)
     {
-      return (false, $"node {CvmMemoryProtocol.NopSourceNodeCoordinate:000}'s RAM source does not currently compile -- fix it in the Node Editor first.", 0);
+      return (false, compileError, 0);
     }
 
     (List<int>? words, string? error) = CvmAssemblyLanguage.AssembleAndLoadProgram(AssemblyCodeText, _standaloneSram, _standaloneProgram, compiledRam);
@@ -483,21 +484,44 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     return (true, null, words.Count);
   }
 
+  // Every node CvmAssemblyLanguage's tagged mnemonics can resolve against today: 607 (nop/pushlit/
+  // push/pop/ret) and 507 (the eleven usl/ssr/usr/add/sub/and/xor/or/inv/inc/dec ALU ops) -- see
+  // CvmAssemblyLanguage's own remarks. A live chip session's compiledRam already has every node in
+  // the boot tree, 507 included (Ga144CvmHardwareInstaller compiles the whole install tree up front),
+  // so this list only matters for the standalone (no-chip-connected) path below.
+  private static readonly IReadOnlyList<int> StandaloneCvmNodeCoordinates =
+  [
+    CvmMemoryProtocol.NopSourceNodeCoordinate,
+    Node507Program.Coordinate,
+  ];
+
   /// <summary>
-  /// Compiles node 607's current source (<see cref="F18NodeCompilationService"/>) purely in software
-  /// -- no serial port, no connected chip -- for <see cref="AssembleStandalone"/> and the memory
-  /// inspector's no-session disassembly to resolve tagged mnemonics (<c>nop</c>/<c>pushlit</c>/
-  /// <c>push</c>/<c>pop</c>/<c>ret</c>) against. Self-describing opcodes (<c>call</c>/<c>br</c>/
-  /// <c>ifbr</c>/<c>slit</c>) never need this at all. Returns an empty table (never throws) if node
-  /// 607's RAM source doesn't currently compile.
+  /// Compiles every node in <see cref="StandaloneCvmNodeCoordinates"/> (<see cref="F18NodeCompilationService"/>)
+  /// purely in software -- no serial port, no connected chip -- for <see cref="AssembleStandalone"/>
+  /// and the memory inspector's no-session disassembly to resolve tagged mnemonics against. Node 507's
+  /// own RAM source imports node 607 (<c># 607 import</c>), so compiling 507 alone would already pull
+  /// 607's compile in as an import -- but only 507's OWN <see cref="F18NodeCompilationResult"/> comes
+  /// back from that call, so each node in the list is still compiled and stored individually here to
+  /// end up with both in <c>compiledRam</c>. Self-describing opcodes (<c>call</c>/<c>br</c>/<c>ifbr</c>/
+  /// <c>slit</c>) never need this at all. Returns an empty table and a descriptive error (never
+  /// throws) naming whichever node's source doesn't currently compile.
   /// </summary>
-  private (bool Success, IReadOnlyDictionary<int, F18CompileResult> CompiledRam) CompileStandaloneNode607()
+  private (bool Success, IReadOnlyDictionary<int, F18CompileResult> CompiledRam, string? Error) CompileStandaloneCvmNodes()
   {
-    F18NodeCompilationResult compiled = new F18NodeCompilationService(_chip, _romLibrary, _userMacros)
-        .CompileNode(CvmMemoryProtocol.NopSourceNodeCoordinate);
-    return compiled.Ram.Success
-        ? (true, new Dictionary<int, F18CompileResult> { [CvmMemoryProtocol.NopSourceNodeCoordinate] = compiled.Ram })
-        : (false, new Dictionary<int, F18CompileResult>());
+    var compilationService = new F18NodeCompilationService(_chip, _romLibrary, _userMacros);
+    var compiledRam = new Dictionary<int, F18CompileResult>();
+    foreach (int coordinate in StandaloneCvmNodeCoordinates)
+    {
+      F18NodeCompilationResult compiled = compilationService.CompileNode(coordinate);
+      if (!compiled.Ram.Success)
+      {
+        return (false, new Dictionary<int, F18CompileResult>(), $"node {coordinate:000}'s RAM source does not currently compile -- fix it in the Node Editor first.");
+      }
+
+      compiledRam[coordinate] = compiled.Ram;
+    }
+
+    return (true, compiledRam, null);
   }
 
   /// <summary>
@@ -594,7 +618,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       words = _standaloneSram.ReadRange(baseAddress, count);
       breakpoints = [];
       programCounter = null;
-      (_, IReadOnlyDictionary<int, F18CompileResult> compiledRam) = CompileStandaloneNode607();
+      (_, IReadOnlyDictionary<int, F18CompileResult> compiledRam, _) = CompileStandaloneCvmNodes();
       disassembly = baseAddress < CvmMemoryProtocol.Page0WordCount
           ? CvmAssemblyLanguage.DisassemblePage0(_standaloneSram, compiledRam, Math.Min(baseAddress + count, CvmMemoryProtocol.Page0WordCount))
           : new Dictionary<int, string>();

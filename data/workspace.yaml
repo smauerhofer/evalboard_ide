@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-29T13:35:40.1200619
-      utcDateTime: 2026-08-29T13:35:40.1200619Z
-      localDateTime: 2026-08-29T15:35:40.1200619+02:00
+      dateTime: 2026-08-29T14:44:46.9016254
+      utcDateTime: 2026-08-29T14:44:46.9016254Z
+      localDateTime: 2026-08-29T16:44:46.9016254+02:00
       date: 2026-08-29T00:00:00.0000000
       day: 29
       dayOfWeek: Saturday
       dayOfYear: 241
-      hour: 13
-      millisecond: 120
-      microsecond: 61
-      nanosecond: 900
-      minute: 35
+      hour: 14
+      millisecond: 901
+      microsecond: 625
+      nanosecond: 400
+      minute: 44
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 40
-      ticks: 639236073401200619
-      utcTicks: 639236073401200619
-      timeOfDay: 13:35:40.1200619
+      second: 46
+      ticks: 639236114869016254
+      utcTicks: 639236114869016254
+      timeOfDay: 14:44:46.9016254
       year: 2026
   portB: 
   portC:
@@ -10856,6 +10856,12 @@ projects:
     - coordinate: 606
       enabled: true
       sourceCode: >
+        (
+         node 606 frame pointer management.
+         register A contains the frame pointer.
+         opcode pattern 1010_????_????_????
+        )
+
         # 607 import
 
         entry main
@@ -10870,26 +10876,41 @@ projects:
 
         : off a . + ;
 
-        : local drop ex
-
-        : main A[ 2* !p !p ]] lit !b @b
-        	@b xff and >r # local -until
-        	2* -if 2* -if 2* -if r> off
-        : la ( a-) A[ @p /r! ; ]] lit !b !b main ;
-        	then r> noff la ;
-        	then 2* -if r> off
+        : local // 1010_0???_????_????
+          drop ex
+        : main
+          A[ 2* !p !p ]] lit !b @b @b xff and >r # local -until
+          // 1010_1???_????_????
+          2* -if // 1010_11??_????_????
+          2* -if // 1010_111?_????_????
+          2* -if // 1010_1111_????_????
+          r> off
+        : la ( a-)
+          A[ @p /r! ; ]] lit !b !b main ;
+          then // 1010_1110_????_????
+          r> noff la ;
+          then // 1010_110?_????_????
+          2* -if // 1010_1101_????_????
+          r> off
         : ld A[ @p /1@ ]] lit !b !b A[ /r! ; ]] lit !b main ;
-        	then r> noff ld ;
-        	then 2* -if 2* -if r> off
+          then // 1010_1100_????_????
+          r> noff ld ;
+          then // 1010_10??_????_????
+          2* -if // 1010_101?_????_????
+          2* -if // 1010_1011_????_????
+          r> off
         : st ( a-) A[ /r@ ]] , !b A[ @p /1! ; ]] lit @p !b !b main ;
-        	then r> noff st ;
-        	then 2* -if
+          then  // 1010_1010_????_????
+          r> noff st ;
+          then // 1010_100?_????_????
+          2* -if // 1010_1001_????_????
         : cleanup A[ @p /pop ]] lit !b a !b A[ !p 'ret ]] lit !b @b a! r>
 
         : adjust A[ @p . + ; ]] lit !b !b main ;
 
-        : enter then A[ @p /push ]] lit !b a !b A[ dup !p ]] lit !b @b a! r> inv adjust ;
-
+        : enter
+          then // 1010_1000_????_????
+          A[ @p /push ]] lit !b a !b A[ dup !p ]] lit !b @b a! r> inv adjust ;
         : 'xf ( s-s) a A[ @p /r@ ]] lit !b !b A[ !p /r! ; ]] lit !b @b a! ;
 
         : 'exit 1 A[ @p a! ]] lit !b !b
@@ -10908,17 +10929,17 @@ projects:
 
         main starting point
 
-        la
+        la load address relative to frame pointer.
 
-        ld
+        ld load data relative to frame pointer.
 
-        st
+        st store data relative to frame pointer.
 
-        cleanup exit stack frame, return and cleanup
+        cleanup 
 
-        adjust
+        adjust add something to stack pointer
 
-        enter enter stack frame
+        enter enter stack frame. push the frame pointer, add an offset and load a new frame pointer.
 
         'xf exchanges frame pointer with r
 
@@ -10949,7 +10970,7 @@ projects:
       - 0x37217
       - 0x27601
       - 0x05B27
-      - 0x05607
+      - 0x05605
       - 0x11415
       - 0x09703
       - 0x27600
@@ -10959,14 +10980,14 @@ projects:
       - 0x27601
       - 0x13400
       - 0x09D12
-      - 0x05712
+      - 0x05710
       - 0x09BB2
       - 0x11403
       - 0x27600
       - 0x1141C
       - 0x3722C
       - 0x05B8A
-      - 0x05604
+      - 0x05602
       - 0x09D22
       - 0x0D62E
       - 0x00A9A
@@ -10974,7 +10995,7 @@ projects:
       - 0x049F5
       - 0x11403
       - 0x05B8A
-      - 0x0560F
+      - 0x0560D
       - 0x09D22
       - 0x259B2
       - 0x00A9A
@@ -11797,6 +11818,8 @@ projects:
       nop
 
       slit 100
+
+      inc
 
       push
 
