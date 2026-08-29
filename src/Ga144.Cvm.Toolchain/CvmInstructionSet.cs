@@ -6,7 +6,13 @@ namespace Ga144.Cvm.Toolchain;
 /// <c>br &lt;offset&gt;</c>, <c>ifbr &lt;offset&gt;</c>, <c>slit &lt;value&gt;</c>, plus node 507's ALU
 /// ops -- <c>usl</c>, <c>ssr</c>, <c>usr</c>, <c>add</c>, <c>sub</c>, <c>and</c>, <c>xor</c>, <c>or</c>
 /// (binary: register r and the top of the CVM data stack), and <c>inv</c>, <c>inc</c>, <c>dec</c>
-/// (unary: register r alone)) and, for each, how many words it occupies once assembled, how its
+/// (unary: register r alone), plus node 606's frame-pointer-management ops -- <c>enter &lt;locals&gt;</c>,
+/// <c>adjust &lt;offset&gt;</c>, <c>stl &lt;offset&gt;</c>, <c>stp &lt;offset&gt;</c>,
+/// <c>ldl &lt;offset&gt;</c>, <c>ldp &lt;offset&gt;</c>, <c>lal &lt;offset&gt;</c>,
+/// <c>lap &lt;offset&gt;</c> (each self-describing, an 8-bit tag OR'd with an 8-bit unsigned value), plus
+/// node 606's ninth mnemonic <c>leave</c> (a tagged mnemonic like nop/push/pop/ret, NOT self-describing
+/// -- see <see cref="LeaveMnemonic"/>'s own remarks)) and, for each, how many words it occupies once
+/// assembled, how its
 /// operand (if any) is encoded, and a stable numeric <see cref="CvmInstructionShape.Id"/>. This is the
 /// SHAPE of each instruction only -- for the tagged-dispatch mnemonics
 /// (<see cref="CvmOperandEncoding.None"/>/<see cref="CvmOperandEncoding.TrailingWord"/>: <c>nop</c>,
@@ -59,6 +65,39 @@ public static class CvmInstructionSet
   public const string InvertMnemonic = "inv";
   public const string IncrementMnemonic = "inc";
   public const string DecrementMnemonic = "dec";
+
+  // Node 606's frame-pointer-management ops, added per Stefan's node 606 source and its accompanying
+  // bit-pattern table. Each is a single self-describing word (no node/linker resolution needed at all,
+  // like call/br/ifbr/slit -- NOT like the tagged nop/push/pop/ret/ALU family above): a fixed 8-bit tag
+  // (bits 15-8, pattern 1010_1nnn) OR'd with an UNSIGNED 8-bit offset/count (bits 7-0, 0x00-0xFF). This
+  // is a genuinely different shape from br/ifbr/slit's EmbeddedSignedValue -- the table gives every one
+  // of these an unsigned 0..0xFF range, never a signed one, so they use the new
+  // CvmOperandEncoding.EmbeddedUnsignedValue instead. la/ld/st are node 606's own shared internal words
+  // (each reached twice, once via "noff" for the local/negative-offset variant and once via "off" for
+  // the parameter/positive-offset variant); the CVM mnemonic table gives the four resulting pairs their
+  // own distinct names (stl/stp, ldl/ldp, lal/lap) rather than exposing "off"/"noff" as a separate CVM
+  // concept.
+  public const string EnterMnemonic = "enter";
+  public const string AdjustMnemonic = "adjust";
+  public const string StoreLocalMnemonic = "stl";
+  public const string StoreParameterMnemonic = "stp";
+  public const string LoadLocalMnemonic = "ldl";
+  public const string LoadParameterMnemonic = "ldp";
+  public const string LoadAddressOfLocalMnemonic = "lal";
+  public const string LoadAddressOfParameterMnemonic = "lap";
+
+  // 'leave, node 606's ninth mnemonic, is shaped completely differently from the eight self-describing
+  // ones just above: it is a TAGGED mnemonic, exactly like nop/pushlit/push/pop/ret on node 607 -- a
+  // single bare opcode word (CvmOperandEncoding.None) whose real numeric value depends on where 'leave
+  // ends up in node 606's own compiled RAM, resolved only against a live compile (see the IDE-side
+  // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.NodeSymbolByMnemonic, not this project, which never
+  // knows any node's F18 source). Per Stefan's own bit-pattern table this belongs to the OTHER node-606
+  // opcode class -- "1010 0xxx xxxx xxxx | call word in node 606, address in opcode" -- distinct from
+  // enter/adjust/stl/stp/ldl/ldp/lal/lap's own fixed "1010 1nnn" tags above: 'leave is one of
+  // potentially several individually-named words reached this way, added as each one gets a name, the
+  // same way node 607's own tagged nop/push/pop/pushlit/ret were added one at a time from that node's
+  // own "0x8000 | address" family.
+  public const string LeaveMnemonic = "leave";
 
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
@@ -116,6 +155,49 @@ public static class CvmInstructionSet
   /// <summary>The largest value a 12-bit two's-complement field can hold: 0x7FF (2047).</summary>
   public const int SlitValueMaxValue = 0x7FF;
 
+  // Node 606's eight frame-pointer-management ops, straight from Stefan's bit-pattern table:
+  //   1010 1000 xxxx xxxx   0..0xFF   enter <locals>
+  //   1010 1001 xxxx xxxx   0..0xFF   adjust <offset>
+  //   1010 1010 xxxx xxxx   0..0xFF   stl <offset>
+  //   1010 1011 xxxx xxxx   0..0xFF   stp <offset>
+  //   1010 1100 xxxx xxxx   0..0xFF   ldl <offset>
+  //   1010 1101 xxxx xxxx   0..0xFF   ldp <offset>
+  //   1010 1110 xxxx xxxx   0..0xFF   lal <offset>
+  //   1010 1111 xxxx xxxx   0..0xFF   lap <offset>
+  // -- a fixed 8-bit tag (bits 15-8) OR'd with an UNSIGNED 8-bit value (bits 7-0). Unlike br/ifbr/slit,
+  // the table gives these an unsigned range, not a signed one, so 0xFF is the largest value, never
+  // sign-extended back to -1.
+
+  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>enter</c> word: binary 1010_1000.</summary>
+  public const int EnterTag = 0xA800;
+
+  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>adjust</c> word: binary 1010_1001.</summary>
+  public const int AdjustTag = 0xA900;
+
+  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>stl</c> word: binary 1010_1010.</summary>
+  public const int StoreLocalTag = 0xAA00;
+
+  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>stp</c> word: binary 1010_1011.</summary>
+  public const int StoreParameterTag = 0xAB00;
+
+  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>ldl</c> word: binary 1010_1100.</summary>
+  public const int LoadLocalTag = 0xAC00;
+
+  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>ldp</c> word: binary 1010_1101.</summary>
+  public const int LoadParameterTag = 0xAD00;
+
+  /// <summary>The fixed high-bit pattern (bits 15-8) of a <c>lal</c> word: binary 1010_1110.</summary>
+  public const int LoadAddressOfLocalTag = 0xAE00;
+
+  /// <summary>The fixed high-bit pattern (bits 15-8) of a <c>lap</c> word: binary 1010_1111.</summary>
+  public const int LoadAddressOfParameterTag = 0xAF00;
+
+  /// <summary>Isolates a word's top 8 bits, for testing against any of node 606's eight tags above.</summary>
+  public const int Node606TagMask = 0xFF00;
+
+  /// <summary>Isolates a word's low 8 bits -- the unsigned value field shared by all eight of node 606's ops.</summary>
+  public const int Node606ValueBitMask = 0xFF;
+
   /// <summary>
   /// How a CVM instruction's operand (if it has one) is actually encoded into its word(s). See each
   /// member for which mnemonics use it.
@@ -155,14 +237,25 @@ public static class CvmInstructionSet
     /// <see cref="SlitTag"/>'s own remarks).
     /// </summary>
     EmbeddedSignedValue,
+
+    /// <summary>
+    /// Like <see cref="EmbeddedSignedValue"/> -- a fixed <see cref="CvmInstructionShape.Tag"/> OR'd with
+    /// a value packed into <see cref="CvmInstructionShape.ValueBitMask"/>'s low bits, fully self-
+    /// describing and known at assemble time from a literal operand alone -- except the packed value is
+    /// UNSIGNED (node 606's eight frame-pointer-management ops: <c>enter</c>, <c>adjust</c>, <c>stl</c>,
+    /// <c>stp</c>, <c>ldl</c>, <c>ldp</c>, <c>lal</c>, <c>lap</c>, each an 8-bit tag OR'd with an 8-bit
+    /// unsigned offset/count, 0x00-0xFF -- see <see cref="Node606TagMask"/>'s own remarks). Like
+    /// <see cref="EmbeddedSignedValue"/>, no label/import operand is supported (yet).
+    /// </summary>
+    EmbeddedUnsignedValue,
   }
 
   /// <summary>
   /// The shape of one CVM instruction: a stable numeric <see cref="Id"/>, how many words it assembles
   /// to (its own opcode word included), and how its operand (if any) is encoded (see
   /// <see cref="CvmOperandEncoding"/>). <see cref="Tag"/> and <see cref="ValueBitMask"/> are only
-  /// meaningful for <see cref="CvmOperandEncoding.EmbeddedSignedValue"/> shapes -- every other
-  /// encoding ignores them (default 0).
+  /// meaningful for <see cref="CvmOperandEncoding.EmbeddedSignedValue"/>/<see cref="CvmOperandEncoding.EmbeddedUnsignedValue"/>
+  /// shapes -- every other encoding ignores them (default 0).
   /// </summary>
   public sealed record CvmInstructionShape(int Id, string Mnemonic, int WordLength, CvmOperandEncoding Encoding, int Tag = 0, int ValueBitMask = 0)
   {
@@ -170,15 +263,16 @@ public static class CvmInstructionSet
     public bool HasOperand => Encoding != CvmOperandEncoding.None;
 
     /// <summary>
-    /// For an <see cref="CvmOperandEncoding.EmbeddedSignedValue"/> shape: which low bits of the word
-    /// hold its signed value field, distinct per mnemonic family since the tag/value split isn't fixed
-    /// width across all of them -- <c>br</c>/<c>ifbr</c> reserve 5 bits for their tag and pack an
-    /// 11-bit signed offset into the rest (<see cref="BranchOffsetBitMask"/>), while <c>slit</c>
-    /// reserves only 4 bits for its tag and packs a 12-bit signed value into the rest
-    /// (<see cref="SlitValueBitMask"/>). <see cref="Tag"/> is expected to already be aligned to
-    /// whatever's outside this mask (i.e. <c>Tag &amp; ValueBitMask == 0</c>), so a decoder can always
-    /// recover the tag bits alone via <c>word &amp; ~ValueBitMask</c> without a separately stored mask
-    /// per shape.
+    /// For an <see cref="CvmOperandEncoding.EmbeddedSignedValue"/>/<see cref="CvmOperandEncoding.EmbeddedUnsignedValue"/>
+    /// shape: which low bits of the word hold its value field, distinct per mnemonic family since the
+    /// tag/value split isn't fixed width across all of them -- <c>br</c>/<c>ifbr</c> reserve 5 bits for
+    /// their tag and pack an 11-bit signed offset into the rest (<see cref="BranchOffsetBitMask"/>),
+    /// <c>slit</c> reserves only 4 bits for its tag and packs a 12-bit signed value into the rest
+    /// (<see cref="SlitValueBitMask"/>), and node 606's eight ops each reserve 8 bits for their own tag
+    /// and pack an 8-bit UNSIGNED value into the rest (<see cref="Node606ValueBitMask"/>). <see cref="Tag"/>
+    /// is expected to already be aligned to whatever's outside this mask (i.e.
+    /// <c>Tag &amp; ValueBitMask == 0</c>), so a decoder can always recover the tag bits alone via
+    /// <c>word &amp; ~ValueBitMask</c> without a separately stored mask per shape.
     /// </summary>
     public int ValueBitMask { get; init; } = ValueBitMask;
   }
@@ -217,6 +311,15 @@ public static class CvmInstructionSet
     new(Id: 17, InvertMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 18, IncrementMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 19, DecrementMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 20, EnterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: EnterTag, ValueBitMask: Node606ValueBitMask),
+    new(Id: 21, AdjustMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: AdjustTag, ValueBitMask: Node606ValueBitMask),
+    new(Id: 22, StoreLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: StoreLocalTag, ValueBitMask: Node606ValueBitMask),
+    new(Id: 23, StoreParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: StoreParameterTag, ValueBitMask: Node606ValueBitMask),
+    new(Id: 24, LoadLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadLocalTag, ValueBitMask: Node606ValueBitMask),
+    new(Id: 25, LoadParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadParameterTag, ValueBitMask: Node606ValueBitMask),
+    new(Id: 26, LoadAddressOfLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadAddressOfLocalTag, ValueBitMask: Node606ValueBitMask),
+    new(Id: 27, LoadAddressOfParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadAddressOfParameterTag, ValueBitMask: Node606ValueBitMask),
+    new(Id: 28, LeaveMnemonic, 1, CvmOperandEncoding.None),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =
@@ -251,6 +354,9 @@ public static class CvmInstructionSet
   /// <summary>Extracts a <c>slit</c> word's signed value field, sign-extending its low 12 bits. Unlike <see cref="DecodeBranchOffset"/>, this IS the whole answer -- a <c>slit</c> value isn't relative to anything.</summary>
   public static int DecodeSlitValue(int word) => DecodeSignedField(word, SlitValueBitMask);
 
+  /// <summary>Extracts one of node 606's eight ops' unsigned value field -- its low 8 bits, taken as-is (never sign-extended, unlike <see cref="DecodeBranchOffset"/>/<see cref="DecodeSlitValue"/>).</summary>
+  public static int DecodeNode606Value(int word) => word & Node606ValueBitMask;
+
   /// <summary>
   /// Decodes a single already-fetched CVM word using ONLY the two self-describing encodings
   /// (<see cref="CvmOperandEncoding.EmbeddedAddress"/>, <see cref="CvmOperandEncoding.EmbeddedSignedValue"/>)
@@ -282,6 +388,18 @@ public static class CvmInstructionSet
     if ((word & SlitTagMask) == SlitTag)
     {
       return $"{SlitMnemonic} {DecodeSlitValue(word)}";
+    }
+
+    // Node 606's eight ops, all self-describing the same way: an 8-bit tag (bits 15-8) OR'd with an
+    // 8-bit unsigned value (bits 7-0). Matched generically against every EmbeddedUnsignedValue shape in
+    // Instructions rather than one if-check per mnemonic, so a ninth one added there later needs no
+    // change here.
+    foreach (CvmInstructionShape shape in Instructions)
+    {
+      if (shape.Encoding == CvmOperandEncoding.EmbeddedUnsignedValue && (word & Node606TagMask) == shape.Tag)
+      {
+        return $"{shape.Mnemonic} {DecodeNode606Value(word)}";
+      }
     }
 
     return null;

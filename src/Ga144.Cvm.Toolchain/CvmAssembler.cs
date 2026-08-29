@@ -26,6 +26,10 @@ namespace Ga144.Cvm.Toolchain;
 ///   br -3                   ; branch by a literal signed offset, -0x400..0x3FF (11 bits)
 ///   ifbr 5                  ; conditional branch -- same offset shape, a different tag and width
 ///   slit -100                ; load a literal signed value into R, -0x800..0x7FF (12 bits)
+///   enter 3                 ; node 606: enter stack frame, reserve 3 locals -- unsigned, 0x00..0xFF
+///   ldp 1                   ; node 606: load parameter at frame-relative offset 1
+///   stl 0                   ; node 606: store to local at frame-relative offset 0
+///   adjust 2                ; node 606: adjust stack frame by an unsigned 0x00..0xFF amount
 ///
 /// .section DATA
 /// table: .word 1, 2, 3      ; raw data words -- each may also be numeric or a label/import name
@@ -50,7 +54,12 @@ namespace Ga144.Cvm.Toolchain;
 /// word right after the branch's own opcode word, plus the offset -- see
 /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>'s own remarks); <c>slit</c>
 /// packs a wider 12-bit value with a narrower tag, and isn't an address computation at all -- per
-/// Stefan, it loads its value directly into the F18 interpreter's own R register.
+/// Stefan, it loads its value directly into the F18 interpreter's own R register. Node 606's eight
+/// frame-pointer ops (<c>enter</c>, <c>adjust</c>, <c>stl</c>, <c>stp</c>, <c>ldl</c>, <c>ldp</c>,
+/// <c>lal</c>, <c>lap</c>) are shaped the same way as br/ifbr/slit -- a fixed tag OR'd with a literal
+/// value, no relocation, no node -- except each packs an UNSIGNED 8-bit value
+/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>, emitted by
+/// <see cref="EmitEmbeddedUnsignedValue"/>), never a signed one.
 ///
 /// This is a two-pass assembler: pass 1 walks every line purely to compute section layout (every
 /// instruction's word length is fixed by its mnemonic alone, so a label's final offset never depends
@@ -226,6 +235,15 @@ public static class CvmAssembler
             break;
           }
 
+          if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue)
+          {
+            // Node 606's eight ops: also no separate tag word -- shape.Tag OR'd with an UNSIGNED value
+            // packed into shape.ValueBitMask's low bits (8 bits for all eight of them). Also fully
+            // self-describing, so also no placeholder/relocation/external symbol.
+            EmitEmbeddedUnsignedValue(codeSection, shape, line.Args[0], line.LineNumber, errors);
+            break;
+          }
+
           int opcodeOffset = codeSection.Words.Count;
           // Self-describing placeholder -- not a bare 0. 0x8000 | shape.Id is stable and unique per
           // mnemonic regardless of which node(s)/opcode-range actually implement it, so a tool that
@@ -383,6 +401,44 @@ public static class CvmAssembler
     if (value < minValue || value > maxValue)
     {
       errors.Add($"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s signed {bitWidth}-bit value ({minValue}..{maxValue}).");
+      targetSection.Words.Add(shape.Tag);
+      return;
+    }
+
+    targetSection.Words.Add(shape.Tag | (value & valueBitMask));
+  }
+
+  /// <summary>
+  /// Emits an <c>enter</c>/<c>adjust</c>/<c>stl</c>/<c>stp</c>/<c>ldl</c>/<c>ldp</c>/<c>lal</c>/<c>lap</c>
+  /// word: <paramref name="shape"/>.Tag OR'd with an UNSIGNED literal value packed into
+  /// <paramref name="shape"/>.ValueBitMask's low bits. This mirrors <see cref="EmitEmbeddedSignedValue"/>
+  /// exactly except for the range check and parse: node 606's table gives every one of these an
+  /// unsigned 0..0xFF range, never a signed one, so there is no negative half to accept and
+  /// <see cref="TryParseNumericLiteral"/> (not <see cref="TryParseSignedNumericLiteral"/>) is the right
+  /// parser. Like <see cref="EmitEmbeddedSignedValue"/>, this does NOT (yet) accept a label or import
+  /// operand, and a non-numeric or out-of-range literal is a hard error, never silently truncated or
+  /// zero-filled.
+  /// </summary>
+  private static void EmitEmbeddedUnsignedValue(
+      CvmSection targetSection,
+      CvmInstructionSet.CvmInstructionShape shape,
+      string operand,
+      int lineNumber,
+      List<string> errors)
+  {
+    int valueBitMask = shape.ValueBitMask;
+    int bitWidth = System.Numerics.BitOperations.PopCount((uint)valueBitMask);
+
+    if (!TryParseNumericLiteral(operand, out int value))
+    {
+      errors.Add($"line {lineNumber}: \"{operand}\" is not a literal unsigned value -- \"{shape.Mnemonic}\" does not (yet) support a label/import operand.");
+      targetSection.Words.Add(shape.Tag);
+      return;
+    }
+
+    if (value < 0 || value > valueBitMask)
+    {
+      errors.Add($"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s unsigned {bitWidth}-bit value (0..{valueBitMask}).");
       targetSection.Words.Add(shape.Tag);
       return;
     }

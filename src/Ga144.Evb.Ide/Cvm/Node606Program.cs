@@ -32,17 +32,27 @@ namespace Ga144.Evb.Ide.Cvm;
 /// f itself ("frame pointer init"); 606 addresses its own local RAM directly with A/off/noff to
 /// store and retrieve frame-relative data, entirely separate from the port traffic to 607.
 ///
-/// <b>Verification.</b> Compiled with zero errors (<c>Success = true</c>) against this project's
-/// real <c>Compiler/F18Compiler.cs</c>, importing node 607's exported symbols via
-/// <c># 607 import</c> (<c>F18CompilerOptions.ImportResolver</c>, fed node 607's own compiled
-/// <c>Exports</c> -- the same <c>F18ExportSet</c>/<c>F18ImportResolution</c> plumbing
+/// <b>Verification.</b> Compiled with zero errors AND zero warnings (<c>Success = true</c>)
+/// against this project's real <c>Compiler/F18Compiler.cs</c>, importing node 607's exported
+/// symbols via <c># 607 import</c> (<c>F18CompilerOptions.ImportResolver</c>, fed node 607's own
+/// compiled <c>Exports</c> -- the same <c>F18ExportSet</c>/<c>F18ImportResolution</c> plumbing
 /// <c>F18NodeCompilationService</c> already uses for real cross-node imports). 61 of 64 RAM
-/// words used, entry point <c>main</c> at word address 0x003. One informational warning is
-/// expected and benign: F18C050, "'main' redefines the name imported from node 607" -- both 607
-/// and 606 each define their own independent <c>main</c> fetch/dispatch loop, and 606 never
-/// calls into 607's main by name, so the shadowing is intentional. Adding the per-word
-/// documentation comments to <see cref="Source"/> was re-verified to produce byte-for-byte
-/// identical compiled output to the plain, uncommented version.
+/// words used, entry point <c>main</c> at word address 0x003, <c>'leave</c> itself at word
+/// address 0x037. (An earlier revision of this file, compiled against an earlier revision of
+/// <see cref="Node607Program"/> whose own fetch/dispatch loop was named <c>main</c> rather than
+/// <c>'nop</c>, got one additional informational, benign warning here -- F18C050, "'main'
+/// redefines the name imported from node 607" -- since both nodes defined their own independent
+/// word called <c>main</c>; that warning no longer fires now that 607's own loop is named
+/// <c>'nop</c> instead, per <see cref="Node607Program"/>'s own revision history.) Adding the
+/// per-word documentation comments to <see cref="Source"/> was re-verified to produce
+/// byte-for-byte identical compiled output to the plain, uncommented version.
+///
+/// <b>Revision note.</b> This replaces an earlier revision's <c>'exit</c>/<c>'wait</c> pair
+/// (which together implemented "wait for a stimulus [from 707/the PC] and [then] start from
+/// location 1") with a single new word, <c>'leave</c> -- the undo side of <c>enter</c>, restoring
+/// 606's frame pointer to whatever <c>enter</c> saved before (Stefan's own description: "undo
+/// enter. move frame pointer to stack pointer and pop the saved frame pointer"). <c>'exit</c>/
+/// <c>'wait</c> are gone entirely in this revision, not merely renamed.
 ///
 /// <b>A note on confidence.</b> <c>la</c>/<c>ld</c>/<c>st</c>/<c>adjust</c> were given with no
 /// description (Stefan's own word list left them blank), and <c>main</c>'s exact dispatch
@@ -117,15 +127,26 @@ internal static class Node606Program
       // from the port traffic to 607 described above.
       //
       // Verified: this source compiles against the real F18Compiler with 0 errors
-      // (Success=true), importing node 607's exported symbols via '# 607 import'
-      // (F18CompilerOptions.ImportResolver, fed node 607's own compiled Exports --
-      // the same F18ExportSet/F18ImportResolution plumbing F18NodeCompilationService
-      // already uses for real cross-node imports). 61 of 64 RAM words used, entry
-      // point 'main' at word address 0x003. One informational warning is expected
-      // and benign: F18C050, "'main' redefines the name imported from node 607" --
-      // both 607 and 606 each define their own local word called 'main' (their
-      // own, independent fetch/dispatch loops), and 606 never needs to call INTO
-      // 607's main by name, so the shadowing is intentional, not a conflict.
+      // and 0 warnings (Success=true), importing node 607's exported symbols via
+      // '# 607 import' (F18CompilerOptions.ImportResolver, fed node 607's own
+      // compiled Exports -- the same F18ExportSet/F18ImportResolution plumbing
+      // F18NodeCompilationService already uses for real cross-node imports). 61 of
+      // 64 RAM words used, entry point 'main' at word address 0x003, 'leave itself
+      // at word address 0x037. (An earlier revision of this file, compiled against
+      // an earlier revision of Node607.f18 whose own fetch/dispatch loop was named
+      // 'main rather than 'nop, got one additional informational, benign warning
+      // here -- F18C050, "'main' redefines the name imported from node 607" --
+      // since both nodes defined their own independent word called 'main; that
+      // warning no longer fires now that 607's own loop is named 'nop instead,
+      // per Node607.f18's own revision history.)
+      //
+      // Revision note: this replaces an earlier revision's 'exit/'wait pair (which
+      // together implemented "wait for a stimulus [from 707/the PC] and [then]
+      // start from location 1") with a single new word, 'leave -- the undo side of
+      // 'enter, restoring 606's frame pointer to whatever 'enter saved before
+      // (Stefan's own description: "undo enter. move frame pointer to stack
+      // pointer and pop the saved frame pointer"). 'exit/'wait are gone entirely
+      // in this revision, not merely renamed.
       //
       // Adding the per-word documentation comments below was re-verified to
       // produce byte-for-byte identical compiled output (same Success, same
@@ -325,26 +346,26 @@ internal static class Node606Program
       : 'xf ( s-s) a A[ @p /r@ ]] lit !b !b A[ !p /r! ; ]] lit !b @b a! ;
 
       // ----------------------------------------------------------------------
-      // 'exit  --  waits for a stimulus and start from location 1 (Stefan's own
-      // description, split across this word and 'wait below, into which it falls
-      // through with no ';')
+      // 'leave  --  undo enter: restore 606's frame pointer to what it was
+      // before the matching 'enter (Stefan's own description: "undo enter. move
+      // frame pointer to stack pointer and pop the saved frame pointer")
       // ----------------------------------------------------------------------
-      // Pushes literal 1, ships {@p, a!} to 607 (fetch the literal 1, sent by the
-      // following plain '!b', then set A -- which holds P on 607 -- to 1): once
-      // 607 next resumes fetching, it starts from word address 1. Falls through
-      // into 'wait, below, to actually resume 607 (via 'wait's own '@b').
-      : 'exit 1 A[ @p a! ]] lit !b !b
-      // ----------------------------------------------------------------------
-      // 'wait  --  waits for a stimulus from the memory controller (Stefan's own
-      // description)
-      // ----------------------------------------------------------------------
-      // Ships {@b, drop, return} to 607: 607 executes '@b' against its OWN 'down'
-      // port (per node 607's "# down /b" -- toward 707/the PC), which blocks
-      // until a word arrives from there, discards it with 'drop', then returns
-      // to wherever 607's own flow continues (typically its main fetch loop).
-      // Combined with 'exit above, this implements "wait for a stimulus [from
-      // 707/the PC] and [then] start from location 1" -- 607's own P was already
-      // set to 1 by 'exit; this word supplies the actual wait/stimulus half.
-      : 'wait A[ @b drop ; ]] lit !b ;
+      // 'a' pushes 606's current frame pointer. First packed word {@p, CALL
+      // /pop} ships to 607 (fetch a literal -- sent by the following plain '!b'
+      // of that just-pushed frame pointer -- then call 607's own /pop, "pop a
+      // value from stack": reading back the saved caller's frame pointer that
+      // 'enter's own /push originally saved there -- the exact reverse of
+      // 'enter's first round trip). Second packed word {!p, plain return}: 607
+      // relays that popped value back out over the port, then executes a bare
+      // return -- NOT a tail-jump into its own 'ret the way 'cleanup's epilogue
+      // does. That's the key difference from 'cleanup: 'leave is invoked as an
+      // ordinary primitive, not as part of a call/return sequence, so it only
+      // needs to hand control straight back to whatever called it, never to pop
+      // a separate return address off 607's own return stack. Back on 606's
+      // side, '@b' receives the relayed saved frame pointer and 'a!' installs
+      // it into A -- restoring 606's frame pointer to the caller's, i.e.
+      // "undoing" whatever the matching 'enter did -- before tail-calling back
+      // into 'main to wait for the next command.
+      : 'leave A[ @p /pop ]] lit !b a !b A[ !p ; ]] lit !b @b a! main ;
       """;
 }

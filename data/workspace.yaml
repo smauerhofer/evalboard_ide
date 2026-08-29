@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-29T14:44:46.9016254
-      utcDateTime: 2026-08-29T14:44:46.9016254Z
-      localDateTime: 2026-08-29T16:44:46.9016254+02:00
+      dateTime: 2026-08-29T19:22:33.5047024
+      utcDateTime: 2026-08-29T19:22:33.5047024Z
+      localDateTime: 2026-08-29T21:22:33.5047024+02:00
       date: 2026-08-29T00:00:00.0000000
       day: 29
       dayOfWeek: Saturday
       dayOfYear: 241
-      hour: 14
-      millisecond: 901
-      microsecond: 625
+      hour: 19
+      millisecond: 504
+      microsecond: 702
       nanosecond: 400
-      minute: 44
+      minute: 22
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 46
-      ticks: 639236114869016254
-      utcTicks: 639236114869016254
-      timeOfDay: 14:44:46.9016254
+      second: 33
+      ticks: 639236281535047024
+      utcTicks: 639236281535047024
+      timeOfDay: 19:22:33.5047024
       year: 2026
   portB: 
   portC:
@@ -10913,9 +10913,7 @@ projects:
           A[ @p /push ]] lit !b a !b A[ dup !p ]] lit !b @b a! r> inv adjust ;
         : 'xf ( s-s) a A[ @p /r@ ]] lit !b !b A[ !p /r! ; ]] lit !b @b a! ;
 
-        : 'exit 1 A[ @p a! ]] lit !b !b
-
-        : 'wait A[ @b drop ; ]] lit !b ;
+        : 'leave A[ @p /pop ]] lit !b a !b A[ !p ; ]] lit !b @b a! main ;
 
 
         (
@@ -10943,9 +10941,7 @@ projects:
 
         'xf exchanges frame pointer with r
 
-        'wait waits for a stimulus from the memory controller
-
-        'exit waits for a stimulus and start from location 1
+        'leave undo enter. move frame pointer to stack pointer and pop the saved frame pointer.
 
 
         )
@@ -11005,12 +11001,12 @@ projects:
       - 0x09D22
       - 0x0D715
       - 0x00A55
-      - 0x05D22
-      - 0x00001
-      - 0x04AB2
-      - 0x089B2
-      - 0x05B55
-      - 0x00255
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -11822,6 +11818,16 @@ projects:
       inc
 
       push
+
+      enter 10
+
+      push
+
+      push
+
+      leave
+
+      pop
 
       nop
 

@@ -7,17 +7,21 @@ namespace Ga144.Evb.Ide.Services;
 
 /// <summary>
 /// The CVM's own small assembly language: Stefan's mnemonics (<c>nop</c>, <c>pushlit &lt;data&gt;</c>,
-/// <c>push</c>, <c>pop</c>, <c>ret</c>, and node 507's eleven ALU ops) layered on top of the
-/// wire-level opcode convention (opcode = 0x8000 | wordAddress) that <see cref="CvmMemoryProtocol"/>
-/// already established for node 607 -- node 507's ALU ops carry a DIFFERENT tag of their own, not
-/// 0x8000 (see <see cref="Node507UnaryTagBits"/>/<see cref="Node507BinaryTagBits"/>'s own remarks).
-/// (<c>call</c>, <c>br</c>, <c>ifbr</c>, and <c>slit</c> are the exceptions -- see this class's own
-/// remarks on why they aren't part of this tagged-opcode layer.)
+/// <c>push</c>, <c>pop</c>, <c>ret</c>, node 507's eleven ALU ops, and node 606's own <c>leave</c>)
+/// layered on top of the wire-level opcode convention (opcode = tag | wordAddress) that
+/// <see cref="CvmMemoryProtocol"/> already established for node 607 -- node 507's ALU ops and node
+/// 606's <c>leave</c> each carry a DIFFERENT tag of their own, not node 607's 0x8000 (see
+/// <see cref="Node507UnaryTagBits"/>/<see cref="Node507BinaryTagBits"/>/<see cref="Node606TagBits"/>'s
+/// own remarks). (<c>call</c>, <c>br</c>, <c>ifbr</c>, <c>slit</c>, and node 606's OTHER eight
+/// frame-pointer ops (<c>enter</c>, <c>adjust</c>, <c>stl</c>, <c>stp</c>, <c>ldl</c>, <c>ldp</c>,
+/// <c>lal</c>, <c>lap</c>) are the exceptions -- see this class's own remarks on why they aren't part
+/// of this tagged-opcode layer.)
 ///
 /// This is deliberately a SEPARATE naming layer from any node's own F18 source symbols ('nop, 'plit,
-/// 'pop, 'push on node 607; 'usl, 'ssr, 'usr, '+, '-, 'and, 'xor, 'or, 'inv, 'inc, 'dec on node 507) --
-/// those tick-names are each node's own interpreter labels and won't change; the mnemonics here are
-/// what a person reads and writes, and the two are free to diverge (as pushlit already has from 'plit).
+/// 'pop, 'push on node 607; 'usl, 'ssr, 'usr, '+, '-, 'and, 'xor, 'or, 'inv, 'inc, 'dec on node 507;
+/// 'leave on node 606) -- those tick-names are each node's own interpreter labels and won't change;
+/// the mnemonics here are what a person reads and writes, and the two are free to diverge (as pushlit
+/// already has from 'plit).
 ///
 /// The mnemonic/word-length/operand-arity SHAPE of each instruction now lives in the standalone
 /// Ga144.Cvm.Toolchain project's <see cref="CvmInstructionSet"/> (shared with the freestanding
@@ -27,28 +31,31 @@ namespace Ga144.Evb.Ide.Services;
 /// compile and has no business in that shared, IDE-independent project. A mnemonic is no longer
 /// assumed to live on node 607 -- <see cref="NodeSymbolByMnemonic"/> below records, per mnemonic,
 /// which node's compile to resolve it against, so <c>nop</c>/<c>pushlit</c>/<c>push</c>/<c>pop</c>/
-/// <c>ret</c> resolve against node 607 while <c>usl</c>/<c>ssr</c>/<c>usr</c>/<c>add</c>/<c>sub</c>/
-/// <c>and</c>/<c>xor</c>/<c>or</c>/<c>inv</c>/<c>inc</c>/<c>dec</c> resolve against node 507.
+/// <c>ret</c> resolve against node 607, <c>usl</c>/<c>ssr</c>/<c>usr</c>/<c>add</c>/<c>sub</c>/
+/// <c>and</c>/<c>xor</c>/<c>or</c>/<c>inv</c>/<c>inc</c>/<c>dec</c> resolve against node 507, and
+/// <c>leave</c> resolves against node 606.
 ///
 /// Shapes whose <see cref="CvmInstructionSet.CvmInstructionShape.Encoding"/> is anything other than
 /// <see cref="CvmInstructionSet.CvmOperandEncoding.None"/>/<see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>
 /// are deliberately left out of that pairing: <c>call</c>
-/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>) and <c>br</c>/<c>ifbr</c>/
-/// <c>slit</c> (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>) have no F18
+/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>), <c>br</c>/<c>ifbr</c>/
+/// <c>slit</c> (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>), and node 606's
+/// eight ops (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>) have no F18
 /// symbol at all to resolve, since none of their opcode words are a tagged dispatch to a named
 /// primitive routine -- each one's whole word is fully determined by its own operand alone. Because of
 /// that, none of them need a live compile to recognize: <see cref="CvmDebugSession.DisassemblePage0"/>
 /// checks for them directly via <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> BEFORE ever
 /// consulting this file's own symbol-driven decode table, so they already show up correctly in the
 /// memory inspector. <see cref="Assemble"/> mirrors that same dual dispatch on the OTHER direction --
-/// hand-typed CVM asm source that uses <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c> is encoded
-/// directly from <see cref="CvmInstructionSet"/> and the operand alone, bypassing this file's own
-/// <see cref="Instructions"/>/<see cref="NodeSymbolByMnemonic"/> pairing entirely (see
-/// <see cref="Assemble"/>'s own remarks) -- so <see cref="Instructions"/> itself still omits all four,
-/// since they would have nothing to pair them with, without that meaning they can't be assembled.
-/// Extending this file to the remaining primitive nodes (606/608/707/407/508/506) for the TAGGED
-/// mnemonics they might one day expose remains separate, later work -- 607 and 507 are simply the two
-/// nodes that have tagged mnemonics of their own today.
+/// hand-typed CVM asm source that uses <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>/node 606's ops is
+/// encoded directly from <see cref="CvmInstructionSet"/> and the operand alone, bypassing this file's
+/// own <see cref="Instructions"/>/<see cref="NodeSymbolByMnemonic"/> pairing entirely (see
+/// <see cref="Assemble"/>'s own remarks) -- so <see cref="Instructions"/> itself still omits all of
+/// them, since they would have nothing to pair them with, without that meaning they can't be assembled.
+/// Extending this file to the remaining primitive nodes (608/707/407/508/506) for the TAGGED mnemonics
+/// they might one day expose remains separate, later work -- 607, 507, and now 606 (for <c>leave</c>
+/// specifically -- its other eight ops are self-describing, not tagged) are simply the nodes that have
+/// tagged mnemonics of their own today.
 ///
 /// Both directions -- <see cref="BuildDecodeTable"/> for disassembly and <see cref="BuildEncodeTable"/>/
 /// <see cref="Assemble"/> for assembly -- are built from the single <see cref="Instructions"/> table,
@@ -85,19 +92,33 @@ internal static class CvmAssemblyLanguage
   private const int Node507UnaryTagBits = 0xC000;
   private const int Node507BinaryTagBits = 0xC800;
 
+  // Node 606's own tag for its "call word in node 606, address in opcode" family (the OTHER opcode
+  // class in Stefan's node-606 table, distinct from enter/adjust/stl/stp/ldl/ldp/lal/lap's own
+  // self-describing 0xA800-0xAFFF tags in CvmInstructionSet -- those never need this constant at all,
+  // since they carry their own fixed value and need no node/symbol pairing). Bit pattern
+  // "1010 0xxx xxxx xxxx", but per Node606.f18's own 'main' dispatch ("@b xff and >r"), the dispatch
+  // byte is always masked down to 8 bits before use, so in practice only 0xA000-0xA0FF is ever
+  // produced by this node's own code -- same address-field width as node 607's own 0x8000|address
+  // family. 'leave is the first (and, as of this revision, only) named word reached this way.
+  private const int Node606TagBits = 0xA000;
+
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
-  // tag bits its opcode word must carry (see Node607TagBits/Node507UnaryTagBits/Node507BinaryTagBits
-  // above -- these are NOT all the same value). Every mnemonic in CvmInstructionSet.Instructions must
-  // have an entry here, or BuildDecodeTable/BuildEncodeTable simply won't find it in a live compile --
-  // this is the one place that link, kept as a small, easy-to-audit map rather than folded back into
-  // the shared table (which has no notion of "node", "F18 symbol", or "tag" at all, on purpose: gaasm
-  // never needs any of them). Node 607's five original tagged mnemonics resolve against 607's own
-  // symbols (still defined in CvmMemoryProtocol, node 607's own wire-protocol convention); node 507's
-  // eleven ALU ops resolve against 507's own tick-named words (Node507Program/Node507.f18), using the
-  // literal F18 symbol names straight from that source rather than adding node-507-specific constants
-  // to CvmMemoryProtocol, which is documented as node 607's own convention. The eight binary ALU ops
+  // tag bits its opcode word must carry (see Node607TagBits/Node507UnaryTagBits/Node507BinaryTagBits/
+  // Node606TagBits above -- these are NOT all the same value). Every mnemonic in
+  // CvmInstructionSet.Instructions must have an entry here, or BuildDecodeTable/BuildEncodeTable simply
+  // won't find it in a live compile -- this is the one place that link, kept as a small, easy-to-audit
+  // map rather than folded back into the shared table (which has no notion of "node", "F18 symbol", or
+  // "tag" at all, on purpose: gaasm never needs any of them). Node 607's five original tagged mnemonics
+  // resolve against 607's own symbols (still defined in CvmMemoryProtocol, node 607's own wire-protocol
+  // convention); node 507's eleven ALU ops and node 606's own 'leave resolve against each node's own
+  // tick-named words (Node507Program/Node507.f18, Node606Program/Node606.f18), using the literal F18
+  // symbol names straight from that source rather than adding node-specific constants to
+  // CvmMemoryProtocol, which is documented as node 607's own convention. The eight binary ALU ops
   // (usl/ssr/usr/add/sub/and/xor/or) and three unary ones (inv/inc/dec) are split per Node507.f18's own
-  // 'main' dispatch comments -- see Node507BinaryTagBits/Node507UnaryTagBits's own remarks.
+  // 'main' dispatch comments -- see Node507BinaryTagBits/Node507UnaryTagBits's own remarks. Node 606's
+  // own other eight ops (enter/adjust/stl/stp/ldl/ldp/lal/lap) are deliberately absent from this map --
+  // they are self-describing (CvmOperandEncoding.EmbeddedUnsignedValue) and need no node/symbol pairing
+  // at all, exactly like call/br/ifbr/slit; see this class's own remarks for why.
   private static readonly IReadOnlyDictionary<string, (int NodeCoordinate, string SymbolName, int Tag)> NodeSymbolByMnemonic =
       new Dictionary<string, (int NodeCoordinate, string SymbolName, int Tag)>(StringComparer.OrdinalIgnoreCase)
       {
@@ -117,6 +138,7 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.InvertMnemonic] = (Node507Program.Coordinate, "'inv", Node507UnaryTagBits),
         [CvmInstructionSet.IncrementMnemonic] = (Node507Program.Coordinate, "'inc", Node507UnaryTagBits),
         [CvmInstructionSet.DecrementMnemonic] = (Node507Program.Coordinate, "'dec", Node507UnaryTagBits),
+        [CvmInstructionSet.LeaveMnemonic] = (Node606Program.Coordinate, "'leave", Node606TagBits),
       };
 
   /// <summary>
@@ -245,7 +267,7 @@ internal static class CvmAssemblyLanguage
     {
       CvmAsmInstruction instruction = instructions[line];
       CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
-      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue })
+      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue })
       {
         (int? word, string? selfDescribingError) = EncodeSelfDescribingWord(selfDescribingShape, instruction.Operand, line + 1);
         if (word is null)
@@ -394,10 +416,11 @@ internal static class CvmAssemblyLanguage
   }
 
   /// <summary>
-  /// Encodes one <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c> word directly from
+  /// Encodes one <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>/node-606 word directly from
   /// <paramref name="shape"/> and its literal operand -- the same arithmetic
-  /// <see cref="CvmAssembler.EmitEmbeddedSignedValue"/> uses for <c>br</c>/<c>ifbr</c>/<c>slit</c>
-  /// (mask-derived min/max, tag OR'd with the value's low bits) and <see cref="CvmAssembler"/>'s own
+  /// <see cref="CvmAssembler.EmitEmbeddedSignedValue"/>/<see cref="CvmAssembler.EmitEmbeddedUnsignedValue"/>
+  /// use for <c>br</c>/<c>ifbr</c>/<c>slit</c> and node 606's eight ops respectively (mask-derived
+  /// min/max, tag OR'd with the value's low bits) and <see cref="CvmAssembler"/>'s own
   /// <c>EmbeddedAddress</c> case uses for <c>call</c>, kept as a small duplicate here rather than
   /// shared: that assembler resolves a label/import operand through relocations against a
   /// <see cref="CvmObjectFile"/>, which has no place in this simpler, label-free, immediately-loaded
@@ -418,6 +441,18 @@ internal static class CvmAssemblyLanguage
       }
 
       return (value, null);
+    }
+
+    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue)
+    {
+      // Node 606's eight ops: unsigned 0..ValueBitMask, never a negative half -- unlike the signed
+      // case just below, so no min/max split is needed here.
+      if (value < 0 || value > shape.ValueBitMask)
+      {
+        return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s unsigned value (0..{shape.ValueBitMask}).");
+      }
+
+      return (shape.Tag | (value & shape.ValueBitMask), null);
     }
 
     int maxValue = shape.ValueBitMask >> 1;

@@ -357,9 +357,13 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// Ends the debugging session outright: cancels any in-flight Continue and closes the serial port
   /// (<see cref="CloseSession"/> -- the same cleanup the window's own Closed handler runs via
   /// <see cref="Cancel"/>), then resets every session-derived display back to its "nothing started"
-  /// state, same as before the very first Start. Unlike closing the window, the CVM Debugger stays
-  /// open afterward -- Start reconnects and reinstalls from scratch, same as it would after a fresh
-  /// launch.
+  /// state, same as before the very first Start -- EXCEPT the transaction log, which is deliberately
+  /// left exactly as it was: Stop is for pausing/disconnecting, not for discarding a record of what
+  /// the wire just did, so <see cref="RefreshLog"/> is never called here (it would otherwise blank
+  /// <see cref="LogText"/> the moment <see cref="_session"/> goes null -- see its own remarks).
+  /// <see cref="StartAsync"/> is what clears the log, by starting an entirely new session whose own
+  /// transaction log begins empty. Unlike closing the window, the CVM Debugger stays open afterward --
+  /// Start reconnects and reinstalls from scratch, same as it would after a fresh launch.
   /// </summary>
   private void Stop()
   {
@@ -372,7 +376,6 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     Breakpoints.Clear();
     StatusText = "Stopped -- communication with the chip closed. Click Start / Reinstall to reconnect.";
     InstallSummaryText = string.Empty;
-    RefreshLog();
     RefreshMemoryView();
     RefreshProgramCounter();
     OnPropertyChanged(nameof(IsSessionActive));
@@ -485,26 +488,30 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   }
 
   // Every node CvmAssemblyLanguage's tagged mnemonics can resolve against today: 607 (nop/pushlit/
-  // push/pop/ret) and 507 (the eleven usl/ssr/usr/add/sub/and/xor/or/inv/inc/dec ALU ops) -- see
+  // push/pop/ret), 507 (the eleven usl/ssr/usr/add/sub/and/xor/or/inv/inc/dec ALU ops), and 606
+  // (leave -- node 606's eight enter/adjust/stl/stp/ldl/ldp/lal/lap ops are self-describing and never
+  // need this list at all, but leave is tagged/node-resolved exactly like 607's own primitives) -- see
   // CvmAssemblyLanguage's own remarks. A live chip session's compiledRam already has every node in
-  // the boot tree, 507 included (Ga144CvmHardwareInstaller compiles the whole install tree up front),
-  // so this list only matters for the standalone (no-chip-connected) path below.
+  // the boot tree, 507/606 included (Ga144CvmHardwareInstaller compiles the whole install tree up
+  // front), so this list only matters for the standalone (no-chip-connected) path below.
   private static readonly IReadOnlyList<int> StandaloneCvmNodeCoordinates =
   [
     CvmMemoryProtocol.NopSourceNodeCoordinate,
     Node507Program.Coordinate,
+    Node606Program.Coordinate,
   ];
 
   /// <summary>
   /// Compiles every node in <see cref="StandaloneCvmNodeCoordinates"/> (<see cref="F18NodeCompilationService"/>)
   /// purely in software -- no serial port, no connected chip -- for <see cref="AssembleStandalone"/>
   /// and the memory inspector's no-session disassembly to resolve tagged mnemonics against. Node 507's
-  /// own RAM source imports node 607 (<c># 607 import</c>), so compiling 507 alone would already pull
-  /// 607's compile in as an import -- but only 507's OWN <see cref="F18NodeCompilationResult"/> comes
-  /// back from that call, so each node in the list is still compiled and stored individually here to
-  /// end up with both in <c>compiledRam</c>. Self-describing opcodes (<c>call</c>/<c>br</c>/<c>ifbr</c>/
-  /// <c>slit</c>) never need this at all. Returns an empty table and a descriptive error (never
-  /// throws) naming whichever node's source doesn't currently compile.
+  /// and node 606's own RAM sources both import node 607 (<c># 607 import</c>), so compiling either
+  /// alone would already pull 607's compile in as an import -- but only that node's OWN
+  /// <see cref="F18NodeCompilationResult"/> comes back from that call, so each node in the list is
+  /// still compiled and stored individually here to end up with all three in <c>compiledRam</c>.
+  /// Self-describing opcodes (<c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>, and node 606's own eight
+  /// enter/adjust/stl/stp/ldl/ldp/lal/lap ops) never need this at all. Returns an empty table and a
+  /// descriptive error (never throws) naming whichever node's source doesn't currently compile.
   /// </summary>
   private (bool Success, IReadOnlyDictionary<int, F18CompileResult> CompiledRam, string? Error) CompileStandaloneCvmNodes()
   {
@@ -669,6 +676,11 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     }
   }
 
+  // The _session-is-null branch below is what blanks LogText. Stop() deliberately never calls this
+  // method at all (see its own remarks) specifically to avoid hitting that branch -- Stop leaves
+  // LogText exactly as it was rather than blanking it. Every other call site (StartAsync, StepAsync,
+  // ContinueAsync) only reaches this method with a non-null _session, so in today's code this branch
+  // is purely defensive (e.g. a session that goes null out from under an in-flight await).
   private void RefreshLog()
   {
     if (_session is null)
