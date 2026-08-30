@@ -1,68 +1,85 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// The CVM Debugger's own default test program: exercises every one of the CVM's 43 opcodes that
+/// The CVM Debugger's own default test program: exercises every one of the CVM's 42 opcodes that
 /// this project can currently deliver a result for AND verify from the transaction log alone,
 /// replacing the earlier 3-instruction smoke test (5 'nop, 'plit/pop/push round trip, one 'call,
 /// one 'br) that only ever touched 5 of the CVM's 72 opcodes.
 ///
-/// <b>Coverage: 43 of 72 opcodes, every one with a log-checkable expected value.</b> Node 607's own
+/// <b>Coverage: 42 of 72 opcodes, every one with a log-checkable expected value.</b> Node 607's own
 /// five primitives (nop, pushlit, pop, push, ret) plus call/br/ifbr/slit; node 507's eleven ALU ops
 /// (usl, ssr, usr, add, sub, and, xor, or, inv, inc, dec); node 506's nine register-d/
 /// extended-precision ops (zext, addc, ldd, std, xd, mul2d, div2d, sext, umuld); node 407's five
 /// register-w/port ops that need no live F18A port on the far side (xpt, ldhi, ldlo, sthi, stlo);
-/// and node 606's full nine-op frame-pointer set (enter, adjust, stl, stp, ldl, ldp, lal, lap,
-/// leave). Every instruction that WRITES a value is immediately followed by a comment stating the
-/// expected hex value the transaction log's own "WRITE ... &lt;- XXXX" line should show, computed and
-/// cross-checked with a Python simulation of each node's own F18 source before this program was
-/// written -- see this class's own git history / the session notes for the derivation of each one
-/// (register-r operand order for the binary ALU ops in particular is the OPPOSITE of the naive
-/// first guess: for usl/ssr/usr/sub the value shifted or subtracted is the POPPED external operand,
-/// and r supplies the count/subtrahend -- "slit X; push; slit Y; op" computes X-op-Y with X popped
-/// from external memory and Y left in r).
+/// and eight of node 606's nine frame-pointer ops (enter, stl, stp, ldl, ldp, lal, lap, leave --
+/// see the exclusion note on 'adjust below). Every instruction that WRITES a value is immediately
+/// followed by a comment stating the expected hex value the transaction log's own
+/// "WRITE ... &lt;- XXXX" line should show, computed and cross-checked with a Python simulation of
+/// each node's own F18 source before this program was written -- see this class's own git history /
+/// the session notes for the derivation of each one (register-r operand order for the binary ALU
+/// ops in particular is the OPPOSITE of the naive first guess: for usl/ssr/usr/sub the value shifted
+/// or subtracted is the POPPED external operand, and r supplies the count/subtrahend -- "slit X;
+/// push; slit Y; op" computes X-op-Y with X popped from external memory and Y left in r).
+/// <b>Confirmed against a real run (2026-08-30), two corrections to that original derivation:</b>
+/// usl/ssr/usr actually shift by r+1, not r -- node 507's own binary-op dispatch drives the shift
+/// with F18's standard <c>for</c>/<c>next</c> loop, which runs its body (popped-count + 1) times,
+/// the classic colorForth/F18 off-by-one every <c>for</c> loop has (0 still loops once); and node
+/// 407's <c>ldlo</c> returns only the LOW 16 bits of its own locally-tracked 18-bit port value
+/// (masked), not the raw unmasked 18-bit value an earlier draft of this program assumed. The
+/// comments below already reflect both corrected values; every other opcode's expected value was
+/// confirmed exact on that same run with no correction needed.
 ///
-/// <b>Two deliberate exclusions, both by Stefan's own choice, both documented at the point they'd
-/// otherwise appear:</b>
+/// <b>Three deliberate exclusions, each documented at the point it would otherwise appear:</b>
 /// <list type="bullet">
 /// <item>Node 508's 27 comparison/arithmetic opcodes (eq, eq0, false, true, ne, ne0, ugt, gt, gt0,
 /// ge, ge0, ule, le, le0, lt, lt0, ult, uge, mul2, udiv2, div2, abs, negate, xt, ldt, stt, bitcnt)
-/// are skipped entirely. Node508.f18's own header comments say the mechanism these ops use to
-/// deliver a result back into node 507's register r is "inferred, not given" -- unlike node 506,
-/// none of the 27 op bodies call `r!` or `main` to deliver a result back to 507, so there is currently no
-/// confirmed way for a subsequent 'push to show one of these ops' actual result on the wire. Rather
-/// than include them with an unverified expected value, Stefan chose to skip them for now.</item>
+/// are skipped entirely, by Stefan's own choice. Node508.f18's own header comments say the
+/// mechanism these ops use to deliver a result back into node 507's register r is "inferred, not
+/// given" -- unlike node 506, none of the 27 op bodies call `r!` or `main` to deliver a result back
+/// to 507, so there is currently no confirmed way for a subsequent 'push to show one of these ops'
+/// actual result on the wire. Rather than include them with an unverified expected value, Stefan
+/// chose to skip them for now.</item>
 /// <item>Node 407's 'in and 'out (real, blocking F18A port reads/writes through register A) are
-/// never executed -- node 408, the node they would actually talk to, is not part of this booted
-/// test cluster, so calling either risks hanging the whole session waiting for a reply that will
-/// never come. Node 407's other five ops (xpt, ldhi, ldlo, sthi, stlo) never touch a real port and
-/// are exercised normally.</item>
+/// never executed, by Stefan's own choice -- node 408, the node they would actually talk to, is not
+/// part of this booted test cluster, so calling either risks hanging the whole session waiting for a
+/// reply that will never come. Node 407's other five ops (xpt, ldhi, ldlo, sthi, stlo) never touch a
+/// real port and are exercised normally.</item>
+/// <item><b>Node 606's 'adjust is excluded for a different, more serious reason: it was tried, and
+/// it broke real hardware.</b> An earlier version of this program included 'adjust (right before the
+/// call into the frame-pointer block below), on the assumption -- per Node606.f18's own header,
+/// which says adjust's dispatch was "given...with no [confirmed]" cascade, same caveat as la/ld/st
+/// -- that at worst its exact effect on p was merely unconfirmed, not unsafe. A real run on
+/// 2026-08-30 showed otherwise: immediately after 'adjust's own opcode fetch, the transaction log
+/// showed the CVM cluster's own boot handshake (two page-1 reads at address 0, exactly what
+/// Ga144CvmHardwareInstaller's automatic test expects right after waking node 708's 'start) followed
+/// by page-0 fetching restarting from address 0 -- i.e. 'adjust forced a full, uncommanded cluster
+/// reset. The resumed second pass then ran with a corrupted external-stack pointer (WRITE addresses
+/// wrapped from page 1 address 0x0000 down through 0x3FFFF instead of continuing the first pass's
+/// own downward sequence) and the run eventually timed out. This is NOT the same class of risk as
+/// 'br'/'ifbr' below (which just fall into an existing, harmless jump-table branch) -- 'adjust
+/// visibly corrupts control flow across the whole cluster, so it stays out of this program entirely
+/// until it can be investigated further, the same treatment as 'in'/'out' above.</item>
 /// </list>
 ///
-/// <b>Two exploratory blocks, deliberately NOT asserted as "known correct":</b>
-/// <list type="bullet">
-/// <item>The 'adjust test (in the main flow, just before the call into the frame-pointer block
-/// below) is self-checking rather than asserting a specific direction: Node606.f18's own header
-/// says adjust's exact effect on node 607's external-memory pointer p is "inferred, not given", so
-/// the program brackets one 'adjust call between two 'push instructions of the same, otherwise
-/// unchanged register r and lets the transaction log's own WRITE addresses show whether adjust adds
-/// or subtracts its operand, rather than this program asserting one answer up front.</item>
-/// <item>'br and 'ifbr (at the very end, after the frame-pointer block returns) are included only
-/// as an observation opportunity, not a real branch test: Node607.f18's own dispatch table does not
+/// <b>Two exploratory instructions, deliberately NOT asserted as "known correct":</b>
+/// 'br and 'ifbr (at the very end, after the frame-pointer block returns) are included only as an
+/// observation opportunity, not a real branch test: Node607.f18's own dispatch table does not
 /// actually implement a signed-offset branch for either tag yet (per this project's own
 /// CvmMemoryProtocol.cs remarks) -- today they fall into the same "100?" jump-table branch as
-/// ret/xs/xp/tjmp/pc and would be misdecoded. This program places both words purely so Stefan can
-/// see, from the log, what node 607's existing dispatch actually does with them on real hardware --
-/// it does not assume or check for a particular outcome.</item>
-/// </list>
+/// ret/xs/xp/tjmp/pc and would be misdecoded (harmlessly, unlike 'adjust above -- nothing past them
+/// in this program depends on their outcome, since they are the last two real instructions here).
+/// This program places both words purely so Stefan can see, from the log, what node 607's existing
+/// dispatch actually does with them on real hardware -- it does not assume or check for a
+/// particular outcome.
 ///
-/// The frame-pointer block (word address 0x8A, called once from the main flow via 'call) is
-/// self-checking in the same spirit for node 606's local-vs-parameter offset-sign convention:
-/// Node606.f18's own header says which of stl/stp maps to a negative-vs-positive frame offset is
-/// itself "inferred, not given", so rather than asserting an absolute address this program compares
-/// stl's/ldl's own address against lal's freshly computed one (and, separately, stp's/ldp's against
-/// lap's) -- those two MUST always agree with each other regardless of which sign convention turns
-/// out to be correct, so the check is meaningful without this program taking a position on the
-/// unconfirmed convention itself.
+/// The frame-pointer block (word address 0x88, called once from the main flow via 'call) is
+/// self-checking for node 606's local-vs-parameter offset-sign convention: Node606.f18's own header
+/// says which of stl/stp maps to a negative-vs-positive frame offset is itself "inferred, not
+/// given", so rather than asserting an absolute address this program compares stl's/ldl's own
+/// address against lal's freshly computed one (and, separately, stp's/ldp's against lap's) -- those
+/// two MUST always agree with each other regardless of which sign convention turns out to be
+/// correct, so the check is meaningful without this program taking a position on the unconfirmed
+/// convention itself.
 ///
 /// This is the single source of truth for that program's text:
 /// <see cref="Services.CvmMemoryProtocol.TryBuildDebuggerTestProgram"/> assembles this exact text
@@ -71,7 +88,7 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <see cref="ViewModels.CvmDebuggerViewModel.StartAsync"/> loads by default, and
 /// <see cref="ViewModels.CvmDebuggerViewModel.DefaultAssemblyCode"/> is this same text again, so
 /// Start and an unedited click of Assemble always produce byte-identical simulated-SRAM contents.
-/// 159 words total once assembled.
+/// 157 words total once assembled.
 /// </summary>
 public static class CvmDebuggerDefaultProgram
 {
@@ -101,19 +118,19 @@ public static class CvmDebuggerDefaultProgram
       "push              ; WRITE <- 0028\n" +
       "slit 0x0012       ; X=0x0012 (shiftee)\n" +
       "push              ; WRITE <- 0012\n" +
-      "slit 8            ; Y=8 (shift count, becomes r)\n" +
-      "usl               ; pop X(0012) READ <- 0012; r = 0012<<8 = 1200\n" +
-      "push              ; WRITE <- 1200\n" +
+      "slit 8            ; Y=8 (shift count, becomes r) -- node 507's 'for'/'next' loop runs (r+1) times, the standard F18 for-loop off-by-one, so this actually shifts by 9, not 8\n" +
+      "usl               ; pop X(0012) READ <- 0012; r = 0012<<(8+1) = 2400\n" +
+      "push              ; WRITE <- 2400\n" +
       "slit -100         ; X=0xFF9C\n" +
       "push              ; WRITE <- FF9C\n" +
-      "slit 3            ; Y=3 (count)\n" +
-      "ssr               ; pop X(FF9C) READ <- FF9C; r = signed(FF9C)>>3 = FFF3\n" +
-      "push              ; WRITE <- FFF3\n" +
+      "slit 3            ; Y=3 (count) -- actually shifts by (3+1)=4, same 'for'/'next' off-by-one as usl above\n" +
+      "ssr               ; pop X(FF9C) READ <- FF9C; r = signed(FF9C)>>(3+1) = FFF9\n" +
+      "push              ; WRITE <- FFF9\n" +
       "slit -100         ; X=0xFF9C\n" +
       "push              ; WRITE <- FF9C\n" +
-      "slit 3            ; Y=3 (count)\n" +
-      "usr               ; pop X(FF9C) READ <- FF9C; r = unsigned(FF9C)>>3 = 1FF3\n" +
-      "push              ; WRITE <- 1FF3\n" +
+      "slit 3            ; Y=3 (count) -- actually shifts by (3+1)=4, same 'for'/'next' off-by-one as usl above\n" +
+      "usr               ; pop X(FF9C) READ <- FF9C; r = unsigned(FF9C)>>(3+1) = 0FF9\n" +
+      "push              ; WRITE <- 0FF9\n" +
       "slit 100          ; X=100\n" +
       "push              ; WRITE <- 0064\n" +
       "slit 200          ; Y=200\n" +
@@ -199,17 +216,15 @@ public static class CvmDebuggerDefaultProgram
       "push              ; WRITE <- 00000\n" +
       "slit 2            ; r=2 (0b10) -- the 2-bit 'hi' value to install\n" +
       "sthi              ; 407's local stack holds the boot seed 0; builds (0 & 0xFFFF) xor (r<<16) = 0x20000, left on 407's OWN stack (not r)\n" +
-      "ldlo              ; moves that 407-local value (dup) into r verbatim: r := 0x20000 RAW (18-bit; unmasked, > 4 hex digits)\n" +
-      "push              ; WRITE <- 20000 (confirms sthi placed the 2 bits at bit16-17)\n" +
+      "ldlo              ; loads the LOW 16 bits of that 407-local 18-bit value into r: r := 0x20000 & 0xFFFF = 0x0000 -- confirmed on real hardware 2026-08-30 (an earlier draft of this comment wrongly claimed ldlo returns the raw, unmasked 18-bit value; it does not)\n" +
+      "push              ; WRITE <- 0000 (confirms sthi placed the 2 bits above bit 15, out of ldlo's own low-16 reach)\n" +
       "slit 0x234        ; r=0x0234 -- the 16-bit 'lo' value to install\n" +
       "stlo              ; combines (0x20000 & 0x30000) xor r(0234) = 0x20234, left on 407's OWN stack\n" +
-      "ldlo              ; r := 0x20234 RAW (18-bit)\n" +
-      "push              ; WRITE <- 20234 (confirms stlo merged the new low 16 bits, keeping the earlier hi 2 bits)\n" +
+      "ldlo              ; loads the LOW 16 bits again: r := 0x20234 & 0xFFFF = 0x0234\n" +
+      "push              ; WRITE <- 0234 (confirms stlo merged the new low 16 bits, keeping the earlier hi 2 bits -- ldhi below reads those back out)\n" +
       "ldhi              ; extracts the hi 2 bits back out of 0x20234: r := (0x20234>>16)&3 = 2\n" +
-      "push              ; WRITE <- 0002 (confirms ldhi's own extraction; also the baseline address for the adjust test below -- call it ADJ_BASE)\n" +
-      "adjust 4          ; EXPLORATORY -- adjusts 607's own external-stack pointer p by a signed size; Node606.f18's own header says this offset's sign/direction convention is \"inferred, not given\". If adjust ADDS 4 to p, the next 'push below lands 3 words ABOVE ADJ_BASE; if it SUBTRACTS 4, 5 words BELOW -- observe, don't assume, which the log shows\n" +
-      "push              ; WRITE <- 0002 (r unchanged since the ADJ_BASE push) -- compare this WRITE's own address to ADJ_BASE's to read off adjust's real effect on p\n" +
-      "call 138          ; jump to the frame-pointer subroutine below -- FRAME_TEST's own word address, computed by counting the words above (pushlit is the only 2-word instruction here); 138 (0x8A)\n" +
+      "push              ; WRITE <- 0002 (confirms ldhi's own extraction)\n" +
+      "call 136          ; jump to the frame-pointer subroutine below -- FRAME_TEST's own word address, computed by counting the words above (pushlit is the only 2-word instruction here); 136 (0x88)\n" +
       "nop               ; execution resumes here once FRAME_TEST's own 'ret' returns\n" +
       "nop\n" +
       "nop\n" +

@@ -39,8 +39,12 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // to be aimed at a specific breakpoint, but should not spin forever chasing one that never fires.
   private const int ContinueTransactionCap = 2_000;
 
-  // How many words the memory inspector shows at once, and the default starting point (page 0,
-  // address 0 -- the start of the loaded test program) before Stefan jumps elsewhere.
+  // The FLOOR on how many words the memory inspector shows at once (and the default starting
+  // point is page 0, address 0 -- the start of the loaded test program -- before Stefan jumps
+  // elsewhere). This used to be the fixed count too, but that silently truncated the view well
+  // short of a longer loaded program (the 157-word CvmDebuggerDefaultProgram in particular ends
+  // at 0x009C, past this constant's own old 64-word/0x003F reach) -- see RefreshMemoryView's own
+  // remarks for how the actual count is now sized to whatever program is currently loaded.
   private const int MemoryViewWordCount = 64;
 
   private readonly Ga144ChipConfiguration _chip;
@@ -68,11 +72,13 @@ public sealed class CvmDebuggerViewModel : ObservableObject
 
   // Source-form equivalent of CvmMemoryProtocol.TryBuildDebuggerTestProgram's own assembled words --
   // both are literally CvmDebuggerDefaultProgram.Source, so assembling this unedited reproduces
-  // exactly the program Start already loads today (43 of the CVM's 72 opcodes, each with a
+  // exactly the program Start already loads today (42 of the CVM's 72 opcodes, each with a
   // log-checkable expected value -- see CvmDebuggerDefaultProgram's own remarks for full coverage
-  // details, the two deliberate exclusions, and the two exploratory blocks), so clicking Assemble
-  // right after Start is a no-op on the simulated SRAM's contents. Edit it and click Assemble to try
-  // a different program against the connected hardware without a rebuild.
+  // details, the three deliberate exclusions (including 'adjust, which is excluded because it
+  // actually corrupted a real run, not merely because it was unconfirmed), and the two exploratory
+  // instructions), so clicking Assemble right after Start is a no-op on the simulated SRAM's
+  // contents. Edit it and click Assemble to try a different program against the connected hardware
+  // without a rebuild.
   private const string DefaultAssemblyCode = CvmDebuggerDefaultProgram.Source;
 
   private CvmDebugSession? _session;
@@ -237,7 +243,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       _session = await installer.StartDebugSessionAsync(endpoint.PortName, _chip, compileService);
 
       InstallSummaryText = $"Install: {_session.Install.Steps.Count} boot frame(s) sent, fire-and-forget. Loaded a {_session.Program.Count}-word test program " +
-          "(43 of the CVM's 72 opcodes, each with a log-checkable expected value -- see CvmDebuggerDefaultProgram's own remarks) into the simulated SRAM and woke node 708's 'start.";
+          "(42 of the CVM's 72 opcodes, each with a log-checkable expected value -- see CvmDebuggerDefaultProgram's own remarks) into the simulated SRAM and woke node 708's 'start.";
 
       // The Assembly Code editor is the single source of truth for what should be running, whether
       // it was edited before or after Start -- re-apply it to the freshly connected chip now, so
@@ -480,30 +486,36 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // Every node CvmAssemblyLanguage's tagged mnemonics can resolve against today: 607 (nop/pushlit/
   // push/pop/ret), 507 (the eleven usl/ssr/usr/add/sub/and/xor/or/inv/inc/dec ALU ops), 606
   // (leave -- node 606's eight enter/adjust/stl/stp/ldl/ldp/lal/lap ops are self-describing and never
-  // need this list at all, but leave is tagged/node-resolved exactly like 607's own primitives), and
-  // 508 (its 27 comparison/arithmetic ops -- eq, eq0, false, true, ne, ne0, ugt, gt, gt0, ge, ge0,
-  // ule, le, le0, lt, lt0, ult, uge, mul2, udiv2, div2, abs, negate, xt, ldt, stt, bitcnt -- every one
-  // of them tagged/node-resolved exactly like leave, none self-describing) -- see
-  // CvmAssemblyLanguage's own remarks. A live chip session's compiledRam already has every node in
-  // the boot tree, 507/606/508 included (Ga144CvmHardwareInstaller compiles the whole install tree up
-  // front), so this list only matters for the standalone (no-chip-connected) path below.
+  // need this list at all, but leave is tagged/node-resolved exactly like 607's own primitives), 508
+  // (its 27 comparison/arithmetic ops -- eq, eq0, false, true, ne, ne0, ugt, gt, gt0, ge, ge0, ule,
+  // le, le0, lt, lt0, ult, uge, mul2, udiv2, div2, abs, negate, xt, ldt, stt, bitcnt -- every one of
+  // them tagged/node-resolved exactly like leave, none self-describing), 506 (its nine
+  // zext/addc/ldd/std/xd/mul2d/div2d/sext/umuld register-d ops), and 407 (its seven
+  // xpt/out/in/ldhi/ldlo/sthi/stlo register-w/port ops) -- see CvmAssemblyLanguage's own remarks. A
+  // live chip session's compiledRam already has every node in the boot tree, all six included
+  // (Ga144CvmHardwareInstaller compiles the whole install tree up front), so this list only matters
+  // for the standalone (no-chip-connected) path below -- CvmDebuggerDefaultProgram.Source uses 506's
+  // and 407's own tagged ops too, so both must be in this list for Assemble to resolve them with no
+  // chip connected, exactly like 507/606/508 already needed to be.
   private static readonly IReadOnlyList<int> StandaloneCvmNodeCoordinates =
   [
     CvmMemoryProtocol.NopSourceNodeCoordinate,
     Node507Program.Coordinate,
     Node606Program.Coordinate,
     Node508Program.Coordinate,
+    Node506Program.Coordinate,
+    Node407Program.Coordinate,
   ];
 
   /// <summary>
   /// Compiles every node in <see cref="StandaloneCvmNodeCoordinates"/> (<see cref="F18NodeCompilationService"/>)
   /// purely in software -- no serial port, no connected chip -- for <see cref="AssembleStandalone"/>
-  /// and the memory inspector's no-session disassembly to resolve tagged mnemonics against. Node 507's,
-  /// node 606's, and node 508's own RAM sources all (transitively, for 508 -&gt; 507 -&gt; 607) import
-  /// node 607 (<c># 607 import</c>/<c># 507 import</c>), so compiling any one of them would already
-  /// pull the chain's compile in as an import -- but only that node's OWN
+  /// and the memory inspector's no-session disassembly to resolve tagged mnemonics against. 507's,
+  /// 606's, 508's, 506's, and 407's own RAM sources all (transitively, for 508/506/407 -&gt; 507 -&gt;
+  /// 607) import node 607 (<c># 607 import</c>/<c># 507 import</c>), so compiling any one of them
+  /// would already pull the chain's compile in as an import -- but only that node's OWN
   /// <see cref="F18NodeCompilationResult"/> comes back from that call, so each node in the list is
-  /// still compiled and stored individually here to end up with all four in <c>compiledRam</c>.
+  /// still compiled and stored individually here to end up with all six in <c>compiledRam</c>.
   /// Self-describing opcodes (<c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>, and node 606's own eight
   /// enter/adjust/stl/stp/ldl/ldp/lal/lap ops) never need this at all. Returns an empty table and a
   /// descriptive error (never throws) naming whichever node's source doesn't currently compile.
@@ -578,6 +590,15 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     StatusText = "Restored the original test Assembly Code.";
   }
 
+  /// <summary>
+  /// Refreshes <see cref="MemoryViewText"/> starting at <see cref="MemoryBaseText"/>. The number of
+  /// words shown is <see cref="MemoryViewWordCount"/> or however many words the CURRENTLY loaded
+  /// program actually occupies, whichever is larger -- so opening the CVM Debugger with a short
+  /// program (or none) still gets a reasonable-sized view, but a longer one like
+  /// <see cref="CvmDebuggerDefaultProgram"/>'s own 157 words is never silently truncated the way a
+  /// fixed 64-word window would. Recomputed on every call (not cached) since the loaded program can
+  /// change between calls (Assemble, Start).
+  /// </summary>
   private void RefreshMemoryView()
   {
     if (!TryParseAddress(MemoryBaseText, out int baseAddress))
@@ -586,7 +607,9 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       return;
     }
 
-    int count = Math.Min(MemoryViewWordCount, CvmSimulatedSram.WordCapacity - baseAddress);
+    int loadedProgramLength = _session?.Program.Count ?? _standaloneProgram.Count;
+    int desiredWordCount = Math.Max(MemoryViewWordCount, loadedProgramLength);
+    int count = Math.Min(desiredWordCount, CvmSimulatedSram.WordCapacity - baseAddress);
     if (count <= 0)
     {
       MemoryViewText = $"{DescribeFlatAddress(baseAddress)} is at or past the end of the simulated SRAM.";
