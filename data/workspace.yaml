@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-29T21:30:27.0812453
-      utcDateTime: 2026-08-29T21:30:27.0812453Z
-      localDateTime: 2026-08-29T23:30:27.0812453+02:00
-      date: 2026-08-29T00:00:00.0000000
-      day: 29
-      dayOfWeek: Saturday
-      dayOfYear: 241
-      hour: 21
-      millisecond: 81
-      microsecond: 245
-      nanosecond: 300
-      minute: 30
+      dateTime: 2026-08-30T06:33:12.1064432
+      utcDateTime: 2026-08-30T06:33:12.1064432Z
+      localDateTime: 2026-08-30T08:33:12.1064432+02:00
+      date: 2026-08-30T00:00:00.0000000
+      day: 30
+      dayOfWeek: Sunday
+      dayOfYear: 242
+      hour: 6
+      millisecond: 106
+      microsecond: 443
+      nanosecond: 200
+      minute: 33
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 27
-      ticks: 639236358270812453
-      utcTicks: 639236358270812453
-      timeOfDay: 21:30:27.0812453
+      second: 12
+      ticks: 639236683921064432
+      utcTicks: 639236683921064432
+      timeOfDay: 06:33:12.1064432
       year: 2026
   portB: 
   portC:
@@ -10893,7 +10893,7 @@ projects:
           2* -if // 1010_101?_????_????
           2* -if // 1010_1011_????_????
           r> off
-        : st ( a-) A[ /r@ ]] , !b A[ @p /1! ; ]] lit @p !b !b main ;
+        : st ( a-) A[ /r@ ]] lit !b A[ @p /1! ; ]] lit !b !b main ;
           then  // 1010_1010_????_????
           r> noff st ;
           then // 1010_100?_????_????
@@ -11041,9 +11041,9 @@ projects:
 
         : /push .loc ( sw-s) >r -1 . + r> over
 
-        : /1! 1
+        : /1! ( swa) 1
 
-        : /! ( wab) inv !b inv !b !b ;
+        : /! ( swab) inv !b inv !b !b ;
 
         : 'lit ( s-s) /next
 
@@ -11879,6 +11879,8 @@ projects:
       push
 
       enter 5
+
+      ldl 1
 
       slit 11
 

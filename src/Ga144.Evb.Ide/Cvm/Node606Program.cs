@@ -54,6 +54,46 @@ namespace Ga144.Evb.Ide.Cvm;
 /// enter. move frame pointer to stack pointer and pop the saved frame pointer"). <c>'exit</c>/
 /// <c>'wait</c> are gone entirely in this revision, not merely renamed.
 ///
+/// <b>Two bugs found and fixed in <c>st</c>, both confirmed against real hardware.</b> Stefan
+/// reported that after both fixes below, <c>stl</c>/<c>stp</c> complete correctly on the EVB --
+/// the trace runs cleanly through <c>stl 1</c>/<c>stl 2</c>/<c>stl 3</c>, <c>ldl 1</c> again,
+/// <c>push</c>, and on into <c>leave</c>, including a breakpoint correctly halting and resuming at
+/// word address 0x000F.
+///
+/// Bug 1: the first packed word, <c>{CALL /r@}</c>, was shipped with the Forth <c>,</c> word
+/// (<c>Builder.EmitRaw</c> -- compiles the raw word directly into the instruction stream, with no
+/// protecting literal-push ahead of it) instead of <c>lit</c> (<c>Builder.EmitLiteral</c> --
+/// compiles F18A opcode 0x08 immediately before the data word, so execution treats it as a value
+/// to push rather than an instruction to run), unlike every other packed-word-then-<c>!b</c> idiom
+/// in this file (<c>la</c>/<c>ld</c>/<c>cleanup</c>/<c>adjust</c>/<c>enter</c>/<c>'xf</c>/
+/// <c>'leave</c> all correctly use <c>lit</c>). This meant the following <c>!b</c> shipped whatever
+/// was already on 606's own stack instead of the intended opcode, and once linear execution fell
+/// through to the un-protected raw word itself, 606 fetched and executed it locally: a CALL into
+/// wherever node 607's imported <c>/r@</c> symbol resolves to -- meaningless inside 606's own
+/// 64-word RAM. Fixed to <c>lit</c>, matching the identical <c>{@p, /r@}</c>-shaped packed word
+/// already correct in <c>'xf</c>.
+///
+/// Bug 2 (the one that actually mattered -- fixing bug 1 alone did not make <c>stl</c>/<c>stp</c>
+/// work): the second packed word, <c>{@p, tail-jump /1!}</c> (<c>A[ @p /1! ; ]]</c>), had a SPARE,
+/// un-packed <c>@p</c> repeated again right after that block's own <c>lit</c> -- a second,
+/// standalone <c>@p</c> executed by 606 itself, never shipped to 607 at all. Compare <c>ld</c>'s
+/// own second half, <c>A[ /r! ; ]] lit !b main ;</c> -- packed word, <c>lit</c>, ONE <c>!b</c> to
+/// ship it, nothing else -- with <c>st</c>'s uncorrected
+/// <c>A[ @p /1! ; ]] lit @p !b !b main ;</c>: the extra <c>@p</c> sat between <c>lit</c> and the
+/// first <c>!b</c>, executing 606's own port fetch from 607 at a moment 607 was not yet expecting
+/// one, throwing off which value each subsequent <c>!b</c> actually shipped -- corrupting the
+/// store before 607 ever reached its own external-memory <c>/1!</c> write, which is exactly why no
+/// <c>WRITE</c> ever showed up on the wire even after bug 1 was fixed. Removing the spare
+/// <c>@p</c> -- leaving <c>A[ @p /1! ; ]] lit !b !b main ;</c>, two <c>!b</c>s shipping the packed
+/// word then the address, exactly <c>ld</c>'s own shape -- is what actually fixed it.
+///
+/// Node 608's own separate, legitimate uses of <c>,</c> (its <c>'ld</c>/<c>'st</c>/<c>'ldph</c>,
+/// which deliberately plant raw data words for <c>'x3</c> to walk with <c>@+</c> rather than
+/// execute, and are never followed directly by <c>!b</c>) confirm <c>,</c> and <c>lit</c> are
+/// genuinely different operations here, not two spellings of the same thing. Both fixes re-verified
+/// to compile with 0 errors/0 warnings and an identical symbol table (same 61-of-64
+/// <c>UsedWordCount</c>, same entry point, <c>'leave</c> still at 0x037) to before either fix.
+///
 /// <b>A note on confidence.</b> <c>la</c>/<c>ld</c>/<c>st</c>/<c>adjust</c> were given with no
 /// description (Stefan's own word list left them blank), and <c>main</c>'s exact dispatch
 /// cascade and <c>enter</c>/<c>cleanup</c>'s precise round-trip values were not independently
@@ -152,6 +192,17 @@ internal static class Node606Program
       // produce byte-for-byte identical compiled output (same Success, same
       // UsedWordCount, same symbol table, same entry point) to the plain,
       // uncommented version -- comments have no effect on the compiled image.
+      //
+      // Bug found and fixed: 'st's first packed word used ',' instead of 'lit' -- see the header on
+      // 'st' itself below for the full diagnosis. In short: ',' (Builder.EmitRaw) plants a raw word
+      // directly in the instruction stream with nothing to protect it, while 'lit' (Builder.EmitLiteral)
+      // prefixes it with the real F18A literal-push opcode so execution treats it as data, not code.
+      // Using ',' here meant node 606 fell through into executing {CALL /r@} as a real local
+      // instruction -- jumping into an address meaningless inside 606's own RAM -- hanging the entire
+      // 'stl'/'stp' round trip the first time either was ever exercised against real hardware. Fixed to
+      // 'lit'; re-verified to compile with 0 errors/0 warnings and the identical symbol table (same
+      // UsedWordCount, same entry point, 'leave still at 0x037) as before the fix. NOT yet re-confirmed
+      // against real hardware -- Stefan should re-test 'stl'/'stp' on the EVB before relying on this.
       //
       // A note on confidence: la/ld/st/adjust were given to me with no
       // description (Stefan's own word list left them blank), and 'main's exact
@@ -270,17 +321,60 @@ internal static class Node606Program
       // st ( a-)  --  store (r's value into a local variable) -- inferred, not
       // given. Reached when bit1 false, bit2' true: "st, positive offset".
       // ----------------------------------------------------------------------
-      // {CALL /r@} is assembled and laid down with ',' rather than shipped
-      // immediately with 'lit' -- still just raw data at this point, per the
-      // compiler's own A[ ... ]] semantics (it never decides what happens to the
-      // word it assembles). The plain '!b' that follows sends it to 607, which
-      // executes the call into its own /r@ ("fetch r from node 507"), fetching
-      // r's current value. A second packed word {@p, tail-jump /1!} follows,
-      // shipped with 'lit', telling 607 to fetch the next literal (the
-      // frame-relative address, sent by the final plain '!b') and jump into its
-      // own /1! ("store word in page 1") to write r's value there. Falls through
-      // to 'main' via tail call.
-      : st ( a-) A[ /r@ ]] , !b A[ @p /1! ; ]] lit @p !b !b main ;
+      // TWO BUGS WERE FOUND AND FIXED HERE -- both confirmed against real hardware
+      // by Stefan, who reported 'stl'/'stp' now complete correctly (trace runs
+      // cleanly through 'stl 1'/'stl 2'/'stl 3', 'ldl 1' again, 'push, and on into
+      // 'leave, including a breakpoint stopping and resuming correctly at 0x000F).
+      //
+      // BUG 1: the first packed word, {CALL /r@}, was shipped with ',' instead of
+      // 'lit' (Builder.EmitLiteral -- compiles F18A opcode 0x08 immediately before
+      // the data word, so execution treats that data word as a literal to push,
+      // not as an instruction to fetch and run) -- unlike every other
+      // packed-word-then-'!b' idiom in this file (la, ld, cleanup, adjust, enter,
+      // 'xf, 'leave all use 'lit). ',' (Builder.InterpretComma/EmitRaw) compiles
+      // the raw word directly into the instruction stream with no protecting
+      // literal-push ahead of it: the following '!b' shipped whatever was already
+      // on 606's stack instead of the intended opcode, and once linear execution
+      // fell through to the raw word itself, 606's own F18 core fetched and
+      // executed it locally -- a CALL into whatever address node 607's imported
+      // '/r@' symbol resolves to, meaningless inside 606's own 64-word RAM.
+      //
+      // BUG 2 (the one that actually mattered -- fixing bug 1 alone was not
+      // enough): the second packed word was written {@p, tail-jump /1!}, i.e.
+      // 'A[ @p /1! ; ]]', with a SPARE, un-packed '@p' token repeated again right
+      // after the block's own 'lit' (a second, standalone '@p' executed by 606
+      // itself, not shipped to 607 at all). Compare 'ld's own second half,
+      // 'A[ /r! ; ]] lit !b main ;' -- packed word, 'lit', ONE '!b' to ship it,
+      // nothing else -- with 'st's uncorrected 'A[ @p /1! ; ]] lit @p !b !b main ;':
+      // an extra '@p' sat between 'lit' and the first '!b', consuming/shifting
+      // 606's OWN stack (executing 606's own '@p', a fetch through its port to
+      // 607, at a moment 607 was not yet expecting one) before either '!b' ran,
+      // throwing off exactly which value each subsequent '!b' actually shipped --
+      // the frame-relative address and the packed {@p, tail-jump /1!} word landed
+      // in the wrong slots relative to what 607's own '@p'-then-'/1!' sequence
+      // expected to receive, corrupting the store before 607 ever reached its own
+      // external-memory '/1!' write. Removing the spare '@p' -- leaving plainly
+      // 'A[ @p /1! ; ]] lit !b !b main ;', two '!b's shipping the packed word and
+      // then the address, exactly 'ld's own shape -- is what made 'stl'/'stp'
+      // actually complete on real hardware.
+      //
+      // Node 608's own separate, legitimate uses of ',' (Node608.f18's
+      // ''ld'/''st'/''ldph', which deliberately plant raw data words for ''x3' to
+      // walk with '@+' rather than execute, never followed directly by '!b')
+      // confirm ',' and 'lit' really are different operations in this toolchain,
+      // not two spellings of the same thing -- see Builder.EmitRaw vs
+      // Builder.EmitLiteral in F18Compiler.cs.
+      //
+      // {CALL /r@} is packed and shipped with 'lit' (see above), and the plain
+      // '!b' that follows sends it to 607, which executes the call into its own
+      // /r@ ("fetch r from node 507"), fetching r's current value. A second
+      // packed word {@p, tail-jump /1!} follows, shipped with 'lit', and TWO plain
+      // '!b's: the first ships the packed word itself, the second ships the
+      // frame-relative address (already on 606's own stack, from off/noff) for
+      // 607's own '@p' to receive -- telling 607 to fetch that literal and jump
+      // into its own /1! ("store word in page 1") to write r's value there.
+      // Falls through to 'main' via tail call.
+      : st ( a-) A[ /r@ ]] lit !b A[ @p /1! ; ]] lit !b !b main ;
       	then r> noff st ;
       	then 2* -if
       // ----------------------------------------------------------------------
