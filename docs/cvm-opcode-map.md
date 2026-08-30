@@ -34,7 +34,7 @@ Two different kinds of opcode appear here:
 | 803b | - | 607 | nop | no operation |
 | 9000 | 000-7ff (signed offset, two's complement) | 607 | br | branch by a signed offset, relative to the word after this one |
 | 9800 | 000-7ff (signed offset, two's complement) | 607 | ifbr | conditional branch by a signed offset, relative to the word after this one |
-| a037 | - | 606 | leave | node 606's frame-pointer cluster signals it is done and waits for the next dispatch |
+| a037 | - | 606 | leave | leave the stack frame, restoring the stack to its state before the last enter |
 | a800 | 00-ff (unsigned count) | 606 | enter | enter a stack frame, reserving space for locals |
 | a900 | 00-ff (unsigned offset) | 606 | adjust | adjust the current stack frame |
 | aa00 | 00-ff (unsigned offset) | 606 | stl | store to a local at a frame-relative offset |
