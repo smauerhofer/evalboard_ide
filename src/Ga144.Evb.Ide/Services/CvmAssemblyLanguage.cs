@@ -22,7 +22,8 @@ namespace Ga144.Evb.Ide.Services;
 /// 'pop, 'push on node 607; 'usl, 'ssr, 'usr, '+, '-, 'and, 'xor, 'or, 'inv, 'inc, 'dec on node 507;
 /// 'leave on node 606; 'eq, 'eq0, 'false, 'true, 'ne, 'ne0, 'ugt, 'gt, 'gt0, 'ge, 'ge0, 'ule, 'le,
 /// 'le0, 'lt, 'lt0, 'ult, 'uge, 'mul2, 'udiv2, 'div2, 'abs, 'negate, 'xt, 'ldt, 'stt, 'bitcnt on node
-/// 508; 'zext, 'addc, 'ldd, 'std, 'xd, 'mul2d, 'div2d, 'sext, 'umuld on node 506) -- those tick-names
+/// 508; 'zext, 'addc, 'ldd, 'std, 'xd, 'mul2d, 'div2d, 'sext, 'umuld on node 506; 'xpt, 'out, 'in,
+/// 'ldhi, 'ldlo, 'sthi, 'stlo on node 407) -- those tick-names
 /// are each node's own interpreter labels and won't change; the mnemonics here are what a person
 /// reads and writes, and the two are free to diverge (as pushlit already has from 'plit).
 ///
@@ -36,9 +37,11 @@ namespace Ga144.Evb.Ide.Services;
 /// which node's compile to resolve it against, so <c>nop</c>/<c>pushlit</c>/<c>push</c>/<c>pop</c>/
 /// <c>ret</c> resolve against node 607, <c>usl</c>/<c>ssr</c>/<c>usr</c>/<c>add</c>/<c>sub</c>/
 /// <c>and</c>/<c>xor</c>/<c>or</c>/<c>inv</c>/<c>inc</c>/<c>dec</c> resolve against node 507,
-/// <c>leave</c> resolves against node 606, and node 508's 27 comparison/arithmetic ops (<c>eq</c>
+/// <c>leave</c> resolves against node 606, node 508's 27 comparison/arithmetic ops (<c>eq</c>
 /// through <c>bitcnt</c>, see <see cref="Node508TagBits"/>'s own remarks for the full list) resolve
-/// against node 508.
+/// against node 508, node 506's nine register-d/extended-precision ops (<c>zext</c> through
+/// <c>umuld</c>) resolve against node 506, and node 407's seven register-w/port ops (<c>xpt</c>
+/// through <c>stlo</c>) resolve against node 407.
 ///
 /// Shapes whose <see cref="CvmInstructionSet.CvmInstructionShape.Encoding"/> is anything other than
 /// <see cref="CvmInstructionSet.CvmOperandEncoding.None"/>/<see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>
@@ -57,11 +60,11 @@ namespace Ga144.Evb.Ide.Services;
 /// own <see cref="Instructions"/>/<see cref="NodeSymbolByMnemonic"/> pairing entirely (see
 /// <see cref="Assemble"/>'s own remarks) -- so <see cref="Instructions"/> itself still omits all of
 /// them, since they would have nothing to pair them with, without that meaning they can't be assembled.
-/// Extending this file to the remaining primitive nodes (608/707/407) for the TAGGED mnemonics they
+/// Extending this file to the remaining primitive nodes (608/707) for the TAGGED mnemonics they
 /// might one day expose remains separate, later work -- 607, 507, 606 (for <c>leave</c> specifically
 /// -- its other eight ops are self-describing, not tagged), 508 (all 27 of its ops are tagged, none
-/// self-describing), and now 506 (all nine of its ops are tagged the same way) are simply the nodes
-/// that have tagged mnemonics of their own today.
+/// self-describing), and now 506 and 407 (all nine of node 506's ops, and all seven of node 407's,
+/// are tagged the same way) are simply the nodes that have tagged mnemonics of their own today.
 ///
 /// Both directions -- <see cref="BuildDecodeTable"/> for disassembly and <see cref="BuildEncodeTable"/>/
 /// <see cref="Assemble"/> for assembly -- are built from the single <see cref="Instructions"/> table,
@@ -128,29 +131,42 @@ internal static class CvmAssemblyLanguage
   // 507's own two ALU tags and node 508's tag above.
   private const int Node506TagBits = 0xE000;
 
+  // Node 407's own tag for its seven register-w/port ops: the "register w" opcode class node 507's own
+  // 'main' dispatch forwards wholesale to node 407 (Node507.f18's own "1111_????_????_????" branch,
+  // "-d-- a leave ;"), confirmed in this project's own cvm-toolchain-design.md as 0xF000-0xFFFF -- the
+  // top-most quarter of the same 4-way "11??" split that also carries node 506's 0xE000-0xE7FF and node
+  // 508's 0xE800-0xEFFF ranges (node 407's "1111" branch is tested before the "1110" split into those
+  // two, per 507's own bit-test cascade). Like nodes 506 and 508 (and unlike node 606's 8-bit-masked
+  // 0xA000-0xA0FF), node 407's own 'main' does a direct "ex" jump to whatever address it receives with
+  // no masking of its own -- the practical range actually produced is narrower still (node 407's RAM is
+  // 64 words), but the tag itself is the full 0xF000 high bits, same shape as node 506's and 508's tags
+  // above.
+  private const int Node407TagBits = 0xF000;
+
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
   // tag bits its opcode word must carry (see Node607TagBits/Node507UnaryTagBits/Node507BinaryTagBits/
-  // Node606TagBits/Node508TagBits/Node506TagBits above -- these are NOT all the same value). Every
-  // mnemonic in CvmInstructionSet.Instructions must have an entry here, or BuildDecodeTable/
-  // BuildEncodeTable simply won't find it in a live compile -- this is the one place that link, kept as
-  // a small, easy-to-audit map rather than folded back into the shared table (which has no notion of
-  // "node", "F18 symbol", or "tag" at all, on purpose: gaasm never needs any of them). Node 607's five
-  // original tagged mnemonics resolve against 607's own symbols (still defined in CvmMemoryProtocol,
-  // node 607's own wire-protocol convention); node 507's eleven ALU ops, node 606's own 'leave, node
-  // 508's 27 comparison/arithmetic ops, and node 506's nine register-d/extended-precision ops resolve
-  // against each node's own tick-named words (Node507Program/Node507.f18, Node606Program/Node606.f18,
-  // Node508Program/Node508.f18, Node506Program/Node506.f18), using the literal F18 symbol names
+  // Node606TagBits/Node508TagBits/Node506TagBits/Node407TagBits above -- these are NOT all the same
+  // value). Every mnemonic in CvmInstructionSet.Instructions must have an entry here, or
+  // BuildDecodeTable/BuildEncodeTable simply won't find it in a live compile -- this is the one place
+  // that link, kept as a small, easy-to-audit map rather than folded back into the shared table (which
+  // has no notion of "node", "F18 symbol", or "tag" at all, on purpose: gaasm never needs any of them).
+  // Node 607's five original tagged mnemonics resolve against 607's own symbols (still defined in
+  // CvmMemoryProtocol, node 607's own wire-protocol convention); node 507's eleven ALU ops, node 606's
+  // own 'leave, node 508's 27 comparison/arithmetic ops, node 506's nine register-d/extended-precision
+  // ops, and node 407's seven register-w/port ops resolve against each node's own tick-named words
+  // (Node507Program/Node507.f18, Node606Program/Node606.f18, Node508Program/Node508.f18,
+  // Node506Program/Node506.f18, Node407Program/Node407.f18), using the literal F18 symbol names
   // straight from that source rather than adding node-specific constants to CvmMemoryProtocol, which is
   // documented as node 607's own convention. The eight binary ALU ops (usl/ssr/usr/add/sub/and/xor/or)
   // and three unary ones (inv/inc/dec) are split per Node507.f18's own 'main' dispatch comments -- see
   // Node507BinaryTagBits/Node507UnaryTagBits's own remarks. Node 606's own other eight ops
   // (enter/adjust/stl/stp/ldl/ldp/lal/lap) are deliberately absent from this map -- they are
   // self-describing (CvmOperandEncoding.EmbeddedUnsignedValue) and need no node/symbol pairing at all,
-  // exactly like call/br/ifbr/slit; see this class's own remarks for why. All 27 of node 508's ops and
-  // all nine of node 506's ops, by contrast, each share their own single flat tag (Node508TagBits,
-  // Node506TagBits respectively) -- both nodes' own 'main dispatches by a direct "ex" jump to whatever
-  // address it receives, not a bit cascade like node 606's, so there is no unary/binary-style split the
-  // way node 507 has.
+  // exactly like call/br/ifbr/slit; see this class's own remarks for why. All 27 of node 508's ops, all
+  // nine of node 506's ops, and all seven of node 407's ops, by contrast, each share their own single
+  // flat tag (Node508TagBits, Node506TagBits, Node407TagBits respectively) -- each of those nodes' own
+  // 'main dispatches by a direct "ex" jump to whatever address it receives, not a bit cascade like node
+  // 606's, so there is no unary/binary-style split the way node 507 has.
   private static readonly IReadOnlyDictionary<string, (int NodeCoordinate, string SymbolName, int Tag)> NodeSymbolByMnemonic =
       new Dictionary<string, (int NodeCoordinate, string SymbolName, int Tag)>(StringComparer.OrdinalIgnoreCase)
       {
@@ -207,6 +223,13 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DivideByTwoDoubleMnemonic] = (Node506Program.Coordinate, "'div2d", Node506TagBits),
         [CvmInstructionSet.SignExtendMnemonic] = (Node506Program.Coordinate, "'sext", Node506TagBits),
         [CvmInstructionSet.UnsignedMultiplyDoubleMnemonic] = (Node506Program.Coordinate, "'umuld", Node506TagBits),
+        [CvmInstructionSet.ExchangePortMnemonic] = (Node407Program.Coordinate, "'xpt", Node407TagBits),
+        [CvmInstructionSet.PortWriteMnemonic] = (Node407Program.Coordinate, "'out", Node407TagBits),
+        [CvmInstructionSet.PortReadMnemonic] = (Node407Program.Coordinate, "'in", Node407TagBits),
+        [CvmInstructionSet.LoadHighMnemonic] = (Node407Program.Coordinate, "'ldhi", Node407TagBits),
+        [CvmInstructionSet.LoadLowMnemonic] = (Node407Program.Coordinate, "'ldlo", Node407TagBits),
+        [CvmInstructionSet.StoreHighMnemonic] = (Node407Program.Coordinate, "'sthi", Node407TagBits),
+        [CvmInstructionSet.StoreLowMnemonic] = (Node407Program.Coordinate, "'stlo", Node407TagBits),
       };
 
   /// <summary>

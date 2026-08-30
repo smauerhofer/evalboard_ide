@@ -20,7 +20,10 @@ namespace Ga144.Cvm.Toolchain;
 /// register-d/extended-precision ops -- <c>zext</c>, <c>addc</c>, <c>ldd</c>, <c>std</c>, <c>xd</c>,
 /// <c>mul2d</c>, <c>div2d</c>, <c>sext</c>, <c>umuld</c> (tagged mnemonics exactly like <c>leave</c> and
 /// node 508's 27 ops, resolved against node 506's own live compile -- see
-/// <see cref="ZeroExtendMnemonic"/>'s own remarks)) and, for each, how
+/// <see cref="ZeroExtendMnemonic"/>'s own remarks)), plus node 407's seven register-w/port ops --
+/// <c>xpt</c>, <c>out</c>, <c>in</c>, <c>ldhi</c>, <c>ldlo</c>, <c>sthi</c>, <c>stlo</c> (tagged
+/// mnemonics exactly like node 506's and 508's ops, resolved against node 407's own live compile --
+/// see <see cref="ExchangePortMnemonic"/>'s own remarks)) and, for each, how
 /// many words it occupies once assembled, how its
 /// operand (if any) is encoded, and a stable numeric <see cref="CvmInstructionShape.Id"/>. This is the
 /// SHAPE of each instruction only -- for the tagged-dispatch mnemonics
@@ -41,8 +44,8 @@ namespace Ga144.Cvm.Toolchain;
 ///
 /// This table is the single source of truth shared by <see cref="CvmAssembler"/> here and by the IDE
 /// project's own disassembler (Ga144.Evb.Ide.Services.CvmAssemblyLanguage, which pairs each TAGGED
-/// mnemonic with its own node's live F18 symbol -- 607, 507, 606, 508, and now 506 all have at least
-/// one; 608/707/407 remain separate, later work; the self-describing mnemonics need no such pairing
+/// mnemonic with its own node's live F18 symbol -- 607, 507, 606, 508, 506, and now 407 all have at
+/// least one; 608/707 remain separate, later work; the self-describing mnemonics need no such pairing
 /// and are recognized directly by <see cref="TryDescribeSelfDecodingWord"/> instead). Adding a new CVM
 /// opcode is a one-line change here; the IDE project references this project specifically so both
 /// sides of the toolchain can never drift apart on what the instruction set is.
@@ -170,6 +173,28 @@ public static class CvmInstructionSet
   public const string DivideByTwoDoubleMnemonic = "div2d";
   public const string SignExtendMnemonic = "sext";
   public const string UnsignedMultiplyDoubleMnemonic = "umuld";
+
+  // Node 407's register-w/port ops, added per Stefan's node 407 source and the same naming rule he
+  // gave for nodes 508/506 ("every word that begins with a ' is an opcode for the CVM with the
+  // mnemonic using the same name without the leading '"). Every one of these seven is shaped exactly
+  // like node 506's and 508's ops -- a single bare TAGGED opcode word (CvmOperandEncoding.None), never
+  // self-describing: node 407's own 'main' receives a dispatch address directly over the port and jumps
+  // straight to it ("A[ drop !p ]] lit !b @b >r ex"), so each named word's real opcode is simply node
+  // 407's own confirmed opcode-class tag (0xF000-0xFFFF, "register w", per this project's own
+  // cvm-toolchain-design.md) OR'd with wherever that word lands in node 407's own compiled RAM,
+  // resolved only against a live compile, exactly like node 506's and 508's ops. None of the seven takes
+  // an assembled operand: 'xpt/'out/'in act on node 407's own A (which holds a live port address on
+  // this node, not a data value) and the plain F18A '@'/'!' opcodes; 'ldhi/'ldlo/'sthi/'stlo move an
+  // 18-bit port value's two halves to and from node 507's register r, all via values already on the
+  // stack or already relayed over the port by the time 'main dispatches to it -- never a literal baked
+  // into the instruction word itself.
+  public const string ExchangePortMnemonic = "xpt";
+  public const string PortWriteMnemonic = "out";
+  public const string PortReadMnemonic = "in";
+  public const string LoadHighMnemonic = "ldhi";
+  public const string LoadLowMnemonic = "ldlo";
+  public const string StoreHighMnemonic = "sthi";
+  public const string StoreLowMnemonic = "stlo";
 
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
@@ -428,6 +453,13 @@ public static class CvmInstructionSet
     new(Id: 62, DivideByTwoDoubleMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 63, SignExtendMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 64, UnsignedMultiplyDoubleMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 65, ExchangePortMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 66, PortWriteMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 67, PortReadMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 68, LoadHighMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 69, LoadLowMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 70, StoreHighMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 71, StoreLowMnemonic, 1, CvmOperandEncoding.None),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

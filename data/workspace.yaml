@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-30T07:11:27.1080419
-      utcDateTime: 2026-08-30T07:11:27.1080419Z
-      localDateTime: 2026-08-30T09:11:27.1080419+02:00
+      dateTime: 2026-08-30T08:33:26.5528807
+      utcDateTime: 2026-08-30T08:33:26.5528807Z
+      localDateTime: 2026-08-30T10:33:26.5528807+02:00
       date: 2026-08-30T00:00:00.0000000
       day: 30
       dayOfWeek: Sunday
       dayOfYear: 242
-      hour: 7
-      millisecond: 108
-      microsecond: 41
-      nanosecond: 900
-      minute: 11
+      hour: 8
+      millisecond: 552
+      microsecond: 880
+      nanosecond: 700
+      minute: 33
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 27
-      ticks: 639236706871080419
-      utcTicks: 639236706871080419
-      timeOfDay: 07:11:27.1080419
+      second: 26
+      ticks: 639236756065528807
+      utcTicks: 639236756065528807
+      timeOfDay: 08:33:26.5528807
       year: 2026
   portB: 
   portC:
@@ -9835,6 +9835,8 @@ projects:
     - coordinate: 407
       enabled: true
       sourceCode: >-
+        ( cvm in/out support, 1111_????_????_????)
+
         # 507 import
 
         # 0 org
@@ -9860,7 +9862,7 @@ projects:
 
         : r@ ( -w) A[ a !p ]] lit !b @b ;
 
-        : 'hi@ dup sr16
+        : 'ldhi dup sr16
 
         : r! ( w) A[ @p a! ]] lit !b !b ;
 
@@ -9870,11 +9872,11 @@ projects:
 
         : 'in @ ;
 
-        : 'lo@ dup r! ;
+        : 'ldlo dup r! ;
 
-        : 'hi! xffff and r@ sl16 xor ;
+        : 'sthi xffff and r@ sl16 xor ;
 
-        : 'lo! x30000 and r@ xor ;
+        : 'stlo x30000 and r@ xor ;
 
         : spop ( -w) A[ s/pop ]] lit !b A[ !p ]] lit !b @b ;
 
@@ -9888,13 +9890,13 @@ projects:
 
         'in  reads 18 bit value from port.
 
-        'hi@  moves hi 2 bits from value to R.
+        'ldhi  moves hi 2 bits from value to R.
 
-        'lo@  moves lo 16 bit from value to R.
+        'ldlo  moves lo 16 bit from value to R.
 
-        'hi!  moves 2 bits from R to hi value.
+        'sthi  moves 2 bits from R to hi value.
 
-        'lo!  moves 16 bits from R to lo value.
+        'stlo  moves 16 bits from R to lo value.
 
         )
       ramWords:
@@ -10165,7 +10167,7 @@ projects:
     - coordinate: 506
       enabled: true
       sourceCode: >-
-        ( cvm2 32 bit operations, 1110_0???_????_????)
+        ( cvm node 506. 32 bit operations, 1110_0???_????_????)
 
 
         # 507 import
@@ -10309,7 +10311,7 @@ projects:
     - coordinate: 507
       enabled: true
       sourceCode: >
-        ( node 507 second CVM node, opcode 0xc??? 0xd??? 0xe??? 0xf??? )
+        ( CVM node 507 second dispatch node, 11??_????_????_???? )
 
         # 607 import
 
@@ -10516,7 +10518,7 @@ projects:
     - coordinate: 508
       enabled: true
       sourceCode: >-
-        ( cvm2 comparison, 1110_1???_????_????)
+        ( cvm node 508. comparison, 1110_1???_????_????)
 
         # 507 import
 
@@ -10868,8 +10870,7 @@ projects:
     - coordinate: 606
       enabled: true
       sourceCode: >
-        (
-         node 606 frame pointer management.
+        ( CVM node 606. frame pointer management.
          register A contains the frame pointer.
          opcode pattern 1010_????_????_????
         )
@@ -11033,7 +11034,7 @@ projects:
     - coordinate: 607
       enabled: true
       sourceCode: >
-        ( node 607 main CVM node, opcode 0x8??? )
+        ( CVM node 607. main CVM node, ????_????_????_???? )
 
         # 0 org
 

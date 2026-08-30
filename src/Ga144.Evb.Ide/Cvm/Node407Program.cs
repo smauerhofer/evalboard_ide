@@ -107,6 +107,7 @@ internal static class Node407Program
   /// typo fixes (<c># 307 import</c>-&gt;<c># 507 import</c>, <c># up /b</c>-&gt;<c># down /b</c>).
   /// </summary>
   public const string Source = """
+      ( cvm in/out support, 1111_????_????_????)
       // ============================================================================
       // Node 407 -- CVM test-cluster register-w / port node (self-mapping: real
       // design node 407 and its test mirror are the same physical node, register w)
@@ -190,30 +191,62 @@ internal static class Node407Program
       // regardless of caller" trick (the same shape as node 506's csr16/c!, itself
       // modelled on 507's s/2put/s/put): 'sr16' has no ';' of its own and falls
       // straight into 'c!' immediately below it (masking to 2 bits after the
-      // shift). 'hi@' below CALLs 'sr16' (a genuine CALL, since sr16 was compiled
+      // shift). 'ldhi' below CALLs 'sr16' (a genuine CALL, since sr16 was compiled
       // much earlier); when sr16 falls into c! and c!'s own ';' fires, it pops
-      // the return address 'hi@'s OWN call pushed -- which is intrinsically the
-      // address of the word right after 'hi@'s single-word body, i.e. 'r!'s own
-      // start, exactly where 'hi@ would have landed anyway had it fallen through
-      // directly. Net effect: 'hi@ = dup, shift right 16, mask to 2 bits (via
+      // the return address 'ldhi's OWN call pushed -- which is intrinsically the
+      // address of the word right after 'ldhi's single-word body, i.e. 'r!'s own
+      // start, exactly where 'ldhi would have landed anyway had it fallen through
+      // directly. Net effect: 'ldhi = dup, shift right 16, mask to 2 bits (via
       // sr16/c!), then r!'s own store-into-507's-r logic, all in one call.
       //
       // No per-word descriptions were given for most of this drop; Stefan's own
-      // trailing comment block covers only 'xpt, 'out, 'in, 'hi@, 'lo@, 'hi!, and
-      // 'lo!. Everything else is inferred from the code, cross-checked against
+      // trailing comment block covers only 'xpt, 'out, 'in, 'ldhi, 'ldlo, 'sthi, and
+      // 'stlo. Everything else is inferred from the code, cross-checked against
       // the compiled addresses and against node 506/507/508's already-confirmed
       // idioms -- treat it with the same lower confidence as node 607's 'exec or
       // node 506's own word-by-word notes.
+      //
+      // ----------------------------------------------------------------------
+      // Revision note (this drop, per Stefan: "every word that begins with a '
+      // is an opcode. the mnemonic is the same name without the leading '")
+      // ----------------------------------------------------------------------
+      // Four of this node's own words are RENAMED from the earlier drop below --
+      // their compiled bodies (and therefore their compiled addresses) are byte-
+      // for-byte unchanged, only the names differ, to match this node's own
+      // official cvm mnemonic table (this opcode class is tagged
+      // "1111_????_????_????", per this file's own opening comment line -- the
+      // same convention node 506/508 already carry as their own first line):
+      //     'hi@ -> 'ldhi    (moves hi 2 bits from value to R)
+      //     'lo@ -> 'ldlo    (moves lo 16 bit from value to R)
+      //     'hi! -> 'sthi    (moves 2 bits from R to hi value)
+      //     'lo! -> 'stlo    (moves 16 bits from R to lo value)
+      // 'xpt, 'out, and 'in are unchanged. Stefan's own descriptions for all
+      // seven were already confirmed in the prior drop (see each word's own
+      // comment below) and carry over unchanged to their new names -- only the
+      // names moved, nothing about what any of the seven actually does.
       //
       // Verified: this source (with the import and B-port typos corrected, both
       // confirmed by Stefan) compiles against the real F18Compiler with 0 errors
       // (Success=true), importing node 507's exported symbols via '# 507 import'.
       // 38 of 64 RAM words used, entry point 'main' at word address 0x000,
-      // InitialA=0x175 ("left"), InitialB=0x115 ("down"), InitialStack=[0]. Two
-      // informational warnings are expected and benign: F18C050 for both 'main'
-      // and 'leave', each redefining a name imported from node 507 -- both nodes
-      // define their own independent pair, and 407 never needs to call INTO
-      // 507's versions by name, so the shadowing is intentional.
+      // InitialA=0x175 ("left"), InitialB=0x115 ("down"), InitialStack=[0] --
+      // byte-for-byte identical to the earlier (pre-rename) drop's own compiled
+      // words, confirming this revision's rename touched only symbol names, never
+      // any compiled code. Two informational warnings are expected and benign:
+      // F18C050 for both 'main' and 'leave', each redefining a name imported from
+      // node 507 -- both nodes define their own independent pair, and 407 never
+      // needs to call INTO 507's versions by name, so the shadowing is
+      // intentional.
+      //
+      // Now that this node's own opcode tag is confirmed (node 507's own 'main
+      // dispatch forwards the whole "1111_????_????_????" block here unmasked,
+      // via its own "-d--" branch -- see Node507.f18's own 'main' comments, and
+      // this project's own cvm-toolchain-design.md), all seven of this node's own
+      // tick-prefixed op-words -- 'xpt, 'out, 'in, 'ldhi, 'ldlo, 'sthi, 'stlo --
+      // are registered as tagged CVM instructions in
+      // Ga144.Cvm.Toolchain.CvmInstructionSet (Ids 65-71) and
+      // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.NodeSymbolByMnemonic
+      // (Node407TagBits = 0xF000), the same way node 506's and 508's ops are.
       // ============================================================================
 
       # 507 import
@@ -271,7 +304,7 @@ internal static class Node407Program
       // 'for'/'unext' loops 8 times (7 for), each pass doing '2/ 2/' -- 16
       // right shifts total. Has no ';' of its own: falls straight through into
       // 'c!' immediately below, so calling sr16 ALSO runs c!'s "3 and" mask
-      // before finally returning -- see the header note on 'hi@'s own use of
+      // before finally returning -- see the header note on 'ldhi's own use of
       // this.
       : sr16 ( w-w) 7 for 2/ 2/ unext
 
@@ -279,8 +312,8 @@ internal static class Node407Program
       // c!  --  mask to the low 2 bits (inferred)
       // ----------------------------------------------------------------------
       // '3 and' keeps only bits 0-1. Reached both as the fall-through tail of
-      // sr16 above and (implicitly, via 'hi@'s own CALL to sr16) as part of
-      // 'hi@'s own dispatch below.
+      // sr16 above and (implicitly, via 'ldhi's own CALL to sr16) as part of
+      // 'ldhi's own dispatch below.
       : c! 3 and ;
 
       // ----------------------------------------------------------------------
@@ -299,18 +332,19 @@ internal static class Node407Program
       : r@ ( -w) A[ a !p ]] lit !b @b ;
 
       // ----------------------------------------------------------------------
-      // 'hi@  --  moves hi 2 bits from value to R (Stefan's own description)
+      // 'ldhi  --  moves hi 2 bits from value to R (Stefan's own description;
+      // renamed from 'hi@ -- see the revision note above)
       // ----------------------------------------------------------------------
       // 'dup' keeps a copy of the 18-bit value for the caller (or a later
-      // 'lo@ call); the CALL to 'sr16 shifts the duplicate right 16 bits and,
+      // 'ldlo call); the CALL to 'sr16 shifts the duplicate right 16 bits and,
       // via sr16's own fall-through into c!, masks it to 2 bits -- isolating
       // exactly the value's high 2 bits. Has no ';' of its own: because sr16's
       // call chain (through c!'s own ';') returns to precisely the next word
       // after this one-word body -- which is 'r!'s own start, immediately
-      // below -- calling 'hi@ continues directly into r!'s "store into 507's
+      // below -- calling 'ldhi continues directly into r!'s "store into 507's
       // r" logic (see the header note on this address-collision reuse). Net
       // effect: extracts the high 2 bits and stores them into r, in one call.
-      : 'hi@ dup sr16
+      : 'ldhi dup sr16
 
       // ----------------------------------------------------------------------
       // r! ( w)  --  write 507's own register r (inferred, same relay idiom as
@@ -319,7 +353,7 @@ internal static class Node407Program
       // Ships {@p, a!} to 507: 507's own '@p' fetches the literal w this
       // word's own trailing '!b' carried across, and 'a!' stores it into 507's
       // A (r). The write-side counterpart of r@ above; also reached as the
-      // implicit tail of 'hi@ above.
+      // implicit tail of 'ldhi above.
       : r! ( w) A[ @p a! ]] lit !b !b ;
 
       // ----------------------------------------------------------------------
@@ -349,16 +383,18 @@ internal static class Node407Program
       : 'in @ ;
 
       // ----------------------------------------------------------------------
-      // 'lo@  --  moves lo 16 bit from value to R (Stefan's own description)
+      // 'ldlo  --  moves lo 16 bit from value to R (Stefan's own description;
+      // renamed from 'lo@ -- see the revision note above)
       // ----------------------------------------------------------------------
       // 'dup' keeps a copy of the value for the caller; 'r!' (above) stores the
-      // duplicate into 507's r. Unlike 'hi@, no shifting/masking is applied
+      // duplicate into 507's r. Unlike 'ldhi, no shifting/masking is applied
       // here -- the value's low 16 bits are simply what's moved, with any
-      // excess high bits left for a separate 'hi@ transfer to handle.
-      : 'lo@ dup r! ;
+      // excess high bits left for a separate 'ldhi transfer to handle.
+      : 'ldlo dup r! ;
 
       // ----------------------------------------------------------------------
-      // 'hi!  --  moves 2 bits from R to hi value (Stefan's own description)
+      // 'sthi  --  moves 2 bits from R to hi value (Stefan's own description;
+      // renamed from 'hi! -- see the revision note above)
       // ----------------------------------------------------------------------
       // 'xffff and' masks whatever is on the stack (an existing low-16-bit
       // value) to 16 bits, clearing any stray high bits; 'r@' fetches 507's r
@@ -366,18 +402,19 @@ internal static class Node407Program
       // (bits 16-17) position; 'xor' merges them into the masked value's now-
       // clear high bits. Net effect: builds an 18-bit value from an existing
       // low half plus 2 high bits supplied via r.
-      : 'hi! xffff and r@ sl16 xor ;
+      : 'sthi xffff and r@ sl16 xor ;
 
       // ----------------------------------------------------------------------
-      // 'lo!  --  moves 16 bits from R to lo value (Stefan's own description)
+      // 'stlo  --  moves 16 bits from R to lo value (Stefan's own description;
+      // renamed from 'lo! -- see the revision note above)
       // ----------------------------------------------------------------------
       // 'x30000 and' masks whatever is on the stack to JUST its high 2 bits
       // (bits 16-17), clearing the low 16; 'r@' fetches 507's r (the new low-16
       // value); 'xor' merges it into the masked value's now-clear low bits (the
       // same shift-in-via-XOR idiom used throughout this cluster). Net effect:
       // builds an 18-bit value from an existing high half plus a new low 16
-      // bits supplied via r -- the complement of 'hi! above.
-      : 'lo! x30000 and r@ xor ;
+      // bits supplied via r -- the complement of 'sthi above.
+      : 'stlo x30000 and r@ xor ;
 
       // ----------------------------------------------------------------------
       // spop ( -w)  --  pop a value relayed from 607's own extended memory, via
