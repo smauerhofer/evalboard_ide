@@ -36,9 +36,10 @@ namespace Ga144.Evb.Ide.Cvm;
 /// against this project's real <c>Compiler/F18Compiler.cs</c>, importing node 607's exported
 /// symbols via <c># 607 import</c> (<c>F18CompilerOptions.ImportResolver</c>, fed node 607's own
 /// compiled <c>Exports</c> -- the same <c>F18ExportSet</c>/<c>F18ImportResolution</c> plumbing
-/// <c>F18NodeCompilationService</c> already uses for real cross-node imports). 61 of 64 RAM
+/// <c>F18NodeCompilationService</c> already uses for real cross-node imports). 62 of 64 RAM
 /// words used, entry point <c>main</c> at word address 0x003, <c>'leave</c> itself at word
-/// address 0x037. (An earlier revision of this file, compiled against an earlier revision of
+/// address 0x037, and <c>'halt</c> (Stefan's own addition -- "wait for a word that will never
+/// come") at word address 0x03D. (An earlier revision of this file, compiled against an earlier revision of
 /// <see cref="Node607Program"/> whose own fetch/dispatch loop was named <c>main</c> rather than
 /// <c>'nop</c>, got one additional informational, benign warning here -- F18C050, "'main'
 /// redefines the name imported from node 607" -- since both nodes defined their own independent
@@ -53,6 +54,15 @@ namespace Ga144.Evb.Ide.Cvm;
 /// 606's frame pointer to whatever <c>enter</c> saved before (Stefan's own description: "undo
 /// enter. move frame pointer to stack pointer and pop the saved frame pointer"). <c>'exit</c>/
 /// <c>'wait</c> are gone entirely in this revision, not merely renamed.
+///
+/// <b>Later addition: <c>'halt</c>.</b> Stefan added a tenth word, <c>'halt</c> (his own
+/// description: "'halt halts the CVM. only a reset of the chip can break this halt."), a single
+/// blocking <c>@b</c> with no <c>';'</c> that never returns once entered. It gives a hand-written
+/// program an explicit, deliberate way to stop node 607 dead instead of running off the end of
+/// its own linear layout into zero-filled RAM (which self-describes as <c>call 0</c> and silently
+/// restarts execution -- see <see cref="CvmDebuggerDefaultProgram"/>'s own remarks on that
+/// fall-through hazard). Wired into the CVM asm layer as the <c>halt</c> mnemonic, resolved
+/// against this node's own live compile exactly like <c>leave</c>.
 ///
 /// <b>Two bugs found and fixed in <c>st</c>, both confirmed against real hardware.</b> Stefan
 /// reported that after both fixes below, <c>stl</c>/<c>stp</c> complete correctly on the EVB --
@@ -461,5 +471,25 @@ internal static class Node606Program
       // "undoing" whatever the matching 'enter did -- before tail-calling back
       // into 'main to wait for the next command.
       : 'leave A[ @p /pop ]] lit !b a !b A[ !p ; ]] lit !b @b a! main ;
+
+      // ----------------------------------------------------------------------
+      // 'halt  --  halt the CVM (Stefan's own description: "'halt halts the
+      // CVM. only a reset of the chip can break this halt.")
+      // ----------------------------------------------------------------------
+      // A single '@b': fetches through 606's own port B (pointed "right" at
+      // 607, per this file's own "# right /b" directive above) and simply
+      // blocks -- nothing on 607's side is ever expected to write a matching
+      // word back across that wire in response, so this '@b' never returns.
+      // Deliberately no ';' follows: once entered there is nothing further
+      // to execute or return to, matching Stefan's own description exactly
+      // ("wait for a word that will never come"). This is the CVM asm
+      // mnemonic 'halt's own target (tagged and resolved against this word
+      // exactly like 'leave above, via
+      // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.NodeSymbolByMnemonic) --
+      // the parking spot a hand-written program can jump to instead of
+      // running off the end of its own linear layout, since node 607 itself
+      // has no unconditional halt of its own (see CvmDebuggerDefaultProgram's
+      // own remarks on the fall-through hazard that motivated this word).
+      : 'halt @b // wait for a word that will never come
       """;
 }

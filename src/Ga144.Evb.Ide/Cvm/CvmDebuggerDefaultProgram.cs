@@ -1,18 +1,18 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// The CVM Debugger's own default test program: exercises every one of the CVM's 42 opcodes that
+/// The CVM Debugger's own default test program: exercises every one of the CVM's 43 opcodes that
 /// this project can currently deliver a result for AND verify from the transaction log alone,
 /// replacing the earlier 3-instruction smoke test (5 'nop, 'plit/pop/push round trip, one 'call,
-/// one 'br) that only ever touched 5 of the CVM's 72 opcodes.
+/// one 'br) that only ever touched 5 of the CVM's 73 opcodes.
 ///
-/// <b>Coverage: 42 of 72 opcodes, every one with a log-checkable expected value.</b> Node 607's own
+/// <b>Coverage: 43 of 73 opcodes, every one with a log-checkable expected value.</b> Node 607's own
 /// five primitives (nop, pushlit, pop, push, ret) plus call/br/ifbr/slit; node 507's eleven ALU ops
 /// (usl, ssr, usr, add, sub, and, xor, or, inv, inc, dec); node 506's nine register-d/
 /// extended-precision ops (zext, addc, ldd, std, xd, mul2d, div2d, sext, umuld); node 407's five
 /// register-w/port ops that need no live F18A port on the far side (xpt, ldhi, ldlo, sthi, stlo);
-/// and eight of node 606's nine frame-pointer ops (enter, stl, stp, ldl, ldp, lal, lap, leave --
-/// see the exclusion note on 'adjust below). Every instruction that WRITES a value is immediately
+/// and nine of node 606's ten mnemonics (enter, stl, stp, ldl, ldp, lal, lap, leave, and now halt
+/// itself -- see the exclusion note on 'adjust below). Every instruction that WRITES a value is immediately
 /// followed by a comment stating the expected hex value the transaction log's own
 /// "WRITE ... &lt;- XXXX" line should show, computed and cross-checked with a Python simulation of
 /// each node's own F18 source before this program was written -- see this class's own git history /
@@ -27,7 +27,11 @@ namespace Ga144.Evb.Ide.Cvm;
 /// 407's <c>ldlo</c> returns only the LOW 16 bits of its own locally-tracked 18-bit port value
 /// (masked), not the raw unmasked 18-bit value an earlier draft of this program assumed. The
 /// comments below already reflect both corrected values; every other opcode's expected value was
-/// confirmed exact on that same run with no correction needed.
+/// confirmed exact on that same run with no correction needed. On a SECOND real run (also
+/// 2026-08-30), the call/ret round trip into the frame-pointer block, and every one of its own
+/// enter/stl/stp/ldl/ldp/lal/lap/leave transactions, were confirmed exact -- including the
+/// self-check that lal's/lap's freshly computed addresses agree with stl's/ldl's and stp's/ldp's
+/// own addresses, which they did.
 ///
 /// <b>Three deliberate exclusions, each documented at the point it would otherwise appear:</b>
 /// <list type="bullet">
@@ -46,40 +50,58 @@ namespace Ga144.Evb.Ide.Cvm;
 /// real port and are exercised normally.</item>
 /// <item><b>Node 606's 'adjust is excluded for a different, more serious reason: it was tried, and
 /// it broke real hardware.</b> An earlier version of this program included 'adjust (right before the
-/// call into the frame-pointer block below), on the assumption -- per Node606.f18's own header,
-/// which says adjust's dispatch was "given...with no [confirmed]" cascade, same caveat as la/ld/st
-/// -- that at worst its exact effect on p was merely unconfirmed, not unsafe. A real run on
-/// 2026-08-30 showed otherwise: immediately after 'adjust's own opcode fetch, the transaction log
-/// showed the CVM cluster's own boot handshake (two page-1 reads at address 0, exactly what
+/// call into the frame-pointer block), on the assumption -- per Node606.f18's own header, which says
+/// adjust's dispatch was "given...with no [confirmed]" cascade, same caveat as la/ld/st -- that at
+/// worst its exact effect on p was merely unconfirmed, not unsafe. A real run on 2026-08-30 showed
+/// otherwise: immediately after 'adjust's own opcode fetch, the transaction log showed the CVM
+/// cluster's own boot handshake (two page-1 reads at address 0, exactly what
 /// Ga144CvmHardwareInstaller's automatic test expects right after waking node 708's 'start) followed
 /// by page-0 fetching restarting from address 0 -- i.e. 'adjust forced a full, uncommanded cluster
-/// reset. The resumed second pass then ran with a corrupted external-stack pointer (WRITE addresses
-/// wrapped from page 1 address 0x0000 down through 0x3FFFF instead of continuing the first pass's
-/// own downward sequence) and the run eventually timed out. This is NOT the same class of risk as
-/// 'br'/'ifbr' below (which just fall into an existing, harmless jump-table branch) -- 'adjust
-/// visibly corrupts control flow across the whole cluster, so it stays out of this program entirely
-/// until it can be investigated further, the same treatment as 'in'/'out' above.</item>
+/// reset. This is NOT the same class of risk as 'br'/'ifbr' below (which just fall into an existing,
+/// harmless jump-table branch) -- 'adjust visibly corrupts control flow across the whole cluster, so
+/// it stays out of this program entirely until it can be investigated further, the same treatment as
+/// 'in'/'out' above.</item>
 /// </list>
 ///
 /// <b>Two exploratory instructions, deliberately NOT asserted as "known correct":</b>
-/// 'br and 'ifbr (at the very end, after the frame-pointer block returns) are included only as an
-/// observation opportunity, not a real branch test: Node607.f18's own dispatch table does not
-/// actually implement a signed-offset branch for either tag yet (per this project's own
-/// CvmMemoryProtocol.cs remarks) -- today they fall into the same "100?" jump-table branch as
-/// ret/xs/xp/tjmp/pc and would be misdecoded (harmlessly, unlike 'adjust above -- nothing past them
-/// in this program depends on their outcome, since they are the last two real instructions here).
-/// This program places both words purely so Stefan can see, from the log, what node 607's existing
-/// dispatch actually does with them on real hardware -- it does not assume or check for a
-/// particular outcome.
+/// 'br and 'ifbr are included only as an observation opportunity, not a real branch test:
+/// Node607.f18's own dispatch table does not actually implement a signed-offset branch for either
+/// tag yet (per this project's own CvmMemoryProtocol.cs remarks) -- today they fall into the same
+/// "100?" jump-table branch as ret/xs/xp/tjmp/pc and would be misdecoded (harmlessly, unlike
+/// 'adjust above). This program places both words purely so Stefan can see, from the log, what node
+/// 607's existing dispatch actually does with them on real hardware -- it does not assume or check
+/// for a particular outcome.
 ///
-/// The frame-pointer block (word address 0x88, called once from the main flow via 'call) is
+/// <b>Layout note, learned the hard way on a real run (2026-08-30): the frame-pointer subroutine is
+/// placed AFTER 'br'/'ifbr, not right after its own 'call site.</b> An earlier draft placed it
+/// immediately after "call FRAME_TEST" (with only padding 'nop's in between), which seemed harmless
+/// since a 'call jumps straight over that padding on the way in -- but node 607 has no unconditional
+/// jump other than 'call'/'ret', so when 'ret' returned control to the padding nops, execution then
+/// fell straight through, sequentially, into the SAME subroutine body a second time, un-called. That
+/// second, un-called pass ran the frame-pointer block again, and its own 'ret' this time popped
+/// whatever stale value happened to be sitting at that stack slot from an earlier iteration (in the
+/// observed run, the literal 0x00CD test marker this program itself writes as parameter #2 in the
+/// frame test) and jumped there as if it were a return address -- landing in unused, zero-filled
+/// memory, which decodes as "call 0" (an all-zero word has no tag bit set, so it self-describes as a
+/// call to address 0) and restarted the whole program from address 0, well before ever reaching
+/// 'br'/'ifbr'. Moving the subroutine to after 'br'/'ifbr fixed the ORDERING problem -- both
+/// exploratory instructions were now guaranteed to run before any possible fall-through -- but node
+/// 607 itself still had no way to stop cleanly, so the program still ran off its own end into
+/// zero-filled "call 0" memory and restarted once, at the very end, harmlessly (true of the original
+/// 3-instruction default program too). <b>Stefan has since added a real 'halt opcode to node 606</b>
+/// (a single blocking '@b' that never returns -- see <see cref="Node606Program"/>'s own remarks), and
+/// this program now uses it: a 'halt sits right after 'ifbr's padding 'nop, so the main flow stops
+/// dead there instead of falling through into FRAME_TEST's body a second time. Only a chip reset can
+/// move execution past it now.
+///
+/// The frame-pointer block (word address 0x8D, called once from the main flow via 'call) is
 /// self-checking for node 606's local-vs-parameter offset-sign convention: Node606.f18's own header
 /// says which of stl/stp maps to a negative-vs-positive frame offset is itself "inferred, not
 /// given", so rather than asserting an absolute address this program compares stl's/ldl's own
 /// address against lal's freshly computed one (and, separately, stp's/ldp's against lap's) -- those
 /// two MUST always agree with each other regardless of which sign convention turns out to be
 /// correct, so the check is meaningful without this program taking a position on the unconfirmed
-/// convention itself.
+/// convention itself. Confirmed exact on the 2026-08-30 run: both pairs agreed.
 ///
 /// This is the single source of truth for that program's text:
 /// <see cref="Services.CvmMemoryProtocol.TryBuildDebuggerTestProgram"/> assembles this exact text
@@ -88,7 +110,7 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <see cref="ViewModels.CvmDebuggerViewModel.StartAsync"/> loads by default, and
 /// <see cref="ViewModels.CvmDebuggerViewModel.DefaultAssemblyCode"/> is this same text again, so
 /// Start and an unedited click of Assemble always produce byte-identical simulated-SRAM contents.
-/// 157 words total once assembled.
+/// 156 words total once assembled.
 /// </summary>
 public static class CvmDebuggerDefaultProgram
 {
@@ -224,10 +246,15 @@ public static class CvmDebuggerDefaultProgram
       "push              ; WRITE <- 0234 (confirms stlo merged the new low 16 bits, keeping the earlier hi 2 bits -- ldhi below reads those back out)\n" +
       "ldhi              ; extracts the hi 2 bits back out of 0x20234: r := (0x20234>>16)&3 = 2\n" +
       "push              ; WRITE <- 0002 (confirms ldhi's own extraction)\n" +
-      "call 136          ; jump to the frame-pointer subroutine below -- FRAME_TEST's own word address, computed by counting the words above (pushlit is the only 2-word instruction here); 136 (0x88)\n" +
+      "call 141          ; jump to the frame-pointer subroutine near the end of this program -- its own word address, computed by counting words (pushlit is the only 2-word instruction here); 141 (0x8D)\n" +
       "nop               ; execution resumes here once FRAME_TEST's own 'ret' returns\n" +
       "nop\n" +
       "nop\n" +
+      "br 1              ; EXPLORATORY -- Node607.f18 has no real branch decode for this tag yet; observe, don't assume, what the log shows\n" +
+      "nop\n" +
+      "ifbr 1            ; EXPLORATORY -- same caveat as br above. This is the last instruction the main flow was ever designed to reach\n" +
+      "nop\n" +
+      "halt              ; stop the CPU cleanly here -- everything the main flow cares about has now been observed. Node 606's own 'halt (Stefan's addition: \"wait for a word that will never come\") parks execution in a blocking @b that never returns, so unlike every earlier revision of this program, control never falls through into FRAME_TEST's body a second time -- only a chip reset can move it now\n" +
       "enter 4           ; reserve a 4-word frame; WRITE (old f, expected 0000) at the address 'leave' will read back; new f := that write address\n" +
       "slit 0x0AB        ; r=0x00AB\n" +
       "stl 1             ; WRITE r(00AB) to local #1 (frame-relative offset 1)\n" +
@@ -242,12 +269,6 @@ public static class CvmDebuggerDefaultProgram
       "lap 2             ; r := parameter #2's own address -- NO memory access; compare against the stp/ldp transactions' own address above\n" +
       "push              ; WRITE <- parameter #2's address, i.e. exactly the stp/ldp address above\n" +
       "leave             ; READ back the frame's saved old f -- expect value 0000, restoring f to its pre-enter value\n" +
-      "ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow\n" +
-      "nop               ; buffer before the exploratory block\n" +
-      "nop\n" +
-      "br 1              ; EXPLORATORY -- Node607.f18 has no real branch decode for this tag yet; observe, don't assume, what the log shows\n" +
-      "nop\n" +
-      "ifbr 1            ; EXPLORATORY -- same caveat as br above\n" +
-      "nop\n" +
+      "ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/ifbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)\n" +
       "";
 }

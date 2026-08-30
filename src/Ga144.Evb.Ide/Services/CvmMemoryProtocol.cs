@@ -106,7 +106,7 @@ internal static class CvmMemoryProtocol
 
   /// <summary>
   /// The interactive debugger's own default test program -- a full CVM assembly language source
-  /// (<see cref="CvmDebuggerDefaultProgram.Source"/>) exercising 43 of the CVM's 72 opcodes with a
+  /// (<see cref="CvmDebuggerDefaultProgram.Source"/>) exercising 43 of the CVM's 73 opcodes with a
   /// log-checkable expected value for each, rather than <see cref="TryBuildTestProgram"/>'s minimal
   /// 5 'nop/'plit/'pop/'push/8 'nop smoke test above. See <see cref="CvmDebuggerDefaultProgram"/>'s
   /// own remarks for exactly which opcodes are covered, which are deliberately excluded (and why),

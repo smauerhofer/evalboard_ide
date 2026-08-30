@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-30T11:20:01.4600128
-      utcDateTime: 2026-08-30T11:20:01.4600128Z
-      localDateTime: 2026-08-30T13:20:01.4600128+02:00
+      dateTime: 2026-08-30T11:47:05.2136905
+      utcDateTime: 2026-08-30T11:47:05.2136905Z
+      localDateTime: 2026-08-30T13:47:05.2136905+02:00
       date: 2026-08-30T00:00:00.0000000
       day: 30
       dayOfWeek: Sunday
       dayOfYear: 242
       hour: 11
-      millisecond: 460
-      microsecond: 12
-      nanosecond: 800
-      minute: 20
+      millisecond: 213
+      microsecond: 690
+      nanosecond: 500
+      minute: 47
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 1
-      ticks: 639236856014600128
-      utcTicks: 639236856014600128
-      timeOfDay: 11:20:01.4600128
+      second: 5
+      ticks: 639236872252136905
+      utcTicks: 639236872252136905
+      timeOfDay: 11:47:05.2136905
       year: 2026
   portB: 
   portC:
@@ -10928,6 +10928,7 @@ projects:
 
         : 'leave A[ @p /pop ]] lit !b a !b A[ !p ; ]] lit !b @b a! ;
 
+        : 'halt @b // wait for a word that will never come
 
         (
 
@@ -10956,6 +10957,7 @@ projects:
 
         'leave undo enter. move frame pointer to stack pointer and pop the saved frame pointer.
 
+        'halt halts the CVM. only a reset of the chip can break this halt.
 
         )
       ramWords:
@@ -10987,8 +10989,8 @@ projects:
       - 0x37223
       - 0x37221
       - 0x27601
+      - 0x05B12
       - 0x13400
-      - 0x09D12
       - 0x05710
       - 0x09BB2
       - 0x11403
@@ -11014,12 +11016,12 @@ projects:
       - 0x09D22
       - 0x0D715
       - 0x00A55
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x05B8A
+      - 0x05602
+      - 0x09D22
+      - 0x0D555
+      - 0x00A55
+      - 0x009B2
       - 0x15555
       - 0x15555
       - 0x15555

@@ -7,10 +7,10 @@ namespace Ga144.Evb.Ide.Services;
 
 /// <summary>
 /// The CVM's own small assembly language: Stefan's mnemonics (<c>nop</c>, <c>pushlit &lt;data&gt;</c>,
-/// <c>push</c>, <c>pop</c>, <c>ret</c>, node 507's eleven ALU ops, node 606's own <c>leave</c>, and
-/// node 508's 27 comparison/arithmetic ops) layered on top of the wire-level opcode convention
-/// (opcode = tag | wordAddress) that <see cref="CvmMemoryProtocol"/> already established for node 607
-/// -- node 507's ALU ops, node 606's <c>leave</c>, and node 508's own ops each carry a DIFFERENT tag of
+/// <c>push</c>, <c>pop</c>, <c>ret</c>, node 507's eleven ALU ops, node 606's own <c>leave</c> and
+/// <c>halt</c>, and node 508's 27 comparison/arithmetic ops) layered on top of the wire-level opcode
+/// convention (opcode = tag | wordAddress) that <see cref="CvmMemoryProtocol"/> already established for
+/// node 607 -- node 507's ALU ops, node 606's <c>leave</c>/<c>halt</c>, and node 508's own ops each carry a DIFFERENT tag of
 /// their own, not node 607's 0x8000 (see
 /// <see cref="Node507UnaryTagBits"/>/<see cref="Node507BinaryTagBits"/>/<see cref="Node606TagBits"/>/
 /// <see cref="Node508TagBits"/>'s own remarks). (<c>call</c>, <c>br</c>, <c>ifbr</c>, <c>slit</c>, and
@@ -20,7 +20,7 @@ namespace Ga144.Evb.Ide.Services;
 ///
 /// This is deliberately a SEPARATE naming layer from any node's own F18 source symbols ('nop, 'plit,
 /// 'pop, 'push on node 607; 'usl, 'ssr, 'usr, '+, '-, 'and, 'xor, 'or, 'inv, 'inc, 'dec on node 507;
-/// 'leave on node 606; 'eq, 'eq0, 'false, 'true, 'ne, 'ne0, 'ugt, 'gt, 'gt0, 'ge, 'ge0, 'ule, 'le,
+/// 'leave, 'halt on node 606; 'eq, 'eq0, 'false, 'true, 'ne, 'ne0, 'ugt, 'gt, 'gt0, 'ge, 'ge0, 'ule, 'le,
 /// 'le0, 'lt, 'lt0, 'ult, 'uge, 'mul2, 'udiv2, 'div2, 'abs, 'negate, 'xt, 'ldt, 'stt, 'bitcnt on node
 /// 508; 'zext, 'addc, 'ldd, 'std, 'xd, 'mul2d, 'div2d, 'sext, 'umuld on node 506; 'xpt, 'out, 'in,
 /// 'ldhi, 'ldlo, 'sthi, 'stlo on node 407) -- those tick-names
@@ -37,7 +37,7 @@ namespace Ga144.Evb.Ide.Services;
 /// which node's compile to resolve it against, so <c>nop</c>/<c>pushlit</c>/<c>push</c>/<c>pop</c>/
 /// <c>ret</c> resolve against node 607, <c>usl</c>/<c>ssr</c>/<c>usr</c>/<c>add</c>/<c>sub</c>/
 /// <c>and</c>/<c>xor</c>/<c>or</c>/<c>inv</c>/<c>inc</c>/<c>dec</c> resolve against node 507,
-/// <c>leave</c> resolves against node 606, node 508's 27 comparison/arithmetic ops (<c>eq</c>
+/// <c>leave</c> and <c>halt</c> resolve against node 606, node 508's 27 comparison/arithmetic ops (<c>eq</c>
 /// through <c>bitcnt</c>, see <see cref="Node508TagBits"/>'s own remarks for the full list) resolve
 /// against node 508, node 506's nine register-d/extended-precision ops (<c>zext</c> through
 /// <c>umuld</c>) resolve against node 506, and node 407's seven register-w/port ops (<c>xpt</c>
@@ -108,7 +108,9 @@ internal static class CvmAssemblyLanguage
   // "1010 0xxx xxxx xxxx", but per Node606.f18's own 'main' dispatch ("@b xff and >r"), the dispatch
   // byte is always masked down to 8 bits before use, so in practice only 0xA000-0xA0FF is ever
   // produced by this node's own code -- same address-field width as node 607's own 0x8000|address
-  // family. 'leave is the first (and, as of this revision, only) named word reached this way.
+  // family. 'leave was the first named word reached this way; 'halt (Stefan's own "wait for a word that
+  // will never come" -- "'halt halts the CVM. only a reset of the chip can break this halt.") is the
+  // second, added the same way, resolved against node 606's own live compile exactly like 'leave.
   private const int Node606TagBits = 0xA000;
 
   // Node 508's own tag for its 27 comparison/arithmetic ops: the "register t" opcode class node 507's
@@ -152,7 +154,7 @@ internal static class CvmAssemblyLanguage
   // has no notion of "node", "F18 symbol", or "tag" at all, on purpose: gaasm never needs any of them).
   // Node 607's five original tagged mnemonics resolve against 607's own symbols (still defined in
   // CvmMemoryProtocol, node 607's own wire-protocol convention); node 507's eleven ALU ops, node 606's
-  // own 'leave, node 508's 27 comparison/arithmetic ops, node 506's nine register-d/extended-precision
+  // own 'leave and 'halt, node 508's 27 comparison/arithmetic ops, node 506's nine register-d/extended-precision
   // ops, and node 407's seven register-w/port ops resolve against each node's own tick-named words
   // (Node507Program/Node507.f18, Node606Program/Node606.f18, Node508Program/Node508.f18,
   // Node506Program/Node506.f18, Node407Program/Node407.f18), using the literal F18 symbol names
@@ -187,6 +189,7 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.IncrementMnemonic] = (Node507Program.Coordinate, "'inc", Node507UnaryTagBits),
         [CvmInstructionSet.DecrementMnemonic] = (Node507Program.Coordinate, "'dec", Node507UnaryTagBits),
         [CvmInstructionSet.LeaveMnemonic] = (Node606Program.Coordinate, "'leave", Node606TagBits),
+        [CvmInstructionSet.HaltMnemonic] = (Node606Program.Coordinate, "'halt", Node606TagBits),
         [CvmInstructionSet.EqualMnemonic] = (Node508Program.Coordinate, "'eq", Node508TagBits),
         [CvmInstructionSet.EqualToZeroMnemonic] = (Node508Program.Coordinate, "'eq0", Node508TagBits),
         [CvmInstructionSet.FalseMnemonic] = (Node508Program.Coordinate, "'false", Node508TagBits),

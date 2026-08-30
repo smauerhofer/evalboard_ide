@@ -104,7 +104,7 @@ public sealed class CvmDebugSession : IDisposable
   /// The program currently loaded into page 0 of the simulated SRAM. Initially the debugger's own
   /// default test program (<see cref="CvmDebuggerDefaultProgram.Source"/>, assembled by
   /// <see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/> -- see that class's own remarks for
-  /// exactly which 43 of the CVM's 72 opcodes it exercises, which are deliberately excluded, and
+  /// exactly which 43 of the CVM's 73 opcodes it exercises, which are deliberately excluded, and
   /// which two blocks are exploratory rather than asserted-correct) -- but replaceable at any time
   /// via <see cref="AssembleAndLoadProgram"/>, which is what the CVM Debugger's own Assembly Code
   /// editor does.

@@ -42,8 +42,8 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // The FLOOR on how many words the memory inspector shows at once (and the default starting
   // point is page 0, address 0 -- the start of the loaded test program -- before Stefan jumps
   // elsewhere). This used to be the fixed count too, but that silently truncated the view well
-  // short of a longer loaded program (the 157-word CvmDebuggerDefaultProgram in particular ends
-  // at 0x009C, past this constant's own old 64-word/0x003F reach) -- see RefreshMemoryView's own
+  // short of a longer loaded program (the 156-word CvmDebuggerDefaultProgram in particular ends
+  // at 0x009B, past this constant's own old 64-word/0x003F reach) -- see RefreshMemoryView's own
   // remarks for how the actual count is now sized to whatever program is currently loaded.
   private const int MemoryViewWordCount = 64;
 
@@ -72,7 +72,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
 
   // Source-form equivalent of CvmMemoryProtocol.TryBuildDebuggerTestProgram's own assembled words --
   // both are literally CvmDebuggerDefaultProgram.Source, so assembling this unedited reproduces
-  // exactly the program Start already loads today (42 of the CVM's 72 opcodes, each with a
+  // exactly the program Start already loads today (43 of the CVM's 73 opcodes, each with a
   // log-checkable expected value -- see CvmDebuggerDefaultProgram's own remarks for full coverage
   // details, the three deliberate exclusions (including 'adjust, which is excluded because it
   // actually corrupted a real run, not merely because it was unconfirmed), and the two exploratory
@@ -243,7 +243,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       _session = await installer.StartDebugSessionAsync(endpoint.PortName, _chip, compileService);
 
       InstallSummaryText = $"Install: {_session.Install.Steps.Count} boot frame(s) sent, fire-and-forget. Loaded a {_session.Program.Count}-word test program " +
-          "(42 of the CVM's 72 opcodes, each with a log-checkable expected value -- see CvmDebuggerDefaultProgram's own remarks) into the simulated SRAM and woke node 708's 'start.";
+          "(43 of the CVM's 73 opcodes, each with a log-checkable expected value -- see CvmDebuggerDefaultProgram's own remarks) into the simulated SRAM and woke node 708's 'start.";
 
       // The Assembly Code editor is the single source of truth for what should be running, whether
       // it was edited before or after Start -- re-apply it to the freshly connected chip now, so
@@ -595,7 +595,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// words shown is <see cref="MemoryViewWordCount"/> or however many words the CURRENTLY loaded
   /// program actually occupies, whichever is larger -- so opening the CVM Debugger with a short
   /// program (or none) still gets a reasonable-sized view, but a longer one like
-  /// <see cref="CvmDebuggerDefaultProgram"/>'s own 157 words is never silently truncated the way a
+  /// <see cref="CvmDebuggerDefaultProgram"/>'s own 156 words is never silently truncated the way a
   /// fixed 64-word window would. Recomputed on every call (not cached) since the loaded program can
   /// change between calls (Assemble, Start).
   /// </summary>

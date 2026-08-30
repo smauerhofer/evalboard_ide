@@ -10,8 +10,9 @@ namespace Ga144.Cvm.Toolchain;
 /// <c>adjust &lt;offset&gt;</c>, <c>stl &lt;offset&gt;</c>, <c>stp &lt;offset&gt;</c>,
 /// <c>ldl &lt;offset&gt;</c>, <c>ldp &lt;offset&gt;</c>, <c>lal &lt;offset&gt;</c>,
 /// <c>lap &lt;offset&gt;</c> (each self-describing, an 8-bit tag OR'd with an 8-bit unsigned value), plus
-/// node 606's ninth mnemonic <c>leave</c> (a tagged mnemonic like nop/push/pop/ret, NOT self-describing
-/// -- see <see cref="LeaveMnemonic"/>'s own remarks)), plus node 508's 27 comparison/arithmetic ops --
+/// node 606's ninth mnemonic <c>leave</c> and tenth mnemonic <c>halt</c> (both tagged mnemonics like
+/// nop/push/pop/ret, NOT self-describing -- see <see cref="LeaveMnemonic"/>'s and
+/// <see cref="HaltMnemonic"/>'s own remarks)), plus node 508's 27 comparison/arithmetic ops --
 /// <c>eq</c>, <c>eq0</c>, <c>false</c>, <c>true</c>, <c>ne</c>, <c>ne0</c>, <c>ugt</c>, <c>gt</c>,
 /// <c>gt0</c>, <c>ge</c>, <c>ge0</c>, <c>ule</c>, <c>le</c>, <c>le0</c>, <c>lt</c>, <c>lt0</c>,
 /// <c>ult</c>, <c>uge</c>, <c>mul2</c>, <c>udiv2</c>, <c>div2</c>, <c>abs</c>, <c>negate</c>, <c>xt</c>,
@@ -110,6 +111,17 @@ public static class CvmInstructionSet
   // same way node 607's own tagged nop/push/pop/pushlit/ret were added one at a time from that node's
   // own "0x8000 | address" family.
   public const string LeaveMnemonic = "leave";
+
+  // 'halt, added by Stefan to node 606 ("@b // wait for a word that will never come" -- his own comment:
+  // "'halt halts the CVM. only a reset of the chip can break this halt."), is the second named word
+  // reached the same way as 'leave just above: same TAGGED shape (CvmOperandEncoding.None), same "1010
+  // 0xxx xxxx xxxx" opcode class, resolved only against a live compile of node 606's own source, never
+  // self-describing. It exists specifically to give a hand-written program an explicit, deliberate way
+  // to stop node 607 dead (parked in an infinite @b wait) instead of running off the end of its own
+  // linear layout into zero-filled RAM, which self-describes as "call 0" and silently restarts execution
+  // from address 0 -- see CvmDebuggerDefaultProgram's own remarks for a real instance of that fall-
+  // through hazard.
+  public const string HaltMnemonic = "halt";
 
   // Node 508's comparison/arithmetic ops, added per Stefan's node 508 source and his own naming rule
   // for that message ("all words that begin with a ' are an opcode for the CVM with the mnemonic using
@@ -460,6 +472,7 @@ public static class CvmInstructionSet
     new(Id: 69, LoadLowMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 70, StoreHighMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 71, StoreLowMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 72, HaltMnemonic, 1, CvmOperandEncoding.None),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =
