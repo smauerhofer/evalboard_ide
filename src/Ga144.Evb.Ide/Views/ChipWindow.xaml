@@ -73,11 +73,6 @@
                           ToolTip="Tests node 708's own main/sett dispatch loop specifically (not obit/oword/obyt/readw, already proven by the echo test): boots main/sett only, then calls 'sett' with the same port value twice in a row over Kraken's own NativeWindowsSerialPort transport, reporting each call's outcome separately. Built to isolate a hardware finding: the same sett call that succeeds once times out on a second call, unrelated to w/r's complexity. Resets the chip once, so this is blocked while a Kraken is erected." />
         </StackPanel>
         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-          <Button Content="Node 708 setn test"
-                          Command="{Binding RunNode708SetNodeTestCommand}"
-                          Padding="12,6"
-                          Margin="0,0,8,0"
-                          ToolTip="Tests node 708's newest 'setn' source, which now falls straight through into 'sett' with no ';' of its own (same fall-through idiom as readw/oword): boots main/obit/readw/oword/obyt/setn/sett only (w/r omitted), then calls 'setn' with a node-index value followed by a tentacle/port value, twice in a row, expecting TWO echoed words per call. Reports each call's outcome separately. Resets the chip once, so this is blocked while a Kraken is erected." />
           <Button Content="SRAM Tentacle"
                           Click="OnOpenSramTentacleClick"
                           IsEnabled="True"

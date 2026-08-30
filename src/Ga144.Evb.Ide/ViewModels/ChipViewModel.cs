@@ -43,7 +43,6 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     VerifyNode708RomCommand = new AsyncRelayCommand(VerifyNode708RomAsync, () => !_verifyBusy);
     RunNode708EchoTestCommand = new AsyncRelayCommand(RunNode708EchoTestAsync, () => !_verifyBusy);
     RunNode708DispatchTestCommand = new AsyncRelayCommand(RunNode708DispatchTestAsync, () => !_verifyBusy);
-    RunNode708SetNodeTestCommand = new AsyncRelayCommand(RunNode708SetNodeTestAsync, () => !_verifyBusy);
     CompileCvmTestCommand = new AsyncRelayCommand(CompileCvmTestAsync, () => !_verifyBusy);
     InstallAndRunCvmTestCommand = new AsyncRelayCommand(InstallAndRunCvmTestAsync, () => !_verifyBusy);
     RebuildNodes();
@@ -70,7 +69,6 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public AsyncRelayCommand VerifyNode708RomCommand { get; }
   public AsyncRelayCommand RunNode708EchoTestCommand { get; }
   public AsyncRelayCommand RunNode708DispatchTestCommand { get; }
-  public AsyncRelayCommand RunNode708SetNodeTestCommand { get; }
   public AsyncRelayCommand CompileCvmTestCommand { get; }
   public AsyncRelayCommand InstallAndRunCvmTestCommand { get; }
 
@@ -91,7 +89,6 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
         VerifyNode708RomCommand.NotifyCanExecuteChanged();
         RunNode708EchoTestCommand.NotifyCanExecuteChanged();
         RunNode708DispatchTestCommand.NotifyCanExecuteChanged();
-        RunNode708SetNodeTestCommand.NotifyCanExecuteChanged();
         CompileCvmTestCommand.NotifyCanExecuteChanged();
         InstallAndRunCvmTestCommand.NotifyCanExecuteChanged();
       }
@@ -656,97 +653,6 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       MessageBox.Show(
           $"Node 708 dispatch test could not complete:\n\n{exception.Message}",
           "Node 708 dispatch test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Error);
-    }
-    finally
-    {
-      VerifyBusy = false;
-    }
-  }
-
-  private async Task RunNode708SetNodeTestAsync()
-  {
-    if (_verifyBusy)
-    {
-      return;
-    }
-
-    if (KrakenController.HardwareErected)
-    {
-      MessageBox.Show(
-          "Node 708's setn test cannot run while a Kraken is erected on this chip. "
-          + "This probe requires resetting node 708 to load a one-shot test program, and a "
-          + "resident Kraken must never be reset. Remove the Kraken first, then try again.",
-          "Node 708 setn test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
-    if (endpoint is null)
-    {
-      MessageBox.Show(
-          "No serial endpoint is assigned to this chip. Assign a COM port before running the node 708 setn test.",
-          "Node 708 setn test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    // 'setn' now falls straight through into 'sett' (no '!n' of its own in
-    // this source yet), so each call sends two words: a node-index value
-    // (echoed back but not yet stored anywhere) and a tentacle/port value
-    // (stored into A by the fallen-into 'sett' body) -- reusing the same
-    // 0x175 test value 'focus' erection sends node 707, so a pass/fail on
-    // the second word is directly comparable to the earlier dispatch test.
-    const int testNodeValue = 0x001;
-    const int testTentacleValue = 0x175;
-    const int testCallCount = 2;
-
-    VerifyBusy = true;
-    VerifyStatus = "Running node 708 setn test…";
-    try
-    {
-      var probe = new Ga144Node708SetNodeProbe();
-      Node708SetNodeReport report = await probe.RunSetNodeProbeAsync(
-          endpoint.PortName, Chip, RomLibrary, testNodeValue, testTentacleValue, testCallCount);
-
-      int succeeded = report.Calls.Count(item => item.Succeeded);
-      VerifyStatus = succeeded == report.Calls.Count
-          ? $"Node 708 setn test: {succeeded}/{report.Calls.Count} 'setn' calls succeeded."
-          : $"Node 708 setn test: {report.Calls.Count - succeeded}/{report.Calls.Count} 'setn' call(s) FAILED.";
-
-      var summary = new System.Text.StringBuilder();
-      summary.AppendLine($"Calling 'setn' with the same node/tentacle value pair (0x{testNodeValue:X3}, 0x{testTentacleValue:X3}) {testCallCount} times in a row, over the exact NativeWindowsSerialPort transport Kraken uses:");
-      summary.AppendLine();
-      foreach (Node708SetNodeCallResult call in report.Calls)
-      {
-        if (call.Succeeded)
-        {
-          string first = call.FirstEchoedBytes is null ? "" : string.Join(" ", call.FirstEchoedBytes.Select(b => $"{b:X2}"));
-          string second = call.SecondEchoedBytes is null ? "" : string.Join(" ", call.SecondEchoedBytes.Select(b => $"{b:X2}"));
-          summary.AppendLine($"  Call {call.CallNumber}: OK ({call.Elapsed.TotalMilliseconds:F1} ms, echoed {first} then {second})");
-        }
-        else
-        {
-          summary.AppendLine($"  Call {call.CallNumber}: FAILED ({call.Elapsed.TotalMilliseconds:F1} ms) -- {call.FailureMessage}");
-        }
-      }
-
-      MessageBox.Show(
-          summary.ToString(),
-          "Node 708 setn test",
-          MessageBoxButton.OK,
-          succeeded < report.Calls.Count ? MessageBoxImage.Warning : MessageBoxImage.Information);
-    }
-    catch (Exception exception)
-    {
-      VerifyStatus = "Node 708 setn test failed.";
-      MessageBox.Show(
-          $"Node 708 setn test could not complete:\n\n{exception.Message}",
-          "Node 708 setn test",
           MessageBoxButton.OK,
           MessageBoxImage.Error);
     }

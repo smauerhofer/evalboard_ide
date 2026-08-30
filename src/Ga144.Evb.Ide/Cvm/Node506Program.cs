@@ -76,6 +76,7 @@ internal static class Node506Program
   /// <c># 507 import</c>.
   /// </summary>
   public const string Source = """
+      ( cvm2 32 bit operations, 1110_0???_????_????)
       // ============================================================================
       // Node 506 -- CVM test-cluster register-d node (test-mirror of real design
       // node 306, register d)
@@ -128,24 +129,65 @@ internal static class Node506Program
       // s/2put/s/put (confirmed there by Stefan): 'csr16' compiles to a single
       // word containing only a CALL to 'sr16; that CALL's return address is
       // intrinsically 'csr16's own next word -- 'c!'s start -- REGARDLESS of who
-      // calls csr16. '+c falls through into csr16 (no ';' of its own), so after
+      // calls csr16. 'addc falls through into csr16 (no ';' of its own), so after
       // sr16's shift loop returns into c!, c! stores the carry bit, and only THEN
-      // returns to '+c's own caller -- and 'lsh explicitly CALLs csr16 for the
-      // same reason, picking up c!'s carry-capture "for free" the same way 'rsh
-      // does explicitly (see 'lsh/'rsh/c! below).
+      // returns to 'addc's own caller -- and 'mul2d explicitly CALLs csr16 for the
+      // same reason, picking up c!'s carry-capture "for free" the same way 'div2d
+      // does explicitly (see 'mul2d/'div2d/c! below).
       //
-      // No per-word descriptions were given for this drop, unlike node 507's --
-      // every word's meaning below is inferred from its code and naming, cross-
-      // checked against the compiled addresses. Treat it with the same lower
-      // confidence as node 607's 'exec or node 606's 'enter.
+      // ----------------------------------------------------------------------
+      // Revision note (this drop, per Stefan: "every word that begins with a '
+      // is an opcode. the mnemonic is the same name without the leading '")
+      // ----------------------------------------------------------------------
+      // Four of this node's own words are RENAMED from the earlier drop below --
+      // their compiled bodies (and therefore their compiled addresses) are byte-
+      // for-byte unchanged, only the names differ, to match this node's own
+      // official cvm2 mnemonic table (this opcode class is tagged
+      // "1110_0???_????_????", per this file's own opening comment line -- the
+      // same convention node 508 already carries as ITS OWN first line):
+      //     '+c   -> 'addc    (add with carry)
+      //     'lsh  -> 'mul2d   (left shift double)
+      //     'rsh  -> 'div2d   (right shift double)
+      //     'umul -> 'umuld   (unsigned multiply double)
+      // Stefan also supplied, for the first time on this node, a trailing
+      // one-line-per-word comment block (reproduced verbatim at the end of this
+      // file) covering 'zext, sr16, 'addc, csr16, c!, sl16, 'ldd, 'std, 'xd,
+      // 'mul2d, 'div2d, 'sext, and 'umuld -- every one of those descriptions
+      // confirms, word for word, what this file's own per-word comments already
+      // inferred from the code alone; no correction was needed to any of them,
+      // only the four mnemonic renames above. main, leave, spop, spush, r@, r!,
+      // and mask still have no description from Stefan and remain inferred, same
+      // lower-confidence caveat as before -- each is marked "(inferred)" still,
+      // while the thirteen Stefan has now confirmed are marked "(confirmed: ...)"
+      // with his own words quoted directly.
+      //
+      // No per-word descriptions were given for the earlier drop of this file,
+      // unlike node 507's -- every word not covered by Stefan's trailing block
+      // (see the revision note above) is still inferred from its code and
+      // naming alone, cross-checked against the compiled addresses. Treat
+      // main/leave/spop/spush/r@/r!/mask with the same lower confidence as node
+      // 607's 'exec or node 606's 'enter.
       //
       // Verified: this source compiles against the real F18Compiler with 0 errors
       // (Success=true), importing node 507's exported symbols via '# 507 import'.
-      // 61 of 64 RAM words used, entry point 'main' at word address 0x000. Two
-      // informational warnings are expected and benign: F18C050 for both 'main'
-      // and 'leave', each redefining a name imported from node 507 -- both nodes
-      // define their own independent 'main'/'leave' pair, and 506 never needs to
-      // call INTO 507's versions by name, so the shadowing is intentional.
+      // 61 of 64 RAM words used, entry point 'main' at word address 0x000 --
+      // byte-for-byte identical to the earlier (pre-rename) drop's own compiled
+      // words, confirming this revision's rename touched only symbol names, never
+      // any compiled code. Two informational warnings are expected and benign:
+      // F18C050 for both 'main' and 'leave', each redefining a name imported from
+      // node 507 -- both nodes define their own independent 'main'/'leave' pair,
+      // and 506 never needs to call INTO 507's versions by name, so the shadowing
+      // is intentional.
+      //
+      // Now that this node's own opcode tag is confirmed (node 507's own 'main'
+      // dispatch forwards the whole "1110_0???_????_????" block here unmasked,
+      // via its own "r---" branch -- see Node507.f18's own 'main' comments, and
+      // this project's own cvm-toolchain-design.md), all nine of this node's own
+      // tick-prefixed op-words -- 'zext, 'addc, 'ldd, 'std, 'xd, 'mul2d, 'div2d,
+      // 'sext, 'umuld -- are registered as tagged CVM instructions in
+      // Ga144.Cvm.Toolchain.CvmInstructionSet (Ids 56-64) and
+      // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.NodeSymbolByMnemonic
+      // (Node506TagBits = 0xE000), the same way node 508's 27 ops already are.
       // ============================================================================
 
       # 507 import
@@ -232,7 +274,8 @@ internal static class Node506Program
       : r! ( w) A[ @p a! ]] lit !b !b ;
 
       // ----------------------------------------------------------------------
-      // 'zext  --  zero-extend: clear d (inferred)
+      // 'zext  --  zero-extend: clear d (confirmed: "zero extension. load 0 into
+      // register d")
       // ----------------------------------------------------------------------
       // 'dup xor' XORs a value with itself, which is always 0 regardless of
       // what was there (the same "s-0" idiom node 607's own /r@ uses), and
@@ -242,7 +285,7 @@ internal static class Node506Program
 
       // ----------------------------------------------------------------------
       // sr16  --  shift the value on the stack right by a full 16 bits
-      // (inferred, from the name and the loop count)
+      // (confirmed: "shift right 16.")
       // ----------------------------------------------------------------------
       // 'for'/'unext' is this dialect's counted-loop idiom (7 for -> 8
       // iterations); each iteration does '2/ 2/' (two right shifts), for 16
@@ -252,8 +295,9 @@ internal static class Node506Program
       : sr16 7 for 2/ 2/ unext ;
 
       // ----------------------------------------------------------------------
-      // '+c  --  add with carry: d + [popped value] + r, result stored back
-      // into r, carry captured into d via csr16/c! below (inferred)
+      // 'addc  --  add with carry: d + [popped value] + r, result stored back
+      // into r, carry captured into d via csr16/c! below (confirmed: "add with
+      // carry."; renamed from '+c -- see the revision note above)
       // ----------------------------------------------------------------------
       // 'a' pushes d, 'spop' pops a value relayed all the way from 607's own
       // extended memory (the addend), '+' adds them, 'r@' fetches r (the
@@ -264,17 +308,17 @@ internal static class Node506Program
       // visible 16-bit result -- and, per the header note's collision, that
       // CALL chain lands in 'c! before finally returning, storing the
       // extracted carry bit into d.
-      : '+c a spop + r@ + dup r!
+      : 'addc a spop + r@ + dup r!
 
       // ----------------------------------------------------------------------
       // csr16  --  carry-shift-right-16: shared shift helper that always lands
-      // in c! before returning (inferred; the CALL-target collision with c! is
-      // worked out in the header note, in the same spirit as node 507's
-      // s/2put/s/put)
+      // in c! before returning (confirmed: "shift right 16 and store carry in
+      // register d."; the CALL-target collision with c! is worked out in the
+      // header note, in the same spirit as node 507's s/2put/s/put)
       // ----------------------------------------------------------------------
       // Compiles to a single word containing nothing but a CALL to 'sr16.
-      // Reached either by falling through from '+c above (no CALL instruction
-      // of its own is needed to get here) or by an explicit CALL from 'lsh
+      // Reached either by falling through from 'addc above (no CALL instruction
+      // of its own is needed to get here) or by an explicit CALL from 'mul2d
       // below. Either way, that CALL's own return address is intrinsically
       // 'csr16's own next compiled word -- 'c!'s start -- so 'sr16's own
       // trailing ';' always lands in 'c!, not back at csr16's caller; only
@@ -283,38 +327,37 @@ internal static class Node506Program
 
       // ----------------------------------------------------------------------
       // c!  --  capture the low bit of whatever's on the stack as the new
-      // carry flag into d (inferred)
+      // carry flag into d (confirmed: "store carry into register d.")
       // ----------------------------------------------------------------------
       // '1 and' masks everything but bit 0, 'a!' stores it into 506's own A
-      // (d). Reached explicitly at the tail of 'rsh below, and implicitly
-      // (via the csr16 collision above) at the tail of '+c and 'lsh.
+      // (d). Reached explicitly at the tail of 'div2d below, and implicitly
+      // (via the csr16 collision above) at the tail of 'addc and 'mul2d.
       : c! 1 and a! ;
 
       // ----------------------------------------------------------------------
       // sl16  --  shift the value on the stack left by a full 16 bits
-      // (inferred, mirrors sr16)
+      // (confirmed: "shift left 16.")
       // ----------------------------------------------------------------------
       // Same 'for'/'unext' counted-loop idiom as sr16, but with '2* 2*'
       // (two left shifts per iteration) instead of '2/ 2/'.
       : sl16 7 for 2* 2* unext ;
 
       // ----------------------------------------------------------------------
-      // 'ldd  --  load d: copy d's value into r (inferred, mirrors node
-      // 606/608's naming for "load" words)
+      // 'ldd  --  load d: copy d's value into r (confirmed: "move register d
+      // into register r")
       // ----------------------------------------------------------------------
       // 'a' pushes 506's own A (d), 'r!' stores it into 507's r.
       : 'ldd a r! ;
 
       // ----------------------------------------------------------------------
-      // 'std  --  store d: copy r's value into d (inferred, the reverse of
-      // 'ldd)
+      // 'std  --  store d: copy r's value into d (confirmed: "store register r
+      // into register d")
       // ----------------------------------------------------------------------
       // 'r@' fetches 507's r, 'a!' stores it into 506's own A (d).
       : 'std r@ a! ;
 
       // ----------------------------------------------------------------------
-      // 'xd  --  exchange d with r (inferred, matches node 606/608's 'xf/'xg
-      // naming for a genuine two-way exchange)
+      // 'xd  --  exchange d with r (confirmed: "exchange register d and r")
       // ----------------------------------------------------------------------
       // 'a' pushes d, 'r@' fetches r, 'a!' stores r's value into d, and the
       // final 'r!' stores the ORIGINAL d value (still sitting where 'a' left
@@ -322,8 +365,9 @@ internal static class Node506Program
       : 'xd a r@ a! r! ;
 
       // ----------------------------------------------------------------------
-      // 'lsh  --  shift the (r,d) register pair left by one bit, capturing the
-      // carry-out into d (inferred)
+      // 'mul2d  --  shift the (r,d) register pair left by one bit, capturing
+      // the carry-out into d (confirmed: "left shift double"; renamed from
+      // 'lsh -- see the revision note above)
       // ----------------------------------------------------------------------
       // 'r@' fetches r, '2*' shifts it left one bit (vacating its low bit),
       // 'a' pushes d, 'xor' merges d's own low bit into that vacated slot (a
@@ -332,14 +376,15 @@ internal static class Node506Program
       // stack. 'csr16' then shifts that duplicate down 16 bits to recover
       // whatever was shifted out of r's own top -- and, via the collision
       // documented above, ends up running 'c! before returning, storing that
-      // bit into d as the new carry-out. Same net effect as 'rsh below, just
+      // bit into d as the new carry-out. Same net effect as 'div2d below, just
       // reached through the implicit csr16->c! landing instead of an explicit
       // call.
-      : 'lsh r@ 2* a xor dup r! csr16 ;
+      : 'mul2d r@ 2* a xor dup r! csr16 ;
 
       // ----------------------------------------------------------------------
-      // 'rsh  --  shift the (r,d) register pair right by one bit, capturing
-      // the carry-out into d (inferred)
+      // 'div2d  --  shift the (r,d) register pair right by one bit, capturing
+      // the carry-out into d (confirmed: "right shift double"; renamed from
+      // 'rsh -- see the revision note above)
       // ----------------------------------------------------------------------
       // 'r@' fetches r, 'a' pushes d, 'sl16' shifts d left a full 16 bits
       // (moving it up to align with r's own bit range), 'xor' merges d's
@@ -348,10 +393,11 @@ internal static class Node506Program
       // duplicate (the bit shifted OUT of the low end) on the stack, and the
       // explicit trailing 'c!' captures that duplicate's low bit into d as the
       // new carry-out.
-      : 'rsh r@ a sl16 xor dup 2/ r! c! ;
+      : 'div2d r@ a sl16 xor dup 2/ r! c! ;
 
       // ----------------------------------------------------------------------
-      // 'sext  --  sign-extend: replicate r's own sign bit across d (inferred)
+      // 'sext  --  sign-extend: replicate r's own sign bit across d (confirmed:
+      // "sign extension. if register r < 0 then d = -1 else d = 0")
       // ----------------------------------------------------------------------
       // 'r@' fetches r, '2* 2* 2/ 2/' shifts it left then right by two bits
       // each (a no-op on magnitude, but 2/'s arithmetic/sign-preserving
@@ -367,12 +413,13 @@ internal static class Node506Program
       // ----------------------------------------------------------------------
       // 'xffff and' masks to 16 bits, 'a!' stores into 506's own A (d).
       // Reached via fall-through from 'sext above, and via an explicit CALL
-      // from 'umul below.
+      // from 'umuld below.
       : mask xffff and a! ;
 
       // ----------------------------------------------------------------------
-      // 'umul  --  unsigned multiply: r * [popped value], low half in r, high
-      // half in d (inferred, from the classic shift-and-add multiply structure)
+      // 'umuld  --  unsigned multiply: r * [popped value], low half in r, high
+      // half in d (confirmed: "usigned multiply double" [sic, Stefan's own
+      // spelling]; renamed from 'umul -- see the revision note above)
       // ----------------------------------------------------------------------
       // 'spop' pops the multiplicand (relayed from 607's own extended memory),
       // 'dup r@ a! dup xor' stashes a copy into d (used as the running
@@ -386,7 +433,29 @@ internal static class Node506Program
       // 3 and xor mask' finishes aligning the two halves, masks and stores the
       // low half into r, then shifts, masks and combines the remaining bits
       // through 'mask above to store the high half into d.
-      : 'umul spop dup r@ a! dup xor 8 for +* . +* unext
+      : 'umuld spop dup r@ a! dup xor 8 for +* . +* unext
       	2* 2* a xffff and r! a sr16 3 and xor mask ;
+
+      // ----------------------------------------------------------------------
+      // Stefan's own trailing comment block for this revision, reproduced
+      // verbatim (see the revision note above for how each line here was
+      // cross-checked against this file's own per-word comments -- every one
+      // confirmed, none corrected).
+      // ----------------------------------------------------------------------
+      (
+        'zext zero extension. load 0 into register d
+        'addc add with carry.
+        sr16 shift right 16.
+        csr16 shift right 16 and store carry in register d.
+        c! store carry into register d.
+        sl16 shift left 16.
+        'ldd move register d into register r
+        'std store register r into register d
+        'xd exchange register d and r
+        'mul2d left shift double
+        'div2d right shift double
+        'sext sign extension. if register r < 0 then d = -1 else d = 0
+        'umuld usigned multiply double
+      )
       """;
 }

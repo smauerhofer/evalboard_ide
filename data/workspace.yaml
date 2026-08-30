@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-30T06:33:12.1064432
-      utcDateTime: 2026-08-30T06:33:12.1064432Z
-      localDateTime: 2026-08-30T08:33:12.1064432+02:00
+      dateTime: 2026-08-30T07:11:27.1080419
+      utcDateTime: 2026-08-30T07:11:27.1080419Z
+      localDateTime: 2026-08-30T09:11:27.1080419+02:00
       date: 2026-08-30T00:00:00.0000000
       day: 30
       dayOfWeek: Sunday
       dayOfYear: 242
-      hour: 6
-      millisecond: 106
-      microsecond: 443
-      nanosecond: 200
-      minute: 33
+      hour: 7
+      millisecond: 108
+      microsecond: 41
+      nanosecond: 900
+      minute: 11
       month: 8
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 12
-      ticks: 639236683921064432
-      utcTicks: 639236683921064432
-      timeOfDay: 06:33:12.1064432
+      second: 27
+      ticks: 639236706871080419
+      utcTicks: 639236706871080419
+      timeOfDay: 07:11:27.1080419
       year: 2026
   portB: 
   portC:
@@ -10165,6 +10165,9 @@ projects:
     - coordinate: 506
       enabled: true
       sourceCode: >-
+        ( cvm2 32 bit operations, 1110_0???_????_????)
+
+
         # 507 import
 
         # 0 org
@@ -10185,13 +10188,13 @@ projects:
 
         : r@ ( -w) A[ a !p ]] lit !b @b ;
 
-        : r! ( w) A[ @p a! ]] lit !b !b ;
+        : r! ( w) 0xffff and A[ @p a! ]] lit !b !b ;
 
         : 'zext dup xor a! ;
 
         : sr16 7 for 2/ 2/ unext ;
 
-        : '+c a spop + r@ + dup r!
+        : 'addc a spop + r@ + dup r!
 
         : csr16 sr16
 
@@ -10205,16 +10208,31 @@ projects:
 
         : 'xd a r@ a! r! ;
 
-        : 'lsh r@ 2* a xor dup r! csr16 ;
+        : 'mul2d r@ 2* a xor dup r! csr16 ;
 
-        : 'rsh r@ a sl16 xor dup 2/ r! c! ;
+        : 'div2d r@ a sl16 xor dup 2/ r! c! ;
 
         : 'sext r@ 2* 2* 2/ 2/ sr16
 
         : mask xffff and a! ;
 
-        : 'umul spop dup r@ a! dup xor 8 for +* . +* unext
-        	2* 2* a xffff and r! a sr16 3 and xor mask ;
+        : 'umuld spop dup r@ a! dup xor 8 for +* . +* unext
+          2* 2* a xffff and r! a sr16 3 and xor mask ;
+        (
+          'zext zero extension. load 0 into register d
+          'addc add with carry.
+          sr16 shift right 16.
+          csr16 shift right 16 and store carry in register d.
+          c! store carry into register d.
+          sl16 shift left 16.
+          'ldd move register d into register r
+          'std store register r into register d
+          'xd exchange register d and r
+          'mul2d left shift double
+          'div2d right shift double
+          'sext sign extension. if register r < 0 then d = -1 else d = 0
+          'umuld usigned multiply double
+        )
       ramWords:
       - 0x05B02
       - 0x3B9B2
@@ -10229,8 +10247,10 @@ projects:
       - 0x05608
       - 0x05B05
       - 0x239B2
-      - 0x05B25
+      - 0x04012
+      - 0x0FFFF
       - 0x04AB2
+      - 0x09B55
       - 0x243AD
       - 0x048B2
       - 0x00007
@@ -10239,7 +10259,7 @@ projects:
       - 0x3D60B
       - 0x3CDB2
       - 0x1340D
-      - 0x13410
+      - 0x13412
       - 0x040AD
       - 0x00001
       - 0x048B2
@@ -10253,15 +10273,15 @@ projects:
       - 0x1340B
       - 0x36EE3
       - 0x1340D
-      - 0x11417
+      - 0x11419
       - 0x1340B
-      - 0x2361A
+      - 0x2361C
       - 0x38DC2
       - 0x1340D
-      - 0x11418
+      - 0x1141A
       - 0x1340B
       - 0x364C2
-      - 0x31610
+      - 0x31612
       - 0x040AD
       - 0x0FFFF
       - 0x13405
@@ -10273,12 +10293,10 @@ projects:
       - 0x3648F
       - 0x0FFFF
       - 0x3F60D
-      - 0x23610
+      - 0x23612
       - 0x040E2
       - 0x00003
-      - 0x1142E
-      - 0x15555
-      - 0x15555
+      - 0x11430
       - 0x15555
       startup:
         entryPoint: 0x000
@@ -11874,31 +11892,13 @@ projects:
 
       slit 100
 
-      inc
-
       push
 
-      enter 5
+      slit 155
 
-      ldl 1
+      add
 
-      slit 11
-
-      stl 1
-
-      slit 12
-
-      stl 2
-
-      slit 13
-
-      stl 3
-
-      ldl 1
-
-      push
-
-      leave
+      dec
 
       pop
 

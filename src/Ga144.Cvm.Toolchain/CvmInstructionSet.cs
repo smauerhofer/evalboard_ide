@@ -16,7 +16,11 @@ namespace Ga144.Cvm.Toolchain;
 /// <c>gt0</c>, <c>ge</c>, <c>ge0</c>, <c>ule</c>, <c>le</c>, <c>le0</c>, <c>lt</c>, <c>lt0</c>,
 /// <c>ult</c>, <c>uge</c>, <c>mul2</c>, <c>udiv2</c>, <c>div2</c>, <c>abs</c>, <c>negate</c>, <c>xt</c>,
 /// <c>ldt</c>, <c>stt</c>, <c>bitcnt</c> (tagged mnemonics exactly like <c>leave</c>, resolved against
-/// node 508's own live compile -- see <see cref="EqualMnemonic"/>'s own remarks)) and, for each, how
+/// node 508's own live compile -- see <see cref="EqualMnemonic"/>'s own remarks)), plus node 506's nine
+/// register-d/extended-precision ops -- <c>zext</c>, <c>addc</c>, <c>ldd</c>, <c>std</c>, <c>xd</c>,
+/// <c>mul2d</c>, <c>div2d</c>, <c>sext</c>, <c>umuld</c> (tagged mnemonics exactly like <c>leave</c> and
+/// node 508's 27 ops, resolved against node 506's own live compile -- see
+/// <see cref="ZeroExtendMnemonic"/>'s own remarks)) and, for each, how
 /// many words it occupies once assembled, how its
 /// operand (if any) is encoded, and a stable numeric <see cref="CvmInstructionShape.Id"/>. This is the
 /// SHAPE of each instruction only -- for the tagged-dispatch mnemonics
@@ -36,12 +40,12 @@ namespace Ga144.Cvm.Toolchain;
 /// opcode word is fully known the moment the operand is, with no node/linker involvement.
 ///
 /// This table is the single source of truth shared by <see cref="CvmAssembler"/> here and by the IDE
-/// project's own disassembler (Ga144.Evb.Ide.Services.CvmAssemblyLanguage, which today only knows how
-/// to pair each TAGGED mnemonic with node 607's live F18 symbol -- extending it to the other 6 nodes is
-/// separate, later work; the self-describing mnemonics need no such pairing and are recognized
-/// directly by <see cref="TryDescribeSelfDecodingWord"/> instead). Adding a new CVM opcode is a
-/// one-line change here; the IDE project references this project specifically so both sides of the
-/// toolchain can never drift apart on what the instruction set is.
+/// project's own disassembler (Ga144.Evb.Ide.Services.CvmAssemblyLanguage, which pairs each TAGGED
+/// mnemonic with its own node's live F18 symbol -- 607, 507, 606, 508, and now 506 all have at least
+/// one; 608/707/407 remain separate, later work; the self-describing mnemonics need no such pairing
+/// and are recognized directly by <see cref="TryDescribeSelfDecodingWord"/> instead). Adding a new CVM
+/// opcode is a one-line change here; the IDE project references this project specifically so both
+/// sides of the toolchain can never drift apart on what the instruction set is.
 /// </summary>
 public static class CvmInstructionSet
 {
@@ -144,6 +148,28 @@ public static class CvmInstructionSet
   public const string LoadTMnemonic = "ldt";
   public const string StoreTMnemonic = "stt";
   public const string BitCountMnemonic = "bitcnt";
+
+  // Node 506's register-d/extended-precision ops, added per Stefan's node 506 source and the same
+  // naming rule he gave for node 508 ("every word that begins with a ' is an opcode for the CVM with the
+  // mnemonic using the same name without the leading '"). Every one of these nine is shaped exactly like
+  // node 508's 27 ops (and 'leave, and node 607's own nop/push/pop/pushlit/ret) -- a single bare TAGGED
+  // opcode word (CvmOperandEncoding.None), never self-describing: node 506's own 'main' receives a
+  // dispatch address directly over the port and jumps straight to it ("A[ drop !p ]] lit !b @b >r ex"),
+  // so each named word's real opcode is simply node 506's own confirmed opcode-class tag (0xE000-0xE7FF,
+  // "register d", per this project's own cvm-toolchain-design.md) OR'd with wherever that word lands in
+  // node 506's own compiled RAM, resolved only against a live compile, exactly like node 508's ops. None
+  // of the nine takes an assembled operand: each acts on this node's own register d and/or node 507's
+  // register r (already relayed across the port by the time 'main dispatches to it), never on a literal
+  // baked into the instruction word itself.
+  public const string ZeroExtendMnemonic = "zext";
+  public const string AddWithCarryMnemonic = "addc";
+  public const string LoadDMnemonic = "ldd";
+  public const string StoreDMnemonic = "std";
+  public const string ExchangeDMnemonic = "xd";
+  public const string MultiplyByTwoDoubleMnemonic = "mul2d";
+  public const string DivideByTwoDoubleMnemonic = "div2d";
+  public const string SignExtendMnemonic = "sext";
+  public const string UnsignedMultiplyDoubleMnemonic = "umuld";
 
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
@@ -393,6 +419,15 @@ public static class CvmInstructionSet
     new(Id: 53, LoadTMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 54, StoreTMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 55, BitCountMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 56, ZeroExtendMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 57, AddWithCarryMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 58, LoadDMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 59, StoreDMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 60, ExchangeDMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 61, MultiplyByTwoDoubleMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 62, DivideByTwoDoubleMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 63, SignExtendMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 64, UnsignedMultiplyDoubleMnemonic, 1, CvmOperandEncoding.None),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

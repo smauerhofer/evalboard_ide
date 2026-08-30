@@ -18,7 +18,13 @@ namespace Ga144.Evb.Ide.ViewModels;
 /// longer needs a code change and a rebuild, just an edit and a click. <see cref="SaveCommand"/>/
 /// <see cref="LoadCommand"/> persist that hand-written source onto this chip's own project data
 /// (<see cref="Ga144ChipConfiguration.DebuggerAssemblyCode"/>) so it survives closing the debugger,
-/// while <see cref="RestoreCommand"/> discards it in favor of the original built-in test program.
+/// while <see cref="RestoreCommand"/> discards it in favor of the original built-in test program. The
+/// constructor itself re-opens where Stefan left off: if this chip has a Saved
+/// <see cref="Ga144ChipConfiguration.DebuggerAssemblyCode"/>, <see cref="AssemblyCodeText"/> starts
+/// from that instead of <see cref="DefaultAssemblyCode"/>, and either way the constructor immediately
+/// calls <see cref="Assemble"/> once so the window opens with its program already assembled into the
+/// standalone simulated SRAM -- not just sitting as unassembled text in the editor waiting for a
+/// manual click.
 ///
 /// Assemble itself never actually needed a connected chip -- node 607's source compiles the same way
 /// whether or not one is attached -- so it no longer requires an active session: with none, it
@@ -143,9 +149,21 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     LoadCommand = new RelayCommand(LoadAssemblyCode, () => _chip.DebuggerAssemblyCode is not null);
     RestoreCommand = new RelayCommand(RestoreAssemblyCode);
 
-    // The standalone SRAM exists from construction, before Start has ever run -- show it (all-zero
-    // words) right away instead of leaving the memory inspector blank until the first Start.
-    RefreshMemoryView();
+    // Reopen where Stefan left off: if this chip has ever had assembly code Saved from a previous
+    // CVM Debugger session, start the editor from that instead of DefaultAssemblyCode -- otherwise
+    // opening the window after a Save silently reverted to the built-in test program every time.
+    if (_chip.DebuggerAssemblyCode is { } savedAssemblyCode)
+    {
+      _assemblyCodeText = savedAssemblyCode;
+    }
+
+    // Assemble immediately on open (the no-session half of Assemble() -- see its own remarks; needs
+    // no connected chip) so whatever ends up in the editor (saved code above, or DefaultAssemblyCode)
+    // is already assembled into the standalone simulated SRAM the moment the window appears, instead
+    // of showing a program that LOOKS loaded in the editor but has not actually been assembled until
+    // Stefan clicks Assemble by hand. This also calls RefreshMemoryView()/RefreshProgramCounter()
+    // itself, so no separate RefreshMemoryView() call is needed here any more.
+    Assemble();
   }
 
   public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) NotifyCommandStates(); } }
@@ -171,10 +189,13 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   public string NewBreakpointText { get => _newBreakpointText; set => SetProperty(ref _newBreakpointText, value ?? string.Empty); }
 
   /// <summary>
-  /// The CVM Debugger's own Assembly Code editor contents -- prefilled with <see cref="DefaultAssemblyCode"/>,
-  /// which assembles to byte-identical words as the hardcoded test program Start already loads, so
-  /// clicking Assemble unedited right after Start is a no-op. Freely editable; <see cref="AssembleCommand"/>
-  /// is what actually does anything with it.
+  /// The CVM Debugger's own Assembly Code editor contents -- prefilled, by the constructor, from this
+  /// chip's Saved <see cref="Ga144ChipConfiguration.DebuggerAssemblyCode"/> if it has one, or otherwise
+  /// from <see cref="DefaultAssemblyCode"/> (which assembles to byte-identical words as the hardcoded
+  /// test program Start already loads, so clicking Assemble unedited right after Start is a no-op).
+  /// Freely editable; <see cref="AssembleCommand"/> is what actually does anything with a subsequent
+  /// edit, though the constructor already calls <see cref="Assemble"/> once up front so the window
+  /// never opens with unassembled text sitting in the editor.
   /// </summary>
   public string AssemblyCodeText { get => _assemblyCodeText; set => SetProperty(ref _assemblyCodeText, value ?? string.Empty); }
 
