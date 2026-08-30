@@ -39,14 +39,15 @@ public sealed record CvmDebugTransaction(
 /// <summary>
 /// Drives a live CVM install interactively instead of running it to completion:
 /// <see cref="Ga144CvmHardwareInstaller.StartDebugSessionAsync"/> compiles and boots the mesh, loads
-/// the debugger's own test program (<see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/> --
-/// deliberately its own variant, not the one the automatic "Install &amp; run CVM test" uses; see
-/// that method's remarks) into a fresh <see cref="CvmSimulatedSram"/>, and wakes node 708's
-/// <c>'start</c> -- but hands back this session, with the serial port left open, instead of
-/// servicing the resulting traffic to completion. That initial program is only a starting point, not
-/// permanent: <see cref="AssembleAndLoadProgram"/> lets the CVM Debugger's own Assembly Code editor
-/// overwrite it with hand-written source at any time, so trying out a new opcode no longer requires
-/// editing <see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/> and rebuilding the IDE.
+/// the debugger's own default test program (<see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/>,
+/// assembling <see cref="CvmDebuggerDefaultProgram.Source"/> -- deliberately its own variant, not the
+/// minimal one the automatic "Install &amp; run CVM test" uses; see that method's remarks) into a
+/// fresh <see cref="CvmSimulatedSram"/>, and wakes node 708's <c>'start</c> -- but hands back this
+/// session, with the serial port left open, instead of servicing the resulting traffic to
+/// completion. That initial program is only a starting point, not permanent:
+/// <see cref="AssembleAndLoadProgram"/> lets the CVM Debugger's own Assembly Code editor overwrite it
+/// with hand-written source at any time, so trying out a new opcode no longer requires editing
+/// <see cref="CvmDebuggerDefaultProgram"/> and rebuilding the IDE.
 ///
 /// <b>How stepping and breakpoints actually pause real hardware.</b> There is no debug/halt line on
 /// this design -- the CVM's only synchronization point with the host is the memory interface itself
@@ -101,16 +102,12 @@ public sealed class CvmDebugSession : IDisposable
 
   /// <summary>
   /// The program currently loaded into page 0 of the simulated SRAM. Initially the debugger's own
-  /// fixed test program (the shared 5 'nop/'plit/literal/'pop/'push/8 trailing 'nop sequence, except
-  /// word address <see cref="CvmMemoryProtocol.DebuggerCallTestAddress"/> is a <c>call</c> to
-  /// <see cref="CvmMemoryProtocol.DebuggerCallTestTarget"/> instead of a plain 'nop, word address
-  /// <see cref="CvmMemoryProtocol.DebuggerCallTestTarget"/> itself is a real 'ret -- confirmed working
-  /// against real hardware -- completing the call/return round trip, and word address
-  /// <see cref="CvmMemoryProtocol.DebuggerBranchTestAddress"/> (exactly where that round trip resumes)
-  /// is a raw <c>br <see cref="CvmMemoryProtocol.DebuggerBranchTestOffset"/></c> opcode word instead
-  /// of its own plain 'nop; see <see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/>'s own
-  /// remarks) -- but replaceable at any time via <see cref="AssembleAndLoadProgram"/>, which is what
-  /// the CVM Debugger's own Assembly Code editor does.
+  /// default test program (<see cref="CvmDebuggerDefaultProgram.Source"/>, assembled by
+  /// <see cref="CvmMemoryProtocol.TryBuildDebuggerTestProgram"/> -- see that class's own remarks for
+  /// exactly which 43 of the CVM's 72 opcodes it exercises, which are deliberately excluded, and
+  /// which two blocks are exploratory rather than asserted-correct) -- but replaceable at any time
+  /// via <see cref="AssembleAndLoadProgram"/>, which is what the CVM Debugger's own Assembly Code
+  /// editor does.
   /// </summary>
   public IReadOnlyList<int> Program => _program;
 

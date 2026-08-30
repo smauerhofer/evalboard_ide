@@ -66,46 +66,14 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   private readonly CvmSimulatedSram _standaloneSram = new();
   private IReadOnlyList<int> _standaloneProgram = [];
 
-  // Source-form equivalent of CvmMemoryProtocol.TryBuildDebuggerTestProgram's own hardcoded words --
-  // assembling this unedited reproduces exactly the program Start already loads today (call 0x20 at
-  // address 1, br 1 at address 2, 'ret at address 0x20, 'nop padding everywhere else), so clicking
-  // Assemble right after Start is a no-op on the simulated SRAM's contents. Edit it and click
-  // Assemble to try a different program against the connected hardware without a rebuild.
-  private const string DefaultAssemblyCode =
-      "; CVM Debugger test program -- matches what Start loads by default.\n" +
-      "; Edit this, then click Assemble to load your own program into the simulated SRAM.\n" +
-      "nop\n" +
-      "call 0x20   ; address 1\n" +
-      "br 1        ; address 2 -- branches past address 3 once the call above returns here\n" +
-      "nop\n" +
-      "nop\n" +
-      "pushlit 0x1234\n" +
-      "pop\n" +
-      "push\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "nop\n" +
-      "ret         ; address 0x20\n";
+  // Source-form equivalent of CvmMemoryProtocol.TryBuildDebuggerTestProgram's own assembled words --
+  // both are literally CvmDebuggerDefaultProgram.Source, so assembling this unedited reproduces
+  // exactly the program Start already loads today (43 of the CVM's 72 opcodes, each with a
+  // log-checkable expected value -- see CvmDebuggerDefaultProgram's own remarks for full coverage
+  // details, the two deliberate exclusions, and the two exploratory blocks), so clicking Assemble
+  // right after Start is a no-op on the simulated SRAM's contents. Edit it and click Assemble to try
+  // a different program against the connected hardware without a rebuild.
+  private const string DefaultAssemblyCode = CvmDebuggerDefaultProgram.Source;
 
   private CvmDebugSession? _session;
   private CancellationTokenSource? _continueCts;
@@ -191,8 +159,9 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// <summary>
   /// The CVM Debugger's own Assembly Code editor contents -- prefilled, by the constructor, from this
   /// chip's Saved <see cref="Ga144ChipConfiguration.DebuggerAssemblyCode"/> if it has one, or otherwise
-  /// from <see cref="DefaultAssemblyCode"/> (which assembles to byte-identical words as the hardcoded
-  /// test program Start already loads, so clicking Assemble unedited right after Start is a no-op).
+  /// from <see cref="DefaultAssemblyCode"/> (<see cref="CvmDebuggerDefaultProgram.Source"/> itself,
+  /// so it assembles to byte-identical words as the program Start already loads, and clicking
+  /// Assemble unedited right after Start is a no-op).
   /// Freely editable; <see cref="AssembleCommand"/> is what actually does anything with a subsequent
   /// edit, though the constructor already calls <see cref="Assemble"/> once up front so the window
   /// never opens with unassembled text sitting in the editor.
@@ -268,7 +237,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       _session = await installer.StartDebugSessionAsync(endpoint.PortName, _chip, compileService);
 
       InstallSummaryText = $"Install: {_session.Install.Steps.Count} boot frame(s) sent, fire-and-forget. Loaded a {_session.Program.Count}-word test program " +
-          "(5 'nop, 'plit, literal, 'pop, 'push, 8 trailing 'nop) into the simulated SRAM and woke node 708's 'start.";
+          "(43 of the CVM's 72 opcodes, each with a log-checkable expected value -- see CvmDebuggerDefaultProgram's own remarks) into the simulated SRAM and woke node 708's 'start.";
 
       // The Assembly Code editor is the single source of truth for what should be running, whether
       // it was edited before or after Start -- re-apply it to the freshly connected chip now, so
