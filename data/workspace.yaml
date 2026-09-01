@@ -1,6 +1,6 @@
 schemaVersion: 7
 activeBoardId: d6e6f99b-8d7d-4604-9709-4d6a0b6820f7
-activeProjectId: 3955b3c5-6023-4541-84fe-59925a0b12f9
+activeProjectId: 6f706653-dd18-4880-8fa0-a69b52146b8c
 settings:
   autoDetect: false
   activeProbeNewFtdiPorts: true
@@ -24,39 +24,6 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-08-30T11:47:05.2136905
-      utcDateTime: 2026-08-30T11:47:05.2136905Z
-      localDateTime: 2026-08-30T13:47:05.2136905+02:00
-      date: 2026-08-30T00:00:00.0000000
-      day: 30
-      dayOfWeek: Sunday
-      dayOfYear: 242
-      hour: 11
-      millisecond: 213
-      microsecond: 690
-      nanosecond: 500
-      minute: 47
-      month: 8
-      offset: 00:00:00
-      totalOffsetMinutes: 0
-      second: 5
-      ticks: 639236872252136905
-      utcTicks: 639236872252136905
-      timeOfDay: 11:47:05.2136905
-      year: 2026
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -77,6 +44,19 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -9489,75 +9469,102 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 307
-      enabled: false
-      sourceCode: ''
+      enabled: true
+      sourceCode: >+
+        ( cvm in/out support, 1111_????_????_????)
+
+        ( A: port )
+
+        # 407 import
+
+        # 0 org
+
+        entry main
+
+        # up /b
+
+
+
+        : main A[ drop !p ]] lit !b @b >r ex A[ ; ]] !b main ;
+
+        : d/r@ ( -w) A[ t/r@ ]] lit !b A[ !p ]] lit !b @b ;
+
+        : d/r! ( w) A[ @p t/r! ]] lit !b !b ;
+
+        : d/pop ( -w) A[ t/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : d/push ( w) A[ @p t/push ]] lit !b !b ;
+
+        : 'add2 ( )
+
+
       ramWords:
-      - 0x05B8B
-      - 0x049B2
-      - 0x09555
-      - 0x05B05
-      - 0x0C9B2
-      - 0x13406
-      - 0x05B25
-      - 0x049B2
-      - 0x05B25
-      - 0x0560F
-      - 0x13405
-      - 0x05B05
-      - 0x13409
-      - 0x13405
-      - 0x05B25
-      - 0x0560A
+      - 0x05B02
+      - 0x3B9B2
+      - 0x2F455
+      - 0x09700
       - 0x05B12
-      - 0x13404
+      - 0x13400
       - 0x0C9B2
       - 0x09F55
-      - 0x13410
-      - 0x23455
-      - 0x040AA
-      - 0x0FFFF
-      - 0x05BB2
-      - 0x15555
-      - 0x05B02
-      - 0x0D9B2
-      - 0x2FF9A
-      - 0x37226
-      - 0x37221
-      - 0x13575
-      - 0x23716
-      - 0x37224
-      - 0x13545
-      - 0x23716
-      - 0x135D5
-      - 0x23716
-      - 0x3722A
-      - 0x367C2
-      - 0x307C2
-      - 0x31716
-      - 0x208DA
-      - 0x1B415
-      - 0x11414
-      - 0x2E9B2
-      - 0x37155
-      - 0x2E4DA
-      - 0x3079D
-      - 0x2E9B2
-      - 0x31155
-      - 0x3D555
-      - 0x3F555
-      - 0x39555
-      - 0x32FCA
-      - 0x3E655
-      - 0x04D22
-      - 0x05604
-      - 0x2FB9A
-      - 0x09B12
-      - 0x13402
-      - 0x09D22
+      - 0x05B25
+      - 0x05602
+      - 0x05B12
+      - 0x13406
       - 0x0C9B2
-      - 0x01555
+      - 0x09F55
+      - 0x05B25
+      - 0x05604
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x01A
+        entryPoint: 0x000
         p: 0x000
         a: 0x000
         b: 0x000
@@ -9821,9 +9828,111 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 406
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >+
+        ( cvm node 406. extended register, 1111_10??_????_????)
+
+        # 407 import
+
+        # 0x30 org
+
+        entry main
+
+        # right /b
+
+
+        : main A[ 2* !p !p ]] lit !b
+          @b @b a!
+          -if // 1111_01??_????_????
+            : 'str
+            A[ @p t/r! ; ]] lit !b @ !b
+            main ;
+          then // 1111_00??_????_????
+            : 'ldr
+            A[ t/r@ ]] lit !b A[ !p ; ]] lit !b @b !
+            main ;
+        ;
+
+
+        (
+
+        this node provides 48 expansion register, available as temporary and scratch register.
+
+
+        'str store register r into memory in this node. index are from 00..2f
+
+        'ldr load register r from memory in this node. index are from 00..2f
+
+
+        )
+
+
+
+      ramWords:
+      - 0x05B02
+      - 0x37932
+      - 0x00A6E
+      - 0x05B0A
+      - 0x05702
+      - 0x09700
+      - 0x05B12
+      - 0x13400
+      - 0x0D555
+      - 0x09F2A
+      - 0x11400
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -9845,15 +9954,30 @@ projects:
 
         # 0 # 1 /stack
 
-        # left /a
+        # up /a
 
         # down /b
 
 
-        : main A[ drop !p ]] lit !b @b >r ex
+        : t/r@ ( -w) .loc A[ a !p ]] lit !b @b ;
 
-        : leave A[ ; ]] lit !b main ;
+        : t/r! ( w) .loc A[ @p a! ]] lit !b !b ;
 
+        : t/push ( w) .loc A[ @p s/push ]] lit !b !b ;
+
+        : t/pop ( -w) .loc A[ s/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : leave A[ ; ]] lit !b 
+
+        : main A[ 2* !p !p ]] lit !b
+          @b @b >r ..
+          -if // 1111_1???_????_????
+            2* -if // 1111_11??_????_????
+              --l- leave ;
+            then // 1111_10??_????_????
+              r--- leave ;
+          then  // 1111_0???_????_????
+          ex leave ;
         : sr16 ( w-w) 7 for 2/ 2/ unext
 
         : c! 3 and ;
@@ -9900,11 +10024,29 @@ projects:
 
         )
       ramWords:
-      - 0x05B02
-      - 0x3B9B2
-      - 0x2F455
-      - 0x05B40
+      - 0x05B05
+      - 0x239B2
+      - 0x05B25
+      - 0x04AB2
+      - 0x05B25
+      - 0x05603
+      - 0x05B12
+      - 0x1340B
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05BB2
       - 0x15555
+      - 0x05B02
+      - 0x37932
+      - 0x008B2
+      - 0x1B415
+      - 0x37213
+      - 0x13575
+      - 0x1140A
+      - 0x135D5
+      - 0x1140A
+      - 0x17555
+      - 0x1140A
       - 0x048B2
       - 0x00007
       - 0x30772
@@ -9915,47 +10057,29 @@ projects:
       - 0x36475
       - 0x05B05
       - 0x239B2
-      - 0x25605
+      - 0x25617
       - 0x05B25
       - 0x04AB2
-      - 0x2360D
-      - 0x2B710
+      - 0x2361F
+      - 0x2B722
       - 0x25A55
       - 0x03555
-      - 0x25710
+      - 0x25722
       - 0x040B2
       - 0x0FFFF
-      - 0x1340D
-      - 0x1340A
+      - 0x1341F
+      - 0x1341C
       - 0x39555
       - 0x040B2
       - 0x30000
-      - 0x1340D
+      - 0x1341F
       - 0x39555
       - 0x05B12
-      - 0x13410
+      - 0x1340B
       - 0x0C9B2
       - 0x09F55
       - 0x05B25
-      - 0x05608
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x05603
       - 0x15555
       - 0x15555
       - 0x15555
@@ -9965,7 +10089,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x00C
         p: 0x000
         a: 0x000
         b: 0x000
@@ -9973,11 +10097,102 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 408
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >
+        ( cvm node 408 expansion, 1111_11??_????_????)
+
+        # 407 import
+
+        # 0 org
+
+        entry main
+
+        # left /b
+
+
+        : leave A[ ; ]] lit !b 
+
+        : main A[ drop !p ]] lit !b @b ex leave ;
+
+        : mask xffff and a! ;
+
+        : d/r@ ( -w) A[ t/r@ ]] lit !b A[ !p ]] lit !b @b ;
+
+        : d/r! ( w) A[ @p t/r! ]] lit !b mask !b ;
+
+        : d/pop ( -w) A[ t/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : d/push ( w) A[ @p t/push ]] lit !b mask !b ;
+
+        : 'add2 ( ) // r contains carry
+          d/r@ d/pop >r d/pop
+      ramWords:
+      - 0x05BB2
+      - 0x15555
+      - 0x05B02
+      - 0x3B9B2
+      - 0x17555
+      - 0x11400
+      - 0x040AD
+      - 0x0FFFF
+      - 0x05B12
+      - 0x13400
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05BB2
+      - 0x05602
+      - 0x13406
+      - 0x09555
+      - 0x05B12
+      - 0x13406
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05BB2
+      - 0x05604
+      - 0x13406
+      - 0x09555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x002
         p: 0x000
         a: 0x000
         b: 0x000
@@ -10186,11 +10401,13 @@ projects:
 
         : spop ( -w) A[ s/pop ]] lit !b A[ !p ]] lit !b @b ;
 
-        : spush ( w) A[ @p s/push ]] lit !b !b ;
+        : mask xffff and a! ;
+
+        : spush ( w) A[ @p s/push ]] lit !b mask !b ;
+
+        : r! ( w) A[ @p a! ]] lit !b mask !b ;
 
         : r@ ( -w) A[ a !p ]] lit !b @b ;
-
-        : r! ( w) 0xffff and A[ @p a! ]] lit !b !b ;
 
         : 'zext dup xor a! ;
 
@@ -10216,10 +10433,8 @@ projects:
 
         : 'sext r@ 2* 2* 2/ 2/ sr16
 
-        : mask xffff and a! ;
-
         : 'umuld spop dup r@ a! dup xor 8 for +* . +* unext
-          2* 2* a xffff and r! a sr16 3 and xor mask ;
+          2* 2* a mask r! a sr16 3 and xor mask ;
         (
           'zext zero extension. load 0 into register d
           'addc add with carry.
@@ -10242,64 +10457,64 @@ projects:
       - 0x05B40
       - 0x15555
       - 0x05B12
-      - 0x13410
+      - 0x1340B
       - 0x0C9B2
       - 0x09F55
-      - 0x05B25
-      - 0x05608
+      - 0x040AD
+      - 0x0FFFF
+      - 0x05B49
+      - 0x05603
+      - 0x09555
+      - 0x05BB2
+      - 0x04AB2
+      - 0x13409
+      - 0x09555
       - 0x05B05
       - 0x239B2
-      - 0x04012
-      - 0x0FFFF
-      - 0x04AB2
-      - 0x09B55
       - 0x243AD
       - 0x048B2
       - 0x00007
       - 0x30775
       - 0x23605
-      - 0x3D60B
+      - 0x3D612
       - 0x3CDB2
-      - 0x1340D
-      - 0x13412
+      - 0x1340E
+      - 0x13415
       - 0x040AD
       - 0x00001
       - 0x048B2
       - 0x00007
       - 0x36475
-      - 0x2370D
-      - 0x1340B
+      - 0x2370E
+      - 0x13412
       - 0x2B555
-      - 0x2360B
-      - 0x2B70D
-      - 0x1340B
+      - 0x23612
+      - 0x2B70E
+      - 0x13412
       - 0x36EE3
-      - 0x1340D
-      - 0x11419
-      - 0x1340B
-      - 0x2361C
+      - 0x1340E
+      - 0x1141C
+      - 0x13412
+      - 0x2361F
       - 0x38DC2
-      - 0x1340D
-      - 0x1141A
-      - 0x1340B
+      - 0x1340E
+      - 0x1141D
+      - 0x13412
       - 0x364C2
-      - 0x31612
-      - 0x040AD
-      - 0x0FFFF
+      - 0x31615
       - 0x13405
-      - 0x2560B
+      - 0x25612
       - 0x2ADE7
       - 0x00008
       - 0x2E9B2
       - 0x349D4
-      - 0x3648F
-      - 0x0FFFF
-      - 0x3F60D
-      - 0x23612
+      - 0x3648A
+      - 0x13409
+      - 0x1340E
+      - 0x23615
       - 0x040E2
       - 0x00003
-      - 0x11430
-      - 0x15555
+      - 0x11409
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -10313,6 +10528,8 @@ projects:
       sourceCode: >
         ( CVM node 507 second dispatch node, 11??_????_????_???? )
 
+        ( A: register r)
+
         # 607 import
 
         # 0 org
@@ -10323,9 +10540,9 @@ projects:
 
         # up /b
 
-        : s/r@ ( t) .loc A[ @p ]] lit !b dup !b ;
+        // : s/r@ ( -w) .loc A[ a !p ]] lit !b @b ;
 
-        : s/r! ( t) .loc A[ !p ]] lit !b @b ;
+        // : s/r! ( w) .loc A[ @p a! ]] lit !b !b ;
 
         : s/2put ( ww) leap
 
@@ -10347,10 +10564,10 @@ projects:
 
         : ctrl A[ ; ]] lit !b
 
-        : main A[ !p !p ]] lit !b @b >r @b r> ..
+        : main A[ 2* !p !p ]] lit !b @b >r @b r> ..
           ( xy)
           // 11??_????_????_????
-          2* -if // 111?_????_????_????
+          -if // 111?_????_????_????
             2* -if // 1111_????_????_???? node 407
               ( xy) -d-- a leave ;
             then // 1110_????_????_????
@@ -10394,9 +10611,9 @@ projects:
 
         (
 
-        s/r@  used by 207 to read R.
+        s/r@  used by 507 to read R.
 
-        s/r!  used by 207 to write R.
+        s/r!  used by 507 to write R.
 
         s/pop  pops cell from stack.
 
@@ -10443,53 +10660,48 @@ projects:
 
         )
       ramWords:
-      - 0x05B92
-      - 0x049B2
-      - 0x09555
-      - 0x05B05
-      - 0x0C9B2
-      - 0x13406
+      - 0x13401
       - 0x05B25
       - 0x049B2
       - 0x05B25
       - 0x0560D
-      - 0x13405
+      - 0x13400
       - 0x05B05
       - 0x13407
-      - 0x13405
+      - 0x13400
       - 0x05B25
-      - 0x05612
+      - 0x05614
       - 0x05B12
       - 0x13402
       - 0x0C9B2
       - 0x09F55
-      - 0x13410
+      - 0x1340B
       - 0x23455
       - 0x040AA
       - 0x0FFFF
       - 0x05BB2
       - 0x15555
       - 0x05B02
-      - 0x0D9B2
+      - 0x37932
       - 0x2FF9A
-      - 0x37226
-      - 0x37221
+      - 0x1B421
+      - 0x3721C
       - 0x13515
-      - 0x23716
-      - 0x37224
+      - 0x23711
+      - 0x3721F
       - 0x13575
-      - 0x23716
+      - 0x23711
       - 0x135D5
-      - 0x23716
-      - 0x3722A
+      - 0x23711
+      - 0x37225
       - 0x367C2
       - 0x307C2
-      - 0x31716
-      - 0x3722D
+      - 0x31711
+      - 0x37228
       - 0x3A8B2
-      - 0x11414
+      - 0x1140F
       - 0x3A8B2
-      - 0x11415
+      - 0x11410
       - 0x2E9B2
       - 0x37155
       - 0x2E4DA
@@ -10507,8 +10719,13 @@ projects:
       - 0x00001
       - 0x049F5
       - 0x3FFFF
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x01A
+        entryPoint: 0x015
         p: 0x000
         a: 0x000
         b: 0x000
@@ -10875,6 +11092,8 @@ projects:
          opcode pattern 1010_????_????_????
         )
 
+        ( A: frame pointer f)
+
         # 607 import
 
         entry main
@@ -10917,11 +11136,11 @@ projects:
           r> noff st ;
           then // 1010_100?_????_????
           2* -if // 1010_1001_????_????
-        : cleanup A[ @p /pop ]] lit !b a !b A[ !p 'ret ]] lit !b @b a! r>
+        : 'cleanup A[ @p /pop ]] lit !b a !b A[ !p 'ret ]] lit !b @b a! r>
 
         : adjust A[ @p . + ; ]] lit !b !b main ;
 
-        : enter
+        : 'enter
           then // 1010_1000_????_????
           A[ @p /push ]] lit !b a !b A[ dup !p ]] lit !b @b a! r> inv adjust ;
         : 'xf ( s-s) a A[ @p /r@ ]] lit !b !b A[ !p /r! ; ]] lit !b @b a! ;
@@ -10947,11 +11166,9 @@ projects:
 
         st store data relative to frame pointer.
 
-        cleanup 
+        'cleanup add something to stack pointer
 
-        adjust add something to stack pointer
-
-        enter enter stack frame. push the frame pointer, add an offset and load a new frame pointer.
+        'enter enter stack frame. push the frame pointer, add an offset and load a new frame pointer.
 
         'xf exchanges frame pointer with r
 
@@ -11038,6 +11255,8 @@ projects:
       sourceCode: >
         ( CVM node 607. main CVM node, ????_????_????_???? )
 
+        ( T: stack pointer s, A: program counter p)
+
         # 0 org
 
         entry 'nop
@@ -11058,21 +11277,21 @@ projects:
 
         : /next ( s-sx) a dup 1 . + a! dup dup xor /@ ;
 
-        : 'plit .loc ( s-s) /next // push literal
+        : 'push .loc ( s-s) /r@
 
         : /push .loc ( sw-s) >r -1 . + r> over
+
+        : 'plit .loc ( s-s) /next /push ; // push literal
 
         : /1! ( swa) 1
 
         : /! ( swab) inv !b inv !b !b ;
 
-        : 'lit ( s-s) /next
+        : 'pop .loc ( s-s) /pop
 
         : /r! ( sw-s) 3 dup ( swxy) ---u ;
 
-        : 'pop .loc ( s-s) /pop /r! ;
-
-        : 'push .loc ( s-s) /r@ /push ;
+        : 'lit ( s-s) /next /r! ;
 
         : exec ( sxy-s)
           2* -if  // 11??_????_????_????
@@ -11132,24 +11351,24 @@ projects:
       - 0x00001
       - 0x3CA93
       - 0x39707
-      - 0x13408
+      - 0x13400
       - 0x2FDB0
       - 0x3FFFF
       - 0x26FB2
+      - 0x13408
+      - 0x1140D
       - 0x049B2
       - 0x00001
       - 0x33BCA
       - 0x09B55
-      - 0x13408
+      - 0x13402
       - 0x04DB2
       - 0x00003
       - 0x11545
-      - 0x13402
-      - 0x11415
-      - 0x13400
-      - 0x1140D
+      - 0x13408
+      - 0x11417
       - 0x3721E
-      - 0x11515
+      - 0x11545
       - 0x37222
       - 0x37221
       - 0x11575
@@ -11169,13 +11388,13 @@ projects:
       - 0x13402
       - 0x2B555
       - 0x2F600
-      - 0x27715
+      - 0x27717
       - 0x23600
-      - 0x2B715
+      - 0x2B717
       - 0x23600
       - 0x3D608
       - 0x3CA55
-      - 0x23715
+      - 0x23717
       - 0x3A88A
       - 0x1340D
       - 0x26AB2
@@ -11196,6 +11415,8 @@ projects:
       enabled: true
       sourceCode: >-
         ( cvm2 1011 global, opcode 1011_????_????_???? )
+
+        ( A: global pointer g)
 
         # 607 import
 
@@ -11252,13 +11473,13 @@ projects:
 
         'x3  writes the next 3 words from the return address
         	to node 207 and jumps to main.
-        'ld  loads word with address in R. mnemonic ld
+        'ld  loads word with address in register r. mnemonic ld
 
-        'st  pops and stores word with address in R.  mnemonic st
+        'st  pops and stores word with address in register r.  mnemonic st
 
-        'ldph  push word with address in R.  mnemonic pushi
+        'ldph  push word with address in register r.  mnemonic pushi
 
-        leave  gives control back to node 207.
+        leave  gives control back to node 607.
 
         local  calls local instruction.
 
@@ -11272,11 +11493,11 @@ projects:
 
         glob  address of global variable.
 
-        'xg  exchanges global pointer with R. mnemonic xg
+        'xg  exchanges global pointer with register r. mnemonic xg
 
-        'ldx  loads word from extended address. mnemonic ldx
+        'ldx  loads word from extended address. lower word is in register r and page is on the stack. mnemonic ldx
 
-        'stx  stores word to extended address mnemonic stx
+        'stx  stores word to extended address. lower word is in register r and page is on the stack. mnemonic stx
 
         /long  word used by 'stx.
 
@@ -11897,13 +12118,9 @@ projects:
 
       push
 
-      slit 155
+      adjust 2
 
-      add
-
-      dec
-
-      pop
+      push
 
       nop
 
@@ -11922,8 +12139,4382 @@ projects:
       nop
 
       nop
+  - role: Target
+    name: Target GA144
+    nodes:
+    - coordinate: 0
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 1
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 2
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 3
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 4
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 5
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 6
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 7
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 8
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 9
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 10
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 11
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 12
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 13
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 14
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 15
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 16
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 17
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 100
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 101
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 102
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 103
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 104
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 105
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 106
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 107
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 108
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 109
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 110
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 111
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 112
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 113
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 114
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 115
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 116
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 117
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 200
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 201
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 202
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 203
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 204
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 205
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 206
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 207
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 208
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 209
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 210
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 211
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 212
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 213
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 214
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 215
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 216
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 217
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 300
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 301
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 302
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 303
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 304
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 305
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 306
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 307
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 308
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 309
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 310
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 311
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 312
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 313
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 314
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 315
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 316
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 317
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 400
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 401
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 402
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 403
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 404
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 405
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 406
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 407
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 408
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 409
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 410
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 411
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 412
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 413
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 414
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 415
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 416
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 417
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 500
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 501
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 502
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 503
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 504
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 505
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 506
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 507
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 508
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 509
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 510
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 511
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 512
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 513
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 514
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 515
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 516
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 517
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 600
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 601
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 602
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 603
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 604
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 605
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 606
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 607
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 608
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 609
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 610
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 611
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 612
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 613
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 614
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 615
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 616
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 617
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 700
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 701
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 702
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 703
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 704
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 705
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 706
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 707
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 708
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 709
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 710
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 711
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 712
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 713
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 714
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 715
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 716
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 717
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    debuggerAssemblyCode: 
+  userMacros: []
+- id: 6f706653-dd18-4880-8fa0-a69b52146b8c
+  name: CVM2
+  board: 
+  chips:
+  - role: Host
+    name: Host GA144
+    nodes:
+    - coordinate: 0
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 1
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 2
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 3
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 4
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 5
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 6
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 7
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 8
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 9
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 10
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 11
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 12
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 13
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 14
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 15
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 16
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 17
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 100
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 101
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 102
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 103
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 104
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 105
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 106
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 107
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 108
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 109
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 110
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 111
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 112
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 113
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 114
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 115
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 116
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 117
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 200
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 201
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 202
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 203
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 204
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 205
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 206
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 207
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 208
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 209
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 210
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 211
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 212
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 213
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 214
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 215
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 216
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 217
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 300
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 301
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 302
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 303
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 304
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 305
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 306
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 307
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 308
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 309
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 310
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 311
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 312
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 313
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 314
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 315
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 316
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 317
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 400
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 401
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 402
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 403
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 404
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 405
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 406
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 407
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 408
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 409
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 410
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 411
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 412
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 413
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 414
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 415
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 416
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 417
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 500
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 501
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 502
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 503
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 504
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 505
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 506
+      enabled: true
+      sourceCode: "( CVM2 node 506. frame & global, 100?_????_????_???? )\n# 507 import\n# 0 org\nentry main\n# 0 /a\n# right /b\r\n: par 0x1ff and ;\r\n: local par inv ;\r\n: stack@ ( o-a) // load from stack\r\n  a . +  A[ @p m/1@ ]] lit !b !b A[ !m/r ; ]] lit !b ;\r\n: stack! ( o-a) // store to stack\r\n  a . +  A[ m/r ]] lit !b A[ @p m/1! ; ]] lit !b !b ;\r\n: global ( a-g) // calculate global address\r\n  0x7ff and 0x8000 . + ;\n: main # main >r A[ !p !p ]] lit !b @b @b >r \r\n  2* -if // 1001_????_????_????\r\n    // globals\r\n    2* -if // 1001_1???_????_????\r\n      // global fetch to r\r\n      r> global A[ @p m/0@ ]] lit !b !b A[ !m/r ; ]] lit !b ;\r\n    then // 1001_0???_????_????\n      // global store to r\r\n      A[ m/r ]] lit !b r> global A[ @p m/0! ; ]] lit !b !b ;\r\n\r\n  then // 1000_????_????_????\n  2* -if // 1000_1???_????_????\r\n\r\n    2* -if // 1000_11??_????_????\r\n\r\n      2* -if // 1000_111?_????_????\r\n        // load local\r\n        r> local stack@ ;\r\n        \r\n      then // 1000_110?_????_????\n      // load parameter\r\n      r> par stack@ ;\r\n\r\n    then // 1000_10??_????_????\n\r\n      2* -if // 1000_101?_????_????\r\n        // store local\r\n        r> local stack! ;\r\n\r\n      then // 1000_100?_????_????\n      // store parameter\r\n      r> par stack! ;\r\n\r\n  then // 1000_0???_????_????\n  2* -if // 1000_01??_????_????\r\n\r\n    // enter\r\n    a A[ @p m/push ]] lit !b !b ; // save frame pointer\r\n    A[ dup !p ; ]] lit !b @b // read stack pointer\r\n    r> local + a! ;\r\n\r\n  then // 1000_00??_????_????\n  r> ex ;\r\n: 'leave\r\n  A[ @p m/pop ]] lit !b a !b A[ !p ; ]] lit !b @b a! ;\r\n: 'f A[ @p !m/r ; ]] lit !b a !b ;\r\n"
+      ramWords:
+      - 0x04055
+      - 0x001FF
+      - 0x13400
+      - 0x33555
+      - 0x229F7
+      - 0x05607
+      - 0x09B12
+      - 0x11401
+      - 0x09555
+      - 0x229F7
+      - 0x13402
+      - 0x09D22
+      - 0x05714
+      - 0x09555
+      - 0x04012
+      - 0x007FF
+      - 0x08000
+      - 0x3D555
+      - 0x2FD22
+      - 0x0D9B2
+      - 0x01FBA
+      - 0x37221
+      - 0x3721C
+      - 0x2760E
+      - 0x05B27
+      - 0x0560A
+      - 0x11401
+      - 0x09555
+      - 0x05B9A
+      - 0x13402
+      - 0x1340E
+      - 0x05B25
+      - 0x05718
+      - 0x3722D
+      - 0x37228
+      - 0x37226
+      - 0x27602
+      - 0x11404
+      - 0x27600
+      - 0x11404
+      - 0x3722B
+      - 0x27602
+      - 0x11409
+      - 0x27600
+      - 0x11409
+      - 0x37235
+      - 0x23D22
+      - 0x05611
+      - 0x09555
+      - 0x05B02
+      - 0x25955
+      - 0x27602
+      - 0x3CA55
+      - 0x27455
+      - 0x15555
+      - 0x05B8A
+      - 0x05604
+      - 0x09D22
+      - 0x0D555
+      - 0x00A55
+      - 0x05B8A
+      - 0x05701
+      - 0x09555
+      - 0x15555
+      startup:
+        entryPoint: 0x012
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 507
+      enabled: true
+      sourceCode: >
+        ( CVM2 node 508. main CVM2 node, ????_????_????_???? )
 
-      nop
+        ( T: stack pointer s, A: program counter p, m/r: register r)
+
+        # 1 org
+
+        entry m/main
+
+        # 0 /a
+
+        # down /b
+
+        [ 0xffff 1 ] /stack
+
+        # 0 f18var m/r
+
+        : m/pop ( s-sw) dup >r 1 . + r>
+
+        : m/1@ 1 ( sa-sw)
+
+        : m/@ ( sab-sw) !b !b @b ;
+
+        : m/0@ ( sa-sw) 0 m/@ ;
+
+        : m/next ( s-sx) a dup 1 . + a! dup dup xor m/@ ;
+
+        : 'push .loc ( s-s) m/r
+
+        : m/push ( sw-s) >r -1 . + r> over
+
+        : m/1! ( swa-s) 1
+
+        : m/! ( swab-s) inv !b inv !b !b ;
+
+        : m/0! ( swa-s) 0 m/!
+
+        : m/branch ( so-s) a . + a! ;
+
+        : m/call ( sxy-s) ahead drop >r a m/push r> a!
+
+        : m/main ( s-s) m/next dup 2* 2* -until // 0???_????_????_????
+          # m/main >r
+          ( sxy) 2* -if  // 11??_????_????_????
+            -d-- ;
+          then // 10??_????_????_????
+          ( sxy) 2* -if  // 101?_????_????_????
+            --l- ;
+          then // 100?_????_????_????
+            r--- ;
+          ( sxy) 2* -if  // 1001_????_????_????
+          then // 1000_????_????_????
+          ( sxy) 2* -if  // 1000_1???_????_????
+            // local execute
+            drop >r ;
+          then // 1000_0???_????_????
+          // branch relative
+          ( sxy) 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! drop ;
+        : 'ret ( s-s) m/pop a! ;
+
+        : 'plit ( s-s) m/next m/push ;
+
+        : 'tjmp ( so-s) a . + a!
+
+        : 'jump ( s-s) m/next a! ;
+
+        : 'pop ( s-s) m/pop !m/r ;
+
+        : 'xs ( s-s) >r m/r r> !m/r ;
+
+        : 'xp ( s-s) a m/r a! !m/r ;
+
+        : 'nop ( s-s) ;
+
+
+        (
+
+        'nop do nothing
+
+        'tjmp table jump to address in table with offset
+
+        'jump jump to address in next word
+
+        'plit push literal to stack
+
+        'ret return from subroutine
+
+        'push push r onto stack
+
+        'pop pop r from stack
+
+        'xs exchange s and r
+
+        'xp exchange p and r
+
+        )
+      ramWords:
+      - 0x15555
+      - 0x04235
+      - 0x05555
+      - 0x00000
+      - 0x24812
+      - 0x00001
+      - 0x3CCB2
+      - 0x049B2
+      - 0x00001
+      - 0x09B05
+      - 0x05709
+      - 0x00000
+      - 0x22D12
+      - 0x00001
+      - 0x3CA93
+      - 0x39709
+      - 0x13402
+      - 0x2FDB0
+      - 0x3FFFF
+      - 0x26FB2
+      - 0x049B2
+      - 0x00001
+      - 0x33BCA
+      - 0x09B55
+      - 0x05616
+      - 0x00000
+      - 0x229F2
+      - 0x2B555
+      - 0x11400
+      - 0x3A88A
+      - 0x13411
+      - 0x26AB2
+      - 0x1340C
+      - 0x244DA
+      - 0x1B41C
+      - 0x2E46D
+      - 0x11515
+      - 0x37227
+      - 0x115D5
+      - 0x37229
+      - 0x11575
+      - 0x3722B
+      - 0x3A855
+      - 0x367C2
+      - 0x307C2
+      - 0x3078A
+      - 0x3CAED
+      - 0x13404
+      - 0x2B555
+      - 0x1340C
+      - 0x11411
+      - 0x229F2
+      - 0x2A9B2
+      - 0x1340C
+      - 0x2B555
+      - 0x13404
+      - 0x11401
+      - 0x2F602
+      - 0x27701
+      - 0x23602
+      - 0x2B701
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x020
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 508
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 508. arithmetic, 101?_????_????_???? )
+
+        # 507 import
+
+        # 0 org
+
+        entry main
+
+        # 0 /a
+
+        # left /b
+
+        : a/r@ ( -w) A[ m/r ]] lit !b A[ !p ]] lit !b @b ;
+
+        : a/r! ( w) A[ @p !m/r ]] lit !b !b ;
+
+        : a/pop ( -w) A[ m/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : a/push ( w) A[ @p m/push ]] lit !b !b ;
+
+        : a/leave A[ ; ]] !b
+
+        : main # a/leave >r A[ !p !p ]] lit !b @b @b >r
+          2* -if // 1011_????_????_????
+            // extended arithmetic
+            r> r--- ;
+          then // 1010_????_????_????
+          2* -if // 1010_1???_????_????
+            // load literal
+          then // 1010_0???_????_????
+          r> ex ;
+      ramWords:
+      - 0x05B12
+      - 0x13402
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05601
+      - 0x05B12
+      - 0x13404
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05611
+      - 0x089B2
+      - 0x2FD22
+      - 0x0D9B2
+      - 0x01FBA
+      - 0x37213
+      - 0x269B2
+      - 0x115D5
+      - 0x37214
+      - 0x27455
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x00D
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 509
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 509. extended arithmetic, 1011_????_????_???? )
+
+        # 508 import
+
+        # 0 org
+
+        entry x/main
+
+        # 0 /a
+
+        # right /b
+
+        : x/r@ ( -w) A[ a/r@ ]] lit !b A[ !p ]] lit !b @b ;
+
+        : x/r! ( w) A[ @p a/r! ]] lit !b !b ;
+
+        : x/pop ( -w) A[ a/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : x/push ( w) A[ @p a/push ]] lit !b !b ;
+
+        : x/leave A[ a/leave ; ]] !b
+
+        : x/main # x/leave >r A[ !p !p ]] lit !b @b @b >r
+          2* -if // 1011_1???_????_????
+            // extended 2 arithmetic
+            r> --l- ;
+          then // 1011_0???_????_????
+          2* -if // 1011_01??_????_????
+            // push literal
+          then // 1011_00??_????_????
+          r> ex ;
+      ramWords:
+      - 0x05B12
+      - 0x13400
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05604
+      - 0x05B12
+      - 0x13406
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x0560A
+      - 0x089B2
+      - 0x2FD22
+      - 0x0D9B2
+      - 0x01FBA
+      - 0x37213
+      - 0x269B2
+      - 0x11575
+      - 0x37214
+      - 0x27455
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x00D
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 510
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 510. extended 2 arithmetic, 1011_1???_????_???? )
+
+        # 509 import
+
+        # 0 org
+
+        entry x2/main
+
+        # 0 /a
+
+        # left /b
+
+        : x2/r@ ( -w) A[ x/r@ ]] lit !b A[ !p ]] lit !b @b ;
+
+        : x2/r! ( w) A[ @p x/r! ]] lit !b !b ;
+
+        : x2/pop ( -w) A[ x/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : x2/push ( w) A[ @p x/push ]] lit !b !b ;
+
+        : x2/leave A[ x/leave ; ]] !b
+
+        : x2/main # x2/leave >r A[ !p !p ]] lit !b @b @b >r
+          2* -if // 1011_11??_????_????
+            // register file
+            r> r--- ;
+          then // 1011_10??_????_????
+          r> ex ;
+      ramWords:
+      - 0x05B12
+      - 0x13400
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05604
+      - 0x05B12
+      - 0x13406
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x0560A
+      - 0x2FD22
+      - 0x0D9B2
+      - 0x01FBA
+      - 0x37212
+      - 0x269B2
+      - 0x115D5
+      - 0x27455
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x00C
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 511
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 511. register file, 1011_11??_????_???? )
+
+        # 510 import
+
+        [ 0x3f -22 + ] org
+
+        entry r/main
+
+        # 0 /a
+
+        # left /b
+
+        : r/leave A[ x2/leave ; ]] !b
+
+        : r/main # r/leave >r A[ !p !p ]] lit !b @b @b 0x3f and a!
+          2* -if // 1011_111?_????_????
+
+            2* -if // 1011_1111_????_????
+              // load register
+              A[ x2/r@ ]] lit !b A[ !p ]] lit !b @b ! ;
+            then // 1011_1110_????_????
+            // store register
+              A[ @p x2/r! ]] lit !b @ !b ;
+
+          then // 1011_110?_????_????
+
+            2* -if // 1011_1101_????_????
+              // pop register
+              A[ x2/pop ]] lit !b A[ !p ]] lit !b @b ! ;
+            then // 1011_1100_????_????
+            // push register
+              A[ @p x2/push ]] lit !b @ !b ;
+
+      ramWords:
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x089B2
+      - 0x2FD22
+      - 0x0D9B2
+      - 0x01F12
+      - 0x0003F
+      - 0x3EADA
+      - 0x1B438
+      - 0x37235
+      - 0x05B12
+      - 0x13400
+      - 0x0C9B2
+      - 0x09F2D
+      - 0x05B0A
+      - 0x05604
+      - 0x09555
+      - 0x3723D
+      - 0x05B12
+      - 0x13406
+      - 0x0C9B2
+      - 0x09F2D
+      - 0x05B0A
+      - 0x0560A
+      - 0x09555
+      startup:
+        entryPoint: 0x02A
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 512
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 513
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 514
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 515
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 516
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 517
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 600
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 601
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 602
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 603
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 604
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 605
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 606
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 607
+      enabled: true
+      sourceCode: >
+        ( CVM2 SRAM simulator node 607 )
+
+        # 0 org
+
+        # down /b
+
+        # up /a
+
+        entry main
+
+        : main
+          @
+          // we have something to do
+          -if
+            !b @ -if
+              // ( ~p ~a )  write word
+              !b @ !b
+            else
+              // ( ~n p ) compare and exchange
+              !b @ !b @ !b @b !
+            then
+          else
+            @ -if
+              // ( x ~op )
+              inv if
+                // stimuli
+                a @ a! dup ! a!
+              else
+                // set mask
+                @ a!
+              then
+              !b @ !b
+            else
+              // ( p a ) read
+              >r !b r> !b @b !
+            then
+          then
+          main ;
+      ramWords:
+      - 0x03208
+      - 0x09E6C
+      - 0x09E22
+      - 0x11407
+      - 0x09E22
+      - 0x03B02
+      - 0x0A9B2
+      - 0x11411
+      - 0x0320F
+      - 0x3330C
+      - 0x23EAB
+      - 0x0AA45
+      - 0x02AB2
+      - 0x09E22
+      - 0x11411
+      - 0x2FB9A
+      - 0x09F2A
+      - 0x11400
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 608
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 609
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 610
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 611
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 612
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 613
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 614
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 615
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 616
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 617
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 700
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 701
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 702
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 703
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 704
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 705
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 706
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 707
+      enabled: true
+      sourceCode: >
+        ( CVM2 SRAM simulator node 707 )
+
+        # 708 import
+
+        # 0 org
+
+        # down /b
+
+        # left /a
+
+        entry main
+
+        : main
+          @b
+          // we hase something to do
+          -if
+            @b -if
+              // ( ~p ~a )  write word
+              A[ 'wr ; ]] lit !
+              @b ! ! !
+            else
+              // ( ~n p ) compare and exchange
+              A[ 'cx ; ]] lit !
+              @b @b ! ! ! ! @ !b
+            then
+          else
+            // ( p a ) read
+            A[ 'rd ; ]] lit !
+            @b ! ! @ !b
+          then
+          main ;
+      ramWords:
+      - 0x0120C
+      - 0x01206
+      - 0x05A02
+      - 0x11416
+      - 0x0BA2A
+      - 0x1140B
+      - 0x05A02
+      - 0x11422
+      - 0x01A2A
+      - 0x0BA0A
+      - 0x089B2
+      - 0x11410
+      - 0x05A02
+      - 0x1141C
+      - 0x0BA0A
+      - 0x089B2
+      - 0x11400
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 708
+      enabled: true
+      sourceCode: >-
+        ( cvm test node 708 )
+
+        # 0 org
+
+        # left /a
+
+        entry 'start
+
+
+        : obit ( dwn-dwx) !b over >r delay ;
+
+        : oword ( dw-d) leap drop leap drop leap drop drop ;
+
+        : obyt ( dw-dwx) then then then 3 obit drop
+            7 for dup 1 and 3 xor obit drop 2/ next
+            2 obit ;
+        : 'start ( -d) io b! 18ibits drop drop --l- ;
+
+        : 'wr ( d-d) @ >r @ >r @ oword r> oword r> oword rdl- ;
+
+        : 'rd ( d-d) @ >r @ oword r> oword : recv 18ibits drop ! rdl- ;
+
+        : 'cx ( d-d) @ >r @ >r @ >r @ oword r> oword r> oword r> oword recv ;
+
+
+        (
+
+        the variable bitdelay holds the latest bit delay value
+
+        'start waits from a word from the PC, signaling that the PC is ready to play the SRAM. it expect input either from left or right node. left is for
+
+        the virtual machine access to SRAM and right is for console I/O.
+
+        'left prepare to use left port only
+
+        'right prepare to use right port only
+
+        'wr write to PC, write 3 words, read 0 words
+
+        'rd read from PC, write 2 words, read 1 word
+
+        'cx compare and exchange with PC, write 4 words, read 1 word
+
+        )
+      ramWords:
+      - 0x08FBA
+      - 0x114C8
+      - 0x13406
+      - 0x3B606
+      - 0x3B606
+      - 0x3A255
+      - 0x05600
+      - 0x00003
+      - 0x3BDBA
+      - 0x00007
+      - 0x25DFF
+      - 0x00001
+      - 0x00003
+      - 0x39600
+      - 0x3A77A
+      - 0x05700
+      - 0x00002
+      - 0x04BB2
+      - 0x0015D
+      - 0x134CB
+      - 0x3A2B2
+      - 0x11575
+      - 0x0280A
+      - 0x2FEB2
+      - 0x13402
+      - 0x27602
+      - 0x27602
+      - 0x115B5
+      - 0x0280A
+      - 0x13402
+      - 0x27602
+      - 0x134CB
+      - 0x3BAB2
+      - 0x115B5
+      - 0x0280A
+      - 0x2FEBA
+      - 0x03602
+      - 0x27602
+      - 0x27602
+      - 0x27602
+      - 0x1141F
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x011
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 709
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 710
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 711
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 712
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 713
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 714
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 715
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 716
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    - coordinate: 717
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+    debuggerAssemblyCode: 
   - role: Target
     name: Target GA144
     nodes:
