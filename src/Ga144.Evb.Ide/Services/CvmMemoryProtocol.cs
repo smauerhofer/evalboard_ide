@@ -19,6 +19,25 @@ namespace Ga144.Evb.Ide.Services;
 /// no reply at all. See <see cref="Ga144CvmHardwareInstaller"/>'s own remarks for the full real-
 /// hardware history (byte order, the 2-word-vs-3-word write correction, the address-in-page
 /// inversion fix) that established this.
+///
+/// <b>CVM2 (2026-09-01): this wire-level shape itself is UNCHANGED, only which node answers it.</b>
+/// CVM2 moves the CPU from node 607 to node 507 (<see cref="Node507Program"/> -- corrected 2026-09-01
+/// from an earlier, mistaken attribution to node 508 in this project's own session history; 508 is
+/// not part of CVM2's active mesh at all, see <see cref="Node508Program"/>'s own remarks), but node
+/// 507's own external-memory primitives (<c>m/@</c>: <c>!b !b @b</c> -- two plain writes then one
+/// read; <c>m/!</c>: <c>inv !b inv !b !b</c> -- two INVERTED writes then one plain write, zero reads)
+/// are a byte-for-byte structural match for this class's existing READ/WRITE shape above (2-plain-word
+/// read; 3-word write with the first two inverted) -- confirmed against this project's own AN003
+/// (SRAM Control Cluster) reference documentation, which documents that exact convention
+/// (<c>ex@</c>: "write 2 words [+p +a]... read the result [w]"; <c>ex!</c>: "write 3 words [-p -a
+/// w]. The first two words are inverted"). Node 607 (the SRAM-request router) and node 707/708
+/// (the relay chain to the PC) relay these words through -- their real, verified CVM2 source confirms
+/// this directly now (see each node's own remarks) rather than the earlier "appears to" hedge -- so
+/// this class's <see cref="ReadWord"/>/<see cref="CombineAddress"/>/<see cref="SramWriteFlagBit"/>
+/// logic, and every caller in <see cref="Ga144CvmHardwareInstaller"/>, needs NO changes for CVM2. This
+/// has been checked against node 507's own source and this project's AN003 doc, but NOT yet against
+/// real hardware -- treat it as strong evidence, not a certainty, until Stefan confirms it on the
+/// bench.
 /// </summary>
 internal static class CvmMemoryProtocol
 {
@@ -27,20 +46,31 @@ internal static class CvmMemoryProtocol
   public const int InterWordSettleMilliseconds = 20;
   public const int WakeValue = 0x15555;
 
-  // Node 607's own opcode convention, confirmed by Stefan against this project's real
-  // Node607Program.cs remarks (e.g. 'plit at word 0x00E -> opcode 0x800E): opcode = 0x8000 |
-  // wordAddress. 'nop, 'plit, 'pop, and 'push all live in this same node 607 source.
-  public const int NopSourceNodeCoordinate = 607;
+  // CVM2 (2026-09-01): moved from node 607 (CVM1's old CPU) to node 507 (CVM2's entire CPU -- see
+  // Node507Program's own remarks). Corrected 2026-09-01 from node 508, this project's own earlier
+  // mistaken attribution -- 508 is not part of CVM2's active mesh, see Node508Program's own remarks.
+  // The opcode convention also changed: node 507's own "local execute" dispatch tag is 0x8800, not
+  // node 607's old flat 0x8000 -- see CvmAssemblyLanguage.Node507Cvm2LocalExecuteTagBits's own remarks
+  // for the derivation (also not yet confirmed with Stefan). 'nop, 'plit, 'pop, and 'push all live in
+  // this same node 507 source, under the SAME tick-names CVM1's node 607 used.
+  public const int NopSourceNodeCoordinate = 507;
   public const string NopSymbolName = "'nop";
   public const string PlitSymbolName = "'plit";
   public const int PlitLiteralValue = 0x1234;
   public const string PopSymbolName = "'pop";
   public const string PushSymbolName = "'push";
 
-  // Also node 607's own convention (0x8000 | wordAddress) -- confirmed against real hardware
-  // together with 'nop/'plit/'pop/'push above. Node607.f18's own 'ret ( s-s) pops the return address
-  // /call pushed and installs it into A (i.e. P), completing a call/return round trip.
+  // Also node 507's own convention now (0x8800 | wordAddress, see above) -- CVM1's old value here was
+  // 0x8000, node 607's own flat tag. Node507Program.Source's own 'ret ( rs-rs) pops the return address
+  // /call pushed and installs it into A (i.e. P), completing a call/return round trip -- same
+  // semantics as CVM1's node 607 'ret, just relocated.
   public const string RetSymbolName = "'ret";
+
+  // CVM2 (2026-09-01): node 507's own "local execute" tag -- see the remarks on NopSourceNodeCoordinate
+  // above and CvmAssemblyLanguage.Node507Cvm2LocalExecuteTagBits's own remarks for the derivation.
+  // TryBuildTestProgram below ORs this into each of the four opcodes it builds, replacing CVM1's flat
+  // 0x8000.
+  public const int LocalExecuteTagBits = 0x8800;
 
   // How many leading 'nop opcodes the shared test program starts with before 'plit, and how much
   // trailing 'nop padding follows 'pop/'push -- see Ga144CvmHardwareInstaller.RunSramBackedProgramStep
@@ -50,14 +80,14 @@ internal static class CvmMemoryProtocol
   public const int TrailingNopCount = 8;
 
   /// <summary>
-  /// Resolves node 607's own compiled 'nop/'plit/'pop/'push opcodes from THIS run's own compile
-  /// (never a frozen reference copy -- every address can move as the source evolves) and builds the
-  /// fixed program both the automatic test and the interactive debugger load into simulated SRAM:
-  /// <see cref="LeadingNopCount"/> 'nop, 'plit, its literal, 'pop, 'push, then
-  /// <see cref="TrailingNopCount"/> trailing 'nop. Returns a null program with a description of
-  /// whatever symbol was missing when a required word isn't defined in node 607's current source,
-  /// rather than throwing -- callers decide how to surface that (an inconclusive test step here, an
-  /// exception there).
+  /// Resolves node 507's own compiled 'nop/'plit/'pop/'push opcodes (CVM2, 2026-09-01 -- CVM1's node
+  /// 607 before that) from THIS run's own compile (never a frozen reference copy -- every address can
+  /// move as the source evolves) and builds the fixed program both the automatic test and the
+  /// interactive debugger load into simulated SRAM: <see cref="LeadingNopCount"/> 'nop, 'plit, its
+  /// literal, 'pop, 'push, then <see cref="TrailingNopCount"/> trailing 'nop. Returns a null program
+  /// with a description of whatever symbol was missing when a required word isn't defined in node
+  /// 507's current source, rather than throwing -- callers decide how to surface that (an inconclusive
+  /// test step here, an exception there).
   /// </summary>
   public static (List<int>? Program, string? MissingSymbolDescription) TryBuildTestProgram(
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
@@ -87,12 +117,14 @@ internal static class CvmMemoryProtocol
       return (null, $"\"{PushSymbolName}\"");
     }
 
-    // 0x8000 | address is a CVM opcode -- a 16-bit CVM word (CvmWordCodec.WordMask), not the wider
-    // 18-bit F18 wire word the symbol's own address happens to be stored as.
-    int nopOpcode = 0x8000 | (nopSymbol.Value & CvmWordCodec.WordMask);
-    int plitOpcode = 0x8000 | (plitSymbol.Value & CvmWordCodec.WordMask);
-    int popOpcode = 0x8000 | (popSymbol.Value & CvmWordCodec.WordMask);
-    int pushOpcode = 0x8000 | (pushSymbol.Value & CvmWordCodec.WordMask);
+    // LocalExecuteTagBits | address is a CVM opcode -- a 16-bit CVM word (CvmWordCodec.WordMask), not
+    // the wider 18-bit F18 wire word the symbol's own address happens to be stored as. CVM2 (2026-09-01):
+    // was a flat 0x8000 (node 607's own tag) before node 507 became the CPU -- see LocalExecuteTagBits'
+    // own remarks.
+    int nopOpcode = LocalExecuteTagBits | (nopSymbol.Value & CvmWordCodec.WordMask);
+    int plitOpcode = LocalExecuteTagBits | (plitSymbol.Value & CvmWordCodec.WordMask);
+    int popOpcode = LocalExecuteTagBits | (popSymbol.Value & CvmWordCodec.WordMask);
+    int pushOpcode = LocalExecuteTagBits | (pushSymbol.Value & CvmWordCodec.WordMask);
 
     var program = new List<int>();
     program.AddRange(Enumerable.Repeat(nopOpcode, LeadingNopCount));
@@ -143,11 +175,12 @@ internal static class CvmMemoryProtocol
       ((page << 16) | (addressInPage & 0xFFFF)) & (CvmSimulatedSram.WordCapacity - 1);
 
   // Only page 0 (the low 16 bits of the flat address space) is ever code -- page 1 is the stack,
-  // and node 607's own instruction fetches never leave page 0. This is exactly the point at which
-  // CombineAddress's own page/address-in-page packing rolls over into page 1.
+  // and the CPU node's own instruction fetches never leave page 0 (node 507 now, CVM2; node 607
+  // before it, CVM1). This is exactly the point at which CombineAddress's own page/address-in-page
+  // packing rolls over into page 1.
   public const int Page0WordCount = 0x10000;
 
-  // The wire/memory-level opcode table (node 607's own F18 symbols -> opcode word + word length)
+  // The wire/memory-level opcode table (the CPU node's own F18 symbols -> opcode word + word length --
   // moved to CvmAssemblyLanguage, which layers the CVM assembly language's own mnemonics (nop,
   // pushlit, push, pop) on top of it for both assembly and disassembly. See that file's remarks for
   // why the two naming layers -- F18 source symbols here, CVM asm mnemonics there -- are kept

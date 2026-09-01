@@ -432,30 +432,47 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// </summary>
   private void Assemble()
   {
-    if (_session is not null)
+    // CVM2 (2026-09-01): wrapped in try/catch, which this method never had before -- Assemble() used
+    // to only ever fail gracefully (CvmAssemblyLanguage/CompileStandaloneCvmNodes both return a
+    // (false, error) pair, never throw, for every failure this method's own authors anticipated), so
+    // there was never a case an exception could reach here. That stopped being true the moment a
+    // mnemonic's resolution could depend on a node (F18NodeCompilationService.CompileNode reading THIS
+    // chip's own live Node Editor source, not a reference file) that might not exist yet, or whose
+    // compile might throw instead of failing gracefully for a reason this file's own authors didn't
+    // anticipate -- silently doing nothing on an unhandled exception (which is what an uncaught
+    // exception inside an ICommand.Execute tends to look like from the UI) is worse than a wrong-
+    // looking error message, so this now always leaves SOME visible trace in StatusText.
+    try
     {
-      (bool success, string? error) = _session.AssembleAndLoadProgram(AssemblyCodeText);
-      StatusText = success
-          ? $"Assembled {_session.Program.Count} word(s) and loaded them into the simulated SRAM starting at address 0."
-          : $"Assemble failed: {error}";
-
-      if (success)
+      if (_session is not null)
       {
-        MirrorSessionProgramIntoStandaloneSram(_session.Program);
+        (bool success, string? error) = _session.AssembleAndLoadProgram(AssemblyCodeText);
+        StatusText = success
+            ? $"Assembled {_session.Program.Count} word(s) and loaded them into the simulated SRAM starting at address 0."
+            : $"Assemble failed: {error}";
+
+        if (success)
+        {
+          MirrorSessionProgramIntoStandaloneSram(_session.Program);
+        }
+
+        RefreshMemoryView();
+        RefreshProgramCounter();
+        return;
       }
+
+      (bool standaloneSuccess, string? standaloneError, int wordCount) = AssembleStandalone();
+      StatusText = standaloneSuccess
+          ? $"Assembled {wordCount} word(s) into a standalone simulated SRAM -- no chip connected yet. Click Start; this program loads automatically."
+          : $"Assemble failed: {standaloneError}";
 
       RefreshMemoryView();
       RefreshProgramCounter();
-      return;
     }
-
-    (bool standaloneSuccess, string? standaloneError, int wordCount) = AssembleStandalone();
-    StatusText = standaloneSuccess
-        ? $"Assembled {wordCount} word(s) into a standalone simulated SRAM -- no chip connected yet. Click Start; this program loads automatically."
-        : $"Assemble failed: {standaloneError}";
-
-    RefreshMemoryView();
-    RefreshProgramCounter();
+    catch (Exception exception)
+    {
+      StatusText = "Assemble failed (unexpected error): " + exception.Message;
+    }
   }
 
   /// <summary>
@@ -483,56 +500,64 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     return (true, null, words.Count);
   }
 
-  // Every node CvmAssemblyLanguage's tagged mnemonics can resolve against today: 607 (nop/pushlit/
-  // push/pop/ret), 507 (the eleven usl/ssr/usr/add/sub/and/xor/or/inv/inc/dec ALU ops), 606
-  // (leave -- node 606's eight enter/adjust/stl/stp/ldl/ldp/lal/lap ops are self-describing and never
-  // need this list at all, but leave is tagged/node-resolved exactly like 607's own primitives), 508
-  // (its 27 comparison/arithmetic ops -- eq, eq0, false, true, ne, ne0, ugt, gt, gt0, ge, ge0, ule,
-  // le, le0, lt, lt0, ult, uge, mul2, udiv2, div2, abs, negate, xt, ldt, stt, bitcnt -- every one of
-  // them tagged/node-resolved exactly like leave, none self-describing), 506 (its nine
-  // zext/addc/ldd/std/xd/mul2d/div2d/sext/umuld register-d ops), and 407 (its seven
-  // xpt/out/in/ldhi/ldlo/sthi/stlo register-w/port ops) -- see CvmAssemblyLanguage's own remarks. A
-  // live chip session's compiledRam already has every node in the boot tree, all six included
-  // (Ga144CvmHardwareInstaller compiles the whole install tree up front), so this list only matters
-  // for the standalone (no-chip-connected) path below -- CvmDebuggerDefaultProgram.Source uses 506's
-  // and 407's own tagged ops too, so both must be in this list for Assemble to resolve them with no
-  // chip connected, exactly like 507/606/508 already needed to be.
+  // CVM2 (2026-09-01): trimmed to just the CPU node. CVM1's own five nodes originally listed here
+  // (607, 507, 606, 506, 407) are ALL orphaned now -- none of them are part of CVM2's actual mesh
+  // (708/707/607/507, "the nodes from CVM1 ... will not be used in CVM2"; note 507's OWN CVM1-era
+  // mnemonics are orphaned too, even though the coordinate 507 itself is very much back in active use
+  // as CVM2's real CPU -- see CvmAssemblyLanguage's own remarks), and
+  // CvmAssemblyLanguage.NodeSymbolByMnemonic's own entries for their mnemonics (the ALU ops, leave,
+  // node 506/407's ops) stay in the table per "don't remove any opcodes" but simply never resolve once
+  // their node isn't compiled here -- exactly the same graceful-omission behavior CvmAssemblyLanguage
+  // already has for a node missing from compiledRam altogether, so dropping them from this list
+  // changes nothing about whether those mnemonics still exist, only whether THIS standalone path
+  // wastes a compile on nodes CVM2 doesn't use. This also fixes a real bug: compiling all six
+  // unconditionally meant ANY one of them failing to compile in Stefan's own live project would abort
+  // Assemble entirely with no obvious connection to what was actually typed. See
+  // CompileStandaloneCvmNodes' own remarks for the belt-and-braces fix to that same failure mode
+  // (continue past one bad node rather than aborting on it).
   private static readonly IReadOnlyList<int> StandaloneCvmNodeCoordinates =
   [
-    CvmMemoryProtocol.NopSourceNodeCoordinate,
-    Node507Program.Coordinate,
-    Node606Program.Coordinate,
-    Node508Program.Coordinate,
-    Node506Program.Coordinate,
-    Node407Program.Coordinate,
+    CvmMemoryProtocol.NopSourceNodeCoordinate, // 507, CVM2's entire CPU (corrected 2026-09-01 from 508).
   ];
 
   /// <summary>
   /// Compiles every node in <see cref="StandaloneCvmNodeCoordinates"/> (<see cref="F18NodeCompilationService"/>)
   /// purely in software -- no serial port, no connected chip -- for <see cref="AssembleStandalone"/>
-  /// and the memory inspector's no-session disassembly to resolve tagged mnemonics against. 507's,
-  /// 606's, 508's, 506's, and 407's own RAM sources all (transitively, for 508/506/407 -&gt; 507 -&gt;
-  /// 607) import node 607 (<c># 607 import</c>/<c># 507 import</c>), so compiling any one of them
-  /// would already pull the chain's compile in as an import -- but only that node's OWN
-  /// <see cref="F18NodeCompilationResult"/> comes back from that call, so each node in the list is
-  /// still compiled and stored individually here to end up with all six in <c>compiledRam</c>.
-  /// Self-describing opcodes (<c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>, and node 606's own eight
-  /// enter/adjust/stl/stp/ldl/ldp/lal/lap ops) never need this at all. Returns an empty table and a
-  /// descriptive error (never throws) naming whichever node's source doesn't currently compile.
+  /// and the memory inspector's no-session disassembly to resolve tagged mnemonics against. IMPORTANT:
+  /// this compiles from THIS CHIP'S OWN LIVE PROJECT DATA for each node coordinate (whatever is
+  /// currently saved in the Node Editor), never from this repo's <c>NodeXxxProgram.cs</c> reference/
+  /// documentation copies -- so a reference file being updated (e.g. for a new CVM revision) has NO
+  /// effect here until the same source is also copied into the live project via the Node Editor.
+  ///
+  /// CVM2 (2026-09-01): no longer aborts entirely the moment ONE node fails to compile -- skips that
+  /// node (so it is simply absent from <c>compiledRam</c>, the same graceful-omission
+  /// <see cref="CvmAssemblyLanguage"/> already applies to a node missing from <c>compiledRam</c> for
+  /// any other reason) and keeps going, collecting every node that DOES compile. Only returns failure
+  /// if the list ends up completely empty. This means a mnemonic whose own node compiles fine still
+  /// resolves even if some OTHER node in the list is currently broken -- the previous all-or-nothing
+  /// behavior is exactly what could make Assemble appear to "do nothing" (a confusing error naming an
+  /// unrelated node) for a program that never touched the broken one at all.
   /// </summary>
   private (bool Success, IReadOnlyDictionary<int, F18CompileResult> CompiledRam, string? Error) CompileStandaloneCvmNodes()
   {
     var compilationService = new F18NodeCompilationService(_chip, _romLibrary, _userMacros);
     var compiledRam = new Dictionary<int, F18CompileResult>();
+    var failures = new List<string>();
     foreach (int coordinate in StandaloneCvmNodeCoordinates)
     {
       F18NodeCompilationResult compiled = compilationService.CompileNode(coordinate);
       if (!compiled.Ram.Success)
       {
-        return (false, new Dictionary<int, F18CompileResult>(), $"node {coordinate:000}'s RAM source does not currently compile -- fix it in the Node Editor first.");
+        failures.Add($"node {coordinate:000}'s RAM source does not currently compile -- fix it in the Node Editor first.");
+        continue;
       }
 
       compiledRam[coordinate] = compiled.Ram;
+    }
+
+    if (compiledRam.Count == 0)
+    {
+      return (false, new Dictionary<int, F18CompileResult>(), string.Join(" ", failures));
     }
 
     return (true, compiledRam, null);

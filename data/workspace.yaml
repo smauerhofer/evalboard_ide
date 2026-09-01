@@ -24,6 +24,39 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
+      dateTime: 2026-09-01T17:48:28.3033288
+      utcDateTime: 2026-09-01T17:48:28.3033288Z
+      localDateTime: 2026-09-01T19:48:28.3033288+02:00
+      date: 2026-09-01T00:00:00.0000000
+      day: 1
+      dayOfWeek: Tuesday
+      dayOfYear: 244
+      hour: 17
+      millisecond: 303
+      microsecond: 328
+      nanosecond: 800
+      minute: 48
+      month: 9
+      offset: 00:00:00
+      totalOffsetMinutes: 0
+      second: 28
+      ticks: 639238817083033288
+      utcTicks: 639238817083033288
+      timeOfDay: 17:48:28.3033288
+      year: 2026
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -44,19 +77,6 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -14612,7 +14632,7 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 307
-      enabled: false
+      enabled: true
       sourceCode: ''
       ramWords: []
       startup:
@@ -14816,7 +14836,7 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 406
-      enabled: false
+      enabled: true
       sourceCode: ''
       ramWords: []
       startup:
@@ -14828,11 +14848,110 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 407
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >
+        ( CVM2 node 407. branching, 11??_????_????_???? )
+
+        # 507 import
+
+        # 0 org
+
+        entry b/main
+
+        # 0 /a
+
+        # left /b
+
+        : b/r@ ( -w) A[ over !p ]] lit !b @b ;
+
+        : b/r! ( w) A[ @p over ]] lit !b !b ;
+
+        : b/pop ( -w) A[ m/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : b/push ( w) A[ @p m/push ]] lit !b !b ;
+
+        : b/leave A[ ; ]] !b
+
+        : b/main # b/leave >r A[ !p !p ]] lit !b @b @b >r
+          2* -if // 111?_????_????_????
+            2* -if // 1111_????_????_????
+              //
+              r> --l- ;
+            then // 1110_????_????_????
+             //
+            r> r--- ;
+          then // 110?_????_????_????
+          2* -if // 1010_1???_????_????
+            r> -d-- ;
+          then // 1100_????_????_????
+          ex ;
+      ramWords:
+      - 0x05B05
+      - 0x219B2
+      - 0x05B25
+      - 0x04FB2
+      - 0x05B12
+      - 0x13401
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x0560E
+      - 0x089B2
+      - 0x2FD22
+      - 0x0D9B2
+      - 0x01FBA
+      - 0x37214
+      - 0x37212
+      - 0x269B2
+      - 0x11575
+      - 0x269B2
+      - 0x115D5
+      - 0x37217
+      - 0x269B2
+      - 0x11515
+      - 0x17555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x00B
         p: 0x000
         a: 0x000
         b: 0x000
@@ -14840,11 +14959,129 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 408
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 408. comparison, 1111_????_????_???? )
+
+        # 509 import
+
+        # 0 org
+
+        entry c/main
+
+        # 0 /a
+
+        # left /b
+
+        : c/r@ ( -w) A[ u/r@ ]] lit !b A[ !p ]] lit !b @b ;
+
+        : c/r! ( w) A[ @p u/r! ]] lit !b !b ;
+
+        : c/pop ( -w) A[ u/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : c/push ( w) A[ @p u/push ]] lit !b !b ;
+
+        : c/leave A[ u/leave ; ]] !b
+
+        : c/main # c/leave >r A[ !p !p ]] lit !b @b @b >r
+          2* -if // 1111_1???_????_????
+            // register file
+            r> r--- ;
+          2* -if // 1111_01?_????_????
+            // binary comparison
+            // 'eq
+            // 'ne
+            c/pop
+          then // 1111_00??_????_????
+            // unary comparison
+            // 'not
+            // 'eq0
+            // 'ne0
+          c/r@ ex c/r! ;
+        : 'true ( -f) 1 ;
+
+        : 'false ( -f) dup xor ;
+
+        : 'ne ( xy-f) leap
+
+        : 'not ( x-f) dup dup xor
+
+        then
+
+        : 'eq ( xy-f) xor 
+
+        : 'ne0 ( x-f) if 'true ; then 'false ;
+
+        : 'eq0 ( x-f) 'ne0 'not ;
+
+
+      ramWords:
+      - 0x05B12
+      - 0x13400
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05604
+      - 0x05B12
+      - 0x13406
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x0560A
+      - 0x089B2
+      - 0x2FD22
+      - 0x0D9B2
+      - 0x01FBA
+      - 0x37200
+      - 0x269B2
+      - 0x115D5
+      - 0x37215
+      - 0x13406
+      - 0x13400
+      - 0x17555
+      - 0x11404
+      - 0x05555
+      - 0x00001
+      - 0x24355
+      - 0x1341D
+      - 0x24DE2
+      - 0x389B2
+      - 0x19420
+      - 0x11418
+      - 0x1141A
+      - 0x1341E
+      - 0x1141C
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x00D
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15033,26 +15270,26 @@ projects:
         parameterStack: []
     - coordinate: 506
       enabled: true
-      sourceCode: "( CVM2 node 506. frame & global, 100?_????_????_???? )\n# 507 import\n# 0 org\nentry main\n# 0 /a\n# right /b\r\n: par 0x1ff and ;\r\n: local par inv ;\r\n: stack@ ( o-a) // load from stack\r\n  a . +  A[ @p m/1@ ]] lit !b !b A[ !m/r ; ]] lit !b ;\r\n: stack! ( o-a) // store to stack\r\n  a . +  A[ m/r ]] lit !b A[ @p m/1! ; ]] lit !b !b ;\r\n: global ( a-g) // calculate global address\r\n  0x7ff and 0x8000 . + ;\n: main # main >r A[ !p !p ]] lit !b @b @b >r \r\n  2* -if // 1001_????_????_????\r\n    // globals\r\n    2* -if // 1001_1???_????_????\r\n      // global fetch to r\r\n      r> global A[ @p m/0@ ]] lit !b !b A[ !m/r ; ]] lit !b ;\r\n    then // 1001_0???_????_????\n      // global store to r\r\n      A[ m/r ]] lit !b r> global A[ @p m/0! ; ]] lit !b !b ;\r\n\r\n  then // 1000_????_????_????\n  2* -if // 1000_1???_????_????\r\n\r\n    2* -if // 1000_11??_????_????\r\n\r\n      2* -if // 1000_111?_????_????\r\n        // load local\r\n        r> local stack@ ;\r\n        \r\n      then // 1000_110?_????_????\n      // load parameter\r\n      r> par stack@ ;\r\n\r\n    then // 1000_10??_????_????\n\r\n      2* -if // 1000_101?_????_????\r\n        // store local\r\n        r> local stack! ;\r\n\r\n      then // 1000_100?_????_????\n      // store parameter\r\n      r> par stack! ;\r\n\r\n  then // 1000_0???_????_????\n  2* -if // 1000_01??_????_????\r\n\r\n    // enter\r\n    a A[ @p m/push ]] lit !b !b ; // save frame pointer\r\n    A[ dup !p ; ]] lit !b @b // read stack pointer\r\n    r> local + a! ;\r\n\r\n  then // 1000_00??_????_????\n  r> ex ;\r\n: 'leave\r\n  A[ @p m/pop ]] lit !b a !b A[ !p ; ]] lit !b @b a! ;\r\n: 'f A[ @p !m/r ; ]] lit !b a !b ;\r\n"
+      sourceCode: "( CVM2 node 506. frame & global, 100?_????_????_???? )\n# 507 import\n# 0 org\nentry main\n# 0 /a\n# right /b\r\n: par 0x1ff and ;\r\n: local par inv ;\r\n: stack@ ( o-a) // load from stack\r\n  a . +  A[ @p m/1@ ]] lit !b !b A[ over ; ]] lit !b ;\r\n: stack! ( o-a) // store to stack\r\n  a . +  A[ over @p ]] lit !b !b A[ m/1! ; ]] lit !b ;\r\n: global ( a-g) // calculate global address\r\n  0x7ff and 0x8000 xor ;\n: main # main >r A[ !p !p ]] lit !b @b @b >r \r\n  2* -if // 1001_????_????_????\r\n    // globals\r\n    2* -if // 1001_1???_????_????\r\n      // global fetch to r\r\n      r> global A[ @p m/0@ ]] lit !b !b A[ over ; ]] lit !b ;\r\n    then // 1001_0???_????_????\n      // global store to r\r\n      A[ over @p ]] lit !b !b r> global A[ m/0! ; ]] lit !b ;\r\n\r\n  then // 1000_????_????_????\n  2* -if // 1000_1???_????_????\r\n\r\n    2* -if // 1000_11??_????_????\r\n\r\n      2* -if // 1000_111?_????_????\r\n        // load local\r\n        r> local stack@ ;\r\n        \r\n      then // 1000_110?_????_????\n      // load parameter\r\n      r> par stack@ ;\r\n\r\n    then // 1000_10??_????_????\n\r\n      2* -if // 1000_101?_????_????\r\n        // store local\r\n        r> local stack! ;\r\n\r\n      then // 1000_100?_????_????\n      // store parameter\r\n      r> par stack! ;\r\n\r\n  then // 1000_0???_????_????\n  2* -if // 1000_01??_????_????\r\n\r\n    // enter\r\n    a A[ @p m/push ]] lit !b !b ; // save frame pointer\r\n    A[ dup !p ; ]] lit !b @b // read stack pointer\r\n    r> local + a! ;\r\n\r\n  then // 1000_00??_????_????\n  r> ex ;\r\n: 'leave\r\n  A[ @p m/pop ]] lit !b a !b A[ !p ; ]] lit !b @b a! ;\r\n: 'f A[ @p over ; ]] lit !b a !b ;\r\n"
       ramWords:
       - 0x04055
       - 0x001FF
       - 0x13400
       - 0x33555
       - 0x229F7
-      - 0x05607
+      - 0x05604
       - 0x09B12
-      - 0x11401
+      - 0x21555
       - 0x09555
       - 0x229F7
-      - 0x13402
-      - 0x09D22
-      - 0x05714
+      - 0x21DB2
+      - 0x09B12
+      - 0x11411
       - 0x09555
       - 0x04012
       - 0x007FF
       - 0x08000
-      - 0x3D555
+      - 0x39555
       - 0x2FD22
       - 0x0D9B2
       - 0x01FBA
@@ -15060,14 +15297,14 @@ projects:
       - 0x3721C
       - 0x2760E
       - 0x05B27
-      - 0x0560A
-      - 0x11401
+      - 0x05607
+      - 0x21555
       - 0x09555
-      - 0x05B9A
-      - 0x13402
-      - 0x1340E
-      - 0x05B25
-      - 0x05718
+      - 0x05B22
+      - 0x21DB2
+      - 0x2760E
+      - 0x05B55
+      - 0x11415
       - 0x3722D
       - 0x37228
       - 0x37226
@@ -15082,7 +15319,7 @@ projects:
       - 0x11409
       - 0x37235
       - 0x23D22
-      - 0x05611
+      - 0x0560E
       - 0x09555
       - 0x05B02
       - 0x25955
@@ -15091,12 +15328,12 @@ projects:
       - 0x27455
       - 0x15555
       - 0x05B8A
-      - 0x05604
+      - 0x05601
       - 0x09D22
       - 0x0D555
       - 0x00A55
       - 0x05B8A
-      - 0x05701
+      - 0x04F55
       - 0x09555
       - 0x15555
       startup:
@@ -15110,81 +15347,86 @@ projects:
     - coordinate: 507
       enabled: true
       sourceCode: >
-        ( CVM2 node 508. main CVM2 node, ????_????_????_???? )
+        ( CVM2 node 507. main CVM2 node, ????_????_????_???? )
 
-        ( T: stack pointer s, A: program counter p, m/r: register r)
+        ( T: stack pointer s, A: program counter p, S: register r)
 
         # 1 org
 
         entry m/main
 
-        # 0 /a
+        # 0 /a // program counter
 
-        # down /b
+        # up /b // SRAM port
 
-        [ 0xffff 1 ] /stack
+        [ 0 0xffff 2 ] /stack // r = 0, s = 0xffff
 
-        # 0 f18var m/r
+        : m/pop ( rs-rsw) dup >r 1 . + r>
 
-        : m/pop ( s-sw) dup >r 1 . + r>
+        : m/1@ 1 ( rsa-rsw)
 
-        : m/1@ 1 ( sa-sw)
+        : m/@ ( rsab-rsw) !b !b @b ;
 
-        : m/@ ( sab-sw) !b !b @b ;
+        : m/0@ ( rsa-rsw) 0 m/@ ;
 
-        : m/0@ ( sa-sw) 0 m/@ ;
+        : m/next ( rs-rsx) a dup 1 . + a! dup dup xor m/@ ;
 
-        : m/next ( s-sx) a dup 1 . + a! dup dup xor m/@ ;
+        : 'plit ( rs-rs) m/next 
 
-        : 'push .loc ( s-s) m/r
+        : m/push ( rsw-rs) >r -1 . + r> over
 
-        : m/push ( sw-s) >r -1 . + r> over
+        : m/1! ( rswa-rs) 1
 
-        : m/1! ( swa-s) 1
+        : m/! ( rswab-rs) inv !b inv !b !b ;
 
-        : m/! ( swab-s) inv !b inv !b !b ;
+        : m/0! ( rswa-rs) 0 m/!
 
-        : m/0! ( swa-s) 0 m/!
+        : m/branch ( rso-rs) a . + a! ;
 
-        : m/branch ( so-s) a . + a! ;
+        : m/call ( rsxy-rs) ahead drop >r a m/push r> a!
 
-        : m/call ( sxy-s) ahead drop >r a m/push r> a!
-
-        : m/main ( s-s) m/next dup 2* 2* -until // 0???_????_????_????
+        : m/main ( rs-rs) m/next dup 2* 2* -until // 0???_????_????_????
+          ( rs)
           # m/main >r
-          ( sxy) 2* -if  // 11??_????_????_????
+          ( rsxy) 2* -if  // 11??_????_????_????
             -d-- ;
           then // 10??_????_????_????
-          ( sxy) 2* -if  // 101?_????_????_????
+          ( rsxy) 2* -if  // 101?_????_????_????
             --l- ;
           then // 100?_????_????_????
             r--- ;
-          ( sxy) 2* -if  // 1001_????_????_????
+          ( rsxy) 2* -if  // 1001_????_????_????
           then // 1000_????_????_????
-          ( sxy) 2* -if  // 1000_1???_????_????
+          ( rsxy) 2* -if  // 1000_1???_????_????
             // local execute
             drop >r ;
           then // 1000_0???_????_????
           // branch relative
-          ( sxy) 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! drop ;
-        : 'ret ( s-s) m/pop a! ;
+          ( rsxy) 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! drop ;
+        : 'push .loc ( rs-rs) over m/push ;
 
-        : 'plit ( s-s) m/next m/push ;
+        : 'ret ( rs-rs) m/pop a! ;
 
-        : 'tjmp ( so-s) a . + a!
+        : 'tjmp ( rso-rs) a . + a!
 
-        : 'jump ( s-s) m/next a! ;
+        : 'jump ( rs-rs) m/next a! ;
 
-        : 'pop ( s-s) m/pop !m/r ;
+        : 'pop ( rs-rs) m/pop over ;
 
-        : 'xs ( s-s) >r m/r r> !m/r ;
+        : 'xs ( rs-rs) over ;
 
-        : 'xp ( s-s) a m/r a! !m/r ;
+        : 'xp ( rs-rs) >r a over a! r> ;
 
-        : 'nop ( s-s) ;
+        : 'halt ( rs) dup xor dup inv !b !b 0x8800 !b ;
+
+        : 'nop ( rs-rs) ;
 
 
         (
+
+        m/main CVM interpreter loop
+
+        m/next read the current word and increment p
 
         'nop do nothing
 
@@ -15204,25 +15446,26 @@ projects:
 
         'xp exchange p and r
 
+        'nop no operation
+
+        'halt execution by setting the SRAM mask to left and right.
+
         )
       ramWords:
       - 0x15555
-      - 0x04235
-      - 0x05555
-      - 0x00000
       - 0x24812
       - 0x00001
       - 0x3CCB2
       - 0x049B2
       - 0x00001
       - 0x09B05
-      - 0x05709
+      - 0x05706
       - 0x00000
       - 0x22D12
       - 0x00001
       - 0x3CA93
-      - 0x39709
-      - 0x13402
+      - 0x39706
+      - 0x13409
       - 0x2FDB0
       - 0x3FFFF
       - 0x26FB2
@@ -15230,48 +15473,51 @@ projects:
       - 0x00001
       - 0x33BCA
       - 0x09B55
-      - 0x05616
+      - 0x05613
       - 0x00000
       - 0x229F2
       - 0x2B555
       - 0x11400
       - 0x3A88A
-      - 0x13411
+      - 0x1340E
       - 0x26AB2
-      - 0x1340C
+      - 0x13409
       - 0x244DA
-      - 0x1B41C
-      - 0x2E46D
+      - 0x1B419
+      - 0x2E46A
       - 0x11515
-      - 0x37227
-      - 0x115D5
-      - 0x37229
+      - 0x37224
       - 0x11575
-      - 0x3722B
+      - 0x115D5
+      - 0x37226
+      - 0x37228
       - 0x3A855
       - 0x367C2
       - 0x307C2
       - 0x3078A
       - 0x3CAED
-      - 0x13404
+      - 0x2170E
+      - 0x13401
       - 0x2B555
-      - 0x1340C
-      - 0x11411
       - 0x229F2
       - 0x2A9B2
-      - 0x1340C
+      - 0x13409
       - 0x2B555
-      - 0x13404
-      - 0x11401
-      - 0x2F602
-      - 0x27701
-      - 0x23602
-      - 0x2B701
+      - 0x13401
+      - 0x21555
+      - 0x21555
+      - 0x2EE82
+      - 0x2AC55
+      - 0x24392
+      - 0x33B27
+      - 0x08800
+      - 0x09555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x020
+        entryPoint: 0x01D
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15281,21 +15527,21 @@ projects:
     - coordinate: 508
       enabled: true
       sourceCode: >+
-        ( CVM2 node 508. arithmetic, 101?_????_????_???? )
+        ( CVM2 node 508. binary arithmetic, 101?_????_????_???? )
 
         # 507 import
 
         # 0 org
 
-        entry main
+        entry a/main
 
         # 0 /a
 
         # left /b
 
-        : a/r@ ( -w) A[ m/r ]] lit !b A[ !p ]] lit !b @b ;
+        : a/r@ ( -w) A[ over !p ]] lit !b @b ;
 
-        : a/r! ( w) A[ @p !m/r ]] lit !b !b ;
+        : a/r! ( w) A[ @p over ]] lit !b !b ;
 
         : a/pop ( -w) A[ m/pop ]] lit !b A[ !p ]] lit !b @b ;
 
@@ -15303,63 +15549,83 @@ projects:
 
         : a/leave A[ ; ]] !b
 
-        : main # a/leave >r A[ !p !p ]] lit !b @b @b >r
+        : a/main # a/leave >r A[ !p !p ]] lit !b @b @b >r
           2* -if // 1011_????_????_????
             // extended arithmetic
             r> r--- ;
           then // 1010_????_????_????
           2* -if // 1010_1???_????_????
             // load literal
+            r> drop 2* 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a/r! ;
           then // 1010_0???_????_????
-          r> ex ;
+          // binary operator
+          a/pop a/r@ ex 0xffff and a/r! ;
+        : 'add ( xy-z) + ;
+
+        : 'sub ( xy-z) inv . + 1 . + ;
+
+        : 'and ( xy-z) and ;
+
+        : 'xor ( xy-z) xor ;
+
+        : 'or ( xy-xz) inv over inv and inv ;
+
+        : 'usl ( xy-z) if for 2/ unext ; then drop ;
+
+        : 'ssr ( xy-z) 2* 2* 2/ 2/
+
+        : 'usr ( xy-z) if for 2/ unext ; then drop ;
+
+
+
       ramWords:
+      - 0x05B05
+      - 0x219B2
+      - 0x05B25
+      - 0x04FB2
       - 0x05B12
-      - 0x13402
+      - 0x13401
       - 0x0C9B2
       - 0x09F55
       - 0x05B25
-      - 0x05601
-      - 0x05B12
-      - 0x13404
-      - 0x0C9B2
-      - 0x09F55
-      - 0x05B25
-      - 0x05611
+      - 0x0560E
       - 0x089B2
       - 0x2FD22
       - 0x0D9B2
       - 0x01FBA
-      - 0x37213
+      - 0x37211
       - 0x269B2
       - 0x115D5
-      - 0x37214
-      - 0x27455
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x37217
+      - 0x262DA
+      - 0x367C2
+      - 0x307C2
+      - 0x307B2
+      - 0x11402
+      - 0x13404
+      - 0x13400
+      - 0x17555
+      - 0x040B2
+      - 0x0FFFF
+      - 0x11402
+      - 0x3D555
+      - 0x329F7
+      - 0x00001
+      - 0x2C155
+      - 0x3F555
+      - 0x39555
+      - 0x32FCA
+      - 0x3E655
+      - 0x19428
+      - 0x2E9B2
+      - 0x31155
+      - 0x3B555
+      - 0x364C2
+      - 0x309B2
+      - 0x1942E
+      - 0x2E9B2
+      - 0x31155
+      - 0x3B555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15378,7 +15644,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00D
+        entryPoint: 0x00B
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15387,51 +15653,20 @@ projects:
         parameterStack: []
     - coordinate: 509
       enabled: true
-      sourceCode: >+
-        ( CVM2 node 509. extended arithmetic, 1011_????_????_???? )
-
-        # 508 import
-
-        # 0 org
-
-        entry x/main
-
-        # 0 /a
-
-        # right /b
-
-        : x/r@ ( -w) A[ a/r@ ]] lit !b A[ !p ]] lit !b @b ;
-
-        : x/r! ( w) A[ @p a/r! ]] lit !b !b ;
-
-        : x/pop ( -w) A[ a/pop ]] lit !b A[ !p ]] lit !b @b ;
-
-        : x/push ( w) A[ @p a/push ]] lit !b !b ;
-
-        : x/leave A[ a/leave ; ]] !b
-
-        : x/main # x/leave >r A[ !p !p ]] lit !b @b @b >r
-          2* -if // 1011_1???_????_????
-            // extended 2 arithmetic
-            r> --l- ;
-          then // 1011_0???_????_????
-          2* -if // 1011_01??_????_????
-            // push literal
-          then // 1011_00??_????_????
-          r> ex ;
+      sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ a/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p a/r! ]] lit !b !b ;\n: u/pop ( -w) A[ a/pop ]] lit !b A[ !p ]] lit !b @b ;\n: u/push ( w) A[ @p a/push ]] lit !b !b ;\n: u/leave A[ a/leave ; ]] !b\n: u/main # u/leave >r A[ !p !p ]] lit !b @b @b >r\n  2* -if // 1011_1???_????_????\n    // extended 2 arithmetic\n    r> --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // push literal\n  then // 1011_00??_????_????\r\n  // unary\n  a/r@ ex 0xffff and a/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'nop ( x-x) ;\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n\r\n"
       ramWords:
       - 0x05B12
       - 0x13400
       - 0x0C9B2
       - 0x09F55
       - 0x05B25
-      - 0x05604
+      - 0x05602
       - 0x05B12
-      - 0x13406
+      - 0x13404
       - 0x0C9B2
       - 0x09F55
       - 0x05B25
-      - 0x0560A
+      - 0x05608
       - 0x089B2
       - 0x2FD22
       - 0x0D9B2
@@ -15440,24 +15675,24 @@ projects:
       - 0x269B2
       - 0x11575
       - 0x37214
-      - 0x27455
+      - 0x05455
+      - 0x00000
+      - 0x04015
+      - 0x0FFFF
+      - 0x00002
+      - 0x364C2
+      - 0x31220
+      - 0x329B2
+      - 0x049F5
+      - 0x00001
+      - 0x049F5
+      - 0x3FFFF
       - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x33555
+      - 0x37555
+      - 0x364C2
+      - 0x309B2
+      - 0x31555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15494,35 +15729,35 @@ projects:
         parameterStack: []
     - coordinate: 510
       enabled: true
-      sourceCode: >+
-        ( CVM2 node 510. extended 2 arithmetic, 1011_1???_????_???? )
+      sourceCode: >
+        ( CVM2 node 510. extended arithmetic, 1011_1???_????_???? )
 
         # 509 import
 
         # 0 org
 
-        entry x2/main
+        entry x/main
 
         # 0 /a
 
         # left /b
 
-        : x2/r@ ( -w) A[ x/r@ ]] lit !b A[ !p ]] lit !b @b ;
+        : x/r@ ( -w) A[ u/r@ ]] lit !b A[ !p ]] lit !b @b ;
 
-        : x2/r! ( w) A[ @p x/r! ]] lit !b !b ;
+        : x/r! ( w) A[ @p u/r! ]] lit !b !b ;
 
-        : x2/pop ( -w) A[ x/pop ]] lit !b A[ !p ]] lit !b @b ;
+        : x/pop ( -w) A[ u/pop ]] lit !b A[ !p ]] lit !b @b ;
 
-        : x2/push ( w) A[ @p x/push ]] lit !b !b ;
+        : x/push ( w) A[ @p u/push ]] lit !b !b ;
 
-        : x2/leave A[ x/leave ; ]] !b
+        : x/leave A[ u/leave ; ]] !b
 
-        : x2/main # x2/leave >r A[ !p !p ]] lit !b @b @b >r
+        : x/main # x/leave >r A[ !p !p ]] lit !b @b @b >r
           2* -if // 1011_11??_????_????
             // register file
             r> r--- ;
           then // 1011_10??_????_????
-          r> ex ;
+          ex ;
       ramWords:
       - 0x05B12
       - 0x13400
@@ -15536,14 +15771,14 @@ projects:
       - 0x09F55
       - 0x05B25
       - 0x0560A
+      - 0x089B2
       - 0x2FD22
       - 0x0D9B2
       - 0x01FBA
-      - 0x37212
+      - 0x37213
       - 0x269B2
       - 0x115D5
-      - 0x27455
-      - 0x15555
+      - 0x17555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15589,7 +15824,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00C
+        entryPoint: 0x00D
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15611,26 +15846,26 @@ projects:
 
         # left /b
 
-        : r/leave A[ x2/leave ; ]] !b
+        : r/leave A[ x/leave ; ]] !b
 
         : r/main # r/leave >r A[ !p !p ]] lit !b @b @b 0x3f and a!
           2* -if // 1011_111?_????_????
 
             2* -if // 1011_1111_????_????
               // load register
-              A[ x2/r@ ]] lit !b A[ !p ]] lit !b @b ! ;
+              A[ x/r@ ]] lit !b A[ !p ]] lit !b @b ! ;
             then // 1011_1110_????_????
             // store register
-              A[ @p x2/r! ]] lit !b @ !b ;
+              A[ @p x/r! ]] lit !b @ !b ;
 
           then // 1011_110?_????_????
 
             2* -if // 1011_1101_????_????
               // pop register
-              A[ x2/pop ]] lit !b A[ !p ]] lit !b @b ! ;
+              A[ x/pop ]] lit !b A[ !p ]] lit !b @b ! ;
             then // 1011_1100_????_????
             // push register
-              A[ @p x2/push ]] lit !b @ !b ;
+              A[ @p x/push ]] lit !b @ !b ;
 
       ramWords:
       - 0x15555
@@ -15864,13 +16099,13 @@ projects:
     - coordinate: 607
       enabled: true
       sourceCode: >
-        ( CVM2 SRAM simulator node 607 )
+        ( CVM2 node 607. SRAM simulator using the PC )
 
         # 0 org
 
         # down /b
 
-        # up /a
+        # up /a // confine the access to node 507 only for now
 
         entry main
 
@@ -16182,7 +16417,7 @@ projects:
     - coordinate: 707
       enabled: true
       sourceCode: >
-        ( CVM2 SRAM simulator node 707 )
+        ( CVM2 node 707. SRAM communication between nodes 607 and 708 )
 
         # 708 import
 
@@ -16200,16 +16435,16 @@ projects:
           -if
             @b -if
               // ( ~p ~a )  write word
-              A[ 'wr ; ]] lit !
+              A[ /wr ; ]] lit !
               @b ! ! !
             else
               // ( ~n p ) compare and exchange
-              A[ 'cx ; ]] lit !
+              A[ /cx ; ]] lit !
               @b @b ! ! ! ! @ !b
             then
           else
-            // ( p a ) read
-            A[ 'rd ; ]] lit !
+            // ( p a ) read word
+            A[ /rd ; ]] lit !
             @b ! ! @ !b
           then
           main ;
@@ -16289,13 +16524,13 @@ projects:
     - coordinate: 708
       enabled: true
       sourceCode: >-
-        ( cvm test node 708 )
+        ( CVM2 node 708. PC async interface )
 
         # 0 org
 
         # left /a
 
-        entry 'start
+        entry /start
 
 
         : obit ( dwn-dwx) !b over >r delay ;
@@ -16305,32 +16540,26 @@ projects:
         : obyt ( dw-dwx) then then then 3 obit drop
             7 for dup 1 and 3 xor obit drop 2/ next
             2 obit ;
-        : 'start ( -d) io b! 18ibits drop drop --l- ;
+        : /start ( -d) io b! 18ibits drop drop --l- ;
 
-        : 'wr ( d-d) @ >r @ >r @ oword r> oword r> oword rdl- ;
+        : /wr ( d-d) @ >r @ >r @ oword r> oword r> oword --l- ;
 
-        : 'rd ( d-d) @ >r @ oword r> oword : recv 18ibits drop ! rdl- ;
+        : /rd ( d-d) @ >r @ oword r> oword : recv 18ibits drop ! --l- ;
 
-        : 'cx ( d-d) @ >r @ >r @ >r @ oword r> oword r> oword r> oword recv ;
+        : /cx ( d-d) @ >r @ >r @ >r @ oword r> oword r> oword r> oword recv ;
 
 
         (
 
-        the variable bitdelay holds the latest bit delay value
+        d is the delay is kept in T, so it can be used for every write. Any read will generate a new delay.
 
-        'start waits from a word from the PC, signaling that the PC is ready to play the SRAM. it expect input either from left or right node. left is for
+        /start waits from a stimulus from the PC, signaling that the PC is ready to play the SRAM.
 
-        the virtual machine access to SRAM and right is for console I/O.
+        /wr write to PC, write 3 words, read 0 words
 
-        'left prepare to use left port only
+        /rd read from PC, write 2 words, read 1 word
 
-        'right prepare to use right port only
-
-        'wr write to PC, write 3 words, read 0 words
-
-        'rd read from PC, write 2 words, read 1 word
-
-        'cx compare and exchange with PC, write 4 words, read 1 word
+        /cx compare and exchange with PC, write 4 words, read 1 word
 
         )
       ramWords:
@@ -16361,13 +16590,13 @@ projects:
       - 0x13402
       - 0x27602
       - 0x27602
-      - 0x115B5
+      - 0x11575
       - 0x0280A
       - 0x13402
       - 0x27602
       - 0x134CB
       - 0x3BAB2
-      - 0x115B5
+      - 0x11575
       - 0x0280A
       - 0x2FEBA
       - 0x03602
@@ -16514,7 +16743,16 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-    debuggerAssemblyCode: 
+    debuggerAssemblyCode: >-
+      nop
+
+      nop
+
+      nop
+
+      nop
+
+      nop
   - role: Target
     name: Target GA144
     nodes:

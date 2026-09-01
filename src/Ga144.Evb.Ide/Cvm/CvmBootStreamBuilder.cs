@@ -3,47 +3,58 @@ using Ga144.Evb.Ide.Compiler;
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// Compiles the CVM test cluster's resident node programs -- in the cross-node import order each
-/// source's own <c># NNN import</c> directive requires -- and produces one
-/// <see cref="CvmBootDescriptor"/> per node.
+/// Compiles the CVM cluster's resident node programs and produces one <see cref="CvmBootDescriptor"/>
+/// per node.
 ///
-/// <b>Scope of this pass.</b> Covers all nine of the cluster's nodes: the seven with a finished,
-/// hand-verified resident program as of 2026-08-25 (607, 507, 506, 508, 407, 606, 608), node 708
-/// (added 2026-08-26, then updated 2026-08-27 to a new <c>send</c>/<c>send2</c>/<c>recv</c>
-/// protocol with a <c>'cx</c> compare-and-exchange operation -- see
-/// <see cref="Node708Program"/>'s remarks), and node 707 (added 2026-08-27, Stefan's first
-/// resident source for it -- the memory/PC interface node that imports 708; see
-/// <see cref="Node707Program"/>'s remarks, including two harmless
-/// <c>'warm'</c>/<c>'cold'</c>-shadowing import warnings). This builder produces boot-descriptor
-/// DATA only -- the compiled RAM image, register/stack init, and entry point for each of these
-/// nine nodes -- and says nothing yet about how that data reaches its node across the mesh.
+/// <b>CVM2 (2026-09-01).</b> Stefan is rewriting the whole CVM around new, differently-numbered nodes
+/// and a more sophisticated inter-node communication scheme; CVM1's nine-node branching tree (607 as
+/// CPU, with 507/606/608 and 507's own three children 506/508/407) is retired -- "the nodes from CVM1
+/// ... will not be used in CVM2". CVM2's own topology, so far, is a simple four-node LINEAR chain, not
+/// a tree at all: 507 (the entire CPU, see <see cref="Node507Program"/>) -&gt; 607 (the on-chip
+/// SRAM-request router) -&gt; 707 (a permanent runtime relay between 607 and 708) -&gt; 708 (the real,
+/// unmirrored async serial PC link, unchanged in role from CVM1). Node 508 is explicitly NOT part of
+/// this chain -- Stefan: "node 508 must be ignored for now" -- see <see cref="Node508Program"/>'s own
+/// remarks. "More nodes will be added later" (Stefan's own words) -- this builder's job is to stay
+/// easy to extend as that happens, not to assume four is final.
 ///
-/// <b>Compile order</b> (forced by import dependencies, cross-checked against every node's own
-/// class remarks): 607 first (no imports); then 507, 606, and 608, each of which does
-/// <c># 607 import</c>; then 506, 508, and 407, each of which does <c># 507 import</c>. This
-/// mirrors the exact chain every per-node verification harness in this project has already used
-/// (607 -&gt; 507 -&gt; {506, 508, 407}; 607 -&gt; 606; 607 -&gt; 608).
+/// <b>Node 507 (CPU), not 508 -- corrected 2026-09-01.</b> This project's own session briefly placed
+/// CVM2's CPU source on node 508 under a mistaken attribution; Stefan corrected it directly: the CPU
+/// is node 507, and 508 has no defined role yet. All of this builder's own compiling/loading of "the
+/// CPU node" now targets <see cref="Node507Program"/>; <see cref="Node508Program"/> is not compiled or
+/// loaded by anything below.
 ///
-/// <b>Compile order is not load order.</b> The mesh topology these seven nodes sit in is a
-/// branching tree, not a simple chain: 607 has THREE children (507 via its up port, 606 via
-/// right, 608 via left), and 507 itself has three more (506, 508, 407). Every node this project
-/// has erected so far for the (unrelated) Kraken tentacles was a simple linear chain -- one
-/// predecessor, one successor -- and <c>KrakenSession.ErectOnto</c>'s old-style, hardware-proven
-/// per-hop relay technique (<c>focus</c> + <c>writeB</c>, sent as host-precomputed boot frames
-/// while every intermediate node still sits in its ROM default) is built around that assumption.
-/// Loading a BRANCHING node like 607 or 507 needs something extra: per DB013 6.1.2.4 ("Root Node
-/// Programming"), a branch node must first be held in a temporary pass-through/relay role while
-/// each of its children is loaded in turn (re-pointing its B register at a different child before
-/// each child's payload), and only as the LAST step be given its own real resident program and
-/// entry jump -- otherwise loading a later sibling would require relaying back through a node
-/// that has already switched over to running its own unrelated CVM firmware.
-/// <see cref="BuildDescriptors"/> below still returns descriptors in COMPILE order (the order
-/// each source's own imports force); see <see cref="BuildLoadOrder"/> and
-/// <see cref="CvmBootLoadStep"/> for the separate, definitive LOAD order Stefan confirmed
-/// (2026-08-25) -- leaves first, root last, a post-order walk of the physical tree. Turning that
-/// load order into an actual delivery sequence is the next step (and deciding whether to reuse
-/// <c>KrakenSession</c>/<c>LegacyKrakenProtocol</c>'s relay primitives for it), now that all nine
-/// nodes' resident programs exist.
+/// <b>Node 607's CVM2 source (2026-09-01).</b> <see cref="Node607Program"/> now carries Stefan's own
+/// CVM2 source -- the on-chip SRAM-request router between 507 and 707 -- replacing the earlier
+/// placeholder gap left by a prior context-limit compaction that lost the first copy pasted into this
+/// session.
+///
+/// <b>Nodes 707 and 708's REAL CVM2 source (2026-09-01).</b> This project's earlier copies of 707 and
+/// 708 -- carried since 2026-08-27 and wrongly treated as already-correct CVM2 content -- have both
+/// now been replaced with Stefan's real source for each. The real 708 names its three request words
+/// <c>/wr</c>/<c>/rd</c>/<c>/cx</c> (a leading slash, not a tick) and exports nothing named <c>'left</c>
+/// at all; the real 707 imports 708 by those same slash names (<c>A[ /wr ; ]]</c> etc.) with a plain
+/// three-way dispatch (write / compare-exchange / read, no "mark" branch, no leading <c>'left</c>
+/// read) -- see <see cref="Node707Program"/>/<see cref="Node708Program"/>'s own remarks. The two were
+/// compiled together to confirm the match, not just assert it: <c>Success = true</c> for both, with
+/// only the same two harmless <c>'warm'</c>/<c>'cold'</c> shadowing warnings 707's own import of 708
+/// has always produced.
+///
+/// <b>Compile order.</b> None of CVM2's four nodes import another CVM2 node's exports BY NAME except
+/// 707, which does <c># 708 import</c> to reach 708's exports by name via a multiport call. 507 talks
+/// to 607, and 607 talks to 707, purely through raw port I/O (<c>@</c>/<c>!</c>/<c>@b</c>/<c>!b</c>)
+/// -- no named symbol resolution needed, so both compile completely standalone. So: 708 (ROM then
+/// RAM) first, then 707 (importing 708's combined ROM+RAM exports); 607 and 507 are independent
+/// standalone compiles with no ordering constraint relative to anything else.
+///
+/// <b>Load order is not compile order.</b> CVM2's four nodes form a plain chain -- one predecessor,
+/// one successor, all the way from 507 out to 708 -- unlike CVM1's branching tree, so the DB013 6.1.2.4
+/// "Root Node Programming" concern <see cref="CvmBootLoadStep"/>'s own remarks describe (a branch node
+/// needing a temporary relay role while EACH child loads in turn) simplifies to the same leaves-first/
+/// root-last idea with no branching to sequence: 507 (reached via 607 acting as relay), then 607
+/// (via 707), then 707 (via 708), then 708 itself last, direct, no relay -- the same tail Stefan
+/// already confirmed for CVM1 (607 via 707, 707 via 708, 708 last), just with 507 prepended as the new
+/// innermost leaf. This is inferred from that same confirmed reasoning applied to CVM2's simpler,
+/// non-branching case -- NOT yet independently reconfirmed by Stefan for CVM2 specifically.
 /// </summary>
 public static class CvmBootStreamBuilder
 {
@@ -51,85 +62,72 @@ public static class CvmBootStreamBuilder
   {
     var compiler = new F18Compiler();
 
-    F18CompileResult result607 = Compile(compiler, Node607Program.Source, F18CompilerOptions.ForRam(Node607Program.Coordinate));
-    ThrowIfFailed(result607);
-
-    F18CompileResult result507 = Compile(compiler, Node507Program.Source, ImportingRam(Node507Program.Coordinate, result607));
-    ThrowIfFailed(result507);
-
-    F18CompileResult result606 = Compile(compiler, Node606Program.Source, ImportingRam(Node606Program.Coordinate, result607));
-    ThrowIfFailed(result606);
-
-    F18CompileResult result608 = Compile(compiler, Node608Program.Source, ImportingRam(Node608Program.Coordinate, result607));
-    ThrowIfFailed(result608);
-
-    F18CompileResult result506 = Compile(compiler, Node506Program.Source, ImportingRam(Node506Program.Coordinate, result507));
-    ThrowIfFailed(result506);
-
-    F18CompileResult result508 = Compile(compiler, Node508Program.Source, ImportingRam(Node508Program.Coordinate, result507));
-    ThrowIfFailed(result508);
-
-    F18CompileResult result407 = Compile(compiler, Node407Program.Source, ImportingRam(Node407Program.Coordinate, result507));
-    ThrowIfFailed(result407);
-
-    // 708 needs no cross-node import (nothing in its source imports another CVM node's
-    // exports), but unlike every node above it is not an ordinary internal F18A node: it is
-    // the real, unmirrored async serial boot node, so its RAM compile needs ITS OWN real
-    // factory ROM's exports (18ibits, delay) in scope -- the same same-node ROM-then-RAM
-    // pairing F18NodeCompilationService uses, not a cross-node ImportResolver.
+    // 708 needs no cross-node import (nothing in its source imports another CVM node's exports), but
+    // unlike every other node it is not an ordinary internal F18A node: it is the real, unmirrored
+    // async serial boot node, so its RAM compile needs ITS OWN real factory ROM's exports (18ibits,
+    // delay) in scope -- the same same-node ROM-then-RAM pairing F18NodeCompilationService uses, not a
+    // cross-node ImportResolver. CVM2 (2026-09-01): this is now Stefan's own real 708 source -- see
+    // Node708Program's own remarks -- which exports /wr//rd//cx (no leading tick) and no 'left at all.
     F18CompileResult rom708 = CompileNode708Rom(compiler);
     ThrowIfFailed(rom708);
 
     F18CompileResult result708 = Compile(compiler, Node708Program.Source, ImportingRom(Node708Program.Coordinate, rom708));
     ThrowIfFailed(result708);
 
-    // 707 has an ordinary '# 708 import' directive, but 708 is not an ordinary node: its
-    // exports come from BOTH its own custom ROM (warm, cold, 18ibits, delay, ...) and its RAM
-    // ('left, 'wr, 'cx, 'rd, ...), so 707's import needs both combined -- the same merge
-    // F18NodeCompilationService.ResolveRamImport performs (TryCombineExports) for every
-    // cross-node import, reproduced here as CombineExports.
+    // 707's '# 708 import' is an ordinary cross-node RAM import, EXCEPT that 708's own exports span
+    // both its custom ROM and its RAM (unlike 607/508 below, neither of which layers real custom ROM
+    // under their RAM). Reproduces F18NodeCompilationService.ResolveRamImport's exact combine-then-
+    // import sequence for that one case: merge 708's ROM exports with its RAM exports, then hand the
+    // merged set to 707 as its resolved import. CVM2 (2026-09-01): this is now Stefan's own real 707
+    // source -- see Node707Program's own remarks -- matched to the real 708 above (imports /wr//rd//cx
+    // by name, three-way dispatch, no 'left read).
     F18CompileResult result707 = Compile(compiler, Node707Program.Source, ImportingCombinedRam(Node707Program.Coordinate, rom708, result708));
     ThrowIfFailed(result707);
 
+    // CVM2 (2026-09-01): 607 is now the on-chip SRAM-request router, reached from 507 above and
+    // reaching 707 below purely via raw port I/O -- no '# NNN import' directive of its own (unlike
+    // CVM1's 507/606/608, which all imported 607 by name). Standalone compile, same shape as 507
+    // below. Verified via a standalone harness compile of this exact source (0 diagnostics, 18/64
+    // words used, entry point 'main' at 0x000) -- see Node607Program's own remarks.
+    F18CompileResult result607 = Compile(compiler, Node607Program.Source, F18CompilerOptions.ForRam(Node607Program.Coordinate));
+    ThrowIfFailed(result607);
+
+    // CVM2 (2026-09-01): 507 is the entire CPU -- corrected from an earlier, mistaken attribution to
+    // node 508 in this project's own session (see Node507Program/Node508Program's own remarks).
+    // Standalone compile -- confirmed via a standalone harness compile of this exact source (0
+    // diagnostics, UsedWordCount 60, EntryPoint 0x1D at m/main) -- see Node507Program's own remarks.
+    // Node 508 is NOT compiled here -- it has no defined role in CVM2 yet.
+    F18CompileResult result507 = Compile(compiler, Node507Program.Source, F18CompilerOptions.ForRam(Node507Program.Coordinate));
+    ThrowIfFailed(result507);
+
     return
     [
-      CvmBootDescriptor.FromCompileResult(result607),
       CvmBootDescriptor.FromCompileResult(result507),
-      CvmBootDescriptor.FromCompileResult(result606),
-      CvmBootDescriptor.FromCompileResult(result608),
-      CvmBootDescriptor.FromCompileResult(result506),
-      CvmBootDescriptor.FromCompileResult(result508),
-      CvmBootDescriptor.FromCompileResult(result407),
-      CvmBootDescriptor.FromCompileResult(result708),
+      CvmBootDescriptor.FromCompileResult(result607),
       CvmBootDescriptor.FromCompileResult(result707),
+      CvmBootDescriptor.FromCompileResult(result708),
     ];
   }
 
   /// <summary>
-  /// The definitive boot LOAD order for this cluster, confirmed by Stefan (2026-08-25): a
-  /// post-order walk of the physical tree, leaves first / root last, so that every child is
-  /// fully loaded and running its own real program before its parent gives up its temporary
-  /// relay role. See <see cref="CvmBootLoadStep"/>'s remarks for the full tree diagram and the
-  /// DB013 6.1.2.4 rationale. All nine steps now have a resident program (707's arrived
-  /// 2026-08-27 -- see <see cref="Node707Program"/>).
+  /// CVM2's boot LOAD order (2026-09-01): a plain leaves-first/root-last chain, 507 -&gt; 607 -&gt; 707
+  /// -&gt; 708, inferred from the same reasoning Stefan confirmed for CVM1's branching tree (2026-08-25)
+  /// applied to CVM2's simpler non-branching case -- see this class's own remarks. NOT yet
+  /// independently reconfirmed by Stefan for CVM2 specifically. Node 508 is deliberately absent -- it
+  /// is not part of CVM2's active mesh (see Node508Program's own remarks).
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
   [
-    new CvmBootLoadStep(407, 507),
-    new CvmBootLoadStep(506, 507),
-    new CvmBootLoadStep(508, 507),
     new CvmBootLoadStep(507, 607),
-    new CvmBootLoadStep(606, 607),
-    new CvmBootLoadStep(608, 607),
     new CvmBootLoadStep(607, 707),
     new CvmBootLoadStep(707, 708),
     new CvmBootLoadStep(708, null),
   ];
 
   /// <summary>
-  /// Pairs <see cref="BuildLoadOrder"/>'s confirmed sequence with each step's compiled
-  /// <see cref="CvmBootDescriptor"/> from <see cref="BuildDescriptors"/>. Every step now
-  /// resolves to a real descriptor -- all nine nodes have a resident program as of 2026-08-27.
+  /// Pairs <see cref="BuildLoadOrder"/>'s sequence with each step's compiled <see cref="CvmBootDescriptor"/>
+  /// from <see cref="BuildDescriptors"/>. Every step resolves to a real descriptor -- all four CVM2
+  /// nodes compile.
   /// </summary>
   public static IReadOnlyList<(CvmBootLoadStep Step, CvmBootDescriptor? Descriptor)> BuildLoadPlan()
   {
@@ -147,21 +145,6 @@ public static class CvmBootStreamBuilder
 
   private static F18CompileResult Compile(F18Compiler compiler, string source, F18CompilerOptions options) =>
       compiler.Compile(source, options);
-
-  // Every CVM node source in this cluster only ever imports exactly one other node (its own
-  // immediate master), so this resolver only needs to answer for that single coordinate --
-  // matching the same pattern every per-node verification harness for this project already uses.
-  private static F18CompilerOptions ImportingRam(int coordinate, F18CompileResult upstream) => new()
-  {
-    MemorySpace = F18MemorySpace.Ram,
-    NodeCoordinate = coordinate,
-    MemoryBaseAddress = 0x000,
-    MemoryWordCount = 64,
-    IncludeCommonRomWords = true,
-    ImportResolver = importedCoordinate => importedCoordinate == upstream.NodeCoordinate
-        ? F18ImportResolution.FromExports(upstream.Exports)
-        : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
-  };
 
   // Compiles node 708's real factory ROM (Node708Rom -- this project's own byte-for-byte copy
   // of data/ga144-rom.yaml's node 708 entry, "macro rom_async_boot"), including the same
@@ -195,11 +178,10 @@ public static class CvmBootStreamBuilder
   }
 
   // Pairs a node's RAM compile with its OWN already-compiled ROM's exports -- the same-node
-  // ROM-then-RAM pattern F18NodeCompilationService.CompileRam uses -- as opposed to
-  // ImportingRam above, which pairs a node's RAM compile with a DIFFERENT node's exports via
-  // that different node's own '# NNN import' directive. Node 708 needs this one: it has no
-  // '# NNN import' directive of its own, but its RAM source calls words (18ibits, delay) that
-  // live in its own real ROM, not in the compiler's built-in common ROM words.
+  // ROM-then-RAM pattern F18NodeCompilationService.CompileRam uses -- as opposed to a cross-node
+  // import. Node 708 needs this one: it has no '# NNN import' directive of its own, but its RAM
+  // source calls words (18ibits, delay) that live in its own real ROM, not in the compiler's built-in
+  // common ROM words. (607 and 507 layer no real custom ROM under their RAM, so neither needs this.)
   private static F18CompilerOptions ImportingRom(int coordinate, F18CompileResult ownRom) => new()
   {
     MemorySpace = F18MemorySpace.Ram,
@@ -211,12 +193,12 @@ public static class CvmBootStreamBuilder
     PredefinedSymbols = ownRom.Symbols,
   };
 
-  // 707's '# 708 import' is an ordinary cross-node RAM import, EXCEPT that 708's own exports
-  // span both its custom ROM and its RAM (unlike every other node ImportingRam above already
-  // handles, none of which layer real custom ROM under their RAM). Reproduces
-  // F18NodeCompilationService.ResolveRamImport's exact combine-then-import sequence for that one
-  // case: merge 708's ROM exports with its RAM exports (CombineExports, mirroring that service's
-  // private TryCombineExports), then hand the merged set to 707 as its resolved import.
+  // 707's '# 708 import' is an ordinary cross-node RAM import, EXCEPT that 708's own exports span
+  // both its custom ROM and its RAM (unlike 607/507 above, neither of which layers real custom ROM
+  // under their RAM). Reproduces F18NodeCompilationService.ResolveRamImport's exact combine-then-import
+  // sequence for that one case: merge 708's ROM exports with its RAM exports (CombineExports,
+  // mirroring that service's private TryCombineExports), then hand the merged set to 707 as its
+  // resolved import.
   private static F18CompilerOptions ImportingCombinedRam(int coordinate, F18CompileResult rom, F18CompileResult ram) => new()
   {
     MemorySpace = F18MemorySpace.Ram,

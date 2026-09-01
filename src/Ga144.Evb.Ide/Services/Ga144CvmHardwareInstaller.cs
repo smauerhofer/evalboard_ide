@@ -136,6 +136,17 @@ public sealed class Ga144CvmHardwareInstaller
   /// there instead of automatically servicing the resulting read/write traffic to completion, leaving
   /// the port open and handing back a session the CVM Debugger window drives one transaction (or one
   /// breakpoint run) at a time.
+  ///
+  /// <b>CVM2 (2026-09-01): the default program can currently fail to build, and that's tolerated.</b>
+  /// <see cref="CvmDebuggerDefaultProgram.Source"/> is still CVM1-era content exercising opcodes (ALU
+  /// ops like <c>inv</c> among them) that CVM2's mesh has no node for any more -- every one of CVM1's
+  /// old node 507 ALU mnemonics is now permanently orphaned (see
+  /// <see cref="Services.CvmAssemblyLanguage"/>'s own remarks), so assembling it throws. Rather than
+  /// let that abort Start Debug Session entirely, this method falls back to the same minimal
+  /// <c>nop</c>/<c>plit</c>/<c>pop</c>/<c>push</c> program <see cref="InstallAndRunAsync"/>'s automatic
+  /// test already builds (<see cref="CvmMemoryProtocol.TryBuildTestProgram"/>) and only throws if THAT
+  /// also fails. <see cref="CvmDebuggerDefaultProgram"/> itself stays untouched, per Stefan's own
+  /// standing instruction.
   /// </summary>
   public Task<CvmDebugSession> StartDebugSessionAsync(
       string portName,
@@ -168,7 +179,20 @@ public sealed class Ga144CvmHardwareInstaller
       (List<int>? program, string? error) = CvmMemoryProtocol.TryBuildDebuggerTestProgram(compiledRam);
       if (program is null)
       {
-        throw new InvalidOperationException($"Could not build the debugger's own default test program: {error}");
+        // CVM2 (2026-09-01): CvmDebuggerDefaultProgram.Source is still CVM1-era content exercising
+        // many opcodes (including ALU ops like 'inv) that have no defined node under CVM2's mesh at
+        // all -- every one of CVM1's old node 507 ALU-op mnemonics is now permanently orphaned, see
+        // CvmAssemblyLanguage's own remarks. Rather than block Start Debug Session entirely on a
+        // default program CVM2 cannot currently satisfy, fall back to the same minimal
+        // nop/plit/pop/push smoke-test program InstallAndRunAsync's own automatic test already uses.
+        // CvmDebuggerDefaultProgram.cs itself is left untouched per Stefan's own standing
+        // instruction ("just keep it for now") -- this only changes what StartDebugSession does when
+        // that program fails to build, not the program's own content.
+        (program, error) = CvmMemoryProtocol.TryBuildTestProgram(compiledRam);
+        if (program is null)
+        {
+          throw new InvalidOperationException($"Could not build a debugger test program: {error}");
+        }
       }
 
       var sram = new CvmSimulatedSram();
