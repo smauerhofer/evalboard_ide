@@ -124,6 +124,7 @@ public sealed class NodeEditorViewModel : ObservableObject
       if (SetProperty(ref _sourceCode, value ?? string.Empty))
       {
         CompilationStatus = "RAM source changed; compile again to refresh RAM output.";
+        OnPropertyChanged(nameof(SourceLineNumberGutterText));
       }
     }
   }
@@ -136,8 +137,34 @@ public sealed class NodeEditorViewModel : ObservableObject
       if (SetProperty(ref _romSourceCode, value ?? string.Empty))
       {
         CompilationStatus = "ROM source changed; ROM must compile before RAM can compile.";
+        OnPropertyChanged(nameof(RomSourceLineNumberGutterText));
       }
     }
+  }
+
+  /// <summary>
+  /// Line-number gutter for the editable <see cref="SourceCode"/> text box, one number per line,
+  /// recomputed on every edit (unlike <see cref="RamAddressGutterText"/>/<see cref="RomAddressGutterText"/>
+  /// below, which are fixed -- a compiled word image always has exactly <see cref="RamWordCount"/>/
+  /// <see cref="Models.RomComparison.RomWordCount"/> lines, but free-form F18 source has as many lines
+  /// as the person editing it happens to have typed). Raised alongside <see cref="SourceCode"/>'s own
+  /// change notification rather than a separate stored field, so the two can never drift out of sync.
+  /// </summary>
+  public string SourceLineNumberGutterText => BuildLineNumberGutterText(SourceCode);
+
+  /// <summary>Line-number gutter for the editable <see cref="RomSourceCode"/> text box. See <see cref="SourceLineNumberGutterText"/>'s own remarks.</summary>
+  public string RomSourceLineNumberGutterText => BuildLineNumberGutterText(RomSourceCode);
+
+  // "\r\n" and "\n" both count as one line break here -- WPF's own TextBox normally writes "\r\n" for
+  // AcceptsReturn="True" content, but source loaded from disk/another editor may already be "\n"-only;
+  // normalizing first keeps the line count (and therefore the gutter) correct either way. An empty
+  // source still shows line "1", matching the single empty line a fresh/cleared TextBox actually has.
+  private static string BuildLineNumberGutterText(string source)
+  {
+    int lineCount = string.IsNullOrEmpty(source)
+        ? 1
+        : source.Replace("\r\n", "\n").Split('\n').Length;
+    return string.Join(Environment.NewLine, Enumerable.Range(1, lineCount));
   }
 
   public string RamWordsText { get => _ramWordsText; set => SetProperty(ref _ramWordsText, value ?? string.Empty); }

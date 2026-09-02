@@ -53,10 +53,33 @@
                                 MinWidth="150" MinHeight="32" Margin="12,0,0,0" />
           </DockPanel>
 
-          <TextBox Grid.Row="1" Text="{Binding SourceCode, UpdateSourceTrigger=PropertyChanged}"
-                             AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto"
-                             HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="14"
-                             TextWrapping="NoWrap" SpellCheck.IsEnabled="False" />
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="OnGutteredSourceScrollViewerPreviewMouseWheel">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBox Grid.Column="0" Text="{Binding SourceLineNumberGutterText, Mode=OneWay}"
+                                     IsReadOnly="True" IsTabStop="False"
+                                     AcceptsReturn="True" BorderThickness="0"
+                                     Background="#F4F4F4" Foreground="#666"
+                                     FontFamily="Consolas" FontSize="14"
+                                     Padding="2,0,8,0" TextWrapping="NoWrap"
+                                     VerticalScrollBarVisibility="Disabled"
+                                     HorizontalScrollBarVisibility="Disabled"
+                                     IsInactiveSelectionHighlightEnabled="True" />
+              <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Auto">
+                <TextBox Text="{Binding SourceCode, UpdateSourceTrigger=PropertyChanged}"
+                                       AcceptsReturn="True" AcceptsTab="True"
+                                       BorderThickness="0" Padding="2,0,2,0"
+                                       FontFamily="Consolas" FontSize="14"
+                                       TextWrapping="NoWrap" SpellCheck.IsEnabled="False"
+                                       VerticalScrollBarVisibility="Disabled"
+                                       HorizontalScrollBarVisibility="Disabled" />
+              </ScrollViewer>
+            </Grid>
+          </ScrollViewer>
 
           <Border Grid.Row="2" Background="#F4F4F4" BorderBrush="#D0D0D0" BorderThickness="1"
                             Padding="8" Margin="0,7,0,0">
@@ -94,10 +117,33 @@
                                 MinWidth="150" MinHeight="32" Margin="12,0,0,0" />
           </DockPanel>
 
-          <TextBox Grid.Row="1" Text="{Binding RomSourceCode, UpdateSourceTrigger=PropertyChanged}"
-                             AcceptsReturn="True" AcceptsTab="True" VerticalScrollBarVisibility="Auto"
-                             HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="14"
-                             TextWrapping="NoWrap" SpellCheck.IsEnabled="False" />
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  PreviewMouseWheel="OnGutteredSourceScrollViewerPreviewMouseWheel">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <TextBox Grid.Column="0" Text="{Binding RomSourceLineNumberGutterText, Mode=OneWay}"
+                                     IsReadOnly="True" IsTabStop="False"
+                                     AcceptsReturn="True" BorderThickness="0"
+                                     Background="#F4F4F4" Foreground="#666"
+                                     FontFamily="Consolas" FontSize="14"
+                                     Padding="2,0,8,0" TextWrapping="NoWrap"
+                                     VerticalScrollBarVisibility="Disabled"
+                                     HorizontalScrollBarVisibility="Disabled"
+                                     IsInactiveSelectionHighlightEnabled="True" />
+              <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Auto">
+                <TextBox Text="{Binding RomSourceCode, UpdateSourceTrigger=PropertyChanged}"
+                                       AcceptsReturn="True" AcceptsTab="True"
+                                       BorderThickness="0" Padding="2,0,2,0"
+                                       FontFamily="Consolas" FontSize="14"
+                                       TextWrapping="NoWrap" SpellCheck.IsEnabled="False"
+                                       VerticalScrollBarVisibility="Disabled"
+                                       HorizontalScrollBarVisibility="Disabled" />
+              </ScrollViewer>
+            </Grid>
+          </ScrollViewer>
 
           <Border Grid.Row="2" Background="#FFF7DF" BorderBrush="#D7BE74" BorderThickness="1"
                             Padding="8" Margin="0,7,0,0">

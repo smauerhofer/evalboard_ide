@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-02T06:38:22.3080564
-      utcDateTime: 2026-09-02T06:38:22.3080564Z
-      localDateTime: 2026-09-02T08:38:22.3080564+02:00
+      dateTime: 2026-09-02T14:51:25.4727163
+      utcDateTime: 2026-09-02T14:51:25.4727163Z
+      localDateTime: 2026-09-02T16:51:25.4727163+02:00
       date: 2026-09-02T00:00:00.0000000
       day: 2
       dayOfWeek: Wednesday
       dayOfYear: 245
-      hour: 6
-      millisecond: 308
-      microsecond: 56
-      nanosecond: 400
-      minute: 38
+      hour: 14
+      millisecond: 472
+      microsecond: 716
+      nanosecond: 300
+      minute: 51
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 22
-      ticks: 639239279023080564
-      utcTicks: 639239279023080564
-      timeOfDay: 06:38:22.3080564
+      second: 25
+      ticks: 639239574854727163
+      utcTicks: 639239574854727163
+      timeOfDay: 14:51:25.4727163
       year: 2026
   portB: 
   portC:
@@ -14849,7 +14849,7 @@ projects:
         parameterStack: []
     - coordinate: 407
       enabled: true
-      sourceCode: >
+      sourceCode: >+
         ( CVM2 node 407. branching, 11??_????_????_???? )
 
         # 507 import
@@ -14860,7 +14860,7 @@ projects:
 
         # 0 /a
 
-        # left /b
+        # down /b
 
         : b/r@ ( -w) A[ over !p ]] lit !b @b ;
 
@@ -14870,9 +14870,9 @@ projects:
 
         : b/push ( w) A[ @p m/push ]] lit !b !b ;
 
-        : b/leave A[ ; ]] !b
+        : b/leave A[ ; ]] lit !b
 
-        : b/main # b/leave >r A[ !p !p ]] lit !b @b @b >r
+        : b/main # b/leave lit >r A[ !p !p ]] lit !b @b @b >r
           2* -if // 111?_????_????_????
             2* -if // 1111_????_????_????
               //
@@ -14885,6 +14885,8 @@ projects:
             r> -d-- ;
           then // 1100_????_????_????
           ex ;
+        : 'call A[ m/next ]] lit !b A[ >r a ]] lit !b A[ m/push ]] lit !b A[ r> a! ]] lit !b ;
+
       ramWords:
       - 0x05B05
       - 0x219B2
@@ -14895,31 +14897,31 @@ projects:
       - 0x0C9B2
       - 0x09F55
       - 0x05B25
-      - 0x0560E
-      - 0x089B2
-      - 0x2FD22
+      - 0x0560F
+      - 0x05BB2
+      - 0x15555
+      - 0x04812
+      - 0x0000A
       - 0x0D9B2
-      - 0x01FBA
+      - 0x09F02
+      - 0x2E46E
       - 0x37214
-      - 0x37212
       - 0x269B2
       - 0x11575
       - 0x269B2
       - 0x115D5
-      - 0x37217
+      - 0x37219
       - 0x269B2
       - 0x11515
       - 0x17555
       - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x05B12
+      - 0x13407
+      - 0x2EEB2
+      - 0x09D27
+      - 0x1340F
+      - 0x26AB2
+      - 0x09555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -14951,7 +14953,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00B
+        entryPoint: 0x00C
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15270,7 +15272,7 @@ projects:
         parameterStack: []
     - coordinate: 506
       enabled: true
-      sourceCode: "( CVM2 node 506. frame & global, 100?_????_????_???? )\n# 507 import\n# 0 org\nentry main\n# 0 /a\n# right /b\r\n: par 0x1ff and ;\r\n: local par inv ;\r\n: stack@ ( o-a) // load from stack\r\n  a . +  A[ @p m/1@ ]] lit !b !b A[ over ; ]] lit !b ;\r\n: stack! ( o-a) // store to stack\r\n  a . +  A[ over @p ]] lit !b !b A[ m/1! ; ]] lit !b ;\r\n: global ( a-g) // calculate global address\r\n  0x7ff and 0x8000 xor ;\n: main # main >r A[ !p !p ]] lit !b @b @b >r \r\n  2* -if // 1001_????_????_????\r\n    // globals\r\n    2* -if // 1001_1???_????_????\r\n      // global fetch to r\r\n      r> global A[ @p m/0@ ]] lit !b !b A[ over ; ]] lit !b ;\r\n    then // 1001_0???_????_????\n      // global store to r\r\n      A[ over @p ]] lit !b !b r> global A[ m/0! ; ]] lit !b ;\r\n\r\n  then // 1000_????_????_????\n  2* -if // 1000_1???_????_????\r\n\r\n    2* -if // 1000_11??_????_????\r\n\r\n      2* -if // 1000_111?_????_????\r\n        // load local\r\n        r> local stack@ ;\r\n        \r\n      then // 1000_110?_????_????\n      // load parameter\r\n      r> par stack@ ;\r\n\r\n    then // 1000_10??_????_????\n\r\n      2* -if // 1000_101?_????_????\r\n        // store local\r\n        r> local stack! ;\r\n\r\n      then // 1000_100?_????_????\n      // store parameter\r\n      r> par stack! ;\r\n\r\n  then // 1000_0???_????_????\n  2* -if // 1000_01??_????_????\r\n\r\n    // enter\r\n    a A[ @p m/push ]] lit !b !b ; // save frame pointer\r\n    A[ dup !p ; ]] lit !b @b // read stack pointer\r\n    r> local + a! ;\r\n\r\n  then // 1000_00??_????_????\n  r> ex ;\r\n: 'leave\r\n  A[ @p m/pop ]] lit !b a !b A[ !p ; ]] lit !b @b a! ;\r\n: 'f A[ @p over ; ]] lit !b a !b ;\r\n"
+      sourceCode: "( CVM2 node 506. frame & global, 100?_????_????_???? )\n# 507 import\n# 0 org\nentry main\n# 0 /a\n# right /b\r\n: par 0x1ff and ;\r\n: local par inv ;\r\n: stack@ ( o-a) // load from stack\r\n  a . +  A[ @p m/1@ ]] lit !b !b A[ over ; ]] lit !b ;\r\n: stack! ( o-a) // store to stack\r\n  a . +  A[ over @p ]] lit !b !b A[ m/1! ; ]] lit !b ;\r\n: main # main lit >r A[ 2* !p !p ]] lit !b @b @b >r \r\n  -if // 1001_????_????_????\r\n    // globals\r\n    2* -if // 1001_1???_????_????\r\n      // global fetch to r\r\n      r> 0x7ff and A[ @p m/2@ ]] lit !b !b A[ over ; ]] lit !b ;\r\n    then // 1001_0???_????_????\n      // global store to r\r\n      A[ over @p ]] lit !b !b r> 0x7ff and A[ m/2! ; ]] lit !b ;\r\n\r\n  then // 1000_????_????_????\n  2* -if // 1000_1???_????_????\r\n\r\n    2* -if // 1000_11??_????_????\r\n\r\n      2* -if // 1000_111?_????_????\r\n        // load local\r\n        r> local stack@ ;\r\n        \r\n      then // 1000_110?_????_????\n      // load parameter\r\n      r> par stack@ ;\r\n\r\n    then // 1000_10??_????_????\n\r\n      2* -if // 1000_101?_????_????\r\n        // store local\r\n        r> local stack! ;\r\n\r\n      then // 1000_100?_????_????\n      // store parameter\r\n      r> par stack! ;\r\n\r\n  then // 1000_0???_????_????\n  2* -if // 1000_01??_????_????\r\n\r\n    // enter\r\n    a A[ @p m/push ]] lit !b !b ; // save frame pointer\r\n    A[ dup !p ; ]] lit !b @b // read stack pointer\r\n    r> local + a! ;\r\n\r\n  then // 1000_00??_????_????\n  r> ex ;\r\n: 'leave\r\n  A[ @p m/pop ]] lit !b a !b A[ !p ; ]] lit !b @b a! ;\r\n: 'f A[ @p over ; ]] lit !b a !b ;\r\n"
       ramWords:
       - 0x04055
       - 0x001FF
@@ -15284,42 +15286,41 @@ projects:
       - 0x229F7
       - 0x21DB2
       - 0x09B12
-      - 0x11411
+      - 0x11412
       - 0x09555
-      - 0x04012
+      - 0x04812
+      - 0x0000E
+      - 0x37932
+      - 0x09F02
+      - 0x2F220
+      - 0x3721A
+      - 0x27DFF
       - 0x007FF
-      - 0x08000
-      - 0x39555
-      - 0x2FD22
-      - 0x0D9B2
-      - 0x01FBA
-      - 0x37221
-      - 0x3721C
-      - 0x2760E
-      - 0x05B27
-      - 0x05607
+      - 0x0560C
+      - 0x09B12
       - 0x21555
       - 0x09555
       - 0x05B22
       - 0x21DB2
-      - 0x2760E
-      - 0x05B55
-      - 0x11415
-      - 0x3722D
-      - 0x37228
-      - 0x37226
+      - 0x27DFF
+      - 0x007FF
+      - 0x11418
+      - 0x09555
+      - 0x3722C
+      - 0x37227
+      - 0x37225
       - 0x27602
       - 0x11404
       - 0x27600
       - 0x11404
-      - 0x3722B
+      - 0x3722A
       - 0x27602
       - 0x11409
       - 0x27600
       - 0x11409
-      - 0x37235
+      - 0x37234
       - 0x23D22
-      - 0x0560E
+      - 0x0560F
       - 0x09555
       - 0x05B02
       - 0x25955
@@ -15336,8 +15337,9 @@ projects:
       - 0x04F55
       - 0x09555
       - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x012
+        entryPoint: 0x00E
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15381,9 +15383,9 @@ projects:
 
         : m/! ( rswab-rs) inv !b inv !b !b ;
 
-        : m/0! ( rswa-rs) 0 m/!
+        : m/0! ( rswa-rs) 0 m/! ;
 
-        : m/2! ( rswa-rs) 2 m/!
+        : m/2! ( rswa-rs) 2 m/! ;
 
         : m/branch ( rso-rs) a . + a! ;
 
@@ -15487,9 +15489,9 @@ projects:
       - 0x00001
       - 0x33BCA
       - 0x09B55
-      - 0x05614
+      - 0x05714
       - 0x00000
-      - 0x05614
+      - 0x05714
       - 0x00002
       - 0x229F2
       - 0x2B555
@@ -15560,9 +15562,9 @@ projects:
 
         : a/push ( w) A[ @p m/push ]] lit !b !b ;
 
-        : a/leave A[ ; ]] !b
+        : a/leave A[ ; ]] lit !b
 
-        : a/main # a/leave >r A[ !p !p ]] lit !b @b @b >r
+        : a/main # a/leave lit >r A[ !p !p ]] lit !b @b @b >r
           2* -if // 1011_????_????_????
             // extended arithmetic
             r> r--- ;
@@ -15601,15 +15603,17 @@ projects:
       - 0x0C9B2
       - 0x09F55
       - 0x05B25
-      - 0x0560E
-      - 0x089B2
-      - 0x2FD22
+      - 0x0560F
+      - 0x05BB2
+      - 0x15555
+      - 0x04812
+      - 0x0000A
       - 0x0D9B2
-      - 0x01FBA
-      - 0x37211
+      - 0x09F02
+      - 0x2E46B
       - 0x269B2
       - 0x115D5
-      - 0x37217
+      - 0x37219
       - 0x262DA
       - 0x367C2
       - 0x307C2
@@ -15629,18 +15633,16 @@ projects:
       - 0x39555
       - 0x32FCA
       - 0x3E655
-      - 0x19428
+      - 0x1942A
       - 0x2E9B2
       - 0x31155
       - 0x3B555
       - 0x364C2
       - 0x309B2
-      - 0x1942E
+      - 0x19430
       - 0x2E9B2
       - 0x31155
       - 0x3B555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15657,7 +15659,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00B
+        entryPoint: 0x00C
         p: 0x000
         a: 0x000
         b: 0x000

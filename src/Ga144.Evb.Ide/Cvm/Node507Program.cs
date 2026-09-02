@@ -66,6 +66,71 @@ namespace Ga144.Evb.Ide.Cvm;
 /// ten tick-labeled symbols all still resolve, entry point shifted by one word (<c>m/main</c> now at
 /// 0x01C, was 0x01D) purely because of the one extra <c>lit</c> instruction's own word.
 ///
+/// <b>2026-09-02 revision #3 (per Stefan): new CVM2 memory layout.</b> SRAM's three pages (see
+/// <see cref="Services.CvmMemoryProtocol"/>'s own remarks on <c>CombineAddress</c>'s page/
+/// address-in-page split) are now assigned: page 0 is CODE, and its ENTIRE range is used --
+/// 0x0000-0xFFFF, no longer whatever narrower span <c>call</c>'s own 15-bit embedded address
+/// (<see cref="CvmInstructionSet.CallAddressMask"/>, 0x0000-0x7FFF) could reach; page 1 is still the
+/// stack, unchanged; page 2 is GLOBALS then DATA CONSTANTS -- globals first, "because opcodes accessing
+/// global variables have limited range" (Stefan's own words), i.e. whatever new global-variable opcode
+/// eventually reads/writes page 2 is expected to have a narrower operand field than a full page, so
+/// putting globals at the low end keeps them inside that field regardless of how large the data-constant
+/// region below them grows. This source adds <c>m/2@</c>/<c>m/2!</c> -- page-2 read/write, mirroring
+/// <c>m/0@</c>/<c>m/0!</c> exactly (<c>2 m/@ ;</c>/<c>2 m/!</c>, same shape as <c>0 m/@ ;</c>/<c>0 m/!</c>
+/// immediately above each) -- so page 2 has the same <c>m/@</c>/<c>m/!</c>-backed accessor pair page 0
+/// and page 1 (<c>m/0@</c>/<c>m/1@</c>/<c>m/0!</c>/<c>m/1!</c>) already had. Re-verified standalone: 0
+/// errors, but RAM is now completely FULL, 64/64 words used (was 60/64) -- entry point <c>m/main</c> now
+/// at 0x01F (was 0x01B); no headroom left in this node without freeing space elsewhere first.
+///
+/// <b>2026-09-02 revision #4, confirmed a real (if inert) bug (Stefan: "You are right").</b>
+/// <c>m/0!</c>/<c>m/2!</c> were indeed missing their own <c>;</c> -- unlike <c>m/1@</c>/<c>m/1!</c>
+/// (deliberately unterminated because <c>m/@</c>/<c>m/!</c> are the VERY NEXT definition, so falling
+/// into them and hitting THEIR <c>;</c> already returns correctly), <c>m/0!</c>/<c>m/2!</c> are NOT
+/// immediately followed by <c>m/!</c> -- it's already spent on <c>m/1!</c>'s own fall-through, several
+/// words earlier -- so without their own <c>;</c> they fell straight through into whatever was compiled
+/// right after them instead of returning, the same class of "compiles fine, wrong at the word-boundary
+/// level" issue as the confirmed <c>ahead</c>/<c>begin</c> bug two revisions above. Both were inert
+/// (neither word is called anywhere else in this source yet), so nothing was actually broken by this
+/// yet -- Stefan's fix: <c>: m/0! ( rswa-rs) 0 m/! ;</c> and <c>: m/2! ( rswa-rs) 2 m/! ;</c>, now
+/// self-contained exactly like their <c>m/0@</c>/<c>m/2@</c> counterparts always were. Re-verified
+/// standalone: both extra <c>;</c> opcodes packed into already-allocated instruction slots -- 0 errors,
+/// still 64/64 words used, entry point <c>m/main</c> still at 0x01F, unchanged from revision #3.
+///
+/// <b>Open design item (not yet implemented anywhere): the new page-0-address opcode needs a linker
+/// that does not exist yet.</b> Per Stefan, the new <c>TrailingWord</c>-shaped opcode discussed under
+/// revision #3 above is specifically for CALLING a function whose address turns out to be above
+/// <see cref="CvmInstructionSet.CallAddressMask"/> (0x7FFF) -- the plain <c>call</c> opcode stays for
+/// anything at or below it. The catch, in Stefan's own words: "the address of a function must be known
+/// by the assembler, but it is known by the linker" -- an assembler emitting a direct call has to
+/// choose between the compact <c>call</c> encoding and the new wide one BEFORE the callee's final
+/// address exists, since that address is only assigned once every function is placed, i.e. at link
+/// time, and <see cref="Ga144.Cvm.Toolchain"/>'s own linker is not implemented yet (an empty
+/// <c>Ga144.Cvm.Linker</c> project only). Stefan's proposed resolution: an explicit per-function
+/// attribute -- lower half of page 0 (0x0000-0x7FFF, reachable by the compact <c>call</c>) or upper half
+/// (0x8000-0xFFFF, needing the new wide opcode) -- declared by the programmer rather than inferred, so
+/// the assembler already knows which encoding to emit for a given callee before that callee has a real
+/// address, and the (future) linker packs each region from functions carrying that region's own
+/// attribute. This affects <see cref="CvmAssembler"/>/<see cref="CvmObjectFile"/>/<see cref="CvmInstructionSet"/>
+/// in <c>Ga144.Cvm.Toolchain</c> -- the freestanding, sectioned/relocatable assembler a real linker will
+/// eventually consume -- NOT <see cref="Services.CvmAssemblyLanguage"/>, which by its own design has no
+/// sections, no separate functions to place, and no linker in its picture at all (see that class's own
+/// remarks). Still open: the new opcode's mnemonic and whether it behaves like <c>call</c> (pushes a
+/// return address -- the likely answer, since Stefan describes it purely as a wide-range alternative to
+/// <c>call</c>) or like <c>jump</c>/<c>br</c> (does not); the exact source-language syntax for the
+/// per-function region attribute; and whether the region boundary is exactly the 0x8000 split
+/// <c>CallAddressMask</c> already implies.
+///
+/// <b>Also flagged, not yet reflected anywhere in code: the new page-0-address opcode.</b> Per Stefan,
+/// a new CVM opcode is planned that "contains the address in the next word in code" -- i.e. a
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>-shaped instruction (like
+/// <c>pushlit</c>) carrying a full 16-bit page-0 address in its own following word, presumably to reach
+/// anywhere in page 0's now-full 0x0000-0xFFFF range that <c>call</c>'s 15-bit embedded address alone
+/// cannot. This source has no new tick-labeled primitive for it (the ten tick-labeled opcodes are
+/// unchanged from the previous revision), and neither <see cref="CvmInstructionSet"/> nor
+/// <see cref="Services.CvmAssemblyLanguage"/> has a matching entry yet -- open until its exact shape
+/// (mnemonic, whether it behaves like <c>call</c> (saves a return address) or like <c>jump</c>/<c>br</c>
+/// (does not), and its own tag bits) is confirmed with Stefan.
+///
 /// <b>Registers.</b> Per the source's own header comment: T is the CVM's stack pointer s, A is the
 /// CVM program counter p, S is the CVM's other register r. <c># 1 org</c> starts compiling at word
 /// address 1 (not 0); <c># 0 /a</c> initializes A (p) to 0; <c># up /b</c> points this node's B
@@ -113,9 +178,10 @@ namespace Ga144.Evb.Ide.Cvm;
 /// reading as native nops was indeed the intent, not a missing return/branch-back.
 ///
 /// <b>Verification.</b> Compiled standalone against this project's real <c>Compiler/F18Compiler.cs</c>
-/// via <c>F18CompilerOptions.ForRam(507)</c>, including the new compile-time-stack-empty check: 60/64
-/// words used, 0 errors, entry point <c>m/main</c> at 0x01B. See this class's own remarks for the
-/// history behind these numbers.
+/// via <c>F18CompilerOptions.ForRam(507)</c>, including the new compile-time-stack-empty check: 64/64
+/// words used (completely full -- see this class's own remarks on the new memory layout), 0 errors,
+/// entry point <c>m/main</c> at 0x01F. See this class's own remarks for the history behind these
+/// numbers.
 /// </summary>
 internal static class Node507Program
 {
@@ -123,13 +189,15 @@ internal static class Node507Program
   public const int Coordinate = 507;
 
   /// <summary>
-  /// Node 507's full resident F18 source, as supplied by Stefan on 2026-09-01 and fixed by Stefan on
-  /// 2026-09-02 -- twice: first <c># m/main >r</c> -&gt; <c># m/main lit >r</c> in <c>m/main</c>'s
-  /// dispatch loop (confirmed on real hardware: <c>'nop</c> works), then <c>ahead</c> -&gt;
-  /// <c>begin</c> in <c>m/call</c> plus a trailing <c>..</c> added to <c>m/main</c>'s <c>dup 2* 2*</c>
-  /// (confirmed on real hardware: <c>call</c>/<c>ret</c> now work too). See the class remarks for the
-  /// dispatch logic, the ten tick-labeled opcodes, both 2026-09-02 fixes and the refactor, and the
-  /// compile verification this source was checked against.
+  /// Node 507's full resident F18 source, as supplied by Stefan on 2026-09-01 and revised several
+  /// times on 2026-09-02: the <c># m/main >r</c> -&gt; <c># m/main lit >r</c> fix (confirmed on real
+  /// hardware: <c>'nop</c> works), the <c>ahead</c> -&gt; <c>begin</c> fix plus a trailing <c>..</c>
+  /// added to <c>m/main</c>'s <c>dup 2* 2*</c> (confirmed on real hardware: <c>call</c>/<c>ret</c> work
+  /// too), the new page-2 memory layout adding <c>m/2@</c>/<c>m/2!</c>, and a fix to
+  /// <c>m/0!</c>/<c>m/2!</c> (each now ends with its own <c>;</c>, confirmed a real if inert bug) --
+  /// the last two not yet hardware confirmed. See the class remarks for the dispatch logic, the ten
+  /// tick-labeled opcodes, every 2026-09-02 revision, and the compile verification this source was
+  /// checked against.
   /// </summary>
   public const string Source = """
       ( CVM2 node 507. main CVM2 node, ????_????_????_???? )
@@ -144,11 +212,13 @@ internal static class Node507Program
       : m/@ ( rsab-rsw) !b !b @b ;
       : m/next ( rs-rsx) a dup 1 . + a!
       : m/0@ ( rsa-rsw) 0 m/@ ;
+      : m/2@ ( rsa-rsw) 2 m/@ ;
       : 'plit ( rs-rs) m/next
       : m/push ( rsw-rs) >r -1 . + r> over
       : m/1! ( rswa-rs) 1
       : m/! ( rswab-rs) inv !b inv !b !b ;
-      : m/0! ( rswa-rs) 0 m/!
+      : m/0! ( rswa-rs) 0 m/! ;
+      : m/2! ( rswa-rs) 2 m/! ;
       : m/branch ( rso-rs) a . + a! ;
       : m/call ( rsxy-rs)
         begin drop >r a m/push r> a!

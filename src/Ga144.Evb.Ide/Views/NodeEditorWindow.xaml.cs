@@ -1,5 +1,7 @@
 using Ga144.Evb.Ide.ViewModels;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Ga144.Evb.Ide.Views;
 
@@ -130,5 +132,29 @@ public partial class NodeEditorWindow : Window
 
     string message = _viewModel.CopyCurrentSourceTo(pickerViewModel.SelectedProject, pickerViewModel.SelectedRole);
     MessageBox.Show(this, message, "Copy to project", MessageBoxButton.OK, MessageBoxImage.Information);
+  }
+
+  // The RAM/ROM source tabs' line-number gutter (NodeEditorWindow.xaml's own remarks:
+  // SourceLineNumberGutterText/RomSourceLineNumberGutterText) puts the actual editable text in a
+  // multi-line TextBox with its own scrollbars turned off (VerticalScrollBarVisibility="Disabled"),
+  // relying on an ANCESTOR ScrollViewer to do the real scrolling so the gutter and the text always move
+  // together. A known WPF quirk defeats the mouse wheel there: a multi-line TextBox's built-in
+  // PART_ContentHost scroll viewer still swallows the (bubbling) MouseWheel event before it can reach
+  // that ancestor, even though the TextBox itself has nothing left to scroll -- so without this handler,
+  // spinning the wheel over the source text (or its gutter) does nothing at all. Wiring this to the
+  // outer ScrollViewer's PreviewMouseWheel (a TUNNELING event, delivered top-down before the TextBox
+  // ever gets a chance to swallow the later bubbling MouseWheel) lets it apply the scroll and mark the
+  // event handled first, so the wheel always scrolls the whole gutter+source pair together no matter
+  // where the cursor is over it -- the gutter, the source text, or the text's own independent
+  // horizontal-scroll region.
+  private void OnGutteredSourceScrollViewerPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+  {
+    if (sender is not ScrollViewer scrollViewer)
+    {
+      return;
+    }
+
+    scrollViewer.ScrollToVerticalOffset(scrollViewer.VerticalOffset - e.Delta);
+    e.Handled = true;
   }
 }
