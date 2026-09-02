@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-02T14:51:25.4727163
-      utcDateTime: 2026-09-02T14:51:25.4727163Z
-      localDateTime: 2026-09-02T16:51:25.4727163+02:00
+      dateTime: 2026-09-02T19:34:05.4906794
+      utcDateTime: 2026-09-02T19:34:05.4906794Z
+      localDateTime: 2026-09-02T21:34:05.4906794+02:00
       date: 2026-09-02T00:00:00.0000000
       day: 2
       dayOfWeek: Wednesday
       dayOfYear: 245
-      hour: 14
-      millisecond: 472
-      microsecond: 716
-      nanosecond: 300
-      minute: 51
+      hour: 19
+      millisecond: 490
+      microsecond: 679
+      nanosecond: 400
+      minute: 34
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 25
-      ticks: 639239574854727163
-      utcTicks: 639239574854727163
-      timeOfDay: 14:51:25.4727163
+      second: 5
+      ticks: 639239744454906794
+      utcTicks: 639239744454906794
+      timeOfDay: 19:34:05.4906794
       year: 2026
   portB: 
   portC:
@@ -14849,8 +14849,10 @@ projects:
         parameterStack: []
     - coordinate: 407
       enabled: true
-      sourceCode: >+
-        ( CVM2 node 407. branching, 11??_????_????_???? )
+      sourceCode: >-
+        ( CVM2 node 407. VM extending, 11??_????_????_???? )
+
+        ( A: temporary register tmp1 )
 
         # 507 import
 
@@ -14872,21 +14874,33 @@ projects:
 
         : b/leave A[ ; ]] lit !b
 
-        : b/main # b/leave lit >r A[ !p !p ]] lit !b @b @b >r
-          2* -if // 111?_????_????_????
+        : b/main # b/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r
+          -if // 111?_????_????_????
             2* -if // 1111_????_????_????
-              //
               r> --l- ;
             then // 1110_????_????_????
-             //
             r> r--- ;
           then // 110?_????_????_????
-          2* -if // 1010_1???_????_????
+          2* -if // 1101_????_????_????
             r> -d-- ;
           then // 1100_????_????_????
           ex ;
-        : 'call A[ m/next ]] lit !b A[ >r a ]] lit !b A[ m/push ]] lit !b A[ r> a! ]] lit !b ;
+        : 'lcall A[ m/next ]] lit !b A[ >r a ]] lit !b A[ m/push ]] lit !b A[ r> a! ]] lit !b ;
 
+        : 'ljmp A[ m/next ]] lit !b A[ a! ]] lit !b ;
+
+
+        (
+
+        this node provides support for extending the VM to neighbour nodes.
+
+        tmp1 is a register available to the neighbouring nodes.
+
+        'lcall long call. the next word defines the destination address.
+
+        'ljmp long jump. jumps to the address in the next word
+
+        )
       ramWords:
       - 0x05B05
       - 0x219B2
@@ -14902,9 +14916,9 @@ projects:
       - 0x15555
       - 0x04812
       - 0x0000A
-      - 0x0D9B2
+      - 0x37932
       - 0x09F02
-      - 0x2E46E
+      - 0x2F216
       - 0x37214
       - 0x269B2
       - 0x11575
@@ -14922,10 +14936,10 @@ projects:
       - 0x1340F
       - 0x26AB2
       - 0x09555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x05B12
+      - 0x13407
+      - 0x2A9B2
+      - 0x09555
       - 0x15555
       - 0x15555
       - 0x15555

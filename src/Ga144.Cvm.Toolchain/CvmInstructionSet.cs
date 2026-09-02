@@ -24,7 +24,10 @@ namespace Ga144.Cvm.Toolchain;
 /// <see cref="ZeroExtendMnemonic"/>'s own remarks)), plus node 407's seven register-w/port ops --
 /// <c>xpt</c>, <c>out</c>, <c>in</c>, <c>ldhi</c>, <c>ldlo</c>, <c>sthi</c>, <c>stlo</c> (tagged
 /// mnemonics exactly like node 506's and 508's ops, resolved against node 407's own live compile --
-/// see <see cref="ExchangePortMnemonic"/>'s own remarks)) and, for each, how
+/// see <see cref="ExchangePortMnemonic"/>'s own remarks)), plus CVM2's <c>lcall</c>/<c>ljmp</c> (long
+/// call/long jump, added 2026-09-02 -- shaped exactly like <c>pushlit</c>, resolved against node 407's
+/// own live compile too, but a DIFFERENT tag -- see <see cref="LongCallMnemonic"/>'s own remarks)) and,
+/// for each, how
 /// many words it occupies once assembled, how its
 /// operand (if any) is encoded, and a stable numeric <see cref="CvmInstructionShape.Id"/>. This is the
 /// SHAPE of each instruction only -- for the tagged-dispatch mnemonics
@@ -207,6 +210,26 @@ public static class CvmInstructionSet
   public const string LoadLowMnemonic = "ldlo";
   public const string StoreHighMnemonic = "sthi";
   public const string StoreLowMnemonic = "stlo";
+
+  // CVM2's long call/long jump, added per Stefan's node 407 source (2026-09-02) and the memory-layout
+  // change on node 507 that motivated it: page 0 now spans the FULL 0x0000-0xFFFF, so a function above
+  // 0x7FFF no longer fits in call's own 15-bit EmbeddedAddress word (CallAddressMask). Both are shaped
+  // EXACTLY like pushlit -- a single tagged opcode word (resolved against a live node's own compiled
+  // symbol, never self-describing) followed by one trailing operand word -- so no new
+  // CvmOperandEncoding case was needed, just two more TrailingWord entries pointed at a different node.
+  // Per Stefan's own explanation of node 407's b/main dispatch cascade ("the sequence 'ex ;' will call
+  // 'lcall and 'ljmp because their address is already in R") and the x/y relay protocol between node
+  // 507 and node 407 (confirmed correct by Stefan, 2026-09-02): node 507's m/main hands off to node 407
+  // once the fetched CVM opcode word's top bits read "11??", and node 407's own b/main cascade consumes
+  // two more bits before falling to "ex" for the "1100" case -- so a CVM opcode word reaching 'lcall or
+  // 'ljmp always has its top 4 bits "1100" (0xC000), the same "tag | local address" scheme node 507's
+  // own local-execute already uses with 0x8800 (Node507Cvm2LocalExecuteTagBits, in the IDE project's own
+  // Services.CvmAssemblyLanguage). The actual far-call/far-jump TARGET address is carried separately, in
+  // the trailing word, read by 'lcall/'ljmp themselves via node 507's own m/next once running on node
+  // 407 -- see Cvm.Node407Program's own remarks for the full derivation. lcall pushes a return address
+  // (like call/m/call); ljmp does not (like a plain jump).
+  public const string LongCallMnemonic = "lcall";
+  public const string LongJumpMnemonic = "ljmp";
 
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
@@ -473,6 +496,8 @@ public static class CvmInstructionSet
     new(Id: 70, StoreHighMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 71, StoreLowMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 72, HaltMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 73, LongCallMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 74, LongJumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

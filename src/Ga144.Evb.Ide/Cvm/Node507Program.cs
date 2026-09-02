@@ -149,9 +149,12 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <b>m/main's dispatch cascade -- DERIVED, NOT YET CONFIRMED WITH STEFAN BEYOND 'nop.</b> The
 /// source's own header comment marks its own top-bit dispatch pattern as still undetermined
 /// ("<c>????_????_????_????</c>"). Reading the cascade itself: "11??" tests true -&gt; hand off to
-/// the DOWN port (<c>-d--</c>) -- per the inline comment this reaches a node not yet loaded (read as
-/// a future ALU/offload node, possibly node 508 -- see <see cref="Node508Program"/>'s own remarks --
-/// but this is a guess, not confirmed); "101?" -&gt; LEFT port (<c>--l-</c>); "100?" (unconditional
+/// the DOWN port (<c>-d--</c>) -- per the inline comment this reaches a node not yet loaded; the
+/// earlier guess here (a future ALU/offload node, possibly node 508) was almost certainly wrong --
+/// <see cref="Node407Program"/>, supplied 2026-09-02, opens with the exact same "<c>11??_????_????_
+/// ????</c>" bit pattern as its own header comment, strong circumstantial evidence it is what
+/// <c>-d--</c> actually reaches, though Stefan has not confirmed this in so many words -- see that
+/// class's own remarks; "101?" -&gt; LEFT port (<c>--l-</c>); "100?" (unconditional
 /// at that point) -&gt; RIGHT port (<c>r---</c>) -- this is node 607, CVM2's on-chip SRAM-request
 /// router; within the remaining "1000_????" quarter, "1000_1???" is explicitly commented "local
 /// execute" (<c>drop &gt;r ;</c> -- jump directly to an address in this node's own RAM), and

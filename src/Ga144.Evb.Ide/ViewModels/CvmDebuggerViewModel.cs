@@ -506,18 +506,29 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // mnemonics are orphaned too, even though the coordinate 507 itself is very much back in active use
   // as CVM2's real CPU -- see CvmAssemblyLanguage's own remarks), and
   // CvmAssemblyLanguage.NodeSymbolByMnemonic's own entries for their mnemonics (the ALU ops, leave,
-  // node 506/407's ops) stay in the table per "don't remove any opcodes" but simply never resolve once
-  // their node isn't compiled here -- exactly the same graceful-omission behavior CvmAssemblyLanguage
-  // already has for a node missing from compiledRam altogether, so dropping them from this list
-  // changes nothing about whether those mnemonics still exist, only whether THIS standalone path
-  // wastes a compile on nodes CVM2 doesn't use. This also fixes a real bug: compiling all six
-  // unconditionally meant ANY one of them failing to compile in Stefan's own live project would abort
-  // Assemble entirely with no obvious connection to what was actually typed. See
-  // CompileStandaloneCvmNodes' own remarks for the belt-and-braces fix to that same failure mode
-  // (continue past one bad node rather than aborting on it).
+  // node 506's ops, node 407's OLD register-w/port ops) stay in the table per "don't remove any
+  // opcodes" but simply never resolve once their node isn't compiled here -- exactly the same
+  // graceful-omission behavior CvmAssemblyLanguage already has for a node missing from compiledRam
+  // altogether, so dropping them from this list changes nothing about whether those mnemonics still
+  // exist, only whether THIS standalone path wastes a compile on nodes CVM2 doesn't use. This also
+  // fixes a real bug: compiling all six unconditionally meant ANY one of them failing to compile in
+  // Stefan's own live project would abort Assemble entirely with no obvious connection to what was
+  // actually typed. See CompileStandaloneCvmNodes' own remarks for the belt-and-braces fix to that
+  // same failure mode (continue past one bad node rather than aborting on it).
+  //
+  // Node 407 added back 2026-09-02: NOT a revival of the orphaned CVM1 node -- CVM2 reuses the same
+  // coordinate for an unrelated long-call/long-jump helper (lcall/ljmp), reached from node 507's own
+  // m/main dispatch. Needed here for lcall/ljmp to resolve at all in this standalone path -- otherwise
+  // CvmAssemblyLanguage's own "undefined opcode -> nop" substitution would silently turn every lcall/
+  // ljmp into a nop, exactly as it already does for a mnemonic whose node is missing from compiledRam
+  // for any other reason. As with node 507, this compiles from THIS CHIP'S OWN LIVE PROJECT DATA for
+  // coordinate 407 (see CompileStandaloneCvmNodes' own remarks), not from Cvm.Node407Program's
+  // reference source -- that reference copy has no effect here until it's also saved into the live
+  // project via the Node Editor.
   private static readonly IReadOnlyList<int> StandaloneCvmNodeCoordinates =
   [
     CvmMemoryProtocol.NopSourceNodeCoordinate, // 507, CVM2's entire CPU (corrected 2026-09-01 from 508).
+    Node407Program.Coordinate, // 407, CVM2's long-call/long-jump helper (added 2026-09-02).
   ];
 
   /// <summary>
