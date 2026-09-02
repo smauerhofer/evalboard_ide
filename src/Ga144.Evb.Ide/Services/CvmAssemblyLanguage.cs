@@ -226,8 +226,16 @@ internal static class CvmAssemblyLanguage
             return (shape.Mnemonic, nodeCoordinate, symbolName, tag, shape.WordLength, shape.HasOperand);
           })];
 
-  /// <summary>One parsed line of CVM assembly: a mnemonic plus its operand, when required (pushlit only, today).</summary>
-  public sealed record CvmAsmInstruction(string Mnemonic, int? Operand);
+  /// <summary>
+  /// One parsed line of CVM assembly. <see cref="Label"/> is the name defined on this line (a bare
+  /// "label:" line with nothing else has an empty <see cref="Mnemonic"/> and exists purely to mark
+  /// the address of whatever comes next -- see <see cref="ParseSource"/>'s own remarks), never both
+  /// this and <see cref="OperandLabel"/> at once. <see cref="Operand"/> is set when the line's
+  /// operand (if any) was already a literal number; <see cref="OperandLabel"/> is set instead when
+  /// it was a label reference still waiting to be resolved to a literal by
+  /// <see cref="Assemble"/>'s own label pass -- never both.
+  /// </summary>
+  public sealed record CvmAsmInstruction(string Mnemonic, int? Operand, string? Label = null, string? OperandLabel = null);
 
   /// <summary>
   /// Resolves <see cref="Instructions"/> against THIS run's own compiles (never a frozen reference
@@ -316,22 +324,62 @@ internal static class CvmAssemblyLanguage
   /// that is a different problem than "not implemented yet." Returns a null word list with a
   /// 1-based-line error message (never throws) when a mnemonic isn't recognized at all, node 507's own
   /// 'nop can't be resolved either (nothing to substitute with), an operand is missing where one is
-  /// required or out of range, or one is supplied where none is allowed. This is what
+  /// required or out of range, a label operand is undefined or unsupported for that mnemonic, or an
+  /// operand is supplied where none is allowed. This is what
   /// <see cref="CvmDebugSession.AssembleAndLoadProgram"/> uses to turn the CVM Debugger's own
-  /// Assembly Code editor into a program loaded straight into the simulated SRAM -- there are no
-  /// labels or sections here (unlike the freestanding <c>gaasm</c>/<see cref="CvmAssembler"/>): every
-  /// operand must already be a literal, since this assembles one flat, immediately-loaded program,
-  /// never a relocatable object file bound for a linker.
+  /// Assembly Code editor into a program loaded straight into the simulated SRAM.
+  ///
+  /// <b>Labels (2026-09-02, per Stefan).</b> Unlike the freestanding <c>gaasm</c>/
+  /// <see cref="CvmAssembler"/>, there are still no sections, imports, or an object file here -- this
+  /// assembles one flat, immediately-loaded program, and every label is local to that one program --
+  /// but a label name (defined with "name:", optionally sharing its line with an instruction, e.g.
+  /// "loop: nop", or standing alone) IS supported as an operand wherever a literal number was already
+  /// accepted, resolved by address before any mnemonic-specific encoding happens below. Resolution is
+  /// a simple two-pass scheme entirely local to this one call: <see cref="CollectLabelAddresses"/>
+  /// (pass 1) walks every instruction once to learn each label's address -- a forward reference (using
+  /// a label before its own "name:" line, the normal case for a loop or a subroutine placed after its
+  /// caller) works exactly the same as a backward one -- then this method's own loop (pass 2) resolves
+  /// each operand label via <see cref="ResolveOperandLabel"/> before falling into the exact same
+  /// literal-operand encoding path a hand-typed number would have used, so every existing range/arity
+  /// check below applies unchanged either way. <c>call</c> and every tagged mnemonic (<c>pushlit</c>,
+  /// plus <c>slit</c>) resolve a label to its own ABSOLUTE word address; <c>br</c>/<c>ifbr</c> resolve
+  /// to a signed RELATIVE offset instead, since that is what their own opcode word actually encodes
+  /// (see <see cref="ResolveOperandLabel"/>'s own remarks); node 606's eight
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/> ops don't accept a label
+  /// operand at all, since their value is a frame-relative slot index/count, never an address.
   /// </summary>
   public static (List<int>? Words, string? Error) Assemble(
       IReadOnlyList<CvmAsmInstruction> instructions,
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
     IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand)> encodeTable = BuildEncodeTable(compiledRam);
+
+    (IReadOnlyDictionary<string, int>? labelAddresses, string? labelError) = CollectLabelAddresses(instructions, encodeTable);
+    if (labelAddresses is null)
+    {
+      return (null, labelError);
+    }
+
     var words = new List<int>();
     for (int line = 0; line < instructions.Count; line++)
     {
       CvmAsmInstruction instruction = instructions[line];
+      if (instruction.Mnemonic.Length == 0)
+      {
+        continue; // a bare "label:" line -- nothing of its own to assemble.
+      }
+
+      if (instruction.OperandLabel is not null)
+      {
+        (int? resolvedOperand, string? resolveError) = ResolveOperandLabel(instruction, words.Count, labelAddresses, line + 1);
+        if (resolveError is not null)
+        {
+          return (null, resolveError);
+        }
+
+        instruction = instruction with { Operand = resolvedOperand };
+      }
+
       CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
       if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue })
       {
@@ -385,6 +433,113 @@ internal static class CvmAssemblyLanguage
     }
 
     return (words, null);
+  }
+
+  /// <summary>
+  /// Pass 1 of resolving labels for <see cref="Assemble"/>: walks every instruction once, in the SAME
+  /// order pass 2 (<see cref="Assemble"/>'s own loop) will emit words in, tracking the running word
+  /// address so each label's address is known before any operand is resolved -- a forward reference
+  /// (a "call"/"br" written before the "name:" line it names) is the normal, common case for a loop or
+  /// a subroutine placed after its own caller, so labels cannot be resolved in a single pass. Word
+  /// length per line comes from <see cref="GetWordLength"/>, never from actually encoding the line, so
+  /// this pass needs no operand resolved yet. Returns a null map with a 1-based-line error only for a
+  /// genuine duplicate label definition; an undefined or unsupported label OPERAND is a pass-2 concern
+  /// instead (see <see cref="ResolveOperandLabel"/>'s own remarks), since only pass 2 knows which
+  /// mnemonic is asking for it. Label names are matched case-insensitively, like every mnemonic in
+  /// this file.
+  /// </summary>
+  private static (IReadOnlyDictionary<string, int>? Labels, string? Error) CollectLabelAddresses(
+      IReadOnlyList<CvmAsmInstruction> instructions,
+      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand)> encodeTable)
+  {
+    var labels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+    int address = 0;
+    for (int line = 0; line < instructions.Count; line++)
+    {
+      CvmAsmInstruction instruction = instructions[line];
+      if (instruction.Label is not null && !labels.TryAdd(instruction.Label, address))
+      {
+        return (null, $"line {line + 1}: label \"{instruction.Label}\" is already defined.");
+      }
+
+      if (instruction.Mnemonic.Length > 0)
+      {
+        address += GetWordLength(instruction.Mnemonic, encodeTable);
+      }
+    }
+
+    return (labels, null);
+  }
+
+  /// <summary>
+  /// How many words <paramref name="mnemonic"/> occupies once assembled -- used by
+  /// <see cref="CollectLabelAddresses"/> to compute label addresses BEFORE any operand (literal or
+  /// label) is resolved, since word length never depends on the operand's actual value. Mirrors
+  /// exactly what <see cref="Assemble"/>'s own pass 2 will actually emit for the same mnemonic, so the
+  /// two passes can never disagree on an address: a self-describing shape (<c>call</c>/<c>br</c>/
+  /// <c>ifbr</c>/<c>slit</c>/node 606's ops) is always its own
+  /// <see cref="CvmInstructionSet.CvmInstructionShape.WordLength"/>; a tagged mnemonic resolves through
+  /// <paramref name="encodeTable"/> the same way pass 2 does; anything else -- a genuine opcode with no
+  /// live node to answer it, which pass 2's own "undefined opcode -&gt; nop" substitution (see
+  /// <see cref="Assemble"/>'s own remarks) always collapses to exactly one word regardless of the
+  /// substituted opcode's real shape, or an outright unrecognized mnemonic pass 2 will reject outright
+  /// -- is 1, a safe placeholder that never needs to be exact since pass 2 either matches it anyway or
+  /// fails that very line before any address past it is ever used.
+  /// </summary>
+  private static int GetWordLength(
+      string mnemonic,
+      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand)> encodeTable)
+  {
+    CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(mnemonic);
+    if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue })
+    {
+      return selfDescribingShape.WordLength;
+    }
+
+    return encodeTable.TryGetValue(mnemonic, out (int Opcode, int WordLength, bool HasOperand) entry) ? entry.WordLength : 1;
+  }
+
+  /// <summary>
+  /// Turns one instruction's <see cref="CvmAsmInstruction.OperandLabel"/> into the literal value
+  /// <see cref="Assemble"/>'s own existing per-mnemonic encode logic already knows how to validate and
+  /// pack, so that logic runs completely unchanged whether the source said a number or a label name.
+  /// <c>call</c> (an <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>) and every
+  /// tagged mnemonic resolved via <paramref name="labelAddresses"/> alone (<c>pushlit</c>, the only one
+  /// with a trailing-word operand today) resolve to the label's own ABSOLUTE word address -- so does
+  /// <c>slit</c>, even though it's an <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>
+  /// like <c>br</c>/<c>ifbr</c> below: loading a label's own address as a small signed literal is a
+  /// legitimate use, even though that encoding's value isn't inherently an address (see its own
+  /// remarks). <c>br</c>/<c>ifbr</c> resolve to a signed RELATIVE offset instead, per
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>'s own remarks confirmed
+  /// against real hardware: the target is relative to the address of the word immediately AFTER the
+  /// branch's own opcode word, i.e. <c>labelAddress - (instructionAddress + 1)</c>, not the branch
+  /// word's own address. Node 606's eight <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>
+  /// ops reject a label operand outright with a clear error -- their value is a frame-relative slot
+  /// index/count, never an address, so resolving one would just be silently wrong. Range/arity
+  /// validation of the resolved value itself still happens downstream exactly as it would for a
+  /// hand-typed literal -- this method only turns a name into a number, never validates its range.
+  /// </summary>
+  private static (int? Operand, string? Error) ResolveOperandLabel(
+      CvmAsmInstruction instruction,
+      int instructionAddress,
+      IReadOnlyDictionary<string, int> labelAddresses,
+      int lineNumber)
+  {
+    if (!labelAddresses.TryGetValue(instruction.OperandLabel!, out int labelAddress))
+    {
+      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" references undefined label \"{instruction.OperandLabel}\".");
+    }
+
+    CvmInstructionSet.CvmInstructionShape? shape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
+    if (shape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue })
+    {
+      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" does not support a label operand -- its value is a frame-relative slot index/count, not an address; supply a literal 0..{shape.ValueBitMask} value instead.");
+    }
+
+    bool isRelativeBranch =
+        string.Equals(instruction.Mnemonic, CvmInstructionSet.BranchMnemonic, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(instruction.Mnemonic, CvmInstructionSet.ConditionalBranchMnemonic, StringComparison.OrdinalIgnoreCase);
+    return isRelativeBranch ? (labelAddress - (instructionAddress + 1), null) : (labelAddress, null);
   }
 
   /// <summary>
@@ -499,8 +654,11 @@ internal static class CvmAssemblyLanguage
   /// min/max, tag OR'd with the value's low bits) and <see cref="CvmAssembler"/>'s own
   /// <c>EmbeddedAddress</c> case uses for <c>call</c>, kept as a small duplicate here rather than
   /// shared: that assembler resolves a label/import operand through relocations against a
-  /// <see cref="CvmObjectFile"/>, which has no place in this simpler, label-free, immediately-loaded
-  /// assembler.
+  /// <see cref="CvmObjectFile"/>, deferred all the way to a not-yet-implemented linker, which has no
+  /// place in this simpler, immediately-loaded assembler -- this file's own label support (see
+  /// <see cref="Assemble"/>'s own remarks) resolves a label to a plain literal <c>int</c> BEFORE this
+  /// method is ever called, so from here a label-derived operand and a hand-typed one are
+  /// indistinguishable.
   /// </summary>
   private static (int? Word, string? Error) EncodeSelfDescribingWord(CvmInstructionSet.CvmInstructionShape shape, int? operand, int lineNumber)
   {
@@ -544,9 +702,23 @@ internal static class CvmAssemblyLanguage
   /// <summary>
   /// Parses CVM assembly source text into <see cref="CvmAsmInstruction"/>s ready for
   /// <see cref="Assemble"/>: one mnemonic per line, optionally followed by a "0x"-prefixed hex or
-  /// plain decimal operand; blank lines and ";" or "//" line comments are ignored. This is purely
-  /// textual -- it does not know or care whether a mnemonic actually resolves against node 607's
-  /// current compile, that check happens in <see cref="Assemble"/>.
+  /// plain decimal operand OR a label name (see below); blank lines and ";" or "//" line comments are
+  /// ignored. This is purely textual -- it does not know or care whether a mnemonic actually resolves
+  /// against a live node's current compile (that's <see cref="Assemble"/>'s job) or whether a label
+  /// name it records here is ever actually defined anywhere (also <see cref="Assemble"/>'s job, via
+  /// <see cref="CollectLabelAddresses"/>) -- this method only tells the two apart syntactically.
+  ///
+  /// <b>Labels.</b> A line may start with "name:" (an identifier -- a letter or underscore, then any
+  /// mix of letters/digits/underscores -- immediately followed by a colon), either on its own (marking
+  /// the address of whatever instruction comes next) or immediately followed by that instruction on
+  /// the same line, e.g. "loop: nop". A candidate before ':' that isn't a valid identifier (starts
+  /// with a digit, e.g. a stray "0x12:") is left alone and the whole line is parsed as an ordinary
+  /// instruction instead, same as before labels existed. Once a line's optional label prefix is
+  /// stripped, its second token -- if not "0x"-hex or plain decimal -- is recorded as a label
+  /// OPERAND reference (<see cref="CvmAsmInstruction.OperandLabel"/>) when it's itself a valid
+  /// identifier, rather than an immediate parse failure; whether that label actually exists, and
+  /// whether the mnemonic in question even accepts a label there, is resolved later in
+  /// <see cref="Assemble"/>.
   /// </summary>
   public static (List<CvmAsmInstruction>? Instructions, string? Error) ParseSource(string source)
   {
@@ -561,17 +733,42 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
+      string? label = null;
+      if (TryParseLabelPrefix(line, out string labelCandidate, out string remainder))
+      {
+        label = labelCandidate;
+        line = remainder;
+        if (line.Length == 0)
+        {
+          // A bare "label:" line with no instruction of its own -- see CollectLabelAddresses's own
+          // remarks for how this marks the address of whatever comes next.
+          instructions.Add(new CvmAsmInstruction(string.Empty, null, label));
+          continue;
+        }
+      }
+
       string[] parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
       if (parts.Length == 1)
       {
-        instructions.Add(new CvmAsmInstruction(parts[0], null));
+        instructions.Add(new CvmAsmInstruction(parts[0], null, label));
         continue;
       }
 
-      if (parts.Length == 2 && TryParseOperand(parts[1], out int operand))
+      if (parts.Length == 2)
       {
-        instructions.Add(new CvmAsmInstruction(parts[0], operand));
-        continue;
+        if (TryParseOperand(parts[1], out int operand))
+        {
+          instructions.Add(new CvmAsmInstruction(parts[0], operand, label));
+          continue;
+        }
+
+        if (IsValidIdentifier(parts[1]))
+        {
+          // Not a number -- a forward or backward reference to another line's label, resolved once
+          // every label's address is known (see Assemble's own remarks).
+          instructions.Add(new CvmAsmInstruction(parts[0], null, label, parts[1]));
+          continue;
+        }
       }
 
       return (null, $"line {lineNumber + 1}: could not parse \"{original.Trim()}\".");
@@ -586,6 +783,55 @@ internal static class CvmAssemblyLanguage
     int slashSlash = line.IndexOf("//", StringComparison.Ordinal);
     int cut = semicolon < 0 ? slashSlash : (slashSlash < 0 ? semicolon : Math.Min(semicolon, slashSlash));
     return cut < 0 ? line : line[..cut];
+  }
+
+  // A leading "name:" where "name" is a valid identifier (IsValidIdentifier) marks a label
+  // definition -- returns the name and whatever follows the colon (trimmed, possibly empty for a
+  // bare "label:" line). A colon that isn't preceded by a valid identifier (no colon at all, or the
+  // text before it starts with a digit or contains a character an identifier can't) isn't a label at
+  // all; the whole original line is handed back unchanged for ordinary instruction parsing.
+  private static bool TryParseLabelPrefix(string line, out string label, out string remainder)
+  {
+    int colon = line.IndexOf(':');
+    if (colon < 0)
+    {
+      label = string.Empty;
+      remainder = line;
+      return false;
+    }
+
+    string candidate = line[..colon].Trim();
+    if (!IsValidIdentifier(candidate))
+    {
+      label = string.Empty;
+      remainder = line;
+      return false;
+    }
+
+    label = candidate;
+    remainder = line[(colon + 1)..].Trim();
+    return true;
+  }
+
+  // A label name (definition or operand reference): a letter or underscore, then any mix of
+  // letters/digits/underscores -- deliberately cannot start with a digit, so it never collides with a
+  // "0x..."/plain-decimal numeric operand or a stray "0x12:" that isn't meant as a label at all.
+  private static bool IsValidIdentifier(string text)
+  {
+    if (text.Length == 0 || (!char.IsLetter(text[0]) && text[0] != '_'))
+    {
+      return false;
+    }
+
+    for (int i = 1; i < text.Length; i++)
+    {
+      if (!char.IsLetterOrDigit(text[i]) && text[i] != '_')
+      {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   // Handles a leading '-' before EITHER a "0x"-prefixed hex magnitude or a plain decimal one -- the

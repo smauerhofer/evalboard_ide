@@ -196,10 +196,31 @@
             </Grid.RowDefinitions>
             <TextBlock Text="Compiled RAM image (one 18-bit word per line, addresses 0x000 through 0x03F)"
                                    FontWeight="SemiBold" />
-            <TextBox Grid.Row="1" Text="{Binding RamWordsText, UpdateSourceTrigger=PropertyChanged}"
-                                 AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
-                                 HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="13"
-                                 TextWrapping="NoWrap" SpellCheck.IsEnabled="False" />
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                                    HorizontalScrollBarVisibility="Auto" Margin="0,5,0,0">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0" Text="{Binding RamAddressGutterText, Mode=OneWay}"
+                                       IsReadOnly="True" IsTabStop="False"
+                                       AcceptsReturn="True" BorderThickness="0"
+                                       Background="#F4F4F4" Foreground="#666"
+                                       FontFamily="Consolas" FontSize="13"
+                                       Padding="2,0,8,0" TextWrapping="NoWrap"
+                                       VerticalScrollBarVisibility="Disabled"
+                                       HorizontalScrollBarVisibility="Disabled"
+                                       IsInactiveSelectionHighlightEnabled="True" />
+                <TextBox Grid.Column="1" Text="{Binding RamWordsText, UpdateSourceTrigger=PropertyChanged}"
+                                       AcceptsReturn="True" MinWidth="120"
+                                       BorderThickness="0" Padding="2,0,2,0"
+                                       FontFamily="Consolas" FontSize="13"
+                                       TextWrapping="NoWrap" SpellCheck.IsEnabled="False"
+                                       VerticalScrollBarVisibility="Disabled"
+                                       HorizontalScrollBarVisibility="Disabled" />
+              </Grid>
+            </ScrollViewer>
           </Grid>
 
           <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">

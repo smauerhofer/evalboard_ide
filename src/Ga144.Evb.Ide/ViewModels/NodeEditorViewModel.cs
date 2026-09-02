@@ -143,6 +143,25 @@ public sealed class NodeEditorViewModel : ObservableObject
   public string RamWordsText { get => _ramWordsText; set => SetProperty(ref _ramWordsText, value ?? string.Empty); }
   public string RomWordsText { get => _romWordsText; set => SetProperty(ref _romWordsText, value ?? string.Empty); }
 
+  // RAM has no Models.RomComparison-style shared constant of its own -- it has
+  // always been word-addressed from 0x000 for 64 words (per this window's own
+  // "RAM and startup" header text and the literal 64 already used by Split(...)
+  // below); named here instead of leaving another bare "64"/"0x000" behind.
+  private const int RamBaseAddress = 0x000;
+  private const int RamWordCount = 64;
+
+  /// <summary>
+  /// Fixed address gutter for the compiled RAM image (0x000..0x03F, one per line),
+  /// shown read-only alongside the editable word column -- the same
+  /// gutter-beside-editable-column presentation <see cref="RomAddressGutterText"/>
+  /// already uses for the System ROM image, so a RAM word's address is visible the
+  /// same way without becoming part of the editable/round-tripped text.
+  /// </summary>
+  public string RamAddressGutterText { get; } = string.Join(
+      Environment.NewLine,
+      Enumerable.Range(0, RamWordCount)
+          .Select(index => $"0x{RamBaseAddress + index:X3}"));
+
   /// <summary>
   /// Fixed address gutter for the System ROM image (0x080..0x0BF, one per line),
   /// shown read-only alongside the editable word column so each line's address is
@@ -308,7 +327,7 @@ public sealed class NodeEditorViewModel : ObservableObject
   {
     Node.Enabled = Enabled;
     Node.SourceCode = SourceCode;
-    Node.RamWords = Split(RamWordsText, 64);
+    Node.RamWords = Split(RamWordsText, RamWordCount);
     Node.Startup.EntryPoint = NormalizeWord(EntryPoint, "0x000");
     Node.Startup.P = NormalizeWord(P, "0x000");
     Node.Startup.A = NormalizeWord(A, "0x000");
@@ -347,7 +366,7 @@ public sealed class NodeEditorViewModel : ObservableObject
 
     targetNode.Enabled = Enabled;
     targetNode.SourceCode = SourceCode;
-    targetNode.RamWords = Split(RamWordsText, 64);
+    targetNode.RamWords = Split(RamWordsText, RamWordCount);
     targetNode.Startup.EntryPoint = NormalizeWord(EntryPoint, "0x000");
     targetNode.Startup.P = NormalizeWord(P, "0x000");
     targetNode.Startup.A = NormalizeWord(A, "0x000");

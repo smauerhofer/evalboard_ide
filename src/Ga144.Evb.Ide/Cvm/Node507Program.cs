@@ -19,6 +19,39 @@ namespace Ga144.Evb.Ide.Cvm;
 /// this source has had; every note below marked "never confirmed with Stefan"/"never against real
 /// hardware" predates this and should be read as still open beyond that one confirmed point.
 ///
+/// <b>2026-09-02 fix #2, confirmed working on real hardware (per Stefan: "call and ret are working
+/// now. 'ahead' was wrong, 'begin' was right").</b> <c>m/call</c>'s body -- deliberately left
+/// unterminated so it falls straight through into <c>m/main</c> right after it, the same
+/// cross-definition fall-through idiom documented throughout this file -- opened with <c>ahead</c>
+/// (an unconditional forward branch that wants a matching <c>then</c>), but the compile-time control
+/// word it was actually meant to pair with is <c>m/main</c>'s own <c>-until</c> a few words later, on
+/// the OTHER side of the <c>m/call</c>/<c>m/main</c> boundary -- exactly the kind of cross-definition
+/// span this source already relies on elsewhere, since F18 colon-definitions are just address labels,
+/// not scopes, so a still-open compile-time control marker carries straight through one falling into
+/// the next. <c>ahead</c>/<c>then</c> is the wrong pairing for that: <c>begin</c>/<c>-until</c> is.
+/// <b>Per <see cref="Compiler.F18Compiler"/>'s own "Unified control stack" remarks, this project's
+/// compiler keeps NO separate control-flow stack at all -- <c>ahead</c>/<c>if</c>/<c>begin</c>/<c>for</c>
+/// push and <c>then</c>/<c>until</c>/<c>again</c>/<c>next</c> pop the SAME
+/// <c>Interpreter.DataStack</c> the compile-time-stack-empty check above (F18I011) already watches,
+/// exactly like real F18 hardware (DB013 5.3.x) does -- a forward opener like <c>ahead</c> pushes an
+/// encoded PATCH HANDLE for a later <c>then</c> to resolve; a backward opener like <c>begin</c> pushes
+/// a raw DESTINATION address for a later <c>until</c>/<c>-until</c>/<c>again</c> to branch to; both are
+/// "just integers" to the stack.</b> That is exactly why this particular mismatch slipped past F18I011:
+/// <c>ahead</c> pushed one value (its own patch handle) and <c>-until</c> popped one value right back
+/// off, so the stack was empty and balanced by the time compilation finished -- <c>-until</c> just
+/// happened to consume <c>ahead</c>'s patch handle as if it were a plain backward-branch address
+/// (silently wrong, not out of range), while <c>ahead</c>'s own forward branch was left completely
+/// unpatched since the <c>then</c> that should have resolved it never ran. A COUNT-based check like
+/// F18I011 cannot see a KIND mismatch like this one; only real hardware surfaced it, as wrong
+/// <c>call</c>/<c>ret</c> behavior. Stefan's fix: <c>ahead</c> -&gt; <c>begin</c> in <c>m/call</c>.
+/// Alongside it, <c>m/main</c>'s <c>dup 2* 2*</c> picked up a trailing <c>..</c> (the same word as
+/// <c>align</c> -- see <see cref="Compiler.F18Compiler"/>'s own handling of both) right before
+/// <c>-until</c>, forcing that loop's branch target onto a word boundary. Both changes confirmed
+/// together on real hardware: <c>call</c> and <c>ret</c> now work.
+/// Re-verified standalone: 60/64 words used (was 61 before this fix), entry point <c>m/main</c> now at
+/// 0x01B (was 0x01C) -- both shifts are solely from <c>begin</c>/<c>..</c> compiling different word
+/// counts than <c>ahead</c> did, not from any other change.
+///
 /// <b>Also changed in the 2026-09-02 revision (functionally equivalent, not new bugs).</b>
 /// <c>m/next</c>'s body was refactored from <c>a dup 1 . + a! dup dup xor m/@ ;</c> (computing 0 via
 /// <c>dup dup xor</c>, i.e. any value XORed with itself) to just <c>a dup 1 . + a!</c>, deliberately
@@ -80,8 +113,8 @@ namespace Ga144.Evb.Ide.Cvm;
 /// reading as native nops was indeed the intent, not a missing return/branch-back.
 ///
 /// <b>Verification.</b> Compiled standalone against this project's real <c>Compiler/F18Compiler.cs</c>
-/// via <c>F18CompilerOptions.ForRam(507)</c>, including the new compile-time-stack-empty check: 61/64
-/// words used, 0 errors, entry point <c>m/main</c> at 0x01C. See this class's own remarks for the
+/// via <c>F18CompilerOptions.ForRam(507)</c>, including the new compile-time-stack-empty check: 60/64
+/// words used, 0 errors, entry point <c>m/main</c> at 0x01B. See this class's own remarks for the
 /// history behind these numbers.
 /// </summary>
 internal static class Node507Program
@@ -91,9 +124,11 @@ internal static class Node507Program
 
   /// <summary>
   /// Node 507's full resident F18 source, as supplied by Stefan on 2026-09-01 and fixed by Stefan on
-  /// 2026-09-02 (<c># m/main >r</c> -&gt; <c># m/main lit >r</c> in <c>m/main</c>'s dispatch loop),
-  /// with <c>'nop</c> confirmed working on real hardware in this revision. See the class remarks for
-  /// the dispatch logic, the ten tick-labeled opcodes, the 2026-09-02 fix and refactor, and the
+  /// 2026-09-02 -- twice: first <c># m/main >r</c> -&gt; <c># m/main lit >r</c> in <c>m/main</c>'s
+  /// dispatch loop (confirmed on real hardware: <c>'nop</c> works), then <c>ahead</c> -&gt;
+  /// <c>begin</c> in <c>m/call</c> plus a trailing <c>..</c> added to <c>m/main</c>'s <c>dup 2* 2*</c>
+  /// (confirmed on real hardware: <c>call</c>/<c>ret</c> now work too). See the class remarks for the
+  /// dispatch logic, the ten tick-labeled opcodes, both 2026-09-02 fixes and the refactor, and the
   /// compile verification this source was checked against.
   /// </summary>
   public const string Source = """
@@ -116,10 +151,10 @@ internal static class Node507Program
       : m/0! ( rswa-rs) 0 m/!
       : m/branch ( rso-rs) a . + a! ;
       : m/call ( rsxy-rs)
-        ahead drop >r a m/push r> a!
+        begin drop >r a m/push r> a!
       : m/main ( rs-rs) m/next
         ( rsx)
-        dup 2* 2*
+        dup 2* 2* ..
         -until // 0???_????_????_????
         ( rs)
         # m/main lit >r

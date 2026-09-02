@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-02T05:44:24.2761950
-      utcDateTime: 2026-09-02T05:44:24.2761950Z
-      localDateTime: 2026-09-02T07:44:24.2761950+02:00
+      dateTime: 2026-09-02T06:38:22.3080564
+      utcDateTime: 2026-09-02T06:38:22.3080564Z
+      localDateTime: 2026-09-02T08:38:22.3080564+02:00
       date: 2026-09-02T00:00:00.0000000
       day: 2
       dayOfWeek: Wednesday
       dayOfYear: 245
-      hour: 5
-      millisecond: 276
-      microsecond: 195
-      nanosecond: 0
-      minute: 44
+      hour: 6
+      millisecond: 308
+      microsecond: 56
+      nanosecond: 400
+      minute: 38
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 24
-      ticks: 639239246642761950
-      utcTicks: 639239246642761950
-      timeOfDay: 05:44:24.2761950
+      second: 22
+      ticks: 639239279023080564
+      utcTicks: 639239279023080564
+      timeOfDay: 06:38:22.3080564
       year: 2026
   portB: 
   portC:
@@ -15371,6 +15371,8 @@ projects:
 
         : m/0@ ( rsa-rsw) 0 m/@ ;
 
+        : m/2@ ( rsa-rsw) 2 m/@ ;
+
         : 'plit ( rs-rs) m/next 
 
         : m/push ( rsw-rs) >r -1 . + r> over
@@ -15381,13 +15383,15 @@ projects:
 
         : m/0! ( rswa-rs) 0 m/!
 
+        : m/2! ( rswa-rs) 2 m/!
+
         : m/branch ( rso-rs) a . + a! ;
 
         : m/call ( rsxy-rs)
-          ahead drop >r a m/push r> a!
+          begin drop >r a m/push r> a!
         : m/main ( rs-rs) m/next
           ( rsx)
-          dup 2* 2*
+          dup 2* 2* ..
           -until // 0???_????_????_????
           ( rs)
           # m/main lit >r
@@ -15473,6 +15477,8 @@ projects:
       - 0x3CAB2
       - 0x05706
       - 0x00000
+      - 0x05706
+      - 0x00002
       - 0x13407
       - 0x2FDB0
       - 0x3FFFF
@@ -15481,32 +15487,33 @@ projects:
       - 0x00001
       - 0x33BCA
       - 0x09B55
-      - 0x05612
+      - 0x05614
       - 0x00000
+      - 0x05614
+      - 0x00002
       - 0x229F2
       - 0x2B555
-      - 0x11400
       - 0x3A88A
-      - 0x1340D
+      - 0x1340F
       - 0x26AB2
       - 0x13407
       - 0x244DA
-      - 0x1B418
+      - 0x1B41C
       - 0x048DA
-      - 0x0001C
-      - 0x1B423
+      - 0x0001F
+      - 0x1B426
       - 0x11515
-      - 0x37225
+      - 0x37228
       - 0x11575
-      - 0x37227
+      - 0x3722A
       - 0x115D5
-      - 0x37229
+      - 0x3722C
       - 0x3A855
       - 0x367C2
       - 0x307C2
       - 0x3078A
       - 0x3CAED
-      - 0x2170D
+      - 0x2170F
       - 0x13401
       - 0x2B555
       - 0x229F2
@@ -15522,11 +15529,8 @@ projects:
       - 0x33B27
       - 0x08800
       - 0x09555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       startup:
-        entryPoint: 0x01C
+        entryPoint: 0x01F
         p: 0x000
         a: 0x000
         b: 0x000
@@ -16748,7 +16752,7 @@ projects:
         returnStack: []
         parameterStack: []
     debuggerAssemblyCode: >-
-      nop
+      call label
 
       nop
 
@@ -16757,6 +16761,11 @@ projects:
       nop
 
       nop
+
+      halt
+
+
+      label: ret
   - role: Target
     name: Target GA144
     nodes:
