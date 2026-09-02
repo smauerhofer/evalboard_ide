@@ -17,19 +17,28 @@ namespace Ga144.Evb.Ide.Cvm;
 /// otherwise a natural fit alongside <c>'jump</c>/<c>m/call</c>. Living on a separate node with its own
 /// fresh 64-word budget sidesteps that entirely (this source uses only 38 of its 64 words).
 ///
-/// <b>Likely resolves node 507's own open "-d--" dispatch question -- STRONGLY SUGGESTED, NOT YET
-/// EXPLICITLY CONFIRMED BY STEFAN IN SO MANY WORDS.</b> This source's own header,
+/// <b>Resolves node 507's own "-d--" dispatch question -- CONFIRMED by Stefan (2026-09-02): "the port
+/// between 407 and 507 is still 'down'."</b> This source's own header,
 /// <c>( CVM2 node 407. VM extending, 11??_????_????_???? )</c>, states the exact same leading bit
 /// pattern as the FIRST test in <see cref="Node507Program"/>'s own <c>m/main</c> dispatch cascade --
 /// <c>2* -if // 11??_????_????_???? -d-- ;</c> -- which that class's own remarks could previously only
-/// guess a destination for ("a future ALU/offload node, possibly node 508 ... but this is a guess, not
-/// confirmed"). That guess was almost certainly wrong. Further evidence, from this node's own 2026-09-02
-/// fix (see <c>b/main</c>'s own remarks below): its dispatch used to hand off <c>-d--</c> (down) for the
-/// "1101" case, which Stefan corrected to <c>---u</c> (up) since down would have chained further away
-/// rather than back toward whatever dispatched into node 407 in the first place -- confirming node 407's
-/// OWN up port reaches back the way it came, consistent with (though still not an outright statement of)
-/// node 407 being what node 507's <c>-d--</c> reaches. Circumstantial but now doubly so; still not a
-/// sentence from Stefan saying it outright, so this file treats it as likely rather than settled.
+/// guess a destination for. Node 407 is that destination, and the physical link between the two nodes
+/// is node 507's local "down" port / node 407's local "down" port (bound to port B here, <c># down /b</c>
+/// below) -- see <see cref="Models.KrakenConfiguration.PortAddress"/>'s own geographic-adjacency table,
+/// which independently computes the SAME local port name ("down") on BOTH sides of this link (407 at an
+/// even row, 507 at an odd row -- exactly the alternating-mirror pattern that already gives node
+/// 507&lt;-&gt;607 the same local port name, "up", on both of ITS sides too, confirmed working on real
+/// hardware). This makes 407&lt;-&gt;507 the SAME kind of symmetric-local-name link, not an exception.
+///
+/// <b>Do not confuse this with <c>b/main</c>'s own <c>-d--</c>-&gt;<c>---u</c> fix below.</b> An earlier
+/// revision of this file's own remarks mistakenly conflated the two: <c>b/main</c>'s dispatch cascade
+/// (below) hands off to <c>--l-</c>/<c>r---</c>/<c>---u</c> for FURTHER relay to OTHER neighbour nodes
+/// (plausibly 406/408/307, per Stefan's own "a similar pattern repeats then in nodes 406, 408 and 307") --
+/// none of those three branches is the link back to 507 at all. The link back to 507 is the separate,
+/// dedicated port B (<c># down /b</c>), used throughout this file's own register/stack helpers AND by
+/// <c>b/main</c>'s own opening <c>@b @b</c> receive -- unrelated to which further-relay branch a given
+/// opcode's remaining bits select. Per Stefan directly (2026-09-02): "you misunderstood my -d-- remark.
+/// only valid inside the RAM source. the port between 407 and 507 is still 'down'."
 ///
 /// <b>Imports node 507.</b> <c># 507 import</c> brings node 507's exported symbols (<c>m/pop</c>,
 /// <c>m/push</c>, and everything else node 507 exports) into scope here by name -- see
@@ -54,16 +63,15 @@ namespace Ga144.Evb.Ide.Cvm;
 /// worked out here -- flagged as open rather than guessed at further.
 ///
 /// <b><c>b/main</c>'s own dispatch cascade -- fixed 2026-09-02 (Stefan: "you are right: -d-- must be
-/// replaced with ---u in node 407").</b> Reads two words via <c>@b</c> (from the down port) into a
-/// register-r-held first word, per-word bit-testing further within the already-consumed "11??" prefix:
-/// "111?" -&gt; "1111" hands off LEFT (<c>--l-</c>), else "1110" hands off RIGHT (<c>r---</c>); "110?"
-/// -&gt; "1101" hands off UP (<c>---u</c>) -- corrected FROM <c>-d--</c> (down again), which would have
-/// chained further away rather than back toward whoever dispatched into this node in the first place --
-/// this is also the first explicit confirmation that node 407 sits directly below <see cref="Node507Program"/>
-/// on the mesh (its <c>up</c> port is what reaches back to 507), strengthening (though still not
-/// outright stating) the likely resolution of <see cref="Node507Program"/>'s own open <c>-d--</c>
-/// question noted above; else "1100" falls to <c>ex</c> ("execute", GA144's native multi-port-wait/idle
-/// opcode) -- this is where <c>'lcall</c>/<c>'ljmp</c> below are actually reached from.
+/// replaced with ---u in node 407").</b> Reads two words via <c>@b</c> (from port B, the SEPARATE
+/// down-bound link to 507 -- see this class's own remarks above on not confusing this cascade's own
+/// branches with that link) into a register-r-held first word, per-word bit-testing further within the
+/// already-consumed "11??" prefix: "111?" -&gt; "1111" hands off LEFT (<c>--l-</c>), else "1110" hands
+/// off RIGHT (<c>r---</c>); "110?" -&gt; "1101" hands off UP (<c>---u</c>) -- corrected FROM <c>-d--</c>
+/// (down), per Stefan's own fix -- these three are further relay hand-offs to OTHER neighbour nodes
+/// entirely (plausibly 406/408/307), not the link back to 507; else "1100" falls to <c>ex</c> ("execute",
+/// GA144's native multi-port-wait/idle opcode) -- this is where <c>'lcall</c>/<c>'ljmp</c> below are
+/// actually reached from.
 ///
 /// <b><c>'lcall</c>/<c>'ljmp</c>.</b> Each streams a short instruction sequence the same way the
 /// register/stack helpers above do. <c>'lcall</c> streams <c>m/next</c> (fetch the address in the
@@ -87,15 +95,21 @@ namespace Ga144.Evb.Ide.Cvm;
 /// by whoever dispatches into node 407 in the first place, by loading R with <c>'lcall</c>'s address or
 /// <c>'ljmp</c>'s before handing off -- not by any further bit pattern node 407 itself inspects.
 ///
-/// <b>Still open, not yet reflected in <see cref="CvmInstructionSet"/>/<see cref="CvmAssembler"/>/
-/// <see cref="Services.CvmAssemblyLanguage"/>.</b> Given the above, the real open question is no longer
-/// "what bit pattern distinguishes 'lcall from 'ljmp inside node 407" -- there isn't one -- but HOW and
-/// WHERE R gets loaded with the right one of the two addresses before the "11??"/down-port handoff
-/// happens: presumably something on the CALLING side (<see cref="Node507Program"/>'s own <c>m/main</c>,
-/// or a future revision of it) that isn't part of the source supplied so far. That mechanism -- and
-/// therefore the exact top-level CVM opcode bit pattern/tag the ASSEMBLER should emit for <c>lcall</c>/
-/// <c>ljmp</c> mnemonics -- is needed before either can be added to the toolchain's own instruction
-/// table or assembler.
+/// <b>Resolved and implemented (2026-09-02): the CVM opcode tag.</b> Node 507's own <c>m/main</c> hands
+/// off down-port to node 407 once a fetched opcode word's top bits read "11??" -- carrying, per the
+/// relay protocol traced in <see cref="Node507Program"/>'s own remarks (the <c>x</c>/<c>y</c> stack
+/// convention: <c>x</c> is the ORIGINAL fetched word, unshifted, relayed via <c>2* !p !p</c> to node 407
+/// alongside the progressively-shifted <c>y</c>), the ORIGINAL opcode word itself all the way to
+/// <c>ex</c> -- which jumps directly to whatever address is already in R. Since <c>ex</c> is only
+/// reached once the cascade's own bit-tests have consumed exactly "1100" (this method's own remarks
+/// above), and <c>ex</c> jumps straight to <c>x</c>, <c>x</c>'s own low bits must equal <c>'lcall</c>'s
+/// or <c>'ljmp</c>'s real address ON NODE 407 -- so the CVM-level opcode word is
+/// <c>0xC000 | (address on node 407)</c>, the SAME "tag | local address" scheme
+/// <see cref="Node507Program"/>'s own local-execute already uses with 0x8800. Wired up in
+/// <see cref="CvmInstructionSet.LongCallMnemonic"/>/<see cref="CvmInstructionSet.LongJumpMnemonic"/>
+/// (shape: <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>, exactly like <c>pushlit</c>)
+/// and <see cref="Services.CvmAssemblyLanguage"/>'s own <c>Node407LongCallTagBits</c> (0xC000), resolved
+/// against THIS node's live compile the same way <c>pushlit</c> resolves against node 507's.
 ///
 /// <b>Verification.</b> Compiled standalone against this project's real <c>Compiler/F18Compiler.cs</c>,
 /// importing <see cref="Node507Program"/>'s own exports (<c>F18CompilerOptions.ForRam(407)</c> with an

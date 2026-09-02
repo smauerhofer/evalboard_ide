@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-02T19:34:05.4906794
-      utcDateTime: 2026-09-02T19:34:05.4906794Z
-      localDateTime: 2026-09-02T21:34:05.4906794+02:00
+      dateTime: 2026-09-02T20:22:10.0636632
+      utcDateTime: 2026-09-02T20:22:10.0636632Z
+      localDateTime: 2026-09-02T22:22:10.0636632+02:00
       date: 2026-09-02T00:00:00.0000000
       day: 2
       dayOfWeek: Wednesday
       dayOfYear: 245
-      hour: 19
-      millisecond: 490
-      microsecond: 679
-      nanosecond: 400
-      minute: 34
+      hour: 20
+      millisecond: 63
+      microsecond: 663
+      nanosecond: 200
+      minute: 22
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 5
-      ticks: 639239744454906794
-      utcTicks: 639239744454906794
-      timeOfDay: 19:34:05.4906794
+      second: 10
+      ticks: 639239773300636632
+      utcTicks: 639239773300636632
+      timeOfDay: 20:22:10.0636632
       year: 2026
   portB: 
   portC:
@@ -16768,7 +16768,7 @@ projects:
         returnStack: []
         parameterStack: []
     debuggerAssemblyCode: >-
-      call label
+      lcall label
 
       nop
 
@@ -16781,7 +16781,13 @@ projects:
       halt
 
 
-      label: ret
+      label:
+
+      nop
+
+      ret
+
+      nop
   - role: Target
     name: Target GA144
     nodes:
