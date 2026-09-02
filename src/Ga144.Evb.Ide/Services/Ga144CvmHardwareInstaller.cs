@@ -215,12 +215,21 @@ public sealed class Ga144CvmHardwareInstaller
     }
   }
 
-  // Everything InstallAndRun and StartDebugSession share: compile all 9 nodes from the project's own
-  // current sources (fail closed before any hardware is touched), reset the chip, and deliver every
-  // node across the mesh through node 708. On success the returned port is left OPEN and reset-pin
-  // cleanup is the caller's responsibility -- InstallAndRun disposes it once RunTests finishes;
-  // StartDebugSession hands it to a long-lived CvmDebugSession instead. On a compile/validation
-  // failure (before any hardware is touched) this returns null and no port was ever opened.
+  // Everything InstallAndRun and StartDebugSession share: compile every node in the current load
+  // order from the project's own current sources (fail closed before any hardware is touched), reset
+  // the chip, and deliver every node across the mesh through node 708. On success the returned port is
+  // left OPEN and reset-pin cleanup is the caller's responsibility -- InstallAndRun disposes it once
+  // RunTests finishes; StartDebugSession hands it to a long-lived CvmDebugSession instead. On a
+  // compile/validation failure (before any hardware is touched) this returns null and no port was
+  // ever opened.
+  //
+  // CVM2 (2026-09-01), per Stefan: "take the nodes code in the project and not the NodeXxxProgram
+  // code, which should only be used if no code in the project is defined." So a node's own project
+  // source (chip.GetNode(coordinate).SourceCode) is ALWAYS tried first; CvmBootStreamBuilder's fixed
+  // NodeXxxProgram.Source reference copy is used ONLY as a fallback for a coordinate whose project
+  // source is still blank, via F18NodeCompilationService.CompileNode's own ramSourceOverride
+  // parameter -- and every step description below that used the fallback says so explicitly, since
+  // that source is about to be written onto real hardware and Stefan should be able to tell.
   private static NativeWindowsSerialPort? OpenAndBootMesh(
       string portName,
       Ga144ChipConfiguration chip,
@@ -230,9 +239,10 @@ public sealed class Ga144CvmHardwareInstaller
       out IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
     // Compile every node from the PROJECT's own current sources first -- entirely offline, no
-    // hardware touched yet -- and require every one of the 9 to succeed with a full 64-word RAM
-    // image before any reset/relay happens. Fail closed: a half-compiled cluster must never reach
-    // the chip.
+    // hardware touched yet -- falling back to the fixed reference source only for a node with no
+    // project source of its own (see this method's own remarks above) -- and require every node to
+    // succeed with a full 64-word RAM image before any reset/relay happens. Fail closed: a
+    // half-compiled cluster must never reach the chip.
     IReadOnlyList<CvmBootLoadStep> loadOrder = CvmBootStreamBuilder.BuildLoadOrder();
     var descriptors = new Dictionary<int, CvmBootDescriptor>();
 
@@ -243,17 +253,34 @@ public sealed class Ga144CvmHardwareInstaller
     // of the underlying ga144-rom.yaml, etc.) is picked up automatically the next time this method
     // runs.
     var compiledRamDictionary = new Dictionary<int, F18CompileResult>();
+
+    // Per Stefan (2026-09-01): "take the nodes code in the project and not the NodeXxxProgram code,
+    // which should only be used if no code in the project is defined." So every node still compiles
+    // from chip.GetNode(coordinate).SourceCode by default (compileService.CompileNode's own normal
+    // behavior, no override) -- this set only records which nodes had NO project source at all and
+    // had to fall back to CvmBootStreamBuilder.ReferenceSourceFor's fixed reference copy instead, so
+    // that fallback can be called out in this run's own step descriptions below rather than installed
+    // onto real hardware silently.
+    var referenceFallbackCoordinates = new HashSet<int>();
     foreach (CvmBootLoadStep step in loadOrder)
     {
       Ga144NodeConfiguration node = chip.GetNode(step.NodeCoordinate);
+      string? ramSourceOverride = null;
       if (string.IsNullOrWhiteSpace(node.SourceCode))
       {
-        install = FailedInstall($"Node {step.NodeCoordinate:000} has no source in this project. Use \"Copy to project…\" in the node editor for every CVM node before installing on hardware.");
-        compiledRam = compiledRamDictionary;
-        return null;
+        string? referenceSource = CvmBootStreamBuilder.ReferenceSourceFor(step.NodeCoordinate);
+        if (referenceSource is null)
+        {
+          install = FailedInstall($"Node {step.NodeCoordinate:000} has no source in this project. Use \"Copy to project…\" in the node editor for every CVM node before installing on hardware.");
+          compiledRam = compiledRamDictionary;
+          return null;
+        }
+
+        ramSourceOverride = referenceSource;
+        referenceFallbackCoordinates.Add(step.NodeCoordinate);
       }
 
-      F18NodeCompilationResult compiled = compileService.CompileNode(step.NodeCoordinate);
+      F18NodeCompilationResult compiled = compileService.CompileNode(step.NodeCoordinate, ramSourceOverride: ramSourceOverride);
       if (!compiled.Success)
       {
         int errorCount = compiled.Rom.Diagnostics.Concat(compiled.Ram.Diagnostics)
@@ -366,7 +393,9 @@ public sealed class Ga144CvmHardwareInstaller
         IReadOnlyList<int> programLeaf = BuildProgramLeaf(descriptor);
         IReadOnlyList<int> wrapped = CvmRelayProtocol.WrapForward(chain.Count, programLeaf);
         SendBootFrame(port, transferAddress, wrapped);
-        steps.Add(new CvmInstallStep($"Load node {step.NodeCoordinate:000}'s own program (entry 0x{descriptor.EntryPoint:X3})", step.NodeCoordinate, chain.Count, wrapped.Count));
+        string loadDescription = $"Load node {step.NodeCoordinate:000}'s own program (entry 0x{descriptor.EntryPoint:X3})"
+            + (referenceFallbackCoordinates.Contains(step.NodeCoordinate) ? " [reference source -- not yet defined in this project]" : "");
+        steps.Add(new CvmInstallStep(loadDescription, step.NodeCoordinate, chain.Count, wrapped.Count));
       }
 
       // Node 708 itself, last: write its own compiled RAM directly (transfer address 0x000 is a
@@ -374,7 +403,9 @@ public sealed class Ga144CvmHardwareInstaller
       // still pointed at ser-exec since this is not yet the final frame.
       CvmBootDescriptor rootDescriptor = descriptors[rootCoordinate];
       SendBootFrame(port, AsyncSerialContinuationAddress, 0x000, rootDescriptor.Words);
-      steps.Add(new CvmInstallStep("Write node 708's own RAM image", rootCoordinate, 0, rootDescriptor.Words.Count));
+      string rootDescription = "Write node 708's own RAM image"
+          + (referenceFallbackCoordinates.Contains(rootCoordinate) ? " [reference source -- not yet defined in this project]" : "");
+      steps.Add(new CvmInstallStep(rootDescription, rootCoordinate, 0, rootDescriptor.Words.Count));
 
       // Final empty frame: completion = 708's real entry point, already resident from the frame
       // just above -- this is what actually starts the CVM running.

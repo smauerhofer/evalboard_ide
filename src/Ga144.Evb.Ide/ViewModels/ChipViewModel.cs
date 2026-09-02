@@ -668,17 +668,29 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   // temporary pass-through role while their own children load -- see
   // CvmBootStreamBuilder's remarks) is a separate, not-yet-built step.
   //
-  // Unlike CvmBootStreamBuilder (which compiles this project's team's fixed
-  // reference sources -- Node607Program.Source and so on, baked into the
-  // assembly), this compiles the CURRENTLY SELECTED PROJECT's own node
-  // sources for these coordinates (Chip.GetNode(coordinate).SourceCode),
-  // through the same F18NodeCompilationService/RomLibrary path the node
-  // editor's own "Compile ROM + RAM" button uses. That is the point of
-  // "test": bring a CVM node into this project (e.g. via the node editor's
-  // "Copy to project…" from the reference source), edit it here, and this
-  // button compiles exactly what is currently in the project, live -- not a
-  // frozen reference copy -- so a change can be tried immediately without
-  // touching the shipped Node*Program.cs files at all.
+  // Unlike CvmBootStreamBuilder.BuildDescriptors/BuildLoadPlan (which compile
+  // this project's team's fixed reference sources -- Node607Program.Source
+  // and so on, baked into the assembly, and are dead code as far as the
+  // shipped app is concerned), this compiles the CURRENTLY SELECTED
+  // PROJECT's own node sources for these coordinates
+  // (Chip.GetNode(coordinate).SourceCode), through the same
+  // F18NodeCompilationService/RomLibrary path the node editor's own
+  // "Compile ROM + RAM" button uses. That is the point of "test": bring a
+  // CVM node into this project (e.g. via the node editor's "Copy to
+  // project…" from the reference source), edit it here, and this button
+  // compiles exactly what is currently in the project, live -- not a frozen
+  // reference copy -- so a change can be tried immediately without touching
+  // the shipped Node*Program.cs files at all.
+  //
+  // CVM2 (2026-09-01), per Stefan: "take the nodes code in the project and
+  // not the NodeXxxProgram code, which should only be used if no code in the
+  // project is defined." So a coordinate with no project source yet no
+  // longer just gets skipped with a "not configured" message -- it falls
+  // back to CvmBootStreamBuilder.ReferenceSourceFor's fixed reference source
+  // instead (via F18NodeCompilationService.CompileNode's own
+  // ramSourceOverride parameter) so this dry run still shows what an actual
+  // install would do, and the summary below says explicitly which nodes (if
+  // any) had to fall back rather than compiling their own project source.
   //
   // The confirmed load order/tree shape (leaves first, root last) still
   // comes from CvmBootStreamBuilder.BuildLoadOrder(), since that shape is
@@ -704,8 +716,9 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
           + "load order, leaves first / root last:");
       summary.AppendLine();
 
-      bool anyMissing = false;
       bool anyFailed = false;
+      bool anyUnavailable = false;
+      bool anyReferenceFallback = false;
 
       await Task.Run(() =>
       {
@@ -714,20 +727,30 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
           string via = step.ViaNodeCoordinate.HasValue ? $"via {step.ViaNodeCoordinate.Value:000}" : "(boot node, no via)";
           Ga144NodeConfiguration node = Chip.GetNode(step.NodeCoordinate);
 
+          string? ramSourceOverride = null;
+          string fallbackNote = "";
           if (string.IsNullOrWhiteSpace(node.SourceCode))
           {
-            anyMissing = true;
-            summary.AppendLine($"Node {step.NodeCoordinate:000} {via} -- not configured in this project (no RAM source). Use \"Copy to project…\" in the node editor to bring in the reference source.");
-            continue;
+            string? referenceSource = CvmBootStreamBuilder.ReferenceSourceFor(step.NodeCoordinate);
+            if (referenceSource is null)
+            {
+              anyUnavailable = true;
+              summary.AppendLine($"Node {step.NodeCoordinate:000} {via} -- not configured in this project (no RAM source), and no reference source exists to fall back to. Use \"Copy to project…\" in the node editor once this node's source is available.");
+              continue;
+            }
+
+            ramSourceOverride = referenceSource;
+            anyReferenceFallback = true;
+            fallbackNote = " [reference source -- not yet defined in this project; use \"Copy to project…\" in the node editor to bring it in and edit it here]";
           }
 
-          Compiler.F18NodeCompilationResult compiled = compileService.CompileNode(step.NodeCoordinate);
+          Compiler.F18NodeCompilationResult compiled = compileService.CompileNode(step.NodeCoordinate, ramSourceOverride: ramSourceOverride);
           if (!compiled.Success)
           {
             anyFailed = true;
             int errorCount = compiled.Rom.Diagnostics.Concat(compiled.Ram.Diagnostics)
                 .Count(diagnostic => diagnostic.Severity == Compiler.F18DiagnosticSeverity.Error);
-            summary.AppendLine($"Node {step.NodeCoordinate:000} {via} -- COMPILE FAILED ({errorCount} error(s)). Open this node in the editor and press \"Compile ROM + RAM\" for full diagnostics.");
+            summary.AppendLine($"Node {step.NodeCoordinate:000} {via} -- COMPILE FAILED ({errorCount} error(s)){fallbackNote}. Open this node in the editor and press \"Compile ROM + RAM\" for full diagnostics.");
             continue;
           }
 
@@ -738,25 +761,26 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
               + $"A={(descriptor.InitialA.HasValue ? $"0x{descriptor.InitialA.Value:X3}" : "-")} "
               + $"B={(descriptor.InitialB.HasValue ? $"0x{descriptor.InitialB.Value:X3}" : "-")} "
               + $"IO={(descriptor.InitialIo.HasValue ? $"0x{descriptor.InitialIo.Value:X3}" : "-")} "
-              + $"stack=[{string.Join(",", descriptor.InitialStack)}]");
+              + $"stack=[{string.Join(",", descriptor.InitialStack)}]{fallbackNote}");
         }
       });
 
       summary.AppendLine();
-      summary.AppendLine(anyMissing || anyFailed
+      summary.AppendLine(anyFailed || anyUnavailable
           ? "Not every node in this project is ready yet -- see above."
-          : "All 9 nodes in this project compiled successfully.");
+          : "All nodes in this project's CVM load order compiled successfully."
+            + (anyReferenceFallback ? " (One or more used the fixed reference source, noted above, because this project doesn't define them yet.)" : ""));
       summary.AppendLine();
       summary.AppendLine("This does not touch hardware. Delivering these images across the mesh is a separate step, not yet built.");
 
-      VerifyStatus = anyFailed
+      VerifyStatus = anyFailed || anyUnavailable
           ? "CVM boot stream compiled with errors -- see summary."
           : "CVM boot stream compiled -- see summary.";
       MessageBox.Show(
           summary.ToString(),
           "Install CVM test (dry run)",
           MessageBoxButton.OK,
-          anyFailed ? MessageBoxImage.Warning : MessageBoxImage.Information);
+          anyFailed || anyUnavailable ? MessageBoxImage.Warning : MessageBoxImage.Information);
     }
     catch (Exception exception)
     {

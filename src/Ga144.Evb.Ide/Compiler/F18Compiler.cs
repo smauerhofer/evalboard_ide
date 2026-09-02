@@ -69,6 +69,8 @@ public sealed class F18Compiler
     // dictionary, so that is not an error. Any open control structures are still
     // reported below.
 
+    ValidateInterpreterStackIsEmpty();
+
     Builder.Align();
     ResolveSymbolRelocations();
 
@@ -2195,6 +2197,44 @@ public sealed class F18Compiler
         $"'{token.Text}' is a target-compilation word and cannot be used inside a '[' interpretation section. Use ']' first.",
         token.Location);
     return false;
+  }
+
+  // The F18CompileTimeInterpreter's data/return stacks (Interpreter.DataStack /
+  // Interpreter.ReturnStack) are the compiler's own scratch stacks for evaluating
+  // compile-time expressions: '[ ... ]' interpretation sections, and the shorthand
+  // '#'/''' forms (PushHashValue/PushTickValue) that push a single resolved value
+  // or word address without opening a bracket at all. Every value pushed there is
+  // meant to be consumed by something -- a directive like '/a', '/b', '/io',
+  // '/stack', '..', ',', '.word', or an explicit 'lit'/'literal' to compile it as
+  // an actual object-code literal -- before the node finishes compiling. A value
+  // still sitting on either stack once the WHOLE node has finished compiling means
+  // one of those pushes was never picked up (or an '>r' was never matched by an
+  // 'r>') -- almost always a missing 'lit'/'literal' or a forgotten directive, not
+  // intentional; the pushed value never reached the compiled program at all.
+  // Reported once per node compile, not per push, so sequential '[ ... ]'
+  // sections/'#'/''' uses that each fully consume their own value are unaffected.
+  private void ValidateInterpreterStackIsEmpty()
+  {
+    if (Interpreter.DataStack.Count > 0)
+    {
+      AddError(
+          "F18I011",
+          $"Compile-time data stack is not empty after compiling this node: {Interpreter.DataStack.Count} " +
+          $"value(s) left over ({string.Join(", ", Interpreter.DataStack.Select(v => $"0x{v:X5} ({v})"))}). " +
+          "Every value pushed by a '[ ... ]' section or a '#'/''' shorthand must be consumed -- by a directive " +
+          "such as '/a', '/b', '/io', '/stack', '..', ',', '.word', or an explicit 'lit'/'literal' -- before compilation ends.",
+          LastLocation());
+    }
+
+    if (Interpreter.ReturnStack.Count > 0)
+    {
+      AddError(
+          "F18I012",
+          $"Compile-time return stack is not empty after compiling this node: {Interpreter.ReturnStack.Count} " +
+          $"value(s) left over ({string.Join(", ", Interpreter.ReturnStack.Select(v => $"0x{v:X5} ({v})"))}). " +
+          "Every compile-time '>r' must be matched by a corresponding 'r>' before compilation ends.",
+          LastLocation());
+    }
   }
 
   private MemoryBuilder Builder => _builder ?? throw new InvalidOperationException("Compiler memory builder is not initialized.");

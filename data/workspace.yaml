@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-01T17:48:28.3033288
-      utcDateTime: 2026-09-01T17:48:28.3033288Z
-      localDateTime: 2026-09-01T19:48:28.3033288+02:00
-      date: 2026-09-01T00:00:00.0000000
-      day: 1
-      dayOfWeek: Tuesday
-      dayOfYear: 244
-      hour: 17
-      millisecond: 303
-      microsecond: 328
-      nanosecond: 800
-      minute: 48
+      dateTime: 2026-09-02T05:44:24.2761950
+      utcDateTime: 2026-09-02T05:44:24.2761950Z
+      localDateTime: 2026-09-02T07:44:24.2761950+02:00
+      date: 2026-09-02T00:00:00.0000000
+      day: 2
+      dayOfWeek: Wednesday
+      dayOfYear: 245
+      hour: 5
+      millisecond: 276
+      microsecond: 195
+      nanosecond: 0
+      minute: 44
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 28
-      ticks: 639238817083033288
-      utcTicks: 639238817083033288
-      timeOfDay: 17:48:28.3033288
+      second: 24
+      ticks: 639239246642761950
+      utcTicks: 639239246642761950
+      timeOfDay: 05:44:24.2761950
       year: 2026
   portB: 
   portC:
@@ -15367,9 +15367,9 @@ projects:
 
         : m/@ ( rsab-rsw) !b !b @b ;
 
-        : m/0@ ( rsa-rsw) 0 m/@ ;
+        : m/next ( rs-rsx) a dup 1 . + a!
 
-        : m/next ( rs-rsx) a dup 1 . + a! dup dup xor m/@ ;
+        : m/0@ ( rsa-rsw) 0 m/@ ;
 
         : 'plit ( rs-rs) m/next 
 
@@ -15383,21 +15383,28 @@ projects:
 
         : m/branch ( rso-rs) a . + a! ;
 
-        : m/call ( rsxy-rs) ahead drop >r a m/push r> a!
-
-        : m/main ( rs-rs) m/next dup 2* 2* -until // 0???_????_????_????
+        : m/call ( rsxy-rs)
+          ahead drop >r a m/push r> a!
+        : m/main ( rs-rs) m/next
+          ( rsx)
+          dup 2* 2*
+          -until // 0???_????_????_????
           ( rs)
-          # m/main >r
-          ( rsxy) 2* -if  // 11??_????_????_????
+          # m/main lit >r
+          ( rsxy)
+          2* -if  // 11??_????_????_????
             -d-- ;
           then // 10??_????_????_????
-          ( rsxy) 2* -if  // 101?_????_????_????
+          ( rsxy)
+          2* -if  // 101?_????_????_????
             --l- ;
           then // 100?_????_????_????
+          ( rsxy)
+          2* -if  // 1001_????_????_????
             r--- ;
-          ( rsxy) 2* -if  // 1001_????_????_????
           then // 1000_????_????_????
-          ( rsxy) 2* -if  // 1000_1???_????_????
+          ( rsxy)
+          2* -if  // 1000_1???_????_????
             // local execute
             drop >r ;
           then // 1000_0???_????_????
@@ -15405,24 +15412,26 @@ projects:
           ( rsxy) 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! drop ;
         : 'push .loc ( rs-rs) over m/push ;
 
-        : 'ret ( rs-rs) m/pop a! ;
+        : 'ret .loc ( rs-rs) m/pop a! ;
 
-        : 'tjmp ( rso-rs) a . + a!
+        : 'tjmp .loc ( rso-rs) a . + a!
 
-        : 'jump ( rs-rs) m/next a! ;
+        : 'jump .loc ( rs-rs) m/next a! ;
 
-        : 'pop ( rs-rs) m/pop over ;
+        : 'pop .loc ( rs-rs) m/pop over ;
 
-        : 'xs ( rs-rs) over ;
+        : 'xs .loc ( rs-rs) over ;
 
-        : 'xp ( rs-rs) >r a over a! r> ;
+        : 'xp .loc ( rs-rs) >r a over a! r> ;
 
-        : 'halt ( rs) dup xor dup inv !b !b 0x8800 !b ;
+        : 'halt .loc ( rs) dup xor dup inv !b !b 0x8800 !b ;
 
-        : 'nop ( rs-rs) ;
+        : 'nop .loc ( rs-rs) ;
 
 
         (
+
+        m/call push current p on stack and jumps to function
 
         m/main CVM interpreter loop
 
@@ -15459,13 +15468,12 @@ projects:
       - 0x049B2
       - 0x00001
       - 0x09B05
-      - 0x05706
-      - 0x00000
       - 0x22D12
       - 0x00001
-      - 0x3CA93
-      - 0x39706
-      - 0x13409
+      - 0x3CAB2
+      - 0x05706
+      - 0x00000
+      - 0x13407
       - 0x2FDB0
       - 0x3FFFF
       - 0x26FB2
@@ -15473,35 +15481,37 @@ projects:
       - 0x00001
       - 0x33BCA
       - 0x09B55
-      - 0x05613
+      - 0x05612
       - 0x00000
       - 0x229F2
       - 0x2B555
       - 0x11400
       - 0x3A88A
-      - 0x1340E
+      - 0x1340D
       - 0x26AB2
-      - 0x13409
+      - 0x13407
       - 0x244DA
-      - 0x1B419
-      - 0x2E46A
+      - 0x1B418
+      - 0x048DA
+      - 0x0001C
+      - 0x1B423
       - 0x11515
-      - 0x37224
+      - 0x37225
       - 0x11575
+      - 0x37227
       - 0x115D5
-      - 0x37226
-      - 0x37228
+      - 0x37229
       - 0x3A855
       - 0x367C2
       - 0x307C2
       - 0x3078A
       - 0x3CAED
-      - 0x2170E
+      - 0x2170D
       - 0x13401
       - 0x2B555
       - 0x229F2
       - 0x2A9B2
-      - 0x13409
+      - 0x13407
       - 0x2B555
       - 0x13401
       - 0x21555
@@ -15515,9 +15525,8 @@ projects:
       - 0x15555
       - 0x15555
       - 0x15555
-      - 0x15555
       startup:
-        entryPoint: 0x01D
+        entryPoint: 0x01C
         p: 0x000
         a: 0x000
         b: 0x000
@@ -16115,47 +16124,44 @@ projects:
           -if
             !b @ -if
               // ( ~p ~a )  write word
-              !b @ !b
-            else
-              // ( ~n p ) compare and exchange
-              !b @ !b @ !b @b !
+              !b @ !b main ;
             then
-          else
-            @ -if
-              // ( x ~op )
-              inv if
-                // stimuli
-                a @ a! dup ! a!
-              else
-                // set mask
-                @ a!
-              then
-              !b @ !b
-            else
-              // ( p a ) read
-              >r !b r> !b @b !
-            then
+            // ( ~n p ) compare and exchange
+            !b @ !b @ !b @b ! main ;
           then
+          @ -if
+            // ( x ~op )
+            inv if
+              // stimuli
+              a @ a! dup ! a!
+            else
+              // set mask
+              @ a!
+            then
+            !b @ !b main ;
+          then
+          // ( p a ) read
+          >r !b r> !b @b !
           main ;
       ramWords:
-      - 0x03208
+      - 0x03207
       - 0x09E6C
       - 0x09E22
-      - 0x11407
+      - 0x11400
       - 0x09E22
       - 0x03B02
-      - 0x0A9B2
-      - 0x11411
-      - 0x0320F
-      - 0x3330C
+      - 0x0B700
+      - 0x0320E
+      - 0x3330B
       - 0x23EAB
-      - 0x0AA45
+      - 0x0AA44
       - 0x02AB2
       - 0x09E22
-      - 0x11411
+      - 0x11400
       - 0x2FB9A
       - 0x09F2A
       - 0x11400
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -16436,36 +16442,34 @@ projects:
             @b -if
               // ( ~p ~a )  write word
               A[ /wr ; ]] lit !
-              @b ! ! !
-            else
-              // ( ~n p ) compare and exchange
-              A[ /cx ; ]] lit !
-              @b @b ! ! ! ! @ !b
+              >r ! r> ! @b ! main ;
             then
-          else
-            // ( p a ) read word
-            A[ /rd ; ]] lit !
-            @b ! ! @ !b
+            // ( ~n p ) compare and exchange
+            A[ /cx ; ]] lit !
+            >r ! r> ! @b ! @b ! @ !b main ;
           then
+          // ( p a ) read word
+          A[ /rd ; ]] lit !
+          ! @b ! @ !b 
           main ;
       ramWords:
       - 0x0120C
       - 0x01206
-      - 0x05A02
-      - 0x11416
-      - 0x0BA2A
-      - 0x1140B
-      - 0x05A02
-      - 0x11422
-      - 0x01A2A
-      - 0x0BA0A
-      - 0x089B2
-      - 0x11410
-      - 0x05A02
-      - 0x1141C
-      - 0x0BA0A
-      - 0x089B2
+      - 0x05ABA
+      - 0x11414
+      - 0x0AC2A
+      - 0x01A40
+      - 0x05ABA
+      - 0x11423
+      - 0x0AC2A
+      - 0x01A02
+      - 0x0BE22
       - 0x11400
+      - 0x05A2A
+      - 0x1141A
+      - 0x01A0A
+      - 0x09700
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -16528,7 +16532,7 @@ projects:
 
         # 0 org
 
-        # left /a
+        # io /b
 
         entry /start
 
@@ -16540,13 +16544,13 @@ projects:
         : obyt ( dw-dwx) then then then 3 obit drop
             7 for dup 1 and 3 xor obit drop 2/ next
             2 obit ;
-        : /start ( -d) io b! 18ibits drop drop --l- ;
+        : /start ( -d) 18ibits drop drop 10 for dup unext --l- ;
 
-        : /wr ( d-d) @ >r @ >r @ oword r> oword r> oword --l- ;
+        : /wr ( d-d) left a! @ oword @ oword @ oword --l- ;
 
-        : /rd ( d-d) @ >r @ oword r> oword : recv 18ibits drop ! --l- ;
+        : /rd ( d-d) left a! @ oword @ oword : recv 18ibits drop left a! ! --l- ;
 
-        : /cx ( d-d) @ >r @ >r @ >r @ oword r> oword r> oword r> oword recv ;
+        : /cx ( d-d) left a! @ oword @ oword @ oword @ oword recv ;
 
 
         (
@@ -16580,34 +16584,34 @@ projects:
       - 0x3A77A
       - 0x05700
       - 0x00002
-      - 0x04BB2
-      - 0x0015D
       - 0x134CB
-      - 0x3A2B2
+      - 0x3A212
+      - 0x0000A
+      - 0x2E9B2
+      - 0x251B2
       - 0x11575
-      - 0x0280A
-      - 0x2FEB2
+      - 0x04A0A
+      - 0x00175
       - 0x13402
-      - 0x27602
-      - 0x27602
-      - 0x11575
-      - 0x0280A
-      - 0x13402
-      - 0x27602
-      - 0x134CB
-      - 0x3BAB2
-      - 0x11575
-      - 0x0280A
-      - 0x2FEBA
       - 0x03602
-      - 0x27602
-      - 0x27602
-      - 0x27602
-      - 0x1141F
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x03602
+      - 0x11575
+      - 0x04A0A
+      - 0x00175
+      - 0x13402
+      - 0x03602
+      - 0x134CB
+      - 0x3BDAA
+      - 0x00175
+      - 0x0A9B2
+      - 0x11575
+      - 0x04A0A
+      - 0x00175
+      - 0x13402
+      - 0x03602
+      - 0x03602
+      - 0x03602
+      - 0x11421
       - 0x15555
       - 0x15555
       - 0x15555

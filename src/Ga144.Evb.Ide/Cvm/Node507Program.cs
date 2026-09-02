@@ -1,10 +1,37 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// Node 507's resident F18 source -- CVM2's entire CPU. Supplied verbatim by Stefan on 2026-09-01,
-/// correcting an earlier mix-up in this project: the exact same source had been placed on
-/// <see cref="Node508Program"/> under the mistaken belief that 508 was the CPU node. It is not --
+/// Node 507's resident F18 source -- CVM2's entire CPU. Originally supplied by Stefan on
+/// 2026-09-01, correcting an earlier mix-up in this project: the exact same source had been placed
+/// on <see cref="Node508Program"/> under the mistaken belief that 508 was the CPU node. It is not --
 /// 507 is. <see cref="Node508Program"/> is now a placeholder; see its own remarks.
+///
+/// <b>2026-09-02 fix, confirmed working on real hardware.</b> Adding
+/// <see cref="Compiler.F18Compiler"/>'s new compile-time-stack-must-be-empty check (per Stefan:
+/// "please add a check that after compilation of a node the compiler stack must be empty") caught a
+/// real bug in <c>m/main</c>'s dispatch loop: the original <c>m/main</c> body read <c># m/main >r</c>
+/// -- pushing <c>m/main</c>'s own address onto the COMPILE-TIME stack via <c>#</c>, but never
+/// consuming it with <c>lit</c>/<c>literal</c> to actually compile it as an object-code literal, so
+/// the runtime <c>>r</c> right after it operated on whatever was already on the CVM's real return
+/// stack instead -- the address was silently dropped, never reaching the compiled program at all.
+/// Stefan supplied the fix directly: <c># m/main lit >r</c>. Stefan confirmed on real hardware that
+/// <c>'nop</c> now works with this fix in place -- the first real-silicon confirmation any part of
+/// this source has had; every note below marked "never confirmed with Stefan"/"never against real
+/// hardware" predates this and should be read as still open beyond that one confirmed point.
+///
+/// <b>Also changed in the 2026-09-02 revision (functionally equivalent, not new bugs).</b>
+/// <c>m/next</c>'s body was refactored from <c>a dup 1 . + a! dup dup xor m/@ ;</c> (computing 0 via
+/// <c>dup dup xor</c>, i.e. any value XORed with itself) to just <c>a dup 1 . + a!</c>, deliberately
+/// left unterminated so it falls straight through into the newly-relocated <c>m/0@ ( rsa-rsw) 0 m/@
+/// ;</c> immediately after it -- the same "control-flow word as inline padding/fall-through" idiom
+/// already documented on <see cref="Node607Program"/>/<see cref="Node708Program"/>'s own remarks,
+/// just applied here for the first time. <c>0</c> replaces <c>dup dup xor</c> as a plainer way to
+/// push the same value, and <c>m/0@</c> moved to sit directly after <c>m/next</c> so the fall-through
+/// lands on it. Six more tick-labeled opcodes ('ret/'tjmp/'jump/'pop/'xs/'xp/'halt/'nop -- all but
+/// 'push, which already had one) picked up their own <c>.loc</c> marker, purely a compiler
+/// address/symbol diagnostic with no effect on the compiled program. Re-verified standalone: same
+/// ten tick-labeled symbols all still resolve, entry point shifted by one word (<c>m/main</c> now at
+/// 0x01C, was 0x01D) purely because of the one extra <c>lit</c> instruction's own word.
 ///
 /// <b>Registers.</b> Per the source's own header comment: T is the CVM's stack pointer s, A is the
 /// CVM program counter p, S is the CVM's other register r. <c># 1 org</c> starts compiling at word
@@ -21,20 +48,21 @@ namespace Ga144.Evb.Ide.Cvm;
 /// that class needed no protocol changes for CVM2, only updating which node/tag answers it (now
 /// this node, 507, not 508).
 ///
-/// <b>m/main's dispatch cascade -- DERIVED, NOT YET CONFIRMED WITH STEFAN.</b> The source's own
-/// header comment marks its own top-bit dispatch pattern as still undetermined ("<c>????_????_????_????</c>").
-/// Reading the cascade itself: "11??" tests true -&gt; hand off to the DOWN port (<c>-d--</c>) --
-/// per the inline comment this reaches a node not yet loaded (read as a future ALU/offload node,
-/// possibly node 508 -- see <see cref="Node508Program"/>'s own remarks -- but this is a guess, not
-/// confirmed); "101?" -&gt; LEFT port (<c>--l-</c>); "100?" (unconditional at that point) -&gt; RIGHT
-/// port (<c>r---</c>) -- this is node 607, CVM2's on-chip SRAM-request router; within the remaining
-/// "1000_????" quarter, "1000_1???" is explicitly commented "local execute" (<c>drop &gt;r ;</c> --
-/// jump directly to an address in this node's own RAM), and "1000_0???" falls through to "branch
-/// relative" instead. "1000_1???_????_????" as a top-5-bit pattern is 0x8800, i.e. opcode = 0x8800 |
-/// wordAddress -- corroborated by <c>'halt</c>'s own body literally writing the constant 0x8800 to
-/// port b. This has been checked by standalone compile only (all ten tick-labeled symbols resolve
-/// to real addresses), never against real hardware or confirmed with Stefan -- treat as a strong
-/// hypothesis, not a settled fact.
+/// <b>m/main's dispatch cascade -- DERIVED, NOT YET CONFIRMED WITH STEFAN BEYOND 'nop.</b> The
+/// source's own header comment marks its own top-bit dispatch pattern as still undetermined
+/// ("<c>????_????_????_????</c>"). Reading the cascade itself: "11??" tests true -&gt; hand off to
+/// the DOWN port (<c>-d--</c>) -- per the inline comment this reaches a node not yet loaded (read as
+/// a future ALU/offload node, possibly node 508 -- see <see cref="Node508Program"/>'s own remarks --
+/// but this is a guess, not confirmed); "101?" -&gt; LEFT port (<c>--l-</c>); "100?" (unconditional
+/// at that point) -&gt; RIGHT port (<c>r---</c>) -- this is node 607, CVM2's on-chip SRAM-request
+/// router; within the remaining "1000_????" quarter, "1000_1???" is explicitly commented "local
+/// execute" (<c>drop &gt;r ;</c> -- jump directly to an address in this node's own RAM), and
+/// "1000_0???" falls through to "branch relative" instead. "1000_1???_????_????" as a top-5-bit
+/// pattern is 0x8800, i.e. opcode = 0x8800 | wordAddress -- corroborated by <c>'halt</c>'s own body
+/// literally writing the constant 0x8800 to port b. Confirmed on real hardware only for the path
+/// 'nop actually exercises; the rest of the cascade (down/left/right dispatch, local execute,
+/// branch-relative) is still only a standalone-compile-checked hypothesis, not yet exercised or
+/// confirmed on silicon.
 ///
 /// <b>Ten tick-labeled opcodes.</b> <c>'plit</c>, <c>'push</c>, <c>'ret</c>, <c>'tjmp</c>,
 /// <c>'jump</c>, <c>'pop</c>, <c>'xs</c>, <c>'xp</c>, <c>'halt</c>, <c>'nop</c>. Six match existing
@@ -45,15 +73,16 @@ namespace Ga144.Evb.Ide.Cvm;
 /// four (<c>'tjmp</c>, <c>'jump</c>, <c>'xs</c>, <c>'xp</c>) have no existing CVM1 mnemonic and are
 /// deliberately NOT wired into that table yet.
 ///
-/// <b><c>'nop</c>'s empty body.</b> <c>: 'nop ( rs-rs) ;</c> compiles to ZERO words. Standalone, its
-/// own symbol address lands one past the last actually-written word, landing on the compiler's
+/// <b><c>'nop</c>'s empty body.</b> <c>: 'nop .loc ( rs-rs) ;</c> compiles to ZERO words. Standalone,
+/// its own symbol address lands one past the last actually-written word, landing on the compiler's
 /// default-fill pattern (four packed native F18 nop opcodes) rather than on code this source itself
-/// wrote. Possibly intentional (relying on unwritten RAM already reading as native nops) or possibly
-/// missing an explicit return/branch-back -- never resolved with Stefan, still open.
+/// wrote. Confirmed working as intended on real hardware (Stefan, 2026-09-02): unwritten RAM already
+/// reading as native nops was indeed the intent, not a missing return/branch-back.
 ///
 /// <b>Verification.</b> Compiled standalone against this project's real <c>Compiler/F18Compiler.cs</c>
-/// via <c>F18CompilerOptions.ForRam(507)</c>. See this class's own remarks for the exact word
-/// count/entry point/symbol table this revision compiled to.
+/// via <c>F18CompilerOptions.ForRam(507)</c>, including the new compile-time-stack-empty check: 61/64
+/// words used, 0 errors, entry point <c>m/main</c> at 0x01C. See this class's own remarks for the
+/// history behind these numbers.
 /// </summary>
 internal static class Node507Program
 {
@@ -61,9 +90,11 @@ internal static class Node507Program
   public const int Coordinate = 507;
 
   /// <summary>
-  /// Node 507's full resident F18 source, exactly as supplied by Stefan on 2026-09-01. See the
-  /// class remarks for the dispatch logic, the ten tick-labeled opcodes, the <c>'nop</c> empty-body
-  /// finding, and the compile verification this source was checked against.
+  /// Node 507's full resident F18 source, as supplied by Stefan on 2026-09-01 and fixed by Stefan on
+  /// 2026-09-02 (<c># m/main >r</c> -&gt; <c># m/main lit >r</c> in <c>m/main</c>'s dispatch loop),
+  /// with <c>'nop</c> confirmed working on real hardware in this revision. See the class remarks for
+  /// the dispatch logic, the ten tick-labeled opcodes, the 2026-09-02 fix and refactor, and the
+  /// compile verification this source was checked against.
   /// </summary>
   public const string Source = """
       ( CVM2 node 507. main CVM2 node, ????_????_????_???? )
@@ -76,43 +107,52 @@ internal static class Node507Program
       : m/pop ( rs-rsw) dup >r 1 . + r>
       : m/1@ 1 ( rsa-rsw)
       : m/@ ( rsab-rsw) !b !b @b ;
+      : m/next ( rs-rsx) a dup 1 . + a!
       : m/0@ ( rsa-rsw) 0 m/@ ;
-      : m/next ( rs-rsx) a dup 1 . + a! dup dup xor m/@ ;
       : 'plit ( rs-rs) m/next
       : m/push ( rsw-rs) >r -1 . + r> over
       : m/1! ( rswa-rs) 1
       : m/! ( rswab-rs) inv !b inv !b !b ;
       : m/0! ( rswa-rs) 0 m/!
       : m/branch ( rso-rs) a . + a! ;
-      : m/call ( rsxy-rs) ahead drop >r a m/push r> a!
-      : m/main ( rs-rs) m/next dup 2* 2* -until // 0???_????_????_????
+      : m/call ( rsxy-rs)
+        ahead drop >r a m/push r> a!
+      : m/main ( rs-rs) m/next
+        ( rsx)
+        dup 2* 2*
+        -until // 0???_????_????_????
         ( rs)
-        # m/main >r
-        ( rsxy) 2* -if  // 11??_????_????_????
+        # m/main lit >r
+        ( rsxy)
+        2* -if  // 11??_????_????_????
           -d-- ;
         then // 10??_????_????_????
-        ( rsxy) 2* -if  // 101?_????_????_????
+        ( rsxy)
+        2* -if  // 101?_????_????_????
           --l- ;
         then // 100?_????_????_????
+        ( rsxy)
+        2* -if  // 1001_????_????_????
           r--- ;
-        ( rsxy) 2* -if  // 1001_????_????_????
         then // 1000_????_????_????
-        ( rsxy) 2* -if  // 1000_1???_????_????
+        ( rsxy)
+        2* -if  // 1000_1???_????_????
           // local execute
           drop >r ;
         then // 1000_0???_????_????
         // branch relative
         ( rsxy) 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! drop ;
       : 'push .loc ( rs-rs) over m/push ;
-      : 'ret ( rs-rs) m/pop a! ;
-      : 'tjmp ( rso-rs) a . + a!
-      : 'jump ( rs-rs) m/next a! ;
-      : 'pop ( rs-rs) m/pop over ;
-      : 'xs ( rs-rs) over ;
-      : 'xp ( rs-rs) >r a over a! r> ;
-      : 'halt ( rs) dup xor dup inv !b !b 0x8800 !b ;
-      : 'nop ( rs-rs) ;
+      : 'ret .loc ( rs-rs) m/pop a! ;
+      : 'tjmp .loc ( rso-rs) a . + a!
+      : 'jump .loc ( rs-rs) m/next a! ;
+      : 'pop .loc ( rs-rs) m/pop over ;
+      : 'xs .loc ( rs-rs) over ;
+      : 'xp .loc ( rs-rs) >r a over a! r> ;
+      : 'halt .loc ( rs) dup xor dup inv !b !b 0x8800 !b ;
+      : 'nop .loc ( rs-rs) ;
       (
+      m/call push current p on stack and jumps to function
       m/main CVM interpreter loop
       m/next read the current word and increment p
       'nop do nothing

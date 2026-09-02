@@ -55,6 +55,17 @@ namespace Ga144.Evb.Ide.Cvm;
 /// already confirmed for CVM1 (607 via 707, 707 via 708, 708 last), just with 507 prepended as the new
 /// innermost leaf. This is inferred from that same confirmed reasoning applied to CVM2's simpler,
 /// non-branching case -- NOT yet independently reconfirmed by Stefan for CVM2 specifically.
+///
+/// <b>This builder's own compiles are reference-only, never what real hardware installs
+/// (2026-09-01).</b> <see cref="BuildDescriptors"/>/<see cref="BuildLoadPlan"/> below compile the
+/// fixed <c>NodeXxxProgram.Source</c> strings baked into this assembly, and neither is called by the
+/// shipped app's real install/dry-run paths any more -- both <see cref="Services.Ga144CvmHardwareInstaller"/>
+/// and <see cref="ViewModels.ChipViewModel"/>'s "Compile CVM Test" compile each node's OWN CURRENT
+/// PROJECT source first, per Stefan's explicit instruction ("take the nodes code in the project and
+/// not the NodeXxxProgram code, which should only be used if no code in the project is defined"), and
+/// reach for <see cref="ReferenceSourceFor"/> below only as a fallback when a node's project source is
+/// still blank. <see cref="BuildDescriptors"/>/<see cref="BuildLoadPlan"/> remain here only as this
+/// session's own throwaway-harness/reference-verification tool for the reference sources themselves.
 /// </summary>
 public static class CvmBootStreamBuilder
 {
@@ -95,7 +106,8 @@ public static class CvmBootStreamBuilder
     // CVM2 (2026-09-01): 507 is the entire CPU -- corrected from an earlier, mistaken attribution to
     // node 508 in this project's own session (see Node507Program/Node508Program's own remarks).
     // Standalone compile -- confirmed via a standalone harness compile of this exact source (0
-    // diagnostics, UsedWordCount 60, EntryPoint 0x1D at m/main) -- see Node507Program's own remarks.
+    // errors, UsedWordCount 61, EntryPoint 0x01C at m/main, as of the 2026-09-02 '# m/main lit >r'
+    // fix that Stefan confirmed working on real hardware) -- see Node507Program's own remarks.
     // Node 508 is NOT compiled here -- it has no defined role in CVM2 yet.
     F18CompileResult result507 = Compile(compiler, Node507Program.Source, F18CompilerOptions.ForRam(Node507Program.Coordinate));
     ThrowIfFailed(result507);
@@ -123,6 +135,27 @@ public static class CvmBootStreamBuilder
     new CvmBootLoadStep(707, 708),
     new CvmBootLoadStep(708, null),
   ];
+
+  /// <summary>
+  /// The fixed reference source for one CVM2 node, keyed by coordinate -- the SAME strings
+  /// <see cref="BuildDescriptors"/> itself compiles, exposed here so real hardware/dry-run callers
+  /// (<see cref="Services.Ga144CvmHardwareInstaller"/>, <see cref="ViewModels.ChipViewModel"/>) can use
+  /// them as a FALLBACK, never as the primary source. Per Stefan (2026-09-01): "I hope for the CVM2
+  /// boot stream you take the nodes code in the project and not the NodeXxxProgram code, which should
+  /// only be used if no code in the project is defined" -- so a caller must always try
+  /// <c>chip.GetNode(coordinate).SourceCode</c> first and reach for this only when that is blank.
+  /// Returns null for any coordinate with no CVM2 reference source of its own -- in particular node
+  /// 508, which is deliberately not part of CVM2's active mesh yet (see
+  /// <see cref="Node508Program"/>'s own remarks) and has nothing meaningful to fall back to.
+  /// </summary>
+  public static string? ReferenceSourceFor(int coordinate) => coordinate switch
+  {
+    Node507Program.Coordinate => Node507Program.Source,
+    Node607Program.Coordinate => Node607Program.Source,
+    Node707Program.Coordinate => Node707Program.Source,
+    Node708Program.Coordinate => Node708Program.Source,
+    _ => null,
+  };
 
   /// <summary>
   /// Pairs <see cref="BuildLoadOrder"/>'s sequence with each step's compiled <see cref="CvmBootDescriptor"/>
