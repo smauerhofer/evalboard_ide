@@ -144,19 +144,25 @@ public static class CvmBootStreamBuilder
   }
 
   /// <summary>
-  /// CVM2's boot LOAD order: a plain leaves-first/root-last chain. Originally 507 -&gt; 607 -&gt; 707 -&gt;
-  /// 708 (2026-09-01, inferred from the same reasoning Stefan confirmed for CVM1's branching tree
-  /// applied to CVM2's simpler non-branching case -- NOT independently reconfirmed by Stefan for CVM2
-  /// specifically). Extended 2026-09-02 with node 407 -- the long-call/long-jump helper -- as a new
-  /// innermost leaf reached VIA 507 (<c>new CvmBootLoadStep(407, 507)</c>): 407 is one hop further out
-  /// than 507 on the same chain (host&lt;-&gt;708&lt;-&gt;707&lt;-&gt;607&lt;-&gt;507&lt;-&gt;407), so it
-  /// must load FIRST, before 507 itself starts running its own compiled program and stops passively
-  /// relaying. The via-node's local port name (both directions "down", confirmed by Stefan -- see
-  /// Node407Program's own remarks -- and independently by
-  /// <see cref="Models.KrakenConfiguration.PortAddress"/>'s own geographic-adjacency table) is resolved
-  /// generically from <c>parentOf</c> by <see cref="Services.Ga144CvmHardwareInstaller"/>, so this one
-  /// new step is the only change that method itself needed. Node 508 is deliberately absent -- it is
-  /// not part of CVM2's active mesh (see Node508Program's own remarks).
+  /// CVM2's boot LOAD order: a plain leaves-first/root-last chain, 407 -&gt; 507 -&gt; 607 -&gt; 707 -&gt;
+  /// 708. Originally just 507 -&gt; 607 -&gt; 707 -&gt; 708 (2026-09-01, inferred from the same reasoning
+  /// Stefan confirmed for CVM1's branching tree applied to CVM2's simpler non-branching case). Extended
+  /// 2026-09-02 with node 407 -- the long-call/long-jump helper -- as a new innermost leaf reached VIA
+  /// 507 (<c>new CvmBootLoadStep(407, 507)</c>): 407 is one hop further out than 507 on the same chain
+  /// (host&lt;-&gt;708&lt;-&gt;707&lt;-&gt;607&lt;-&gt;507&lt;-&gt;407), so it must load FIRST, before 507
+  /// itself starts running its own compiled program and stops passively relaying. The via-node's local
+  /// port name (both directions "down", confirmed by Stefan -- see Node407Program's own remarks -- and
+  /// independently by <see cref="Models.KrakenConfiguration.PortAddress"/>'s own geographic-adjacency
+  /// table) is resolved generically from <c>parentOf</c> by
+  /// <see cref="Services.Ga144CvmHardwareInstaller"/>, so this one new step was the only change that
+  /// method itself needed.
+  ///
+  /// <b>CONFIRMED ON REAL HARDWARE (2026-09-02).</b> This full five-node load order -- 407 included --
+  /// was installed and run on a real EVB: a test program's <c>lcall</c>/<c>'ret</c> round-tripped
+  /// correctly through node 407 (see Node407Program's own remarks for the transaction log), which could
+  /// only happen if every hop's relay/focus/port-write sequence, all the way out to 407, was correct.
+  /// Node 508 is deliberately absent -- it is not part of CVM2's active mesh (see Node508Program's own
+  /// remarks).
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
   [

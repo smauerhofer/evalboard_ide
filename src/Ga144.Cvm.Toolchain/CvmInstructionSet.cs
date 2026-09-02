@@ -227,7 +227,10 @@ public static class CvmInstructionSet
   // Services.CvmAssemblyLanguage). The actual far-call/far-jump TARGET address is carried separately, in
   // the trailing word, read by 'lcall/'ljmp themselves via node 507's own m/next once running on node
   // 407 -- see Cvm.Node407Program's own remarks for the full derivation. lcall pushes a return address
-  // (like call/m/call); ljmp does not (like a plain jump).
+  // (like call/m/call); ljmp does not (like a plain jump). CONFIRMED ON REAL HARDWARE (2026-09-02):
+  // lcall's own opcode/operand pair (0xC01B 0x0007 in Stefan's test program), the return-address push,
+  // the jump, and the matching 'ret pop/return all round-tripped correctly on a real EVB -- see
+  // Cvm.Node407Program's own remarks for the transaction log.
   public const string LongCallMnemonic = "lcall";
   public const string LongJumpMnemonic = "ljmp";
 

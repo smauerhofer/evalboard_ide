@@ -116,6 +116,18 @@ namespace Ga144.Evb.Ide.Cvm;
 /// import resolver supplying node 507's compiled <c>F18ExportSet</c>): 0 errors, 38/64 words used,
 /// entry point <c>b/main</c> at 0x00C, every symbol (<c>b/r@</c>/<c>b/r!</c>/<c>b/pop</c>/<c>b/push</c>/
 /// <c>b/leave</c>/<c>b/main</c>/<c>'lcall</c>/<c>'ljmp</c>) resolves.
+///
+/// <b>CONFIRMED ON REAL HARDWARE (2026-09-02).</b> A test program (<c>lcall label ... halt ... label:
+/// nop ret nop</c>) installed and run against a real EVB, transaction log: <c>[READ] 0:0000 -&gt; C01B</c>
+/// / <c>[READ] 0:0001 -&gt; 0007</c> (the <c>lcall</c> opcode and its trailing operand word, resolving to
+/// 0xC01B exactly as derived above); <c>[WRITE] 1:FFFE &lt;- 0002</c> (the return address -- this
+/// instruction's own address + 2, its own word length -- pushed onto the data stack by <c>'lcall</c>'s
+/// own <c>m/push</c>); <c>[READ] 0:0007 -&gt; 8840</c> / <c>[READ] 0:0008 -&gt; 8831</c> (landing on
+/// <c>label</c>, executing <c>nop</c> then <c>'ret</c>); <c>[READ] 1:FFFE -&gt; 0002</c> (<c>'ret</c>
+/// popping that same return address back); <c>[READ] 0:0002 -&gt; 8840</c> / <c>[READ] 0:0003 -&gt; 8840</c>
+/// (execution resuming exactly where <c>lcall</c> left off). The full mechanism -- opcode tag, trailing
+/// operand, the 507-&gt;407 relay, and <c>'lcall</c>'s own call/return semantics -- works end to end on
+/// real silicon, not just in the standalone compiler harness above.
 /// </summary>
 internal static class Node407Program
 {
