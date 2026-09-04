@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-04T10:20:16.7596507
-      utcDateTime: 2026-09-04T10:20:16.7596507Z
-      localDateTime: 2026-09-04T12:20:16.7596507+02:00
+      dateTime: 2026-09-04T12:12:30.4999716
+      utcDateTime: 2026-09-04T12:12:30.4999716Z
+      localDateTime: 2026-09-04T14:12:30.4999716+02:00
       date: 2026-09-04T00:00:00.0000000
       day: 4
       dayOfWeek: Friday
       dayOfYear: 247
-      hour: 10
-      millisecond: 759
-      microsecond: 650
-      nanosecond: 700
-      minute: 20
+      hour: 12
+      millisecond: 499
+      microsecond: 971
+      nanosecond: 600
+      minute: 12
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 16
-      ticks: 639241140167596507
-      utcTicks: 639241140167596507
-      timeOfDay: 10:20:16.7596507
+      second: 30
+      ticks: 639241207504999716
+      utcTicks: 639241207504999716
+      timeOfDay: 12:12:30.4999716
       year: 2026
   portB: 
   portC:
@@ -15854,12 +15854,25 @@ projects:
               r> 0x3ff and g/! ;
 
           then // 1010_0???_????_????
-          // binary operator
           A[ m/next ]] lit !b A[ !p ]] lit !b @b ex ;
         : 'ldg g/next g/@ ;
 
         : 'stg g/next g/! ;
 
+
+        (
+
+        opcode 1010_11??_????_???? load global into r. the offset is 10 bit.
+
+        opcode 1010_10??_????_???? store r to global. the offset is 10 bit.
+
+
+        'ldg load global to r. offset in the next word
+
+        'stg store r to global. offset in the next word
+
+
+        )
 
       ramWords:
       - 0x05B05
@@ -15936,7 +15949,7 @@ projects:
         parameterStack: []
     - coordinate: 509
       enabled: true
-      sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ a/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p a/r! ]] lit !b !b ;\n: u/pop ( -w) A[ a/pop ]] lit !b A[ !p ]] lit !b @b ;\n: u/push ( w) A[ @p a/push ]] lit !b !b ;\n: u/leave A[ a/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r\n  -if // 1011_1???_????_????\n    // extended 2 arithmetic\n    r> --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // push literal\n  then // 1011_00??_????_????\r\n  // unary\n  u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'nop ( x-x) ;\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\n\r\n\r\n"
+      sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ g/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p g/r! ]] lit !b !b ;\n: u/pop ( -w) A[ g/pop ]] lit !b A[ !p ]] lit !b @b ;\n: u/push ( w) A[ @p g/push ]] lit !b !b ;\n: u/leave A[ g/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r\n  -if // 1011_1???_????_????\n    // \n    r> --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // load literal -512..511\r\n    r> 0x3fc00 and 5 for 2/ 2/ unext u/r! ;\n  then // 1011_00??_????_????\r\n  // unary\n  u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'nop ( x-x) ;\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\n\r\n\r\n"
       ramWords:
       - 0x05B12
       - 0x13400
@@ -15951,7 +15964,7 @@ projects:
       - 0x05B25
       - 0x05608
       - 0x05BB2
-      - 0x1140A
+      - 0x11416
       - 0x04812
       - 0x0000C
       - 0x37932
@@ -15959,14 +15972,20 @@ projects:
       - 0x2F215
       - 0x269B2
       - 0x11575
-      - 0x37216
+      - 0x3721C
+      - 0x27DFF
+      - 0x3FC00
+      - 0x00005
+      - 0x2E9B2
+      - 0x30772
+      - 0x11404
       - 0x13400
       - 0x17555
       - 0x040B2
       - 0x0FFFF
       - 0x11404
       - 0x364C2
-      - 0x31222
+      - 0x31228
       - 0x329B2
       - 0x049F5
       - 0x00001
@@ -15980,18 +15999,12 @@ projects:
       - 0x31555
       - 0x24DE2
       - 0x2E9B2
-      - 0x1942F
-      - 0x2761E
+      - 0x19435
+      - 0x27624
       - 0x2EDB2
-      - 0x13420
-      - 0x3F72A
+      - 0x13426
+      - 0x3F730
       - 0x27555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555

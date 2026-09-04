@@ -62,12 +62,22 @@ namespace Ga144.Evb.Ide.Services;
 /// further relay to node 505 ("call node 505" in its own dispatch cascade), are NOT wired in yet -- see
 /// <see cref="Node506Program"/>'s own remarks for the full derivation and the still-open items.
 ///
+/// <b><c>Node508Program.cs</c> is ALSO back -- another BRAND NEW, unrelated CVM2 file (2026-09-04).</b>
+/// Node 508 was an ignored placeholder from 2026-09-01 ("node 508 must be ignored for now") until
+/// Stefan supplied its real role and source: the globals-access node, a third sibling leaf of 507
+/// alongside 407 and 506, reached from node 507's own <c>m/main</c> dispatch via its LEFT port
+/// (<c>--l-</c>). Per Stefan's own tick-naming rule, only <c>ldg</c>/<c>stg</c> (node 508's own
+/// <c>'ldg</c>/<c>'stg</c>, the only two of its words that begin with a leading <c>'</c>) are wired in
+/// below -- see <see cref="Node508LoadStoreGlobalTagBits"/>'s own remarks for the tag derivation. Node
+/// 508's own two narrower embedded-offset opcode forms (a 10-bit offset baked directly into the opcode
+/// word) have no tick-prefixed name to hang a mnemonic off of and are NOT wired in -- see
+/// <see cref="Node508Program"/>'s own remarks.
+///
 /// <b>What's still orphaned, not removed.</b> Node 508's OLD CVM1 27 comparison/arithmetic mnemonics
 /// (<c>eq</c> through <c>bitcnt</c>) keep their <see cref="NodeSymbolByMnemonic"/> entries, still
 /// pointing at <see cref="Node508Program.Coordinate"/> and <see cref="Node508TagBits"/>, per "do not
-/// remove any opcodes" -- they simply never resolve, since node 508 currently has no real source at
-/// all (see <see cref="Node508Program"/>'s own remarks: not defined yet, deliberately excluded from
-/// CVM2's active mesh).
+/// remove any opcodes" -- they simply never resolve, since node 508's own REAL CVM2 source (the
+/// globals-access node, above) does not define any of these 27 old F18 symbols either.
 ///
 /// This is deliberately a SEPARATE naming layer from any node's own F18 source symbols ('nop, 'plit,
 /// 'push, 'pop, 'ret, 'halt, plus 'tjmp/'jump/'xs/'xp, on CVM2's node 507 -- see
@@ -185,6 +195,19 @@ internal static class CvmAssemblyLanguage
   // run through CvmInstructionSet.TryDescribeSelfDecodingWord first (which will report "br" instead).
   private const int Node506LeaveTagBits = 0x9000;
 
+  // CVM2's node 508 'ldg/'stg tag (2026-09-04), per Stefan's node 508 source (Cvm.Node508Program): its
+  // own g/main dispatch cascade falls through to its own remote-fetch-then-"ex" tail (jump to whatever
+  // address is in R) once the fetched CVM opcode word's top 5 bits read "1010_0" -- the same
+  // "tag | local address" scheme Node407LongCallTagBits/Node506LeaveTagBits/
+  // Node507Cvm2LocalExecuteTagBits already use, just with a 5-bit tag/11-bit address split this time.
+  // As a plain 16-bit tag word (address bits zeroed) this is 0xA000 -- see
+  // CvmInstructionSet.LoadGlobalMnemonic's own remarks for the full bit derivation. Unlike
+  // Node506LeaveTagBits, this range (0xA000-0xA03F, node 508's own RAM is only 64 words) has no known
+  // collision with br/ifbr (0x9000-0x9FFF) or with node 606's own eight orphaned frame-pointer tags
+  // (0xA800-0xAFFF) -- see Cvm.Node508Program's own remarks. NOT YET CONFIRMED ON REAL HARDWARE
+  // (2026-09-04).
+  private const int Node508LoadStoreGlobalTagBits = 0xA000;
+
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
   // tag bits its opcode word must carry (Node508TagBits for the OLD, permanently-orphaned CVM1
   // comparison ops; Node507Cvm2LocalExecuteTagBits for CVM2's own six repointed primitives -- these
@@ -199,9 +222,10 @@ internal static class CvmAssemblyLanguage
   // deleted type -- BuildDecodeTable/BuildEncodeTable never look it up, and Instructions' own filter
   // drops it from the table entirely, the graceful-omission path this file already relies on for
   // call/br/ifbr/slit. Node 507 (CVM2's actual CPU), node 407 (CVM2's long-call/long-jump helper), node
-  // 506 (CVM2's stack-frame node) -- both 407 and 506 different nodes than their deleted CVM1
-  // namesakes, sharing only the coordinate -- and node 508 (permanently orphaned, not defined) are the
-  // only coordinates anything here still points at.
+  // 506 (CVM2's stack-frame node), and node 508 (CVM2's globals-access node, plus its own OLD,
+  // permanently orphaned CVM1 comparison ops) -- 407/506/508 all different nodes than their deleted
+  // CVM1 namesakes, sharing only the coordinate -- are the only coordinates anything here still points
+  // at.
   private static readonly IReadOnlyDictionary<string, (int NodeCoordinate, string SymbolName, int Tag)> NodeSymbolByMnemonic =
       new Dictionary<string, (int NodeCoordinate, string SymbolName, int Tag)>(StringComparer.OrdinalIgnoreCase)
       {
@@ -228,10 +252,20 @@ internal static class CvmAssemblyLanguage
         // CvmInstructionSet.Instructions instead (see Node506EnterTag's own remarks), not here. Node
         // 506's own load-local/load-parameter/store-local/store-parameter are not wired in yet.
         [CvmInstructionSet.LeaveMnemonic] = (Node506Program.Coordinate, "'leave", Node506LeaveTagBits),
-        // CVM1's OLD 27 node-508 comparison/arithmetic ops -- permanently orphaned (node 508 has no
-        // real CVM2 source at all -- not defined yet, deliberately excluded from CVM2's active mesh --
-        // see Node508Program's own remarks), kept per "do not remove any opcodes." See this class's
-        // own remarks.
+        // CVM2's node 508 (2026-09-04) -- the globals-access node, resolved against node 508's own live
+        // compile, tag 0xA000 (Node508LoadStoreGlobalTagBits's own remarks). Only 'ldg/'stg so far, per
+        // Stefan's own tick-naming rule (only these two of node 508's own words begin with a leading
+        // '); node 508's own two narrower embedded-offset opcode forms (10-bit offset baked directly
+        // into the opcode word, no trailing word) have no tick-prefixed name to hang a mnemonic off of
+        // and are NOT wired in here -- see Node508Program's own remarks.
+        [CvmInstructionSet.LoadGlobalMnemonic] = (Node508Program.Coordinate, "'ldg", Node508LoadStoreGlobalTagBits),
+        [CvmInstructionSet.StoreGlobalMnemonic] = (Node508Program.Coordinate, "'stg", Node508LoadStoreGlobalTagBits),
+        // CVM1's OLD 27 node-508 comparison/arithmetic ops -- permanently orphaned (node 508's own REAL
+        // CVM2 source, added 2026-09-04, is the globals-access node above and does not define any of
+        // these 27 old F18 symbols), kept per "do not remove any opcodes." Simply omitted from
+        // BuildDecodeTable/BuildEncodeTable now that node 508 has a real compile, the same graceful-
+        // omission path this file already relies on for any mnemonic whose symbol isn't defined in its
+        // node's current source. See this class's own remarks.
         [CvmInstructionSet.EqualMnemonic] = (Node508Program.Coordinate, "'eq", Node508TagBits),
         [CvmInstructionSet.EqualToZeroMnemonic] = (Node508Program.Coordinate, "'eq0", Node508TagBits),
         [CvmInstructionSet.FalseMnemonic] = (Node508Program.Coordinate, "'false", Node508TagBits),

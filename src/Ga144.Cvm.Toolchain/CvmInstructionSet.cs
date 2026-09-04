@@ -26,7 +26,10 @@ namespace Ga144.Cvm.Toolchain;
 /// mnemonics exactly like node 506's and 508's ops, resolved against node 407's own live compile --
 /// see <see cref="ExchangePortMnemonic"/>'s own remarks)), plus CVM2's <c>lcall</c>/<c>ljmp</c> (long
 /// call/long jump, added 2026-09-02 -- shaped exactly like <c>pushlit</c>, resolved against node 407's
-/// own live compile too, but a DIFFERENT tag -- see <see cref="LongCallMnemonic"/>'s own remarks)) and,
+/// own live compile too, but a DIFFERENT tag -- see <see cref="LongCallMnemonic"/>'s own remarks)), plus
+/// CVM2's <c>ldg</c>/<c>stg</c> (load global/store global, added 2026-09-04 -- shaped exactly like
+/// <c>lcall</c>/<c>ljmp</c>, resolved against node 508's own live compile, its own DIFFERENT tag again --
+/// see <see cref="LoadGlobalMnemonic"/>'s own remarks) and,
 /// for each, how
 /// many words it occupies once assembled, how its
 /// operand (if any) is encoded, and a stable numeric <see cref="CvmInstructionShape.Id"/>. This is the
@@ -239,6 +242,32 @@ public static class CvmInstructionSet
   // Cvm.Node407Program's own remarks for the transaction log.
   public const string LongCallMnemonic = "lcall";
   public const string LongJumpMnemonic = "ljmp";
+
+  // CVM2's load global/store global, added per Stefan's node 508 source (2026-09-04, "here is node
+  // 508. it handles access to globals.") and his own tick-naming rule ("every word that begins with a
+  // ' is an opcode for the CVM with the mnemonic using the same name without the leading '"): node 508
+  // defines ': 'ldg g/next g/@ ;' and ': 'stg g/next g/! ;', each first fetching a trailing offset word
+  // via g/next (structurally the SAME m/next-relay g/next itself performs) before doing the actual
+  // global read/write -- exactly the "tagged opcode word, then one trailing operand word" shape
+  // pushlit/lcall/ljmp already use, so no new CvmOperandEncoding case was needed here either, just two
+  // more TrailingWord entries pointed at node 508. Per node 508's own g/main dispatch cascade (see
+  // Cvm.Node508Program's own remarks for the full derivation): node 507 hands off to node 508 once a
+  // fetched CVM opcode word's top bits read "101?" (the LEFT port), and node 508's own cascade consumes
+  // three more bits before falling through to its own remote-fetch-then-"ex" tail for the "1010_0"
+  // case (5 bits total: "10100") -- so 'ldg's/'stg's own CVM opcode word always has its top 5 bits
+  // "10100" (0xA000), the same "tag | local address" scheme Node407LongCallTagBits/
+  // Node506LeaveTagBits/Node507Cvm2LocalExecuteTagBits already use (in the IDE project's own
+  // Services.CvmAssemblyLanguage), just a 5-bit tag/11-bit address split this time. The actual
+  // global-offset operand itself is carried separately, in the trailing word, read by 'ldg/'stg
+  // themselves via g/next once running on node 508 -- see Cvm.Node508Program's own remarks. Node 508's
+  // own g/main also answers TWO further, narrower opcode forms with an offset embedded directly in the
+  // opcode word (10 bits, no trailing word) rather than via 'ldg/'stg's trailing-word form -- those are
+  // NOT wired in here, since Stefan's own source gives them no tick-prefixed name to hang a CVM mnemonic
+  // off of (only 'ldg/'stg qualify under his own naming rule) -- see Cvm.Node508Program's own remarks.
+  // NOT YET CONFIRMED ON REAL HARDWARE (2026-09-04) -- derived the same way lcall/ljmp's own tag was
+  // before its own hardware confirmation, but node 508's load has not itself been installed and run yet.
+  public const string LoadGlobalMnemonic = "ldg";
+  public const string StoreGlobalMnemonic = "stg";
 
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
@@ -535,6 +564,8 @@ public static class CvmInstructionSet
     new(Id: 72, HaltMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 73, LongCallMnemonic, 2, CvmOperandEncoding.TrailingWord),
     new(Id: 74, LongJumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 75, LoadGlobalMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 76, StoreGlobalMnemonic, 2, CvmOperandEncoding.TrailingWord),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =
