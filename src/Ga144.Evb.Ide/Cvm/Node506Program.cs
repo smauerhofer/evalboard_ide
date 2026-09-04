@@ -1,461 +1,196 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// Node 506's resident F18 source -- the CVM test-cluster register-d node (test-mirror of real
-/// design node 306, register d). See <see cref="Node607Program"/>'s remarks for the full
-/// test-mirror mapping table.
+/// Node 506's resident F18 source -- CVM2's stack-frame node, supplied verbatim by Stefan on
+/// 2026-09-02: "i have rewritten node 506. it handles stack frames only." This is a BRAND NEW file --
+/// CVM1 also had a node 506 (register-d/extended-precision ops zext/addc/ldd/std/xd/mul2d/div2d/sext/
+/// umuld), deleted on 2026-09-01 along with 606/506/407 per <see cref="Services.CvmAssemblyLanguage"/>'s
+/// own remarks on the CVM1 leftover NODE removal; this node 506 is unrelated CVM2 content that happens
+/// to reuse the same coordinate, not a revival of the old one. It plays roughly the SAME conceptual
+/// role CVM1's node 606 played (frame-pointer/local-variable management -- enter/leave/load-local/
+/// load-parameter/store-local/store-parameter), just redesigned for CVM2's own relay-based dispatch
+/// scheme and a wider 9-bit offset field, rather than 606's 8-bit one.
 ///
-/// <b>A pure servant, one level further out than 507.</b> 507 reaches 506 the same way 607
-/// reaches 507 (a named multiport call, here 507's own <c>r---</c>, which parks 507's OWN P at
-/// the port -- see <see cref="Node507Program"/>'s remarks on 507's <c>main</c> dispatch). From
-/// then on, every <c>@p</c>/<c>!p</c> 507 executes is a live handshake with whatever 506 sends
-/// through ITS reciprocal B port (pointed "right" back at 507). 506 imports 507's exported words
-/// via <c># 507 import</c> (not 607's -- 506 only ever talks to its immediate parent).
+/// <b>Why a separate node.</b> Same reasoning as <see cref="Node407Program"/> (node 507's own RAM is
+/// completely full): frame-management primitives need their own resident node with its own fresh
+/// 64-word budget. Verified via a standalone harness compile importing <see cref="Node507Program"/>'s
+/// own exports (<c>F18CompilerOptions.ForRam(506)</c>): 0 errors, 60/64 words used, entry point
+/// <c>f/main</c> at 0x01B, every symbol resolves (<c>par</c> 0x0000, <c>f/next</c> 0x0002, <c>f/pop</c>
+/// 0x0005, <c>f/r@</c> 0x0009, <c>f/r!</c> 0x000B, <c>f/push</c> 0x000D, <c>f/stack@</c> 0x000F,
+/// <c>f/stack!</c> 0x0014, <c>f/leave</c> 0x0019, <c>f/main</c> 0x001B, <c>'leave</c> 0x0038) -- these
+/// addresses are unchanged by the 2026-09-04 bug fix below (removing the stray <c>;</c> only changed
+/// which NOP padding filled an already-one-word-long packed instruction, not the total word count).
 ///
-/// <b>Local port directions on 506</b> (row 5 is odd, column 06 is even, per this project's
-/// <c>KrakenTopology.PortAddress</c> mirroring rules):
-/// <code>
-///   right (r---, 0x1D5) -&gt; 507  the node that puppets 506 (matches "# right /b")
-///   left  (--l-, 0x175) -&gt; 505  not part of this cluster
-///   up    (---u, 0x145) -&gt; 606  not part of this cluster
-///   down  (-d--, 0x115) -&gt; 406  not part of this cluster
-/// </code>
+/// <b>Reached from node 507 via the RIGHT port (<c>r---</c>), not <c>-d--</c>.</b> Node 507's own
+/// <c>m/main</c> dispatch cascade tests "100?" next as "1001" -&gt; <c>r---</c> (right) vs "1000" ->
+/// local-execute/branch-relative (see <see cref="Node507Program"/>'s own remarks) -- and this source's
+/// own header, <c>( CVM2 node 506. frame, 1001_????_????_???? )</c>, states exactly that "1001" prefix,
+/// so node 506 sits at node 507's right, reached the same "multiport call temporarily fetches from that
+/// port" way <see cref="Node407Program"/> is reached via <c>-d--</c>.
 ///
-/// <b>How control returns to 507</b> (worked out, not given). 507's own "CALL r---" pushes a
-/// return address onto 507's OWN R -- the address of "a leave ;" right after "r---" in 507's own
-/// <c>main</c>. As long as 507's P stays parked at the port, every word 506 ships arrives as if it
-/// were 507's own next instruction. 506's own <c>leave</c> ships a bare <c>{return}</c> opcode to
-/// 507; when 507 executes that (still fetching over the port), it pops ITS OWN R -- landing back
-/// on "a leave ;", 507's own local cleanup -- so 506's own R stack never has to carry anything for
-/// 507's sake at all.
+/// <b>Same relay/receive idiom as node 407.</b> <c>f/main</c> opens with
+/// <c>A[ 2* !p !p ]] lit !b @b @b &gt;r</c> -- the identical <c>x</c>/<c>y</c> stack-comment convention
+/// traced for node 407 (<see cref="Node407Program"/>'s own remarks): <c>y</c> (the progressively-shifted
+/// remaining-bits value) is what gets tested bit by bit below; <c>x</c> (the ORIGINAL fetched CVM opcode
+/// word, parked on the native return stack via <c>&gt;r</c>) is what any downstream <c>ex</c> would jump
+/// to, and what <c>f/main</c>'s own load/store branches recover via <c>r&gt;</c> to extract the embedded
+/// offset from directly (see below) rather than jumping to it.
 ///
-/// <b>506's own loop-back</b> is a separate, self-contained mechanism: <c>leave</c> also CALLs
-/// <c>main</c> (pushing RA_leave = leave's own trailing <c>;</c>); <c>main</c> does <c>&gt;r</c>
-/// (pushing the dispatch address 507 just sent, on top of RA_leave) then <c>ex</c> (pops ONLY that
-/// top entry and jumps) -- RA_leave is left undisturbed underneath. Whichever ALU word <c>ex</c>
-/// jumps into, its own plain <c>;</c> at the end therefore pops exactly RA_leave, landing back on
-/// leave's own tail, which (via its own trailing <c>;</c>) returns to whoever called <c>leave</c>
-/// before -- a clean, self-priming loop from the second dispatch onward. Stefan confirmed the
-/// cold-start case (the very first "entry main", before <c>leave</c> has ever run once, when R has
-/// nothing valid queued yet) is fine as-is.
+/// <b><c>f/main</c>'s own dispatch cascade and its CVM-level opcode encoding.</b> Three more bits are
+/// tested past the "1001" prefix (bits 11, 10, 9 of the ORIGINAL opcode word):
+/// <list type="bullet">
+/// <item><c>1001_111?_????_????</c> -- load local into r. <c>r&gt; par inv f/stack@</c>: <c>par</c>
+/// (<c>0x1ff and</c>) masks the ORIGINAL opcode word's own low 9 bits out as the offset, <c>inv</c>
+/// negates it (locals sit BELOW the frame pointer) before <c>f/stack@</c> reads it. Self-describing --
+/// the whole word is tag bits 15-9 (<c>1001111</c>) OR'd with a 9-bit value in bits 8-0, no live-node
+/// symbol needed to decode it, exactly like CVM1's old node 606 enter/adjust/stl/stp/ldl/ldp/lal/lap
+/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>) -- just a 9-bit field
+/// instead of 606's 8-bit one, and (unlike 606's ops, which were plain unsigned counts/offsets) the
+/// VALUE here decodes into a signed local-vs-parameter direction via <c>inv</c>, so this may end up
+/// needing its own new embedded-value shape rather than reusing EmbeddedUnsignedValue as-is -- not yet
+/// settled.</item>
+/// <item><c>1001_110?_????_????</c> -- load parameter into r. <c>r&gt; par f/stack@</c>: same offset
+/// extraction, no <c>inv</c> (parameters sit ABOVE the frame pointer).</item>
+/// <item><c>1001_101?_????_????</c> -- store local from r. <c>r&gt; par inv f/stack!</c>.</item>
+/// <item><c>1001_100?_????_????</c> -- store parameter from r. <c>r&gt; par f/stack!</c>.</item>
+/// <item><c>1001_01??_????_????</c> -- <c>r&gt; --l- ;</c>, a further multiport hand-off to node 506's
+/// OWN left neighbour -- per the source's own comment, "call node 505." Node 505's source has not been
+/// supplied yet; this whole 6-bit-tag sub-family (<c>1001_01??</c>, i.e. 0x9400-0x97FF) is reserved for
+/// whatever node 505 itself defines, the same way node 506 was handed the whole "1001" nibble by node
+/// 507. Not wired into anything yet -- flagged, not guessed at.</item>
+/// <item><c>1001_001?_????_????</c> -- enter stack frame. <c>a A[ @p m/push ]] lit !b !b ;</c> saves the
+/// caller's frame pointer, then reads the stack pointer and computes the new frame pointer from
+/// <c>r&gt; par inv +</c> -- the 9-bit offset (locals count) again taken directly from the original
+/// opcode word's own low bits, self-describing like the load/store ops above.</item>
+/// <item><c>1001_000?_????_????</c> -- <c>ex</c> (no preceding <c>r&gt;</c>, matching
+/// <see cref="Node407Program"/>'s own confirmed-on-hardware <c>b/main</c> tail exactly): jumps to
+/// whatever address is already in R, i.e. <c>x</c> itself (the original opcode word, parked earlier and
+/// never popped along any of the branches above) -- the SAME "ex reached once the cascade consumes a
+/// fixed prefix" pattern <see cref="Node407Program"/> uses for <c>'lcall</c>/<c>'ljmp</c>.
+/// This is where <c>'leave</c> (defined separately below <c>f/main</c>) is actually reached from: TAGGED
+/// (needs live-node-symbol resolution, not self-describing), tag bits 15-9 = <c>1001000</c>, i.e.
+/// <c>0x9000 | (address of 'leave on node 506)</c> -- <c>0x9038</c> against this exact compile (entry
+/// above). Exactly the same "tag | local address" scheme node 507's own local-execute uses with 0x8800
+/// and node 407's <c>'lcall</c>/<c>'ljmp</c> use with 0xC000.</item>
+/// </list>
 ///
-/// <b>A second address-collision trick</b>, in the same spirit as 507's <c>s/2put</c>/<c>s/put</c>
-/// (confirmed there by Stefan): <c>csr16</c> compiles to a single word containing only a CALL to
-/// <c>sr16</c>; that CALL's return address is intrinsically csr16's own next word -- <c>c!</c>'s
-/// start -- REGARDLESS of who calls csr16. <c>'+c</c> falls through into csr16 (no <c>;</c> of its
-/// own), so after sr16's shift loop returns into c!, c! stores the carry bit, and only THEN
-/// returns to '+c's own caller -- and <c>'lsh</c> explicitly CALLs csr16 for the same reason,
-/// picking up c!'s carry-capture "for free" the same way <c>'rsh</c> does explicitly.
+/// <b>Opcode-space collision with <c>br</c>/<c>ifbr</c> -- KNOWN, ACCEPTED, deliberately left
+/// unresolved.</b> The ENTIRE "1001_????_????_????" range (0x9000-0x9FFF) this source claims is already
+/// fully owned by <c>br</c> (<see cref="CvmInstructionSet.BranchTag"/>, 0x9000, top 5 bits <c>10010</c>,
+/// i.e. every <c>1001_0xxx</c> word) and <c>ifbr</c> (<see cref="CvmInstructionSet.ConditionalBranchTag"/>,
+/// 0x9800, top 5 bits <c>10011</c>, every <c>1001_1xxx</c> word) -- together already covering the exact
+/// same full nibble, confirmed working on real hardware (the <c>br 1</c> test --
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>'s own remarks). Per Stefan
+/// (2026-09-02): <c>br</c>/<c>ifbr</c> will eventually move to a new tag range ("i will specified the
+/// range later. for now it is not yet defined"), but per Stefan's later explicit instruction (2026-09-04,
+/// "ignore the ranges of br/ifbr. ignore the overlapping ranges. give me now enter and leave mnemonics.")
+/// <c>enter</c>/<c>leave</c> ARE wired in now anyway (<see cref="CvmInstructionSet.Instructions"/>'s
+/// <c>enter</c> entry, tag <see cref="CvmInstructionSet.Node506EnterTag"/> 0x9200; and
+/// <see cref="Services.CvmAssemblyLanguage.NodeSymbolByMnemonic"/>'s <c>leave</c> entry, tag
+/// <see cref="Services.CvmAssemblyLanguage.Node506LeaveTagBits"/> 0x9000), ENCODING correctly despite the
+/// collision -- only DISASSEMBLY of an <c>enter</c>/<c>leave</c> word is currently wrong (reported as
+/// <c>br</c> instead), since <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> checks <c>br</c>
+/// first for the whole 0x9000-0x97FF range. This node's own load-local/load-parameter/store-local/
+/// store-parameter mnemonics and its own relay to node 505 remain UNWIRED (out of the narrower scope
+/// Stefan asked for: "give me now enter and leave mnemonics").
 ///
-/// <b>A note on confidence.</b> No per-word descriptions were given for this drop, unlike node
-/// 507's. Every word's meaning below is inferred from its code and naming, cross-checked against
-/// the compiled addresses -- treat it with the same lower confidence as node 607's <c>exec</c> or
-/// node 606's <c>enter</c>. The control-flow mechanics (the leave/main self-priming loop, and the
-/// csr16/c! collision) were traced and confirmed structurally against the compiled word addresses.
-///
-/// <b>Verification.</b> Compiled with zero errors (<c>Success = true</c>) against this project's
-/// real <c>Compiler/F18Compiler.cs</c>, importing node 507's exported symbols via
-/// <c># 507 import</c>. 61 of 64 RAM words used, entry point <c>main</c> at word address 0x000.
-/// Two informational warnings are expected and benign: F18C050 for both <c>main</c> and
-/// <c>leave</c>, each redefining a name imported from node 507 -- both nodes define their own
-/// independent pair, and 506 never needs to call INTO 507's versions by name, so the shadowing is
-/// intentional. Adding the per-word documentation comments to <see cref="Source"/> was re-verified
-/// to produce byte-for-byte identical compiled output to the plain, uncommented version.
+/// <b>Bug found and fixed (2026-09-04): a stray <c>;</c> inside <c>enter</c>'s own remote
+/// read-stack-pointer step corrupted <c>'leave</c>'s compiled encoding.</b> An earlier revision of this
+/// source read <c>A[ dup !p ; ]] lit !b @b</c> for that step (three native opcodes packed into one word:
+/// <c>dup</c>, <c>!p</c>, then a bare <c>;</c>) and <c>'leave</c>'s own body separately read
+/// <c>A[ @p m/pop ]] lit !b a !b A[ !p ]] lit !b @b a! ;</c> (an extra, unneeded <c>@p</c>+send of node
+/// 506's OWN CURRENT, not-yet-restored frame pointer feeding 507's <c>m/pop</c> bogus input). Stefan
+/// diagnosed and fixed BOTH on real hardware: the packed <c>;</c> is dropped (<c>A[ dup !p ]] lit !b @b</c>,
+/// now the same "no bare ';' inside the remote step" shape throughout), and <c>'leave</c> itself is
+/// simplified to <c>A[ m/pop ]] lit !b A[ !p ]] lit !b @b a! ;</c> -- pop remotely on 507, transmit the
+/// popped value back, store it into this node's own frame-pointer register, matching <c>enter</c>'s own
+/// clean "remote op, transmit back, store locally" shape. Independently confirmed in this session, BEFORE
+/// Stefan's own report came in, via a standalone compiler-harness bisection against this exact source:
+/// with the stray <c>;</c> present, node 506's own compiled RAM never actually contained a valid "call
+/// m/pop" instruction at the second word of <c>'leave</c>'s body -- the toolchain's real compiler (not a
+/// hand-decode) produced an unrelated packed-opcode word there instead of
+/// <see cref="Compiler.F18InstructionSet.TryEncodePackedControl"/>'s own expected call encoding, even
+/// though neither word individually looks wrong and an isolated compile of <c>'leave</c>'s body ALONE
+/// (outside the full node) encoded correctly -- the corruption only appeared with the complete, real
+/// <c>f/main</c> preceding it. Removing the stray <c>;</c> (Stefan's exact fix, reproduced verbatim
+/// below) was independently re-verified against the SAME harness to restore the correct call-to-<c>m/pop</c>
+/// encoding at that word, with every symbol address unchanged (the stray <c>;</c> only changed which NOP
+/// padding filled that one already-one-word-long packed instruction, not the total word count) -- so this
+/// was a genuine compile-time correctness bug, not merely a runtime one, and the fix is confirmed correct
+/// two independent ways.
 /// </summary>
 internal static class Node506Program
 {
-  /// <summary>The node this program is always deployed to -- test-mirror of real design node 306 (register d).</summary>
+  /// <summary>The node this program is always deployed to -- CVM2's stack-frame node.</summary>
   public const int Coordinate = 506;
 
   /// <summary>
-  /// Node 506's full resident F18 source, fully commented per-word (every description here is
-  /// inferred from the code and naming -- Stefan did not supply per-word descriptions for this
-  /// node) with a traced walkthrough of the leave/main self-priming return loop and the
-  /// csr16/c! address-collision trick. See the class remarks for the compile verification this
-  /// source was checked against, including its cross-node import of node 507's symbol table via
-  /// <c># 507 import</c>.
+  /// Node 506's full resident F18 source. Originally supplied by Stefan on 2026-09-02 ("i have
+  /// rewritten node 506. it handles stack frames only."); revised 2026-09-04 with the bug fix described
+  /// in the class remarks above (the stray <c>;</c> inside <c>enter</c>'s remote read-stack-pointer step,
+  /// and the simplified <c>'leave</c> body). See the class remarks for the register/stack helpers,
+  /// <c>f/main</c>'s dispatch cascade, its CVM-level opcode encoding, the bug fix, and the accepted
+  /// <c>br</c>/<c>ifbr</c> tag collision.
   /// </summary>
   public const string Source = """
-      ( cvm2 32 bit operations, 1110_0???_????_????)
-      // ============================================================================
-      // Node 506 -- CVM test-cluster register-d node (test-mirror of real design
-      // node 306, register d)
-      // ============================================================================
-      //
-      // Real hardware role (per cvm_2.txt): node 306 holds d, a second working
-      // register that pairs with r (on 307/507) for extended-precision/carry-aware
-      // arithmetic: add-with-carry, multi-bit shifts with a carry-out, unsigned
-      // multiply, and sign/zero extension. Node 506 is that same node, test-
-      // mirrored (row' = 8-row, column unchanged) -- see Node607Program.cs's
-      // remarks for the full mirror-mapping table.
-      //
-      // A pure servant, one level further out than 507: 507 reaches 506 the same
-      // way 607 reaches 507 (a named multiport call, here 507's own "r---", which
-      // parks 507's OWN P at the port -- see 507's 'main' dispatch). From then on,
-      // every @p/!p 507 executes is a live handshake with whatever 506 sends
-      // through ITS reciprocal B port (pointed "right" back at 507 by this file's
-      // own "# right /b" directive). 506 imports 507's exported words via
-      // '# 507 import' (not 607's -- 506 only ever talks to its immediate parent).
-      //
-      // Local port directions on 506 (row 5 is odd, column 06 is even, per this
-      // project's KrakenTopology.PortAddress mirroring rules):
-      //     right (r---, 0x1D5) -> 507  (the node that puppets 506; matches this
-      //                                   file's own "# right /b")
-      //     left  (--l-, 0x175) -> 505  (not part of this cluster)
-      //     up    (---u, 0x145) -> 606  (not part of this cluster)
-      //     down  (-d--, 0x115) -> 406  (not part of this cluster)
-      //
-      // How control returns to 507 (worked out, not given): 507's own "CALL r---"
-      // pushes a return address onto 507's OWN R -- the address of "a leave ;"
-      // right after "r---" in 507's own 'main'. As long as 507's P stays parked at
-      // the port, every word 506 ships arrives as if it were 507's own next
-      // instruction. 506's own 'leave' below ships a bare {return} opcode to 507;
-      // when 507 executes THAT (still fetching over the port), it pops ITS OWN R
-      // -- landing back on "a leave ;", 507's own local cleanup -- so 506's own R
-      // stack never has to carry anything for 507's sake at all.
-      //
-      // 506's OWN loop-back is a separate, self-contained mechanism: 'leave' also
-      // CALLs 'main' (pushing RA_leave = leave's own trailing ';'); 'main' does
-      // '>r' (pushing the dispatch address 507 just sent, on top of RA_leave) then
-      // 'ex' (pops ONLY that top entry and jumps) -- RA_leave is left undisturbed
-      // underneath. Whichever ALU word 'ex' jumps into, its own plain ';' at the
-      // end therefore pops exactly RA_leave, landing back on leave's own tail,
-      // which (via its own trailing ';') returns to whoever called 'leave' before
-      // -- a clean, self-priming loop from the second dispatch onward. Stefan
-      // confirmed the cold-start case (the very first "entry main", before 'leave'
-      // has ever run once, when R has nothing valid queued yet) is fine as-is.
-      //
-      // A second address-collision trick, in the same spirit as 507's
-      // s/2put/s/put (confirmed there by Stefan): 'csr16' compiles to a single
-      // word containing only a CALL to 'sr16; that CALL's return address is
-      // intrinsically 'csr16's own next word -- 'c!'s start -- REGARDLESS of who
-      // calls csr16. 'addc falls through into csr16 (no ';' of its own), so after
-      // sr16's shift loop returns into c!, c! stores the carry bit, and only THEN
-      // returns to 'addc's own caller -- and 'mul2d explicitly CALLs csr16 for the
-      // same reason, picking up c!'s carry-capture "for free" the same way 'div2d
-      // does explicitly (see 'mul2d/'div2d/c! below).
-      //
-      // ----------------------------------------------------------------------
-      // Revision note (this drop, per Stefan: "every word that begins with a '
-      // is an opcode. the mnemonic is the same name without the leading '")
-      // ----------------------------------------------------------------------
-      // Four of this node's own words are RENAMED from the earlier drop below --
-      // their compiled bodies (and therefore their compiled addresses) are byte-
-      // for-byte unchanged, only the names differ, to match this node's own
-      // official cvm2 mnemonic table (this opcode class is tagged
-      // "1110_0???_????_????", per this file's own opening comment line -- the
-      // same convention node 508 already carries as ITS OWN first line):
-      //     '+c   -> 'addc    (add with carry)
-      //     'lsh  -> 'mul2d   (left shift double)
-      //     'rsh  -> 'div2d   (right shift double)
-      //     'umul -> 'umuld   (unsigned multiply double)
-      // Stefan also supplied, for the first time on this node, a trailing
-      // one-line-per-word comment block (reproduced verbatim at the end of this
-      // file) covering 'zext, sr16, 'addc, csr16, c!, sl16, 'ldd, 'std, 'xd,
-      // 'mul2d, 'div2d, 'sext, and 'umuld -- every one of those descriptions
-      // confirms, word for word, what this file's own per-word comments already
-      // inferred from the code alone; no correction was needed to any of them,
-      // only the four mnemonic renames above. main, leave, spop, spush, r@, r!,
-      // and mask still have no description from Stefan and remain inferred, same
-      // lower-confidence caveat as before -- each is marked "(inferred)" still,
-      // while the thirteen Stefan has now confirmed are marked "(confirmed: ...)"
-      // with his own words quoted directly.
-      //
-      // No per-word descriptions were given for the earlier drop of this file,
-      // unlike node 507's -- every word not covered by Stefan's trailing block
-      // (see the revision note above) is still inferred from its code and
-      // naming alone, cross-checked against the compiled addresses. Treat
-      // main/leave/spop/spush/r@/r!/mask with the same lower confidence as node
-      // 607's 'exec or node 606's 'enter.
-      //
-      // Verified: this source compiles against the real F18Compiler with 0 errors
-      // (Success=true), importing node 507's exported symbols via '# 507 import'.
-      // 61 of 64 RAM words used, entry point 'main' at word address 0x000 --
-      // byte-for-byte identical to the earlier (pre-rename) drop's own compiled
-      // words, confirming this revision's rename touched only symbol names, never
-      // any compiled code. Two informational warnings are expected and benign:
-      // F18C050 for both 'main' and 'leave', each redefining a name imported from
-      // node 507 -- both nodes define their own independent 'main'/'leave' pair,
-      // and 506 never needs to call INTO 507's versions by name, so the shadowing
-      // is intentional.
-      //
-      // Now that this node's own opcode tag is confirmed (node 507's own 'main'
-      // dispatch forwards the whole "1110_0???_????_????" block here unmasked,
-      // via its own "r---" branch -- see Node507.f18's own 'main' comments, and
-      // this project's own cvm-toolchain-design.md), all nine of this node's own
-      // tick-prefixed op-words -- 'zext, 'addc, 'ldd, 'std, 'xd, 'mul2d, 'div2d,
-      // 'sext, 'umuld -- are registered as tagged CVM instructions in
-      // Ga144.Cvm.Toolchain.CvmInstructionSet (Ids 56-64) and
-      // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.NodeSymbolByMnemonic
-      // (Node506TagBits = 0xE000), the same way node 508's 27 ops already are.
-      // ============================================================================
-
+      ( CVM2 node 506. frame, 1001_????_????_???? )
+      ( A: register f (frame pointer)
       # 507 import
-
       # 0 org
-      entry main
-
-      //  A holds this node's own working register, d. Initialised to 0 at cold
-      //  start, matching every other node in this cluster.
+      entry f/main
       # 0 /a
-
-      //  B is initialised to point "right", toward 507 -- the master node that
-      //  puppets this one. Every !b/@b in this file talks to 507 through B.
       # right /b
+      : par 0x1ff and ;
+      : f/next ( -w) A[ m/next ]] lit !b ahead ;
+      : f/pop ( -w) A[ m/pop ]] lit !b then A[ !p ]] lit !b @b ;
+      : f/r@ ( -w) A[ over !p ]] lit !b @b ;
+      : f/r! ( w) A[ @p over ]] lit !b !b ;
+      : f/push ( w) A[ @p m/push ]] lit !b !b ;
+      : f/stack@ ( o-a) // load from stack
+        a . +  A[ @p m/1@ ]] lit !b !b A[ over ]] lit !b ;
+      : f/stack! ( o-a) // store to stack
+        a . +  A[ over @p ]] lit !b !b A[ m/1! ]] lit !b ;
+      : f/leave A[ ; ]] lit !b
+      : f/main // node entry point
+        # f/leave lit >r // prepare return address
+        A[ 2* !p !p ]] lit !b @b @b >r // push take over code
+        -if // 1001_1???_????_????
+          2* -if // 1001_11??_????_????
+            2* -if // 1001_111?_????_????
+              // load local
+              r> par inv f/stack@ ;
 
-      // ----------------------------------------------------------------------
-      // main  --  wait for the next dispatch and jump to it (inferred)
-      // ----------------------------------------------------------------------
-      // Ships {drop, !p} to 507 as a packed literal: when 507 (its P parked at
-      // the port from its own "CALL r---") executes this, its own 'drop'
-      // discards a stack item and '!p' sends 507's new top of stack -- the ALU
-      // word address 507's own dispatch already selected -- out over the port.
-      // '@b' on 506's side receives that address, '>r' parks it, and 'ex' pops
-      // it straight back off and jumps there -- reaching whichever of the ALU
-      // words below 507 asked for. Because '>r' only added ONE entry on top of
-      // whatever was already on R, and 'ex' consumes only that same entry, R is
-      // left exactly as it was before 'main' ran -- see the header note on how
-      // this keeps the loop self-priming from the second dispatch onward.
-      : main A[ drop !p ]] lit !b @b >r ex
-
-      // ----------------------------------------------------------------------
-      // leave  --  signal 507 that this operation is done, then wait for the
-      // next one (inferred)
-      // ----------------------------------------------------------------------
-      // Ships a single packed {return} word to 507 -- executed by 507 (still
-      // fetching over the port from its own parked P), this pops 507's OWN R
-      // and resumes 507's own local cleanup code (its "a leave ;" tail) --
-      // see the header note. Then CALLs 'main' again: this is what re-primes
-      // 506's own R with a fresh return address (this word's own trailing ';')
-      // before 'main's '>r'/'ex' pair consumes just the dispatch entry on top
-      // of it, so whichever ALU word runs next returns correctly back here.
-      : leave A[ ; ]] lit !b main ;
-
-      // ----------------------------------------------------------------------
-      // spop ( -w)  --  pop a value relayed from 607's own extended memory, via
-      // 507 (inferred)
-      // ----------------------------------------------------------------------
-      // 's/pop' resolves (via '# 507 import') to 507's own exported word of
-      // that name, so this ships {CALL s/pop} to 507 -- 507 in turn relays a
-      // further {CALL /pop} up to 607, which pops and returns a word from its
-      // own extended-memory area. A second packed word ships {!p} -- what 507
-      // itself executes to send that value back down over the port -- and '@b'
-      // on 506's side is what actually receives it, landing on 506's own stack
-      // (the (-w) effect).
-      : spop ( -w) A[ s/pop ]] lit !b A[ !p ]] lit !b @b ;
-
-      // ----------------------------------------------------------------------
-      // spush ( w)  --  push a value up the chain to 607's own extended memory,
-      // via 507 (inferred)
-      // ----------------------------------------------------------------------
-      // Ships {@p, CALL s/push} to 507 in one packed word: 507's own '@p'
-      // fetches the literal w this word's own trailing '!b' just carried
-      // across, then 507 falls into its own exported 's/push', which itself
-      // relays {@p, CALL /push} further up to 607 to complete the push.
-      : spush ( w) A[ @p s/push ]] lit !b !b ;
-
-      // ----------------------------------------------------------------------
-      // r@ ( -w)  --  read 507's own register r (inferred)
-      // ----------------------------------------------------------------------
-      // Ships {a, !p} to 507: 507's own 'a' pushes 507's A (which holds r, per
-      // Node507Program.cs's remarks), and '!p' sends it back over the port.
-      // '@b' on 506's side receives it. Distinct from 506's own local register
-      // d (held in 506's own A) -- this reaches across to 507's register, for
-      // the cross-register arithmetic every ALU word below needs (r and d
-      // paired together).
-      : r@ ( -w) A[ a !p ]] lit !b @b ;
-
-      // ----------------------------------------------------------------------
-      // r! ( w)  --  write 507's own register r (inferred)
-      // ----------------------------------------------------------------------
-      // Ships {@p, a!} to 507: 507's own '@p' fetches the literal w this
-      // word's own trailing '!b' carried across, and 'a!' stores it into 507's
-      // A (r). The write-side counterpart of r@ above.
-      : r! ( w) A[ @p a! ]] lit !b !b ;
-
-      // ----------------------------------------------------------------------
-      // 'zext  --  zero-extend: clear d (confirmed: "zero extension. load 0 into
-      // register d")
-      // ----------------------------------------------------------------------
-      // 'dup xor' XORs a value with itself, which is always 0 regardless of
-      // what was there (the same "s-0" idiom node 607's own /r@ uses), and
-      // 'a!' stores that 0 into 506's own A (d) -- clearing the extension
-      // register ahead of a zero-extended value in r.
-      : 'zext dup xor a! ;
-
-      // ----------------------------------------------------------------------
-      // sr16  --  shift the value on the stack right by a full 16 bits
-      // (confirmed: "shift right 16.")
-      // ----------------------------------------------------------------------
-      // 'for'/'unext' is this dialect's counted-loop idiom (7 for -> 8
-      // iterations); each iteration does '2/ 2/' (two right shifts), for 16
-      // shifts total across 8 iterations -- moving a double-length value's
-      // high half down into view, or discarding a lower half already
-      // consumed.
-      : sr16 7 for 2/ 2/ unext ;
-
-      // ----------------------------------------------------------------------
-      // 'addc  --  add with carry: d + [popped value] + r, result stored back
-      // into r, carry captured into d via csr16/c! below (confirmed: "add with
-      // carry."; renamed from '+c -- see the revision note above)
-      // ----------------------------------------------------------------------
-      // 'a' pushes d, 'spop' pops a value relayed all the way from 607's own
-      // extended memory (the addend), '+' adds them, 'r@' fetches r (the
-      // running sum), '+' adds again, 'dup r!' stores the combined sum back
-      // into r while keeping a duplicate on the stack. Has no ';' of its own:
-      // falls straight through into 'csr16' immediately below, which shifts
-      // that duplicate right 16 bits to extract whatever carried past the
-      // visible 16-bit result -- and, per the header note's collision, that
-      // CALL chain lands in 'c! before finally returning, storing the
-      // extracted carry bit into d.
-      : 'addc a spop + r@ + dup r!
-
-      // ----------------------------------------------------------------------
-      // csr16  --  carry-shift-right-16: shared shift helper that always lands
-      // in c! before returning (confirmed: "shift right 16 and store carry in
-      // register d."; the CALL-target collision with c! is worked out in the
-      // header note, in the same spirit as node 507's s/2put/s/put)
-      // ----------------------------------------------------------------------
-      // Compiles to a single word containing nothing but a CALL to 'sr16.
-      // Reached either by falling through from 'addc above (no CALL instruction
-      // of its own is needed to get here) or by an explicit CALL from 'mul2d
-      // below. Either way, that CALL's own return address is intrinsically
-      // 'csr16's own next compiled word -- 'c!'s start -- so 'sr16's own
-      // trailing ';' always lands in 'c!, not back at csr16's caller; only
-      // AFTER c! runs does control finally return further up the call chain.
-      : csr16 sr16
-
-      // ----------------------------------------------------------------------
-      // c!  --  capture the low bit of whatever's on the stack as the new
-      // carry flag into d (confirmed: "store carry into register d.")
-      // ----------------------------------------------------------------------
-      // '1 and' masks everything but bit 0, 'a!' stores it into 506's own A
-      // (d). Reached explicitly at the tail of 'div2d below, and implicitly
-      // (via the csr16 collision above) at the tail of 'addc and 'mul2d.
-      : c! 1 and a! ;
-
-      // ----------------------------------------------------------------------
-      // sl16  --  shift the value on the stack left by a full 16 bits
-      // (confirmed: "shift left 16.")
-      // ----------------------------------------------------------------------
-      // Same 'for'/'unext' counted-loop idiom as sr16, but with '2* 2*'
-      // (two left shifts per iteration) instead of '2/ 2/'.
-      : sl16 7 for 2* 2* unext ;
-
-      // ----------------------------------------------------------------------
-      // 'ldd  --  load d: copy d's value into r (confirmed: "move register d
-      // into register r")
-      // ----------------------------------------------------------------------
-      // 'a' pushes 506's own A (d), 'r!' stores it into 507's r.
-      : 'ldd a r! ;
-
-      // ----------------------------------------------------------------------
-      // 'std  --  store d: copy r's value into d (confirmed: "store register r
-      // into register d")
-      // ----------------------------------------------------------------------
-      // 'r@' fetches 507's r, 'a!' stores it into 506's own A (d).
-      : 'std r@ a! ;
-
-      // ----------------------------------------------------------------------
-      // 'xd  --  exchange d with r (confirmed: "exchange register d and r")
-      // ----------------------------------------------------------------------
-      // 'a' pushes d, 'r@' fetches r, 'a!' stores r's value into d, and the
-      // final 'r!' stores the ORIGINAL d value (still sitting where 'a' left
-      // it) into r -- a true swap of the two registers' contents.
-      : 'xd a r@ a! r! ;
-
-      // ----------------------------------------------------------------------
-      // 'mul2d  --  shift the (r,d) register pair left by one bit, capturing
-      // the carry-out into d (confirmed: "left shift double"; renamed from
-      // 'lsh -- see the revision note above)
-      // ----------------------------------------------------------------------
-      // 'r@' fetches r, '2*' shifts it left one bit (vacating its low bit),
-      // 'a' pushes d, 'xor' merges d's own low bit into that vacated slot (a
-      // shift-in via XOR, since the vacated bit is known to be 0), 'dup r!'
-      // stores the merged result back into r while keeping a duplicate on the
-      // stack. 'csr16' then shifts that duplicate down 16 bits to recover
-      // whatever was shifted out of r's own top -- and, via the collision
-      // documented above, ends up running 'c! before returning, storing that
-      // bit into d as the new carry-out. Same net effect as 'div2d below, just
-      // reached through the implicit csr16->c! landing instead of an explicit
-      // call.
-      : 'mul2d r@ 2* a xor dup r! csr16 ;
-
-      // ----------------------------------------------------------------------
-      // 'div2d  --  shift the (r,d) register pair right by one bit, capturing
-      // the carry-out into d (confirmed: "right shift double"; renamed from
-      // 'rsh -- see the revision note above)
-      // ----------------------------------------------------------------------
-      // 'r@' fetches r, 'a' pushes d, 'sl16' shifts d left a full 16 bits
-      // (moving it up to align with r's own bit range), 'xor' merges d's
-      // shifted-up low bit into r's high end, 'dup 2/ r!' shifts the merged
-      // value right one bit and stores it back into r while keeping a
-      // duplicate (the bit shifted OUT of the low end) on the stack, and the
-      // explicit trailing 'c!' captures that duplicate's low bit into d as the
-      // new carry-out.
-      : 'div2d r@ a sl16 xor dup 2/ r! c! ;
-
-      // ----------------------------------------------------------------------
-      // 'sext  --  sign-extend: replicate r's own sign bit across d (confirmed:
-      // "sign extension. if register r < 0 then d = -1 else d = 0")
-      // ----------------------------------------------------------------------
-      // 'r@' fetches r, '2* 2* 2/ 2/' shifts it left then right by two bits
-      // each (a no-op on magnitude, but 2/'s arithmetic/sign-preserving
-      // right shift re-floods the top bits with copies of the sign bit, per
-      // node 507's own 'ssr comment on this same idiom), then falls through
-      // (no ';' of its own) into 'mask' immediately below, which shifts the
-      // remaining distance via 'sr16 and stores the fully sign-extended
-      // result into d.
-      : 'sext r@ 2* 2* 2/ 2/ sr16
-
-      // ----------------------------------------------------------------------
-      // mask  --  finish extending a value and store it into d (inferred)
-      // ----------------------------------------------------------------------
-      // 'xffff and' masks to 16 bits, 'a!' stores into 506's own A (d).
-      // Reached via fall-through from 'sext above, and via an explicit CALL
-      // from 'umuld below.
-      : mask xffff and a! ;
-
-      // ----------------------------------------------------------------------
-      // 'umuld  --  unsigned multiply: r * [popped value], low half in r, high
-      // half in d (confirmed: "usigned multiply double" [sic, Stefan's own
-      // spelling]; renamed from 'umul -- see the revision note above)
-      // ----------------------------------------------------------------------
-      // 'spop' pops the multiplicand (relayed from 607's own extended memory),
-      // 'dup r@ a! dup xor' stashes a copy into d (used as the running
-      // accumulator's high half) and clears the top of stack to 0 (the
-      // accumulator's low half, built up in r via the '+*' steps below).
-      // '8 for +* . +* unext' repeats the F18A '+*' opcode (this chip's
-      // single-step shift-and-conditionally-add multiply primitive) sixteen
-      // times total (8 iterations of two '+*'s each, matching sr16/sl16's own
-      // 8x2 pattern for a full 16-bit operand), building the double-length
-      // product one bit at a time. The closing '2* 2* a xffff and r! a sr16
-      // 3 and xor mask' finishes aligning the two halves, masks and stores the
-      // low half into r, then shifts, masks and combines the remaining bits
-      // through 'mask above to store the high half into d.
-      : 'umuld spop dup r@ a! dup xor 8 for +* . +* unext
-      	2* 2* a xffff and r! a sr16 3 and xor mask ;
-
-      // ----------------------------------------------------------------------
-      // Stefan's own trailing comment block for this revision, reproduced
-      // verbatim (see the revision note above for how each line here was
-      // cross-checked against this file's own per-word comments -- every one
-      // confirmed, none corrected).
-      // ----------------------------------------------------------------------
+            then // 1001_110?_????_????
+            // load parameter
+            r> par f/stack@ ;
+          then // 1001_10??_????_????
+            2* -if // 1001_101?_????_????
+              // store local
+              r> par inv f/stack! ;
+            then // 1001_100?_????_????
+            // store parameter
+            r> par f/stack! ;
+        then // 1001_0???_????_????
+        2* -if // 1001_01??_????_????
+          r> --l- ;
+        then // 1001_00???_????_????
+        2* -if // 1001_001?_????_????
+          // enter
+          a A[ @p m/push ]] lit !b !b  // save frame pointer
+          A[ dup !p ]] lit !b @b // read stack pointer
+          r> par inv + a! ; // calculate new frame pointer
+        then // 1001_000?_????_????
+        ex ;
+      : 'leave .loc
+        A[ m/pop ]] lit !b A[ !p ]] lit !b @b a! ;
       (
-        'zext zero extension. load 0 into register d
-        'addc add with carry.
-        sr16 shift right 16.
-        csr16 shift right 16 and store carry in register d.
-        c! store carry into register d.
-        sl16 shift left 16.
-        'ldd move register d into register r
-        'std store register r into register d
-        'xd exchange register d and r
-        'mul2d left shift double
-        'div2d right shift double
-        'sext sign extension. if register r < 0 then d = -1 else d = 0
-        'umuld usigned multiply double
+      opcode 1001_111?_????_???? load local into r. the offset is 9 bit.
+      opcode 1001_110?_????_???? load parameter into r. the offset is 9 bit.
+      opcode 1001_101?_????_???? store local from r. the offset is 9 bit.
+      opcode 1001_100?_????_???? store parameter from r. the offset is 9 bit.
+      opcode 1001_001?_????_???? enter stack frame. the offset is 9 bit.
+      opcode 1001_01??_????_???? call node 505
+      'leave restore stack pointer and previous frame. undo enter stack frame.
       )
       """;
 }
