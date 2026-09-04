@@ -31,31 +31,36 @@ namespace Ga144.Evb.Ide.Services;
 /// <see cref="Node507Program.Coordinate"/>.
 ///
 /// <b>CVM1 leftover NODES removed (2026-09-01, per Stefan's own request).</b> <c>Node606Program.cs</c>
-/// and <c>Node506Program.cs</c> (plus their <c>.f18</c> mirror files) are DELETED -- neither node is
-/// part of CVM2's mesh (708/707/607/507, plus 407 -- see below) at all, so keeping dedicated
-/// resident-source files for them served no purpose once CVM2 replaced CVM1 wholesale. Their
-/// mnemonics -- node 606's leave and node 506's nine register-d ops (zext/addc/ldd/std/xd/mul2d/div2d/
-/// sext/umuld) -- STAY in <see cref="CvmInstructionSet"/>'s own opcode table (per "do not remove any
-/// opcodes"), but no longer have ANY <see cref="NodeSymbolByMnemonic"/> entry at all: there is no node
-/// left to name, so <see cref="Instructions"/>' own filter (only mnemonics present in
-/// <see cref="NodeSymbolByMnemonic"/>) drops them automatically, the same graceful omission
-/// <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c> already get for an unrelated reason (no F18 symbol by
-/// design, rather than no node by removal). Node 507's own eleven CVM1-era ALU-op mnemonics (usl/ssr/
-/// usr/add/sub/and/xor/or/inv/inc/dec) are in this same permanently-orphaned state: node 507's REAL
-/// CVM2 source (the CPU, above) does not define them either, and the physical coordinate 507 is now
-/// something else entirely, so those eleven behave exactly like the removed nodes' mnemonics even
-/// though 507 itself is very much in active use.
+/// (plus its <c>.f18</c> mirror file) is DELETED -- it is not part of CVM2's mesh
+/// (708/707/607/507, plus 407/506 -- see below) at all, so keeping a dedicated resident-source file for
+/// it served no purpose once CVM2 replaced CVM1 wholesale. Its own mnemonic -- node 606's <c>leave</c>
+/// (now repointed, see below) -- STAYS in <see cref="CvmInstructionSet"/>'s own opcode table (per "do
+/// not remove any opcodes"). Node 507's own eleven CVM1-era ALU-op mnemonics (usl/ssr/usr/add/sub/and/
+/// xor/or/inv/inc/dec) are permanently orphaned the same way: node 507's REAL CVM2 source (the CPU,
+/// above) does not define them either, and the physical coordinate 507 is now something else entirely.
 ///
 /// <b><c>Node407Program.cs</c> is back -- a BRAND NEW, unrelated CVM2 file (2026-09-02).</b> The
-/// original CVM1 node 407 (register-w/port ops xpt/out/in/ldhi/ldlo/sthi/stlo) was deleted 2026-09-01
-/// right alongside 606/506 above; those seven mnemonics stay permanently orphaned exactly like node
-/// 606/506's own, with NO <see cref="NodeSymbolByMnemonic"/> entry. The coordinate 407 was then reused
-/// for a completely different CVM2 node -- Stefan's long-call/long-jump helper, reached from node 507's
-/// own <c>m/main</c> dispatch once the memory layout grew past <c>call</c>'s own 15-bit reach -- and
-/// that new node DOES have two entries below, <see cref="CvmInstructionSet.LongCallMnemonic"/>/
-/// <see cref="CvmInstructionSet.LongJumpMnemonic"/>, pointed at <see cref="Node407Program.Coordinate"/>
-/// with the new <see cref="Node407LongCallTagBits"/> tag -- see that constant's own remarks for the
-/// full derivation.
+/// original CVM1 node 407 (register-w/port ops xpt/out/in/ldhi/ldlo/sthi/stlo) was deleted 2026-09-01;
+/// those seven mnemonics stay permanently orphaned, with NO <see cref="NodeSymbolByMnemonic"/> entry.
+/// The coordinate 407 was then reused for a completely different CVM2 node -- Stefan's long-call/
+/// long-jump helper, reached from node 507's own <c>m/main</c> dispatch once the memory layout grew
+/// past <c>call</c>'s own 15-bit reach -- and that new node DOES have two entries below,
+/// <see cref="CvmInstructionSet.LongCallMnemonic"/>/<see cref="CvmInstructionSet.LongJumpMnemonic"/>,
+/// pointed at <see cref="Node407Program.Coordinate"/> with the new <see cref="Node407LongCallTagBits"/>
+/// tag -- see that constant's own remarks for the full derivation.
+///
+/// <b><c>Node506Program.cs</c> is ALSO back -- another BRAND NEW, unrelated CVM2 file (2026-09-02).</b>
+/// The original CVM1 node 506 (register-d/extended-precision ops zext/addc/ldd/std/xd/mul2d/div2d/sext/
+/// umuld) was deleted 2026-09-01 right alongside 606 above; those nine mnemonics stay permanently
+/// orphaned, with NO <see cref="NodeSymbolByMnemonic"/> entry. The coordinate 506 was then reused for
+/// CVM2's stack-frame node (enter/leave/load-local/load-parameter/store-local/store-parameter), reached
+/// from node 507's own <c>m/main</c> dispatch via its RIGHT port (<c>r---</c>). Per Stefan (2026-09-02,
+/// "give me now enter and leave mnemonics"), only <c>enter</c> (repointed from CVM1's node 606 --
+/// <see cref="CvmInstructionSet.Node506EnterTag"/>) and <c>leave</c> (repointed here, below, from CVM1's
+/// node 606 to node 506's own <c>'leave</c> -- see <see cref="Node506LeaveTagBits"/>'s own remarks) are
+/// wired in so far; node 506's own load-local/load-parameter/store-local/store-parameter, and its own
+/// further relay to node 505 ("call node 505" in its own dispatch cascade), are NOT wired in yet -- see
+/// <see cref="Node506Program"/>'s own remarks for the full derivation and the still-open items.
 ///
 /// <b>What's still orphaned, not removed.</b> Node 508's OLD CVM1 27 comparison/arithmetic mnemonics
 /// (<c>eq</c> through <c>bitcnt</c>) keep their <see cref="NodeSymbolByMnemonic"/> entries, still
@@ -161,6 +166,25 @@ internal static class CvmAssemblyLanguage
   // once running on node 407.
   private const int Node407LongCallTagBits = 0xC000;
 
+  // CVM2's node 506 'leave tag (2026-09-02), per Stefan's node 506 source (Cvm.Node506Program): its own
+  // f/main dispatch cascade falls to "ex" (jump to whatever address is in R) once the fetched CVM
+  // opcode word's top 7 bits read "1001_000" -- the same "tag | local address" scheme
+  // Node407LongCallTagBits/Node507Cvm2LocalExecuteTagBits already use, just with a 7-bit tag/9-bit
+  // address split instead of a 4-bit or 5-bit one. As a plain 16-bit tag word (address bits zeroed)
+  // this is 0x9000 -- see CvmInstructionSet.Node506EnterTag's own remarks for the full bit derivation.
+  //
+  // KNOWN, DELIBERATE collision with br (2026-09-02): 0x9000 is also CvmInstructionSet.BranchTag's own
+  // value, and BranchTag's mask covers this tag's entire range (0x9000-0x97FF). Per Stefan: "ignore the
+  // ranges of br/ifbr. ignore the overlapping ranges. give me now enter and leave mnemonics." Not
+  // resolved -- accepted for now, same as CvmInstructionSet.Node506EnterTag's own collision with br.
+  // Unlike enter (self-describing, so br's OWN check silently wins during disassembly -- see
+  // CvmInstructionSet.TryDescribeSelfDecodingWord's own remarks), leave is a TAGGED mnemonic resolved
+  // only through THIS file's own BuildDecodeTable/BuildEncodeTable against a live compile, which never
+  // consults br/ifbr at all -- so leave's own encode/decode through this file is unaffected by the
+  // collision; it only matters if the very same 0x9038-shaped word is ever fetched as a plain word and
+  // run through CvmInstructionSet.TryDescribeSelfDecodingWord first (which will report "br" instead).
+  private const int Node506LeaveTagBits = 0x9000;
+
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
   // tag bits its opcode word must carry (Node508TagBits for the OLD, permanently-orphaned CVM1
   // comparison ops; Node507Cvm2LocalExecuteTagBits for CVM2's own six repointed primitives -- these
@@ -170,13 +194,14 @@ internal static class CvmAssemblyLanguage
   // in a live compile -- this is the one place that link, kept as a small, easy-to-audit map rather
   // than folded back into the shared table (which has no notion of "node", "F18 symbol", or "tag" at
   // all, on purpose: gaasm never needs any of them). A mnemonic whose own node was one of the CVM1
-  // leftovers removed 2026-09-01 (606/506, plus node 407's OLD register-w/port ops -- see this class's
-  // own remarks) has NO entry here at all any more, not an entry pointing at a deleted type --
-  // BuildDecodeTable/BuildEncodeTable never look it up, and Instructions' own filter drops it from the
-  // table entirely, the graceful-omission path this file already relies on for call/br/ifbr/slit. Node
-  // 507 (CVM2's actual CPU), node 407 (CVM2's long-call/long-jump helper, a different node than the
-  // deleted CVM1 one that happens to share the same coordinate), and node 508 (permanently orphaned,
-  // not defined) are the only coordinates anything here still points at.
+  // leftovers removed 2026-09-01 (606, plus node 407's and 506's OLD register-w/port and register-d ops
+  // -- see this class's own remarks) has NO entry here at all any more, not an entry pointing at a
+  // deleted type -- BuildDecodeTable/BuildEncodeTable never look it up, and Instructions' own filter
+  // drops it from the table entirely, the graceful-omission path this file already relies on for
+  // call/br/ifbr/slit. Node 507 (CVM2's actual CPU), node 407 (CVM2's long-call/long-jump helper), node
+  // 506 (CVM2's stack-frame node) -- both 407 and 506 different nodes than their deleted CVM1
+  // namesakes, sharing only the coordinate -- and node 508 (permanently orphaned, not defined) are the
+  // only coordinates anything here still points at.
   private static readonly IReadOnlyDictionary<string, (int NodeCoordinate, string SymbolName, int Tag)> NodeSymbolByMnemonic =
       new Dictionary<string, (int NodeCoordinate, string SymbolName, int Tag)>(StringComparer.OrdinalIgnoreCase)
       {
@@ -197,6 +222,12 @@ internal static class CvmAssemblyLanguage
         // entry, not a special case.
         [CvmInstructionSet.LongCallMnemonic] = (Node407Program.Coordinate, "'lcall", Node407LongCallTagBits),
         [CvmInstructionSet.LongJumpMnemonic] = (Node407Program.Coordinate, "'ljmp", Node407LongCallTagBits),
+        // CVM2's node 506 (2026-09-02) -- repointed from CVM1's node 606 ("only update existing opcodes
+        // where possible"). Only 'leave so far, per Stefan's own explicit scope ("give me now enter and
+        // leave mnemonics"); enter is a DIFFERENT (self-describing) shape and is wired directly in
+        // CvmInstructionSet.Instructions instead (see Node506EnterTag's own remarks), not here. Node
+        // 506's own load-local/load-parameter/store-local/store-parameter are not wired in yet.
+        [CvmInstructionSet.LeaveMnemonic] = (Node506Program.Coordinate, "'leave", Node506LeaveTagBits),
         // CVM1's OLD 27 node-508 comparison/arithmetic ops -- permanently orphaned (node 508 has no
         // real CVM2 source at all -- not defined yet, deliberately excluded from CVM2's active mesh --
         // see Node508Program's own remarks), kept per "do not remove any opcodes." See this class's

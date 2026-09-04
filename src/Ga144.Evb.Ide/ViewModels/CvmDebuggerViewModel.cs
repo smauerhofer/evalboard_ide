@@ -525,10 +525,20 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // coordinate 407 (see CompileStandaloneCvmNodes' own remarks), not from Cvm.Node407Program's
   // reference source -- that reference copy has no effect here until it's also saved into the live
   // project via the Node Editor.
+  //
+  // Node 506 added back 2026-09-04, same reasoning: CVM2 reuses the coordinate for the stack-frame node
+  // (enter/leave/...), reached from node 507's own m/main dispatch via its RIGHT port. Only 'leave (a
+  // TAGGED mnemonic, resolved via NodeSymbolByMnemonic against a live compile) actually needs this --
+  // enter is self-describing (CvmInstructionSet.Node506EnterTag) and would resolve with or without node
+  // 506 being compiled here -- but including it costs nothing and keeps 'leave from silently degrading
+  // to the same "undefined opcode -> nop" substitution 407 hit before it was added. Same live-project-
+  // data caveat as node 407: Cvm.Node506Program's reference source has no effect here until it is also
+  // saved into node 506's own Node Editor tab for this chip.
   private static readonly IReadOnlyList<int> StandaloneCvmNodeCoordinates =
   [
     CvmMemoryProtocol.NopSourceNodeCoordinate, // 507, CVM2's entire CPU (corrected 2026-09-01 from 508).
     Node407Program.Coordinate, // 407, CVM2's long-call/long-jump helper (added 2026-09-02).
+    Node506Program.Coordinate, // 506, CVM2's stack-frame node (added 2026-09-04).
   ];
 
   /// <summary>

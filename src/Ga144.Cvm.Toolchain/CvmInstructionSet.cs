@@ -102,17 +102,23 @@ public static class CvmInstructionSet
   public const string LoadAddressOfLocalMnemonic = "lal";
   public const string LoadAddressOfParameterMnemonic = "lap";
 
-  // 'leave, node 606's ninth mnemonic, is shaped completely differently from the eight self-describing
-  // ones just above: it is a TAGGED mnemonic, exactly like nop/pushlit/push/pop/ret on node 607 -- a
-  // single bare opcode word (CvmOperandEncoding.None) whose real numeric value depends on where 'leave
-  // ends up in node 606's own compiled RAM, resolved only against a live compile (see the IDE-side
-  // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.NodeSymbolByMnemonic, not this project, which never
-  // knows any node's F18 source). Per Stefan's own bit-pattern table this belongs to the OTHER node-606
-  // opcode class -- "1010 0xxx xxxx xxxx | call word in node 606, address in opcode" -- distinct from
-  // enter/adjust/stl/stp/ldl/ldp/lal/lap's own fixed "1010 1nnn" tags above: 'leave is one of
-  // potentially several individually-named words reached this way, added as each one gets a name, the
-  // same way node 607's own tagged nop/push/pop/pushlit/ret were added one at a time from that node's
-  // own "0x8000 | address" family.
+  // 'leave was originally node 606's ninth mnemonic (CVM1), shaped completely differently from the
+  // eight self-describing ones just above: a TAGGED mnemonic, exactly like nop/pushlit/push/pop/ret on
+  // node 607 -- a single bare opcode word (CvmOperandEncoding.None) whose real numeric value depends on
+  // where 'leave ends up in its own node's compiled RAM, resolved only against a live compile (see the
+  // IDE-side Ga144.Evb.Ide.Services.CvmAssemblyLanguage.NodeSymbolByMnemonic, not this project, which
+  // never knows any node's F18 source).
+  //
+  // REPOINTED to CVM2's node 506 (2026-09-02), per "only update existing opcodes where possible":
+  // node 506's own new stack-frame source (Cvm.Node506Program) defines its own 'leave, reached via its
+  // own f/main dispatch cascade falling to "ex" once the fetched word's top 7 bits read "1001_000"
+  // (tag 0x9000 | address on node 506) -- see that class's own remarks for the full derivation. This
+  // tag is a KNOWN, DELIBERATE collision with the still-live BranchTag (also 0x9000, EmbeddedSignedValue)
+  // -- per Stefan (2026-09-02): "ignore the ranges of br/ifbr. ignore the overlapping ranges. give me
+  // now enter and leave mnemonics." br/ifbr have not been moved yet, so a word like 0x9038 currently
+  // decodes as "br" (TryDescribeSelfDecodingWord checks self-describing shapes first) even though it is
+  // also a valid 'leave opcode on node 506 -- this ambiguity is accepted for now, not a bug to silently
+  // work around, and is expected to resolve once br/ifbr's own new tag range is chosen.
   public const string LeaveMnemonic = "leave";
 
   // 'halt, added by Stefan to node 606 ("@b // wait for a word that will never come" -- his own comment:
@@ -303,7 +309,12 @@ public static class CvmInstructionSet
   // the table gives these an unsigned range, not a signed one, so 0xFF is the largest value, never
   // sign-extended back to -1.
 
-  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>enter</c> word: binary 1010_1000.</summary>
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-8) of CVM1's OLD node-606 <c>enter</c> word: binary 1010_1000.
+  /// SUPERSEDED (2026-09-02) -- <c>enter</c> itself now uses <see cref="Node506EnterTag"/> instead (see
+  /// that constant's own remarks); this constant is kept per "do not remove any opcodes" but is no
+  /// longer referenced by <see cref="Instructions"/>.
+  /// </summary>
   public const int EnterTag = 0xA800;
 
   /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>adjust</c> word: binary 1010_1001.</summary>
@@ -332,6 +343,29 @@ public static class CvmInstructionSet
 
   /// <summary>Isolates a word's low 8 bits -- the unsigned value field shared by all eight of node 606's ops.</summary>
   public const int Node606ValueBitMask = 0xFF;
+
+  // CVM2's node 506 (2026-09-02) redefines enter/leave (and, not yet wired in, load-local/load-parameter/
+  // store-local/store-parameter) with a DIFFERENT bit layout than CVM1's node 606: a 7-bit tag (bits
+  // 15-9) OR'd with a 9-bit UNSIGNED offset (bits 8-0), rather than 606's 8-bit tag/8-bit value split --
+  // per Node506Program's own remarks, derived directly from its f/main dispatch cascade: "1001_001?"
+  // (7 bits fixed: 1001001) is enter, with "the offset is 9 bit" per the source's own trailing comment.
+  // enter is repointed here ("only update existing opcodes where possible"); adjust/stl/stp/ldl/ldp/
+  // lal/lap are UNTOUCHED and still point at node 606's old 8-bit tags above -- node 506's own
+  // load-local/load-parameter/store-local/store-parameter are not wired into this table yet.
+  //
+  // KNOWN, DELIBERATE collision with br/ifbr (2026-09-02): Node506EnterTag falls inside BranchTag's own
+  // range (0x9000-0x97FF, EmbeddedSignedValue) -- per Stefan: "ignore the ranges of br/ifbr. ignore the
+  // overlapping ranges. give me now enter and leave mnemonics." Not resolved, accepted for now.
+
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-9) of CVM2 node 506's <c>enter</c> word: binary 1001_001,
+  /// i.e. 0x9200 with the low 9 bits (the offset) zeroed. See this file's own remarks just above on
+  /// the 7-bit-tag/9-bit-value split and the accepted br/ifbr collision.
+  /// </summary>
+  public const int Node506EnterTag = 0x9200;
+
+  /// <summary>Isolates a word's low 9 bits -- CVM2 node 506's own unsigned offset field (<c>enter</c>, and eventually its load-local/load-parameter/store-local/store-parameter siblings).</summary>
+  public const int Node506FrameValueBitMask = 0x1FF;
 
   /// <summary>
   /// How a CVM instruction's operand (if it has one) is actually encoded into its word(s). See each
@@ -446,7 +480,7 @@ public static class CvmInstructionSet
     new(Id: 17, InvertMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 18, IncrementMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 19, DecrementMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 20, EnterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: EnterTag, ValueBitMask: Node606ValueBitMask),
+    new(Id: 20, EnterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506EnterTag, ValueBitMask: Node506FrameValueBitMask),
     new(Id: 21, AdjustMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: AdjustTag, ValueBitMask: Node606ValueBitMask),
     new(Id: 22, StoreLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: StoreLocalTag, ValueBitMask: Node606ValueBitMask),
     new(Id: 23, StoreParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: StoreParameterTag, ValueBitMask: Node606ValueBitMask),
@@ -571,15 +605,36 @@ public static class CvmInstructionSet
       return $"{SlitMnemonic} {DecodeSlitValue(word)}";
     }
 
-    // Node 606's eight ops, all self-describing the same way: an 8-bit tag (bits 15-8) OR'd with an
-    // 8-bit unsigned value (bits 7-0). Matched generically against every EmbeddedUnsignedValue shape in
-    // Instructions rather than one if-check per mnemonic, so a ninth one added there later needs no
-    // change here.
+    // Every EmbeddedUnsignedValue shape, self-describing the same way: a fixed tag OR'd with an
+    // unsigned value in the low ValueBitMask bits. Matched generically against every such shape in
+    // Instructions rather than one if-check per mnemonic, so a new one added there later needs no
+    // change here. IMPORTANT (2026-09-02): this mask/width is now taken from EACH shape's OWN
+    // ValueBitMask (derived as ~shape.ValueBitMask), not a single hardcoded width -- node 606's eight
+    // ops (adjust/stl/stp/ldl/ldp/lal/lap, still 8-bit tag/8-bit value, Node606TagMask/
+    // Node606ValueBitMask) and node 506's enter (7-bit tag/9-bit value, Node506EnterTag/
+    // Node506FrameValueBitMask) now genuinely differ in width, so the OLD single-hardcoded-mask version
+    // of this loop (word & Node606TagMask for every shape) would have decoded enter's own 9-bit value
+    // one bit short. Node606TagMask/DecodeNode606Value themselves are unchanged and still correct for
+    // node 606's own seven still-8-bit ops.
+    //
+    // NOTE: this loop is currently unreachable for "enter" specifically -- br's own self-describing
+    // check above (branchTag == BranchTag) matches FIRST for every word in 0x9000-0x97FF, which is
+    // Node506EnterTag's entire range too (0x9200's own top 5 bits equal BranchTag's). Per Stefan
+    // (2026-09-02, "ignore the ranges of br/ifbr... give me now enter and leave mnemonics") this
+    // collision is accepted for now: Assemble() still emits the correct 0x9200|offset word for "enter"
+    // (encoding dispatches by mnemonic string, not through this method), but disassembling that same
+    // word back will currently report "br <offset>" instead, until br/ifbr move to a new tag.
     foreach (CvmInstructionShape shape in Instructions)
     {
-      if (shape.Encoding == CvmOperandEncoding.EmbeddedUnsignedValue && (word & Node606TagMask) == shape.Tag)
+      if (shape.Encoding != CvmOperandEncoding.EmbeddedUnsignedValue)
       {
-        return $"{shape.Mnemonic} {DecodeNode606Value(word)}";
+        continue;
+      }
+
+      int tagMask = ~shape.ValueBitMask & 0xFFFF;
+      if ((word & tagMask) == shape.Tag)
+      {
+        return $"{shape.Mnemonic} {word & shape.ValueBitMask}";
       }
     }
 
