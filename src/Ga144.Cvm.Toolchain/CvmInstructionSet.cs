@@ -29,7 +29,23 @@ namespace Ga144.Cvm.Toolchain;
 /// own live compile too, but a DIFFERENT tag -- see <see cref="LongCallMnemonic"/>'s own remarks)), plus
 /// CVM2's <c>ldg</c>/<c>stg</c> (load global/store global, added 2026-09-04 -- shaped exactly like
 /// <c>lcall</c>/<c>ljmp</c>, resolved against node 508's own live compile, its own DIFFERENT tag again --
-/// see <see cref="LoadGlobalMnemonic"/>'s own remarks) and,
+/// see <see cref="LoadGlobalMnemonic"/>'s own remarks)), plus node 509's nine unary-arithmetic ops --
+/// <c>abs</c>, <c>neg</c>, <c>inc</c>, <c>dec</c>, <c>inv</c>, <c>mul2</c>, <c>div2</c>, <c>udiv2</c>,
+/// <c>bitcnt</c> (added 2026-09-05: eight of these REPOINT existing orphaned mnemonics -- <c>inv</c>/
+/// <c>inc</c>/<c>dec</c> from node 507's old ALU-op family and <c>abs</c>/<c>mul2</c>/<c>div2</c>/
+/// <c>udiv2</c>/<c>bitcnt</c> from node 508's old 27-op family -- to node 509's own live compile,
+/// per "only update existing opcodes where possible"; only <c>neg</c> is a genuinely new mnemonic
+/// (node 509's own <c>'neg</c> has no existing same-named counterpart -- <c>negate</c>, Id 51, stays a
+/// separate, still-orphaned mnemonic). Tagged exactly like <c>leave</c>/node 508's/node 506's/node
+/// 407's own ops, a DIFFERENT tag again -- see <see cref="NegMnemonic"/>'s own remarks), plus node
+/// 509's tenth mnemonic <c>lit</c> (added 2026-09-05, per Stefan's own explicit follow-up: "add this
+/// range to the cvm language ... mnemonic lit") -- self-describing, shaped exactly like <c>br</c>/
+/// <c>ifbr</c>/<c>slit</c> (a fixed 6-bit tag OR'd with a 10-bit signed value), its own DIFFERENT tag
+/// and field width again -- see <see cref="LitTag"/>'s own remarks), plus node 509's tenth and eleventh
+/// tagged ops, <c>parity</c> and <c>odd</c> (added 2026-09-05, per Stefan's own follow-up: "I added 2
+/// new opcodes to node 509. add them also to the language") -- both genuinely new (no existing orphaned
+/// mnemonic of either name to repoint), tagged exactly like the original nine (see
+/// <see cref="ParityMnemonic"/>'s own remarks) and,
 /// for each, how
 /// many words it occupies once assembled, how its
 /// operand (if any) is encoded, and a stable numeric <see cref="CvmInstructionShape.Id"/>. This is the
@@ -51,7 +67,7 @@ namespace Ga144.Cvm.Toolchain;
 ///
 /// This table is the single source of truth shared by <see cref="CvmAssembler"/> here and by the IDE
 /// project's own disassembler (Ga144.Evb.Ide.Services.CvmAssemblyLanguage, which pairs each TAGGED
-/// mnemonic with its own node's live F18 symbol -- 607, 507, 606, 508, 506, and now 407 all have at
+/// mnemonic with its own node's live F18 symbol -- 607, 507, 606, 508, 506, 407, and now 509 all have at
 /// least one; 608/707 remain separate, later work; the self-describing mnemonics need no such pairing
 /// and are recognized directly by <see cref="TryDescribeSelfDecodingWord"/> instead). Adding a new CVM
 /// opcode is a one-line change here; the IDE project references this project specifically so both
@@ -269,6 +285,54 @@ public static class CvmInstructionSet
   public const string LoadGlobalMnemonic = "ldg";
   public const string StoreGlobalMnemonic = "stg";
 
+  // Node 509's nine unary-arithmetic ops, added per Stefan's node 509 source (2026-09-05, "here is node
+  // 509"). Node 509 is reached from node 508's own g/main dispatch (NOT from node 507 directly) once a
+  // fetched CVM opcode word's top bits read "1011" -- node 508's own remarks document the "extended
+  // arithmetic, relayed onward via the RIGHT port" branch as an as-yet-unsupplied neighbour; node 509 is
+  // that neighbour. Every one of these nine is shaped exactly like node 508's/506's/407's own ops -- a
+  // single bare TAGGED opcode word (CvmOperandEncoding.None), never self-describing: node 509's own
+  // u/main receives a dispatch address directly over the port (relayed further from node 508, itself
+  // relayed from node 507) and jumps straight to it via "ex" once its own cascade consumes "1011_00"
+  // (see Services.CvmAssemblyLanguage.Node509UnaryArithmeticTagBits's own remarks for the full
+  // derivation), so each named word's real opcode is node 509's own confirmed tag (0xB000) OR'd with
+  // wherever that word lands in node 509's own compiled RAM, resolved only against a live compile. None
+  // of the nine takes an assembled operand: each acts on register r alone (already relayed across two
+  // hops -- 507 to 508 to 509 -- by the time u/main dispatches to it).
+  //
+  // EIGHT of these nine REPOINT an existing, previously-orphaned mnemonic rather than adding a new one,
+  // per "only update existing opcodes where possible": InvertMnemonic/IncrementMnemonic/
+  // DecrementMnemonic (node 507's own old ALU-op family, three of its eleven unary/binary ops) and
+  // AbsoluteValueMnemonic/MultiplyByTwoMnemonic/DivideByTwoMnemonic/UnsignedDivideByTwoMnemonic/
+  // BitCountMnemonic (five of node 508's own old 27-op family) all already existed in Instructions below
+  // with no live node to resolve against; node 509's own tick-prefixed words ('inv, 'inc, 'dec, 'abs,
+  // 'mul2, 'div2, 'udiv2, 'bitcnt) match those exact mnemonic strings, so they are repointed here rather
+  // than duplicated. Only NegMnemonic below is a genuinely NEW entry: node 509's own word is named
+  // 'neg, not 'negate, so it does NOT repoint the existing (still separately orphaned) NegateMnemonic
+  // ("negate", Id 51) -- taken literally, per Stefan's own tick-naming rule, rather than assumed to be a
+  // renaming of it.
+  public const string NegMnemonic = "neg";
+
+  // CVM2 node 509's own literal-load mnemonic, added 2026-09-05 per Stefan's own explicit follow-up
+  // ("add this range to the cvm language ... mnemonic lit") naming the "1011_01??_????_????" branch of
+  // node 509's own u/main dispatch that was previously left unwired for lack of a name (see
+  // Node509Program's own remarks). Self-describing (CvmOperandEncoding.EmbeddedSignedValue), shaped
+  // exactly like br/ifbr/slit -- see LitTag's own remarks for the full bit derivation.
+  public const string LitMnemonic = "lit";
+
+  // Node 509's tenth and eleventh unary-arithmetic ops, added 2026-09-05 per Stefan's own follow-up
+  // ("I added 2 new opcodes to node 509. add them also to the language") and his own tick-naming rule,
+  // exactly like the original nine. Both are genuinely NEW mnemonics -- no existing orphaned "parity" or
+  // "odd" mnemonic anywhere in this table to repoint -- shaped exactly like the original nine (a single
+  // bare TAGGED opcode word, CvmOperandEncoding.None, resolved only against node 509's own live compile,
+  // tag 0xB000 | local address, same as InvertMnemonic/IncrementMnemonic/etc. above). Per Node509Program's
+  // own remarks, 'parity and 'odd share the SAME cross-definition fall-through idiom already used by
+  // 'abs/'neg/'inc/'dec: "'parity" has no own trailing ";" -- its one-word body (a call to 'bitcnt) falls
+  // straight through into 'odd's own body ("1 and ;"), so invoking 'parity computes bitcnt-then-AND-1
+  // (the parity bit), while 'odd entered directly at its own address just does the AND-1 test alone. Each
+  // still has its own distinct, independently-reachable address, exactly like the four-way overlap above.
+  public const string ParityMnemonic = "parity";
+  public const string OddMnemonic = "odd";
+
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
   /// 15 bits. Bit 15 (0x8000) must stay clear on a <c>call</c> word -- that is the only thing that
@@ -395,6 +459,37 @@ public static class CvmInstructionSet
 
   /// <summary>Isolates a word's low 9 bits -- CVM2 node 506's own unsigned offset field (<c>enter</c>, and eventually its load-local/load-parameter/store-local/store-parameter siblings).</summary>
   public const int Node506FrameValueBitMask = 0x1FF;
+
+  // CVM2 node 509's own literal-load form, added 2026-09-05 per Stefan's node 509 source
+  // (Cvm.Node509Program) and his own follow-up naming it: "add this range to the cvm language ...
+  // mnemonic lit". Straight from that source's own bit-pattern comment:
+  //   1011 01xx xxxx xxxx   -0x200..0x1FF   lit (literal, signed value)
+  // -- a fixed 6-bit tag (bits 15-10) OR'd with a 10-bit two's-complement signed value (bits 9-0).
+  // -0x200..0x1FF is exactly a 10-bit signed value's own range, confirming the field width -- the same
+  // shape as br/ifbr/slit (EmbeddedSignedValue, self-describing, no live node/linker involvement at
+  // all), just its own tag and its own narrower 10-bit field. This is the "1011_01??_????_????" branch
+  // of node 509's own u/main dispatch cascade (see Node509Program's own remarks) that was previously
+  // left unwired for lack of a name -- now named, it is wired the same way br/ifbr/slit are: a direct
+  // check in TryDescribeSelfDecodingWord below, not the generic EmbeddedUnsignedValue loop (which is
+  // node 606/509's own TAGGED-dispatch family's mechanism, a different thing). Distinct from the
+  // existing <c>slit</c> (0xD000, 12-bit field) -- despite the conceptual similarity (both load a
+  // literal signed value directly into a register), Stefan named this one separately, so it is wired as
+  // its own mnemonic rather than folded into slit.
+
+  /// <summary>The fixed high-bit pattern (bits 15-10) of a <c>lit</c> word: binary 1011_01.</summary>
+  public const int LitTag = 0xB400;
+
+  /// <summary>Isolates a word's top 6 bits, for testing against <see cref="LitTag"/>.</summary>
+  public const int LitTagMask = 0xFC00;
+
+  /// <summary>Isolates a word's low 10 bits -- the raw (not yet sign-extended) <c>lit</c> value field.</summary>
+  public const int LitValueBitMask = 0x3FF;
+
+  /// <summary>The most negative value a 10-bit two's-complement field can hold: -0x200 (-512).</summary>
+  public const int LitValueMinValue = -0x200;
+
+  /// <summary>The largest value a 10-bit two's-complement field can hold: 0x1FF (511).</summary>
+  public const int LitValueMaxValue = 0x1FF;
 
   /// <summary>
   /// How a CVM instruction's operand (if it has one) is actually encoded into its word(s). See each
@@ -566,6 +661,10 @@ public static class CvmInstructionSet
     new(Id: 74, LongJumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
     new(Id: 75, LoadGlobalMnemonic, 2, CvmOperandEncoding.TrailingWord),
     new(Id: 76, StoreGlobalMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 77, NegMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 78, LitMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: LitTag, ValueBitMask: LitValueBitMask),
+    new(Id: 79, ParityMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 80, OddMnemonic, 1, CvmOperandEncoding.None),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =
@@ -599,6 +698,9 @@ public static class CvmInstructionSet
 
   /// <summary>Extracts a <c>slit</c> word's signed value field, sign-extending its low 12 bits. Unlike <see cref="DecodeBranchOffset"/>, this IS the whole answer -- a <c>slit</c> value isn't relative to anything.</summary>
   public static int DecodeSlitValue(int word) => DecodeSignedField(word, SlitValueBitMask);
+
+  /// <summary>Extracts a <c>lit</c> word's signed value field, sign-extending its low 10 bits. Like <see cref="DecodeSlitValue"/> (not <see cref="DecodeBranchOffset"/>), this IS the whole answer.</summary>
+  public static int DecodeLitValue(int word) => DecodeSignedField(word, LitValueBitMask);
 
   /// <summary>Extracts one of node 606's eight ops' unsigned value field -- its low 8 bits, taken as-is (never sign-extended, unlike <see cref="DecodeBranchOffset"/>/<see cref="DecodeSlitValue"/>).</summary>
   public static int DecodeNode606Value(int word) => word & Node606ValueBitMask;
@@ -634,6 +736,11 @@ public static class CvmInstructionSet
     if ((word & SlitTagMask) == SlitTag)
     {
       return $"{SlitMnemonic} {DecodeSlitValue(word)}";
+    }
+
+    if ((word & LitTagMask) == LitTag)
+    {
+      return $"{LitMnemonic} {DecodeLitValue(word)}";
     }
 
     // Every EmbeddedUnsignedValue shape, self-describing the same way: a fixed tag OR'd with an

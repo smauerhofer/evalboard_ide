@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-04T12:12:30.4999716
-      utcDateTime: 2026-09-04T12:12:30.4999716Z
-      localDateTime: 2026-09-04T14:12:30.4999716+02:00
-      date: 2026-09-04T00:00:00.0000000
-      day: 4
-      dayOfWeek: Friday
-      dayOfYear: 247
-      hour: 12
-      millisecond: 499
-      microsecond: 971
-      nanosecond: 600
-      minute: 12
+      dateTime: 2026-09-05T06:39:19.5769647
+      utcDateTime: 2026-09-05T06:39:19.5769647Z
+      localDateTime: 2026-09-05T08:39:19.5769647+02:00
+      date: 2026-09-05T00:00:00.0000000
+      day: 5
+      dayOfWeek: Saturday
+      dayOfYear: 248
+      hour: 6
+      millisecond: 576
+      microsecond: 964
+      nanosecond: 700
+      minute: 39
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 30
-      ticks: 639241207504999716
-      utcTicks: 639241207504999716
-      timeOfDay: 12:12:30.4999716
+      second: 19
+      ticks: 639241871595769647
+      utcTicks: 639241871595769647
+      timeOfDay: 06:39:19.5769647
       year: 2026
   portB: 
   portC:
@@ -15949,7 +15949,7 @@ projects:
         parameterStack: []
     - coordinate: 509
       enabled: true
-      sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ g/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p g/r! ]] lit !b !b ;\n: u/pop ( -w) A[ g/pop ]] lit !b A[ !p ]] lit !b @b ;\n: u/push ( w) A[ @p g/push ]] lit !b !b ;\n: u/leave A[ g/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r\n  -if // 1011_1???_????_????\n    // \n    r> --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // load literal -512..511\r\n    r> 0x3fc00 and 5 for 2/ 2/ unext u/r! ;\n  then // 1011_00??_????_????\r\n  // unary\n  u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'nop ( x-x) ;\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\n\r\n\r\n"
+      sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ g/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p g/r! ]] lit !b !b ;\n: u/pop ( -w) A[ g/pop ]] lit !b A[ !p ]] lit !b @b ;\n: u/push ( w) A[ @p g/push ]] lit !b !b ;\n: u/leave A[ g/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ !p 2* !p ]] lit !b @b @b\n  -if // 1011_1???_????_????\n    // \n    --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // load literal -512..511\r\n    // mnemonic lit\r\n    drop 0x03ff and dup 0x0200 and if drop 0xfc00 xor u/r! ; then drop u/r! ;\n  then // 1011_00??_????_????\r\n  // unary\n  drop >r u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\r\n: 'parity 'bitcnt\r\n: 'odd 1 and ;\n\r\n(\r\nopcode 1011_01??_????_???? load literal to r. the range of the literal is -0x200 to 0x1ff.\r\n\r\n'abs make r absolute\r\n'neg negate r\n'inc increment r\r\n'dec decrement r\r\n'inv invert all bits in r\r\n'mul2 shift left r\r\n'div2 signed shift right of r\r\n'udiv2 unsigned shift right of r\r\n'bitcnt count 1 bits in r\r\n'parity if r contains an odd number of 1 bits, then r becomes 1 otherwise r becomes 0.\r\n'odd r becomes 1 of r is odd, otherwise r becomes 0.\r\n)\r\n"
       ramWords:
       - 0x05B12
       - 0x13400
@@ -15967,31 +15967,32 @@ projects:
       - 0x11416
       - 0x04812
       - 0x0000C
-      - 0x37932
+      - 0x0C432
       - 0x09F02
-      - 0x2F215
-      - 0x269B2
+      - 0x1B414
       - 0x11575
-      - 0x3721C
-      - 0x27DFF
-      - 0x3FC00
-      - 0x00005
-      - 0x2E9B2
-      - 0x30772
+      - 0x3721D
+      - 0x3BDFB
+      - 0x003FF
+      - 0x04064
+      - 0x00200
+      - 0x3BDE2
+      - 0x0FC00
       - 0x11404
+      - 0x3B704
+      - 0x3A8B2
       - 0x13400
       - 0x17555
       - 0x040B2
       - 0x0FFFF
       - 0x11404
       - 0x364C2
-      - 0x31228
+      - 0x3122A
       - 0x329B2
       - 0x049F5
       - 0x00001
       - 0x049F5
       - 0x3FFFF
-      - 0x15555
       - 0x33555
       - 0x37555
       - 0x364C2
@@ -15999,16 +16000,15 @@ projects:
       - 0x31555
       - 0x24DE2
       - 0x2E9B2
-      - 0x19435
-      - 0x27624
+      - 0x19436
+      - 0x27626
       - 0x2EDB2
-      - 0x13426
-      - 0x3F730
+      - 0x13428
+      - 0x3F731
       - 0x27555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1342F
+      - 0x04055
+      - 0x00001
       - 0x15555
       - 0x15555
       - 0x15555
@@ -17037,6 +17037,13 @@ projects:
         returnStack: []
         parameterStack: []
     debuggerAssemblyCode: >-
+      lit 0x55
+
+      bitcnt
+
+      push
+
+
       enter 5
 
       leave
