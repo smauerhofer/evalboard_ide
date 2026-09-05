@@ -827,11 +827,15 @@ internal static class CvmAssemblyLanguage
   /// mistaken for its own opcode if a word were decoded in isolation.
   ///
   /// Returns a sparse map from flat address to a listing line: an instruction's own address gets its
-  /// mnemonic, folded together with its operand when it has one (e.g. "pushlit 0x1234") so the memory
-  /// inspector reads like a real disassembly rather than two disconnected rows; the operand word's own
-  /// address is left out of the map entirely (no note at all), same as any other address that doesn't
+  /// mnemonic, folded together with its operand when it has one (e.g. "pushlit 0x1234 (4660)") so the
+  /// memory inspector reads like a real disassembly rather than two disconnected rows; the operand word's
+  /// own address is left out of the map entirely (no note at all), same as any other address that doesn't
   /// fall on a recognized instruction boundary -- typically because it holds an opcode this debugger
-  /// doesn't know about yet.
+  /// doesn't know about yet. The operand itself is rendered by <see cref="CvmInstructionSet.FormatOperand"/>
+  /// -- fixed 2026-09-05 per Stefan so a tagged trailing-word mnemonic (e.g. <c>andi</c>) shows the SAME
+  /// "0x{hex} ({decimal})" shape <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> now uses for
+  /// every self-describing mnemonic (<c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>/<c>lit</c>), rather
+  /// than the hex-only rendering this one line used before -- see that method's own remarks.
   /// </summary>
   public static IReadOnlyDictionary<int, string> DisassemblePage0(
       CvmSimulatedSram sram,
@@ -863,7 +867,7 @@ internal static class CvmAssemblyLanguage
         if (operandCount == 1 && address + 1 < endAddressExclusive)
         {
           int operandValue = sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1));
-          notes[address] = $"{instruction.Mnemonic} 0x{operandValue:X4}";
+          notes[address] = $"{instruction.Mnemonic} {CvmInstructionSet.FormatOperand(operandValue)}";
         }
         else
         {

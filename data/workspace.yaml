@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-05T10:51:30.8403952
-      utcDateTime: 2026-09-05T10:51:30.8403952Z
-      localDateTime: 2026-09-05T12:51:30.8403952+02:00
+      dateTime: 2026-09-05T15:35:23.6588699
+      utcDateTime: 2026-09-05T15:35:23.6588699Z
+      localDateTime: 2026-09-05T17:35:23.6588699+02:00
       date: 2026-09-05T00:00:00.0000000
       day: 5
       dayOfWeek: Saturday
       dayOfYear: 248
-      hour: 10
-      millisecond: 840
-      microsecond: 395
-      nanosecond: 200
-      minute: 51
+      hour: 15
+      millisecond: 658
+      microsecond: 869
+      nanosecond: 900
+      minute: 35
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 30
-      ticks: 639242022908403952
-      utcTicks: 639242022908403952
-      timeOfDay: 10:51:30.8403952
+      second: 23
+      ticks: 639242193236588699
+      utcTicks: 639242193236588699
+      timeOfDay: 15:35:23.6588699
       year: 2026
   portB: 
   portC:
@@ -14899,7 +14899,7 @@ projects:
 
         : y/leave A[ n/leave ; ]] lit !b
 
-        : y/main # y/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r
+        : y/main # y/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b
           -if // 1110_1???_????_????
             // more arithmetic
             r> r--- ;
@@ -14974,9 +14974,9 @@ projects:
       - 0x1140E
       - 0x04812
       - 0x00012
-      - 0x37932
-      - 0x09F02
-      - 0x2F21B
+      - 0x0C432
+      - 0x09FBA
+      - 0x0121B
       - 0x269B2
       - 0x115D5
       - 0x3721E
@@ -17063,7 +17063,7 @@ projects:
     debuggerAssemblyCode: >-
       lit 0x55
 
-      inv
+      andi 0x0a
 
       push
 

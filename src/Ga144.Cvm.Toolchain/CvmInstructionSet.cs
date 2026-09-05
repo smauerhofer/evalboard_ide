@@ -801,6 +801,24 @@ public static class CvmInstructionSet
   public static int DecodeNode606Value(int word) => word & Node606ValueBitMask;
 
   /// <summary>
+  /// The one shared operand rendering for every disassembled instruction that carries a numeric value,
+  /// tagged or self-describing alike -- fixed 2026-09-05 per Stefan ("i would prefer a unified
+  /// presentation") after the memory inspector showed <c>lit</c> in decimal only, <c>call</c> in hex
+  /// only, and a tagged trailing-word mnemonic (<c>andi</c>) in hex only, three different conventions
+  /// side by side in the same listing. Always renders as <c>0x{4-digit hex} ({decimal})</c>: the hex
+  /// half is <paramref name="value"/>'s raw 16-bit two's-complement bit pattern (matching
+  /// <see cref="CvmWordCodec.WordMask"/>, so a negative <paramref name="value"/> -- e.g. a backward
+  /// <c>br</c> offset or a negative <c>lit</c>/<c>slit</c> -- wraps to its own high hex digits exactly
+  /// as it would sit in the word, rather than printing a minus sign into the hex half), the decimal half
+  /// is <paramref name="value"/> itself, signed exactly as each caller's own <c>Decode*</c> method
+  /// already returns it. Every self-describing case in <see cref="TryDescribeSelfDecodingWord"/> and the
+  /// tagged-mnemonic trailing-word case in Ga144.Evb.Ide.Services.CvmAssemblyLanguage.DisassemblePage0
+  /// route through this one method now, so the listing can never again show two different operand
+  /// conventions in the same column.
+  /// </summary>
+  public static string FormatOperand(int value) => $"0x{value & 0xFFFF:X4} ({value})";
+
+  /// <summary>
   /// Decodes a single already-fetched CVM word using ONLY the two self-describing encodings
   /// (<see cref="CvmOperandEncoding.EmbeddedAddress"/>, <see cref="CvmOperandEncoding.EmbeddedSignedValue"/>)
   /// -- the ones fully determined by the word's own bit pattern, needing no live F18 compile at all to
@@ -814,28 +832,28 @@ public static class CvmInstructionSet
   {
     if (word <= CallAddressMask)
     {
-      return $"{CallMnemonic} 0x{word:X4}";
+      return $"{CallMnemonic} {FormatOperand(word)}";
     }
 
     int branchTag = word & BranchTagMask;
     if (branchTag == BranchTag)
     {
-      return $"{BranchMnemonic} {DecodeBranchOffset(word)}";
+      return $"{BranchMnemonic} {FormatOperand(DecodeBranchOffset(word))}";
     }
 
     if (branchTag == ConditionalBranchTag)
     {
-      return $"{ConditionalBranchMnemonic} {DecodeBranchOffset(word)}";
+      return $"{ConditionalBranchMnemonic} {FormatOperand(DecodeBranchOffset(word))}";
     }
 
     if ((word & SlitTagMask) == SlitTag)
     {
-      return $"{SlitMnemonic} {DecodeSlitValue(word)}";
+      return $"{SlitMnemonic} {FormatOperand(DecodeSlitValue(word))}";
     }
 
     if ((word & LitTagMask) == LitTag)
     {
-      return $"{LitMnemonic} {DecodeLitValue(word)}";
+      return $"{LitMnemonic} {FormatOperand(DecodeLitValue(word))}";
     }
 
     // Every EmbeddedUnsignedValue shape, self-describing the same way: a fixed tag OR'd with an
@@ -867,7 +885,7 @@ public static class CvmInstructionSet
       int tagMask = ~shape.ValueBitMask & 0xFFFF;
       if ((word & tagMask) == shape.Tag)
       {
-        return $"{shape.Mnemonic} {word & shape.ValueBitMask}";
+        return $"{shape.Mnemonic} {FormatOperand(word & shape.ValueBitMask)}";
       }
     }
 

@@ -549,6 +549,21 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // "compile order" (507, 407, 506, 508, 509). Same live-project-data caveat as 407/506: each
   // NodeXxxProgram.Source reference copy has no effect here until it is also saved into that node's
   // own Node Editor tab for this chip.
+  //
+  // Node 406 added 2026-09-05, the SAME missed-gap bug as 508/509 above, reported directly by Stefan:
+  // assembling "addi 0x0a" against a live session (whose compiledRam already covered node 406 via
+  // CvmBootStreamBuilder.BuildLoadOrder) correctly emitted 0xE424/0x000A, but the memory inspector's
+  // own no-session disassembly showed no mnemonic at all for 0xE424 -- the same "opcode's own node
+  // isn't in THIS list" gap 508/509 hit before they were added here, not a CvmAssemblyLanguage/
+  // CvmInstructionSet bug (their round-trip already verified clean against a compile that DOES
+  // include node 406 -- see CvmInstructionSet.AddConstantMnemonic's own remarks). Without node 406
+  // resolving here, decodeTable has no entry for 0xE424, so DisassemblePage0's own stateful scan (see
+  // that method's own remarks) advances only ONE word past it instead of two, leaving 0xE424 itself
+  // blank and then misreading the FOLLOWING word (its own trailing operand, 0x000A) as a fresh
+  // instruction in its own right -- since 0x000A also happens to be <= CvmInstructionSet.
+  // CallAddressMask, it self-describes as "call 0x000A", exactly the confusing symptom reported.
+  // Listed last since it imports node 407's own exports ('# 407 import'), same "parent before child,
+  // CompileNode resolves the import regardless of list order" note as 508/509 above.
   private static readonly IReadOnlyList<int> StandaloneCvmNodeCoordinates =
   [
     CvmMemoryProtocol.NopSourceNodeCoordinate, // 507, CVM2's entire CPU (corrected 2026-09-01 from 508).
@@ -556,6 +571,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     Node506Program.Coordinate, // 506, CVM2's stack-frame node (added 2026-09-04).
     Node508Program.Coordinate, // 508, CVM2's ldg/stg node (added 2026-09-05).
     Node509Program.Coordinate, // 509, CVM2's unary-arithmetic node (added 2026-09-05).
+    Node406Program.Coordinate, // 406, CVM2's binary-arithmetic node (added 2026-09-05).
   ];
 
   /// <summary>
