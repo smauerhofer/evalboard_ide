@@ -76,7 +76,7 @@ namespace Ga144.Evb.Ide.Services;
 /// <b><c>Node509Program.cs</c> is a BRAND NEW coordinate (2026-09-05) -- no CVM1 namesake at all.</b>
 /// Stefan's unary-arithmetic node, reached from node 508's own <c>g/main</c> dispatch (NOT node 507
 /// directly) via its RIGHT port -- the first CVM2 node three hops out from the root
-/// (507 -&gt; 508 -&gt; 509). Eight of its eleven tick-prefixed words REPOINT existing, previously-orphaned
+/// (507 -&gt; 508 -&gt; 509). Eight of its twelve tick-prefixed words REPOINT existing, previously-orphaned
 /// mnemonics rather than adding duplicates, per "only update existing opcodes where possible": <c>inv</c>/
 /// <c>inc</c>/<c>dec</c> (node 507's own old ALU-op family) and <c>abs</c>/<c>mul2</c>/<c>div2</c>/
 /// <c>udiv2</c>/<c>bitcnt</c> (five of node 508's own old 27-op family) all now resolve against node
@@ -91,7 +91,33 @@ namespace Ga144.Evb.Ide.Services;
 /// <see cref="CvmInstructionSet.LitTag"/>'s own remarks). Two more tick-prefixed words, <c>parity</c> and
 /// <c>odd</c>, were added the same way as <c>neg</c> (2026-09-05, "I added 2 new opcodes to node 509. add
 /// them also to the language") -- both genuinely new, tagged exactly like the other nine, resolved
-/// against node 509's own live compile -- see <see cref="Node509Program"/>'s own remarks.
+/// against node 509's own live compile. A thirteenth, <c>not</c>, followed the same day ("I added 'not'
+/// to node 509. please add it to assembler and disassembler") -- also genuinely new, same tag, same live
+/// compile -- see <see cref="Node509Program"/>'s own remarks for all three, including a structural note
+/// on how adding <c>not</c>'s own definition also changed <c>'neg</c>'s own control flow (not this
+/// class's concern, since address resolution here is always dynamic against a live compile regardless).
+///
+/// <b><c>Node406Program.cs</c> is a BRAND NEW coordinate (2026-09-05) -- no CVM1 namesake at all.</b>
+/// Stefan's binary-arithmetic node, reached from node 407's own <c>n/main</c> dispatch (NOT node 507
+/// directly) via its RIGHT port -- CVM2's SECOND three-hop branch off 507, mirroring 507-&gt;508-&gt;509
+/// with 507-&gt;407-&gt;406. Node 406's own source originally referenced six names imported from node
+/// 407 (<c>n/r@</c>/<c>n/r!</c>/<c>n/pop</c>/<c>n/push</c>/<c>n/next</c>/<c>n/leave</c>) that did not
+/// exist on node 407 AS IT STOOD AT THE TIME (node 407 exported only five, under a <c>b/</c> prefix, with
+/// no "next" helper) -- Stefan resolved this blocking mismatch directly by supplying a full replacement
+/// <see cref="Node407Program"/> source renaming its whole export prefix to <c>n/</c> and adding a new
+/// <c>n/next</c> -- see <see cref="Node407Program"/>'s own remarks, including a FLAGGED, not silently
+/// resolved, discrepancy in that same replacement (its own "1101" relay branch reverting from
+/// <c>---u</c> back to <c>-d--</c>). EIGHT of node 406's own twelve tick-prefixed binary ops REPOINT
+/// node 507's old, permanently-orphaned ALU-op mnemonics (<c>add</c>/<c>sub</c>/<c>and</c>/<c>xor</c>/
+/// <c>or</c>/<c>usl</c>/<c>ssr</c>/<c>usr</c>) rather than adding duplicates, per "only update existing
+/// opcodes where possible" -- see <see cref="Node406BinaryStackTagBits"/>'s own remarks. The remaining
+/// four (<c>rsb</c>/<c>rsl</c>/<c>rsr</c>/<c>rur</c>) are genuinely new. Each of the twelve additionally
+/// gets its own "i"-suffixed sibling mnemonic for its "constant in the next trailing word" form, per
+/// Stefan's own explicit naming rule ("for opcode with constant parameter, add a i to the mnemonic. so
+/// 'add' becomes 'addi'") -- both forms share the SAME F18 symbol on node 406, differing only in tag
+/// (<see cref="Node406BinaryStackTagBits"/> vs <see cref="Node406BinaryConstantTagBits"/>) and operand
+/// shape -- see <see cref="Node406Program"/>'s own remarks for the full <c>ahead</c>/<c>[ swap ]</c>/
+/// <c>then</c> dispatch-convergence derivation.
 ///
 /// <b>What's still orphaned, not removed.</b> Node 508's OLD CVM1 27 comparison/arithmetic mnemonics
 /// (<c>eq</c> through <c>bitcnt</c>) mostly keep their <see cref="NodeSymbolByMnemonic"/> entries, still
@@ -100,8 +126,9 @@ namespace Ga144.Evb.Ide.Services;
 /// globals-access node, above) does not define any of these 27 old F18 symbols either. Five of the 27
 /// (<c>mul2</c>/<c>udiv2</c>/<c>div2</c>/<c>abs</c>/<c>bitcnt</c>) are the exception -- repointed to node
 /// 509 above, per the paragraph just above this one -- leaving 22 still orphaned against node 508.
-/// Node 507's own eleven old ALU-op mnemonics are down to eight still orphaned the same way, now that
-/// <c>inv</c>/<c>inc</c>/<c>dec</c> are also repointed to node 509.
+/// Node 507's own eleven old ALU-op mnemonics are now ALL repointed, none still orphaned: <c>inv</c>/
+/// <c>inc</c>/<c>dec</c> to node 509 (above), and <c>add</c>/<c>sub</c>/<c>and</c>/<c>xor</c>/<c>or</c>/
+/// <c>usl</c>/<c>ssr</c>/<c>usr</c> to node 406 (added 2026-09-05 -- see the node 406 block below).
 ///
 /// This is deliberately a SEPARATE naming layer from any node's own F18 source symbols ('nop, 'plit,
 /// 'push, 'pop, 'ret, 'halt, plus 'tjmp/'jump/'xs/'xp, on CVM2's node 507 -- see
@@ -187,10 +214,11 @@ internal static class CvmAssemblyLanguage
   private const int Node507Cvm2LocalExecuteTagBits = 0x8800;
 
   // CVM2's long call/long jump tag (2026-09-02), per Stefan's node 407 source and his own explanation
-  // of node 407's b/main dispatch cascade and the x/y relay protocol handing off from node 507's own
-  // m/main (confirmed correct by Stefan -- see Cvm.Node407Program's own remarks for the full
-  // derivation): node 507 hands off to node 407 once a fetched CVM opcode word's top bits read "11??",
-  // and node 407's own cascade consumes two more bits before falling to "ex" (which jumps to whatever
+  // of node 407's n/main dispatch cascade (renamed from b/main 2026-09-05 -- see Cvm.Node407Program's
+  // own remarks) and the x/y relay protocol handing off from node 507's own m/main (confirmed correct by
+  // Stefan -- see Cvm.Node407Program's own remarks for the full derivation): node 507 hands off to node
+  // 407 once a fetched CVM opcode word's top bits read "11??", and node 407's own cascade consumes two
+  // more bits before falling to "ex" (which jumps to whatever
   // address is already in R -- 'lcall's or 'ljmp's own address on node 407, loaded there by whoever
   // dispatches in) for the "1100" case -- so 'lcall/'ljmp's own CVM opcode word always has its top 4
   // bits "1100", i.e. tag 0xC000 OR'd with the local address on node 407, the same "tag | local
@@ -245,6 +273,24 @@ internal static class CvmAssemblyLanguage
   // (2026-09-05).
   private const int Node509UnaryArithmeticTagBits = 0xB000;
 
+  // CVM2's node 406 binary-arithmetic tags (2026-09-05), per Stefan's node 406 source
+  // (Cvm.Node406Program): its own y/main dispatch cascade offers TWO forms of each of its twelve named
+  // ops, selected by two more bits within the already-consumed "1110" prefix node 407's own n/main
+  // cascade hands off on (its own RIGHT port) -- "1110_00??_????_????" (six bits fixed: 0xE000) is the
+  // "parameter already on the stack" form (CvmOperandEncoding.None), and "1110_01??_????_????" (six bits
+  // fixed: 0xE400) is the "parameter in the following trailing word" form
+  // (CvmOperandEncoding.TrailingWord) -- the same "tag | local address" scheme every other node's tag
+  // above already uses, just the first one with TWO tags sharing the SAME symbol table (both resolve
+  // against the SAME F18 address on node 406, differing only in tag and operand shape) rather than one
+  // tag per node. A 6-bit-tag/10-bit-address split, matching Node509UnaryArithmeticTagBits's own bit
+  // width exactly. Node 406's own RAM is only 64 words, so these two ranges (0xE000-0xE03F,
+  // 0xE400-0xE43F) have no LIVE collision with any other wired tag here (Node508TagBits, 0xE800, is the
+  // nearest neighbour, non-overlapping) -- see Cvm.Node406Program's own remarks on
+  // CvmInstructionSet's own purely-historical "register d" 0xE000-0xE7FF comment text, which overlaps
+  // only in prose, never in any live wiring. NOT YET CONFIRMED ON REAL HARDWARE (2026-09-05).
+  private const int Node406BinaryStackTagBits = 0xE000;
+  private const int Node406BinaryConstantTagBits = 0xE400;
+
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
   // tag bits its opcode word must carry (Node508TagBits for the OLD, permanently-orphaned CVM1
   // comparison ops; Node507Cvm2LocalExecuteTagBits for CVM2's own six repointed primitives -- these
@@ -260,9 +306,10 @@ internal static class CvmAssemblyLanguage
   // drops it from the table entirely, the graceful-omission path this file already relies on for
   // call/br/ifbr/slit. Node 507 (CVM2's actual CPU), node 407 (CVM2's long-call/long-jump helper), node
   // 506 (CVM2's stack-frame node), node 508 (CVM2's globals-access node, plus its own OLD, permanently
-  // orphaned CVM1 comparison ops), and node 509 (CVM2's unary-arithmetic node -- a BRAND NEW coordinate,
-  // no CVM1 namesake to share or orphan) -- 407/506/508 all different nodes than their deleted CVM1
-  // namesakes, sharing only the coordinate -- are the only coordinates anything here still points at.
+  // orphaned CVM1 comparison ops), node 509 (CVM2's unary-arithmetic node -- a BRAND NEW coordinate, no
+  // CVM1 namesake to share or orphan), and node 406 (CVM2's binary-arithmetic node -- ALSO a BRAND NEW
+  // coordinate, no CVM1 namesake) -- 407/506/508 all different nodes than their deleted CVM1 namesakes,
+  // sharing only the coordinate -- are the only coordinates anything here still points at.
   private static readonly IReadOnlyDictionary<string, (int NodeCoordinate, string SymbolName, int Tag)> NodeSymbolByMnemonic =
       new Dictionary<string, (int NodeCoordinate, string SymbolName, int Tag)>(StringComparer.OrdinalIgnoreCase)
       {
@@ -310,6 +357,41 @@ internal static class CvmAssemblyLanguage
         // to the language") -- both genuinely new, same tag, same live compile as the rest of node 509.
         [CvmInstructionSet.ParityMnemonic] = (Node509Program.Coordinate, "'parity", Node509UnaryArithmeticTagBits),
         [CvmInstructionSet.OddMnemonic] = (Node509Program.Coordinate, "'odd", Node509UnaryArithmeticTagBits),
+        // Node 509's thirteenth op (2026-09-05, "I added 'not' to node 509. please add it to assembler
+        // and disassembler") -- genuinely new, same tag, same live compile as the rest of node 509.
+        [CvmInstructionSet.NotMnemonic] = (Node509Program.Coordinate, "'not", Node509UnaryArithmeticTagBits),
+        // CVM2's node 406 (2026-09-05) -- the binary-arithmetic node, resolved against node 406's own
+        // live compile. EIGHT of these twelve REPOINT node 507's old, permanently-orphaned ALU-op
+        // mnemonics ("only update existing opcodes where possible"); rsb/rsl/rsr/rur are genuinely new.
+        // Each has TWO entries here -- the plain mnemonic (parameter already on the stack,
+        // Node406BinaryStackTagBits) and its own "i"-suffixed sibling (parameter in the next trailing
+        // word, Node406BinaryConstantTagBits) -- both pointing at the SAME F18 symbol on node 406, per
+        // Stefan's own naming rule ("for opcode with constant parameter, add a i to the mnemonic. so
+        // 'add' becomes 'addi'"). See Node406Program's own remarks for the full derivation.
+        [CvmInstructionSet.AddMnemonic] = (Node406Program.Coordinate, "'add", Node406BinaryStackTagBits),
+        [CvmInstructionSet.AddConstantMnemonic] = (Node406Program.Coordinate, "'add", Node406BinaryConstantTagBits),
+        [CvmInstructionSet.SubtractMnemonic] = (Node406Program.Coordinate, "'sub", Node406BinaryStackTagBits),
+        [CvmInstructionSet.SubtractConstantMnemonic] = (Node406Program.Coordinate, "'sub", Node406BinaryConstantTagBits),
+        [CvmInstructionSet.ReverseSubtractMnemonic] = (Node406Program.Coordinate, "'rsb", Node406BinaryStackTagBits),
+        [CvmInstructionSet.ReverseSubtractConstantMnemonic] = (Node406Program.Coordinate, "'rsb", Node406BinaryConstantTagBits),
+        [CvmInstructionSet.AndMnemonic] = (Node406Program.Coordinate, "'and", Node406BinaryStackTagBits),
+        [CvmInstructionSet.AndConstantMnemonic] = (Node406Program.Coordinate, "'and", Node406BinaryConstantTagBits),
+        [CvmInstructionSet.XorMnemonic] = (Node406Program.Coordinate, "'xor", Node406BinaryStackTagBits),
+        [CvmInstructionSet.XorConstantMnemonic] = (Node406Program.Coordinate, "'xor", Node406BinaryConstantTagBits),
+        [CvmInstructionSet.OrMnemonic] = (Node406Program.Coordinate, "'or", Node406BinaryStackTagBits),
+        [CvmInstructionSet.OrConstantMnemonic] = (Node406Program.Coordinate, "'or", Node406BinaryConstantTagBits),
+        [CvmInstructionSet.ReverseShiftLeftMnemonic] = (Node406Program.Coordinate, "'rsl", Node406BinaryStackTagBits),
+        [CvmInstructionSet.ReverseShiftLeftConstantMnemonic] = (Node406Program.Coordinate, "'rsl", Node406BinaryConstantTagBits),
+        [CvmInstructionSet.UnsignedShiftLeftMnemonic] = (Node406Program.Coordinate, "'usl", Node406BinaryStackTagBits),
+        [CvmInstructionSet.UnsignedShiftLeftConstantMnemonic] = (Node406Program.Coordinate, "'usl", Node406BinaryConstantTagBits),
+        [CvmInstructionSet.ReverseShiftRightMnemonic] = (Node406Program.Coordinate, "'rsr", Node406BinaryStackTagBits),
+        [CvmInstructionSet.ReverseShiftRightConstantMnemonic] = (Node406Program.Coordinate, "'rsr", Node406BinaryConstantTagBits),
+        [CvmInstructionSet.SignedShiftRightMnemonic] = (Node406Program.Coordinate, "'ssr", Node406BinaryStackTagBits),
+        [CvmInstructionSet.SignedShiftRightConstantMnemonic] = (Node406Program.Coordinate, "'ssr", Node406BinaryConstantTagBits),
+        [CvmInstructionSet.ReverseUnsignedShiftRightMnemonic] = (Node406Program.Coordinate, "'rur", Node406BinaryStackTagBits),
+        [CvmInstructionSet.ReverseUnsignedShiftRightConstantMnemonic] = (Node406Program.Coordinate, "'rur", Node406BinaryConstantTagBits),
+        [CvmInstructionSet.UnsignedShiftRightMnemonic] = (Node406Program.Coordinate, "'usr", Node406BinaryStackTagBits),
+        [CvmInstructionSet.UnsignedShiftRightConstantMnemonic] = (Node406Program.Coordinate, "'usr", Node406BinaryConstantTagBits),
         // CVM1's OLD 27 node-508 comparison/arithmetic ops -- permanently orphaned (node 508's own REAL
         // CVM2 source, added 2026-09-04, is the globals-access node above and does not define any of
         // these 27 old F18 symbols), kept per "do not remove any opcodes." Simply omitted from

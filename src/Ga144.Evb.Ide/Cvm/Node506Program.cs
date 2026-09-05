@@ -63,7 +63,8 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <c>r&gt; par inv +</c> -- the 9-bit offset (locals count) again taken directly from the original
 /// opcode word's own low bits, self-describing like the load/store ops above.</item>
 /// <item><c>1001_000?_????_????</c> -- <c>ex</c> (no preceding <c>r&gt;</c>, matching
-/// <see cref="Node407Program"/>'s own confirmed-on-hardware <c>b/main</c> tail exactly): jumps to
+/// <see cref="Node407Program"/>'s own confirmed-on-hardware <c>n/main</c> (renamed from <c>b/main</c>
+/// 2026-09-05) tail exactly): jumps to
 /// whatever address is already in R, i.e. <c>x</c> itself (the original opcode word, parked earlier and
 /// never popped along any of the branches above) -- the SAME "ex reached once the cascade consumes a
 /// fixed prefix" pattern <see cref="Node407Program"/> uses for <c>'lcall</c>/<c>'ljmp</c>.

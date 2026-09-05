@@ -73,13 +73,17 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <b>Why a separate node.</b> Same reasoning as every other CVM2 satellite node (407/506/508): a fresh
 /// 64-word budget for a handful of new primitives. Re-verified via a standalone harness compile of the
 /// CORRECTED source, importing <see cref="Node508Program"/>'s own exports (<c>g/r@</c>, <c>g/r!</c>,
-/// <c>g/pop</c>, <c>g/push</c>, <c>g/leave</c>): 0 errors, 58/64 words used (up from 55, per the
-/// two-more-opcodes addition just below), entry point <c>u/main</c> at 0x00E (unchanged), every symbol
+/// <c>g/pop</c>, <c>g/push</c>, <c>g/leave</c>): 0 errors, 60/64 words used (up from 58, per the
+/// <c>'not</c> addition just below), entry point <c>u/main</c> at 0x00E (unchanged), every symbol
 /// resolves at its own address (<c>u/r@</c> 0x0000, <c>u/r!</c> 0x0004, <c>u/pop</c> 0x0006, <c>u/push</c>
 /// 0x000A, <c>u/leave</c> 0x000C, <c>u/main</c> 0x000E, <c>'abs</c> 0x0023, <c>'neg</c> 0x0025, <c>'inc</c>
 /// 0x0026, <c>'dec</c> 0x0028, <c>'inv</c> 0x002A, <c>'mul2</c> 0x002B, <c>'div2</c> 0x002C, <c>'udiv2</c>
-/// 0x002E, <c>'bitcnt</c> 0x002F, <c>'parity</c> 0x0037, <c>'odd</c> 0x0038) -- <c>'inc</c>'s own address,
-/// 0x0026, is exactly what makes the confirmed <c>0xB026</c> opcode word above correct (0xB000 | 0x026).
+/// 0x002E, <c>'bitcnt</c> 0x002F, <c>'parity</c> 0x0037, <c>'odd</c> 0x0038, <c>'not</c> 0x003A) --
+/// <c>'inc</c>'s own address, 0x0026, is exactly what makes the confirmed <c>0xB026</c> opcode word above
+/// correct (0xB000 | 0x026); note it (and every other address up through <c>'odd</c>) is UNCHANGED by the
+/// <c>'not</c> addition below -- <c>'neg</c>'s own new <c>begin</c> compiles no opcode of its own (it
+/// only records the current address as a future backward-branch destination), so nothing already
+/// confirmed on real hardware shifted; the only new code is <c>'not</c>'s own, at its own new address.
 ///
 /// <b>Two more ops added 2026-09-05: <c>'parity</c> and <c>'odd</c>.</b> Per Stefan's own follow-up ("I
 /// added 2 new opcodes to node 509. add them also to the language"). Both are wired into
@@ -95,6 +99,46 @@ namespace Ga144.Evb.Ide.Cvm;
 /// own description), while <c>'odd</c> entered directly at its own address just does the AND-1 test alone
 /// (1 if r itself is odd, 0 otherwise) -- each still has its own distinct, independently-reachable
 /// address, exactly like the four-way <c>'abs</c>/<c>'neg</c>/<c>'inc</c>/<c>'dec</c> overlap.
+///
+/// <b>A twelfth tagged op added 2026-09-05: <c>'not</c>.</b> Per Stefan's own follow-up ("I added 'not'
+/// to node 509. please add it to assembler and disassembler"), then CONFIRMED ON REAL HARDWARE the same
+/// day ("the following code is tested on hardware. it works"). Wired into
+/// <see cref="CvmInstructionSet"/>/<see cref="Services.CvmAssemblyLanguage"/> exactly like the other
+/// eleven (tag 0xB000, resolved only against this node's own live compile) -- see
+/// <see cref="CvmInstructionSet.NotMnemonic"/>'s own remarks. Confirmed via a standalone compile: 0
+/// errors, <c>'not</c> resolves cleanly at 0x003A, and every earlier address (<c>'abs</c> through
+/// <c>'odd</c>) is unchanged from before this addition.
+///
+/// <c>'not</c>'s own body -- <c>: 'not until dup xor ;</c> -- reuses <c>'inc</c>'s own code (<c>1 . +
+/// ;</c>) via a conditional BACKWARD branch, rather than adding a fresh forward branch of its own. This
+/// took an earlier draft revision (an <c>ahead</c>/extra <c>then</c> pair, since replaced) that risked
+/// changing <c>'abs</c>'s own already-hardware-confirmed control flow; Stefan's hardware-tested fix
+/// avoids that entirely, confirmed by tracing the compiler's own control-stack code
+/// (<c>PushControlValue</c>/<c>TryPopControlValue</c>, which turn out to be nothing more than
+/// <see cref="Compiler.F18CompileTimeInterpreter"/>'s own compile-time DATA stack -- the same stack
+/// <c>dup</c>/<c>drop</c>/<c>swap</c> inside a <c>[ ... ]</c> interpretation section already operate on,
+/// which is exactly why <c>[ swap ]</c> works as a control-marker reorder trick here):
+/// <list type="bullet">
+/// <item><c>'abs</c>'s own <c>-if</c> pushes its usual forward-branch handle (call it A), exactly as
+/// before.</item>
+/// <item><c>'neg</c>'s own body is now <c>inv begin [ swap ]</c>: <c>begin</c> pushes a SECOND handle (B)
+/// -- the CURRENT address, i.e. <c>'inc</c>'s own address -- as a backward-branch destination, landing on
+/// top of A; <c>[ swap ]</c> then drops into compile-time interpretation just long enough to swap the top
+/// two stack entries, putting A back on top.</item>
+/// <item>The <c>then</c> right after <c>'dec</c>'s own <c>;</c> -- unchanged from before -- pops whatever
+/// is on top, which is once again A (thanks to the swap), so <c>'abs</c>'s own <c>-if</c> resolves to
+/// EXACTLY the same address it always did. <c>'abs</c>'s and <c>'neg</c>'s own hardware-confirmed
+/// behavior is provably unaffected.</item>
+/// <item>That leaves B (the backward-branch destination pointing at <c>'inc</c>) sitting alone on the
+/// stack, unresolved, all the way through <c>'inv</c>/<c>'mul2</c>/<c>'div2</c>/<c>'udiv2</c>/
+/// <c>'bitcnt</c>/<c>'parity</c>/<c>'odd</c> -- <c>'bitcnt</c>'s own internal <c>begin ... [ swap ] ...
+/// again then</c> pushes and pops its own handles in a fully balanced way, so it never disturbs B.</item>
+/// <item><c>'not</c>'s own <c>until</c> finally pops B and compiles a CONDITIONAL backward branch to it.
+/// Entered directly at its own address: if r is zero, the branch is taken, landing on <c>'inc</c>'s own
+/// <c>1 . + ;</c> -- 0 + 1 = 1; if r is non-zero, the branch falls through to <c>dup xor ;</c> -- r XOR r
+/// = 0. Either way, exactly "if r is 0 then r = 1, otherwise r = 0," reusing <c>'inc</c>'s own code
+/// instead of duplicating it.</item>
+/// </list>
 ///
 /// <b>Reached from node 508 (NOT node 507 directly) via the RIGHT port, confirmed symmetrically both
 /// sides.</b> This source's own header, <c>( CVM2 node 509. unary arithmetic, 1011_????_????_???? )</c>,
@@ -138,40 +182,51 @@ namespace Ga144.Evb.Ide.Cvm;
 /// self-describing exactly like <c>br</c>/<c>ifbr</c>/<c>slit</c> (tag 0xB400, a 6-bit tag OR'd with
 /// this same 10-bit signed field, UNCHANGED by this fix) -- see
 /// <see cref="CvmInstructionSet.LitTag"/>'s own remarks for the full derivation. <c>lit</c> needs no
-/// live node/linker resolution at all, unlike every one of node 509's own eleven TAGGED words below.</item>
+/// live node/linker resolution at all, unlike every one of node 509's own twelve TAGGED words below.</item>
 /// <item><c>1011_00??_????_????</c> -- falls through to <c>drop &gt;r u/r@ ex 0xffff and u/r! ;</c>
 /// (the added <c>drop &gt;r</c> is the third part of the fix above): discard the leftover cascade-test
 /// remainder, re-park the original opcode word (x) into R, fetch the value relayed in from the caller,
 /// <c>ex</c> (jump to whatever address is now in R), then store the result back once whichever named
-/// word below returns. This is where every one of node 509's own eleven tick-prefixed words is actually
+/// word below returns. This is where every one of node 509's own twelve tick-prefixed words is actually
 /// reached from.</item>
 /// </list>
 ///
-/// <b>The eleven named words and two separate cross-definition fall-throughs.</b> <c>'abs</c>,
-/// <c>'neg</c>, <c>'inc</c>, and <c>'dec</c> share one continuous compile-time control span: <c>'abs</c>
-/// opens with a sign test (<c>2* 2* 2/ 2/ -if</c>) whose TRUE branch falls straight through <c>'neg</c>'s
-/// own body (<c>inv</c>) into <c>'inc</c>'s own body (<c>1 . + ;</c>) -- i.e. NOT(x)+1, the standard
-/// two's-complement negate, exactly what <c>'neg</c> itself computes when entered directly at its own
-/// address -- while the FALSE branch of that same <c>-if</c> (x already non-negative) skips past all of
-/// <c>'inc</c>/<c>'dec</c>'s own bodies to the <c>then</c> just after <c>'dec</c>'s own <c>;</c>, leaving
-/// <c>'abs</c>'s own result unchanged on the stack. This is the exact same "still-open compile-time
-/// control marker carries straight through one colon-definition falling into the next" idiom
-/// <see cref="Node507Program"/>'s own remarks already document for <c>m/call</c>/<c>m/main</c> -- F18
-/// colon-definitions are address labels, not scopes, so nothing unusual is happening here beyond that
-/// established pattern; each of the four names still has its own distinct, independently-reachable
-/// address regardless of how their bodies happen to overlap in memory. A second, simpler instance of the
-/// same idiom spans <c>'parity</c>/<c>'odd</c> (added 2026-09-05): <c>: 'parity 'bitcnt</c> has no own
-/// trailing <c>;</c>, so its one-word body (a call to <c>'bitcnt</c>) falls straight through into
-/// <c>'odd</c>'s own body (<c>1 and ;</c>) -- entered directly, <c>'parity</c> computes bitcnt-then-AND-1
-/// (the parity bit), while <c>'odd</c> entered directly at its own address just does the AND-1 test alone;
-/// again, two distinct addresses despite the shared tail. <c>'inv</c>/<c>'mul2</c>/<c>'div2</c>/
-/// <c>'udiv2</c>/<c>'bitcnt</c> are each simple, self-contained bodies with no such overlap. Unaffected by
-/// the 2026-09-05 bug fix above (only the addresses these words land at moved, per that word-count
-/// change).
+/// <b>The twelve named words, two cross-definition fall-throughs, and one cross-definition backward
+/// branch.</b> <c>'abs</c>, <c>'neg</c>, <c>'inc</c>, and <c>'dec</c> share one continuous compile-time
+/// control span: <c>'abs</c> opens with a sign test (<c>2* 2* 2/ 2/ -if</c>)
+/// whose TRUE branch falls straight through <c>'neg</c>'s own body (<c>inv</c>) into <c>'inc</c>'s own
+/// body (<c>1 . + ;</c>) -- i.e. NOT(x)+1, the standard two's-complement negate, exactly what <c>'neg</c>
+/// itself computes when entered directly at its own address. This is the exact same "still-open
+/// compile-time control marker carries straight through one colon-definition falling into the next"
+/// idiom <see cref="Node507Program"/>'s own remarks already document for <c>m/call</c>/<c>m/main</c> --
+/// F18 colon-definitions are address labels, not scopes, so nothing unusual is happening here beyond
+/// that established pattern; each name still has its own distinct, independently-reachable address
+/// regardless of how bodies happen to overlap in memory.
+///
+/// A second, simpler instance of the same idiom spans <c>'parity</c>/<c>'odd</c> (added 2026-09-05):
+/// <c>: 'parity 'bitcnt</c> has no own trailing <c>;</c>, so its one-word body (a call to <c>'bitcnt</c>)
+/// falls straight through into <c>'odd</c>'s own body (<c>1 and ;</c>) -- entered directly, <c>'parity</c>
+/// computes bitcnt-then-AND-1 (the parity bit), while <c>'odd</c> entered directly at its own address
+/// just does the AND-1 test alone; again, two distinct addresses despite the shared tail.
+/// <c>'inv</c>/<c>'mul2</c>/<c>'div2</c>/<c>'udiv2</c>/<c>'bitcnt</c> are each simple, self-contained
+/// bodies with no such overlap.
+///
+/// A THIRD instance, of a different shape, spans <c>'neg</c> and <c>'not</c> (added 2026-09-05, hardware-
+/// confirmed): <c>'neg</c>'s own body gained <c>begin [ swap ]</c> right after its <c>inv</c>, pushing a
+/// BACKWARD-branch destination (pointing at <c>'inc</c>'s own address) that then sits dormant on the
+/// compiler's own control-marker stack all the way through <c>'inv</c> and onward, until <c>'not</c>'s
+/// own <c>until</c> finally consumes it. The <c>[ swap ]</c> in the middle is what keeps this from
+/// disturbing <c>'abs</c>'s own original <c>-if</c> -- see the "twelfth tagged op" remarks above for the
+/// full derivation (confirmed directly from the compiler's own control-stack code: it's the same stack
+/// <c>[ ... ]</c>'s own <c>dup</c>/<c>drop</c>/<c>swap</c> operate on). Net effect: <c>'not</c>, entered
+/// directly, computes "if r is 0 then r = 1, otherwise r = 0" by branching into <c>'inc</c>'s own code
+/// when r is zero and falling through to a plain <c>dup xor</c> (always 0) otherwise -- reusing
+/// <c>'inc</c> rather than duplicating its body -- and neither <c>'abs</c> nor <c>'neg</c>'s own
+/// hardware-confirmed behavior changes at all.
 ///
 /// <b>CVM-level opcode tag -- unaffected by the bug fix above, re-confirmed against the corrected
 /// compile.</b> <c>u/main</c>'s own cascade still consumes exactly "1011_00" (6 fixed bits) before
-/// falling to <c>ex</c>, so every one of node 509's eleven named words' own CVM opcode word still has its
+/// falling to <c>ex</c>, so every one of node 509's twelve named words' own CVM opcode word still has its
 /// top 6 bits "101100" -- tag 0xB000 OR'd with the word's own local address on node 509, the SAME
 /// "tag | local address" scheme node 507's own local execute (0x8800), node 407's <c>'lcall</c>/
 /// <c>'ljmp</c> (0xC000), node 506's <c>'leave</c> (0x9000), and node 508's <c>'ldg</c>/<c>'stg</c>
@@ -181,17 +236,19 @@ namespace Ga144.Evb.Ide.Cvm;
 /// word the debugger actually read back.
 ///
 /// <b>Wired into <see cref="CvmInstructionSet"/>/<see cref="Services.CvmAssemblyLanguage"/>
-/// (2026-09-05).</b> EIGHT of node 509's eleven tick-prefixed words match an EXISTING, previously-orphaned
+/// (2026-09-05).</b> EIGHT of node 509's twelve tick-prefixed words match an EXISTING, previously-orphaned
 /// mnemonic exactly (<c>'inv</c>/<c>'inc</c>/<c>'dec</c> from node 507's old ALU-op family,
 /// <c>'abs</c>/<c>'mul2</c>/<c>'div2</c>/<c>'udiv2</c>/<c>'bitcnt</c> from node 508's old 27-op family)
 /// and, per "only update existing opcodes where possible," REPOINT those existing mnemonics rather than
-/// adding duplicates. <c>'neg</c>, <c>'parity</c>, and <c>'odd</c> are the three genuinely new mnemonics
-/// -- <c>'neg</c> does NOT repoint the existing, separately-orphaned <c>negate</c> mnemonic (different
-/// spelling, taken literally per Stefan's own tick-naming rule), and <c>'parity</c>/<c>'odd</c> have no
-/// existing orphaned counterpart of either name at all. See <see cref="CvmInstructionSet.NegMnemonic"/>'s
-/// and <see cref="CvmInstructionSet.ParityMnemonic"/>'s own remarks for the full accounting. <c>lit</c>
-/// (the embedded-literal form above) was added the same day as node 509's twelfth mnemonic overall,
-/// self-describing rather than tagged -- see <see cref="CvmInstructionSet.LitMnemonic"/>'s own remarks.
+/// adding duplicates. <c>'neg</c>, <c>'parity</c>, <c>'odd</c>, and <c>'not</c> are the four genuinely new
+/// mnemonics -- <c>'neg</c> does NOT repoint the existing, separately-orphaned <c>negate</c> mnemonic
+/// (different spelling, taken literally per Stefan's own tick-naming rule), and <c>'parity</c>/<c>'odd</c>/
+/// <c>'not</c> have no existing orphaned counterpart of any of those names at all. See
+/// <see cref="CvmInstructionSet.NegMnemonic"/>'s, <see cref="CvmInstructionSet.ParityMnemonic"/>'s, and
+/// <see cref="CvmInstructionSet.NotMnemonic"/>'s own remarks for the full accounting. <c>lit</c> (the
+/// embedded-literal form above) was added the same day as node 509's tenth mnemonic overall (the ninth
+/// tagged word plus itself, self-describing rather than tagged), before <c>'parity</c>/<c>'odd</c>/
+/// <c>'not</c> existed -- see <see cref="CvmInstructionSet.LitMnemonic"/>'s own remarks.
 /// None of this wiring needs to track address changes by hand:
 /// <see cref="Services.CvmAssemblyLanguage.BuildDecodeTable"/>/<see cref="Services.CvmAssemblyLanguage.BuildEncodeTable"/>
 /// always resolve a TAGGED mnemonic against whichever address its own F18 symbol currently has in a live
@@ -237,6 +294,7 @@ internal static class Node509Program
 
       : 'abs ( x-y) 2* 2* 2/ 2/ -if
       : 'neg ( x-y) inv
+      begin [ swap ]
       : 'inc ( x-y) 1 . + ;
       : 'dec ( x-y) -1 . + ;
       then
@@ -247,6 +305,7 @@ internal static class Node509Program
       : 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;
       : 'parity 'bitcnt
       : 'odd 1 and ;
+      : 'not until dup xor ;
       (
       opcode 1011_01??_????_???? load literal to r. the range of the literal is -0x200 to 0x1ff.
       'abs make r absolute
@@ -260,6 +319,7 @@ internal static class Node509Program
       'bitcnt count 1 bits in r
       'parity if r contains an odd number of 1 bits, then r becomes 1 otherwise r becomes 0.
       'odd r becomes 1 of r is odd, otherwise r becomes 0.
+      'not logical not. if r is 0 then r = 1, otherwise r = 0
       )
       """;
 }

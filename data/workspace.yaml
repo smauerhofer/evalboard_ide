@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-05T06:39:19.5769647
-      utcDateTime: 2026-09-05T06:39:19.5769647Z
-      localDateTime: 2026-09-05T08:39:19.5769647+02:00
+      dateTime: 2026-09-05T10:51:30.8403952
+      utcDateTime: 2026-09-05T10:51:30.8403952Z
+      localDateTime: 2026-09-05T12:51:30.8403952+02:00
       date: 2026-09-05T00:00:00.0000000
       day: 5
       dayOfWeek: Saturday
       dayOfYear: 248
-      hour: 6
-      millisecond: 576
-      microsecond: 964
-      nanosecond: 700
-      minute: 39
+      hour: 10
+      millisecond: 840
+      microsecond: 395
+      nanosecond: 200
+      minute: 51
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 19
-      ticks: 639241871595769647
-      utcTicks: 639241871595769647
-      timeOfDay: 06:39:19.5769647
+      second: 30
+      ticks: 639242022908403952
+      utcTicks: 639242022908403952
+      timeOfDay: 10:51:30.8403952
       year: 2026
   portB: 
   portC:
@@ -14872,7 +14872,7 @@ projects:
         parameterStack: []
     - coordinate: 406
       enabled: true
-      sourceCode: >
+      sourceCode: >-
         ( CVM2 node 406. binary arithmetic, 1110_????_????_???? )
 
         # 407 import
@@ -14884,6 +14884,8 @@ projects:
         # 0 /a
 
         # right /b
+
+        : y/limit 0x000f and ;
 
         : y/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;
 
@@ -14903,31 +14905,55 @@ projects:
             r> r--- ;
           then // 1110_0???_????_????
           2* -if // 1110_01??_????_????
-            // load literal
-            r> drop 2* 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ y/r! ;
-          then // 1110_00??_????_????
-          2* -if // 1110_001?_????_????
             // binary operator with constant in next word
-            y/next ahead
-          then
-          // binary operator with stack
-          y/pop then y/r@ r> 0x003f and r> ex 0xffff and y/r! ;
+            y/next ahead [ swap ]
+          then // 1110_00??_????_????
+          // binary operator with parameter on stack
+          y/pop then y/r@ ex 0xffff and y/r! ;
         : 'add ( xy-z) + ;
 
-        : 'sub ( xy-z) inv . + 1 . + ;
+        : 'sub ( xy-z) over
+
+        : 'rsb ( xy-z) inv . + 1 . + ;
 
         : 'and ( xy-z) and ;
 
         : 'xor ( xy-z) xor ;
 
-        : 'or ( xy-xz) inv over inv and inv ;
+        : 'or ( xy-z) inv over inv and inv ;
 
-        : 'usl ( xy-z) if for 2/ unext ; then drop ;
+        : 'rsl ( xy-z) over
 
-        : 'ssr ( xy-z) 2* 2* 2/ 2/
+        : 'usl ( xy-z) y/limit if for 2* unext ; then begin begin drop ;
 
-        : 'usr ( xy-z) if for 2/ unext ; then drop ;
+        : 'rsr ( xy-z) over
+
+        : 'ssr ( xy-z) 2* 2* 2/ 2/ y/limit until for 2/ unext ;
+
+        : 'rur ( xy-z) over
+
+        : 'usr ( xy-z) y/limit until for 2/ unext ;
+
+        (
+          1110_01??_????_???? binary operation with r and next word as parameter
+          1110_00??_????_???? binary operation with r and parameter on stack
+          'add add r with parameter
+          'sub subtract r with parameter
+          'rsb reverse subtract. subtract r from parameter
+          'and bitwise and.
+          'xor bitwise exclusive or.
+          'or bitwise or.
+          'rsl reverse unsigned shift left r by parameter bits
+          'usl unsigned shift left parameter by r bits
+          'rsr reverse signed shift right r by parameter bits
+          'ssr signed shift right parameter by r bits
+          'rur reverse unsigned shift right r by parameter bits
+          'usr unsigned shift right parameter by r bits
+          parameter is either a word constant or popped from the stack.
+        )
       ramWords:
+      - 0x04055
+      - 0x0000F
       - 0x05B12
       - 0x13400
       - 0x0C9B2
@@ -14947,30 +14973,23 @@ projects:
       - 0x05BB2
       - 0x1140E
       - 0x04812
-      - 0x00010
+      - 0x00012
       - 0x37932
       - 0x09F02
-      - 0x2F219
+      - 0x2F21B
       - 0x269B2
       - 0x115D5
-      - 0x3721F
-      - 0x262DA
-      - 0x367C2
-      - 0x307C2
-      - 0x307B2
-      - 0x11404
-      - 0x37223
-      - 0x1340C
-      - 0x11422
-      - 0x13406
-      - 0x13400
-      - 0x27DFA
-      - 0x0003F
-      - 0x27455
+      - 0x3721E
+      - 0x1340E
+      - 0x1141F
+      - 0x13408
+      - 0x13402
+      - 0x17555
       - 0x040B2
       - 0x0FFFF
-      - 0x11404
+      - 0x11406
       - 0x3D555
+      - 0x209B2
       - 0x329F7
       - 0x00001
       - 0x2C155
@@ -14978,22 +14997,27 @@ projects:
       - 0x39555
       - 0x32FCA
       - 0x3E655
-      - 0x19435
+      - 0x209B2
+      - 0x13400
+      - 0x19432
       - 0x2E9B2
-      - 0x31155
+      - 0x37155
       - 0x3B555
+      - 0x209B2
       - 0x364C2
-      - 0x309B2
-      - 0x1943B
+      - 0x31600
+      - 0x19432
       - 0x2E9B2
       - 0x31155
-      - 0x3B555
-      - 0x15555
-      - 0x15555
+      - 0x209B2
+      - 0x13400
+      - 0x19432
+      - 0x2E9B2
+      - 0x31155
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x012
+        entryPoint: 0x014
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15949,7 +15973,7 @@ projects:
         parameterStack: []
     - coordinate: 509
       enabled: true
-      sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ g/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p g/r! ]] lit !b !b ;\n: u/pop ( -w) A[ g/pop ]] lit !b A[ !p ]] lit !b @b ;\n: u/push ( w) A[ @p g/push ]] lit !b !b ;\n: u/leave A[ g/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ !p 2* !p ]] lit !b @b @b\n  -if // 1011_1???_????_????\n    // \n    --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // load literal -512..511\r\n    // mnemonic lit\r\n    drop 0x03ff and dup 0x0200 and if drop 0xfc00 xor u/r! ; then drop u/r! ;\n  then // 1011_00??_????_????\r\n  // unary\n  drop >r u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\r\n: 'parity 'bitcnt\r\n: 'odd 1 and ;\n\r\n(\r\nopcode 1011_01??_????_???? load literal to r. the range of the literal is -0x200 to 0x1ff.\r\n\r\n'abs make r absolute\r\n'neg negate r\n'inc increment r\r\n'dec decrement r\r\n'inv invert all bits in r\r\n'mul2 shift left r\r\n'div2 signed shift right of r\r\n'udiv2 unsigned shift right of r\r\n'bitcnt count 1 bits in r\r\n'parity if r contains an odd number of 1 bits, then r becomes 1 otherwise r becomes 0.\r\n'odd r becomes 1 of r is odd, otherwise r becomes 0.\r\n)\r\n"
+      sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ g/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p g/r! ]] lit !b !b ;\n: u/pop ( -w) A[ g/pop ]] lit !b A[ !p ]] lit !b @b ;\n: u/push ( w) A[ @p g/push ]] lit !b !b ;\n: u/leave A[ g/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ !p 2* !p ]] lit !b @b @b\n  -if // 1011_1???_????_????\n    // \n    --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // load literal -512..511\r\n    // mnemonic lit\r\n    drop 0x03ff and dup 0x0200 and if drop 0xfc00 xor u/r! ; then drop u/r! ;\n  then // 1011_00??_????_????\r\n  // unary\n  drop >r u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\nbegin [ swap ]\r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\r\n: 'parity 'bitcnt\r\n: 'odd 1 and ;\r\n: 'not until dup xor ;\n\r\n(\r\nopcode 1011_01??_????_???? load literal to r. the range of the literal is -0x200 to 0x1ff.\r\n\r\n'abs make r absolute\r\n'neg negate r\n'inc increment r\r\n'dec decrement r\r\n'inv invert all bits in r\r\n'mul2 shift left r\r\n'div2 signed shift right of r\r\n'udiv2 unsigned shift right of r\r\n'bitcnt count 1 bits in r\r\n'parity if r contains an odd number of 1 bits, then r becomes 1 otherwise r becomes 0.\r\n'odd r becomes 1 of r is odd, otherwise r becomes 0.\r\n'not logical not. if r is 0 then r = 1, otherwise r = 0\r\n)\r\n"
       ramWords:
       - 0x05B12
       - 0x13400
@@ -15987,8 +16011,8 @@ projects:
       - 0x0FFFF
       - 0x11404
       - 0x364C2
-      - 0x3122A
-      - 0x329B2
+      - 0x3123C
+      - 0x3372A
       - 0x049F5
       - 0x00001
       - 0x049F5
@@ -16009,8 +16033,8 @@ projects:
       - 0x1342F
       - 0x04055
       - 0x00001
-      - 0x15555
-      - 0x15555
+      - 0x1943C
+      - 0x24355
       - 0x15555
       - 0x15555
       - 0x15555
@@ -17039,7 +17063,7 @@ projects:
     debuggerAssemblyCode: >-
       lit 0x55
 
-      bitcnt
+      inv
 
       push
 

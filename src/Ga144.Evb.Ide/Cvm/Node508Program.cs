@@ -39,8 +39,9 @@ namespace Ga144.Evb.Ide.Cvm;
 ///
 /// <b>Register/stack helpers and the shared "remote op / transmit back / return control" idiom.</b>
 /// <c>g/r@</c>/<c>g/r!</c>/<c>g/pop</c>/<c>g/push</c>/<c>g/next</c>/<c>g/leave</c> are structurally
-/// identical, word for word, to <see cref="Node407Program"/>'s own <c>b/r@</c>/<c>b/r!</c>/<c>b/pop</c>/
-/// <c>b/push</c>/<c>b/leave</c> and <see cref="Node506Program"/>'s own <c>f/r@</c>/<c>f/r!</c>/
+/// identical, word for word, to <see cref="Node407Program"/>'s own <c>n/r@</c>/<c>n/r!</c>/<c>n/pop</c>/
+/// <c>n/push</c>/<c>n/leave</c> (renamed from <c>b/</c> 2026-09-05, see that class's own remarks) and
+/// <see cref="Node506Program"/>'s own <c>f/r@</c>/<c>f/r!</c>/
 /// <c>f/pop</c>/<c>f/push</c> (<c>f/next</c> too, via <c>A[ m/next ]] lit !b ahead</c>): each uses the
 /// <c>A[ ... ]] lit !b</c> idiom to assemble a raw instruction word, compile it as a literal, and stream
 /// it out over port B (bound to "left" here). <c>g/@</c>/<c>g/!</c> are new -- global fetch/store by
@@ -49,16 +50,18 @@ namespace Ga144.Evb.Ide.Cvm;
 /// (page 1, stack).
 ///
 /// <b><c>g/main</c>'s own dispatch cascade and its CVM-level opcode encoding.</b> Opens with the same
-/// "prepare return address, push take over code" idiom <see cref="Node407Program"/>'s <c>b/main</c> and
+/// "prepare return address, push take over code" idiom <see cref="Node407Program"/>'s <c>n/main</c> and
 /// <see cref="Node506Program"/>'s <c>f/main</c> both use (<c># g/leave lit &gt;r</c> then
 /// <c>A[ 2* !p !p ]] lit !b @b @b &gt;r</c>), then tests the header's own <c>101?</c> prefix bit by bit:
 /// <list type="bullet">
 /// <item><c>1011_????_????_????</c> -- extended arithmetic, relayed onward via the RIGHT port
-/// (<c>r---</c>): structurally the SAME "further hand-off to an as-yet-unsupplied neighbour node" idiom
-/// <see cref="Node407Program"/>'s own <c>b/main</c> uses for its <c>--l-</c>/<c>r---</c>/<c>---u</c>
-/// branches -- not the link back to 507, and not yet answered by anything in CVM2's mesh (no node
-/// occupying 508's own right-hand neighbour position has been supplied). Left exactly as open as
-/// <see cref="Node407Program"/> leaves its own equivalent branches, rather than guessed at further.</item>
+/// (<c>r---</c>): the SAME "further hand-off to a neighbour node" idiom
+/// <see cref="Node407Program"/>'s own <c>n/main</c> uses for ITS <c>r---</c> branch -- and, like that
+/// branch (now filled by <see cref="Node406Program"/>, 2026-09-05), this one is ALSO now filled: node
+/// 509's own unary-arithmetic node hangs directly off this RIGHT port (see
+/// <see cref="Node509Program"/>'s own remarks). <see cref="Node407Program"/>'s own remaining <c>--l-</c>/
+/// <c>-d--</c> branches are still left exactly as open as this one used to be, rather than guessed at
+/// further.</item>
 /// <item><c>1010_11??_????_????</c> -- global fetch to r, a 10-bit embedded offset (<c>0x3ff and</c>
 /// matches the "the offset is 10 bit" comment below exactly): <c>r&gt; 0x3ff and g/@ ;</c>.</item>
 /// <item><c>1010_10??_????_????</c> -- global store from r, same 10-bit offset: <c>r&gt; 0x3ff and

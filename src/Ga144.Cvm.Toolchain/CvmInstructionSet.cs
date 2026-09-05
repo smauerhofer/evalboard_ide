@@ -45,7 +45,20 @@ namespace Ga144.Cvm.Toolchain;
 /// tagged ops, <c>parity</c> and <c>odd</c> (added 2026-09-05, per Stefan's own follow-up: "I added 2
 /// new opcodes to node 509. add them also to the language") -- both genuinely new (no existing orphaned
 /// mnemonic of either name to repoint), tagged exactly like the original nine (see
-/// <see cref="ParityMnemonic"/>'s own remarks) and,
+/// <see cref="ParityMnemonic"/>'s own remarks), plus node 509's twelfth tagged op, <c>not</c> (added
+/// 2026-09-05, per Stefan's own follow-up: "I added 'not' to node 509. please add it to assembler and
+/// disassembler") -- also genuinely new, tagged the same way (see <see cref="NotMnemonic"/>'s own
+/// remarks), plus node 406's twelve binary-arithmetic ops (added 2026-09-05, per Stefan's own node 406
+/// source, "add these opcodes to assembler and disassembler and include this node in the boot stream") --
+/// <c>add</c>/<c>sub</c>/<c>and</c>/<c>xor</c>/<c>or</c>/<c>usl</c>/<c>ssr</c>/<c>usr</c> REPOINT eight
+/// of node 507's old, permanently-orphaned ALU-op mnemonics (per "only update existing opcodes where
+/// possible"), while <c>rsb</c>/<c>rsl</c>/<c>rsr</c>/<c>rur</c> are genuinely new; EACH of these twelve
+/// also gets a second, "i"-suffixed CVM mnemonic (<c>addi</c>/<c>subi</c>/<c>rsbi</c>/<c>andi</c>/
+/// <c>xori</c>/<c>ori</c>/<c>rsli</c>/<c>usli</c>/<c>rsri</c>/<c>ssri</c>/<c>ruri</c>/<c>usri</c>) for
+/// its own "constant in the next trailing word" form, per Stefan's own explicit naming rule ("for opcode
+/// with constant parameter, add a i to the mnemonic. so 'add' becomes 'addi'") -- see
+/// <see cref="ReverseSubtractMnemonic"/>'s and <see cref="AddConstantMnemonic"/>'s own remarks for the
+/// full derivation, and
 /// for each, how
 /// many words it occupies once assembled, how its
 /// operand (if any) is encoded, and a stable numeric <see cref="CvmInstructionShape.Id"/>. This is the
@@ -242,11 +255,12 @@ public static class CvmInstructionSet
   // EXACTLY like pushlit -- a single tagged opcode word (resolved against a live node's own compiled
   // symbol, never self-describing) followed by one trailing operand word -- so no new
   // CvmOperandEncoding case was needed, just two more TrailingWord entries pointed at a different node.
-  // Per Stefan's own explanation of node 407's b/main dispatch cascade ("the sequence 'ex ;' will call
-  // 'lcall and 'ljmp because their address is already in R") and the x/y relay protocol between node
-  // 507 and node 407 (confirmed correct by Stefan, 2026-09-02): node 507's m/main hands off to node 407
-  // once the fetched CVM opcode word's top bits read "11??", and node 407's own b/main cascade consumes
-  // two more bits before falling to "ex" for the "1100" case -- so a CVM opcode word reaching 'lcall or
+  // Per Stefan's own explanation of node 407's n/main dispatch cascade (renamed from b/main 2026-09-05 --
+  // see Cvm.Node407Program's own remarks) ("the sequence 'ex ;' will call 'lcall and 'ljmp because their
+  // address is already in R") and the x/y relay protocol between node 507 and node 407 (confirmed
+  // correct by Stefan, 2026-09-02): node 507's m/main hands off to node 407 once the fetched CVM opcode
+  // word's top bits read "11??", and node 407's own n/main cascade consumes two more bits before
+  // falling to "ex" for the "1100" case -- so a CVM opcode word reaching 'lcall or
   // 'ljmp always has its top 4 bits "1100" (0xC000), the same "tag | local address" scheme node 507's
   // own local-execute already uses with 0x8800 (Node507Cvm2LocalExecuteTagBits, in the IDE project's own
   // Services.CvmAssemblyLanguage). The actual far-call/far-jump TARGET address is carried separately, in
@@ -332,6 +346,70 @@ public static class CvmInstructionSet
   // still has its own distinct, independently-reachable address, exactly like the four-way overlap above.
   public const string ParityMnemonic = "parity";
   public const string OddMnemonic = "odd";
+
+  // Node 509's twelfth op, added 2026-09-05 per Stefan's own follow-up ("I added 'not' to node 509.
+  // please add it to assembler and disassembler") -- genuinely new, no existing orphaned "not" mnemonic
+  // to repoint. Shaped exactly like the other eleven (a single bare TAGGED opcode word,
+  // CvmOperandEncoding.None, resolved only against node 509's own live compile, tag 0xB000 | local
+  // address). Note (not this toolchain's concern to resolve, just to flag): this same source revision
+  // also inserted a new "ahead" right after 'neg's own "inv", closed by a SECOND "then" added at the very
+  // end of 'not's own definition ("if dup xor ; then then") -- per the F18 compiler's own LIFO forward-
+  // branch stack (CompileForwardIf/CompileAhead push a handle, CompileThen pops the most recently pushed
+  // one), that new "ahead" is resolved by the FIRST "then" after it (the one already there, right after
+  // 'dec's own ";"), while the ORIGINAL "-if" opened by 'abs is now what the NEW second "then" resolves,
+  // pushed down one level by the new "ahead". Every one of 'abs/'neg/'inc/'dec/'inv/... own addresses is
+  // confirmed UNCHANGED by this (the new "ahead" packed into 'neg's own existing word, per
+  // F18CompilerOptions.PackControlTransfers's default packing behavior) -- see Node509Program's own
+  // remarks for the full derivation.
+  public const string NotMnemonic = "not";
+
+  // Node 406's twelve binary-arithmetic ops, added 2026-09-05 per Stefan's node 406 source ("i provide
+  // you with node 406. it contains binary operations. add these opcodes to assembler and disassembler
+  // and include this node in the boot stream"). Node 406 is reached from node 407's own n/main dispatch
+  // (NOT node 507 directly) via its RIGHT port -- a SECOND three-hop branch off 507, mirroring
+  // 507->508->509 with 507->407->406. EIGHT of these twelve REPOINT existing, previously-orphaned
+  // mnemonics from node 507's old CVM1-era ALU-op family, per "only update existing opcodes where
+  // possible": AddMnemonic/SubtractMnemonic/AndMnemonic/XorMnemonic/OrMnemonic/
+  // UnsignedShiftLeftMnemonic/SignedShiftRightMnemonic/UnsignedShiftRightMnemonic (add/sub/and/xor/or/
+  // usl/ssr/usr) already existed in Instructions below with no live node to resolve against; node 406's
+  // own tick-prefixed words ('add, 'sub, 'and, 'xor, 'or, 'usl, 'ssr, 'usr) match those exact mnemonic
+  // strings, so they are repointed here rather than duplicated -- see
+  // Services.CvmAssemblyLanguage.NodeSymbolByMnemonic for the actual repointing. FOUR are genuinely NEW
+  // mnemonics: node 406's own 'rsb/'rsl/'rsr/'rur ("reverse subtract"/"reverse shift left"/"reverse
+  // shift right"/"reverse unsigned shift right") have no existing same-named counterpart anywhere in
+  // this table.
+  //
+  // Each of the twelve exists in TWO forms on node 406 itself, both resolving to the SAME F18 symbol/
+  // address but reached via a DIFFERENT tag and taking a DIFFERENT CVM operand shape, per node 406's own
+  // y/main dispatch cascade (see Cvm.Node406Program's own remarks for the full derivation): a
+  // "parameter on the stack" form (CvmOperandEncoding.None, tag 0xE000, Node406BinaryStackTagBits) and a
+  // "constant in the next word" form (CvmOperandEncoding.TrailingWord, tag 0xE400,
+  // Node406BinaryConstantTagBits) -- shaped exactly like pushlit/lcall/ljmp/ldg/stg's own trailing-word
+  // convention. Per Stefan's own explicit naming instruction ("for opcode with constant parameter, add a
+  // i to the mnemonic. so 'add' becomes 'addi'"), the constant-in-next-word form of each of the twelve
+  // gets its own, separate, "i"-suffixed CVM mnemonic (addi/subi/rsbi/andi/xori/ori/rsli/usli/rsri/ssri/
+  // ruri/usri) -- a completely distinct entry in this table from its stack-parameter counterpart, even
+  // though both ultimately resolve to the same node-406 F18 symbol.
+  public const string ReverseSubtractMnemonic = "rsb";
+  public const string ReverseShiftLeftMnemonic = "rsl";
+  public const string ReverseShiftRightMnemonic = "rsr";
+  public const string ReverseUnsignedShiftRightMnemonic = "rur";
+
+  // The "i suffix" constant-in-next-word forms of all twelve of node 406's binary ops -- see the remarks
+  // just above for the naming rule and the shared-symbol/different-tag relationship to their
+  // stack-parameter counterparts.
+  public const string AddConstantMnemonic = "addi";
+  public const string SubtractConstantMnemonic = "subi";
+  public const string ReverseSubtractConstantMnemonic = "rsbi";
+  public const string AndConstantMnemonic = "andi";
+  public const string XorConstantMnemonic = "xori";
+  public const string OrConstantMnemonic = "ori";
+  public const string ReverseShiftLeftConstantMnemonic = "rsli";
+  public const string UnsignedShiftLeftConstantMnemonic = "usli";
+  public const string ReverseShiftRightConstantMnemonic = "rsri";
+  public const string SignedShiftRightConstantMnemonic = "ssri";
+  public const string ReverseUnsignedShiftRightConstantMnemonic = "ruri";
+  public const string UnsignedShiftRightConstantMnemonic = "usri";
 
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
@@ -665,6 +743,23 @@ public static class CvmInstructionSet
     new(Id: 78, LitMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: LitTag, ValueBitMask: LitValueBitMask),
     new(Id: 79, ParityMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 80, OddMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 81, NotMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 82, ReverseSubtractMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 83, ReverseShiftLeftMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 84, ReverseShiftRightMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 85, ReverseUnsignedShiftRightMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 86, AddConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 87, SubtractConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 88, ReverseSubtractConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 89, AndConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 90, XorConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 91, OrConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 92, ReverseShiftLeftConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 93, UnsignedShiftLeftConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 94, ReverseShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 95, SignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 96, ReverseUnsignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 97, UnsignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =
