@@ -47,7 +47,15 @@ namespace Ga144.Evb.Ide.Services;
 /// past <c>call</c>'s own 15-bit reach -- and that new node DOES have two entries below,
 /// <see cref="CvmInstructionSet.LongCallMnemonic"/>/<see cref="CvmInstructionSet.LongJumpMnemonic"/>,
 /// pointed at <see cref="Node407Program.Coordinate"/> with the new <see cref="Node407LongCallTagBits"/>
-/// tag -- see that constant's own remarks for the full derivation.
+/// tag -- see that constant's own remarks for the full derivation. Extended 2026-09-06 with THREE more
+/// tick-prefixed words on the SAME node -- <c>'clbr</c>/<c>'lbr</c>/<c>'cljmp</c> (long conditional
+/// branch, long branch, long conditional jump) -- all reached through node 407's own SAME "1100" dispatch
+/// branch as <c>'lcall</c>/<c>'ljmp</c>, so all five now share <see cref="Node407LongCallTagBits"/>,
+/// distinguished only by their own address on node 407 -- see
+/// <see cref="CvmInstructionSet.LongConditionalBranchMnemonic"/>'s and <see cref="Node407Program"/>'s own
+/// remarks for the full derivation, including how this revision also hoisted the "fetch the trailing
+/// operand word" step out of <c>'lcall</c>/<c>'ljmp</c>'s own bodies and into <c>n/main</c>'s own shared
+/// dispatch tail (an internal refactor that leaves the CVM-level tag/opcode scheme completely unchanged).
 ///
 /// <b><c>Node506Program.cs</c> is ALSO back -- another BRAND NEW, unrelated CVM2 file (2026-09-02).</b>
 /// The original CVM1 node 506 (register-d/extended-precision ops zext/addc/ldd/std/xd/mul2d/div2d/sext/
@@ -248,6 +256,13 @@ internal static class CvmAssemblyLanguage
   // far call/jump TARGET address itself is not in this tag word at all -- it's the TrailingWord operand
   // (CvmInstructionSet.CvmOperandEncoding.TrailingWord), read by 'lcall/'ljmp via node 507's own m/next
   // once running on node 407.
+  //
+  // Extended 2026-09-06 to also cover 'clbr/'lbr/'cljmp: Stefan's follow-up node 407 source added three
+  // more tick-prefixed words reached through this SAME "1100" n/main branch (the branch's own condition
+  // is unchanged -- only what happens once it falls to "ex" changed, see Node407Program's own remarks),
+  // so all five long-call/branch/jump ops now share this one tag, distinguished purely by their own
+  // address on node 407, exactly the same "one tag, many named ops at different addresses" shape
+  // Node509UnaryArithmeticTagBits and Node408's own tags already use.
   private const int Node407LongCallTagBits = 0xC000;
 
   // CVM2's node 506 'leave tag (2026-09-02), per Stefan's node 506 source (Cvm.Node506Program): its own
@@ -373,6 +388,15 @@ internal static class CvmAssemblyLanguage
         // entry, not a special case.
         [CvmInstructionSet.LongCallMnemonic] = (Node407Program.Coordinate, "'lcall", Node407LongCallTagBits),
         [CvmInstructionSet.LongJumpMnemonic] = (Node407Program.Coordinate, "'ljmp", Node407LongCallTagBits),
+
+        // Node 407's three long-branch ops (added 2026-09-06, "more opcodes to node 407 added") -- all
+        // reached through node 407's own SAME "1100" n/main branch as 'lcall/'ljmp above, so they share
+        // the SAME tag (Node407LongCallTagBits, 0xC000), differing only in their own address on node 407
+        // -- see CvmInstructionSet.LongConditionalBranchMnemonic's own remarks and Node407Program's own
+        // remarks for the full derivation.
+        [CvmInstructionSet.LongConditionalBranchMnemonic] = (Node407Program.Coordinate, "'clbr", Node407LongCallTagBits),
+        [CvmInstructionSet.LongBranchMnemonic] = (Node407Program.Coordinate, "'lbr", Node407LongCallTagBits),
+        [CvmInstructionSet.LongConditionalJumpMnemonic] = (Node407Program.Coordinate, "'cljmp", Node407LongCallTagBits),
         // CVM2's node 506 (2026-09-02) -- repointed from CVM1's node 606 ("only update existing opcodes
         // where possible"). Only 'leave so far, per Stefan's own explicit scope ("give me now enter and
         // leave mnemonics"); enter is a DIFFERENT (self-describing) shape and is wired directly in

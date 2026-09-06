@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-06T00:19:44.6992247
-      utcDateTime: 2026-09-06T00:19:44.6992247Z
-      localDateTime: 2026-09-06T02:19:44.6992247+02:00
+      dateTime: 2026-09-06T06:37:53.3102665
+      utcDateTime: 2026-09-06T06:37:53.3102665Z
+      localDateTime: 2026-09-06T08:37:53.3102665+02:00
       date: 2026-09-06T00:00:00.0000000
       day: 6
       dayOfWeek: Sunday
       dayOfYear: 249
-      hour: 0
-      millisecond: 699
-      microsecond: 224
-      nanosecond: 700
-      minute: 19
+      hour: 6
+      millisecond: 310
+      microsecond: 266
+      nanosecond: 500
+      minute: 37
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 44
-      ticks: 639242507846992247
-      utcTicks: 639242507846992247
-      timeOfDay: 00:19:44.6992247
+      second: 53
+      ticks: 639242734733102665
+      utcTicks: 639242734733102665
+      timeOfDay: 06:37:53.3102665
       year: 2026
   portB: 
   portC:
@@ -15063,10 +15063,24 @@ projects:
           2* -if // 1101_????_????_????
             r> -d-- ;
           then // 1100_????_????_????
-          ex ;
-        : 'lcall A[ m/next ]] lit !b A[ >r a ]] lit !b A[ m/push ]] lit !b A[ r> a! ]] lit !b ;
+          A[ m/next ]] lit !b ex ;
+        : 'lcall A[ >r a ]] lit !b A[ m/push ]] lit !b A[ r> a! ]] lit !b ;
 
-        : 'ljmp A[ m/next ]] lit !b A[ a! ]] lit !b ;
+        : 'ljmp A[ a! ]] lit !b ;
+
+        : 'clbr A[ !p over !p ]] lit !b @b @b
+          if // no branch
+            ;
+          then // branch
+          drop A[ @p m/branch ]] lit !b !b ;
+        : 'lbr A[ m/branch ]] lit !b ; 
+
+        : 'cljmp A[ !p over !p ]] lit !b @b @b
+          if // no branch
+            ;
+          then // branch
+          drop A[ @p a! ]] lit !b !b ;
+
 
 
         (
@@ -15078,6 +15092,12 @@ projects:
         'lcall long call. the next word defines the destination address.
 
         'ljmp long jump. jumps to the address in the next word
+
+        'cljmp long jump. jumps to the address in the next word if r == 0
+
+        'lbr long branch. branch with offset in the next word
+
+        'clbr conditional long branch. branch with offset in the next word if r == 0
 
         )
       ramWords:
@@ -15110,32 +15130,32 @@ projects:
       - 0x3721D
       - 0x269B2
       - 0x11515
-      - 0x17555
+      - 0x05B5D
+      - 0x13407
       - 0x15555
       - 0x05B12
-      - 0x13407
       - 0x2EEB2
-      - 0x09D27
       - 0x1340F
+      - 0x09D25
       - 0x26AB2
-      - 0x09555
-      - 0x05B12
-      - 0x13407
+      - 0x05B55
       - 0x2A9B2
+      - 0x05B02
+      - 0x0CF32
+      - 0x0132B
+      - 0x15555
+      - 0x3BD22
+      - 0x0561A
       - 0x09555
+      - 0x05B55
+      - 0x1341A
+      - 0x05B02
+      - 0x0CF32
+      - 0x01334
       - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x3BD22
+      - 0x04AB2
+      - 0x09555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15910,13 +15930,24 @@ projects:
           then // 1010_????_????_????
           2* -if // 1010_1???_????_????
 
-            // globals
             2* -if // 1010_11??_????_????
-              // global fetch to r
-              r> 0x3ff and g/@ ;
+
+              2* -if // 1010_111?_????_????
+                // conditional branch
+                g/r@ if r> g/leave then
+              then // 1010_110?_????_????
+              // branch
+              r> 0x1ff and dup 0x100 and if drop 0xfe00 xor dup then drop A[ @p m/branch ]] lit !p !p ;
+
             then // 1010_10??_????_????
-              // global store to r
-              r> 0x3ff and g/! ;
+
+            // globals
+            2* -if // 1010_101?_????_????
+              // load r form global
+              r> 0x1ff and g/@ ;
+            then // 1010_100?_????_????
+            // store r to global
+            r> 0x1ff and g/! ;
 
           then // 1010_0???_????_????
           A[ m/next ]] lit !b A[ !p ]] lit !b @b ex ;
@@ -15927,9 +15958,13 @@ projects:
 
         (
 
-        opcode 1010_11??_????_???? load global into r. the offset is 10 bit.
+        opcode 1010_100?_????_???? store r to global. the offset is unsigned 9 bit.
 
-        opcode 1010_10??_????_???? store r to global. the offset is 10 bit.
+        opcode 1010_101?_????_???? load global into r. the offset is unsigned 9 bit.
+
+        opcode 1010_110?_????_???? branch to offset. the offset is signed 9 bit.
+
+        opcode 1010_111?_????_???? conditional branch to offset if r == 0. the offset is signed 9 bit.
 
 
         'ldg load global to r. offset in the next word
@@ -15971,13 +16006,27 @@ projects:
       - 0x2F21F
       - 0x269B2
       - 0x115D5
-      - 0x37227
-      - 0x37224
+      - 0x37235
+      - 0x3722E
+      - 0x37225
+      - 0x13400
+      - 0x19425
+      - 0x27616
+      - 0x27DFB
+      - 0x001FF
+      - 0x04063
+      - 0x00100
+      - 0x3BDE3
+      - 0x0FE00
+      - 0x3BD36
+      - 0x0561A
+      - 0x15555
+      - 0x37232
       - 0x27DFA
-      - 0x003FF
+      - 0x001FF
       - 0x1140E
       - 0x27DFA
-      - 0x003FF
+      - 0x001FF
       - 0x11412
       - 0x05B12
       - 0x13407
@@ -15988,20 +16037,6 @@ projects:
       - 0x1140E
       - 0x1340A
       - 0x11412
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       startup:

@@ -68,7 +68,10 @@ namespace Ga144.Cvm.Toolchain;
 /// <see cref="Instructions"/> entries at all, either time, since every name it needed already existed in
 /// this table -- see the IDE project's own
 /// Services.CvmAssemblyLanguage.Node408UnaryComparisonTagBits/Node408BinaryComparisonTagBits for the tag
-/// derivation), and
+/// derivation), plus node 407's own three long-branch ops (added 2026-09-06, per Stefan's own follow-up
+/// node 407 source, "more opcodes to node 407 added") -- <c>clbr</c>/<c>lbr</c>/<c>cljmp</c> -- all
+/// genuinely NEW mnemonics, shaped exactly like <c>lcall</c>/<c>ljmp</c> (same node, same tag, just
+/// different addresses -- see <see cref="LongConditionalBranchMnemonic"/>'s own remarks), and
 /// for each, how
 /// many words it occupies once assembled, how its
 /// operand (if any) is encoded, and a stable numeric <see cref="CvmInstructionShape.Id"/>. This is the
@@ -290,6 +293,27 @@ public static class CvmInstructionSet
   // Cvm.Node407Program's own remarks for the transaction log.
   public const string LongCallMnemonic = "lcall";
   public const string LongJumpMnemonic = "ljmp";
+
+  // Node 407's three long-branch ops, added 2026-09-06 per Stefan's own follow-up node 407 source ("more
+  // opcodes to node 407 added. use them in assembler and disassembler"), which also renamed the node's
+  // own header comment ("VM secondary main", was "VM extending") and hoisted the shared "fetch the
+  // trailing operand word" step (A[ m/next ]] lit !b) out of 'lcall/'ljmp's own bodies and into n/main's
+  // own dispatch tail itself (still falling to "ex" for the "1100" prefix, so the CVM opcode tag itself,
+  // LongCallTagBits below, is UNCHANGED) -- seven of node 507's own already-exported words
+  // (m/pop/m/push/m/next/a/a!/m/branch) are now used by this node, m/branch newly among them. All THREE
+  // are genuinely new mnemonics -- no existing orphaned same-named mnemonic to repoint -- shaped exactly
+  // like lcall/ljmp (CvmOperandEncoding.TrailingWord: one tagged opcode word, resolved against node 407's
+  // own live compile, same tag as lcall/ljmp since all five ops share node 407's SAME "1100" dispatch
+  // branch, just different addresses within node 407's own RAM; then one trailing operand word). Per this
+  // source's own trailing comment: 'lbr (long branch) adds a trailing signed offset to the CVM's own
+  // program counter via node 507's own m/branch (unconditionally); 'clbr (conditional long branch) does
+  // the same but only if r == 0, otherwise returns without branching; 'cljmp (conditional long jump) is
+  // the same conditional test but jumps to an absolute trailing address (like 'ljmp) instead of adding an
+  // offset. NOT YET CONFIRMED ON REAL HARDWARE (2026-09-06) -- see Cvm.Node407Program's own remarks for
+  // the full derivation, including how 'clbr's/'cljmp's own conditional test works.
+  public const string LongConditionalBranchMnemonic = "clbr";
+  public const string LongBranchMnemonic = "lbr";
+  public const string LongConditionalJumpMnemonic = "cljmp";
 
   // CVM2's load global/store global, added per Stefan's node 508 source (2026-09-04, "here is node
   // 508. it handles access to globals.") and his own tick-naming rule ("every word that begins with a
@@ -778,6 +802,9 @@ public static class CvmInstructionSet
     new(Id: 95, SignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
     new(Id: 96, ReverseUnsignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
     new(Id: 97, UnsignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 98, LongConditionalBranchMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 99, LongBranchMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 100, LongConditionalJumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

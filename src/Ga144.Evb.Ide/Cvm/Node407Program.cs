@@ -18,9 +18,9 @@ namespace Ga144.Evb.Ide.Cvm;
 /// fresh 64-word budget sidesteps that entirely.
 ///
 /// <b>Resolves node 507's own "-d--" dispatch question -- CONFIRMED by Stefan (2026-09-02): "the port
-/// between 407 and 507 is still 'down'."</b> This source's own header,
-/// <c>( CVM2 node 407. VM extending, 11??_????_????_???? )</c>, states the exact same leading bit
-/// pattern as the FIRST test in <see cref="Node507Program"/>'s own <c>m/main</c> dispatch cascade --
+/// between 407 and 507 is still 'down'."</b> This source's own header (renamed 2026-09-06, see below --
+/// the leading bit pattern itself is unchanged) states the exact same leading bit pattern as the FIRST
+/// test in <see cref="Node507Program"/>'s own <c>m/main</c> dispatch cascade --
 /// <c>2* -if // 11??_????_????_???? -d-- ;</c> -- which that class's own remarks could previously only
 /// guess a destination for. Node 407 is that destination, and the physical link between the two nodes
 /// is node 507's local "down" port / node 407's local "down" port (bound to port B here, <c># down /b</c>
@@ -53,30 +53,50 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <c>---u</c> or silently kept without comment. Whether this reversion is intentional (e.g. the "1101"
 /// branch's own destination changed again) or an oversight from editing an older copy of this file is
 /// not yet resolved -- flagged as open, per this project's own practice of never guessing at unspecified
-/// design decisions.
+/// design decisions. STILL UNRESOLVED as of the 2026-09-06 revision below, which left this "1101" branch
+/// completely untouched.
 ///
-/// <b>Imports node 507.</b> <c># 507 import</c> brings node 507's exported symbols (<c>m/pop</c>,
-/// <c>m/push</c>, <c>m/next</c>, and everything else node 507 exports) into scope here by name -- see
-/// <see cref="Compiler.F18Compiler"/>'s own <c>InterpretNodeImport</c>/<c>CompileImportCoordinate</c>
-/// for the mechanism: an imported name resolves to the OTHER node's address, so referencing <c>m/pop</c>
-/// here compiles a reference to node 507's own compiled address for it, not a local definition.
+/// <b>Renamed header, three new tick-prefixed words, and the "fetch trailing word" step hoisted into
+/// <c>n/main</c> itself -- Stefan's own follow-up (2026-09-06, "more opcodes to node 407 added. use them
+/// in assembler and disassembler").</b> The node's own header comment changed from "VM extending" to
+/// "VM secondary main" (the leading bit pattern, <c>11??_????_????_????</c>, and every export name are
+/// unchanged -- confirmed via a standalone harness compile that node 406's and node 408's own sources,
+/// both importing this node by name, still compile cleanly against it with zero changes needed on their
+/// own sides). <c>n/main</c>'s own dispatch cascade is structurally IDENTICAL -- same four branches,
+/// same bit tests, same "1100" prefix falling through to the local-execute tail -- except that tail
+/// itself grew a leading <c>A[ m/next ]] lit !b</c> (was bare <c>ex ;</c>, now
+/// <c>A[ m/next ]] lit !b ex ;</c>): this streams a call to node 507's own <c>m/next</c> (per that node's
+/// own remarks, "read the current word and increment p" -- i.e. fetch the CVM program's own next word
+/// and advance its program counter) BEFORE jumping via <c>ex</c>. This is exactly the step <c>'lcall</c>
+/// and <c>'ljmp</c> USED TO perform themselves, as their own first streamed word (see the 2026-09-05
+/// verification numbers below, where each began with its own <c>A[ m/next ]] lit !b</c>) -- hoisted up
+/// into the shared tail so it happens once for every op reached this way, not duplicated per op. This
+/// matters because THREE new ops were added alongside it, all of which also need that same trailing-word
+/// fetch: <c>'clbr</c> (conditional long branch), <c>'lbr</c> (long branch), and <c>'cljmp</c>
+/// (conditional long jump) -- per this source's own trailing comment, respectively "branch with offset in
+/// the next word if r == 0", "branch with offset in the next word" (unconditional), and "jumps to the
+/// address in the next word if r == 0". Since ALL FIVE named ops (<c>'lcall</c>/<c>'ljmp</c>/<c>'clbr</c>/
+/// <c>'lbr</c>/<c>'cljmp</c>) are reached the exact same way -- <c>n/main</c> falling to its "1100"
+/// tail, which now fetches the trailing word FIRST, then jumps via <c>ex</c> to whichever address was
+/// already in R -- the CVM-level opcode TAG itself is completely unaffected (still <c>0xC000</c>,
+/// resolved the same way as before): only the ADDRESSES the five ops land at, and which of node 507's own
+/// exports each pulls in, changed. <c>'lbr</c>/<c>'clbr</c> both stream a call to node 507's own
+/// <c>m/branch</c> (<c>: m/branch ( rso-rs) a . + a! ;</c> -- adds the just-fetched offset to node 507's
+/// own program-counter register <c>a</c> and stores it back, i.e. a genuine relative branch), a
+/// PREVIOUSLY-UNUSED node 507 export that neither <c>'lcall</c> nor <c>'ljmp</c> ever needed;
+/// <c>'cljmp</c> instead streams <c>@p a!</c> (an absolute jump, like <c>'ljmp</c>'s own tail) but only
+/// after the SAME conditional test <c>'clbr</c> uses.
 ///
-/// <b>Register/stack helpers (<c>n/r@</c>/<c>n/r!</c>/<c>n/pop</c>/<c>n/push</c>/<c>n/next</c>/
-/// <c>n/leave</c>).</b> Each uses the <c>A[ ... ]] lit !b</c> idiom: <c>A[ ... ]]</c> assembles up to
-/// four primitive opcodes (or an embedded call to a named word, per
-/// <c>F18Compiler.CompileQuotedInstruction</c>'s own remarks) into ONE raw instruction word and leaves
-/// it on the compile-time stack without deciding what happens to it; <c>lit</c> compiles that word as an
-/// ordinary object-code literal; <c>!b</c> writes it out over port B (bound to "down" by <c># down /b</c>
-/// below). So each of these compiles a short sequence of literal instruction words and streams them
-/// out, one per <c>!b</c>, rather than executing anything itself -- consistent with this node's own
-/// stated purpose, "support for extending the VM to neighbour nodes." <c>n/r@</c>/<c>n/r!</c> read/write
-/// a neighbour register (<c>over !p</c>/<c>@p over</c>, then a data word); <c>n/pop</c>/<c>n/push</c> do
-/// the same but embed a CALL to node 507's own imported <c>m/pop</c>/<c>m/push</c> as the first streamed
-/// word, plus an <c>!p</c>/<c>@p</c> as the second; <c>n/next</c> (NEW, see above) embeds a call to node
-/// 507's own imported <c>m/next</c> the same way <c>n/pop</c> embeds <c>m/pop</c>; <c>n/leave</c>
-/// streams a single raw <c>;</c> (return) word. The exact wire-level protocol/purpose of what receives
-/// and executes these streamed words is not fully worked out here -- flagged as open rather than
-/// guessed at further.
+/// <b><c>'clbr</c>/<c>'cljmp</c>'s own shared conditional-test shape.</b> Both open with the IDENTICAL
+/// streamed sequence, <c>A[ !p over !p ]] lit !b @b @b</c> (relays two words out, reads two back), then
+/// <c>if // no branch ; then // branch drop A[ ... ]] lit !b !b ;</c> -- per real GA144 "if" semantics
+/// (branch to "then" when the tested value is ZERO, otherwise fall through), this means: if the tested
+/// value is NONZERO, the word takes the "if" body immediately (a bare <c>;</c>, "no branch" per the
+/// source's own comment) and returns without doing anything further; if it IS zero, execution falls to
+/// "then" instead, drops something, and streams the actual branch/jump (<c>m/branch</c> for <c>'clbr</c>,
+/// <c>a!</c> for <c>'cljmp</c>). This matches both ops' own stated meaning ("... if r == 0") exactly --
+/// unlike the polarity concerns flagged on <see cref="Node408Program"/>'s own fall-through idioms, this
+/// one reads consistently with its own documentation at face value, so no flag is raised here.
 ///
 /// <b><c>n/main</c>'s own dispatch cascade (renamed from <c>b/main</c>, 2026-09-05) -- see the FLAGGED
 /// note above on its own "1101" branch.</b> Reads two words via <c>@b</c> (from port B, the SEPARATE
@@ -87,96 +107,109 @@ namespace Ga144.Evb.Ide.Cvm;
 /// PREVIOUSLY an unsupplied further-relay branch (no code change needed here -- the relay was already
 /// wired, just unanswered until node 408 existed) -- else "1110" hands off RIGHT (<c>r---</c>) -- THIS is
 /// the link to node 406 (see <see cref="Node406Program"/>'s own remarks); "110?" -&gt; "1101" hands off
-/// DOWN (<c>-d--</c>, see the FLAGGED note above -- this was <c>---u</c>, UP, in the immediately prior
-/// revision); else "1100" falls to <c>ex</c> ("execute", GA144's native multi-port-wait/idle opcode) --
-/// this is where <c>'lcall</c>/<c>'ljmp</c> below are actually reached from.
+/// DOWN (<c>-d--</c>, see the FLAGGED note above -- this was <c>---u</c>, UP, in an earlier revision);
+/// else "1100" falls to <c>A[ m/next ]] lit !b ex ;</c> (fetch the trailing word, THEN "execute", GA144's
+/// native multi-port-wait/idle opcode -- see the 2026-09-06 remarks above for why the fetch moved here)
+/// -- this is where <c>'lcall</c>/<c>'ljmp</c>/<c>'clbr</c>/<c>'lbr</c>/<c>'cljmp</c> below are actually
+/// reached from.
 ///
-/// <b><c>'lcall</c>/<c>'ljmp</c>.</b> Each streams a short instruction sequence the same way the
-/// register/stack helpers above do. <c>'lcall</c> streams <c>m/next</c> (fetch the address in the
-/// FOLLOWING word, per <c>m/next</c>'s own semantics on <see cref="Node507Program"/>), then <c>&gt;r
-/// a</c>, <c>m/push</c>, <c>r&gt; a!</c> -- structurally the SAME body <see cref="Node507Program"/>'s
+/// <b><c>'lcall</c>/<c>'ljmp</c> (bodies simplified 2026-09-06 -- see above).</b> Each streams a short
+/// instruction sequence the same way the register/stack helpers above do. <c>'lcall</c> now streams just
+/// <c>&gt;r a</c>, <c>m/push</c>, <c>r&gt; a!</c> (its own former leading <c>A[ m/next ]] lit !b</c> moved
+/// into <c>n/main</c>'s own shared tail, above) -- structurally the SAME body <see cref="Node507Program"/>'s
 /// own <c>m/call</c> has (<c>begin drop &gt;r a m/push r&gt; a!</c>, minus the <c>begin drop</c> already
-/// consumed by whatever calls in), i.e. a full call: push a return address, then jump. <c>'ljmp</c>
-/// streams just <c>m/next</c> then <c>a!</c> -- structurally identical to <see cref="Node507Program"/>'s
-/// own plain <c>'jump</c> (<c>m/next a!</c>), no return address pushed. Per the source's own trailing
+/// consumed by whatever calls in), i.e. a full call: push a return address, then jump. <c>'ljmp</c> now
+/// streams just <c>a!</c> (likewise minus its own former leading <c>m/next</c>) -- structurally identical
+/// to <see cref="Node507Program"/>'s own plain <c>'jump</c> (<c>m/next a!</c>, where the <c>m/next</c>
+/// half now lives in <c>n/main</c> instead), no return address pushed. Per the source's own trailing
 /// comment: "'lcall long call. the next word defines the destination address. 'ljmp long jump. jumps to
-/// the address in the next word" -- confirming both take a full-width address in the CVM word
+/// the address in the next word" -- confirming both still take a full-width address in the CVM word
 /// immediately following the opcode, i.e. exactly the
 /// <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/> shape <c>pushlit</c> already uses,
-/// just with call/jump semantics instead of a stack push.
+/// just with call/jump semantics instead of a stack push. This body simplification is a pure internal
+/// refactor -- see the CVM opcode tag remarks below for why it changes neither mnemonic's own tag.
 ///
-/// <b>How <c>'lcall</c> vs <c>'ljmp</c> is actually selected -- per Stefan: "the sequence 'ex ;' will
-/// call 'lcall and 'ljmp because their address is already in R."</b> <c>n/main</c>'s own bit-cascade
-/// does NOT distinguish between them at all -- <c>ex</c> is GA144's native instruction, executing
-/// whatever address is already sitting in R (the F18 register <see cref="Node507Program"/>'s own header
-/// calls <c>S</c>) as a direct jump/call. So the choice of which of the two gets run is made entirely
-/// by whoever dispatches into node 407 in the first place, by loading R with <c>'lcall</c>'s address or
-/// <c>'ljmp</c>'s before handing off -- not by any further bit pattern node 407 itself inspects.
+/// <b>How <c>'lcall</c> vs <c>'ljmp</c> (and now <c>'clbr</c>/<c>'lbr</c>/<c>'cljmp</c>) is actually
+/// selected -- per Stefan: "the sequence 'ex ;' will call 'lcall and 'ljmp because their address is
+/// already in R."</b> <c>n/main</c>'s own bit-cascade does NOT distinguish between any of the five at
+/// all -- <c>ex</c> is GA144's native instruction, executing whatever address is already sitting in R
+/// (the F18 register <see cref="Node507Program"/>'s own header calls <c>S</c>) as a direct jump/call. So
+/// the choice of which of the five gets run is made entirely by whoever dispatches into node 407 in the
+/// first place, by loading R with the target op's own address before handing off -- not by any further
+/// bit pattern node 407 itself inspects.
 ///
-/// <b>The CVM opcode tag (resolved 2026-09-02, unaffected by the 2026-09-05 rename).</b> Node 507's own
-/// <c>m/main</c> hands off down-port to node 407 once a fetched opcode word's top bits read "11??" --
-/// carrying, per the relay protocol traced in <see cref="Node507Program"/>'s own remarks (the
-/// <c>x</c>/<c>y</c> stack convention: <c>x</c> is the ORIGINAL fetched word, unshifted, relayed via
-/// <c>2* !p !p</c> to node 407 alongside the progressively-shifted <c>y</c>), the ORIGINAL opcode word
-/// itself all the way to <c>ex</c> -- which jumps directly to whatever address is already in R. Since
-/// <c>ex</c> is only reached once the cascade's own bit-tests have consumed exactly "1100" (this
-/// method's own remarks above), and <c>ex</c> jumps straight to <c>x</c>, <c>x</c>'s own low bits must
-/// equal <c>'lcall</c>'s or <c>'ljmp</c>'s real address ON NODE 407 -- so the CVM-level opcode word is
-/// <c>0xC000 | (address on node 407)</c>, the SAME "tag | local address" scheme
+/// <b>The CVM opcode tag (resolved 2026-09-02, unaffected by the 2026-09-05 rename or the 2026-09-06
+/// extension).</b> Node 507's own <c>m/main</c> hands off down-port to node 407 once a fetched opcode
+/// word's top bits read "11??" -- carrying, per the relay protocol traced in
+/// <see cref="Node507Program"/>'s own remarks (the <c>x</c>/<c>y</c> stack convention: <c>x</c> is the
+/// ORIGINAL fetched word, unshifted, relayed via <c>2* !p !p</c> to node 407 alongside the
+/// progressively-shifted <c>y</c>), the ORIGINAL opcode word itself all the way to the "1100" tail, which
+/// now fetches the trailing word first and THEN jumps directly to whatever address is already in R
+/// (unchanged by that reordering). Since this tail is only reached once the cascade's own bit-tests have
+/// consumed exactly "1100" (this method's own remarks above), and it jumps straight to <c>x</c>, <c>x</c>'s
+/// own low bits must equal whichever of <c>'lcall</c>/<c>'ljmp</c>/<c>'clbr</c>/<c>'lbr</c>/<c>'cljmp</c>'s
+/// real address ON NODE 407 the caller intends -- so the CVM-level opcode word is
+/// <c>0xC000 | (address on node 407)</c> for ALL FIVE, the SAME "tag | local address" scheme
 /// <see cref="Node507Program"/>'s own local-execute already uses with 0x8800. Wired up in
-/// <see cref="CvmInstructionSet.LongCallMnemonic"/>/<see cref="CvmInstructionSet.LongJumpMnemonic"/>
-/// (shape: <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>, exactly like <c>pushlit</c>)
-/// and <see cref="Services.CvmAssemblyLanguage"/>'s own <c>Node407LongCallTagBits</c> (0xC000), resolved
+/// <see cref="CvmInstructionSet.LongCallMnemonic"/>/<see cref="CvmInstructionSet.LongJumpMnemonic"/>/
+/// <see cref="CvmInstructionSet.LongConditionalBranchMnemonic"/>/<see cref="CvmInstructionSet.LongBranchMnemonic"/>/
+/// <see cref="CvmInstructionSet.LongConditionalJumpMnemonic"/> (shape:
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>, exactly like <c>pushlit</c>) and
+/// <see cref="Services.CvmAssemblyLanguage"/>'s own <c>Node407LongCallTagBits</c> (0xC000), resolved
 /// against THIS node's live compile the same way <c>pushlit</c> resolves against node 507's -- the tag
-/// itself does not depend on WHERE <c>'lcall</c>/<c>'ljmp</c> land in node 407's own RAM, only on which
-/// node answers them, so it is unaffected by the address shift below.
+/// itself does not depend on WHERE any of the five land in node 407's own RAM, only on which node answers
+/// them.
 ///
-/// <b>Verification (2026-09-05, this revision).</b> Compiled standalone against this project's real
-/// <c>Compiler/F18Compiler.cs</c>, importing <see cref="Node507Program"/>'s own exports: 0 errors, 42/64
-/// words used (up from 38, per the new <c>n/next</c> word), entry point <c>n/main</c> at 0x0010 (up from
-/// 0x000C), every symbol resolves: <c>n/r@</c>=0x0000, <c>n/r!</c>=0x0002, <c>n/pop</c>=0x0004,
-/// <c>n/push</c>=0x0008, <c>n/next</c>=0x000A (NEW), <c>n/leave</c>=0x000E, <c>n/main</c>=0x0010,
-/// <c>'lcall</c>=0x001F, <c>'ljmp</c>=0x0026. Also confirmed: node 406's own ORIGINAL, unmodified source
-/// (still referencing <c>n/r@</c> etc.) compiles cleanly against THIS node with 0 errors and no changes
-/// needed on its own side.
+/// <b>Verification (2026-09-06, this revision).</b> Compiled standalone against this project's real
+/// <c>Compiler/F18Compiler.cs</c>, importing <see cref="Node507Program"/>'s own exports: 0 errors, 55/64
+/// words used (up from 42), entry point <c>n/main</c> at 0x0010 (UNCHANGED -- everything before
+/// <c>n/main</c> in the source is unchanged, so its own address doesn't move). Every symbol resolves:
+/// <c>n/r@</c>=0x0000, <c>n/r!</c>=0x0002, <c>n/pop</c>=0x0004, <c>n/push</c>=0x0008, <c>n/next</c>=0x000A,
+/// <c>n/leave</c>=0x000E, <c>n/main</c>=0x0010, <c>'lcall</c>=0x0020, <c>'ljmp</c>=0x0025,
+/// <c>'clbr</c>=0x0027 (NEW), <c>'lbr</c>=0x002E (NEW), <c>'cljmp</c>=0x0030 (NEW). Also confirmed: both
+/// <see cref="Node406Program"/>'s and <see cref="Node408Program"/>'s own current sources, each importing
+/// this node by name, still compile cleanly against THIS revision with 0 errors and no changes needed on
+/// their own side (the six exports they depend on -- <c>n/r@</c>/<c>n/r!</c>/<c>n/pop</c>/<c>n/push</c>/
+/// <c>n/next</c>/<c>n/leave</c> -- are byte-for-byte unchanged from the 2026-09-05 revision).
 ///
-/// <b><c>'lcall</c>'s own address shifted -- a direct, mechanical consequence of inserting
-/// <c>n/next</c> earlier in this source, not a bug.</b> Before this revision, <c>'lcall</c> lived at a
-/// lower address, giving the hardware-confirmed opcode 0xC01B (see the transaction log below). With
-/// <c>n/next</c> now occupying two words ahead of everything that follows it, <c>'lcall</c> moved to
-/// 0x001F, giving opcode 0xC01F instead. This is simply where the CVM opcode tag scheme (tag | whatever
-/// address the symbol happens to compile to) always resolves to a live compile rather than a fixed
-/// number -- see <see cref="Services.CvmAssemblyLanguage"/>'s own remarks on why every tagged mnemonic
-/// works this way.
+/// <b><c>'lcall</c>'s own address shifted again -- a direct, mechanical consequence of this revision's
+/// own restructuring, not a bug.</b> <c>'lcall</c> moved from 0x001F (the 2026-09-05 revision) to 0x0020
+/// now, and <c>'ljmp</c> from 0x0026 to 0x0025 -- both because words were added/removed/reordered ahead
+/// of them (the <c>A[ m/next ]] lit !b</c> hoist shrinks each of THEIR own bodies by one embedded call,
+/// while growing <c>n/main</c>'s own tail by the same amount, net word-count changes depending on exactly
+/// how the compiler packs each). This is simply where the CVM opcode tag scheme (tag | whatever address
+/// the symbol happens to compile to) always resolves to a live compile rather than a fixed number -- see
+/// <see cref="Services.CvmAssemblyLanguage"/>'s own remarks on why every tagged mnemonic works this way.
 ///
-/// <b>CONFIRMED ON REAL HARDWARE (2026-09-02, address now STALE -- see the paragraph just above).</b> A
-/// test program (<c>lcall label ... halt ... label: nop ret nop</c>) installed and run against a real
-/// EVB, transaction log: <c>[READ] 0:0000 -&gt; C01B</c> / <c>[READ] 0:0001 -&gt; 0007</c> (the
-/// <c>lcall</c> opcode and its trailing operand word, resolving to 0xC01B exactly as derived above, AT
-/// THE TIME); <c>[WRITE] 1:FFFE &lt;- 0002</c> (the return address -- this instruction's own address + 2,
+/// <b>CONFIRMED ON REAL HARDWARE (2026-09-02, address now STALE -- see the paragraph just above, twice
+/// over).</b> A test program (<c>lcall label ... halt ... label: nop ret nop</c>) installed and run
+/// against a real EVB, transaction log: <c>[READ] 0:0000 -&gt; C01B</c> / <c>[READ] 0:0001 -&gt; 0007</c>
+/// (the <c>lcall</c> opcode and its trailing operand word, resolving to 0xC01B exactly as derived at the
+/// time); <c>[WRITE] 1:FFFE &lt;- 0002</c> (the return address -- this instruction's own address + 2,
 /// its own word length -- pushed onto the data stack by <c>'lcall</c>'s own <c>m/push</c>); <c>[READ]
 /// 0:0007 -&gt; 8840</c> / <c>[READ] 0:0008 -&gt; 8831</c> (landing on <c>label</c>, executing <c>nop</c>
 /// then <c>'ret</c>); <c>[READ] 1:FFFE -&gt; 0002</c> (<c>'ret</c> popping that same return address
 /// back); <c>[READ] 0:0002 -&gt; 8840</c> / <c>[READ] 0:0003 -&gt; 8840</c> (execution resuming exactly
 /// where <c>lcall</c> left off). The full MECHANISM -- opcode tag, trailing operand, the 507-&gt;407
 /// relay, and <c>'lcall</c>'s own call/return semantics -- is proven to work end to end on real silicon
-/// by this log; the EXACT addresses/opcode values it shows (0xC01B specifically) are now stale for a
-/// fresh compile of this revised source, which resolves <c>'lcall</c> to 0xC01F instead (see above) --
-/// a fresh hardware run has not yet been done against this revision.
+/// by this log; the EXACT addresses/opcode values it shows (0xC01B specifically) are now doubly stale for
+/// a fresh compile of this revised source (0xC01F after the 2026-09-05 revision, 0xC020 now) -- a fresh
+/// hardware run has not yet been done against either later revision, nor has <c>'clbr</c>/<c>'lbr</c>/
+/// <c>'cljmp</c> been tested on hardware at all yet.
 /// </summary>
 internal static class Node407Program
 {
-  /// <summary>The node this program is always deployed to -- CVM2's long call/long jump helper.</summary>
+  /// <summary>The node this program is always deployed to -- CVM2's long call/long jump/long branch helper.</summary>
   public const int Coordinate = 407;
 
   /// <summary>
-  /// Node 407's full resident F18 source, as supplied by Stefan on 2026-09-05 ("use this node 407:"),
-  /// replacing the 2026-09-02 revision. See the class remarks for the <c>b/</c>-&gt;<c>n/</c> rename,
-  /// the new <c>n/next</c> export, the FLAGGED "1101" branch reversion, <c>n/main</c>'s dispatch
-  /// cascade, <c>'lcall</c>/<c>'ljmp</c>'s own bodies, and the updated verification numbers.
+  /// Node 407's full resident F18 source, as supplied by Stefan on 2026-09-06 ("more opcodes to node 407
+  /// added"), replacing the 2026-09-05 revision. See the class remarks for the renamed header, the
+  /// hoisted trailing-word fetch, the three new ops (<c>'clbr</c>/<c>'lbr</c>/<c>'cljmp</c>), and the
+  /// updated verification numbers.
   /// </summary>
   public const string Source = """
-      ( CVM2 node 407. VM extending, 11??_????_????_???? )
+      ( CVM2 node 407. VM secondary main, 11??_????_????_???? )
       ( A: temporary register tmp1 )
       # 507 import
       # 0 org
@@ -199,14 +232,28 @@ internal static class Node407Program
         2* -if // 1101_????_????_????
           r> -d-- ;
         then // 1100_????_????_????
-        ex ;
-      : 'lcall A[ m/next ]] lit !b A[ >r a ]] lit !b A[ m/push ]] lit !b A[ r> a! ]] lit !b ;
-      : 'ljmp A[ m/next ]] lit !b A[ a! ]] lit !b ;
+        A[ m/next ]] lit !b ex ;
+      : 'lcall A[ >r a ]] lit !b A[ m/push ]] lit !b A[ r> a! ]] lit !b ;
+      : 'ljmp A[ a! ]] lit !b ;
+      : 'clbr A[ !p over !p ]] lit !b @b @b
+        if // no branch
+          ;
+        then // branch
+        drop A[ @p m/branch ]] lit !b !b ;
+      : 'lbr A[ m/branch ]] lit !b ;
+      : 'cljmp A[ !p over !p ]] lit !b @b @b
+        if // no branch
+          ;
+        then // branch
+        drop A[ @p a! ]] lit !b !b ;
       (
       this node provides support for extending the VM to neighbour nodes.
       tmp1 is a register available to the neighbouring nodes.
       'lcall long call. the next word defines the destination address.
       'ljmp long jump. jumps to the address in the next word
+      'cljmp long jump. jumps to the address in the next word if r == 0
+      'lbr long branch. branch with offset in the next word
+      'clbr conditional long branch. branch with offset in the next word if r == 0
       )
       """;
 }
