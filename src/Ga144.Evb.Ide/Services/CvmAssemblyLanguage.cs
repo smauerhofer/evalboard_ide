@@ -1024,10 +1024,10 @@ internal static class CvmAssemblyLanguage
       // 0..(ValueBitMask >> ValueBitShift), never a negative half -- unlike the signed case just below,
       // so no min/max split is needed here. This mirrors CvmAssembler.EmitEmbeddedUnsignedValue exactly
       // (kept as a small duplicate here per this method's own remarks).
-      int maxValue = shape.ValueBitMask >> shape.ValueBitShift;
-      if (value < 0 || value > maxValue)
+      int unsignedMaxValue = shape.ValueBitMask >> shape.ValueBitShift;
+      if (value < 0 || value > unsignedMaxValue)
       {
-        return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s unsigned value (0..{maxValue}).");
+        return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s unsigned value (0..{unsignedMaxValue}).");
       }
 
       return (shape.Tag | ((value << shape.ValueBitShift) & shape.ValueBitMask), null);
