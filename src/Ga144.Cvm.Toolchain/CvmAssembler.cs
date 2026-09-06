@@ -24,6 +24,7 @@ namespace Ga144.Cvm.Toolchain;
 /// loop:
 ///   ret                     ; return -- pops the address a call pushed and jumps back to it
 ///   br -3                   ; branch by a literal signed offset, -0x400..0x3FF (11 bits)
+///   br loop                 ; or by a label defined in this same file's same section
 ///   ifbr 5                  ; conditional branch -- same offset shape, a different tag and width
 ///   slit -100                ; load a literal signed value into R, -0x800..0x7FF (12 bits)
 ///   enter 3                 ; node 606: enter stack frame, reserve 3 locals -- unsigned, 0x00..0xFF
@@ -47,14 +48,14 @@ namespace Ga144.Cvm.Toolchain;
 /// instead -- the same relocation a <c>.word</c> or <c>pushlit</c> label/import operand would get.
 /// <c>br</c>/<c>ifbr</c>/<c>slit</c> are different again
 /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>): each one's word is a
-/// fixed tag OR'd with a signed value that must be a literal, known completely at assemble time --
-/// no relocation, no node, and (not yet implemented -- see <see cref="EmitEmbeddedSignedValue"/>'s
-/// own remarks) no label/import operand either. <c>br</c>/<c>ifbr</c> pack an 11-bit offset (what it's
-/// relative to is no longer an open question -- confirmed against real hardware: the address of the
-/// word right after the branch's own opcode word, plus the offset -- see
-/// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>'s own remarks); <c>slit</c>
-/// packs a wider 12-bit value with a narrower tag, and isn't an address computation at all -- per
-/// Stefan, it loads its value directly into the F18 interpreter's own R register. Node 606's eight
+/// fixed tag OR'd with a signed value, known completely at assemble time -- no relocation, no node.
+/// <c>br</c>/<c>ifbr</c> pack an 11-bit offset (what it's relative to is no longer an open question --
+/// confirmed against real hardware: the address of the word right after the branch's own opcode word,
+/// plus the offset) and accept EITHER a literal offset OR a label defined earlier in the same file's
+/// same section, resolved to that same relative-offset computation (see
+/// <see cref="EmitEmbeddedSignedValue"/>'s own remarks for the exact formula); <c>slit</c> packs a
+/// wider 12-bit value with a narrower tag, accepts only a literal (it isn't an address computation at
+/// all -- per Stefan, it loads its value directly into the F18 interpreter's own R register). Node 606's eight
 /// frame-pointer ops (<c>enter</c>, <c>adjust</c>, <c>stl</c>, <c>stp</c>, <c>ldl</c>, <c>ldp</c>,
 /// <c>lal</c>, <c>lap</c>) are shaped the same way as br/ifbr/slit -- a fixed tag OR'd with a literal
 /// value, no relocation, no node -- except each packs an UNSIGNED 8-bit value
@@ -230,8 +231,11 @@ public static class CvmAssembler
             // shape.ValueBitMask's low bits (11 bits for br/ifbr, 12 for slit -- EmitEmbeddedSignedValue
             // reads the width straight off the shape, so it needs no per-mnemonic special-casing here
             // or there). Fully self-describing from a literal operand alone, so unlike the tagged
-            // mnemonics below this needs no placeholder/relocation/external symbol at all.
-            EmitEmbeddedSignedValue(codeSection, shape, line.Args[0], line.LineNumber, errors);
+            // mnemonics below this needs no placeholder/relocation/external symbol at all. br/ifbr ALSO
+            // accept a label operand now (see EmitEmbeddedSignedValue's own remarks for the relative-
+            // offset computation) -- slit does not, since it isn't an address computation at all.
+            bool supportsRelativeLabel = shape.Mnemonic is CvmInstructionSet.BranchMnemonic or CvmInstructionSet.ConditionalBranchMnemonic;
+            EmitEmbeddedSignedValue(codeSection, shape, line.Args[0], line.LineNumber, codeSection.Words.Count, supportsRelativeLabel, labelOffsets, section, imported, errors);
             break;
           }
 
@@ -366,24 +370,33 @@ public static class CvmAssembler
   /// width straight off the shape (11 bits for br/ifbr, 12 for slit) is what lets one method serve
   /// every <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/> mnemonic without a
   /// per-mnemonic branch here; adding a fourth one someday needs no change to this method at all, only
-  /// a new <see cref="CvmInstructionSet.Instructions"/> entry with its own tag and mask. Unlike
-  /// <see cref="EmitOperandWord"/>, this does NOT (yet) accept a label or import name -- for br/ifbr
-  /// specifically, what the offset would need to be relative to is no longer an open question
-  /// (confirmed against real hardware to be the address right after the branch's own opcode word --
-  /// see <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>'s own remarks), so a
-  /// future label operand there is a known, mechanical computation
-  /// (<c>targetLabelOffset - (thisInstructionOffset + 1)</c>), just not yet written: it needs pass 2
-  /// to know a label's final offset (already true for every other operand kind) AND a fixed point
-  /// (this instruction's own offset, which pass 1's cursor already tracks per line but pass 2's switch
-  /// does not currently thread through to here). <c>slit</c> isn't an address computation at all, so a
-  /// label/import operand there wouldn't mean anything regardless. A non-numeric or out-of-range
-  /// literal operand is a hard error, never a silently truncated or zero-filled word.
+  /// a new <see cref="CvmInstructionSet.Instructions"/> entry with its own tag and mask.
+  ///
+  /// <paramref name="supportsRelativeLabel"/> (true only for br/ifbr -- <c>slit</c> isn't an address
+  /// computation at all, so a label operand there wouldn't mean anything) additionally accepts a label
+  /// defined earlier in pass 1, exactly the mechanical computation this method's own remarks used to
+  /// flag as "known but not yet written": what the offset is relative to is confirmed against real
+  /// hardware to be the address right after the branch's own opcode word, so the packed value is simply
+  /// <c>targetLabelOffset - (thisInstructionOffset + 1)</c>, where <paramref name="thisInstructionOffset"/>
+  /// is this word's own section-relative offset (the caller passes <c>codeSection.Words.Count</c>
+  /// before adding this word, mirroring how every other operand kind already gets its offset from pass
+  /// 1's per-line cursor). The label must be defined in the SAME section as the branch itself -- a
+  /// relative offset across sections isn't meaningful -- and an <c>.import</c>ed name is rejected for
+  /// the same reason a cross-file relative offset isn't computable at assemble time (unlike
+  /// <c>call</c>'s absolute-address relocation, there is no <see cref="CvmRelocationType"/> for "this
+  /// many words from here, resolved at link time"). A non-numeric, unknown, or out-of-range operand is
+  /// always a hard error, never a silently truncated or zero-filled word.
   /// </summary>
   private static void EmitEmbeddedSignedValue(
       CvmSection targetSection,
       CvmInstructionSet.CvmInstructionShape shape,
       string operand,
       int lineNumber,
+      int thisInstructionOffset,
+      bool supportsRelativeLabel,
+      IReadOnlyDictionary<string, (string Section, int Offset)> labelOffsets,
+      string section,
+      ISet<string> imported,
       List<string> errors)
   {
     int valueBitMask = shape.ValueBitMask;
@@ -391,9 +404,32 @@ public static class CvmAssembler
     int minValue = -(maxValue + 1);
     int bitWidth = System.Numerics.BitOperations.PopCount((uint)valueBitMask);
 
-    if (!TryParseSignedNumericLiteral(operand, out int value))
+    int value;
+    if (TryParseSignedNumericLiteral(operand, out value))
     {
-      errors.Add($"line {lineNumber}: \"{operand}\" is not a literal signed value -- \"{shape.Mnemonic}\" does not (yet) support a label/import operand.");
+      // fall through to the range check below.
+    }
+    else if (supportsRelativeLabel && labelOffsets.TryGetValue(operand, out (string Section, int Offset) target))
+    {
+      if (target.Section != section)
+      {
+        errors.Add($"line {lineNumber}: \"{shape.Mnemonic} {operand}\" cannot branch across sections (\"{operand}\" is in \".section {target.Section}\", this instruction is in \".section {section}\").");
+        targetSection.Words.Add(shape.Tag);
+        return;
+      }
+
+      value = target.Offset - (thisInstructionOffset + 1);
+    }
+    else if (supportsRelativeLabel && imported.Contains(operand))
+    {
+      errors.Add($"line {lineNumber}: \"{shape.Mnemonic}\" cannot branch to \".import\"ed \"{operand}\" -- its offset from here is not known until link time.");
+      targetSection.Words.Add(shape.Tag);
+      return;
+    }
+    else
+    {
+      string operandKinds = supportsRelativeLabel ? "a literal signed value or a label defined in this file" : "a literal signed value";
+      errors.Add($"line {lineNumber}: \"{operand}\" is not {operandKinds} -- \"{shape.Mnemonic}\" does not support anything else as an operand.");
       targetSection.Words.Add(shape.Tag);
       return;
     }

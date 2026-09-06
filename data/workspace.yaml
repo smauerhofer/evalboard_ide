@@ -26,25 +26,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-06T11:02:27.1766032
-      utcDateTime: 2026-09-06T11:02:27.1766032Z
-      localDateTime: 2026-09-06T13:02:27.1766032+02:00
+      dateTime: 2026-09-06T15:58:30.5108177
+      utcDateTime: 2026-09-06T15:58:30.5108177Z
+      localDateTime: 2026-09-06T17:58:30.5108177+02:00
       date: 2026-09-06T00:00:00.0000000
       day: 6
       dayOfWeek: Sunday
       dayOfYear: 249
-      hour: 11
-      millisecond: 176
-      microsecond: 603
-      nanosecond: 200
-      minute: 2
+      hour: 15
+      millisecond: 510
+      microsecond: 817
+      nanosecond: 700
+      minute: 58
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 27
-      ticks: 639242893471766032
-      utcTicks: 639242893471766032
-      timeOfDay: 11:02:27.1766032
+      second: 30
+      ticks: 639243071105108177
+      utcTicks: 639243071105108177
+      timeOfDay: 15:58:30.5108177
       year: 2026
   portB: 
   portC:
@@ -15043,11 +15043,15 @@ projects:
 
         # down /b
 
+        : n/pop ( -w) A[ m/pop ]] lit !b begin A[ !p ]] lit !b @b ;
+
+        : n/@ ( ba-w) A[ @p @p ]] lit !b !b !b A[ m/@ ]] lit !b end
+
+        : n/! ( baw) A[ @p @p @p ]] lit !b !b !b !b A[ m/! ]] lit !b ;
+
         : n/r@ ( -w) A[ over !p ]] lit !b @b ;
 
         : n/r! ( w) A[ @p over ]] lit !b !b ;
-
-        : n/pop ( -w) A[ m/pop ]] lit !b A[ !p ]] lit !b @b ;
 
         : n/push ( w) A[ @p m/push ]] lit !b !b ;
 
@@ -15070,18 +15074,8 @@ projects:
 
         : 'ljmp A[ a! ]] lit !b ;
 
-        : 'clbr A[ !p over !p ]] lit !b @b @b
-          if // no branch
-            ;
-          then // branch
-          drop A[ @p m/branch ]] lit !b !b ;
         : 'lbr A[ m/branch ]] lit !b ; 
 
-        : 'cljmp A[ !p over !p ]] lit !b @b @b
-          if // no branch
-            ;
-          then // branch
-          drop A[ @p a! ]] lit !b !b ;
 
 
 
@@ -15095,22 +15089,28 @@ projects:
 
         'ljmp long jump. jumps to the address in the next word
 
-        'cljmp long jump. jumps to the address in the next word if r == 0
-
         'lbr long branch. branch with offset in the next word
-
-        'clbr conditional long branch. branch with offset in the next word if r == 0
 
         )
       ramWords:
+      - 0x05BB2
+      - 0x13401
+      - 0x05B05
+      - 0x0C9B2
+      - 0x05B22
+      - 0x05DB2
+      - 0x09D22
+      - 0x13406
+      - 0x11402
+      - 0x05B22
+      - 0x05D12
+      - 0x09B12
+      - 0x13414
+      - 0x09555
       - 0x05B05
       - 0x219B2
       - 0x05B25
       - 0x04FB2
-      - 0x05B12
-      - 0x13401
-      - 0x0C9B2
-      - 0x09F55
       - 0x05B25
       - 0x0560F
       - 0x05B12
@@ -15120,16 +15120,16 @@ projects:
       - 0x05BB2
       - 0x15555
       - 0x04812
-      - 0x0000E
+      - 0x00018
       - 0x37932
       - 0x09F02
-      - 0x2F21A
-      - 0x37218
+      - 0x2F224
+      - 0x37222
       - 0x269B2
       - 0x11575
       - 0x269B2
       - 0x115D5
-      - 0x3721D
+      - 0x37227
       - 0x269B2
       - 0x11515
       - 0x05B5D
@@ -15142,22 +15142,12 @@ projects:
       - 0x26AB2
       - 0x05B55
       - 0x2A9B2
-      - 0x05B02
-      - 0x0CF32
-      - 0x0132B
-      - 0x15555
-      - 0x3BD22
-      - 0x0561A
-      - 0x09555
       - 0x05B55
       - 0x1341A
-      - 0x05B02
-      - 0x0CF32
-      - 0x01334
       - 0x15555
-      - 0x3BD22
-      - 0x04AB2
-      - 0x09555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15168,7 +15158,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x010
+        entryPoint: 0x01A
         p: 0x000
         a: 0x000
         b: 0x000

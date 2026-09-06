@@ -66,8 +66,30 @@ public sealed class CProject
   public const string ProjectFileName = "project.gacproj";
   public const string IncludeDirectoryName = "include";
   public const string SourceDirectoryName = "src";
+
+  /// <summary>Holds the preprocessor's own output (one ".i" file per compiled ".c" file) -- entirely
+  /// generated, safe to delete, and overwritten every time a source file is (re)compiled.</summary>
+  public const string PreprocessedDirectoryName = "pre";
+
+  /// <summary>Holds the CVM assembly the C compiler generates from this project's own ".c" files (one
+  /// ".casm" per compiled source) -- also entirely generated. Named "tasm" (target/translated
+  /// assembly) specifically to keep it apart from <see cref="AssemblyDirectoryName"/>, which holds
+  /// assembly the person wrote themselves.</summary>
+  public const string TargetAssemblyDirectoryName = "tasm";
+
+  /// <summary>Hand-written CVM assembly (".casm") source files that are simply part of this project --
+  /// assembled directly by <c>gaasm</c>, never compiled from C. This is where a hand-written primitive
+  /// or a CVM feature the compiler doesn't (yet) generate on its own belongs, per the project's own
+  /// resolution rule: something the compiler can't yet do becomes either a CVM opcode or a call into a
+  /// library, and a call into a library needs that library's own assembly to exist somewhere -- this is
+  /// that somewhere, for this project's own use (as opposed to a separate library project entirely).
+  /// </summary>
+  public const string AssemblyDirectoryName = "asm";
+
   public const string HeaderSearchPattern = "*.h";
   public const string SourceSearchPattern = "*.c";
+  public const string PreprocessedSearchPattern = "*.i";
+  public const string AssemblySearchPattern = "*.casm";
 
   public required string RootPath { get; init; }
   public required CProjectMetadata Metadata { get; init; }
@@ -75,6 +97,9 @@ public sealed class CProject
   public string ProjectFilePath => Path.Combine(RootPath, ProjectFileName);
   public string IncludeDirectoryPath => Path.Combine(RootPath, IncludeDirectoryName);
   public string SourceDirectoryPath => Path.Combine(RootPath, SourceDirectoryName);
+  public string PreprocessedDirectoryPath => Path.Combine(RootPath, PreprocessedDirectoryName);
+  public string TargetAssemblyDirectoryPath => Path.Combine(RootPath, TargetAssemblyDirectoryName);
+  public string AssemblyDirectoryPath => Path.Combine(RootPath, AssemblyDirectoryName);
 
   public string Name
   {
@@ -95,11 +120,29 @@ public sealed class CProject
     Directory.CreateDirectory(RootPath);
     Directory.CreateDirectory(IncludeDirectoryPath);
     Directory.CreateDirectory(SourceDirectoryPath);
+    Directory.CreateDirectory(PreprocessedDirectoryPath);
+    Directory.CreateDirectory(TargetAssemblyDirectoryPath);
+    Directory.CreateDirectory(AssemblyDirectoryPath);
   }
 
   public IReadOnlyList<string> GetHeaderFiles() => GetFiles(IncludeDirectoryPath, HeaderSearchPattern);
 
   public IReadOnlyList<string> GetSourceFiles() => GetFiles(SourceDirectoryPath, SourceSearchPattern);
+
+  /// <summary>The hand-written CVM assembly files that are simply part of this project (see
+  /// <see cref="AssemblyDirectoryName"/>) -- as opposed to <see cref="TargetAssemblyDirectoryPath"/>,
+  /// which holds only what the compiler itself generated and is never scanned as a source list.</summary>
+  public IReadOnlyList<string> GetAssemblyFiles() => GetFiles(AssemblyDirectoryPath, AssemblySearchPattern);
+
+  /// <summary>Where the C compiler should write the preprocessed ("pre") output for a given ".c" file
+  /// in this project's own <see cref="SourceDirectoryPath"/>, and where it should write the generated
+  /// ("tasm") CVM assembly for that same file -- both named after the source file itself, with its
+  /// extension replaced, so a build can always find (or safely overwrite) both without guessing.</summary>
+  public string GetPreprocessedFilePath(string sourceFilePath) =>
+      Path.Combine(PreprocessedDirectoryPath, Path.GetFileNameWithoutExtension(sourceFilePath) + ".i");
+
+  public string GetTargetAssemblyFilePath(string sourceFilePath) =>
+      Path.Combine(TargetAssemblyDirectoryPath, Path.GetFileNameWithoutExtension(sourceFilePath) + ".casm");
 
   /// <summary>Resolves a possibly-relative library reference (as stored in <see cref="LibraryReferences"/>) against this project's own root folder.</summary>
   public string ResolveLibraryReferencePath(string storedPath) =>
