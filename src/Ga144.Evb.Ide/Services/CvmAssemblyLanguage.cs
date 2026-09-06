@@ -195,16 +195,19 @@ namespace Ga144.Evb.Ide.Services;
 /// are deliberately left out of that pairing: <c>call</c>
 /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>), <c>br</c>/<c>ifbr</c>/
 /// <c>slit</c> (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>), and node 606's
-/// eight ops (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>) have no F18
+/// eight ops plus (since 2026-09-06) node 306's six address-register ops
+/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>) have no F18
 /// symbol at all to resolve, since none of their opcode words are a tagged dispatch to a named
 /// primitive routine -- each one's whole word is fully determined by its own operand alone. Because of
 /// that, none of them need a live compile to recognize: <see cref="CvmDebugSession.DisassemblePage0"/>
 /// checks for them directly via <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> BEFORE ever
 /// consulting this file's own symbol-driven decode table, so they already show up correctly in the
-/// memory inspector. <see cref="Assemble"/> mirrors that same dual dispatch on the OTHER direction --
-/// hand-typed CVM asm source that uses <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>/node 606's ops is
-/// encoded directly from <see cref="CvmInstructionSet"/> and the operand alone, bypassing this file's
-/// own <see cref="Instructions"/>/<see cref="NodeSymbolByMnemonic"/> pairing entirely (see
+/// memory inspector -- EXCEPT node 306's six, which are currently fully shadowed by <c>slit</c>'s own
+/// tag there (see <see cref="CvmInstructionSet.LoadAddressRegisterMnemonic"/>'s own remarks for that
+/// flagged collision). <see cref="Assemble"/> mirrors that same dual dispatch on the OTHER direction --
+/// hand-typed CVM asm source that uses <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>/node 606's or node
+/// 306's ops is encoded directly from <see cref="CvmInstructionSet"/> and the operand alone, bypassing
+/// this file's own <see cref="Instructions"/>/<see cref="NodeSymbolByMnemonic"/> pairing entirely (see
 /// <see cref="Assemble"/>'s own remarks) -- so <see cref="Instructions"/> itself still omits all of
 /// them, since they would have nothing to pair them with, without that meaning they can't be assembled.
 ///
@@ -860,7 +863,12 @@ internal static class CvmAssemblyLanguage
     CvmInstructionSet.CvmInstructionShape? shape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
     if (shape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue })
     {
-      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" does not support a label operand -- its value is a frame-relative slot index/count, not an address; supply a literal 0..{shape.ValueBitMask} value instead.");
+      // Node 606's eight ops take a frame-relative slot index/count; node 306's six take an address-
+      // register index (0..3, ValueBitMask shifted right by ValueBitShift -- see
+      // CvmInstructionSet.CvmInstructionShape.ValueBitShift's own remarks) -- neither is ever an
+      // address, so a label operand is rejected outright for both the same way.
+      int maxValue = shape.ValueBitMask >> shape.ValueBitShift;
+      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" does not support a label operand -- its value is not an address; supply a literal 0..{maxValue} value instead.");
     }
 
     bool isRelativeBranch =
@@ -1010,14 +1018,19 @@ internal static class CvmAssemblyLanguage
 
     if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue)
     {
-      // Node 606's eight ops: unsigned 0..ValueBitMask, never a negative half -- unlike the signed
-      // case just below, so no min/max split is needed here.
-      if (value < 0 || value > shape.ValueBitMask)
+      // Node 606's eight ops (ValueBitShift 0) and node 306's six address-register ops (ValueBitShift 1,
+      // a 2-bit register index at bits 2-1 rather than bit 0 upward -- see
+      // CvmInstructionSet.CvmInstructionShape.ValueBitShift's own remarks): unsigned
+      // 0..(ValueBitMask >> ValueBitShift), never a negative half -- unlike the signed case just below,
+      // so no min/max split is needed here. This mirrors CvmAssembler.EmitEmbeddedUnsignedValue exactly
+      // (kept as a small duplicate here per this method's own remarks).
+      int maxValue = shape.ValueBitMask >> shape.ValueBitShift;
+      if (value < 0 || value > maxValue)
       {
-        return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s unsigned value (0..{shape.ValueBitMask}).");
+        return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s unsigned value (0..{maxValue}).");
       }
 
-      return (shape.Tag | (value & shape.ValueBitMask), null);
+      return (shape.Tag | ((value << shape.ValueBitShift) & shape.ValueBitMask), null);
     }
 
     int maxValue = shape.ValueBitMask >> 1;

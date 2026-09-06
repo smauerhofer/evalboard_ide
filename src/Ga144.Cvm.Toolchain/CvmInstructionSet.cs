@@ -330,6 +330,82 @@ public static class CvmInstructionSet
   // (2026-09-06) -- see Cvm.Node407Program's own remarks for the full derivation.
   public const string LongBranchMnemonic = "lbr";
 
+  // Node 306's four 32-bit address-register ops, added per Stefan's node 306 source (2026-09-06, "I
+  // change node 307 and added node 306... In 306 there are 4 32-bit address register to access the
+  // whole memory range."), reached from node 407's OWN "1101_????_????_????" sub-branch (previously
+  // FLAGGED as unresolved -- see Cvm.Node407Program's own remarks -- now filled by node 307, "VM
+  // ternary main", which itself further relays "1101_10??_????_????" specifically to node 306, "# right
+  // /b" -- see Cvm.Node307Program's/Cvm.Node306Program's own remarks). Unlike every tagged mnemonic
+  // above (lcall/ljmp/lbr/ldg/stg and the rest), these SIX are self-describing, straight from Stefan's
+  // own trailing bit-pattern table on node 306's source -- no node/linker resolution needed at all, the
+  // same CvmOperandEncoding.EmbeddedUnsignedValue shape node 606's eight frame-pointer ops use, just
+  // with a genuinely new wrinkle: the packed value is a 2-bit ADDRESS-REGISTER INDEX (0-3) that sits at
+  // bits 2-1 of the word, not bit 0 upward -- bit 0 is architecturally fixed at 0 (Stefan's own pattern
+  // ends every one of these six in "?aa0"), and the "?" nibble/bit above the tag is genuinely
+  // don't-care (node 306's own ar/main dispatch, ": ar/reg 0x06 and a! ;", never tests it), assembled as
+  // 0 here for a clean, predictable canonical encoding. This needed one new field on
+  // CvmInstructionShape, ValueBitShift (default 0, so every existing EmbeddedUnsignedValue/
+  // EmbeddedSignedValue shape is completely unaffected) -- see that field's own remarks, and
+  // CvmAssembler.EmitEmbeddedUnsignedValue's/CvmAssemblyLanguage.EncodeSelfDescribingWord's own remarks
+  // for where the shift is actually applied.
+  //
+  // ldar (1101_1011_????_?aa0) loads r from the word at the address held in address register aa;
+  // star (1101_1010_????_?aa0) stores r to that same address -- the actual pointer DEREFERENCE
+  // primitives, per the source's own trailing comments ("load/store r using address register"). inca/
+  // deca (1101_1001_1???_?aa0 / 1101_1001_0???_?aa0) increment/decrement address register aa's own
+  // address by one word. lda/sta (1101_1000_1???_?aa0 / 1101_1000_0???_?aa0) load/store address
+  // register aa's own full 32-bit value from/to {register r (address word), the CVM data stack top
+  // (page word)} -- per the source's own trailing comments ("load/store address register, address in
+  // r, page in stack"); these are how a 32-bit address gets INTO or back OUT OF a register in the first
+  // place (e.g. for the C compiler's own ABI v2 use of address registers to pass pointer arguments --
+  // see Ga144.C.Toolchain.CCodeGenerator's own ABI doc comment), as opposed to ldar/star which use an
+  // already-loaded register to access memory. NOT YET CONFIRMED ON REAL HARDWARE (2026-09-06).
+  //
+  // FLAGGED, not silently worked around: this whole family sits at 0xD800-0xDBFF, squarely inside
+  // SlitTag's own already-active 0xD000-0xDFFF range (Stefan's own "1101 xxxx xxxx xxxx ... slit"
+  // table). TryDescribeSelfDecodingWord checks slit BEFORE the generic EmbeddedUnsignedValue loop these
+  // six mnemonics rely on (see that method's own remarks), so EVERY one of these six -- being pure
+  // self-describing words with no node/symbol to fall back on -- is currently COMPLETELY SHADOWED in
+  // disassembly: a word like 0xD800 ("sta 0") will show as "slit -2048" in the memory
+  // inspector/debugger, never as "sta 0", however this file's own Instructions table is ordered.
+  // Assembling FROM a mnemonic (ldar/star/inca/deca/lda/sta by name) is completely unaffected and still
+  // produces the exact bit pattern Stefan specified -- only decoding an already-assembled WORD back to
+  // a mnemonic is ambiguous. This is the exact same shape of issue already accepted for enter/br
+  // (Node506EnterTag's own remarks, "ignore the overlapping ranges") -- implemented here exactly as
+  // specified rather than silently narrowed or moved, flagged for Stefan to resolve (whether slit's own
+  // range is meant to exclude 0xD800-0xDBFF now that node 306 claims it, or whether this collision is
+  // accepted the same way as enter/br's).
+  public const string LoadAddressRegisterMnemonic = "ldar";
+  public const string StoreAddressRegisterMnemonic = "star";
+  public const string IncrementAddressRegisterMnemonic = "inca";
+  public const string DecrementAddressRegisterMnemonic = "deca";
+  public const string LoadAddressRegisterValueMnemonic = "lda";
+  public const string StoreAddressRegisterValueMnemonic = "sta";
+
+  /// <summary>Fixed high-bit pattern for <see cref="LoadAddressRegisterMnemonic"/> (<c>ldar</c>), register index 0: <c>1101_1011_0000_0000</c>. See that constant's own remarks.</summary>
+  public const int Node306LoadAddressRegisterTag = 0xDB00;
+
+  /// <summary>Fixed high-bit pattern for <see cref="StoreAddressRegisterMnemonic"/> (<c>star</c>), register index 0: <c>1101_1010_0000_0000</c>. See <see cref="LoadAddressRegisterMnemonic"/>'s own remarks.</summary>
+  public const int Node306StoreAddressRegisterTag = 0xDA00;
+
+  /// <summary>Fixed high-bit pattern for <see cref="IncrementAddressRegisterMnemonic"/> (<c>inca</c>), register index 0: <c>1101_1001_1000_0000</c>. See <see cref="LoadAddressRegisterMnemonic"/>'s own remarks.</summary>
+  public const int Node306IncrementAddressRegisterTag = 0xD980;
+
+  /// <summary>Fixed high-bit pattern for <see cref="DecrementAddressRegisterMnemonic"/> (<c>deca</c>), register index 0: <c>1101_1001_0000_0000</c>. See <see cref="LoadAddressRegisterMnemonic"/>'s own remarks.</summary>
+  public const int Node306DecrementAddressRegisterTag = 0xD900;
+
+  /// <summary>Fixed high-bit pattern for <see cref="LoadAddressRegisterValueMnemonic"/> (<c>lda</c>), register index 0: <c>1101_1000_1000_0000</c>. See <see cref="LoadAddressRegisterMnemonic"/>'s own remarks.</summary>
+  public const int Node306LoadAddressRegisterValueTag = 0xD880;
+
+  /// <summary>Fixed high-bit pattern for <see cref="StoreAddressRegisterValueMnemonic"/> (<c>sta</c>), register index 0: <c>1101_1000_0000_0000</c>. See <see cref="LoadAddressRegisterMnemonic"/>'s own remarks.</summary>
+  public const int Node306StoreAddressRegisterValueTag = 0xD800;
+
+  /// <summary>Isolates the 2-bit address-register index field (bits 2-1) shared by all six of node 306's ops -- see <see cref="LoadAddressRegisterMnemonic"/>'s own remarks. Combine with <see cref="Node306AddressRegisterIndexShift"/> when packing/unpacking (the index itself is 0-3, not 0/2/4/6).</summary>
+  public const int Node306AddressRegisterIndexBitMask = 0x0006;
+
+  /// <summary>How far left an address-register index (0-3) is shifted before OR-ing into <see cref="Node306AddressRegisterIndexBitMask"/>'s bits -- 1, since those bits sit at positions 2-1, not 1-0 (bit 0 is architecturally fixed at 0). See <see cref="CvmInstructionShape.ValueBitShift"/>'s own remarks.</summary>
+  public const int Node306AddressRegisterIndexShift = 1;
+
   // CVM2's load global/store global, added per Stefan's node 508 source (2026-09-04, "here is node
   // 508. it handles access to globals.") and his own tick-naming rule ("every word that begins with a
   // ' is an opcode for the CVM with the mnemonic using the same name without the leading '"): node 508
@@ -744,6 +820,14 @@ public static class CvmInstructionSet
     /// <c>stp</c>, <c>ldl</c>, <c>ldp</c>, <c>lal</c>, <c>lap</c>, each an 8-bit tag OR'd with an 8-bit
     /// unsigned offset/count, 0x00-0xFF -- see <see cref="Node606TagMask"/>'s own remarks). Like
     /// <see cref="EmbeddedSignedValue"/>, no label/import operand is supported (yet).
+    ///
+    /// Also covers node 306's six address-register ops (<see cref="LoadAddressRegisterMnemonic"/>'s own
+    /// remarks), which need one refinement: the packed field isn't at bit 0 upward like every earlier
+    /// EmbeddedUnsignedValue mnemonic, so <see cref="CvmInstructionShape.ValueBitShift"/> exists to left-
+    /// shift the operand before OR-ing it into <see cref="CvmInstructionShape.ValueBitMask"/>'s bits (and
+    /// right-shift it back out when decoding) -- 0 for every OLDER EmbeddedUnsignedValue mnemonic (node
+    /// 606's eight ops, unaffected), 1 for node 306's six (their 2-bit register index sits at bits 2-1,
+    /// with bit 0 architecturally fixed at 0).
     /// </summary>
     EmbeddedUnsignedValue,
   }
@@ -755,7 +839,7 @@ public static class CvmInstructionSet
   /// meaningful for <see cref="CvmOperandEncoding.EmbeddedSignedValue"/>/<see cref="CvmOperandEncoding.EmbeddedUnsignedValue"/>
   /// shapes -- every other encoding ignores them (default 0).
   /// </summary>
-  public sealed record CvmInstructionShape(int Id, string Mnemonic, int WordLength, CvmOperandEncoding Encoding, int Tag = 0, int ValueBitMask = 0)
+  public sealed record CvmInstructionShape(int Id, string Mnemonic, int WordLength, CvmOperandEncoding Encoding, int Tag = 0, int ValueBitMask = 0, int ValueBitShift = 0)
   {
     /// <summary>True for every encoding except <see cref="CvmOperandEncoding.None"/> -- whether the assembler requires exactly one operand argument for this mnemonic.</summary>
     public bool HasOperand => Encoding != CvmOperandEncoding.None;
@@ -773,6 +857,16 @@ public static class CvmInstructionSet
     /// <c>word &amp; ~ValueBitMask</c> without a separately stored mask per shape.
     /// </summary>
     public int ValueBitMask { get; init; } = ValueBitMask;
+
+    /// <summary>
+    /// How far left the operand is shifted before OR-ing it into <see cref="ValueBitMask"/>'s bits (and
+    /// shifted back right when decoding) -- 0 for every EmbeddedSignedValue/EmbeddedUnsignedValue shape
+    /// except node 306's six address-register ops, whose 2-bit register-index operand sits at bits 2-1
+    /// rather than bit 0 upward (see <see cref="LoadAddressRegisterMnemonic"/>'s own remarks). Default 0
+    /// leaves every earlier shape's packing arithmetic (a plain <c>Tag | (value &amp; ValueBitMask)</c>,
+    /// no shift) completely unchanged.
+    /// </summary>
+    public int ValueBitShift { get; init; } = ValueBitShift;
   }
 
   /// <summary>
@@ -891,6 +985,16 @@ public static class CvmInstructionSet
     // cljmp from node 407. remove it also from the CVM assembler and disassembler"), before either was
     // confirmed on real hardware. Never reuse either Id for a different instruction.
     new(Id: 99, LongBranchMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // Node 306's six address-register ops -- self-describing (EmbeddedUnsignedValue, WordLength 1, no
+    // node/linker resolution), a 2-bit register-index operand at bits 2-1 (ValueBitShift: 1) -- see
+    // LoadAddressRegisterMnemonic's own remarks, including the FLAGGED collision with SlitTag's own
+    // 0xD000-0xDFFF range.
+    new(Id: 101, LoadAddressRegisterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306LoadAddressRegisterTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
+    new(Id: 102, StoreAddressRegisterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306StoreAddressRegisterTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
+    new(Id: 103, IncrementAddressRegisterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306IncrementAddressRegisterTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
+    new(Id: 104, DecrementAddressRegisterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306DecrementAddressRegisterTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
+    new(Id: 105, LoadAddressRegisterValueMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306LoadAddressRegisterValueTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
+    new(Id: 106, StoreAddressRegisterValueMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306StoreAddressRegisterValueTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =
@@ -1006,6 +1110,14 @@ public static class CvmInstructionSet
     // collision is accepted for now: Assemble() still emits the correct 0x9200|offset word for "enter"
     // (encoding dispatches by mnemonic string, not through this method), but disassembling that same
     // word back will currently report "br <offset>" instead, until br/ifbr move to a new tag.
+    //
+    // SAME SITUATION, WORSE, for node 306's six ops (ldar/star/inca/deca/lda/sta, 0xD800-0xDBFF): this
+    // loop is currently UNREACHABLE for all six, since the SlitTag check just above matches FIRST for
+    // every word in 0xD000-0xDFFF, which fully contains 0xD800-0xDBFF. Unlike enter (which at least
+    // shares its collision with only one other mnemonic, br), node 306's ops have no live node/symbol to
+    // fall back on at all -- see LoadAddressRegisterMnemonic's own remarks for the full flag. Assembling
+    // ldar/star/inca/deca/lda/sta by name is unaffected; disassembling any word in their range currently
+    // always reports "slit <value>" instead.
     foreach (CvmInstructionShape shape in Instructions)
     {
       if (shape.Encoding != CvmOperandEncoding.EmbeddedUnsignedValue)
@@ -1016,7 +1128,7 @@ public static class CvmInstructionSet
       int tagMask = ~shape.ValueBitMask & 0xFFFF;
       if ((word & tagMask) == shape.Tag)
       {
-        return $"{shape.Mnemonic} {FormatOperand(word & shape.ValueBitMask)}";
+        return $"{shape.Mnemonic} {FormatOperand((word & shape.ValueBitMask) >> shape.ValueBitShift)}";
       }
     }
 

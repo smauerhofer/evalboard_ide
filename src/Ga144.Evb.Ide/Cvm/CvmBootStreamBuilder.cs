@@ -26,9 +26,14 @@ namespace Ga144.Evb.Ide.Cvm;
 /// The next day (2026-09-06), node 407 grew a SECOND child of its own: node 408 (the comparison node,
 /// see <see cref="Node408Program"/>) hangs off node 407's OWN dispatch too, reached via 407's LEFT port
 /// (a previously-unanswered branch of that same cascade) -- 507 -&gt; 407 -&gt; 408, a sibling of 406 under
-/// 407 rather than a further hop past it. CVM2's mesh is TEN nodes now
-/// (708/707/607/507/407/506/508/509/406/408). "More nodes will be added later" (Stefan's own words) --
-/// this builder's job is to stay easy to extend as that happens, not to assume ten is final.
+/// 407 rather than a further hop past it. Later the SAME day, node 407 grew a THIRD child, but this one
+/// FURTHER OUT rather than a sibling: node 407's own long-FLAGGED "1101" branch (see
+/// <see cref="Node407Program"/>'s own remarks) is filled by node 307, "VM ternary main" (see
+/// <see cref="Node307Program"/>), which itself has its own further RIGHT-port child, node 306, the 4x
+/// 32-bit-address-register node (see <see cref="Node306Program"/>) -- 507 -&gt; 407 -&gt; 307 -&gt; 306, CVM2's
+/// first FIVE-hop-deep branch. CVM2's mesh is TWELVE nodes now
+/// (708/707/607/507/407/506/508/509/406/408/307/306). "More nodes will be added later" (Stefan's own
+/// words) -- this builder's job is to stay easy to extend as that happens, not to assume twelve is final.
 ///
 /// <b>Node 507 (CPU), not 508 -- corrected 2026-09-01.</b> This project's own session briefly placed
 /// CVM2's CPU source on node 508 under a mistaken attribution; Stefan corrected it directly: the CPU
@@ -207,6 +212,53 @@ public static class CvmBootStreamBuilder
     });
     ThrowIfFailed(result408);
 
+    // CVM2 (2026-09-06): node 307, "VM ternary main" -- fills node 407's own long-FLAGGED "1101"
+    // dispatch branch (see Node407Program's own remarks). Imports 407 by name ('# 407 import',
+    // n/@/n/!/n/r@/n/r!/n/pop/n/push/n/next/n/leave), so must compile AFTER result407 above.
+    //
+    // NOT EXPECTED TO SUCCEED YET: Node307Program.Source, as supplied, is very likely incomplete -- its
+    // own k/main definition has no closing ';' and its final dispatch branch has no code at all (see
+    // Node307Program's own remarks, reproduced verbatim there rather than silently completed). This call
+    // is expected to throw via ThrowIfFailed below until Stefan confirms/completes that source. Left in,
+    // rather than special-cased around, per this method's own established "every node here gets
+    // compiled and checked, loudly, or not at all" pattern -- the SAME discipline every earlier node's
+    // own compile step already follows.
+    F18CompileResult result307 = Compile(compiler, Node307Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node307Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node407Program.Coordinate
+          ? F18ImportResolution.FromExports(result407.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result307);
+
+    // CVM2 (2026-09-06): node 306, the 4x 32-bit-address-register node -- reached from node 307's own
+    // k/main dispatch via its RIGHT port, one hop further out than 307 itself (507 -> 407 -> 307 -> 306).
+    // Imports 307 by name ('# 307 import', k/r@/k/r!/k/pop/k/push/k/leave), so must compile AFTER
+    // result307 above -- and therefore inherits the same "not expected to succeed yet" caveat noted
+    // there, since a failed result307 leaves nothing valid in result307.Exports for this import to
+    // resolve. See Node306Program's own remarks for the full source, including the six new
+    // self-describing CVM mnemonics (ldar/star/inca/deca/lda/sta) its own trailing opcode table
+    // specifies -- wired into CvmInstructionSet directly (see LoadAddressRegisterMnemonic's own
+    // remarks), not through this node's own live compile, so those six do not depend on this compile
+    // step succeeding either way.
+    F18CompileResult result306 = Compile(compiler, Node306Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node306Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node307Program.Coordinate
+          ? F18ImportResolution.FromExports(result307.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result306);
+
     // CVM2 (2026-09-04): node 506, the stack-frame node (enter/leave/...) -- reached from 507's own
     // m/main dispatch via its RIGHT port, a SIBLING of 407 (both are leaves hanging directly off 507,
     // not a further link in the chain past 407 -- confirmed independently by
@@ -270,6 +322,8 @@ public static class CvmBootStreamBuilder
       CvmBootDescriptor.FromCompileResult(result407),
       CvmBootDescriptor.FromCompileResult(result406),
       CvmBootDescriptor.FromCompileResult(result408),
+      CvmBootDescriptor.FromCompileResult(result307),
+      CvmBootDescriptor.FromCompileResult(result306),
       CvmBootDescriptor.FromCompileResult(result506),
       CvmBootDescriptor.FromCompileResult(result509),
       CvmBootDescriptor.FromCompileResult(result508),
@@ -351,18 +405,38 @@ public static class CvmBootStreamBuilder
   /// <c>AncestorChain</c> loop, with 407 and 507 both already getting "focused" during whichever of the
   /// 406/408 steps happens to run first.
   ///
-  /// <b>CONFIRMED ON REAL HARDWARE (2026-09-02) for the ORIGINAL 407 step (without 406/408 as further
-  /// hops).</b> The load order through node 407 was installed and run on a real EVB: a test program's
+  /// <b>Extended again, same day, with node 307 -- "VM ternary main" -- reached via 407, NOT 507
+  /// directly (<c>new CvmBootLoadStep(307, 407)</c>), and node 306 -- the 4x 32-bit-address-register
+  /// node -- reached via 307 (<c>new CvmBootLoadStep(306, 307)</c>), one hop further still.</b> Node 307
+  /// fills node 407's own long-FLAGGED "1101" branch (see Node407Program's own remarks), making CVM2's
+  /// mesh FIVE relay hops deep for the first time on this branch (708/707/607/507/407/307/306). Node 307
+  /// must therefore load BEFORE 407's own step, alongside 406 and 408 (relative order among the three
+  /// does not matter -- all are independent children of the still-passively-relaying 407); node 306 must
+  /// load before node 307's OWN step, the same "leaf loads before its immediate relay parent" rule 509
+  /// already follows relative to 508. No code changes were needed in
+  /// <see cref="Services.Ga144CvmHardwareInstaller"/> for either extra hop -- 306's own five-hop ancestor
+  /// chain (708/707/607/507/407/307) falls out of the same generic <c>AncestorChain</c> recursion as
+  /// every earlier addition, with 307 and 407 both getting "focused" for the first time during the 306
+  /// step if it happens to run before 307's/407's own steps (their relative order among 406/408/307 is
+  /// otherwise unconstrained).
+  ///
+  /// <b>CONFIRMED ON REAL HARDWARE (2026-09-02) for the ORIGINAL 407 step (without 406/408/307/306 as
+  /// further hops).</b> The load order through node 407 was installed and run on a real EVB: a test program's
   /// <c>lcall</c>/<c>'ret</c> round-tripped correctly through node 407 (see Node407Program's own remarks
   /// for the transaction log), which could only happen if every hop's relay/focus/port-write sequence,
-  /// all the way out to 407, was correct. <b>The NEW 406, 408, 506, 508, and 509 steps are NOT yet
-  /// real-hardware-tested</b> -- all five follow the same generic relay mechanism the 407 step already
-  /// validated, but none has itself been confirmed by a transaction log the way 407 was.
+  /// all the way out to 407, was correct. <b>The NEW 406, 408, 506, 508, 509, 307, and 306 steps are NOT
+  /// yet real-hardware-tested</b> -- all seven follow the same generic relay mechanism the 407 step
+  /// already validated, but none has itself been confirmed by a transaction log the way 407 was, and
+  /// node 307's own source is not even confirmed to COMPILE yet (see Node307Program's own remarks) --
+  /// this load-order entry describes the intended MESH SHAPE regardless, which is independent of whether
+  /// any particular node's current source happens to compile today.
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
   [
     new CvmBootLoadStep(406, 407),
     new CvmBootLoadStep(408, 407),
+    new CvmBootLoadStep(307, 407),
+    new CvmBootLoadStep(306, 307),
     new CvmBootLoadStep(407, 507),
     new CvmBootLoadStep(506, 507),
     new CvmBootLoadStep(509, 508),
@@ -388,6 +462,8 @@ public static class CvmBootStreamBuilder
     Node407Program.Coordinate => Node407Program.Source,
     Node406Program.Coordinate => Node406Program.Source,
     Node408Program.Coordinate => Node408Program.Source,
+    Node307Program.Coordinate => Node307Program.Source,
+    Node306Program.Coordinate => Node306Program.Source,
     Node506Program.Coordinate => Node506Program.Source,
     Node508Program.Coordinate => Node508Program.Source,
     Node509Program.Coordinate => Node509Program.Source,
@@ -400,8 +476,12 @@ public static class CvmBootStreamBuilder
 
   /// <summary>
   /// Pairs <see cref="BuildLoadOrder"/>'s sequence with each step's compiled <see cref="CvmBootDescriptor"/>
-  /// from <see cref="BuildDescriptors"/>. Every step resolves to a real descriptor -- all ten CVM2
-  /// nodes compile.
+  /// from <see cref="BuildDescriptors"/>. Previously every step resolved to a real descriptor (all ten
+  /// CVM2 nodes compiled); as of 2026-09-06's node 307/306 addition, <see cref="BuildDescriptors"/> is
+  /// expected to THROW before returning anything at all, since node 307's own source is not yet
+  /// confirmed to compile (see that method's own remarks and <see cref="Node307Program"/>'s) -- so this
+  /// method currently propagates that same exception rather than returning a plan with a null
+  /// descriptor for any step.
   /// </summary>
   public static IReadOnlyList<(CvmBootLoadStep Step, CvmBootDescriptor? Descriptor)> BuildLoadPlan()
   {

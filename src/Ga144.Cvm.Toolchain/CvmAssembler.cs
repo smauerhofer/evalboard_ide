@@ -60,7 +60,13 @@ namespace Ga144.Cvm.Toolchain;
 /// <c>lal</c>, <c>lap</c>) are shaped the same way as br/ifbr/slit -- a fixed tag OR'd with a literal
 /// value, no relocation, no node -- except each packs an UNSIGNED 8-bit value
 /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>, emitted by
-/// <see cref="EmitEmbeddedUnsignedValue"/>), never a signed one.
+/// <see cref="EmitEmbeddedUnsignedValue"/>), never a signed one. Node 306's six address-register ops
+/// (<c>ldar</c>, <c>star</c>, <c>inca</c>, <c>deca</c>, <c>lda</c>, <c>sta</c>, added 2026-09-06) are the
+/// same EmbeddedUnsignedValue shape too, just with a genuinely narrower 2-bit register-index operand
+/// that isn't at bit 0 upward -- see <see cref="EmitEmbeddedUnsignedValue"/>'s own remarks on
+/// <c>ValueBitShift</c> -- and a FLAGGED collision with <c>slit</c>'s own tag range (see
+/// <see cref="CvmInstructionSet.LoadAddressRegisterMnemonic"/>'s own remarks): assembling any of the six
+/// by name is unaffected by that collision, only disassembling an already-assembled word is ambiguous.
 ///
 /// This is a two-pass assembler: pass 1 walks every line purely to compute section layout (every
 /// instruction's word length is fixed by its mnemonic alone, so a label's final offset never depends
@@ -446,14 +452,20 @@ public static class CvmAssembler
 
   /// <summary>
   /// Emits an <c>enter</c>/<c>adjust</c>/<c>stl</c>/<c>stp</c>/<c>ldl</c>/<c>ldp</c>/<c>lal</c>/<c>lap</c>
-  /// word: <paramref name="shape"/>.Tag OR'd with an UNSIGNED literal value packed into
-  /// <paramref name="shape"/>.ValueBitMask's low bits. This mirrors <see cref="EmitEmbeddedSignedValue"/>
-  /// exactly except for the range check and parse: node 606's table gives every one of these an
-  /// unsigned 0..0xFF range, never a signed one, so there is no negative half to accept and
-  /// <see cref="TryParseNumericLiteral"/> (not <see cref="TryParseSignedNumericLiteral"/>) is the right
-  /// parser. Like <see cref="EmitEmbeddedSignedValue"/>, this does NOT (yet) accept a label or import
-  /// operand, and a non-numeric or out-of-range literal is a hard error, never silently truncated or
-  /// zero-filled.
+  /// (or, since 2026-09-06, node 306's <c>ldar</c>/<c>star</c>/<c>inca</c>/<c>deca</c>/<c>lda</c>/<c>sta</c>)
+  /// word: <paramref name="shape"/>.Tag OR'd with an UNSIGNED literal value, left-shifted by
+  /// <paramref name="shape"/>.ValueBitShift, packed into <paramref name="shape"/>.ValueBitMask's bits.
+  /// This mirrors <see cref="EmitEmbeddedSignedValue"/> exactly except for the range check and parse:
+  /// every one of these mnemonics' own table entry gives an unsigned range, never a signed one, so there
+  /// is no negative half to accept and <see cref="TryParseNumericLiteral"/> (not
+  /// <see cref="TryParseSignedNumericLiteral"/>) is the right parser. ValueBitShift is 0 for node 606's
+  /// eight ops (the operand packs straight into ValueBitMask's bits, unchanged since this method was
+  /// first written) and 1 for node 306's six (their 2-bit register-index operand sits at bits 2-1, not
+  /// bit 0 upward -- see <see cref="CvmInstructionSet.CvmInstructionShape.ValueBitShift"/>'s own
+  /// remarks), so the legal input range is <c>0..(ValueBitMask &gt;&gt; ValueBitShift)</c>, not
+  /// <c>0..ValueBitMask</c>, whenever a shift is in play. Like <see cref="EmitEmbeddedSignedValue"/>,
+  /// this does NOT (yet) accept a label or import operand, and a non-numeric or out-of-range literal is
+  /// a hard error, never silently truncated or zero-filled.
   /// </summary>
   private static void EmitEmbeddedUnsignedValue(
       CvmSection targetSection,
@@ -463,6 +475,8 @@ public static class CvmAssembler
       List<string> errors)
   {
     int valueBitMask = shape.ValueBitMask;
+    int shift = shape.ValueBitShift;
+    int maxValue = valueBitMask >> shift;
     int bitWidth = System.Numerics.BitOperations.PopCount((uint)valueBitMask);
 
     if (!TryParseNumericLiteral(operand, out int value))
@@ -472,14 +486,14 @@ public static class CvmAssembler
       return;
     }
 
-    if (value < 0 || value > valueBitMask)
+    if (value < 0 || value > maxValue)
     {
-      errors.Add($"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s unsigned {bitWidth}-bit value (0..{valueBitMask}).");
+      errors.Add($"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s unsigned {bitWidth - shift}-bit value (0..{maxValue}).");
       targetSection.Words.Add(shape.Tag);
       return;
     }
 
-    targetSection.Words.Add(shape.Tag | (value & valueBitMask));
+    targetSection.Words.Add(shape.Tag | ((value << shift) & valueBitMask));
   }
 
   /// <summary>Like <see cref="TryParseNumericLiteral"/>, but also accepts a leading '-' for a negative decimal or hex magnitude.</summary>

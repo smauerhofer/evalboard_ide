@@ -60,6 +60,39 @@ namespace Ga144.C.Toolchain;
 /// assumed to deallocate all locals AND the caller's pushed arguments together, leaving only the single
 /// return value (if any) on top -- a Pascal-style callee-cleanup convention -- followed by <c>ret</c>.
 /// See <see cref="EmitFunction"/>.</description></item>
+/// <item><description><b>ABI v2 addition (2026-09-06): address-register pointer parameters.</b> Per
+/// Stefan's own node 306 source ("In 306 there are 4 32-bit address register to access the whole memory
+/// range... for the ABI the address register are volatile and are not saved on the stack when a
+/// function is entered. they are also used for the first 4 pointers as arguments to a function"): among
+/// a function's PARAMETERS, in declaration order, the first four whose TYPE is a pointer (an array
+/// parameter already decays to pointer by the time <see cref="CParser"/> hands it here -- see
+/// <see cref="CParameter"/>) are passed via node 306's address registers 0-3 instead of the ordinary
+/// push-onto-the-stack convention above; every OTHER parameter (a 5th-or-later pointer, or any
+/// non-pointer parameter, wherever it falls among the four) keeps ABI v1's stack convention completely
+/// unchanged, just renumbered to skip the register-passed ones (see
+/// <see cref="ComputeParameterRegisterSlots"/>). This is a pure CALLING-CONVENTION change, nothing else:
+/// pointer TYPE and SIZE are UNCHANGED (still exactly one CVM word each -- this compiler does not yet
+/// support the "whole memory range"/far/32-bit addressing node 306's own registers make possible; every
+/// pointer this compiler emits still addresses only the current node's own local page, with an implicit
+/// page word of 0 -- a known, deliberate gap, not yet resolved with Stefan), and pointer DEREFERENCE
+/// (<c>*p</c>, <c>p[i]</c>) still goes through the existing <c>xt</c>/<c>ldt</c>/<c>stt</c> mechanism
+/// above, completely untouched.
+///
+/// Mechanically: at a CALL SITE (<see cref="EmitCall"/>), a register-eligible argument is still
+/// evaluated in its normal left-to-right position (leaving one stack word, per the uniform invariant
+/// below) but is then immediately popped into r, paired with a literal page word of 0, and loaded into
+/// its assigned address register via <c>lda</c> -- never left on the stack for the callee. At the
+/// CALLEE'S OWN PROLOGUE (<see cref="EmitFunction"/>), right after <c>enter &lt;n&gt;</c>, each
+/// register-eligible parameter is immediately spilled OUT of its address register (<c>sta</c>) into an
+/// ordinary LOCAL slot (not a Parameter-kind frame offset -- it never arrived via the stack, so it is
+/// allocated and referenced exactly like any other <see cref="CLvalueKind.Local"/> variable for the rest
+/// of the function body, needing no new <see cref="CLvalueKind"/> or <see cref="CVarKind"/> at all).
+/// Address registers are NEVER trusted to persist beyond that one transient moment (call-site transmit,
+/// or prologue spill) -- exactly the same discipline this ABI already applies to the "t" register above,
+/// for the same reason (volatile, no save/restore of its own, and here explicitly confirmed by Stefan:
+/// "not saved on the stack when a function is entered"). See <see cref="ComputeParameterRegisterSlots"/>,
+/// <see cref="EmitFunction"/>, and <see cref="EmitCall"/> for the exact instruction sequences.
+/// </description></item>
 /// <item><description><c>*</c>/<c>/</c>/<c>%</c> have no hardware primitive, so they compile to calls
 /// into runtime helper routines Stefan implements by hand in the "cvm" assembly library:
 /// <c>__mul</c>, <c>__divs</c>/<c>__divu</c> (signed/unsigned divide), <c>__mods</c>/<c>__modu</c>
@@ -100,6 +133,12 @@ public sealed class CCodeGenerator
     public required CType ReturnType { get; init; }
 
     public required IReadOnlyList<CType> ParameterTypes { get; init; }
+
+    /// <summary>ABI v2: one entry per parameter, parallel to <see cref="ParameterTypes"/> -- the
+    /// address-register index (0-3) a register-eligible pointer parameter is passed in, or null for
+    /// every other parameter (which keeps ABI v1's stack convention). See
+    /// <see cref="ComputeParameterRegisterSlots"/> and this class's own ABI doc comment.</summary>
+    public required IReadOnlyList<int?> ParameterRegisterSlots { get; init; }
 
     public bool IsDefined { get; set; }
   }
@@ -253,10 +292,12 @@ public sealed class CCodeGenerator
         continue;
       }
 
+      IReadOnlyList<CType> parameterTypes = function.Parameters.Select(p => p.Type).ToList();
       _functions[function.Name] = new CFunctionSignature
       {
         ReturnType = function.ReturnType,
-        ParameterTypes = function.Parameters.Select(p => p.Type).ToList(),
+        ParameterTypes = parameterTypes,
+        ParameterRegisterSlots = ComputeParameterRegisterSlots(parameterTypes),
         IsDefined = function.Body is not null,
       };
     }
@@ -271,6 +312,41 @@ public sealed class CCodeGenerator
 
       _globals[global.Name] = new CGlobalSymbol { Type = global.Type, Label = global.Name, IsStatic = global.IsStatic };
     }
+  }
+
+  /// <summary>How many of a function's own pointer-typed parameters get an address register (ABI v2) --
+  /// node 306 has exactly four (see <see cref="CvmInstructionSet"/>'s own <c>ldar</c>/<c>star</c>/
+  /// <c>inca</c>/<c>deca</c>/<c>lda</c>/<c>sta</c> remarks).</summary>
+  private const int MaxAddressRegisterParameters = 4;
+
+  /// <summary>
+  /// ABI v2: among <paramref name="parameterTypes"/>, in order, assigns the first
+  /// <see cref="MaxAddressRegisterParameters"/> POINTER-typed ones an address-register index (0, 1, 2,
+  /// 3, in the order their own pointer encountered) -- every other parameter (a later pointer, or any
+  /// non-pointer parameter, wherever it falls) gets null, keeping ABI v1's stack convention. Computed
+  /// once per signature, from parameter TYPES alone, so a call site can rely on it even for a function
+  /// only declared (not yet defined) -- see this class's own ABI doc comment.
+  /// </summary>
+  private static IReadOnlyList<int?> ComputeParameterRegisterSlots(IReadOnlyList<CType> parameterTypes)
+  {
+    var slots = new int?[parameterTypes.Count];
+    int pointerCount = 0;
+    for (int i = 0; i < parameterTypes.Count; i++)
+    {
+      if (!parameterTypes[i].IsPointer)
+      {
+        continue;
+      }
+
+      if (pointerCount < MaxAddressRegisterParameters)
+      {
+        slots[i] = pointerCount;
+      }
+
+      pointerCount++;
+    }
+
+    return slots;
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -474,13 +550,50 @@ public sealed class CCodeGenerator
 
     var context = new CFunctionContext { Name = function.Name, ReturnType = function.ReturnType, EpilogueLabel = NewLabel("epilogue") };
     context.Scopes.Add(new Dictionary<string, CVarSymbol>(StringComparer.Ordinal));
+
+    // ABI v2: CollectSignatures already ran over the whole translation unit, so this function's own
+    // signature (and its ParameterRegisterSlots) is already sitting in _functions -- reuse it rather
+    // than recomputing, so a call site and this function's own prologue can never disagree about which
+    // parameters are register-eligible.
+    CFunctionSignature signature = _functions[function.Name];
+    int stackParameterIndex = 0;
+    var registerParameters = new List<(int RegisterIndex, int LocalSlot)>();
     for (int i = 0; i < function.Parameters.Count; i++)
     {
-      context.Scopes[0][function.Parameters[i].Name] = new CVarSymbol(CVarKind.Parameter, i, function.Parameters[i].Type);
+      CParameter parameter = function.Parameters[i];
+      int? registerIndex = i < signature.ParameterRegisterSlots.Count ? signature.ParameterRegisterSlots[i] : null;
+      if (registerIndex is int assignedRegister)
+      {
+        // Register-eligible: this parameter never arrives via the stack at all, so it gets an ordinary
+        // LOCAL slot instead of a Parameter-kind frame offset -- see this class's own ABI doc comment.
+        int localSlot = context.NextLocalSlot++;
+        context.Scopes[0][parameter.Name] = new CVarSymbol(CVarKind.Local, localSlot, parameter.Type);
+        registerParameters.Add((assignedRegister, localSlot));
+      }
+      else
+      {
+        // Stack-passed, same as ABI v1 -- but renumbered to count only the parameters that are ACTUALLY
+        // pushed, since any register-eligible ones earlier in the declaration are simply absent from the
+        // caller's own push sequence.
+        context.Scopes[0][parameter.Name] = new CVarSymbol(CVarKind.Parameter, stackParameterIndex, parameter.Type);
+        stackParameterIndex++;
+      }
     }
 
     int enterLineIndex = _codeLines.Count;
     _codeLines.Add(string.Empty); // patched below once the body's local-slot count is known.
+
+    // ABI v2 prologue: spill every register-eligible parameter out of its (volatile, caller-set)
+    // address register into its own ordinary local slot, immediately -- before the body runs and before
+    // this function makes any call of its own that could clobber the register. See this class's own ABI
+    // doc comment for why the value's ONLY safe lifetime inside the register is this one moment.
+    foreach ((int registerIndex, int localSlot) in registerParameters)
+    {
+      EmitCode($"sta {registerIndex}"); // r := this register's address word; stack.push(its page word)
+      EmitCode("push");                 // stack: [..., page, address] -- duplicates r's value onto the stack
+      EmitCode($"stl {localSlot}");     // pops "address" (the value we want) into the parameter's own local slot
+      EmitCode("pop");                  // pops the leftover page word into r and discards it (page is always 0 -- see this class's own ABI doc comment on far pointers not being supported yet)
+    }
 
     _currentFunction = context;
     EmitStatement(function.Body!);
@@ -1581,9 +1694,27 @@ public sealed class CCodeGenerator
       Error(call.Location, $"\"{call.FunctionName}\" expects {signature.ParameterTypes.Count} argument(s), but {call.Arguments.Count} were given");
     }
 
-    foreach (CExpr argument in call.Arguments)
+    // ABI v2: an argument landing in one of node 306's address registers is evaluated exactly like any
+    // other argument (so side effects and evaluation order never change), but its result is then popped
+    // back off the stack and loaded into the assigned address register instead of being left there for
+    // the callee to find with ldp/stp. The register is loaded with "lda", which per node 306's own
+    // opcode table takes the address word from r and the page word from the CVM stack top -- so the
+    // sequence is: pop the just-pushed address into r, push a literal page word of 0 (far/32-bit
+    // pointers spanning pages are not yet supported -- see this file's own ABI v2 doc-comment remarks),
+    // then "lda <register>" consumes both. This mirrors the callee-side prologue spill in EmitFunction,
+    // which immediately re-spills the same register back onto the stack/into a local slot -- the
+    // register itself is never assumed to survive anything but this one handoff.
+    for (int i = 0; i < call.Arguments.Count; i++)
     {
-      EmitExpr(argument);
+      EmitExpr(call.Arguments[i]);
+
+      int? registerIndex = i < signature.ParameterRegisterSlots.Count ? signature.ParameterRegisterSlots[i] : null;
+      if (registerIndex is int assignedRegister)
+      {
+        EmitCode("pop");
+        EmitCode("pushlit 0");
+        EmitCode($"lda {assignedRegister}");
+      }
     }
 
     if (!signature.IsDefined)

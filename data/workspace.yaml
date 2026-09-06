@@ -26,25 +26,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-06T16:20:02.7641933
-      utcDateTime: 2026-09-06T16:20:02.7641933Z
-      localDateTime: 2026-09-06T18:20:02.7641933+02:00
+      dateTime: 2026-09-06T18:05:45.0169673
+      utcDateTime: 2026-09-06T18:05:45.0169673Z
+      localDateTime: 2026-09-06T20:05:45.0169673+02:00
       date: 2026-09-06T00:00:00.0000000
       day: 6
       dayOfWeek: Sunday
       dayOfYear: 249
-      hour: 16
-      millisecond: 764
-      microsecond: 193
+      hour: 18
+      millisecond: 16
+      microsecond: 967
       nanosecond: 300
-      minute: 20
+      minute: 5
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 2
-      ticks: 639243084027641933
-      utcTicks: 639243084027641933
-      timeOfDay: 16:20:02.7641933
+      second: 45
+      ticks: 639243147450169673
+      utcTicks: 639243147450169673
+      timeOfDay: 18:05:45.0169673
       year: 2026
   portB: 
   portC:
@@ -14622,11 +14622,154 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 306
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >-
+        ( CVM2 node 306. VM ternary main, 1101_10??_????_???? )
+
+        ( contains 4 32-bit address register )
+
+        ( address word in x, page word in x+1 )
+
+        # 307 import
+
+        # 0x08 org
+
+        entry ar/main
+
+        # 0 /a
+
+        # right /b
+
+
+        : ar/inc 1 . + ;
+
+        : ar/dec -1 . + ;
+
+        : ar/reg 0x06 and a! ;
+
+
+        : ar/r@ ( -w) A[ k/r@ ]] lit !b A[ !p ]] lit !b @b ;
+
+        : ar/r! ( w) A[ @p k/r! ]] lit !b !b ;
+
+        : ar/pop ( -w) A[ k/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : ar/push ( w) A[ @p k/push ]] lit !b !b ;
+
+
+        : ar/leave A[ k/leave ; ]] lit !b
+
+        : ar/main # ar/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r 
+
+          -if // 1101_101?_????_????
+
+            2* -if // 1101_1011_????_????
+              // ldar load r using address register
+              r> ar/reg A[ k/@ ]] lit !b @+ !b @ !b ;
+            then // 1101_1010_????_????
+            // star store r using address register
+            r> ar/reg A[ k/! ]] lit !b @+ !b @ !b ;
+
+          then // 1101_100?_????_????
+          2* -if // 1101_1001_????_????
+            2* -if // 1101_1001_1???_????
+              // inca increment address
+              r> ar/reg @ ar/inc !+ 0x10000 and # ar/leave until @ ar/inc ! ;
+
+            then // 1100_1001_0???_????
+            // deca decrement address
+            r> ar/reg @ ar/dec !+ # ar/leave -until @ ar/dec ! ;
+          then  
+          2* -if // 1101_1000_1???_????
+            // lda load address register, address in r, page in stack
+            r> ar/reg ar/r@ !+ ar/pop ! ;
+
+          then // 1100_1000_0???_????
+          // lda load address register, address in r, page in stack
+          r> ar/reg @+ ar/r! @ ar/push ;
+
+        (
+
+        opcode ldar 1101_1011_????_?aa0 load r from address in address register
+
+        opcode star 1101_1010_????_?aa0 store r to address in address register
+
+        opcode inca 1101_1001_1???_?aa0 increment address register
+
+        opcode deca 1101_1001_0???_?aa0 decrement address register
+
+        opcode lda  1101_1000_1???_?aa0 load address register, address in r, page in stack
+
+        opcode sta  1101_1000_0???_?aa0 store address register, address in r, page in stack
+
+        )
+      ramWords:
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x049F5
+      - 0x00001
+      - 0x049F5
+      - 0x3FFFF
+      - 0x040AD
+      - 0x00006
+      - 0x05B12
+      - 0x1341C
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05620
+      - 0x05B12
+      - 0x13422
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05626
+      - 0x05BB2
+      - 0x11428
+      - 0x04812
+      - 0x0001A
+      - 0x37932
+      - 0x09F02
+      - 0x2F22A
+      - 0x37226
+      - 0x2760C
+      - 0x05B1A
+      - 0x13410
+      - 0x09E25
+      - 0x2760C
+      - 0x05B1A
+      - 0x13416
+      - 0x09E25
+      - 0x37238
+      - 0x37233
+      - 0x2760C
+      - 0x03608
+      - 0x0FDFA
+      - 0x10000
+      - 0x1941A
+      - 0x03608
+      - 0x0B555
+      - 0x2760C
+      - 0x0360A
+      - 0x0F21A
+      - 0x0360A
+      - 0x0B555
+      - 0x3723D
+      - 0x2760C
+      - 0x1340E
+      - 0x0F614
+      - 0x0B555
+      - 0x2760C
+      - 0x07612
+      - 0x03718
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x01C
         p: 0x000
         a: 0x000
         b: 0x000
@@ -14635,7 +14778,7 @@ projects:
         parameterStack: []
     - coordinate: 307
       enabled: true
-      sourceCode: "( CVM2 node 307. VM ternary main, 1101_????_????_???? )\r\n( contains 8 32-bit address register )\r\n( address word in x, page word in x+1 )\n# 407 import\n# 0x10 org\nentry k/main\n# 0 /a\n# up /b\r\n: k/reg 0x0f and a! ;\n: k/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: k/r! ( w) A[ @p n/r! ]] lit !b !b ;\n: k/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;\n: k/push ( w) A[ @p n/push ]] lit !b !b ;\n// : k/next ( -w) A[ n/next ]] lit !b A[ !p ]] lit !b @b ;\n: k/leave A[ n/leave ; ]] lit !b\n: k/main # k/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r\n  -if // 1101_1???_????_????\n    2* -if // 1101_11??_????_????\n      r> --l- ;\n    then // 1101_10??_????_????\n    r> r--- ;\n  then // 1101_0???_????_????\n  2* -if // 1101_01??_????_????\n    r> -d-- ;\n  then // 1100_00??_????_????\r\n  2* -if // 1101_001?_????_????\n\r\n    2* -if // 1101_0011_????_????\r\n      // lda load address register, address in r, page in stack\r\n      r> k/reg k/r@ !+ k/pop ! ;\n    then // 1100_0010_????_????\r\n      // lda load address register, address in r, page in stack\r\n      r> k/reg @+ k/r! @ k/push ;\r\n\r\n  then // 1100_000?_????_????\r\n\r\n  2* -if // 1101_0001_????_????\n    // \r\n\r\n  then // 1100_0000_????_????\r\n  \n(\r\n  \r\n\r\n)\n"
+      sourceCode: "( CVM2 node 307. VM ternary main, 1101_????_????_???? )\r\n( contains 8 32-bit address register )\r\n( address word in x, page word in x+1 )\n# 407 import\n# 0x10 org\nentry k/main\n# 0 /a\n# up /b\r\n: k/@ ( ab-) A[ @p @p ]] lit !b !b !b A[ n/@ ]] lit !b A[ n/r! ]] lit !b ;\r\n: k/! ( ab-) A[ n/r@ ]] lit !b A[ @p @p ]] lit !b !b !b A[ n/! ]] lit !b ;\n: k/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: k/r! ( w) A[ @p n/r! ]] lit !b !b ;\n: k/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;\n: k/push ( w) A[ @p n/push ]] lit !b !b ;\n// : k/next ( -w) A[ n/next ]] lit !b A[ !p ]] lit !b @b ;\n: k/leave A[ n/leave ; ]] lit !b\n: k/main # k/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r\n  -if // 1101_1???_????_????\n    2* -if // 1101_11??_????_????\n      r> --l- ;\n    then // 1101_10??_????_????\n    r> r--- ;\n  then // 1101_0???_????_????\n  2* -if // 1101_01??_????_????\n    r> -d-- ;\n  then // 1100_00??_????_????\r\n\n(\r\n  \r\n\r\n)\n"
       ramWords:
       - 0x15555
       - 0x15555
@@ -14653,8 +14796,18 @@ projects:
       - 0x15555
       - 0x15555
       - 0x15555
-      - 0x040AD
-      - 0x0000F
+      - 0x05B22
+      - 0x05DB2
+      - 0x09D27
+      - 0x13404
+      - 0x13410
+      - 0x09555
+      - 0x05B12
+      - 0x1340E
+      - 0x05DB2
+      - 0x09B27
+      - 0x13409
+      - 0x09555
       - 0x05B12
       - 0x1340E
       - 0x0C9B2
@@ -14670,28 +14823,18 @@ projects:
       - 0x05BB2
       - 0x11418
       - 0x04812
-      - 0x0001E
+      - 0x00028
       - 0x37932
       - 0x09F02
-      - 0x2F22A
-      - 0x37228
+      - 0x2F234
+      - 0x37232
       - 0x269B2
       - 0x11575
       - 0x269B2
       - 0x115D5
-      - 0x3722D
+      - 0x37237
       - 0x269B2
       - 0x11515
-      - 0x37236
-      - 0x37233
-      - 0x27610
-      - 0x13418
-      - 0x0F612
-      - 0x0B555
-      - 0x27610
-      - 0x07616
-      - 0x0371C
-      - 0x37237
       - 0x15555
       - 0x15555
       - 0x15555
@@ -14702,7 +14845,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x020
+        entryPoint: 0x02A
         p: 0x000
         a: 0x000
         b: 0x000
