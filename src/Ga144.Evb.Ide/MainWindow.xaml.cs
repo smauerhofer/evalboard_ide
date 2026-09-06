@@ -1,15 +1,24 @@
 using Ga144.Evb.Ide.Controls;
+using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.Services;
 using Ga144.Evb.Ide.ViewModels;
 using Ga144.Evb.Ide.Views;
+using Microsoft.Win32;
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Controls;
 
 namespace Ga144.Evb.Ide;
 
 public partial class MainWindow : Window
 {
   private readonly MainWindowViewModel _viewModel;
+  private readonly CProjectStore _cProjectStore = new();
+  // One CProjectWindow per open root folder (case-insensitive on Windows), so opening a C project
+  // that's already open activates the existing window instead of a second one -- "Multiple C
+  // projects can be open at any time" means multiple *different* projects, not multiple windows
+  // onto the same one.
+  private readonly Dictionary<string, CProjectWindow> _openCProjectWindows = new(StringComparer.OrdinalIgnoreCase);
   private SerialDeviceChangeWatcher? _deviceWatcher;
   private bool _closeCompleted;
   private MacroEditorWindow? _macroEditor;
@@ -194,6 +203,107 @@ public partial class MainWindow : Window
           MessageBoxButton.OK,
           MessageBoxImage.Error);
     }
+  }
+
+  private void OnNewCProjectClick(object sender, RoutedEventArgs e)
+  {
+    var dialogViewModel = new NewCProjectViewModel(DefaultCProjectLocation());
+    var dialog = new NewCProjectWindow(dialogViewModel) { Owner = this };
+    if (dialog.ShowDialog() != true)
+    {
+      return;
+    }
+
+    try
+    {
+      CProject project = _cProjectStore.Create(dialogViewModel.ResolvedRootPath, dialogViewModel.Name, dialogViewModel.Kind);
+      OpenOrActivateCProjectWindow(project);
+    }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+        or InvalidOperationException or ArgumentException)
+    {
+      MessageBox.Show(this, exception.Message, "New C project", MessageBoxButton.OK, MessageBoxImage.Error);
+    }
+  }
+
+  private void OnOpenCProjectClick(object sender, RoutedEventArgs e)
+  {
+    var dialog = new OpenFolderDialog { Title = "Open C project (choose its own folder)" };
+    string defaultLocation = DefaultCProjectLocation();
+    if (Directory.Exists(defaultLocation))
+    {
+      dialog.InitialDirectory = defaultLocation;
+    }
+
+    if (dialog.ShowDialog(this) != true)
+    {
+      return;
+    }
+
+    OpenCProjectFolder(dialog.FolderName);
+  }
+
+  private void OnRecentCProjectSelectionChanged(object sender, SelectionChangedEventArgs e)
+  {
+    if (sender is not ComboBox comboBox || comboBox.SelectedItem is not string path)
+    {
+      return;
+    }
+
+    comboBox.SelectedIndex = -1;
+    OpenCProjectFolder(path);
+  }
+
+  private void OpenCProjectFolder(string rootPath)
+  {
+    try
+    {
+      CProject project = _cProjectStore.Load(rootPath);
+      OpenOrActivateCProjectWindow(project);
+    }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+        or InvalidDataException or ArgumentException)
+    {
+      MessageBox.Show(this, exception.Message, "Open C project", MessageBoxButton.OK, MessageBoxImage.Error);
+    }
+  }
+
+  private void OpenOrActivateCProjectWindow(CProject project)
+  {
+    if (_openCProjectWindows.TryGetValue(project.RootPath, out CProjectWindow? existing))
+    {
+      if (existing.WindowState == WindowState.Minimized)
+      {
+        existing.WindowState = WindowState.Normal;
+      }
+
+      existing.Activate();
+      return;
+    }
+
+    var window = new CProjectWindow(new CProjectViewModel(project, _cProjectStore)) { Owner = this };
+    _openCProjectWindows[project.RootPath] = window;
+    window.Closed += (_, _) => _openCProjectWindows.Remove(project.RootPath);
+    window.Show();
+
+    _viewModel.RecordRecentCProjectPath(project.RootPath);
+  }
+
+  // The parent of the most recently opened/created C project, if any, so the next "New"/"Open"
+  // dialog starts somewhere useful instead of always the same default folder.
+  private string DefaultCProjectLocation()
+  {
+    string? mostRecent = _viewModel.RecentCProjectPaths.FirstOrDefault();
+    if (mostRecent is not null)
+    {
+      string? parent = Path.GetDirectoryName(mostRecent);
+      if (!string.IsNullOrWhiteSpace(parent) && Directory.Exists(parent))
+      {
+        return parent;
+      }
+    }
+
+    return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
   }
 
   private async void OnClosing(object? sender, CancelEventArgs e)

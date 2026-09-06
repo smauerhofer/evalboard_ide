@@ -7,6 +7,8 @@ settings:
   scanIntervalMs: 1500
   baudRate: 921600
   krakenIdlePolicy: CloseAfterIdleTimeout
+  recentCProjectPaths:
+  - C:\devl\GreenArray\Ga144EvalboardIde\libs\cvm
 boards:
 - id: d6e6f99b-8d7d-4604-9709-4d6a0b6820f7
   name: EVB001 S0121 board
@@ -24,25 +26,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-06T09:31:22.2987342
-      utcDateTime: 2026-09-06T09:31:22.2987342Z
-      localDateTime: 2026-09-06T11:31:22.2987342+02:00
+      dateTime: 2026-09-06T11:02:27.1766032
+      utcDateTime: 2026-09-06T11:02:27.1766032Z
+      localDateTime: 2026-09-06T13:02:27.1766032+02:00
       date: 2026-09-06T00:00:00.0000000
       day: 6
       dayOfWeek: Sunday
       dayOfYear: 249
-      hour: 9
-      millisecond: 298
-      microsecond: 734
+      hour: 11
+      millisecond: 176
+      microsecond: 603
       nanosecond: 200
-      minute: 31
+      minute: 2
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 22
-      ticks: 639242838822987342
-      utcTicks: 639242838822987342
-      timeOfDay: 09:31:22.2987342
+      second: 27
+      ticks: 639242893471766032
+      utcTicks: 639242893471766032
+      timeOfDay: 11:02:27.1766032
       year: 2026
   portB: 
   portC:

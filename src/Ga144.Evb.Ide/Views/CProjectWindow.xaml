@@ -1,0 +1,136 @@
+<Window x:Class="Ga144.Evb.Ide.Views.CProjectWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{Binding DisplayName}"
+        Width="960"
+        Height="640"
+        MinWidth="760"
+        MinHeight="480"
+        WindowStartupLocation="CenterOwner">
+  <Grid Margin="10">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <Border Grid.Row="0"
+            Background="{StaticResource PanelBrush}"
+            BorderBrush="{StaticResource BorderBrush}"
+            BorderThickness="1"
+            Padding="10"
+            Margin="0,0,0,8">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="220" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Column="0" Text="Name:" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <TextBox Grid.Column="1" Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,16,0" />
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+          <TextBlock Text="Kind:" VerticalAlignment="Center" Margin="0,0,8,0" />
+          <RadioButton Content="Program" IsChecked="{Binding IsProgramKind, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,12,0" />
+          <RadioButton Content="Library" IsChecked="{Binding IsLibraryKind, Mode=TwoWay}" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <TextBlock Grid.Column="3"
+                   Text="{Binding RootPath}"
+                   VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis"
+                   Foreground="#555" />
+
+        <Button Grid.Column="4" Content="Open project folder" Click="OnOpenProjectFolderClick" VerticalAlignment="Center" Margin="8,0,0,0" />
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="300" />
+      </Grid.ColumnDefinitions>
+
+      <GroupBox Grid.Column="0" Header="Header files (include)">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+
+          <ListBox Grid.Row="0"
+                   ItemsSource="{Binding HeaderFiles}"
+                   SelectedItem="{Binding SelectedHeaderFile, Mode=TwoWay}"
+                   MouseDoubleClick="OnOpenHeaderFileClick" />
+
+          <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+            <Button Content="New..." Click="OnNewHeaderFileClick" />
+            <Button Content="Add existing..." Click="OnAddExistingHeaderFileClick" />
+            <Button Content="Open" Click="OnOpenHeaderFileClick" />
+            <Button Content="Remove" Click="OnRemoveHeaderFileClick" />
+          </WrapPanel>
+        </Grid>
+      </GroupBox>
+
+      <GroupBox Grid.Column="1" Header="Source files (src)">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+
+          <ListBox Grid.Row="0"
+                   ItemsSource="{Binding SourceFiles}"
+                   SelectedItem="{Binding SelectedSourceFile, Mode=TwoWay}"
+                   MouseDoubleClick="OnOpenSourceFileClick" />
+
+          <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+            <Button Content="New..." Click="OnNewSourceFileClick" />
+            <Button Content="Add existing..." Click="OnAddExistingSourceFileClick" />
+            <Button Content="Open" Click="OnOpenSourceFileClick" />
+            <Button Content="Remove" Click="OnRemoveSourceFileClick" />
+          </WrapPanel>
+        </Grid>
+      </GroupBox>
+
+      <GroupBox Grid.Column="2" Header="Imported libraries">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+          </Grid.RowDefinitions>
+
+          <ListBox Grid.Row="0"
+                   ItemsSource="{Binding LibraryReferences}"
+                   SelectedItem="{Binding SelectedLibraryReference, Mode=TwoWay}"
+                   DisplayMemberPath="Summary" />
+
+          <WrapPanel Grid.Row="1" Margin="0,8,0,0">
+            <Button Content="Add..." Click="OnAddLibraryReferenceClick" />
+            <Button Content="Remove" Click="OnRemoveLibraryReferenceClick" />
+            <Button Content="Refresh" Click="OnRefreshClick" />
+          </WrapPanel>
+        </Grid>
+      </GroupBox>
+    </Grid>
+
+    <Border Grid.Row="2"
+            Background="#EEF5EF"
+            BorderBrush="#B9CCBD"
+            BorderThickness="1"
+            Padding="8"
+            Margin="0,8,0,0">
+      <DockPanel LastChildFill="True">
+        <Button DockPanel.Dock="Left" Content="Build" Click="OnBuildClick" VerticalAlignment="Top" />
+        <TextBlock Text="{Binding BuildDescription}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="8,0,0,0" />
+      </DockPanel>
+    </Border>
+
+    <TextBlock Grid.Row="3" Text="{Binding StatusText}" Margin="0,6,0,0" Foreground="#555" />
+  </Grid>
+</Window>

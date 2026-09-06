@@ -29,6 +29,12 @@ public sealed class IdeWorkspace
     Projects ??= [];
     Settings.ScanIntervalMs = Math.Clamp(Settings.ScanIntervalMs, 500, 10_000);
     Settings.BaudRate = Math.Clamp(Settings.BaudRate, 9_600, 1_000_000);
+    Settings.RecentCProjectPaths ??= [];
+    Settings.RecentCProjectPaths = Settings.RecentCProjectPaths
+        .Where(path => !string.IsNullOrWhiteSpace(path))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Take(10)
+        .ToList();
 
     if (Projects.Count == 0)
     {
@@ -134,4 +140,9 @@ public sealed class AppSettings
   // survives restarts. CloseAfterIdleTimeout is the KVM-friendly default: the
   // FTDI handle opens on demand and closes ~1 s after the last transaction.
   public KrakenIdlePolicy KrakenIdlePolicy { get; set; } = KrakenIdlePolicy.CloseAfterIdleTimeout;
+
+  // Most-recently-used C project root folders, newest first, for the "Open C Project" menu.
+  // C projects themselves are never stored here -- each is just a folder with its own
+  // project.gacproj (see Models.CProject) -- this is only a convenience shortcut list.
+  public List<string> RecentCProjectPaths { get; set; } = [];
 }

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Ga144.C.Toolchain</RootNamespace>
+    <AssemblyName>Ga144.C.Toolchain</AssemblyName>
+  </PropertyGroup>
+</Project>

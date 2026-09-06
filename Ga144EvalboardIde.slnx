@@ -1,4 +1,6 @@
 <Solution>
+  <Project Path="src/Ga144.C.Preprocessor/Ga144.C.Preprocessor.csproj" />
+  <Project Path="src/Ga144.C.Toolchain/Ga144.C.Toolchain.csproj" />
   <Project Path="src/Ga144.Cvm.Assembler/Ga144.Cvm.Assembler.csproj" />
   <Project Path="src/Ga144.Cvm.Librarian/Ga144.Cvm.Librarian.csproj" />
   <Project Path="src/Ga144.Cvm.Linker/Ga144.Cvm.Linker.csproj" />

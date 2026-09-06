@@ -33,6 +33,14 @@
           <Button Content="Scan serial ports" Command="{Binding ScanNowCommand}" />
           <Button Content="Edit F18 macros" Click="OnMacrosClick" />
           <Button Content="Open workspace folder" Command="{Binding OpenConfigurationFolderCommand}" />
+          <Button Content="New C Project..." Click="OnNewCProjectClick" Margin="20,0,8,0" />
+          <Button Content="Open C Project..." Click="OnOpenCProjectClick" />
+          <ComboBox ItemsSource="{Binding RecentCProjectPaths}"
+                              SelectedIndex="-1"
+                              Width="220"
+                              VerticalAlignment="Center"
+                              SelectionChanged="OnRecentCProjectSelectionChanged"
+                              ToolTip="Recently opened C projects" />
           <CheckBox Content="Auto-detect"
                               IsChecked="{Binding AutoDetectEnabled}"
                               VerticalAlignment="Center"

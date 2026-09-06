@@ -73,6 +73,33 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
   public ObservableCollection<BoardViewModel> Boards { get; } = [];
   public ObservableCollection<ProjectViewModel> Projects { get; } = [];
   public ObservableCollection<SerialPortViewModel> Ports { get; } = [];
+
+  // C projects are plain folders on disk (Models.CProject), not part of this hardware workspace --
+  // this is only the "recently opened" convenience list shown in the main window's toolbar.
+  public ObservableCollection<string> RecentCProjectPaths { get; } = [];
+
+  public void RecordRecentCProjectPath(string rootPath)
+  {
+    List<string> recents = _workspace.Settings.RecentCProjectPaths;
+    recents.RemoveAll(existing => string.Equals(existing, rootPath, StringComparison.OrdinalIgnoreCase));
+    recents.Insert(0, rootPath);
+    while (recents.Count > 10)
+    {
+      recents.RemoveAt(recents.Count - 1);
+    }
+
+    RefreshRecentCProjectPaths();
+    MarkWorkspaceDirty();
+  }
+
+  private void RefreshRecentCProjectPaths()
+  {
+    RecentCProjectPaths.Clear();
+    foreach (string path in _workspace.Settings.RecentCProjectPaths)
+    {
+      RecentCProjectPaths.Add(path);
+    }
+  }
   public IReadOnlyList<EvalBoardModel> BoardModels { get; } = Enum.GetValues<EvalBoardModel>();
   public string ConfigurationPath { get; }
   public string RomLibraryPath { get; }
@@ -447,6 +474,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
                       ?? Boards.FirstOrDefault();
       SelectedProject = Projects.FirstOrDefault(project => project.Id == _workspace.ActiveProjectId)
                         ?? Projects.FirstOrDefault();
+      RefreshRecentCProjectPaths();
 
       OnPropertyChanged(nameof(AutoDetectEnabled));
       OnPropertyChanged(nameof(ActiveProbeNewPortsEnabled));
