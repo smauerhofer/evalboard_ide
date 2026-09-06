@@ -147,6 +147,19 @@ public static class CvmInstructionSet
   public const string LoadAddressOfLocalMnemonic = "lal";
   public const string LoadAddressOfParameterMnemonic = "lap";
 
+  // stl/stp/ldl/ldp REPOINTED to CVM2's node 506 (2026-09-06), the same way 'leave already was
+  // (2026-09-02, see the comment block just below) and 'enter (see Node506EnterTag's own remarks):
+  // Stefan's revised node 506 source names these four branches of its own f/main dispatch explicitly
+  // ("opcode stl 1001_101?...", "opcode stp 1001_100?...", "opcode ldl 1001_111?...", "opcode ldp
+  // 1001_110?...") for the first time -- previously these same four branches existed in node 506's
+  // source but carried no name, so they stayed unwired (see Cvm.Node506Program's own remarks). Still
+  // self-describing (EmbeddedUnsignedValue, unchanged), but now under node 506's own 7-bit-tag/9-bit-value
+  // split (Node506StoreLocalTag/Node506StoreParameterTag/Node506LoadLocalTag/Node506LoadParameterTag,
+  // Node506FrameValueBitMask) rather than CVM1's old node-606 8-bit-tag/8-bit-value one
+  // (StoreLocalTag/StoreParameterTag/LoadLocalTag/LoadParameterTag, kept but superseded, per "do not
+  // remove any opcodes" -- see each superseded constant's own remarks). adjust/lal/lap remain
+  // permanently orphaned -- node 506's own source has never named an equivalent for any of the three.
+
   // 'leave was originally node 606's ninth mnemonic (CVM1), shaped completely differently from the
   // eight self-describing ones just above: a TAGGED mnemonic, exactly like nop/pushlit/push/pop/ret on
   // node 607 -- a single bare opcode word (CvmOperandEncoding.None) whose real numeric value depends on
@@ -541,16 +554,36 @@ public static class CvmInstructionSet
   /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>adjust</c> word: binary 1010_1001.</summary>
   public const int AdjustTag = 0xA900;
 
-  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>stl</c> word: binary 1010_1010.</summary>
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-8) of CVM1's OLD node-606 <c>stl</c> word: binary 1010_1010.
+  /// SUPERSEDED (2026-09-06) -- <c>stl</c> itself now uses <see cref="Node506StoreLocalTag"/> instead
+  /// (see that constant's own remarks); kept per "do not remove any opcodes" but no longer referenced by
+  /// <see cref="Instructions"/>.
+  /// </summary>
   public const int StoreLocalTag = 0xAA00;
 
-  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>stp</c> word: binary 1010_1011.</summary>
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-8) of CVM1's OLD node-606 <c>stp</c> word: binary 1010_1011.
+  /// SUPERSEDED (2026-09-06) -- <c>stp</c> itself now uses <see cref="Node506StoreParameterTag"/>
+  /// instead (see that constant's own remarks); kept per "do not remove any opcodes" but no longer
+  /// referenced by <see cref="Instructions"/>.
+  /// </summary>
   public const int StoreParameterTag = 0xAB00;
 
-  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>ldl</c> word: binary 1010_1100.</summary>
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-8) of CVM1's OLD node-606 <c>ldl</c> word: binary 1010_1100.
+  /// SUPERSEDED (2026-09-06) -- <c>ldl</c> itself now uses <see cref="Node506LoadLocalTag"/> instead
+  /// (see that constant's own remarks); kept per "do not remove any opcodes" but no longer referenced by
+  /// <see cref="Instructions"/>.
+  /// </summary>
   public const int LoadLocalTag = 0xAC00;
 
-  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>ldp</c> word: binary 1010_1101.</summary>
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-8) of CVM1's OLD node-606 <c>ldp</c> word: binary 1010_1101.
+  /// SUPERSEDED (2026-09-06) -- <c>ldp</c> itself now uses <see cref="Node506LoadParameterTag"/> instead
+  /// (see that constant's own remarks); kept per "do not remove any opcodes" but no longer referenced by
+  /// <see cref="Instructions"/>.
+  /// </summary>
   public const int LoadParameterTag = 0xAD00;
 
   /// <summary>The fixed high-bit pattern (bits 15-8) of a <c>lal</c> word: binary 1010_1110.</summary>
@@ -565,18 +598,28 @@ public static class CvmInstructionSet
   /// <summary>Isolates a word's low 8 bits -- the unsigned value field shared by all eight of node 606's ops.</summary>
   public const int Node606ValueBitMask = 0xFF;
 
-  // CVM2's node 506 (2026-09-02) redefines enter/leave (and, not yet wired in, load-local/load-parameter/
-  // store-local/store-parameter) with a DIFFERENT bit layout than CVM1's node 606: a 7-bit tag (bits
+  // CVM2's node 506 (2026-09-02) redefines enter/leave (and, since 2026-09-06, load-local/load-parameter/
+  // store-local/store-parameter too) with a DIFFERENT bit layout than CVM1's node 606: a 7-bit tag (bits
   // 15-9) OR'd with a 9-bit UNSIGNED offset (bits 8-0), rather than 606's 8-bit tag/8-bit value split --
   // per Node506Program's own remarks, derived directly from its f/main dispatch cascade: "1001_001?"
   // (7 bits fixed: 1001001) is enter, with "the offset is 9 bit" per the source's own trailing comment.
-  // enter is repointed here ("only update existing opcodes where possible"); adjust/stl/stp/ldl/ldp/
-  // lal/lap are UNTOUCHED and still point at node 606's old 8-bit tags above -- node 506's own
-  // load-local/load-parameter/store-local/store-parameter are not wired into this table yet.
+  // enter is repointed here ("only update existing opcodes where possible"); adjust/lal/lap remain
+  // UNTOUCHED and still point at node 606's old 8-bit tags above -- node 506's own source has never named
+  // an "adjust"/"lal"/"lap" equivalent, so those three stay permanently orphaned. This also settles the
+  // "may need its own new embedded-value shape" question Node506Program's own remarks once raised: the
+  // VALUE field itself is a plain unsigned 9-bit offset for every one of these ops (load-local's/
+  // store-local's own sign flip happens entirely inside node 506's own dispatch, via "inv", never at the
+  // CVM opcode encoding level) -- EmbeddedUnsignedValue, unchanged, is the right shape after all.
   //
-  // KNOWN, DELIBERATE collision with br/ifbr (2026-09-02): Node506EnterTag falls inside BranchTag's own
-  // range (0x9000-0x97FF, EmbeddedSignedValue) -- per Stefan: "ignore the ranges of br/ifbr. ignore the
-  // overlapping ranges. give me now enter and leave mnemonics." Not resolved, accepted for now.
+  // KNOWN, DELIBERATE collision with br/ifbr (2026-09-02, extended 2026-09-06): Node506EnterTag falls
+  // inside BranchTag's own range (0x9000-0x97FF, EmbeddedSignedValue) -- per Stefan: "ignore the ranges
+  // of br/ifbr. ignore the overlapping ranges. give me now enter and leave mnemonics." Not resolved,
+  // accepted for now. The four new tags just below (stp/stl/ldp/ldl, 0x9800/0x9A00/0x9C00/0x9E00) fall
+  // the SAME way inside ConditionalBranchTag's own range (0x9800-0x9FFF) instead -- the same kind of
+  // collision, just against ifbr rather than br, accepted on the same basis: Assemble() still emits the
+  // correct tagged word for each (dispatched by mnemonic string, never by decoding), but disassembling
+  // one of THESE words back will currently report "ifbr <offset>" instead, for the same reason
+  // TryDescribeSelfDecodingWord's own remarks already document for enter/br.
 
   /// <summary>
   /// The fixed high-bit pattern (bits 15-9) of CVM2 node 506's <c>enter</c> word: binary 1001_001,
@@ -585,7 +628,39 @@ public static class CvmInstructionSet
   /// </summary>
   public const int Node506EnterTag = 0x9200;
 
-  /// <summary>Isolates a word's low 9 bits -- CVM2 node 506's own unsigned offset field (<c>enter</c>, and eventually its load-local/load-parameter/store-local/store-parameter siblings).</summary>
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-9) of CVM2 node 506's <c>stp</c> (store parameter) word: binary
+  /// 1001_100, i.e. 0x9800 with the low 9 bits (the offset) zeroed. Added 2026-09-06 when Stefan's
+  /// revised node 506 source named this branch explicitly ("opcode stp 1001_100?_????_???? store r into
+  /// parameter") -- previously this same <c>1001_100?</c> branch existed in the source but carried no
+  /// name, so it stayed unwired (see <see cref="StoreParameterTag"/>'s own remarks for the superseded
+  /// CVM1-node-606 constant this replaces). Falls inside <see cref="ConditionalBranchTag"/>'s own range --
+  /// see this file's own remarks just above.
+  /// </summary>
+  public const int Node506StoreParameterTag = 0x9800;
+
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-9) of CVM2 node 506's <c>stl</c> (store local) word: binary
+  /// 1001_101, i.e. 0x9A00 with the low 9 bits (the offset) zeroed. Added 2026-09-06 alongside
+  /// <see cref="Node506StoreParameterTag"/> -- see that constant's own remarks.
+  /// </summary>
+  public const int Node506StoreLocalTag = 0x9A00;
+
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-9) of CVM2 node 506's <c>ldp</c> (load parameter) word: binary
+  /// 1001_110, i.e. 0x9C00 with the low 9 bits (the offset) zeroed. Added 2026-09-06 alongside
+  /// <see cref="Node506StoreParameterTag"/> -- see that constant's own remarks.
+  /// </summary>
+  public const int Node506LoadParameterTag = 0x9C00;
+
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-9) of CVM2 node 506's <c>ldl</c> (load local) word: binary
+  /// 1001_111, i.e. 0x9E00 with the low 9 bits (the offset) zeroed. Added 2026-09-06 alongside
+  /// <see cref="Node506StoreParameterTag"/> -- see that constant's own remarks.
+  /// </summary>
+  public const int Node506LoadLocalTag = 0x9E00;
+
+  /// <summary>Isolates a word's low 9 bits -- CVM2 node 506's own unsigned offset field, shared by <c>enter</c> and its four load-local/load-parameter/store-local/store-parameter siblings.</summary>
   public const int Node506FrameValueBitMask = 0x1FF;
 
   // CVM2 node 509's own literal-load form, added 2026-09-05 per Stefan's node 509 source
@@ -734,10 +809,10 @@ public static class CvmInstructionSet
     new(Id: 19, DecrementMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 20, EnterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506EnterTag, ValueBitMask: Node506FrameValueBitMask),
     new(Id: 21, AdjustMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: AdjustTag, ValueBitMask: Node606ValueBitMask),
-    new(Id: 22, StoreLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: StoreLocalTag, ValueBitMask: Node606ValueBitMask),
-    new(Id: 23, StoreParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: StoreParameterTag, ValueBitMask: Node606ValueBitMask),
-    new(Id: 24, LoadLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadLocalTag, ValueBitMask: Node606ValueBitMask),
-    new(Id: 25, LoadParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadParameterTag, ValueBitMask: Node606ValueBitMask),
+    new(Id: 22, StoreLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506StoreLocalTag, ValueBitMask: Node506FrameValueBitMask),
+    new(Id: 23, StoreParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506StoreParameterTag, ValueBitMask: Node506FrameValueBitMask),
+    new(Id: 24, LoadLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506LoadLocalTag, ValueBitMask: Node506FrameValueBitMask),
+    new(Id: 25, LoadParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506LoadParameterTag, ValueBitMask: Node506FrameValueBitMask),
     new(Id: 26, LoadAddressOfLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadAddressOfLocalTag, ValueBitMask: Node606ValueBitMask),
     new(Id: 27, LoadAddressOfParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadAddressOfParameterTag, ValueBitMask: Node606ValueBitMask),
     new(Id: 28, LeaveMnemonic, 1, CvmOperandEncoding.None),

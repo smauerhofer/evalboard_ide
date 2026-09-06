@@ -11,6 +11,18 @@ namespace Ga144.Evb.Ide.Cvm;
 /// load-parameter/store-local/store-parameter), just redesigned for CVM2's own relay-based dispatch
 /// scheme and a wider 9-bit offset field, rather than 606's 8-bit one.
 ///
+/// <b>Revised 2026-09-06: <c>ldl</c>/<c>ldp</c>/<c>stl</c>/<c>stp</c> named for the first time.</b> The
+/// source text is otherwise byte-for-byte unchanged from the 2026-09-04 bug-fixed version below (same
+/// dispatch cascade, same bit patterns, same addresses); only the TRAILING COMMENT changed, naming four
+/// branches that previously had no name attached ("opcode ldl 1001_111?...", "opcode ldp 1001_110?...",
+/// "opcode stl 1001_101?...", "opcode stp 1001_100?..."). Since these four are self-describing
+/// (embedded-value) opcodes with no F18 symbol of their own to tick-prefix, Stefan named them the same
+/// way <c>enter</c> was named back on 2026-09-02 -- in prose, not via a tick-prefixed word definition --
+/// and per "only update existing opcodes where possible" they REPOINT the four matching, previously-
+/// orphaned CVM1 node-606 mnemonics (<c>ldl</c>/<c>ldp</c>/<c>stl</c>/<c>stp</c>) to this node's own real
+/// dispatch, rather than adding new ones. See the cascade paragraph below for each one's own new tag
+/// and the accepted collision with <c>ifbr</c>.
+///
 /// <b>Why a separate node.</b> Same reasoning as <see cref="Node407Program"/> (node 507's own RAM is
 /// completely full): frame-management primitives need their own resident node with its own fresh
 /// 64-word budget. Verified via a standalone harness compile importing <see cref="Node507Program"/>'s
@@ -39,25 +51,43 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <b><c>f/main</c>'s own dispatch cascade and its CVM-level opcode encoding.</b> Three more bits are
 /// tested past the "1001" prefix (bits 11, 10, 9 of the ORIGINAL opcode word):
 /// <list type="bullet">
-/// <item><c>1001_111?_????_????</c> -- load local into r. <c>r&gt; par inv f/stack@</c>: <c>par</c>
-/// (<c>0x1ff and</c>) masks the ORIGINAL opcode word's own low 9 bits out as the offset, <c>inv</c>
-/// negates it (locals sit BELOW the frame pointer) before <c>f/stack@</c> reads it. Self-describing --
-/// the whole word is tag bits 15-9 (<c>1001111</c>) OR'd with a 9-bit value in bits 8-0, no live-node
-/// symbol needed to decode it, exactly like CVM1's old node 606 enter/adjust/stl/stp/ldl/ldp/lal/lap
-/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>) -- just a 9-bit field
-/// instead of 606's 8-bit one, and (unlike 606's ops, which were plain unsigned counts/offsets) the
-/// VALUE here decodes into a signed local-vs-parameter direction via <c>inv</c>, so this may end up
-/// needing its own new embedded-value shape rather than reusing EmbeddedUnsignedValue as-is -- not yet
-/// settled.</item>
-/// <item><c>1001_110?_????_????</c> -- load parameter into r. <c>r&gt; par f/stack@</c>: same offset
-/// extraction, no <c>inv</c> (parameters sit ABOVE the frame pointer).</item>
-/// <item><c>1001_101?_????_????</c> -- store local from r. <c>r&gt; par inv f/stack!</c>.</item>
-/// <item><c>1001_100?_????_????</c> -- store parameter from r. <c>r&gt; par f/stack!</c>.</item>
+/// <item><c>1001_111?_????_????</c> -- load local into r, NAMED <c>ldl</c> for the first time in
+/// Stefan's 2026-09-06 revision ("opcode ldl 1001_111?_????_???? load local into r"). <c>r&gt; par inv
+/// f/stack@</c>: <c>par</c> (<c>0x1ff and</c>) masks the ORIGINAL opcode word's own low 9 bits out as
+/// the offset, <c>inv</c> negates it (locals sit BELOW the frame pointer) before <c>f/stack@</c> reads
+/// it. Self-describing -- the whole word is tag bits 15-9 (<c>1001111</c>) OR'd with a 9-bit value in
+/// bits 8-0, no live-node symbol needed to decode it, exactly like CVM1's old node 606 enter/adjust/
+/// stl/stp/ldl/ldp/lal/lap (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>) --
+/// just a 9-bit field instead of 606's 8-bit one. This settles what an earlier revision of these remarks
+/// left open ("may end up needing its own new embedded-value shape... not yet settled"): the VALUE field
+/// itself is a plain unsigned 9-bit offset regardless of local-vs-parameter -- the local/parameter sign
+/// flip (<c>inv</c>) happens entirely inside <c>f/main</c>'s own dispatch, never at the CVM opcode
+/// encoding level, so <c>EmbeddedUnsignedValue</c> is the right shape after all, unchanged. Wired
+/// 2026-09-06 as <see cref="CvmInstructionSet.LoadLocalMnemonic"/>, tag
+/// <see cref="Services.CvmAssemblyLanguage.Node506LoadLocalTag"/> (0x9E00) -- REPOINTING the existing,
+/// previously-orphaned <c>ldl</c> mnemonic (CVM1's old node 606 family, node 606 itself long gone from
+/// CVM2) rather than adding a new one, per "only update existing opcodes where possible." See
+/// <see cref="CvmInstructionSet.Node506StoreParameterTag"/>'s own remarks for the accepted collision
+/// this (and its three siblings below) has with <c>ifbr</c>.</item>
+/// <item><c>1001_110?_????_????</c> -- load parameter into r, NAMED <c>ldp</c> the same day. <c>r&gt;
+/// par f/stack@</c>: same offset extraction, no <c>inv</c> (parameters sit ABOVE the frame pointer).
+/// Wired as <see cref="CvmInstructionSet.LoadParameterMnemonic"/>, tag
+/// <see cref="Services.CvmAssemblyLanguage.Node506LoadParameterTag"/> (0x9C00) -- same repoint, same
+/// day.</item>
+/// <item><c>1001_101?_????_????</c> -- store local from r, NAMED <c>stl</c> the same day. <c>r&gt; par
+/// inv f/stack!</c>. Wired as <see cref="CvmInstructionSet.StoreLocalMnemonic"/>, tag
+/// <see cref="Services.CvmAssemblyLanguage.Node506StoreLocalTag"/> (0x9A00) -- same repoint, same
+/// day.</item>
+/// <item><c>1001_100?_????_????</c> -- store parameter from r, NAMED <c>stp</c> the same day. <c>r&gt;
+/// par f/stack!</c>. Wired as <see cref="CvmInstructionSet.StoreParameterMnemonic"/>, tag
+/// <see cref="Services.CvmAssemblyLanguage.Node506StoreParameterTag"/> (0x9800) -- same repoint, same
+/// day.</item>
 /// <item><c>1001_01??_????_????</c> -- <c>r&gt; --l- ;</c>, a further multiport hand-off to node 506's
 /// OWN left neighbour -- per the source's own comment, "call node 505." Node 505's source has not been
 /// supplied yet; this whole 6-bit-tag sub-family (<c>1001_01??</c>, i.e. 0x9400-0x97FF) is reserved for
 /// whatever node 505 itself defines, the same way node 506 was handed the whole "1001" nibble by node
-/// 507. Not wired into anything yet -- flagged, not guessed at.</item>
+/// 507. Still not wired into anything -- flagged, not guessed at, unchanged by the 2026-09-06
+/// revision.</item>
 /// <item><c>1001_001?_????_????</c> -- enter stack frame. <c>a A[ @p m/push ]] lit !b !b ;</c> saves the
 /// caller's frame pointer, then reads the stack pointer and computes the new frame pointer from
 /// <c>r&gt; par inv +</c> -- the 9-bit offset (locals count) again taken directly from the original
@@ -91,9 +121,13 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <see cref="Services.CvmAssemblyLanguage.Node506LeaveTagBits"/> 0x9000), ENCODING correctly despite the
 /// collision -- only DISASSEMBLY of an <c>enter</c>/<c>leave</c> word is currently wrong (reported as
 /// <c>br</c> instead), since <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> checks <c>br</c>
-/// first for the whole 0x9000-0x97FF range. This node's own load-local/load-parameter/store-local/
-/// store-parameter mnemonics and its own relay to node 505 remain UNWIRED (out of the narrower scope
-/// Stefan asked for: "give me now enter and leave mnemonics").
+/// first for the whole 0x9000-0x97FF range. <b>Extended 2026-09-06:</b> <c>ldl</c>/<c>ldp</c>/<c>stl</c>/
+/// <c>stp</c> are wired in too now, per Stefan's follow-up revision naming all four explicitly for the
+/// first time -- see the cascade list above for each one's own tag. The SAME collision shape applies one
+/// nibble over: all four land inside <c>ifbr</c>'s own range (0x9800-0x9FFF) rather than <c>br</c>'s
+/// (0x9000-0x97FF), so disassembling one of THESE words currently reports <c>ifbr</c> instead, same
+/// reasoning, same acceptance. Only this node's own relay to node 505 (<c>1001_01??</c>) remains
+/// unwired -- node 505's source has still not been supplied.
 ///
 /// <b>Bug found and fixed (2026-09-04): a stray <c>;</c> inside <c>enter</c>'s own remote
 /// read-stack-pointer step corrupted <c>'leave</c>'s compiled encoding.</b> An earlier revision of this
@@ -129,9 +163,11 @@ internal static class Node506Program
   /// Node 506's full resident F18 source. Originally supplied by Stefan on 2026-09-02 ("i have
   /// rewritten node 506. it handles stack frames only."); revised 2026-09-04 with the bug fix described
   /// in the class remarks above (the stray <c>;</c> inside <c>enter</c>'s remote read-stack-pointer step,
-  /// and the simplified <c>'leave</c> body). See the class remarks for the register/stack helpers,
-  /// <c>f/main</c>'s dispatch cascade, its CVM-level opcode encoding, the bug fix, and the accepted
-  /// <c>br</c>/<c>ifbr</c> tag collision.
+  /// and the simplified <c>'leave</c> body); revised again 2026-09-06 (trailing comment only -- naming
+  /// <c>ldl</c>/<c>ldp</c>/<c>stl</c>/<c>stp</c> for the first time, no dispatch/address changes). See
+  /// the class remarks for the register/stack helpers, <c>f/main</c>'s dispatch cascade, its CVM-level
+  /// opcode encoding (including the four newly-named ops), the bug fix, and the accepted <c>br</c>/
+  /// <c>ifbr</c> tag collisions.
   /// </summary>
   public const string Source = """
       ( CVM2 node 506. frame, 1001_????_????_???? )
@@ -185,11 +221,11 @@ internal static class Node506Program
       : 'leave .loc
         A[ m/pop ]] lit !b A[ !p ]] lit !b @b a! ;
       (
-      opcode 1001_111?_????_???? load local into r. the offset is 9 bit.
-      opcode 1001_110?_????_???? load parameter into r. the offset is 9 bit.
-      opcode 1001_101?_????_???? store local from r. the offset is 9 bit.
-      opcode 1001_100?_????_???? store parameter from r. the offset is 9 bit.
-      opcode 1001_001?_????_???? enter stack frame. the offset is 9 bit.
+      opcode ldl 1001_111?_????_???? load local into r. the offset is 9 bit.
+      opcode ldp 1001_110?_????_???? load parameter into r. the offset is 9 bit.
+      opcode stl 1001_101?_????_???? store r into local. the offset is 9 bit.
+      opcode stp 1001_100?_????_???? store r into parameter. the offset is 9 bit.
+      opcode enter 1001_001?_????_???? enter stack frame. the offset is 9 bit.
       opcode 1001_01??_????_???? call node 505
       'leave restore stack pointer and previous frame. undo enter stack frame.
       )

@@ -31,7 +31,14 @@ namespace Ga144.Evb.Ide.Cvm;
 /// 2026-08-30), the call/ret round trip into the frame-pointer block, and every one of its own
 /// enter/stl/stp/ldl/ldp/lal/lap/leave transactions, were confirmed exact -- including the
 /// self-check that lal's/lap's freshly computed addresses agree with stl's/ldl's and stp's/ldp's
-/// own addresses, which they did.
+/// own addresses, which they did. On a THIRD real run (2026-09-01, the first to include node 606's
+/// new <c>halt</c>), a further correction: <c>addc</c>'s result register r does NOT keep the raw,
+/// unmasked 18-bit sum an earlier draft of this program assumed -- 'push wrote 0x0001, not
+/// 0x10001, for the same X(FFFF)+r(1)+carry(1) sum whose carry bit landed correctly in d (read back
+/// via 'ldd immediately afterward). r is masked to 16 bits like every other register this program
+/// exercises; only <c>d</c> (via the separate <c>ldd</c> round trip) carries the overflow. Every
+/// other opcode's value on this run matched exactly, including 'br 1 and 'halt itself -- see the
+/// Layout note below for what changed there.
 ///
 /// <b>Three deliberate exclusions, each documented at the point it would otherwise appear:</b>
 /// <list type="bullet">
@@ -102,6 +109,29 @@ namespace Ga144.Evb.Ide.Cvm;
 /// two MUST always agree with each other regardless of which sign convention turns out to be
 /// correct, so the check is meaningful without this program taking a position on the unconfirmed
 /// convention itself. Confirmed exact on the 2026-08-30 run: both pairs agreed.
+///
+/// <b>Flagged, not fixed (2026-09-06): <c>ldl</c>/<c>ldp</c>/<c>stl</c>/<c>stp</c>'s own CVM opcode
+/// encoding has since moved out from under this program's own hardware-confirmed run.</b> Everything
+/// above (the 0x00AB/0x00CD expected DATA values, the stl/ldl-vs-lal and stp/ldp-vs-lap self-check) was
+/// confirmed against CVM1's node 606 -- a physically different, now-deleted node -- using the OLD
+/// 8-bit-tag/8-bit-value opcode words CVM1 assigned these four mnemonics. CVM2's own node 506 has since
+/// been given a real <c>ldl</c>/<c>ldp</c>/<c>stl</c>/<c>stp</c> implementation of its own (see
+/// <see cref="Node506Program"/>'s own remarks), and per "only update existing opcodes where possible"
+/// these four mnemonics were REPOINTED to node 506's own, DIFFERENT 7-bit-tag/9-bit-value opcode words
+/// (<see cref="CvmInstructionSet.Node506StoreLocalTag"/> and its three siblings) -- so assembling THIS
+/// program's own <c>stl 1</c>/<c>ldl 1</c>/etc. lines today produces different raw opcode words than the
+/// ones this program's own comments were confirmed against. That is arguably a fix, not a regression --
+/// under the OLD CVM1-derived tags (0xA800-0xAFFF) these words would not even route to node 506 at all
+/// under CVM2's own node-507 dispatch (that range belongs to node 508's globals instead), so a real
+/// CVM2-mesh run of this exact program text would previously have sent stl/ldl/stp/ldp to the WRONG
+/// node entirely. But node 506's own real dispatch differs from CVM1's node 606 in other ways too (a
+/// 9-bit offset instead of 8-bit, and its own not-yet-independently-confirmed local-vs-parameter sign
+/// convention -- see <see cref="Node506Program"/>'s own remarks), so the specific 0x00AB/0x00CD values
+/// asserted above are NOT a reliable prediction of what a real CVM2 run through node 506 will produce --
+/// only a fresh hardware run against the current CVM2 mesh could confirm that. Per Stefan's own standing
+/// instruction (see <see cref="Ga144CvmHardwareInstaller.StartDebugSessionAsync"/>'s own remarks, "just
+/// keep it for now"), this file's own text is left untouched here too; this paragraph only records why
+/// its numbers can no longer be trusted at face value for CVM2.
 ///
 /// This is the single source of truth for that program's text:
 /// <see cref="Services.CvmMemoryProtocol.TryBuildDebuggerTestProgram"/> assembles this exact text
@@ -206,8 +236,8 @@ public static class CvmDebuggerDefaultProgram
       "slit -1           ; r=0xFFFF (this will be the popped addend X)\n" +
       "push              ; WRITE <- FFFF\n" +
       "slit 1            ; r=1 (restore r=1 for addc's own r operand)\n" +
-      "addc              ; pop X(FFFF) READ <- FFFF; total = d(1)+X(FFFF)+r(1) = 0x10001; r := 0x10001 RAW (506's own r! does not mask to 16 bits -- see note below), d := carry = 1\n" +
-      "push              ; WRITE <- 10001 (5 hex digits -- raw/unmasked r; see the note above 'addc)\n" +
+      "addc              ; pop X(FFFF) READ <- FFFF; total = d(1)+X(FFFF)+r(1) = 0x10001; r := 0x0001 (the low 16 bits -- an earlier draft of this comment claimed r keeps the raw, unmasked 18-bit sum; a real run (2026-09-01) showed otherwise, r is masked same as everything else), d := carry = 1\n" +
+      "push              ; WRITE <- 0001 (confirmed against real hardware 2026-09-01: only the low 16 bits of addc's sum reach r/external memory, NOT the raw 0x10001 an earlier draft of this comment assumed)\n" +
       "ldd               ; r := d -- expect the captured carry\n" +
       "push              ; WRITE <- 0001 (confirms addc's carry landed correctly in d)\n" +
       "slit 1            ; r=1\n" +
