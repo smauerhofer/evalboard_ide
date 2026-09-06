@@ -26,25 +26,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-06T18:05:45.0169673
-      utcDateTime: 2026-09-06T18:05:45.0169673Z
-      localDateTime: 2026-09-06T20:05:45.0169673+02:00
+      dateTime: 2026-09-06T18:55:06.3233843
+      utcDateTime: 2026-09-06T18:55:06.3233843Z
+      localDateTime: 2026-09-06T20:55:06.3233843+02:00
       date: 2026-09-06T00:00:00.0000000
       day: 6
       dayOfWeek: Sunday
       dayOfYear: 249
       hour: 18
-      millisecond: 16
-      microsecond: 967
+      millisecond: 323
+      microsecond: 384
       nanosecond: 300
-      minute: 5
+      minute: 55
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 45
-      ticks: 639243147450169673
-      utcTicks: 639243147450169673
-      timeOfDay: 18:05:45.0169673
+      second: 6
+      ticks: 639243177063233843
+      utcTicks: 639243177063233843
+      timeOfDay: 18:55:06.3233843
       year: 2026
   portB: 
   portC:
@@ -14676,7 +14676,7 @@ projects:
               // inca increment address
               r> ar/reg @ ar/inc !+ 0x10000 and # ar/leave until @ ar/inc ! ;
 
-            then // 1100_1001_0???_????
+            then // 1101_1001_0???_????
             // deca decrement address
             r> ar/reg @ ar/dec !+ # ar/leave -until @ ar/dec ! ;
           then  
@@ -14684,8 +14684,8 @@ projects:
             // lda load address register, address in r, page in stack
             r> ar/reg ar/r@ !+ ar/pop ! ;
 
-          then // 1100_1000_0???_????
-          // lda load address register, address in r, page in stack
+          then // 1101_1000_0???_????
+          // sta store address register, address in r, page in stack
           r> ar/reg @+ ar/r! @ ar/push ;
 
         (
@@ -14778,7 +14778,7 @@ projects:
         parameterStack: []
     - coordinate: 307
       enabled: true
-      sourceCode: "( CVM2 node 307. VM ternary main, 1101_????_????_???? )\r\n( contains 8 32-bit address register )\r\n( address word in x, page word in x+1 )\n# 407 import\n# 0x10 org\nentry k/main\n# 0 /a\n# up /b\r\n: k/@ ( ab-) A[ @p @p ]] lit !b !b !b A[ n/@ ]] lit !b A[ n/r! ]] lit !b ;\r\n: k/! ( ab-) A[ n/r@ ]] lit !b A[ @p @p ]] lit !b !b !b A[ n/! ]] lit !b ;\n: k/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: k/r! ( w) A[ @p n/r! ]] lit !b !b ;\n: k/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;\n: k/push ( w) A[ @p n/push ]] lit !b !b ;\n// : k/next ( -w) A[ n/next ]] lit !b A[ !p ]] lit !b @b ;\n: k/leave A[ n/leave ; ]] lit !b\n: k/main # k/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r\n  -if // 1101_1???_????_????\n    2* -if // 1101_11??_????_????\n      r> --l- ;\n    then // 1101_10??_????_????\n    r> r--- ;\n  then // 1101_0???_????_????\n  2* -if // 1101_01??_????_????\n    r> -d-- ;\n  then // 1100_00??_????_????\r\n\n(\r\n  \r\n\r\n)\n"
+      sourceCode: "( CVM2 node 307. VM ternary main, 1101_????_????_???? )\r\n# 407 import\n# 0x10 org\nentry k/main\n# 0 /a\n# up /b\r\n: k/@ ( ab-) A[ @p @p ]] lit !b !b !b A[ n/@ ]] lit !b A[ n/r! ]] lit !b ;\r\n: k/! ( ab-) A[ n/r@ ]] lit !b A[ @p @p ]] lit !b !b !b A[ n/! ]] lit !b ;\n: k/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: k/r! ( w) A[ @p n/r! ]] lit !b !b ;\n: k/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;\n: k/push ( w) A[ @p n/push ]] lit !b !b ;\n// : k/next ( -w) A[ n/next ]] lit !b A[ !p ]] lit !b @b ;\n: k/leave A[ n/leave ; ]] lit !b\n: k/main # k/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r\n  -if // 1101_1???_????_????\n    2* -if // 1101_11??_????_????\n      r> --l- ;\n    then // 1101_10??_????_????\n    r> r--- ;\n  then // 1101_0???_????_????\n  2* -if // 1101_01??_????_????\n    r> -d-- ;\n  then // 1101_00??_????_????\r\n\n(\r\n  \r\n\r\n)\n"
       ramWords:
       - 0x15555
       - 0x15555

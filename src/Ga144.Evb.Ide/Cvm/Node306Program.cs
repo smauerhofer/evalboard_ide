@@ -1,10 +1,12 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// Node 306's resident F18 source -- CVM2's address-register node, supplied verbatim by Stefan on
+/// Node 306's resident F18 source -- CVM2's address-register node. Stefan supplied the first revision on
 /// 2026-09-06 alongside the accompanying revision of node 307 ("I change node 307 and added node
-/// 306... In 306 there are 4 32-bit address register to access the whole memory range."). Brand new
-/// file; no earlier revision of node 306 existed in this project.
+/// 306... In 306 there are 4 32-bit address register to access the whole memory range."), then a
+/// follow-up revision the same day ("here are the nodes without the typos you mentioned") that fixes the
+/// two things flagged against that first revision -- see below. Brand new file; no earlier revision of
+/// node 306 existed in this project before the first message.
 ///
 /// <b>Four 32-bit address registers, held as word-pairs in this node's own RAM.</b> Per Stefan's own
 /// narration and this source's own header comment ("<c>contains 4 32-bit address register</c>",
@@ -44,6 +46,7 @@ namespace Ga144.Evb.Ide.Cvm;
 /// register"); the exact role of the bare <c>.</c> token in each body is NOT analyzed further here (it
 /// does not match any token this project's other confirmed CVM2 sources use), consistent with only
 /// wiring up what is independently confirmed rather than guessing at unconfirmed low-level F18 semantics.
+/// Unchanged by Stefan's 2026-09-06 follow-up.
 ///
 /// <b><c>ar/main</c>'s own dispatch cascade -- consumes three more bits within the already-fixed
 /// "1101_10" prefix.</b> Reads two words via <c>@b</c> (port B, the "right" link to 307), the same
@@ -57,28 +60,21 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <c>1101_1001_0???</c> is <c>deca</c> ("decrement address"). Else (the outer branch's own "then"
 /// fall-through) <c>1101_1000</c> splits once more: <c>1101_1000_1???</c> is <c>lda</c> ("load address
 /// register, address in r, page in stack"); else the final fall-through is <c>1101_1000_0???</c>, which
-/// per the source's own TRAILING opcode table (below) is <c>sta</c> ("store address register") -- see
-/// the FLAGGED note just below on why the INLINE comment on this specific branch is misleading.</item>
+/// is <c>sta</c> ("store address register, address in r, page in stack") -- both this bit pattern and
+/// the mnemonic now agree, per Stefan's 2026-09-06 follow-up (see below).</item>
 /// </list>
 ///
-/// <b>FLAGGED: the final branch's own inline comment says "lda" twice; the trailing opcode table
-/// disagrees for the second one, and is trusted here instead.</b> The source's own inline comment
-/// immediately above the LAST line of <c>ar/main</c> reads "<c>// lda load address register, address in
-/// r, page in stack</c>" -- identical, word for word, to the comment on the branch just above it (the
-/// genuine <c>lda</c> case). But the two branches' own CODE differs (the earlier one:
-/// <c>ar/reg ar/r@ !+ ar/pop !</c>; this final one: <c>ar/reg @+ ar/r! @ ar/push</c> -- roughly opposite
-/// data directions, consistent with one being a LOAD and the other a STORE), and the source's own
-/// TRAILING opcode-table comment block unambiguously assigns THIS bit pattern
-/// (<c>1101_1000_0???_?aa0</c>) to <c>sta</c>, not <c>lda</c>. This class's own <see cref="Source"/>
-/// reproduces the inline "lda" comment completely verbatim (not silently corrected to "sta"); the CVM
-/// mnemonic wiring in <see cref="CvmInstructionSet"/> follows the AUTHORITATIVE trailing table instead
-/// (<see cref="CvmInstructionSet.StoreAddressRegisterValueMnemonic"/>, tag <c>0xD800</c>), which is
-/// unaffected by this inline-comment slip either way.
-///
-/// <b>FLAGGED, same recurring transcription habit as node 307's own final branch.</b> This final
-/// branch's own "then" comment reads "<c>1100_1000_0???_????</c>" -- again a leading "1100" where the
-/// cascade's own bit tests actually reach "1101_1000_0???_????" (see <see cref="Node307Program"/>'s own
-/// remarks for the identical slip there). Reproduced verbatim.
+/// <b>Fixed by Stefan's 2026-09-06 follow-up ("without the typos"), no longer flagged:</b> the first
+/// revision's final branch carried an inline comment reading "<c>// lda load address register, address
+/// in r, page in stack</c>" -- identical, word for word, to the comment on the genuine <c>lda</c> branch
+/// just above it, even though the two branches' own CODE differs (roughly opposite data directions) and
+/// the source's own TRAILING opcode-table comment block unambiguously assigned that bit pattern to
+/// <c>sta</c>. This revision's inline comment now correctly reads "<c>// sta store address register,
+/// address in r, page in stack</c>", agreeing with the trailing table -- see
+/// <see cref="CvmInstructionSet.StoreAddressRegisterValueMnemonic"/> (tag <c>0xD800</c>), which was
+/// unaffected by the inline-comment slip either way and needed no change. The recurring "1100" vs "1101"
+/// leading-nibble slip on this node's own two <c>then</c> comments (<c>inca</c>/<c>deca</c>'s split and
+/// the final branch) is also fixed in this revision -- both now correctly read "1101".
 ///
 /// <b>Six new CVM mnemonics -- self-describing, straight from Stefan's own trailing bit-pattern table,
 /// not tick-prefixed in the source at all.</b> Unlike every earlier tagged mnemonic in this project
@@ -92,7 +88,7 @@ namespace Ga144.Evb.Ide.Cvm;
 /// frame-pointer ops use, needing no live compile/node resolution at all -- see
 /// <see cref="CvmInstructionSet.LoadAddressRegisterMnemonic"/>'s own remarks for the full derivation,
 /// INCLUDING a flagged collision with <c>slit</c>'s own already-active tag range (0xD000-0xDFFF fully
-/// contains this family's own 0xD800-0xDBFF).
+/// contains this family's own 0xD800-0xDBFF). That collision is unaffected by this revision.
 ///
 /// <b>Not verified against a live compile.</b> No compiler is available in this environment to confirm
 /// <c>ar/main</c>'s own body actually compiles as pasted (particularly given the unanalyzed <c>.</c>
@@ -105,9 +101,11 @@ internal static class Node306Program
   public const int Coordinate = 306;
 
   /// <summary>
-  /// Node 306's full resident F18 source, as supplied by Stefan on 2026-09-06 ("here are nodes 307 and
-  /// 306"). See the class remarks for the six opcodes' own derivation, the flagged "lda"/"sta" inline-
-  /// comment mix-up, and the unanalyzed <c>ar/inc</c>/<c>ar/dec</c> bodies.
+  /// Node 306's full resident F18 source, as supplied by Stefan on 2026-09-06, in its second revision
+  /// ("here are the nodes without the typos you mentioned"). See the class remarks for what this
+  /// revision fixed (the duplicated "lda" inline comment on the <c>sta</c> branch, the "1100"/"1101"
+  /// nibble slips) and what remains unanalyzed (the <c>ar/inc</c>/<c>ar/dec</c> bodies' bare <c>.</c>
+  /// token).
   /// </summary>
   public const string Source = """
       ( CVM2 node 306. VM ternary main, 1101_10??_????_???? )
@@ -139,15 +137,15 @@ internal static class Node306Program
           2* -if // 1101_1001_1???_????
             // inca increment address
             r> ar/reg @ ar/inc !+ 0x10000 and # ar/leave until @ ar/inc ! ;
-          then // 1100_1001_0???_????
+          then // 1101_1001_0???_????
           // deca decrement address
           r> ar/reg @ ar/dec !+ # ar/leave -until @ ar/dec ! ;
         then
         2* -if // 1101_1000_1???_????
           // lda load address register, address in r, page in stack
           r> ar/reg ar/r@ !+ ar/pop ! ;
-        then // 1100_1000_0???_????
-        // lda load address register, address in r, page in stack
+        then // 1101_1000_0???_????
+        // sta store address register, address in r, page in stack
         r> ar/reg @+ ar/r! @ ar/push ;
       (
       opcode ldar 1101_1011_????_?aa0 load r from address in address register

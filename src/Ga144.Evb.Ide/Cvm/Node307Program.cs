@@ -1,12 +1,14 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// Node 307's resident F18 source -- CVM2's "VM ternary main" relay node, supplied verbatim by Stefan
-/// on 2026-09-06 alongside node 306 ("I change node 307 and added node 306... here are nodes 307 and
-/// 306:"). This is a BRAND NEW file to this project -- no earlier revision of node 307 existed here
-/// before this message, despite Stefan's own wording ("I change node 307") suggesting it already existed
-/// somewhere in his own design; this class's own <see cref="Source"/> reflects only what was supplied
-/// today.
+/// Node 307's resident F18 source -- CVM2's "VM ternary main" relay node. Stefan supplied the first
+/// revision on 2026-09-06 alongside node 306 ("I change node 307 and added node 306... here are nodes
+/// 307 and 306:"), then a follow-up revision the same day ("here are the nodes without the typos you
+/// mentioned") that fixes two of the three things flagged against that first revision -- see below for
+/// which one is NOT fixed. This is a BRAND NEW file to this project -- no earlier revision of node 307
+/// existed here before the first message, despite Stefan's own wording ("I change node 307") suggesting
+/// it already existed somewhere in his own design; this class's own <see cref="Source"/> reflects only
+/// what has been supplied so far.
 ///
 /// <b>Fills node 407's own previously-FLAGGED, unresolved "1101" relay branch.</b> Node 407's own
 /// <c>n/main</c> dispatch (<see cref="Node407Program"/>) has, since 2026-09-05, carried an open question
@@ -38,17 +40,18 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <b>FLAGGED: <c>k/next</c> is commented out.</b> Every other node in this relay chain (407's own
 /// <c>n/next</c>, 508's own <c>g/next</c>) exports a <c>next</c> helper alongside <c>pop</c>. Here, the
 /// line exists in the source but is prefixed with <c>//</c> (<c>// : k/next ( -w) ...</c>), so it is NOT
-/// a real definition -- reproduced verbatim as a comment, not silently uncommented or removed. Whether
-/// this is deliberate (node 306 and whatever else eventually imports node 307 turn out not to need it)
-/// or an oversight is left for Stefan to say.
+/// a real definition -- reproduced verbatim as a comment, not silently uncommented or removed. Present
+/// unchanged in both revisions. Whether this is deliberate (node 306 and whatever else eventually
+/// imports node 307 turn out not to need it) or an oversight is left for Stefan to say.
 ///
-/// <b>Header says "8" registers; node 306's own header and Stefan's own narration both say "4".
-/// FLAGGED, not silently corrected.</b> This source's own second line reads
-/// "<c>( contains 8 32-bit address register )</c>", but node 307 itself defines no address registers at
-/// all (that is entirely node 306's own job -- see <see cref="Node306Program"/>), and Stefan's own
-/// message introducing both nodes states "In 306 there are 4 32-bit address register", matching node
-/// 306's own header text exactly ("<c>( contains 4 32-bit address register )</c>"). The "8" here looks
-/// like a stale or copy-pasted figure; reproduced verbatim rather than silently changed to "4".
+/// <b>Fixed by Stefan's 2026-09-06 follow-up ("without the typos"), no longer flagged:</b> the first
+/// revision's stray header line "<c>( contains 8 32-bit address register )</c>" (node 307 itself defines
+/// no address registers at all -- that is entirely node 306's own job, see
+/// <see cref="Node306Program"/> -- and the figure also disagreed with node 306's own header and Stefan's
+/// own narration, both of which say "4") is simply GONE from this revision's header, rather than
+/// corrected to "4"; and the final dispatch branch's own trailing comment, which previously misread
+/// "<c>1100_00??_????_????</c>", now correctly reads "<c>1101_00??_????_????</c>", matching what the
+/// cascade's own bit tests actually reach.
 ///
 /// <b><c>k/main</c>'s own dispatch cascade -- consumes two more bits within the already-fixed "1101"
 /// prefix.</b> Reads two words via <c>@b</c> (port B, the "up" link to 407) the same "relay two bits
@@ -62,31 +65,29 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <c>then</c> to whatever comes next.</item>
 /// </list>
 ///
-/// <b>FLAGGED: the final branch is unterminated and its own trailing comment mislabels its bit
-/// pattern -- this source, as supplied, does not look complete.</b> The very last line is
-/// "<c>then // 1100_00??_????_????</c>" followed immediately by an empty comment block
-/// (<c>( )</c>) and nothing else -- no dispatch code for this branch (unlike every other cascade
-/// in this project's own nodes, which either relay onward or fall to a local "ex" tail), and no
-/// closing <c>;</c> for the <c>k/main</c> definition itself. Two separate things are flagged here,
-/// reproduced completely verbatim rather than silently completed or guessed at:
+/// <b>STILL FLAGGED, NOT fixed by the 2026-09-06 follow-up: the final branch remains unterminated,
+/// with no dispatch code of its own.</b> The very last line is still
+/// "<c>then // 1101_00??_????_????</c>" (only its own comment's leading nibble changed, from "1100" to
+/// "1101" -- see above) followed immediately by an empty comment block (<c>( )</c>) and nothing else --
+/// no dispatch code for this branch (unlike every other cascade in this project's own nodes, which
+/// either relay onward or fall to a local "ex" tail), and no closing <c>;</c> for the <c>k/main</c>
+/// definition itself. This is a DIFFERENT, deeper issue than the two comment-text slips Stefan's
+/// follow-up fixed (a wrong header figure, a mislabeled bit-pattern comment) -- it is missing CODE, not
+/// a miscopied comment -- so it is called out again here rather than assumed resolved:
 /// <list type="bullet">
-/// <item>The bit-pattern comment reads "<c>1100_00??</c>", but consuming the cascade's own bit tests in
-/// order (1101, then 0, then falling through the last <c>-if</c>/<c>then</c> pair) actually reaches
-/// "<c>1101_00??_????_????</c>" -- the leading nibble should almost certainly read "1101", not "1100".
-/// The SAME leading-nibble slip recurs in node 306's own trailing <c>then</c> comment (see that class's
-/// own remarks), suggesting a small, consistent transcription habit rather than two unrelated
-/// mistakes.</item>
-/// <item>There is no code and no terminating <c>;</c> after this last <c>then</c> -- as pasted, this
-/// looks like an open stub for a fourth (local?) dispatch branch not yet written, the same shape node
-/// 407's own original "1100" tail was before <c>'lcall</c>/<c>'ljmp</c>/<c>'lbr</c> existed (see
-/// <see cref="Node407Program"/>'s own remarks) -- except THERE the tail at least had SOME code
-/// (<c>ex ;</c>) from the start. Because of this, this class's own <see cref="Source"/> below is very
-/// likely NOT compilable as it stands; no semicolon or dispatch body has been invented here to make it
-/// compile, since guessing at what belongs in an unfinished branch is exactly the kind of unconfirmed
-/// design decision this project's own practice says to flag rather than fill in. Whether node 306 (the
-/// only node currently reachable through node 307 at all) is affected by this depends on whether the
-/// toolchain's own "# import" resolution needs a full, successful compile of node 307 or only its own
-/// declared export list -- not established here.
+/// <item>As pasted (both revisions), this looks like an open stub for a fourth (local?) dispatch branch
+/// not yet written, the same shape node 407's own original "1100" tail was before
+/// <c>'lcall</c>/<c>'ljmp</c>/<c>'lbr</c> existed (see <see cref="Node407Program"/>'s own remarks) --
+/// except THERE the tail at least had SOME code (<c>ex ;</c>) from the start. Because of this, this
+/// class's own <see cref="Source"/> below is very likely still NOT compilable as it stands; no semicolon
+/// or dispatch body has been invented here to make it compile, since guessing at what belongs in an
+/// unfinished branch is exactly the kind of unconfirmed design decision this project's own practice says
+/// to flag rather than fill in.</item>
+/// <item>Whether node 306 (the only node currently reachable through node 307 at all) is affected by
+/// this depends on whether the toolchain's own "# import" resolution needs a full, successful compile of
+/// node 307 or only its own declared export list -- not established here. See
+/// <see cref="CvmBootStreamBuilder"/>'s own remarks: its <c>BuildDescriptors()</c> compiles node 307 and
+/// is still expected to fail on this branch until it is completed.</item>
 /// </list>
 /// </summary>
 internal static class Node307Program
@@ -95,15 +96,14 @@ internal static class Node307Program
   public const int Coordinate = 307;
 
   /// <summary>
-  /// Node 307's full resident F18 source, as supplied by Stefan on 2026-09-06 ("here are nodes 307 and
-  /// 306"). See the class remarks for the flagged incomplete final branch, the commented-out
-  /// <c>k/next</c>, and the "8 vs 4 address register" header discrepancy -- none of those were changed
-  /// here.
+  /// Node 307's full resident F18 source, as supplied by Stefan on 2026-09-06, in its second revision
+  /// ("here are the nodes without the typos you mentioned"). See the class remarks for what this
+  /// revision fixed (the stray "8 register" header line, the final branch's mislabeled bit-pattern
+  /// comment) and what it did NOT fix (the same final branch is still missing its own dispatch code and
+  /// the definition's closing <c>;</c>) -- the commented-out <c>k/next</c> is also unchanged.
   /// </summary>
   public const string Source = """
       ( CVM2 node 307. VM ternary main, 1101_????_????_???? )
-      ( contains 8 32-bit address register )
-      ( address word in x, page word in x+1 )
       # 407 import
       # 0x10 org
       entry k/main
@@ -126,7 +126,7 @@ internal static class Node307Program
         then // 1101_0???_????_????
         2* -if // 1101_01??_????_????
           r> -d-- ;
-        then // 1100_00??_????_????
+        then // 1101_00??_????_????
       (
 
       )
