@@ -76,10 +76,19 @@ namespace Ga144.Evb.Ide.Services;
 /// alongside 407 and 506, reached from node 507's own <c>m/main</c> dispatch via its LEFT port
 /// (<c>--l-</c>). Per Stefan's own tick-naming rule, only <c>ldg</c>/<c>stg</c> (node 508's own
 /// <c>'ldg</c>/<c>'stg</c>, the only two of its words that begin with a leading <c>'</c>) are wired in
-/// below -- see <see cref="Node508LoadStoreGlobalTagBits"/>'s own remarks for the tag derivation. Node
-/// 508's own two narrower embedded-offset opcode forms (a 10-bit offset baked directly into the opcode
-/// word) have no tick-prefixed name to hang a mnemonic off of and are NOT wired in -- see
-/// <see cref="Node508Program"/>'s own remarks.
+/// below -- see <see cref="Node508LoadStoreGlobalTagBits"/>'s own remarks for the tag derivation.
+/// Extended 2026-09-06 ("here is node 508, where some changes happened"): node 508's own dispatch cascade
+/// grew one level deeper, splitting its old single embedded-offset "globals" pair (fetch/store, 10-bit
+/// offset) into FOUR narrower embedded-offset forms (store, load, branch, conditional branch -- the
+/// latter two are brand new, and the offset width shrank to 9 bits to make room for the extra prefix
+/// bit) -- see <see cref="Node508Program"/>'s own remarks for the full cascade, including a flagged,
+/// not-fixed apparent stack-depth bug in the new "branch" form's own sign-extension idiom. None of these
+/// four forms has a tick-prefixed name to hang a mnemonic off of, so NONE of them is wired in here,
+/// exactly the same choice already made for this node's OLD two embedded forms before this revision.
+/// <c>'ldg</c>/<c>'stg</c>'s own addresses moved (0x002C/0x002E -&gt; 0x003A/0x003C, since <c>g/main</c>
+/// grew ahead of them) but needed NO changes here at all, since <see cref="Node508LoadStoreGlobalTagBits"/>
+/// below always resolves against a live compile of <see cref="Node508Program.Source"/>, never a
+/// hardcoded address.
 ///
 /// <b><c>Node509Program.cs</c> is a BRAND NEW coordinate (2026-09-05) -- no CVM1 namesake at all.</b>
 /// Stefan's unary-arithmetic node, reached from node 508's own <c>g/main</c> dispatch (NOT node 507
@@ -294,7 +303,10 @@ internal static class CvmAssemblyLanguage
   // Node506LeaveTagBits, this range (0xA000-0xA03F, node 508's own RAM is only 64 words) has no known
   // collision with br/ifbr (0x9000-0x9FFF) or with node 606's own eight orphaned frame-pointer tags
   // (0xA800-0xAFFF) -- see Cvm.Node508Program's own remarks. NOT YET CONFIRMED ON REAL HARDWARE
-  // (2026-09-04).
+  // (2026-09-04). UNCHANGED by the 2026-09-06 revision to node 508's own source -- that revision only
+  // restructured the SIBLING "1010_1???" branch (the four now-narrower embedded-offset forms, still not
+  // wired here), never the "1010_0???" fall-through this tag is derived from; only 'ldg's/'stg's own
+  // ADDRESSES on node 508 moved (resolved dynamically below, not re-derived here).
   private const int Node508LoadStoreGlobalTagBits = 0xA000;
 
   // CVM2's node 509 unary-arithmetic tag (2026-09-05), per Stefan's node 509 source

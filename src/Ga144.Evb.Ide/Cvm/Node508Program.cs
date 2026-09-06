@@ -9,15 +9,29 @@ namespace Ga144.Evb.Ide.Cvm;
 /// to CVM1's old 507 ALU, whose stale <c>.f18</c> mirror was deleted, never kept in sync, back on
 /// 2026-09-01) -- this is brand new CVM2 content that happens to reuse the same coordinate.
 ///
-/// <b>Why a separate node.</b> Same reasoning as <see cref="Node407Program"/> and
-/// <see cref="Node506Program"/> (node 507's own RAM is completely full): globals-access primitives need
-/// their own resident node with its own fresh 64-word budget. Verified via a standalone harness compile
-/// importing <see cref="Node507Program"/>'s own exports (<c>m/pop</c>, <c>m/push</c>, <c>m/next</c>,
-/// <c>m/2@</c>, <c>m/2!</c>) with a <c>F18CompilerOptions</c> shaped the same way
-/// <see cref="Node407Program"/>/<see cref="Node506Program"/>'s own compiles are: 0 errors, 48/64 words
-/// used, entry point <c>g/main</c> at 0x018, every symbol resolves (<c>g/r@</c> 0x0000, <c>g/r!</c>
-/// 0x0002, <c>g/pop</c> 0x0004, <c>g/push</c> 0x0008, <c>g/next</c> 0x000A, <c>g/@</c> 0x000E, <c>g/!</c>
-/// 0x0012, <c>g/leave</c> 0x0016, <c>g/main</c> 0x0018, <c>'ldg</c> 0x002C, <c>'stg</c> 0x002E).
+/// <b>Revised 2026-09-06: the embedded-offset dispatch grew one level deeper.</b> Stefan's follow-up
+/// message that supplied this revision ("here is node 508, where some changes happened") retracted an
+/// earlier, mistaken paste that actually reproduced node 408's own (unrelated) source unchanged; THIS is
+/// the real, different update. The register/stack helpers (<c>g/r@</c>/<c>g/r!</c>/<c>g/pop</c>/
+/// <c>g/push</c>/<c>g/next</c>/<c>g/@</c>/<c>g/!</c>/<c>g/leave</c>) and <c>'ldg</c>/<c>'stg</c>'s own
+/// bodies are byte-for-byte UNCHANGED; what changed is <c>g/main</c>'s own dispatch cascade under the
+/// <c>1010_1???_????_????</c> prefix -- see the cascade paragraph below for the full shape. Re-verified
+/// via a standalone harness compile importing <see cref="Node507Program"/>'s own exports (now including
+/// <c>m/branch</c>, newly used here -- see below): 0 errors, 62/64 words used, entry point <c>g/main</c>
+/// still at 0x018 (every helper word's address is UNCHANGED: <c>g/r@</c> 0x0000, <c>g/r!</c> 0x0002,
+/// <c>g/pop</c> 0x0004, <c>g/push</c> 0x0008, <c>g/next</c> 0x000A, <c>g/@</c> 0x000E, <c>g/!</c> 0x0012,
+/// <c>g/leave</c> 0x0016, <c>g/main</c> 0x0018), but <c>'ldg</c>/<c>'stg</c> both moved FORWARD, from
+/// 0x002C/0x002E to <c>0x003A</c>/<c>0x003C</c>, since <c>g/main</c>'s own body grew to make room for the
+/// two new branch forms. Also re-verified against the full ten-node CVM2 boot mesh
+/// (<see cref="CvmBootStreamBuilder.BuildDescriptors"/>/<c>BuildLoadOrder</c>/<c>BuildLoadPlan</c>): every
+/// node still compiles with 0 errors and every load step still resolves, including node 509
+/// (<see cref="Node509Program"/>), which imports this node by name -- unaffected, since it only uses
+/// <c>g/r@</c>/<c>g/r!</c>/<c>g/pop</c>/<c>g/push</c>/<c>g/leave</c>, none of which moved. Re-verified
+/// through <see cref="Services.CvmAssemblyLanguage.BuildEncodeTable"/>/<c>BuildDecodeTable</c> too:
+/// <c>ldg</c>/<c>stg</c> still resolve and round-trip correctly at their new addresses (<c>0xA03A</c>/
+/// <c>0xA03C</c>) -- <see cref="Services.CvmAssemblyLanguage"/> needed NO source changes at all for this,
+/// since it always resolves <c>'ldg</c>/<c>'stg</c>'s address against a live compile of this class's own
+/// <see cref="Source"/>, never a hardcoded number.
 ///
 /// <b>Reached from node 507 via the LEFT port (<c>--l-</c>), confirmed symmetrically both sides.</b>
 /// This source's own header, <c>( CVM2 node 508. globals, 101?_????_????_???? )</c>, states the exact
@@ -29,13 +43,17 @@ namespace Ga144.Evb.Ide.Cvm;
 /// BOTH sides of the 507&lt;-&gt;508 link, the same symmetric-local-name pattern already confirmed for
 /// 407&lt;-&gt;507 ("down", both sides) and 506&lt;-&gt;507 ("right", both sides)). So 508 is now a THIRD
 /// sibling leaf hanging directly off 507's own dispatch, alongside 407 and 506, not a further link past
-/// either of them.
+/// either of them. Unchanged by the 2026-09-06 revision.
 ///
 /// <b>Imports node 507.</b> <c># 507 import</c> brings <c>m/pop</c>, <c>m/push</c>, <c>m/next</c>,
 /// <c>m/2@</c>, and <c>m/2!</c> into scope by name -- the last two are node 507's own page-2 read/write
 /// primitives (added 2026-09-02, per that class's own remarks), used here for the actual global
 /// load/store rather than the page-1 stack access <see cref="Node506Program"/> uses via <c>m/1@</c>/
-/// <c>m/1!</c>.
+/// <c>m/1!</c>. The 2026-09-06 revision adds a SIXTH import to this list, purely by use (the <c># 507
+/// import</c> directive itself is unchanged text) -- <c>m/branch</c>, node 507's own <c>( rso-rs) a . +
+/// a! ;</c> primitive, ALREADY exported by <see cref="Node507Program"/> but previously used only by node
+/// 407's own <c>'lbr</c>/<c>'clbr</c> (added the same day); this is the first time node 508 itself calls
+/// it, from its own new "branch" form below.
 ///
 /// <b>Register/stack helpers and the shared "remote op / transmit back / return control" idiom.</b>
 /// <c>g/r@</c>/<c>g/r!</c>/<c>g/pop</c>/<c>g/push</c>/<c>g/next</c>/<c>g/leave</c> are structurally
@@ -47,36 +65,81 @@ namespace Ga144.Evb.Ide.Cvm;
 /// it out over port B (bound to "left" here). <c>g/@</c>/<c>g/!</c> are new -- global fetch/store by
 /// address -- and mirror <see cref="Node506Program"/>'s own <c>f/stack@</c>/<c>f/stack!</c> shape
 /// exactly, just against <c>m/2@</c>/<c>m/2!</c> (page 2, globals) instead of <c>m/1@</c>/<c>m/1!</c>
-/// (page 1, stack).
+/// (page 1, stack). All of this is UNCHANGED by the 2026-09-06 revision.
 ///
-/// <b><c>g/main</c>'s own dispatch cascade and its CVM-level opcode encoding.</b> Opens with the same
-/// "prepare return address, push take over code" idiom <see cref="Node407Program"/>'s <c>n/main</c> and
-/// <see cref="Node506Program"/>'s <c>f/main</c> both use (<c># g/leave lit &gt;r</c> then
-/// <c>A[ 2* !p !p ]] lit !b @b @b &gt;r</c>), then tests the header's own <c>101?</c> prefix bit by bit:
+/// <b><c>g/main</c>'s own dispatch cascade and its CVM-level opcode encoding (revised 2026-09-06).</b>
+/// Opens with the same "prepare return address, push take over code" idiom <see cref="Node407Program"/>'s
+/// <c>n/main</c> and <see cref="Node506Program"/>'s <c>f/main</c> both use (<c># g/leave lit &gt;r</c>
+/// then <c>A[ 2* !p !p ]] lit !b @b @b &gt;r</c>), then tests the header's own <c>101?</c> prefix bit by
+/// bit. The TOP-LEVEL split is unchanged:
 /// <list type="bullet">
 /// <item><c>1011_????_????_????</c> -- extended arithmetic, relayed onward via the RIGHT port
-/// (<c>r---</c>): the SAME "further hand-off to a neighbour node" idiom
-/// <see cref="Node407Program"/>'s own <c>n/main</c> uses for ITS <c>r---</c> branch -- and, like that
-/// branch (now filled by <see cref="Node406Program"/>, 2026-09-05), this one is ALSO now filled: node
-/// 509's own unary-arithmetic node hangs directly off this RIGHT port (see
-/// <see cref="Node509Program"/>'s own remarks). <see cref="Node407Program"/>'s own remaining <c>--l-</c>/
-/// <c>-d--</c> branches are still left exactly as open as this one used to be, rather than guessed at
-/// further.</item>
-/// <item><c>1010_11??_????_????</c> -- global fetch to r, a 10-bit embedded offset (<c>0x3ff and</c>
-/// matches the "the offset is 10 bit" comment below exactly): <c>r&gt; 0x3ff and g/@ ;</c>.</item>
-/// <item><c>1010_10??_????_????</c> -- global store from r, same 10-bit offset: <c>r&gt; 0x3ff and
-/// g/! ;</c>.</item>
-/// <item><c>1010_0???_????_????</c> -- falls through to <c>A[ m/next ]] lit !b A[ !p ]] lit !b @b ex ;</c>,
-/// the SAME remote-fetch-and-store sequence <c>g/next</c> itself performs, immediately followed by
-/// <c>ex</c> (jump to whatever address is already in R, i.e. x itself -- the same "ex reached once the
-/// cascade consumes a fixed prefix" pattern <see cref="Node407Program"/>/<see cref="Node506Program"/>
-/// both use for <c>'lcall</c>/<c>'ljmp</c>/<c>'leave</c>). Unlike those two nodes' own final branches
-/// (which are bare <c>ex ;</c>, nothing more), this one performs an extra remote round-trip first --
-/// the exact purpose of that extra step relative to <c>'ldg</c>/<c>'stg</c>'s own separate, later use of
-/// <c>g/next</c> is not fully worked out here and is flagged as open rather than guessed at further.</item>
+/// (<c>r---</c>): node 509's own unary-arithmetic node hangs directly off this port (see
+/// <see cref="Node509Program"/>'s own remarks). Unchanged, no revision here.</item>
+/// <item><c>1010_????_????_????</c> -- everything below this node's own local dispatch (the
+/// <c>1010_0???</c> fall-through and the now-deeper <c>1010_1???</c> cascade).</item>
+/// </list>
+/// What's NEW is entirely inside the OLD single <c>1010_1???</c> "globals" branch, which is now split ONE
+/// LEVEL DEEPER, into a "branch" group and a "globals" group, each then split once more:
+/// <list type="bullet">
+/// <item><c>1010_11??_????_????</c> -- the NEW branch group, itself split by one more bit:
+/// <list type="bullet">
+/// <item><c>1010_111?_????_????</c> -- conditional branch: <c>g/r@ if r&gt; g/leave then</c>. Per the
+/// source's own trailing comment ("conditional branch to offset if r == 0"): <c>g/r@</c> remotely fetches
+/// node 507's own r register; if it is NONZERO, the <c>if</c>-body runs (<c>r&gt;</c> discards the
+/// pending shifted offset, then <c>g/leave</c> transmits a bare remote return and -- since <c>g/leave</c>
+/// itself has no trailing <c>;</c> -- falls straight through into <c>g/main</c> again, i.e. "return
+/// without branching"). If r IS zero, the <c>if</c>-body is skipped entirely and control falls through
+/// <c>then</c> directly into the NEXT item below (the unconditional "branch" body) -- the same
+/// "IF...THEN, false-clause always runs next" fall-through idiom already confirmed elsewhere this
+/// session (e.g. node 408's <c>'eq</c>/<c>'ne0</c>), and it reads CONSISTENTLY with the source's own
+/// stated meaning here (branch only when r == 0), the same way <see cref="Node407Program"/>'s own
+/// <c>'clbr</c> does -- no polarity concern to flag for this one.</item>
+/// <item><c>1010_110?_????_????</c> -- branch (unconditional, reached directly OR via the
+/// conditional-branch's own zero-flag fall-through above): <c>r&gt; 0x1ff and dup 0x100 and if drop
+/// 0xfe00 xor dup then drop A[ @p m/branch ]] lit !p !p ;</c>. Masks the pending shifted value to 9 bits,
+/// then sign-extends it if bit 8 is set (mirroring node 509's own already-confirmed 10-bit sign-extension
+/// idiom for <c>'lit</c> -- <c>dup 0x0200 and if drop 0xfc00 xor ... ; then drop ... ;</c>, see
+/// <see cref="Node509Program"/>'s own remarks), then streams a remote call to node 507's own
+/// <c>m/branch</c> (adds the offset to node 507's own program counter). <b>Flagged, not fixed: an
+/// apparent stack-depth bug in this specific line.</b> Hand-tracing the token-by-token data-stack effect
+/// (dup/literal push = +1 each, and/xor/if/drop = -1 each) shows BOTH the taken and not-taken paths of
+/// the inner <c>if...then</c> converge on exactly ONE item still pending immediately after <c>then</c> --
+/// but the very next token, <c>drop</c>, discards it before <c>A[ @p m/branch ]] lit !p !p</c> ever runs.
+/// That leaves nothing for the SECOND <c>!p</c> to transmit as <c>m/branch</c>'s own offset operand (the
+/// first <c>!p</c> only sends the freshly-built remote opcode word itself) -- as written, this appears to
+/// under-flow rather than actually deliver the computed offset. Node 509's own analogous idiom (above)
+/// has NO equivalent trailing <c>drop</c> -- each of ITS branches ends by consuming the value directly
+/// (<c>u/r! ;</c>) instead of leaving it to a shared post-<c>then</c> cleanup step. Per "never guess at
+/// unspecified design decisions, flag explicitly rather than silently fix": this is reproduced completely
+/// verbatim below; only Stefan can say whether that trailing <c>drop</c> is a genuine mistake or whether
+/// something about the real hardware's actual <c>and</c>/<c>xor</c>/<c>if</c> timing makes it correct
+/// anyway.</item>
+/// </list>
+/// </item>
+/// <item><c>1010_10??_????_????</c> -- the "globals" group (what the ENTIRE <c>1010_1???</c> branch used
+/// to be, one bit shallower, before this revision), itself split by one more bit, with the SAME two
+/// bodies as before just under a narrower prefix and a narrower mask:
+/// <list type="bullet">
+/// <item><c>1010_101?_????_????</c> -- global fetch to r (source's own comment: "load r form global",
+/// a plain typo for "from"): <c>r&gt; 0x1ff and g/@ ;</c>. Previously <c>1010_11??</c> with a 10-bit mask
+/// (<c>0x3ff</c>); now <c>1010_101?</c> with a 9-bit mask (<c>0x1ff</c>) -- one fewer embedded offset
+/// bit, traded for the new branch group's own extra prefix bit.</item>
+/// <item><c>1010_100?_????_????</c> -- global store from r: <c>r&gt; 0x1ff and g/! ;</c>. Previously
+/// <c>1010_10??</c> (10-bit mask); now <c>1010_100?</c> (9-bit mask), same trade as above.</item>
+/// </list>
+/// </item>
+/// <item><c>1010_0???_????_????</c> -- UNCHANGED: falls through to <c>A[ m/next ]] lit !b A[ !p ]] lit
+/// !b @b ex ;</c>, the same remote-fetch-and-store sequence <c>g/next</c> itself performs, immediately
+/// followed by <c>ex</c> -- this is the tail <c>'ldg</c>/<c>'stg</c> both jump into (see below), the same
+/// "ex reached once the cascade consumes a fixed prefix" pattern <see cref="Node407Program"/>/
+/// <see cref="Node506Program"/> both use for <c>'lcall</c>/<c>'ljmp</c>/<c>'leave</c>.</item>
 /// </list>
 ///
-/// <b><c>'ldg</c>/<c>'stg</c>.</b> <c>: 'ldg g/next g/@ ;</c> and <c>: 'stg g/next g/! ;</c> -- per the
+/// <b><c>'ldg</c>/<c>'stg</c> -- UNCHANGED bodies, moved addresses.</b> <c>: 'ldg g/next g/@ ;</c> and
+/// <c>: 'stg g/next g/! ;</c> are byte-for-byte the same definitions as before 2026-09-06; only their own
+/// compiled addresses moved (0x002C/0x002E -&gt; 0x003A/0x003C) because <c>g/main</c>'s own body, which
+/// precedes them in the source, grew to make room for the new branch/conditional-branch forms. Per the
 /// source's own trailing comment, "'ldg load global to r. offset in the next word" / "'stg store r to
 /// global. offset in the next word": each first calls <c>g/next</c> (an ordinary LOCAL call here, not
 /// the <c>A[...]]</c> remote-embed form -- the offset word itself lives in node 507's shared program
@@ -84,27 +147,33 @@ namespace Ga144.Evb.Ide.Cvm;
 /// trailing address via <c>m/next</c>), then <c>g/@</c>/<c>g/!</c> to actually perform the global
 /// access. This is the same <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/> shape
 /// <c>pushlit</c>/<c>'lcall</c>/<c>'ljmp</c> already use -- a full-width offset in the CVM word
-/// immediately following the opcode -- rather than the 10-bit embedded-offset shape the fetch/store
+/// immediately following the opcode -- rather than the 9-bit embedded-offset shape the fetch/store
 /// branches above use directly.
 ///
-/// <b>Derived CVM-level opcode shapes -- NOT yet wired into <see cref="CvmInstructionSet"/>/
-/// <see cref="Services.CvmAssemblyLanguage"/>.</b> Following exactly the same "tag | embedded/local
-/// value" scheme already confirmed for node 507's own local-execute (0x8800), node 407's <c>'lcall</c>/
-/// <c>'ljmp</c> (0xC000 | address-on-407), and node 506's <c>enter</c>/<c>leave</c> (0x9200 with a 9-bit
-/// embedded value, 0x9000 | address-on-506): the embedded global-fetch/store forms above would encode as
-/// <c>0xAC00 | (10-bit offset)</c> (fetch) and <c>0xA800 | (10-bit offset)</c> (store), and <c>'ldg</c>/
-/// <c>'stg</c> would encode as <c>0xA000 | (address of 'ldg/'stg on node 508)</c> --
-/// <c>0xA02C</c>/<c>0xA02E</c> against this exact compile (entry above). None of this is wired into the
-/// toolchain's own opcode tables yet -- Stefan's request that introduced this source asked only that
-/// node 508 be included in the CVM2 boot mesh (see <see cref="CvmBootStreamBuilder"/>), the same
-/// narrower scope <see cref="Node407Program"/> and <see cref="Node506Program"/> were each first
-/// introduced under before their own opcodes were wired in on a later, separate request.
+/// <b>Wired into <see cref="CvmInstructionSet"/>/<see cref="Services.CvmAssemblyLanguage"/>: only
+/// <c>'ldg</c>/<c>'stg</c>, exactly as before.</b> Per Stefan's own tick-naming rule ("every word that
+/// begins with a <c>'</c> is an opcode for the CVM with the mnemonic using the same name without the
+/// leading <c>'</c>"), and per "only update existing opcodes where possible" / never guess at an
+/// unspecified design decision: NONE of the four embedded-offset forms above (fetch, store, branch,
+/// conditional branch) has a tick-prefixed name in Stefan's own source, so NONE of them gets a CVM
+/// mnemonic here -- the same choice already made for this node's own OLD two embedded forms (fetch/
+/// store), and for node 406's/408's own unnamed "reserved" branches, and for node 407's own still-open
+/// "1101" branch. <c>'ldg</c>/<c>'stg</c> resolve dynamically against THIS class's own <see cref="Source"/>
+/// (see <see cref="Services.CvmAssemblyLanguage.Node508LoadStoreGlobalTagBits"/>'s own remarks) -- since
+/// that resolution is always against a live compile, never a hardcoded address, this revision needed NO
+/// changes there at all despite <c>'ldg</c>/<c>'stg</c>'s own addresses moving; only THIS file's <see cref="Source"/>
+/// and doc comments needed updating, plus the now-stale-numbers passage in
+/// <see cref="Services.CvmAssemblyLanguage"/>'s own class remarks and <see cref="CvmInstructionSet.LoadGlobalMnemonic"/>'s
+/// own remarks (both updated the same day to describe four embedded forms instead of two, and 9 bits
+/// instead of 10, rather than re-deriving anything about <c>'ldg</c>/<c>'stg</c> themselves).
 ///
 /// <b>No known opcode-space collision.</b> Unlike <see cref="Node506Program"/>'s own accepted, deliberate
 /// collision with <c>br</c>/<c>ifbr</c> (both squarely inside the <c>1001_????_????_????</c> range), the
 /// <c>101?_????_????_????</c> range this node claims does not overlap <see cref="CvmInstructionSet.BranchTag"/>
 /// (0x9000, <c>1001_0xxx</c>) or <see cref="CvmInstructionSet.ConditionalBranchTag"/> (0x9800,
-/// <c>1001_1xxx</c>) at all -- no collision to flag here.
+/// <c>1001_1xxx</c>) at all -- no collision to flag here. Unchanged by the 2026-09-06 revision (the
+/// range claimed at the CVM opcode level, <c>0xA000-0xA03F</c> for <c>'ldg</c>/<c>'stg</c>, is exactly as
+/// narrow as before -- node 508's own RAM is still only 64 words).
 /// </summary>
 internal static class Node508Program
 {
@@ -112,9 +181,12 @@ internal static class Node508Program
   public const int Coordinate = 508;
 
   /// <summary>
-  /// Node 508's full resident F18 source, as supplied by Stefan on 2026-09-04. See the class remarks
-  /// for the register/stack helpers, <c>g/main</c>'s dispatch cascade, its derived (but not yet wired)
-  /// CVM-level opcode shapes, and the confirmed LEFT port link back to node 507.
+  /// Node 508's full resident F18 source, as supplied by Stefan on 2026-09-04 and revised 2026-09-06
+  /// ("here is node 508, where some changes happened"). See the class remarks for the register/stack
+  /// helpers, <c>g/main</c>'s now-deeper dispatch cascade (including the two brand new branch/
+  /// conditional-branch forms and the flagged stack-depth concern in the "branch" form's own
+  /// sign-extension idiom), its derived (but not yet wired) CVM-level opcode shapes, and the confirmed
+  /// LEFT port link back to node 507.
   /// </summary>
   public const string Source = """
       ( CVM2 node 508. globals, 101?_????_????_???? )
@@ -137,20 +209,30 @@ internal static class Node508Program
           r> r--- ;
         then // 1010_????_????_????
         2* -if // 1010_1???_????_????
-          // globals
           2* -if // 1010_11??_????_????
-            // global fetch to r
-            r> 0x3ff and g/@ ;
+            2* -if // 1010_111?_????_????
+              // conditional branch
+              g/r@ if r> g/leave then
+            then // 1010_110?_????_????
+            // branch
+            r> 0x1ff and dup 0x100 and if drop 0xfe00 xor dup then drop A[ @p m/branch ]] lit !p !p ;
           then // 1010_10??_????_????
-            // global store to r
-            r> 0x3ff and g/! ;
+          // globals
+          2* -if // 1010_101?_????_????
+            // load r form global
+            r> 0x1ff and g/@ ;
+          then // 1010_100?_????_????
+          // store r to global
+          r> 0x1ff and g/! ;
         then // 1010_0???_????_????
         A[ m/next ]] lit !b A[ !p ]] lit !b @b ex ;
       : 'ldg g/next g/@ ;
       : 'stg g/next g/! ;
       (
-      opcode 1010_11??_????_???? load global into r. the offset is 10 bit.
-      opcode 1010_10??_????_???? store r to global. the offset is 10 bit.
+      opcode 1010_100?_????_???? store r to global. the offset is unsigned 9 bit.
+      opcode 1010_101?_????_???? load global into r. the offset is unsigned 9 bit.
+      opcode 1010_110?_????_???? branch to offset. the offset is signed 9 bit.
+      opcode 1010_111?_????_???? conditional branch to offset if r == 0. the offset is signed 9 bit.
       'ldg load global to r. offset in the next word
       'stg store r to global. offset in the next word
       )

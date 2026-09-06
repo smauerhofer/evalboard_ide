@@ -332,10 +332,18 @@ public static class CvmInstructionSet
   // Services.CvmAssemblyLanguage), just a 5-bit tag/11-bit address split this time. The actual
   // global-offset operand itself is carried separately, in the trailing word, read by 'ldg/'stg
   // themselves via g/next once running on node 508 -- see Cvm.Node508Program's own remarks. Node 508's
-  // own g/main also answers TWO further, narrower opcode forms with an offset embedded directly in the
-  // opcode word (10 bits, no trailing word) rather than via 'ldg/'stg's trailing-word form -- those are
-  // NOT wired in here, since Stefan's own source gives them no tick-prefixed name to hang a CVM mnemonic
-  // off of (only 'ldg/'stg qualify under his own naming rule) -- see Cvm.Node508Program's own remarks.
+  // own g/main also answers FOUR further, narrower opcode forms with an offset embedded directly in the
+  // opcode word (9 bits, no trailing word) rather than via 'ldg/'stg's trailing-word form: global fetch,
+  // global store, branch, and conditional branch (the latter two added 2026-09-06, using node 507's own
+  // m/branch export -- see Cvm.Node507Program's own remarks -- for the actual jump; the offset width
+  // shrank from 10 to 9 bits that same revision to make room for the extra dispatch bit distinguishing
+  // the branch pair from the fetch/store pair). None of these four are wired in here, since Stefan's own
+  // source gives none of them a tick-prefixed name to hang a CVM mnemonic off of (only 'ldg/'stg qualify
+  // under his own naming rule) -- see Cvm.Node508Program's own remarks, including a flagged, not-fixed
+  // apparent stack-depth bug spotted in the new "branch" form's own sign-extension idiom. 'ldg's/'stg's
+  // own addresses on node 508 moved (0x002C/0x002E -> 0x003A/0x003C) when g/main grew to fit the two new
+  // forms, but since both are resolved dynamically against a live compile (never a hardcoded address),
+  // this required no change to LoadGlobalMnemonic/StoreGlobalMnemonic or their own tag derivation above.
   // NOT YET CONFIRMED ON REAL HARDWARE (2026-09-04) -- derived the same way lcall/ljmp's own tag was
   // before its own hardware confirmation, but node 508's load has not itself been installed and run yet.
   public const string LoadGlobalMnemonic = "ldg";
