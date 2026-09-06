@@ -564,6 +564,12 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // CallAddressMask, it self-describes as "call 0x000A", exactly the confusing symptom reported.
   // Listed last since it imports node 407's own exports ('# 407 import'), same "parent before child,
   // CompileNode resolves the import regardless of list order" note as 508/509 above.
+  //
+  // Node 408 added 2026-09-06, pre-emptively (before the same gap could bite): a comparison node,
+  // node 407's OWN second leaf, hanging off its previously-unanswered LEFT-port branch (see
+  // Cvm.Node407Program's/Cvm.Node408Program's own remarks) exactly the way 406 hangs off 407's RIGHT
+  // port -- same "imports node 407, must be in this list or its own tagged mnemonics silently degrade"
+  // reasoning as node 406 just above, so added alongside it rather than waiting for a bug report.
   private static readonly IReadOnlyList<int> StandaloneCvmNodeCoordinates =
   [
     CvmMemoryProtocol.NopSourceNodeCoordinate, // 507, CVM2's entire CPU (corrected 2026-09-01 from 508).
@@ -572,6 +578,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     Node508Program.Coordinate, // 508, CVM2's ldg/stg node (added 2026-09-05).
     Node509Program.Coordinate, // 509, CVM2's unary-arithmetic node (added 2026-09-05).
     Node406Program.Coordinate, // 406, CVM2's binary-arithmetic node (added 2026-09-05).
+    Node408Program.Coordinate, // 408, CVM2's comparison node (added 2026-09-06).
   ];
 
   /// <summary>

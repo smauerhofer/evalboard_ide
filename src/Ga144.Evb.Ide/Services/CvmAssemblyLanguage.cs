@@ -119,13 +119,35 @@ namespace Ga144.Evb.Ide.Services;
 /// shape -- see <see cref="Node406Program"/>'s own remarks for the full <c>ahead</c>/<c>[ swap ]</c>/
 /// <c>then</c> dispatch-convergence derivation.
 ///
+/// <b><c>Node408Program.cs</c> is a BRAND NEW coordinate (2026-09-06) -- no CVM1 namesake at all.</b>
+/// Stefan's comparison node, reached from node 407's own <c>n/main</c> dispatch (NOT node 507 directly)
+/// via its LEFT port -- the FOURTH branch of that same cascade, previously unanswered (see
+/// <see cref="Node407Program"/>'s own remarks). Extended the same day with three more binary ops
+/// (<c>'ge</c>/<c>'gt</c>/<c>'le</c>, "add more opcode to assembler and disassembler"). ALL FOURTEEN of
+/// node 408's own tick-prefixed words (<c>'true</c>/<c>'false</c>/<c>'eq</c>/<c>'ne0</c>/<c>'ne</c>/
+/// <c>'eq0</c>/<c>'ge</c>/<c>'lt0</c>/<c>'lt</c>/<c>'ge0</c>/<c>'gt</c>/<c>'le0</c>/<c>'le</c>/<c>'gt0</c>)
+/// REPOINT existing, previously-orphaned mnemonics from node 508's old CVM1 27-comparison-op family, per
+/// "only update existing opcodes where possible" -- no genuinely new <see cref="CvmInstructionSet"/>
+/// entries were needed at all, either time, unlike node 406's or node 509's own additions. Six are BINARY
+/// (<c>eq</c>/<c>ne</c>/<c>lt</c>/<c>ge</c>/<c>gt</c>/<c>le</c>, tag
+/// <see cref="Node408BinaryComparisonTagBits"/>, 0xF400) and eight are UNARY (everything else, tag
+/// <see cref="Node408UnaryComparisonTagBits"/>, 0xF000) -- see <see cref="Node408Program"/>'s own remarks
+/// for the full derivation, including TWO FLAGGED (not silently investigated further) notes: one on
+/// <c>'eq</c>'s own fall-through into <c>'ne0</c>'s body appearing to invert its stated true/false
+/// polarity, and a second, more confidently derived one (cross-checked against this same file's own
+/// earlier, unambiguous <c>'lt</c> definition) on <c>'ge</c>&lt;-&gt;<c>'lt</c> and
+/// <c>'gt</c>&lt;-&gt;<c>'le</c> each appearing to compute the OTHER's stated meaning.
+///
 /// <b>What's still orphaned, not removed.</b> Node 508's OLD CVM1 27 comparison/arithmetic mnemonics
 /// (<c>eq</c> through <c>bitcnt</c>) mostly keep their <see cref="NodeSymbolByMnemonic"/> entries, still
 /// pointing at <see cref="Node508Program.Coordinate"/> and <see cref="Node508TagBits"/>, per "do not
 /// remove any opcodes" -- they simply never resolve, since node 508's own REAL CVM2 source (the
 /// globals-access node, above) does not define any of these 27 old F18 symbols either. Five of the 27
-/// (<c>mul2</c>/<c>udiv2</c>/<c>div2</c>/<c>abs</c>/<c>bitcnt</c>) are the exception -- repointed to node
-/// 509 above, per the paragraph just above this one -- leaving 22 still orphaned against node 508.
+/// (<c>mul2</c>/<c>udiv2</c>/<c>div2</c>/<c>abs</c>/<c>bitcnt</c>) were repointed to node 509, and
+/// fourteen more (<c>eq</c>/<c>eq0</c>/<c>false</c>/<c>true</c>/<c>ne</c>/<c>ne0</c>/<c>gt0</c>/<c>ge0</c>/
+/// <c>le0</c>/<c>lt</c>/<c>lt0</c>/<c>ge</c>/<c>gt</c>/<c>le</c>) to node 408 (above, the last three added
+/// 2026-09-06) -- leaving only EIGHT still orphaned against node 508: <c>ugt</c>, <c>ule</c>, <c>ult</c>,
+/// <c>uge</c>, <c>negate</c>, <c>xt</c>, <c>ldt</c>, <c>stt</c>.
 /// Node 507's own eleven old ALU-op mnemonics are now ALL repointed, none still orphaned: <c>inv</c>/
 /// <c>inc</c>/<c>dec</c> to node 509 (above), and <c>add</c>/<c>sub</c>/<c>and</c>/<c>xor</c>/<c>or</c>/
 /// <c>usl</c>/<c>ssr</c>/<c>usr</c> to node 406 (added 2026-09-05 -- see the node 406 block below).
@@ -291,6 +313,26 @@ internal static class CvmAssemblyLanguage
   private const int Node406BinaryStackTagBits = 0xE000;
   private const int Node406BinaryConstantTagBits = 0xE400;
 
+  // CVM2's node 408 comparison tags (2026-09-06), per Stefan's node 408 source (Cvm.Node408Program): its
+  // own c/main dispatch cascade offers TWO forms, selected by two more bits within the already-consumed
+  // "1111" prefix node 407's own n/main cascade hands off on (its own LEFT port, previously unanswered
+  // until now -- see Node407Program's own remarks) -- "1111_00??_????_????" (six bits fixed: 0xF000) is
+  // the "unary comparison" form (no second stack pop) and "1111_01??_????_????" (six bits fixed: 0xF400)
+  // is the "binary comparison" form (c/pop for a second operand) -- the same "tag | local address" scheme
+  // every other node's tag above already uses, a 6-bit-tag/10-bit-address split matching
+  // Node406BinaryStackTagBits/Node406BinaryConstantTagBits and Node509UnaryArithmeticTagBits's own bit
+  // width exactly. UNLIKE node 406's pair, these two tags do NOT share one symbol table between them --
+  // each of node 408's fourteen named ops lives at its own distinct address, reached through whichever of
+  // the two tags matches its own arity (binary: 'eq/'ne/'lt; unary: everything else) -- see
+  // Node408Program's own remarks for the full derivation and the binary/unary classification. The
+  // remaining "1111_1???_????_????" quarter (0xF800-0xFFFF, "register file") is reserved/unimplemented,
+  // matching Node406BinaryStackTagBits's own unanswered "1110_1???" sibling -- not wired in here. Node
+  // 408's own RAM is only 64 words, so 0xF000-0xF03F/0xF400-0xF43F have no LIVE collision with anything
+  // else wired here -- see Node408Program's own remarks on the purely-historical "register w" comment-
+  // range overlap. NOT YET CONFIRMED ON REAL HARDWARE (2026-09-06).
+  private const int Node408UnaryComparisonTagBits = 0xF000;
+  private const int Node408BinaryComparisonTagBits = 0xF400;
+
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
   // tag bits its opcode word must carry (Node508TagBits for the OLD, permanently-orphaned CVM1
   // comparison ops; Node507Cvm2LocalExecuteTagBits for CVM2's own six repointed primitives -- these
@@ -307,9 +349,10 @@ internal static class CvmAssemblyLanguage
   // call/br/ifbr/slit. Node 507 (CVM2's actual CPU), node 407 (CVM2's long-call/long-jump helper), node
   // 506 (CVM2's stack-frame node), node 508 (CVM2's globals-access node, plus its own OLD, permanently
   // orphaned CVM1 comparison ops), node 509 (CVM2's unary-arithmetic node -- a BRAND NEW coordinate, no
-  // CVM1 namesake to share or orphan), and node 406 (CVM2's binary-arithmetic node -- ALSO a BRAND NEW
-  // coordinate, no CVM1 namesake) -- 407/506/508 all different nodes than their deleted CVM1 namesakes,
-  // sharing only the coordinate -- are the only coordinates anything here still points at.
+  // CVM1 namesake to share or orphan), node 406 (CVM2's binary-arithmetic node -- ALSO a BRAND NEW
+  // coordinate, no CVM1 namesake), and node 408 (CVM2's comparison node -- ALSO a BRAND NEW coordinate,
+  // no CVM1 namesake) -- 407/506/508 all different nodes than their deleted CVM1 namesakes, sharing only
+  // the coordinate -- are the only coordinates anything here still points at.
   private static readonly IReadOnlyDictionary<string, (int NodeCoordinate, string SymbolName, int Tag)> NodeSymbolByMnemonic =
       new Dictionary<string, (int NodeCoordinate, string SymbolName, int Tag)>(StringComparer.OrdinalIgnoreCase)
       {
@@ -401,22 +444,27 @@ internal static class CvmAssemblyLanguage
         // bitcnt -- are REPOINTED to node 509's own live compile below instead (2026-09-05, "only
         // update existing opcodes where possible" -- node 509's own tick-prefixed words match those
         // exact mnemonic strings); the remaining 22 stay pointed at node 508 and permanently orphaned.
-        [CvmInstructionSet.EqualMnemonic] = (Node508Program.Coordinate, "'eq", Node508TagBits),
-        [CvmInstructionSet.EqualToZeroMnemonic] = (Node508Program.Coordinate, "'eq0", Node508TagBits),
-        [CvmInstructionSet.FalseMnemonic] = (Node508Program.Coordinate, "'false", Node508TagBits),
-        [CvmInstructionSet.TrueMnemonic] = (Node508Program.Coordinate, "'true", Node508TagBits),
-        [CvmInstructionSet.NotEqualMnemonic] = (Node508Program.Coordinate, "'ne", Node508TagBits),
-        [CvmInstructionSet.NotEqualToZeroMnemonic] = (Node508Program.Coordinate, "'ne0", Node508TagBits),
+        // Node 408's eleven comparison ops (2026-09-06) REPOINT all eleven of these from node 508's old,
+        // permanently-orphaned CVM1 tag (Node508TagBits) to node 408's own live compile -- see
+        // Node408Program's own remarks for the full derivation and the binary/unary tag split. Binary
+        // ops (two stack inputs, ( xy-f)) use Node408BinaryComparisonTagBits; unary ops (one input, ( -f)
+        // or ( x-f)) use Node408UnaryComparisonTagBits.
+        [CvmInstructionSet.EqualMnemonic] = (Node408Program.Coordinate, "'eq", Node408BinaryComparisonTagBits),
+        [CvmInstructionSet.EqualToZeroMnemonic] = (Node408Program.Coordinate, "'eq0", Node408UnaryComparisonTagBits),
+        [CvmInstructionSet.FalseMnemonic] = (Node408Program.Coordinate, "'false", Node408UnaryComparisonTagBits),
+        [CvmInstructionSet.TrueMnemonic] = (Node408Program.Coordinate, "'true", Node408UnaryComparisonTagBits),
+        [CvmInstructionSet.NotEqualMnemonic] = (Node408Program.Coordinate, "'ne", Node408BinaryComparisonTagBits),
+        [CvmInstructionSet.NotEqualToZeroMnemonic] = (Node408Program.Coordinate, "'ne0", Node408UnaryComparisonTagBits),
         [CvmInstructionSet.UnsignedGreaterThanMnemonic] = (Node508Program.Coordinate, "'ugt", Node508TagBits),
-        [CvmInstructionSet.GreaterThanMnemonic] = (Node508Program.Coordinate, "'gt", Node508TagBits),
-        [CvmInstructionSet.GreaterThanZeroMnemonic] = (Node508Program.Coordinate, "'gt0", Node508TagBits),
-        [CvmInstructionSet.GreaterOrEqualMnemonic] = (Node508Program.Coordinate, "'ge", Node508TagBits),
-        [CvmInstructionSet.GreaterOrEqualToZeroMnemonic] = (Node508Program.Coordinate, "'ge0", Node508TagBits),
+        [CvmInstructionSet.GreaterThanMnemonic] = (Node408Program.Coordinate, "'gt", Node408BinaryComparisonTagBits),
+        [CvmInstructionSet.GreaterThanZeroMnemonic] = (Node408Program.Coordinate, "'gt0", Node408UnaryComparisonTagBits),
+        [CvmInstructionSet.GreaterOrEqualMnemonic] = (Node408Program.Coordinate, "'ge", Node408BinaryComparisonTagBits),
+        [CvmInstructionSet.GreaterOrEqualToZeroMnemonic] = (Node408Program.Coordinate, "'ge0", Node408UnaryComparisonTagBits),
         [CvmInstructionSet.UnsignedLessOrEqualMnemonic] = (Node508Program.Coordinate, "'ule", Node508TagBits),
-        [CvmInstructionSet.LessOrEqualMnemonic] = (Node508Program.Coordinate, "'le", Node508TagBits),
-        [CvmInstructionSet.LessOrEqualToZeroMnemonic] = (Node508Program.Coordinate, "'le0", Node508TagBits),
-        [CvmInstructionSet.LessThanMnemonic] = (Node508Program.Coordinate, "'lt", Node508TagBits),
-        [CvmInstructionSet.LessThanZeroMnemonic] = (Node508Program.Coordinate, "'lt0", Node508TagBits),
+        [CvmInstructionSet.LessOrEqualMnemonic] = (Node408Program.Coordinate, "'le", Node408BinaryComparisonTagBits),
+        [CvmInstructionSet.LessOrEqualToZeroMnemonic] = (Node408Program.Coordinate, "'le0", Node408UnaryComparisonTagBits),
+        [CvmInstructionSet.LessThanMnemonic] = (Node408Program.Coordinate, "'lt", Node408BinaryComparisonTagBits),
+        [CvmInstructionSet.LessThanZeroMnemonic] = (Node408Program.Coordinate, "'lt0", Node408UnaryComparisonTagBits),
         [CvmInstructionSet.UnsignedLessThanMnemonic] = (Node508Program.Coordinate, "'ult", Node508TagBits),
         [CvmInstructionSet.UnsignedGreaterOrEqualMnemonic] = (Node508Program.Coordinate, "'uge", Node508TagBits),
         [CvmInstructionSet.NegateMnemonic] = (Node508Program.Coordinate, "'negate", Node508TagBits),

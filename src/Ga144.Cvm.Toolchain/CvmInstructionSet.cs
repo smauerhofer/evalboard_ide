@@ -58,7 +58,17 @@ namespace Ga144.Cvm.Toolchain;
 /// its own "constant in the next trailing word" form, per Stefan's own explicit naming rule ("for opcode
 /// with constant parameter, add a i to the mnemonic. so 'add' becomes 'addi'") -- see
 /// <see cref="ReverseSubtractMnemonic"/>'s and <see cref="AddConstantMnemonic"/>'s own remarks for the
-/// full derivation, and
+/// full derivation, plus node 408's fourteen comparison ops (added 2026-09-06, per Stefan's own node 408
+/// source, "add node 408 to the assembler, disassembler and boot stream", extended the same day with
+/// <c>ge</c>/<c>gt</c>/<c>le</c>, "add more opcode to assembler and disassembler") -- <c>true</c>/
+/// <c>false</c>/<c>eq</c>/<c>ne0</c>/<c>ne</c>/<c>eq0</c>/<c>lt0</c>/<c>ge0</c>/<c>le0</c>/<c>gt0</c>/
+/// <c>lt</c>/<c>ge</c>/<c>gt</c>/<c>le</c> ALL FOURTEEN repoint existing, previously-orphaned mnemonics
+/// from node 508's old CVM1 27-comparison-op family (per "only update existing opcodes where possible")
+/// -- unlike every earlier node added this way, node 408 needed NO genuinely new mnemonic constants or
+/// <see cref="Instructions"/> entries at all, either time, since every name it needed already existed in
+/// this table -- see the IDE project's own
+/// Services.CvmAssemblyLanguage.Node408UnaryComparisonTagBits/Node408BinaryComparisonTagBits for the tag
+/// derivation), and
 /// for each, how
 /// many words it occupies once assembled, how its
 /// operand (if any) is encoded, and a stable numeric <see cref="CvmInstructionShape.Id"/>. This is the
@@ -177,6 +187,14 @@ public static class CvmInstructionSet
   // an assembled operand: every comparison/arithmetic op here acts on register r (already on the CVM
   // data stack by the time 'main dispatches to it) and, where relevant, a second value 507/607 relay
   // over the port -- never on a literal baked into the instruction word itself.
+  //
+  // FOURTEEN of these 27 (eq/eq0/false/true/ne/ne0/gt0/ge0/le0/lt/lt0/ge/gt/le) were REPOINTED to CVM2's
+  // own node 408 (2026-09-06, the last three -- ge/gt/le -- added the same day in a follow-up "add more
+  // opcode" revision), per "only update existing opcodes where possible" -- see the class-level remarks
+  // above and the IDE project's own Services.CvmAssemblyLanguage for the full derivation. Five more --
+  // mul2/udiv2/div2/abs/bitcnt -- were separately repointed to node 509; the remaining EIGHT -- ugt/ule/
+  // ult/uge/negate/xt/ldt/stt -- remain permanently orphaned against node 508, which never defined any of
+  // these 27 old F18 symbols in its own real CVM2 source.
   public const string EqualMnemonic = "eq";
   public const string EqualToZeroMnemonic = "eq0";
   public const string FalseMnemonic = "false";

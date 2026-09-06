@@ -23,9 +23,12 @@ namespace Ga144.Evb.Ide.Cvm;
 /// day, a SECOND such three-hop branch was added: node 406 (the binary-arithmetic node, see
 /// <see cref="Node406Program"/>) hangs off node 407's OWN dispatch, reached via 407's RIGHT port -- 507
 /// -&gt; 407 -&gt; 406, mirroring 507 -&gt; 508 -&gt; 509 on the OTHER leaf of 507's own three-way split.
-/// CVM2's mesh is nine nodes now (708/707/607/507/407/506/508/509/406). "More nodes will be added
-/// later" (Stefan's own words) -- this builder's job is to stay easy to extend as that happens, not to
-/// assume nine is final.
+/// The next day (2026-09-06), node 407 grew a SECOND child of its own: node 408 (the comparison node,
+/// see <see cref="Node408Program"/>) hangs off node 407's OWN dispatch too, reached via 407's LEFT port
+/// (a previously-unanswered branch of that same cascade) -- 507 -&gt; 407 -&gt; 408, a sibling of 406 under
+/// 407 rather than a further hop past it. CVM2's mesh is TEN nodes now
+/// (708/707/607/507/407/506/508/509/406/408). "More nodes will be added later" (Stefan's own words) --
+/// this builder's job is to stay easy to extend as that happens, not to assume ten is final.
 ///
 /// <b>Node 507 (CPU), not 508 -- corrected 2026-09-01.</b> This project's own session briefly placed
 /// CVM2's CPU source on node 508 under a mistaken attribution; Stefan corrected it directly: the CPU
@@ -63,32 +66,35 @@ namespace Ga144.Evb.Ide.Cvm;
 /// branch node needing a temporary relay role while EACH child loads in turn), now genuinely in play
 /// with THREE leaf siblings hanging off 507 (407, 506, and, as of 2026-09-04, 508) plus, as of
 /// 2026-09-05, a FOURTH level on TWO separate branches: node 509 hangs off 508's own dispatch rather
-/// than 507's, and node 406 hangs off 407's own dispatch rather than 507's. Load order: 406 (via 407
-/// acting as relay, added 2026-09-05 -- 406 must load before 407's OWN step, since 407 must still be a
-/// passive relay when 406 loads through it), then 407 (reached via 507 acting as relay, added
-/// 2026-09-02), then 506 (also via 507 acting as relay, added 2026-09-04), then 509 (via 508 acting as
-/// relay, added 2026-09-05 -- 509 must load before 508's OWN step, for the same reason 406 must load
-/// before 407's), then 508 (via 507 acting as relay, added 2026-09-04 -- 507 relays ALL THREE of its
-/// direct children in turn, re-pointing its own B port at whichever child is loading next), then 507
-/// itself (via 607), then 607 (via 707), then 707 (via 708), then 708 itself last, direct, no relay --
-/// the same tail Stefan already confirmed for CVM1 (607 via 707, 707 via 708, 708 last).
+/// than 507's, and node 406 hangs off 407's own dispatch rather than 507's. As of 2026-09-06, 407 gained
+/// a SECOND child of its own, node 408, a sibling of 406 under 407 (both must load before 407's own
+/// step). Load order: 406 and 408 (via 407 acting as relay -- 406 added 2026-09-05, 408 added
+/// 2026-09-06 -- both must load before 407's OWN step, since 407 must still be a passive relay while
+/// either loads through it), then 407 (reached via 507 acting as relay, added 2026-09-02), then 506
+/// (also via 507 acting as relay, added 2026-09-04), then 509 (via 508 acting as relay, added
+/// 2026-09-05 -- 509 must load before 508's OWN step, for the same reason 406/408 must load before
+/// 407's), then 508 (via 507 acting as relay, added 2026-09-04 -- 507 relays ALL THREE of its direct
+/// children in turn, re-pointing its own B port at whichever child is loading next), then 507 itself
+/// (via 607), then 607 (via 707), then 707 (via 708), then 708 itself last, direct, no relay -- the same
+/// tail Stefan already confirmed for CVM1 (607 via 707, 707 via 708, 708 last).
 /// <see cref="Services.Ga144CvmHardwareInstaller.OpenAndBootMesh"/>'s own
 /// <c>parentOf</c>/<c>AncestorChain</c>/<c>focused</c>-set relay logic needed NO code changes to support
-/// any of this, including 509's and 406's own extra hops: <c>AncestorChain</c> already walks
+/// any of this, including 509's, 406's, and 408's own extra hops: <c>AncestorChain</c> already walks
 /// <c>parentOf</c> recursively however deep the chain goes, so 509's own ancestor chain
-/// (708/707/607/507/508, four relay hops deep) and 406's own ancestor chain (708/707/607/507/407, also
-/// four relay hops deep) both fall out of the exact same generic loop that already handled 407/506/508's
-/// own three-hop chains -- each load step unconditionally re-points its via-node's B port at that step's
-/// own target, so loading 406 (through 407, which is itself still just relaying), then 407, then 506,
-/// then 509 (through 508, which is itself still just relaying), then 508 back-to-back all through the
-/// same tree already works correctly -- 407 gets "focused" only once (during the 406 step, the first
-/// time it appears in ANY load step's own ancestor chain), 507 gets "focused" only once (during the 406
-/// step too, since 406's own ancestor chain reaches all the way to 507), 508 gets "focused" only once
-/// (during the 509 step), and every later step simply re-points, no re-focus needed. This load order is
-/// inferred from the same confirmed CVM1 reasoning applied to CVM2's branching case -- the ORIGINAL 407
-/// step (without 406 as a further hop) IS confirmed on real hardware (see
-/// <see cref="Node407Program"/>'s own remarks), but the NEW 406, 506, 508, and 509 steps are not yet
-/// real-hardware-tested.
+/// (708/707/607/507/508, four relay hops deep) and 406's/408's own ancestor chains (both
+/// 708/707/607/507/407, also four relay hops deep) all fall out of the exact same generic loop that
+/// already handled 407/506/508's own three-hop chains -- each load step unconditionally re-points its
+/// via-node's B port at that step's own target, so loading 406 and 408 (both through 407, which is
+/// itself still just relaying, in either order relative to each other), then 407, then 506, then 509
+/// (through 508, which is itself still just relaying), then 508 back-to-back all through the same tree
+/// already works correctly -- 407 gets "focused" only once (during whichever of the 406/408 steps runs
+/// first, the first time it appears in ANY load step's own ancestor chain), 507 gets "focused" only once
+/// (during that same first step too, since both 406's and 408's own ancestor chains reach all the way to
+/// 507), 508 gets "focused" only once (during the 509 step), and every later step simply re-points, no
+/// re-focus needed. This load order is inferred from the same confirmed CVM1 reasoning applied to CVM2's
+/// branching case -- the ORIGINAL 407 step (without 406/408 as further hops) IS confirmed on real
+/// hardware (see <see cref="Node407Program"/>'s own remarks), but the NEW 406, 408, 506, 508, and 509
+/// steps are not yet real-hardware-tested.
 ///
 /// <b>This builder's own compiles are reference-only, never what real hardware installs
 /// (2026-09-01).</b> <see cref="BuildDescriptors"/>/<see cref="BuildLoadPlan"/> below compile the
@@ -182,6 +188,25 @@ public static class CvmBootStreamBuilder
     });
     ThrowIfFailed(result406);
 
+    // CVM2 (2026-09-06): node 408, the comparison node -- reached from node 407's own n/main dispatch via
+    // ITS LEFT port, the SAME kind of further hop past 407 as node 406 is (407 -> 408), CVM2's own
+    // fourth-relay-hop sibling of 406 rather than a further link past it. Imports 407 by name
+    // ('# 407 import', n/r@/n/r!/n/pop/n/push/n/leave), so must compile AFTER result407 above, same as
+    // result406. See Node408Program's and Node407Program's own remarks for the full source and the
+    // previously-unanswered "1111"/LEFT branch this fills.
+    F18CompileResult result408 = Compile(compiler, Node408Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node408Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node407Program.Coordinate
+          ? F18ImportResolution.FromExports(result407.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result408);
+
     // CVM2 (2026-09-04): node 506, the stack-frame node (enter/leave/...) -- reached from 507's own
     // m/main dispatch via its RIGHT port, a SIBLING of 407 (both are leaves hanging directly off 507,
     // not a further link in the chain past 407 -- confirmed independently by
@@ -244,6 +269,7 @@ public static class CvmBootStreamBuilder
     [
       CvmBootDescriptor.FromCompileResult(result407),
       CvmBootDescriptor.FromCompileResult(result406),
+      CvmBootDescriptor.FromCompileResult(result408),
       CvmBootDescriptor.FromCompileResult(result506),
       CvmBootDescriptor.FromCompileResult(result509),
       CvmBootDescriptor.FromCompileResult(result508),
@@ -309,17 +335,34 @@ public static class CvmBootStreamBuilder
   /// its own step, and 507 getting "focused" for the first time during the 406 step too, since 406's own
   /// ancestor chain reaches all the way back to 507.
   ///
-  /// <b>CONFIRMED ON REAL HARDWARE (2026-09-02) for the ORIGINAL 407 step (without 406 as a further
-  /// hop).</b> The load order through node 407 was installed and run on a real EVB: a test program's
+  /// <b>Extended again, 2026-09-06, with node 408 -- the comparison node -- reached via 407, NOT 507
+  /// directly (<c>new CvmBootLoadStep(408, 407)</c>).</b> A SIBLING of 406 under 407 (both are a further
+  /// hop past 407, not past each other): node 408 hangs off node 407's OWN <c>n/main</c> dispatch (407's
+  /// LEFT port, previously unanswered -- see Node407Program's own remarks), the SAME relationship 406 has
+  /// to 407 via its own RIGHT port. It must therefore load BEFORE 407's own step too, placed right after
+  /// 406 in the list below (relative order between 406 and 408 does not matter -- both are independent
+  /// children of the same still-passively-relaying 407 -- only that both precede 407's own step). 407's
+  /// own local port name toward 408 ("left" both sides, matching node 407's own dispatch cascade's
+  /// <c>--l-</c> for the "1111" prefix -- see Node408Program's own remarks) is likewise expected to match
+  /// <see cref="Models.KrakenConfiguration.PortAddress"/>'s own geographic-adjacency table, the same way
+  /// every other link here has. No code changes were needed in
+  /// <see cref="Services.Ga144CvmHardwareInstaller"/> for this either -- 408's own four-hop chain
+  /// (708/707/607/507/407), identical in shape to 406's own, falls out of the same generic
+  /// <c>AncestorChain</c> loop, with 407 and 507 both already getting "focused" during whichever of the
+  /// 406/408 steps happens to run first.
+  ///
+  /// <b>CONFIRMED ON REAL HARDWARE (2026-09-02) for the ORIGINAL 407 step (without 406/408 as further
+  /// hops).</b> The load order through node 407 was installed and run on a real EVB: a test program's
   /// <c>lcall</c>/<c>'ret</c> round-tripped correctly through node 407 (see Node407Program's own remarks
   /// for the transaction log), which could only happen if every hop's relay/focus/port-write sequence,
-  /// all the way out to 407, was correct. <b>The NEW 406, 506, 508, and 509 steps are NOT yet
-  /// real-hardware-tested</b> -- all four follow the same generic relay mechanism the 407 step already
+  /// all the way out to 407, was correct. <b>The NEW 406, 408, 506, 508, and 509 steps are NOT yet
+  /// real-hardware-tested</b> -- all five follow the same generic relay mechanism the 407 step already
   /// validated, but none has itself been confirmed by a transaction log the way 407 was.
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
   [
     new CvmBootLoadStep(406, 407),
+    new CvmBootLoadStep(408, 407),
     new CvmBootLoadStep(407, 507),
     new CvmBootLoadStep(506, 507),
     new CvmBootLoadStep(509, 508),
@@ -344,6 +387,7 @@ public static class CvmBootStreamBuilder
   {
     Node407Program.Coordinate => Node407Program.Source,
     Node406Program.Coordinate => Node406Program.Source,
+    Node408Program.Coordinate => Node408Program.Source,
     Node506Program.Coordinate => Node506Program.Source,
     Node508Program.Coordinate => Node508Program.Source,
     Node509Program.Coordinate => Node509Program.Source,
@@ -356,7 +400,7 @@ public static class CvmBootStreamBuilder
 
   /// <summary>
   /// Pairs <see cref="BuildLoadOrder"/>'s sequence with each step's compiled <see cref="CvmBootDescriptor"/>
-  /// from <see cref="BuildDescriptors"/>. Every step resolves to a real descriptor -- all nine CVM2
+  /// from <see cref="BuildDescriptors"/>. Every step resolves to a real descriptor -- all ten CVM2
   /// nodes compile.
   /// </summary>
   public static IReadOnlyList<(CvmBootLoadStep Step, CvmBootDescriptor? Descriptor)> BuildLoadPlan()

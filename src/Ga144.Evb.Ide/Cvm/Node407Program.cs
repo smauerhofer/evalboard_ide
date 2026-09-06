@@ -82,12 +82,14 @@ namespace Ga144.Evb.Ide.Cvm;
 /// note above on its own "1101" branch.</b> Reads two words via <c>@b</c> (from port B, the SEPARATE
 /// down-bound link to 507 -- see this class's own remarks above on not confusing this cascade's own
 /// branches with that link) into a register-r-held first word, per-word bit-testing further within the
-/// already-consumed "11??" prefix: "111?" -&gt; "1111" hands off LEFT (<c>--l-</c>), else "1110" hands
-/// off RIGHT (<c>r---</c>) -- THIS is the link to node 406 (see <see cref="Node406Program"/>'s own
-/// remarks), filling what was previously an unsupplied further-relay branch; "110?" -&gt; "1101" hands
-/// off DOWN (<c>-d--</c>, see the FLAGGED note above -- this was <c>---u</c>, UP, in the immediately
-/// prior revision); else "1100" falls to <c>ex</c> ("execute", GA144's native multi-port-wait/idle
-/// opcode) -- this is where <c>'lcall</c>/<c>'ljmp</c> below are actually reached from.
+/// already-consumed "11??" prefix: "111?" -&gt; "1111" hands off LEFT (<c>--l-</c>) -- THIS is the link
+/// to node 408 (see <see cref="Node408Program"/>'s own remarks, added 2026-09-06), filling what was
+/// PREVIOUSLY an unsupplied further-relay branch (no code change needed here -- the relay was already
+/// wired, just unanswered until node 408 existed) -- else "1110" hands off RIGHT (<c>r---</c>) -- THIS is
+/// the link to node 406 (see <see cref="Node406Program"/>'s own remarks); "110?" -&gt; "1101" hands off
+/// DOWN (<c>-d--</c>, see the FLAGGED note above -- this was <c>---u</c>, UP, in the immediately prior
+/// revision); else "1100" falls to <c>ex</c> ("execute", GA144's native multi-port-wait/idle opcode) --
+/// this is where <c>'lcall</c>/<c>'ljmp</c> below are actually reached from.
 ///
 /// <b><c>'lcall</c>/<c>'ljmp</c>.</b> Each streams a short instruction sequence the same way the
 /// register/stack helpers above do. <c>'lcall</c> streams <c>m/next</c> (fetch the address in the

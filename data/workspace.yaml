@@ -24,25 +24,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-05T15:35:23.6588699
-      utcDateTime: 2026-09-05T15:35:23.6588699Z
-      localDateTime: 2026-09-05T17:35:23.6588699+02:00
-      date: 2026-09-05T00:00:00.0000000
-      day: 5
-      dayOfWeek: Saturday
-      dayOfYear: 248
-      hour: 15
-      millisecond: 658
-      microsecond: 869
-      nanosecond: 900
-      minute: 35
+      dateTime: 2026-09-06T00:19:44.6992247
+      utcDateTime: 2026-09-06T00:19:44.6992247Z
+      localDateTime: 2026-09-06T02:19:44.6992247+02:00
+      date: 2026-09-06T00:00:00.0000000
+      day: 6
+      dayOfWeek: Sunday
+      dayOfYear: 249
+      hour: 0
+      millisecond: 699
+      microsecond: 224
+      nanosecond: 700
+      minute: 19
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 23
-      ticks: 639242193236588699
-      utcTicks: 639242193236588699
-      timeOfDay: 15:35:23.6588699
+      second: 44
+      ticks: 639242507846992247
+      utcTicks: 639242507846992247
+      timeOfDay: 00:19:44.6992247
       year: 2026
   portB: 
   portC:
@@ -15155,10 +15155,10 @@ projects:
         parameterStack: []
     - coordinate: 408
       enabled: true
-      sourceCode: >+
+      sourceCode: >
         ( CVM2 node 408. comparison, 1111_????_????_???? )
 
-        # 509 import
+        # 407 import
 
         # 0 org
 
@@ -15168,69 +15168,112 @@ projects:
 
         # left /b
 
-        : c/r@ ( -w) A[ u/r@ ]] lit !b A[ !p ]] lit !b @b ;
+        : c/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;
 
-        : c/r! ( w) A[ @p u/r! ]] lit !b !b ;
+        : c/r! ( w) A[ @p n/r! ]] lit !b !b ;
 
-        : c/pop ( -w) A[ u/pop ]] lit !b A[ !p ]] lit !b @b ;
+        : c/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;
 
-        : c/push ( w) A[ @p u/push ]] lit !b !b ;
+        : c/push ( w) A[ @p n/push ]] lit !b !b ;
 
-        : c/leave A[ u/leave ; ]] !b
+        : c/leave A[ n/leave ; ]] lit !b
 
-        : c/main # c/leave >r A[ !p !p ]] lit !b @b @b >r
-          2* -if // 1111_1???_????_????
+        : c/main # c/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b
+          -if // 1111_1???_????_????
             // register file
             r> r--- ;
-          2* -if // 1111_01?_????_????
+          then // 1111_0???_????_????
+          2* -if // 1111_01??_????_????
             // binary comparison
             // 'eq
             // 'ne
             c/pop
           then // 1111_00??_????_????
             // unary comparison
-            // 'not
+            // 'true
+            // 'false
             // 'eq0
             // 'ne0
+            // 'lt0
+            // 'ge0
+            // 'le0
+            // 'gt0
           c/r@ ex c/r! ;
         : 'true ( -f) 1 ;
 
         : 'false ( -f) dup xor ;
 
-        : 'ne ( xy-f) leap
-
-        : 'not ( x-f) dup dup xor
-
-        then
-
         : 'eq ( xy-f) xor 
 
         : 'ne0 ( x-f) if 'true ; then 'false ;
 
-        : 'eq0 ( x-f) 'ne0 'not ;
+        : 'ne ( xy-f) 'eq
 
+        : c/not ( f-f) 1 xor ;
 
+        : 'eq0 ( x-f) 'ne0 c/not ;
+
+        : c/cmp ( xy-z) inv . +
+
+        : c/inc ( x-y) 1 . + ;
+
+        : 'ge ( xy-f) c/cmp
+
+        : 'lt0 ( x-f) 2* 2* # 'true -until 'false ;
+
+        : 'lt ( xy-f) c/cmp
+
+        : 'ge0 ( x-f) 'lt0 c/not ;
+
+        : 'gt ( xy-f) c/cmp
+
+        : 'le0 ( x-f) 2* 2* # 'true -until 'eq0 ;
+
+        : 'le ( xy-f) c/cmp
+
+        : 'gt0 ( x-f) 'le0 c/not ;
+
+        (
+          1111_01??_????_???? binary comparison
+          1111_00??_????_???? unary comparison
+          'true unary. store true constant in r
+          'false unary. store false constant in r
+          'eq binary. r is true if x == y
+          'ne0 unary. r is true if x != 0
+          'ne binary. r is true if x != y
+          'eq0 unary. r is true if x == 0
+          'lt0 unary. r is true if x < 0
+          'le0 unary. r is true if x <= 0
+          'gt0 unary. r is true if x > 0
+          'ge0 unary. r is true if x >= 0
+          'lt binary. r is true if x < y
+          'le binary. r is true if x <= y
+          'gt binary. r is true if x > y
+          'ge binary. r is true if x >= y
+        )
       ramWords:
       - 0x05B12
       - 0x13400
       - 0x0C9B2
       - 0x09F55
       - 0x05B25
-      - 0x05604
+      - 0x05602
       - 0x05B12
-      - 0x13406
+      - 0x13404
       - 0x0C9B2
       - 0x09F55
       - 0x05B25
-      - 0x0560A
-      - 0x089B2
-      - 0x2FD22
-      - 0x0D9B2
-      - 0x01FBA
-      - 0x37200
+      - 0x05608
+      - 0x05BB2
+      - 0x1140E
+      - 0x04812
+      - 0x0000C
+      - 0x0C432
+      - 0x09FBA
+      - 0x01215
       - 0x269B2
       - 0x115D5
-      - 0x37215
+      - 0x37217
       - 0x13406
       - 0x13400
       - 0x17555
@@ -15238,34 +15281,32 @@ projects:
       - 0x05555
       - 0x00001
       - 0x24355
-      - 0x1341D
-      - 0x24DE2
       - 0x389B2
       - 0x19420
-      - 0x11418
       - 0x1141A
-      - 0x1341E
       - 0x1141C
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1341D
+      - 0x04355
+      - 0x00001
+      - 0x1341E
+      - 0x11422
+      - 0x329F2
+      - 0x049F5
+      - 0x00001
+      - 0x13426
+      - 0x364B2
+      - 0x1B41A
+      - 0x1141C
+      - 0x13426
+      - 0x1342A
+      - 0x11422
+      - 0x13426
+      - 0x364B2
+      - 0x1B41A
+      - 0x11424
+      - 0x13426
+      - 0x13431
+      - 0x11422
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15276,7 +15317,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00D
+        entryPoint: 0x00E
         p: 0x000
         a: 0x000
         b: 0x000
@@ -17061,9 +17102,13 @@ projects:
         returnStack: []
         parameterStack: []
     debuggerAssemblyCode: >-
-      lit 0x55
+      lit 3
 
-      andi 0x0a
+      push
+
+      lit -3
+
+      lt
 
       push
 
