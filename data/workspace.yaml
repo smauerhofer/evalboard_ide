@@ -9,6 +9,7 @@ settings:
   krakenIdlePolicy: CloseAfterIdleTimeout
   recentCProjectPaths:
   - C:\devl\GreenArray\Ga144EvalboardIde\libs\cvm
+  - C:\devl\GreenArray\Ga144EvalboardIde\libs\CTest1
 boards:
 - id: d6e6f99b-8d7d-4604-9709-4d6a0b6820f7
   name: EVB001 S0121 board

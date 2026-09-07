@@ -9,4 +9,9 @@ extern void _start()
 
 }
 
+extern void _exit()
+{
+
+
+}
 
