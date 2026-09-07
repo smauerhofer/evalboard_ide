@@ -18,6 +18,7 @@ public sealed class CParser
     "void", "char", "int", "unsigned", "signed", "static", "extern", "const", "volatile",
     "if", "else", "while", "do", "for", "return", "break", "continue", "goto", "switch", "case", "default",
     "sizeof", "struct", "union", "enum", "typedef", "float", "double", "long", "short", "auto", "register",
+    "__fastcall", "__lower",
   ];
 
   private static readonly HashSet<string> UnsupportedTypeKeywords = ["struct", "union", "enum", "typedef", "float", "double", "long", "short"];
@@ -162,15 +163,32 @@ public sealed class CParser
   private bool LooksLikeTypeStart() =>
       CheckWord("void") || CheckWord("char") || CheckWord("int") || CheckWord("unsigned") || CheckWord("signed") ||
       CheckWord("static") || CheckWord("extern") || CheckWord("const") || CheckWord("volatile") ||
+      CheckWord("__fastcall") || CheckWord("__lower") ||
       UnsupportedTypeKeywords.Any(CheckWord);
 
   /// <summary>Consumes storage-class/qualifier keywords (in any order/quantity) and exactly one base
   /// type, reporting a specific diagnostic for a recognized-but-unsupported type keyword rather than a
-  /// generic syntax error.</summary>
-  private CType ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern)
+  /// generic syntax error.
+  ///
+  /// <b><c>__fastcall</c>/<c>__lower</c> -- added 2026-09-07, per <c>claude/cvm-abi.md</c>.</b> Both are
+  /// recognized here, in the same order-independent specifier bag as <c>static</c>/<c>extern</c>/
+  /// <c>const</c>/<c>volatile</c>, rather than in the (more MSVC-literal) position between the return
+  /// type and the function name -- a deliberate placement choice, flagged here since Stefan did not
+  /// dictate a specific syntax: this keeps both keywords usable in any order alongside the existing
+  /// specifiers (e.g. <c>static __fastcall int add(...)</c> or <c>__fastcall static int add(...)</c>),
+  /// consistent with how this method already treats every other specifier. Both are semantically
+  /// meaningless outside a FUNCTION declaration (a parameter, a local variable, a global variable, or a
+  /// bare type name for <c>sizeof</c>/a cast can never be <c>__fastcall</c> or <c>__lower</c>) -- every
+  /// call site below that is not <see cref="ParseExternalDeclaration"/>'s own function-declarator branch
+  /// rejects a true <paramref name="isFastcall"/>/<paramref name="isLower"/> immediately via
+  /// <see cref="RejectCallingConventionKeywords"/>, with a specific diagnostic, rather than silently
+  /// dropping them or falling through to a confusing generic parse error.</summary>
+  private CType ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLower)
   {
     isStatic = false;
     isExtern = false;
+    isFastcall = false;
+    isLower = false;
     while (true)
     {
       if (Match("static"))
@@ -180,6 +198,14 @@ public sealed class CParser
       else if (Match("extern"))
       {
         isExtern = true;
+      }
+      else if (Match("__fastcall"))
+      {
+        isFastcall = true;
+      }
+      else if (Match("__lower"))
+      {
+        isLower = true;
       }
       else if (Match("const") || Match("volatile"))
       {
@@ -239,6 +265,23 @@ public sealed class CParser
     throw Error(Current.Location, $"expected a type, found \"{Current.Text}\"");
   }
 
+  /// <summary>Rejects <c>__fastcall</c>/<c>__lower</c> wherever <see cref="ParseDeclarationSpecifiers"/>
+  /// was called for something other than a function declaration (a parameter, a local/global variable,
+  /// or a bare type name for <c>sizeof</c>/a cast) -- both keywords describe a function's own calling
+  /// convention and code placement, and are meaningless anywhere else.</summary>
+  private void RejectCallingConventionKeywords(bool isFastcall, bool isLower, CSourceLocation location, string context)
+  {
+    if (isFastcall)
+    {
+      throw Error(location, $"'__fastcall' can only be used on a function declaration, not {context}");
+    }
+
+    if (isLower)
+    {
+      throw Error(location, $"'__lower' can only be used on a function declaration, not {context}");
+    }
+  }
+
   /// <summary>Parses "*... name (\"[\" length \"]\")?" given the already-parsed base type -- a plain
   /// (non-function, non-abstract) declarator. Rejects a second array dimension explicitly rather than
   /// silently misinterpreting one (see the design doc's "no multi-dimensional arrays" scope note).
@@ -280,7 +323,9 @@ public sealed class CParser
   /// a function-pointer cast) -- a small, deliberate scope limit.</summary>
   private CType ParseAbstractType()
   {
-    CType type = ParseDeclarationSpecifiers(out _, out _);
+    CSourceLocation location = Current.Location;
+    CType type = ParseDeclarationSpecifiers(out _, out _, out bool isFastcall, out bool isLower);
+    RejectCallingConventionKeywords(isFastcall, isLower, location, "a type name");
     while (Match("*"))
     {
       type = CType.PointerTo(type);
@@ -390,7 +435,7 @@ public sealed class CParser
   private void ParseExternalDeclaration(List<CFunctionDecl> functions, List<CGlobalVarDecl> globals)
   {
     CSourceLocation location = Current.Location;
-    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern);
+    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLowerSpecified);
 
     // The base type carries no pointer stars of its own -- in "int *a, b;", only "a" is a pointer, not
     // "b", so each declarator (the first one included) consumes its own stars starting fresh from
@@ -408,15 +453,42 @@ public sealed class CParser
       List<CParameter> parameters = ParseParameterList();
       Expect(")", "to close the parameter list");
 
+      // "__fastcall implies also __lower, so __fastcall includes __lower" (Stefan, 2026-09-07) -- a
+      // __fastcall function is ALWAYS required to be placed in the lower half of memory too, whether or
+      // not "__lower" was itself also written on the declaration. See CFunctionDecl's own remarks: a
+      // caller only ever needs to check IsLower to decide the call/lcall encoding, never IsFastcall.
+      bool isLower = isLowerSpecified || isFastcall;
+
+      // "if a __fastcall function uses more than 32 register, the compiler should generate an error" and
+      // "pointers must be allocated in ar[0..3] for fastcall functions" (Stefan, 2026-09-07, 3rd round of
+      // claude/cvm-abi.md's dictation) together mean a __fastcall function may declare at most 4 pointer
+      // parameters (node 306 has exactly 4 address registers, ar[0..3]) -- a 5th pointer parameter has
+      // nowhere left to go under this convention (pointers are never passed via node 511's register
+      // file, and never fall back to the stack for a __fastcall function per that same dictation), so
+      // Stefan confirmed this is also a compiler error, the same as the >32-register case. Only pointer
+      // parameters are checked here -- the node-511 register-file exhaustion check for the remaining
+      // (non-pointer) parameters is deferred to CCodeGenerator, since it is not yet implemented there
+      // either (see claude/cvm-abi.md) and doing it here would duplicate that future logic.
+      if (isFastcall)
+      {
+        int pointerParameterCount = parameters.Count(p => p.Type.IsPointer);
+        if (pointerParameterCount > 4)
+        {
+          throw Error(location, $"\"{name}\" is '__fastcall' but declares {pointerParameterCount} pointer parameters -- a '__fastcall' function may have at most 4 (node 306's ar[0..3])");
+        }
+      }
+
       CCompoundStmt? body = null;
       if (!Match(";"))
       {
         body = ParseCompoundStatement();
       }
 
-      functions.Add(new CFunctionDecl(location, name, type, parameters, body, isStatic));
+      functions.Add(new CFunctionDecl(location, name, type, parameters, body, isStatic, isFastcall, isLower));
       return;
     }
+
+    RejectCallingConventionKeywords(isFastcall, isLowerSpecified, location, "a variable declaration");
 
     // One or more comma-separated global variable declarators sharing the same base type/specifiers.
     while (true)
@@ -475,7 +547,9 @@ public sealed class CParser
 
     do
     {
-      CType baseType = ParseDeclarationSpecifiers(out _, out _);
+      CSourceLocation specifierLocation = Current.Location;
+      CType baseType = ParseDeclarationSpecifiers(out _, out _, out bool isFastcall, out bool isLower);
+      RejectCallingConventionKeywords(isFastcall, isLower, specifierLocation, "a parameter declaration");
       CType type = ParseDeclaratorType(baseType, "in a parameter declaration", out string name, out _);
       parameters.Add(new CParameter(name, type.Decay()));
     } while (Match(","));
@@ -519,7 +593,9 @@ public sealed class CParser
 
   private void ParseLocalDeclaration(List<CStmt> statements)
   {
-    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out _);
+    CSourceLocation specifierLocation = Current.Location;
+    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out _, out bool isFastcall, out bool isLower);
+    RejectCallingConventionKeywords(isFastcall, isLower, specifierLocation, "a local declaration");
 
     do
     {
@@ -1034,19 +1110,19 @@ public sealed class CParser
           case '\'': result.Append('\''); i += 2; break;
           case '"': result.Append('"'); i += 2; break;
           case 'x':
-          {
-            int j = i + 2;
-            int value = 0;
-            while (j < body.Length && Uri.IsHexDigit(body[j]))
             {
-              value = (value * 16) + Convert.ToInt32(body[j].ToString(), 16);
-              j++;
-            }
+              int j = i + 2;
+              int value = 0;
+              while (j < body.Length && Uri.IsHexDigit(body[j]))
+              {
+                value = (value * 16) + Convert.ToInt32(body[j].ToString(), 16);
+                j++;
+              }
 
-            result.Append((char)value);
-            i = j;
-            break;
-          }
+              result.Append((char)value);
+              i = j;
+              break;
+            }
 
           default:
             result.Append(c);
