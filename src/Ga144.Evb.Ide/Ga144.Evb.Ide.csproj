@@ -24,5 +24,6 @@
 
   <ItemGroup>
 		<ProjectReference Include="..\Ga144.Cvm.Toolchain\Ga144.Cvm.Toolchain.csproj" />
+		<ProjectReference Include="..\Ga144.C.Toolchain\Ga144.C.Toolchain.csproj" />
 	</ItemGroup>
 </Project>

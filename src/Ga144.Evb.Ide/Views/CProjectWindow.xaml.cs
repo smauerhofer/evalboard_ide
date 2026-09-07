@@ -115,12 +115,16 @@ public partial class CProjectWindow : Window
       });
 
   private void OnBuildClick(object sender, RoutedEventArgs e) =>
-      MessageBox.Show(
-          this,
-          _viewModel.BuildDescription,
-          "Build " + _viewModel.Name,
-          MessageBoxButton.OK,
-          MessageBoxImage.Information);
+      RunGuarded(() =>
+      {
+        CBuildResult result = _viewModel.Build();
+        MessageBox.Show(
+            this,
+            result.Messages.Count > 0 ? string.Join(Environment.NewLine, result.Messages) : "Nothing to build.",
+            (result.Success ? "Build succeeded -- " : "Build failed -- ") + _viewModel.Name,
+            MessageBoxButton.OK,
+            result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+      });
 
   private bool ConfirmRemove(string displayName) =>
       MessageBox.Show(

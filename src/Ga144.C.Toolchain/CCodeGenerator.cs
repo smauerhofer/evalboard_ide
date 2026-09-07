@@ -262,6 +262,38 @@ public sealed class CCodeGenerator
 
   private string NewLabel(string hint) => $"__L{_labelCounter++}_{hint}";
 
+  /// <summary>
+  /// The CVM C ABI's external-symbol naming convention (per Stefan, 2026-09-07: "an external symbol
+  /// should prepend an addition '_' character to the label"): every assembly-level symbol that IS
+  /// directly a user-written C identifier -- a function's own name, or a global variable's own name --
+  /// gets one additional leading underscore prepended on top of whatever the person wrote. A C
+  /// function named <c>start</c> becomes the CVM label/export <c>_start</c>; a C function literally
+  /// named <c>_start</c> becomes <c>__start</c>. This mirrors the classic C toolchain convention of
+  /// prefixing every C-linkage symbol, so a compiled C name can never collide with a hand-written CVM
+  /// assembly label that doesn't carry the prefix.
+  ///
+  /// Applied at every point a function's or global's OWN name becomes literal assembly text: its own
+  /// label/".export" line, a ".import" for one only declared (not defined) in this file, a "call"
+  /// target, and a "pushlit" reference to a global's address.
+  ///
+  /// <b>Deliberately NOT applied to:</b>
+  /// <list type="bullet">
+  /// <item><description>this compiler's own internal, already-mangled labels -- loop/branch labels
+  /// (<see cref="NewLabel"/>), the string-literal pool's "__strN" (<see cref="InternStringLiteral"/>),
+  /// a "static" local's "__static_&lt;function&gt;_&lt;name&gt;_&lt;n&gt;" (see
+  /// <see cref="DeclareLocal"/>) -- none of which is a direct re-emission of a user identifier, so none
+  /// needs (or gets) this prefix;</description></item>
+  /// <item><description>the hand-written CVM runtime library routine names ("__mul"/"__divs"/
+  /// "__divu"/"__mods"/"__modu", see <see cref="EmitLibraryBinary"/>) -- these are this compiler's own
+  /// fixed, reserved call targets, not something the person wrote in their C source, so they are
+  /// emitted exactly as chosen. <b>Flagged:</b> Stefan has not said whether these should ALSO gain an
+  /// extra leading underscore (i.e. call sites emitting "___mul" to match a "cvm" library that defines
+  /// it under that name) -- left unprefixed until confirmed, since changing this later is a one-line
+  /// fix localized to <see cref="EmitLibraryBinary"/>'s three call sites.</description></item>
+  /// </list>
+  /// </summary>
+  private static string MangleExternalSymbol(string name) => "_" + name;
+
   private void EmitCode(string line) => _codeLines.Add("  " + line);
 
   private void EmitLabel(string label) => _codeLines.Add($"{label}:");
@@ -358,17 +390,17 @@ public sealed class CCodeGenerator
     if (global.IsExtern)
     {
       // Declared here, defined elsewhere -- no storage, just a reference the linker resolves.
-      _imports.Add(global.Name);
+      _imports.Add(MangleExternalSymbol(global.Name));
       return;
     }
 
     if (!global.IsStatic)
     {
-      _dataLines.Add($".export {global.Name}");
+      _dataLines.Add($".export {MangleExternalSymbol(global.Name)}");
     }
 
     List<string> words = ComputeGlobalInitialWords(global.Type, global.Initializer, global.Location);
-    _dataLines.Add($"{global.Name}: .word {string.Join(", ", words)}");
+    _dataLines.Add($"{MangleExternalSymbol(global.Name)}: .word {string.Join(", ", words)}");
   }
 
   /// <summary>Computes the DATA-section words for a global (or static-local) variable's initial value:
@@ -438,7 +470,7 @@ public sealed class CCodeGenerator
       case CUnaryExpr { Op: CUnaryOp.AddressOf, Operand: CNameExpr name }:
         if (_globals.ContainsKey(name.Name))
         {
-          word = name.Name;
+          word = MangleExternalSymbol(name.Name);
           return true;
         }
 
@@ -447,7 +479,7 @@ public sealed class CCodeGenerator
 
       case CNameExpr arrayName when _globals.TryGetValue(arrayName.Name, out CGlobalSymbol? symbol) && symbol.Type.IsArray:
         // A bare array name decays to its own address, same as everywhere else in C.
-        word = arrayName.Name;
+        word = MangleExternalSymbol(arrayName.Name);
         return true;
 
       case CStringLiteralExpr stringLiteral:
@@ -543,10 +575,10 @@ public sealed class CCodeGenerator
   {
     if (!function.IsStatic)
     {
-      _codeLines.Add($".export {function.Name}");
+      _codeLines.Add($".export {MangleExternalSymbol(function.Name)}");
     }
 
-    _codeLines.Add($"{function.Name}:");
+    _codeLines.Add($"{MangleExternalSymbol(function.Name)}:");
 
     var context = new CFunctionContext { Name = function.Name, ReturnType = function.ReturnType, EpilogueLabel = NewLabel("epilogue") };
     context.Scopes.Add(new Dictionary<string, CVarSymbol>(StringComparer.Ordinal));
@@ -687,7 +719,7 @@ public sealed class CCodeGenerator
             return new CLvalue(CLvalueKind.Parameter, symbol.Index, symbol.Type);
           }
 
-          string label = symbol?.GlobalLabel ?? name.Name;
+          string label = symbol?.GlobalLabel ?? MangleExternalSymbol(name.Name);
           CType type;
           if (symbol is { Kind: CVarKind.Global })
           {
@@ -822,7 +854,7 @@ public sealed class CCodeGenerator
             return CType.PointerTo(symbol.Type);
           }
 
-          string label = symbol?.GlobalLabel ?? name.Name;
+          string label = symbol?.GlobalLabel ?? MangleExternalSymbol(name.Name);
           CType type;
           if (symbol is { Kind: CVarKind.Global })
           {
@@ -1627,13 +1659,14 @@ public sealed class CCodeGenerator
 
     if (_globals.TryGetValue(name.Name, out CGlobalSymbol? global))
     {
+      string globalLabel = MangleExternalSymbol(name.Name);
       if (global.Type.IsArray)
       {
-        EmitCode($"pushlit {name.Name}");
+        EmitCode($"pushlit {globalLabel}");
         return global.Type.Decay();
       }
 
-      EmitCode($"pushlit {name.Name}");
+      EmitCode($"pushlit {globalLabel}");
       EmitCode("xt");
       EmitCode("ldt");
       return global.Type;
@@ -1648,8 +1681,9 @@ public sealed class CCodeGenerator
 
     // Not defined in this file -- assume an external global the linker will resolve, per this
     // compiler's "missing pieces become an .import" rule.
-    _imports.Add(name.Name);
-    EmitCode($"pushlit {name.Name}");
+    string importedLabel = MangleExternalSymbol(name.Name);
+    _imports.Add(importedLabel);
+    EmitCode($"pushlit {importedLabel}");
     EmitCode("xt");
     EmitCode("ldt");
     return CType.Int;
@@ -1675,17 +1709,19 @@ public sealed class CCodeGenerator
 
   private CType EmitCall(CCallExpr call)
   {
+    string mangledName = MangleExternalSymbol(call.FunctionName);
+
     if (!_functions.TryGetValue(call.FunctionName, out CFunctionSignature? signature))
     {
       Error(call.Location, $"\"{call.FunctionName}\" is not declared");
-      _imports.Add(call.FunctionName);
+      _imports.Add(mangledName);
       foreach (CExpr argument in call.Arguments)
       {
         // Arguments stay on the stack for the callee, exactly like a normal call -- do not pop them.
         EmitExpr(argument);
       }
 
-      EmitCode($"call {call.FunctionName}");
+      EmitCode($"call {mangledName}");
       return CType.Int;
     }
 
@@ -1719,10 +1755,10 @@ public sealed class CCodeGenerator
 
     if (!signature.IsDefined)
     {
-      _imports.Add(call.FunctionName);
+      _imports.Add(mangledName);
     }
 
-    EmitCode($"call {call.FunctionName}");
+    EmitCode($"call {mangledName}");
     return signature.ReturnType;
   }
 }

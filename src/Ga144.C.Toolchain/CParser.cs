@@ -23,6 +23,26 @@ public sealed class CParser
 
   private static readonly HashSet<string> UnsupportedTypeKeywords = ["struct", "union", "enum", "typedef", "float", "double", "long", "short"];
 
+  /// <summary>A `__fastcall` function's pointer parameters are passed in node 306's four address
+  /// registers, `ar[0]` through `ar[3]` -- see `claude/cvm-abi.md` section 2.2. A 5th pointer parameter
+  /// has nowhere to go under this convention (pointers never fall back to the stack, or to node 511's
+  /// register file, for a `__fastcall` function), so it is a compiler error -- Stefan, verbatim: "a 5th
+  /// __fastcall pointer parameter also rises a compiler error."</summary>
+  private const int MaxFastcallPointerParameters = 4;
+
+  /// <summary>A `__fastcall` function's non-pointer parameters are passed in node 511's own register
+  /// file, one register per 16-bit word, beginning at `reg[0]` -- see `claude/cvm-abi.md` section 2.2
+  /// and `claude/cvm-node510-511-register-file.md`. That register file holds exactly 32 registers, so a
+  /// `__fastcall` function whose non-pointer parameters need more than 32 words of register space cannot
+  /// be represented -- Stefan, verbatim: "if a __fastcall function uses more than 32 register, the
+  /// compiler should generate an error." Measured in WORDS, not parameter COUNT, via
+  /// <see cref="CType.SizeInWords"/> -- today every non-pointer type this compiler supports (int,
+  /// unsigned int, char, unsigned char) is exactly 1 word, so this is currently equivalent to counting
+  /// non-pointer parameters, but the word-based accounting matches the ABI doc's own "32-bit values...
+  /// occupies two consecutive registers" rule and stays correct if a wider non-pointer type is ever
+  /// added.</summary>
+  private const int MaxFastcallRegisterWords = 32;
+
   private readonly List<CToken> _tokens;
   private readonly List<string> _diagnostics = [];
   private int _pos;
@@ -459,22 +479,31 @@ public sealed class CParser
       // caller only ever needs to check IsLower to decide the call/lcall encoding, never IsFastcall.
       bool isLower = isLowerSpecified || isFastcall;
 
-      // "if a __fastcall function uses more than 32 register, the compiler should generate an error" and
-      // "pointers must be allocated in ar[0..3] for fastcall functions" (Stefan, 2026-09-07, 3rd round of
-      // claude/cvm-abi.md's dictation) together mean a __fastcall function may declare at most 4 pointer
-      // parameters (node 306 has exactly 4 address registers, ar[0..3]) -- a 5th pointer parameter has
-      // nowhere left to go under this convention (pointers are never passed via node 511's register
-      // file, and never fall back to the stack for a __fastcall function per that same dictation), so
-      // Stefan confirmed this is also a compiler error, the same as the >32-register case. Only pointer
-      // parameters are checked here -- the node-511 register-file exhaustion check for the remaining
-      // (non-pointer) parameters is deferred to CCodeGenerator, since it is not yet implemented there
-      // either (see claude/cvm-abi.md) and doing it here would duplicate that future logic.
+      // "pointers must be allocated in ar[0..3] for fastcall functions" plus "a 5th __fastcall pointer
+      // parameter also rises a compiler error" (Stefan, 2026-09-07, 3rd/4th rounds of claude/cvm-abi.md's
+      // dictation): a __fastcall function may declare at most MaxFastcallPointerParameters pointer
+      // parameters (node 306 has exactly that many address registers, ar[0..3]) -- a 5th has nowhere
+      // left to go under this convention (pointers are never passed via node 511's register file, and
+      // never fall back to the stack for a __fastcall function per that same dictation).
+      //
+      // "if a __fastcall function uses more than 32 register, the compiler should generate an error"
+      // (same 3rd round): every NON-pointer parameter is instead passed in node 511's own register file,
+      // one register per CType.SizeInWords word, and that file holds only MaxFastcallRegisterWords
+      // registers total -- exceeding it is likewise a compiler error, not a silent fallback to the stack.
+      // Both checks only need the already-parsed parameter list (no code generation involved), so both
+      // are enforced here rather than deferred.
       if (isFastcall)
       {
         int pointerParameterCount = parameters.Count(p => p.Type.IsPointer);
-        if (pointerParameterCount > 4)
+        if (pointerParameterCount > MaxFastcallPointerParameters)
         {
-          throw Error(location, $"\"{name}\" is '__fastcall' but declares {pointerParameterCount} pointer parameters -- a '__fastcall' function may have at most 4 (node 306's ar[0..3])");
+          throw Error(location, $"\"{name}\" is '__fastcall' but declares {pointerParameterCount} pointer parameters -- a '__fastcall' function may have at most {MaxFastcallPointerParameters} (node 306's ar[0..3])");
+        }
+
+        int registerWordCount = parameters.Where(p => !p.Type.IsPointer).Sum(p => p.Type.SizeInWords);
+        if (registerWordCount > MaxFastcallRegisterWords)
+        {
+          throw Error(location, $"\"{name}\" is '__fastcall' but its non-pointer parameters need {registerWordCount} node-511 registers -- a '__fastcall' function may use at most {MaxFastcallRegisterWords} (reg[0..{MaxFastcallRegisterWords - 1}])");
         }
       }
 

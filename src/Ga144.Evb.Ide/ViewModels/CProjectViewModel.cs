@@ -1,3 +1,5 @@
+using Ga144.C.Toolchain;
+using Ga144.Cvm.Toolchain;
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.Services;
 using System.Collections.ObjectModel;
@@ -128,17 +130,15 @@ public sealed class CProjectViewModel : ObservableObject
     private set => SetProperty(ref _statusText, value);
   }
 
-  // The C compiler (.c -> CVM assembly) does not exist yet, so Build has nothing to run today.
-  // This describes the pipeline once it does, so the window is honest about what "Build" will
-  // mean rather than pretending to compile anything: gaasm and (for libraries) the librarian
-  // already exist (Ga144.Cvm.Toolchain); the linker is still a stub, so a Program project's own
-  // final link is not possible yet either.
+  // Updated 2026-09-07 alongside Build() below: the C compiler and gaasm are both now actually
+  // wired into this window's "Build" button (see Build()'s own remarks), so this text no longer
+  // says "not implemented yet" for those two steps. galink is still a stub, so a Program project's
+  // own final link genuinely still doesn't happen -- that part of the text is unchanged.
   public string BuildDescription => IsLibrary
-      ? "Build: compile each src/*.c file to CVM assembly (not implemented yet), assemble it with gaasm, " +
-        "and archive the resulting object files into this project's own .galib -- automatically, with no separate step."
-      : "Build: compile each src/*.c file to CVM assembly (not implemented yet), assemble it with gaasm, " +
-        "then link against this project's imported libraries with galink to produce a .gaimg. galink itself is " +
-        "still a stub, so linking isn't possible yet either.";
+      ? "Build: compiles each src/*.c file to CVM assembly, assembles it with gaasm, " +
+        "and archives the resulting object files into this project's own .galib -- automatically, with no separate step."
+      : "Build: compiles each src/*.c file to CVM assembly and assembles it with gaasm. " +
+        "Linking against this project's imported libraries with galink to produce a .gaimg is not implemented yet -- galink is still a stub.";
 
   public void Refresh()
   {
@@ -212,6 +212,138 @@ public sealed class CProjectViewModel : ObservableObject
     Save();
     RefreshLibraryReferences();
     StatusText = $"Removed library reference \"{reference.DisplayName}\".";
+  }
+
+  /// <summary>
+  /// Runs this project's actual build pipeline -- added 2026-09-07, replacing the "Build" button's
+  /// previous behavior of just showing <see cref="BuildDescription"/> in a dialog and doing nothing:
+  /// compile every "src/*.c" file to CVM assembly (<see cref="CCompiler"/>), assemble every resulting
+  /// ".casm" -- both compiler-generated and this project's own hand-written "asm/*.casm" files (see
+  /// <see cref="CProject.AssemblyDirectoryName"/>) -- with <see cref="CvmAssembler"/>, and, only for a
+  /// <see cref="CProjectKind.Library"/> project whose ENTIRE build succeeded, archive the resulting
+  /// object files into this project's own ".galib" (<see cref="CProject.LibraryOutputPath"/>) -- a
+  /// library with some members silently missing would be worse than no library at all.
+  ///
+  /// Every source file and every hand-written assembly file is always attempted, even after an
+  /// earlier one fails, so one broken file never hides problems in the others. A Program project's
+  /// own build stops at "compiled and assembled": <c>galink</c> is still a stub (see
+  /// <see cref="BuildDescription"/>), so no ".gaimg" is produced by this method at all.
+  ///
+  /// <b>Flagged:</b> include resolution only looks at this project's own "include" directory plus
+  /// each DIRECTLY imported library's "include" directory -- not a library's own further library
+  /// references (transitive includes). Stefan has not said whether transitive includes should be
+  /// visible; today, a header inside "a library of a library" is not found.
+  /// </summary>
+  public CBuildResult Build()
+  {
+    Model.EnsureDirectoriesExist();
+
+    var messages = new List<string>();
+    bool success = true;
+
+    var includeDirectories = new List<string> { Model.IncludeDirectoryPath };
+    foreach (CLibraryReferenceViewModel reference in LibraryReferences)
+    {
+      if (reference.IsValid)
+      {
+        includeDirectories.Add(_store.Load(reference.ResolvedFullPath).IncludeDirectoryPath);
+      }
+    }
+
+    var resolver = new FileSystemIncludeResolver(includeDirectories);
+    var assemblySources = new List<string>();
+
+    foreach (string sourceFile in Model.GetSourceFiles())
+    {
+      string relativeName = Path.GetRelativePath(Model.SourceDirectoryPath, sourceFile);
+      CCompileResult result = CCompiler.Compile(sourceFile, File.ReadAllText(sourceFile), resolver);
+
+      if (result.PreprocessedText is not null)
+      {
+        File.WriteAllText(Model.GetPreprocessedFilePath(sourceFile), result.PreprocessedText);
+      }
+
+      if (result.Success && result.Assembly is not null)
+      {
+        File.WriteAllText(Model.GetTargetAssemblyFilePath(sourceFile), result.Assembly);
+        assemblySources.Add(Model.GetTargetAssemblyFilePath(sourceFile));
+        messages.Add($"Compiled {relativeName}.");
+      }
+      else
+      {
+        success = false;
+        messages.Add($"{relativeName}: compile failed.");
+        messages.AddRange(result.Diagnostics);
+      }
+    }
+
+    assemblySources.AddRange(Model.GetAssemblyFiles());
+
+    var objectMembers = new List<CvmLibraryMember>();
+    foreach (string assemblySource in assemblySources)
+    {
+      string relativeName = Path.GetRelativePath(Model.RootPath, assemblySource);
+      (CvmObjectFile? objectFile, IReadOnlyList<string> errors) = CvmAssembler.Assemble(File.ReadAllText(assemblySource));
+
+      if (objectFile is null)
+      {
+        success = false;
+        messages.Add($"{relativeName}: assembly failed.");
+        messages.AddRange(errors);
+        continue;
+      }
+
+      string objectFilePath = Model.GetObjectFilePath(assemblySource);
+      using (var stream = File.Create(objectFilePath))
+      {
+        objectFile.Save(stream);
+      }
+
+      objectMembers.Add(new CvmLibraryMember { Name = Path.GetFileName(objectFilePath), ObjectBytes = File.ReadAllBytes(objectFilePath) });
+      messages.Add($"Assembled {relativeName}.");
+    }
+
+    if (IsLibrary)
+    {
+      string libraryPath = Model.LibraryOutputPath;
+      if (success)
+      {
+        var library = new CvmLibrary();
+        library.Members.AddRange(objectMembers);
+
+        string tempPath = libraryPath + ".tmp";
+        bool librarySuccess;
+        IReadOnlyList<string> libraryErrors;
+        using (var stream = File.Create(tempPath))
+        {
+          (librarySuccess, libraryErrors) = library.Save(stream);
+        }
+
+        if (!librarySuccess)
+        {
+          File.Delete(tempPath);
+          success = false;
+          messages.Add($"{Path.GetFileName(libraryPath)}: archiving failed.");
+          messages.AddRange(libraryErrors);
+        }
+        else
+        {
+          File.Move(tempPath, libraryPath, overwrite: true);
+          messages.Add($"Archived {objectMembers.Count} object file(s) into {Path.GetFileName(libraryPath)}.");
+        }
+      }
+      else
+      {
+        messages.Add($"Skipped {Path.GetFileName(libraryPath)} -- the build has errors above.");
+      }
+    }
+    else
+    {
+      messages.Add("Linking is not implemented yet (galink is still a stub), so no .gaimg was produced.");
+    }
+
+    StatusText = success ? "Build succeeded." : "Build failed -- see the build results for details.";
+    return new CBuildResult { Success = success, Messages = messages };
   }
 
   private string AddExistingFile(string sourceFilePath, bool isHeader)
@@ -310,6 +442,16 @@ public sealed class CProjectViewModel : ObservableObject
     builder.Append("_H");
     return builder.ToString();
   }
+}
+
+/// <summary>The outcome of one <see cref="CProjectViewModel.Build"/> run: whether the whole build
+/// succeeded, and a message per step -- one line for each file compiled, assembled, or archived, plus
+/// every diagnostic from any step that failed, in the order the steps ran (compile, then assemble,
+/// then -- Library projects only -- archive).</summary>
+public sealed class CBuildResult
+{
+  public required bool Success { get; init; }
+  public required IReadOnlyList<string> Messages { get; init; }
 }
 
 /// <summary>
