@@ -26,39 +26,6 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-06T18:55:06.3233843
-      utcDateTime: 2026-09-06T18:55:06.3233843Z
-      localDateTime: 2026-09-06T20:55:06.3233843+02:00
-      date: 2026-09-06T00:00:00.0000000
-      day: 6
-      dayOfWeek: Sunday
-      dayOfYear: 249
-      hour: 18
-      millisecond: 323
-      microsecond: 384
-      nanosecond: 300
-      minute: 55
-      month: 9
-      offset: 00:00:00
-      totalOffsetMinutes: 0
-      second: 6
-      ticks: 639243177063233843
-      utcTicks: 639243177063233843
-      timeOfDay: 18:55:06.3233843
-      year: 2026
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -79,6 +46,19 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -14624,7 +14604,7 @@ projects:
     - coordinate: 306
       enabled: true
       sourceCode: >-
-        ( CVM2 node 306. VM ternary main, 1101_10??_????_???? )
+        ( CVM2 node 306. VM 32 bit addres pointer, 1101_10??_????_???? )
 
         ( contains 4 32-bit address register )
 
@@ -14659,48 +14639,41 @@ projects:
 
         : ar/leave A[ k/leave ; ]] lit !b
 
-        : ar/main # ar/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r 
+        : ar/main  A[ 2* !p !p ]] lit !b @b
 
-          -if // 1101_101?_????_????
+          @b
+          // set register in a
+          dup 0x07 and 2* a!
+          // call word
+          2/ 2/ 2/ 0x3f and ex ar/leave ;
 
-            2* -if // 1101_1011_????_????
-              // ldar load r using address register
-              r> ar/reg A[ k/@ ]] lit !b @+ !b @ !b ;
-            then // 1101_1010_????_????
-            // star store r using address register
-            r> ar/reg A[ k/! ]] lit !b @+ !b @ !b ;
+        : 'lda A[ k/@ ]] lit !b @+ !b @ !b ;
 
-          then // 1101_100?_????_????
-          2* -if // 1101_1001_????_????
-            2* -if // 1101_1001_1???_????
-              // inca increment address
-              r> ar/reg @ ar/inc !+ 0x10000 and # ar/leave until @ ar/inc ! ;
+        : 'sta A[ k/! ]] lit !b @+ !b @ !b ;
 
-            then // 1101_1001_0???_????
-            // deca decrement address
-            r> ar/reg @ ar/dec !+ # ar/leave -until @ ar/dec ! ;
-          then  
-          2* -if // 1101_1000_1???_????
-            // lda load address register, address in r, page in stack
-            r> ar/reg ar/r@ !+ ar/pop ! ;
+        : 'arinc @ ar/inc !+ 0x10000 and # ar/leave until @ ar/inc ! ;
 
-          then // 1101_1000_0???_????
-          // sta store address register, address in r, page in stack
-          r> ar/reg @+ ar/r! @ ar/push ;
+        : 'ardec @ ar/dec !+ # ar/leave -until @ ar/dec ! ;
+
+        : 'arld ar/r@ !+ ar/pop ! ;
+
+        : 'arst @+ ar/r! @ ar/push ;
+
+
 
         (
 
-        opcode ldar 1101_1011_????_?aa0 load r from address in address register
+        opcode lda   1101_10??_????_?aaa load r from address in address register
 
-        opcode star 1101_1010_????_?aa0 store r to address in address register
+        opcode sta   1101_10??_????_?aaa store r to address in address register
 
-        opcode inca 1101_1001_1???_?aa0 increment address register
+        opcode arinc 1101_10??_????_?aaa increment address register
 
-        opcode deca 1101_1001_0???_?aa0 decrement address register
+        opcode ardec 1101_10??_????_?aaa decrement address register
 
-        opcode lda  1101_1000_1???_?aa0 load address register, address in r, page in stack
+        opcode arld  1101_1000_1???_?aa0 load address register, address in r, page in stack
 
-        opcode sta  1101_1000_0???_?aa0 store address register, address in r, page in stack
+        opcode arst  1101_1000_0???_?aa0 store address register, address in r, page in stack
 
         )
       ramWords:
@@ -14732,42 +14705,42 @@ projects:
       - 0x05626
       - 0x05BB2
       - 0x11428
-      - 0x04812
-      - 0x0001A
+      - 0x05B02
       - 0x37932
-      - 0x09F02
-      - 0x2F22A
-      - 0x37226
-      - 0x2760C
+      - 0x00D12
+      - 0x00007
+      - 0x3E4AA
+      - 0x307C7
+      - 0x0003F
+      - 0x3F455
+      - 0x1141A
       - 0x05B1A
       - 0x13410
       - 0x09E25
-      - 0x2760C
       - 0x05B1A
       - 0x13416
       - 0x09E25
-      - 0x37238
-      - 0x37233
-      - 0x2760C
       - 0x03608
       - 0x0FDFA
       - 0x10000
       - 0x1941A
       - 0x03608
       - 0x0B555
-      - 0x2760C
       - 0x0360A
       - 0x0F21A
       - 0x0360A
       - 0x0B555
-      - 0x3723D
-      - 0x2760C
       - 0x1340E
       - 0x0F614
       - 0x0B555
-      - 0x2760C
       - 0x07612
       - 0x03718
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x01C
         p: 0x000
@@ -14853,11 +14826,143 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 308
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 308. VM 32 arithmetic, 1101_11??_????_???? )
+
+        ( contains 4 32-bit address register )
+
+        ( low word in x, high word in x+1 )
+
+        # 307 import
+
+        # 0x08 org
+
+        entry d/main
+
+        # 0 /a
+
+        # left /b
+
+
+        : d/inc 1 . + ;
+
+        : d/dec -1 . + ;
+
+        : d/!+ 0xffff and !+ ;
+
+        : d/pop ( -w) A[ k/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : d/push ( w) A[ @p k/push ]] lit !b !b ;
+
+
+        : d/leave A[ k/leave ; ]] lit !b
+
+        : d/main  A[ 2* !p !p ]] lit !b @b
+          @b
+          // set register in a
+          dup 0x03 and 2* a!
+          // call word
+          2/ 2/ 0x3f and ex d/leave ;
+
+        : 'dpop d/pop !+ d/pop ! ;
+
+        : 'dpush @+ @ d/push d/push ;
+
+        : 'dinc @ d/inc dup d/!+ 0x10000 and # d/leave until @ d/inc d/!+ ;
+
+        : 'ddec @ d/dec dup d/!+ # d/leave -until @ d/dec d/!+ ;
+
+        : 'dadd @ d/pop + dup d/!+ 2* -if dup xor d/inc else dup xor then @ d/pop + . + d/!+ ;
+
+        : 'dor @+ inv @ inv and inv d/push
+
+
+        (
+
+        opcode dpop  1101_11??_????_??aa pop from stack into register d[a]
+
+        opcode dpush 1101_11??_????_??aa push register d[a] onto stack
+
+        opcode dinc  1101_11??_????_??aa increment register d[a]
+
+        opcode ddec  1101_11??_????_??aa decrement register d[a]
+
+        opcode dadd  1101_11??_????_??aa add register d[a] with stack
+
+        opcode dor   1101_11??_????_??aa or hi & lo part of r[a] and push result on stack. ussed to detect if a register is 0
+
+        )
+
+
+
+      ramWords:
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x049F5
+      - 0x00001
+      - 0x049F5
+      - 0x3FFFF
+      - 0x0403D
+      - 0x0FFFF
+      - 0x05B12
+      - 0x13422
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05626
+      - 0x05BB2
+      - 0x11428
+      - 0x05B02
+      - 0x37932
+      - 0x00D12
+      - 0x00003
+      - 0x3E4AA
+      - 0x30712
+      - 0x0003F
+      - 0x3F455
+      - 0x11414
+      - 0x1340E
+      - 0x0F60E
+      - 0x0B555
+      - 0x07EB2
+      - 0x13412
+      - 0x11412
+      - 0x03608
+      - 0x2560C
+      - 0x040B2
+      - 0x10000
+      - 0x19414
+      - 0x03608
+      - 0x1140C
+      - 0x0360A
+      - 0x2560C
+      - 0x1B414
+      - 0x0360A
+      - 0x1140C
+      - 0x0360E
+      - 0x3CDB2
+      - 0x1340C
+      - 0x37238
+      - 0x243B2
+      - 0x13408
+      - 0x11439
+      - 0x243B2
+      - 0x0360E
+      - 0x3C9F2
+      - 0x1140C
+      - 0x0660A
+      - 0x320CA
+      - 0x13412
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x016
         p: 0x000
         a: 0x000
         b: 0x000
@@ -16213,7 +16318,7 @@ projects:
         parameterStack: []
     - coordinate: 509
       enabled: true
-      sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ g/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p g/r! ]] lit !b !b ;\n: u/pop ( -w) A[ g/pop ]] lit !b A[ !p ]] lit !b @b ;\n: u/push ( w) A[ @p g/push ]] lit !b !b ;\n: u/leave A[ g/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ !p 2* !p ]] lit !b @b @b\n  -if // 1011_1???_????_????\n    // \n    --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // load literal -512..511\r\n    // mnemonic lit\r\n    drop 0x03ff and dup 0x0200 and if drop 0xfc00 xor u/r! ; then drop u/r! ;\n  then // 1011_00??_????_????\r\n  // unary\n  drop >r u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\nbegin [ swap ]\r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\r\n: 'parity 'bitcnt\r\n: 'odd 1 and ;\r\n: 'not until dup xor ;\n\r\n(\r\nopcode 1011_01??_????_???? load literal to r. the range of the literal is -0x200 to 0x1ff.\r\n\r\n'abs make r absolute\r\n'neg negate r\n'inc increment r\r\n'dec decrement r\r\n'inv invert all bits in r\r\n'mul2 shift left r\r\n'div2 signed shift right of r\r\n'udiv2 unsigned shift right of r\r\n'bitcnt count 1 bits in r\r\n'parity if r contains an odd number of 1 bits, then r becomes 1 otherwise r becomes 0.\r\n'odd r becomes 1 of r is odd, otherwise r becomes 0.\r\n'not logical not. if r is 0 then r = 1, otherwise r = 0\r\n)\r\n"
+      sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ g/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p g/r! ]] lit !b !b ;\n: u/pop ( -w) A[ g/pop ]] lit !b A[ !p ]] lit !b @b ;\n: u/push ( w) A[ @p g/push ]] lit !b !b ;\n: u/leave A[ g/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ !p 2* !p ]] lit !b @b @b\n  -if // 1011_1???_????_????\n    // \n    --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // \n    --l- ;\n  then // 1011_00??_????_????\n  2* -if // 1011_001?_????_????\n    // load literal -256..255\r\n    drop 0x01ff and dup 0x0200 and if drop 0xfe00 xor u/r! ; then drop u/r! ;\n  then // 1011_000?_????_????\r\n  // unary\n  drop >r u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\nbegin [ swap ]\r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\r\n: 'parity 'bitcnt\r\n: 'odd 1 and ;\r\n: 'not until dup xor ;\n\r\n(\r\nopcode lit 1011_01??_????_???? load literal to r. the range of the literal is -0x200 to 0x1ff.\r\n\r\n'abs make r absolute\r\n'neg negate r\n'inc increment r\r\n'dec decrement r\r\n'inv invert all bits in r\r\n'mul2 shift left r\r\n'div2 signed shift right of r\r\n'udiv2 unsigned shift right of r\r\n'bitcnt count 1 bits in r\r\n'parity if r contains an odd number of 1 bits, then r becomes 1 otherwise r becomes 0.\r\n'odd r becomes 1 of r is odd, otherwise r becomes 0.\r\n'not logical not. if r is 0 then r = 1, otherwise r = 0\r\n)\r\n"
       ramWords:
       - 0x05B12
       - 0x13400
@@ -16235,13 +16340,15 @@ projects:
       - 0x09F02
       - 0x1B414
       - 0x11575
-      - 0x3721D
+      - 0x37216
+      - 0x11575
+      - 0x3721F
       - 0x3BDFB
-      - 0x003FF
-      - 0x04064
+      - 0x001FF
+      - 0x04066
       - 0x00200
       - 0x3BDE2
-      - 0x0FC00
+      - 0x0FE00
       - 0x11404
       - 0x3B704
       - 0x3A8B2
@@ -16251,8 +16358,8 @@ projects:
       - 0x0FFFF
       - 0x11404
       - 0x364C2
-      - 0x3123C
-      - 0x3372A
+      - 0x3122C
+      - 0x329B2
       - 0x049F5
       - 0x00001
       - 0x049F5
@@ -16264,19 +16371,17 @@ projects:
       - 0x31555
       - 0x24DE2
       - 0x2E9B2
-      - 0x19436
-      - 0x27626
+      - 0x19438
+      - 0x27628
       - 0x2EDB2
-      - 0x13428
-      - 0x3F731
+      - 0x1342A
+      - 0x3F733
       - 0x27555
-      - 0x1342F
+      - 0x13431
       - 0x04055
       - 0x00001
-      - 0x1943C
+      - 0x19428
       - 0x24355
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       startup:
@@ -16395,48 +16500,8 @@ projects:
         parameterStack: []
     - coordinate: 511
       enabled: true
-      sourceCode: >+
-        ( CVM2 node 511. register file, 1011_11??_????_???? )
-
-        # 510 import
-
-        [ 0x40 -25 + ] org
-
-        entry r/main
-
-        # 0 /a
-
-        # left /b
-
-        : r/leave A[ x/leave ; ]] lit !b
-
-        : r/main # r/leave lit >r A[ !p !p ]] lit !b @b @b 0x3f and a!
-          2* -if // 1011_111?_????_????
-
-            2* -if // 1011_1111_????_????
-              // load register
-              A[ x/r@ ]] lit !b A[ !p ]] lit !b @b ! ;
-            then // 1011_1110_????_????
-            // store register
-              A[ @p x/r! ]] lit !b @ !b ;
-
-          then // 1011_110?_????_????
-
-            2* -if // 1011_1101_????_????
-              // pop register
-              A[ x/pop ]] lit !b A[ !p ]] lit !b @b ! ;
-            then // 1011_1100_????_????
-            // push register
-              A[ @p x/push ]] lit !b @ !b ;
-
+      sourceCode: "( CVM2 node 511. register file, 1011_11??_????_???? )\r\n( 32 register )\n# 510 import\n# 0x20  org\nentry r/main\n# 0 /a\n# left /b\n\r\n: r/leave A[ x/leave ; ]] lit !b\n: r/main  A[ drop !p ]] lit !b\n\n  @b // get opcode\n  // set register in a\n  dup 0x1f and a!\n  // call word\n  2/ 2/ 2/ 2/ 2/ 0x1f and 0x20 xor ex r/leave ;\n\r\n  // load register\n: 'rld A[ x/r@ ]] lit !b A[ !p ]] lit !b @b ! ;\n  // store register\n: 'rst A[ @p x/r! ]] lit !b @ !b ;\n: 'rpop A[ x/pop ]] lit !b A[ !p ]] lit !b @b ! ;\r\n: 'rpush A[ @p x/push ]] lit !b @ !b ;\r\n\r\n(\r\nthis node supports 32 16-bit register.\r\nregister are encoded in the lower 5 bits of the opcode.\r\nthe address of the function is encoded in the next 5 bits with an offset of 0x20, so address 0x20 to 0x3f can be encoded.\r\nopcode rld   1011_11??_???a_aaaa move r to reg[a]\nopcode rst   1011_11??_???a_aaaa move reg[a] to r\nopcode rpop  1011_11??_???a_aaaa pop stack to reg[a]\nopcode rpush 1011_11??_???a_aaaa push reg[a] to stack\n)\r\n\n "
       ramWords:
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -16471,14 +16536,17 @@ projects:
       - 0x15555
       - 0x05BB2
       - 0x1140C
-      - 0x04812
-      - 0x00027
-      - 0x0D9B2
-      - 0x09F07
-      - 0x0003F
-      - 0x3EADA
-      - 0x1B438
-      - 0x37235
+      - 0x05B03
+      - 0x3B9B2
+      - 0x040AA
+      - 0x0001F
+      - 0x307C2
+      - 0x30712
+      - 0x0001F
+      - 0x3FDE2
+      - 0x00020
+      - 0x17555
+      - 0x11420
       - 0x05B12
       - 0x13400
       - 0x0C9B2
@@ -16486,7 +16554,6 @@ projects:
       - 0x05B0A
       - 0x05604
       - 0x09555
-      - 0x3723D
       - 0x05B12
       - 0x13406
       - 0x0C9B2
@@ -16494,8 +16561,13 @@ projects:
       - 0x05B0A
       - 0x0560A
       - 0x09555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x029
+        entryPoint: 0x022
         p: 0x000
         a: 0x000
         b: 0x000

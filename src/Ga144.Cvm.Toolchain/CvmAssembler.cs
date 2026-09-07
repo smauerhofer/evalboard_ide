@@ -67,6 +67,14 @@ namespace Ga144.Cvm.Toolchain;
 /// <c>ValueBitShift</c> -- and a FLAGGED collision with <c>slit</c>'s own tag range (see
 /// <see cref="CvmInstructionSet.LoadAddressRegisterMnemonic"/>'s own remarks): assembling any of the six
 /// by name is unaffected by that collision, only disassembling an already-assembled word is ambiguous.
+/// Node 511's four register-file ops (<c>rld</c>, <c>rst</c>, <c>rpop</c>, <c>rpush</c>, added
+/// 2026-09-07, <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>) are NOT YET
+/// SUPPORTED by this assembler at all -- they need both a live-node-resolved base AND an embedded
+/// operand at once, which this assembler's relocation-based resolution of tagged mnemonics has no way to
+/// express (see that encoding's own remarks); a line using one of the four fails outright with a clear
+/// error rather than silently dropping the register operand. Only
+/// <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>'s own immediately-resolving assembler
+/// supports them today.
 ///
 /// This is a two-pass assembler: pass 1 walks every line purely to compute section layout (every
 /// instruction's word length is fixed by its mnemonic alone, so a label's final offset never depends
@@ -251,6 +259,23 @@ public static class CvmAssembler
             // packed into shape.ValueBitMask's low bits (8 bits for all eight of them). Also fully
             // self-describing, so also no placeholder/relocation/external symbol.
             EmitEmbeddedUnsignedValue(codeSection, shape, line.Args[0], line.LineNumber, errors);
+            break;
+          }
+
+          if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
+          {
+            // Node 511's four register-file ops (rld/rst/rpop/rpush) need BOTH a live-node-resolved base
+            // (which function -- exactly what the generic tagged path below already provides via its own
+            // CvmOpcode relocation) AND a user-supplied embedded register operand packed into the SAME
+            // word -- something CvmRelocationType.CvmOpcode has no way to express: it resolves an entire
+            // word from a single symbol name at link time, with no room for a second, per-instance
+            // operand value. Falling through to the generic tagged path below would silently DROP the
+            // register operand (it only emits a trailing operand word for CvmOperandEncoding.TrailingWord,
+            // which this isn't) -- so this errors out loudly instead of doing that. Only
+            // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own immediately-resolving assembler (the CVM
+            // Debugger's own Assembly Code editor) supports these four mnemonics today; revisit here once
+            // a real linker exists and CvmRelocationType grows a shape that can carry a second operand.
+            errors.Add($"line {line.LineNumber}: \"{shape.Mnemonic}\" is not yet supported by this assembler -- use the CVM Debugger's own Assembly Code editor instead.");
             break;
           }
 

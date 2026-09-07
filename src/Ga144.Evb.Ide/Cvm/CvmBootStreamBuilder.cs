@@ -31,9 +31,17 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <see cref="Node407Program"/>'s own remarks) is filled by node 307, "VM ternary main" (see
 /// <see cref="Node307Program"/>), which itself has its own further RIGHT-port child, node 306, the 4x
 /// 32-bit-address-register node (see <see cref="Node306Program"/>) -- 507 -&gt; 407 -&gt; 307 -&gt; 306, CVM2's
-/// first FIVE-hop-deep branch. CVM2's mesh is TWELVE nodes now
-/// (708/707/607/507/407/506/508/509/406/408/307/306). "More nodes will be added later" (Stefan's own
-/// words) -- this builder's job is to stay easy to extend as that happens, not to assume twelve is final.
+/// first FIVE-hop-deep branch. On 2026-09-07, the 508-&gt;509 branch was extended two hops further: node
+/// 510, "extended arithmetic" (see <see cref="Node510Program"/>), fills node 509's own previously-open
+/// LEFT-port branch (508 -&gt; 509 -&gt; 510), and node 511, the 32-register register-file node (see
+/// <see cref="Node511Program"/>), hangs off node 510's own RIGHT port one hop further out still (509 -&gt;
+/// 510 -&gt; 511) -- CVM2's mesh is now SIX relay hops deep on this branch, its deepest so far. Node 511's
+/// own four opcodes ('rld/'rst/'rpop/'rpush, supporting register-based parameter passing) needed a
+/// genuinely new operand encoding, <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>
+/// -- see that enum member's own remarks. CVM2's mesh is FOURTEEN nodes now
+/// (708/707/607/507/407/506/508/509/406/408/307/306/510/511). "More nodes will be added later" (Stefan's
+/// own words) -- this builder's job is to stay easy to extend as that happens, not to assume fourteen is
+/// final.
 ///
 /// <b>Node 507 (CPU), not 508 -- corrected 2026-09-01.</b> This project's own session briefly placed
 /// CVM2's CPU source on node 508 under a mistaken attribution; Stefan corrected it directly: the CPU
@@ -317,6 +325,50 @@ public static class CvmBootStreamBuilder
     });
     ThrowIfFailed(result509);
 
+    // CVM2 (2026-09-07): node 510, "extended arithmetic" -- reached from node 509's own u/main
+    // dispatch via ITS LEFT port, NOT a sibling of 406/408/307/509/506 but a further hop past 509
+    // (508 -> 509 -> 510), CVM2's mesh going five relay hops deep on this branch for the first time
+    // (708/707/607/507/508/509/510). Imports 509 by name ('# 509 import',
+    // u/r@/u/r!/u/pop/u/push/u/leave), so must compile AFTER result509 above. Supplied by Stefan
+    // together with node 511 ("here are nodes 510 and 511"). See Node510Program's own remarks for the
+    // full source, the confirmed relay chain (node 509's own previously-open LEFT branch), and the
+    // FLAGGED opening-idiom shape (matching node 509's OWN pre-fix pattern, not its corrected one).
+    F18CompileResult result510 = Compile(compiler, Node510Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node510Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node509Program.Coordinate
+          ? F18ImportResolution.FromExports(result509.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result510);
+
+    // CVM2 (2026-09-07): node 511, the 32-register register-file node -- reached from node 510's own
+    // x/main dispatch via ITS RIGHT port, one hop further out than 510 itself (509 -> 510 -> 511),
+    // CVM2's mesh now SIX relay hops deep on this branch (708/707/607/507/508/509/510/511). Imports
+    // 510 by name ('# 510 import', x/r@/x/r!/x/pop/x/push/x/leave), so must compile AFTER result510
+    // above. Its own four new CVM opcodes ('rld/'rst/'rpop/'rpush, register load/store/pop/push,
+    // supporting register-based parameter passing per Stefan's own description) are wired into
+    // CvmInstructionSet/CvmAssemblyLanguage directly via the new NodeResolvedEmbeddedValue encoding
+    // (see LoadRegisterFileMnemonic's and CvmOperandEncoding.NodeResolvedEmbeddedValue's own remarks),
+    // not through this node's own live compile succeeding here -- see Node511Program's own remarks for
+    // the full source and the bit-format derivation ((functionAddress - 0x20) &lt;&lt; 5 | registerIndex).
+    F18CompileResult result511 = Compile(compiler, Node511Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node511Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node510Program.Coordinate
+          ? F18ImportResolution.FromExports(result510.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result511);
+
     return
     [
       CvmBootDescriptor.FromCompileResult(result407),
@@ -325,6 +377,8 @@ public static class CvmBootStreamBuilder
       CvmBootDescriptor.FromCompileResult(result307),
       CvmBootDescriptor.FromCompileResult(result306),
       CvmBootDescriptor.FromCompileResult(result506),
+      CvmBootDescriptor.FromCompileResult(result511),
+      CvmBootDescriptor.FromCompileResult(result510),
       CvmBootDescriptor.FromCompileResult(result509),
       CvmBootDescriptor.FromCompileResult(result508),
       CvmBootDescriptor.FromCompileResult(result507),
@@ -420,16 +474,29 @@ public static class CvmBootStreamBuilder
   /// step if it happens to run before 307's/407's own steps (their relative order among 406/408/307 is
   /// otherwise unconstrained).
   ///
-  /// <b>CONFIRMED ON REAL HARDWARE (2026-09-02) for the ORIGINAL 407 step (without 406/408/307/306 as
-  /// further hops).</b> The load order through node 407 was installed and run on a real EVB: a test program's
+  /// <b>Extended again, 2026-09-07, with node 510 -- "extended arithmetic" -- reached via 509, NOT 508
+  /// directly (<c>new CvmBootLoadStep(510, 509)</c>), and node 511 -- the 32-register register-file
+  /// node -- reached via 510 (<c>new CvmBootLoadStep(511, 510)</c>), one hop further still.</b> Node 510
+  /// fills node 509's own previously-open LEFT-port branch (see Node509Program's own remarks), making
+  /// CVM2's mesh SIX relay hops deep for the first time on this branch
+  /// (708/707/607/507/508/509/510/511). Node 510 must therefore load BEFORE 509's own step, the same
+  /// "leaf loads before its immediate relay parent" rule 509 already follows relative to 508; node 511
+  /// must load before node 510's OWN step, one level deeper still. No code changes were needed in
+  /// <see cref="Services.Ga144CvmHardwareInstaller"/> for either extra hop -- 511's own six-hop ancestor
+  /// chain (708/707/607/507/508/509/510) falls out of the same generic <c>AncestorChain</c> recursion as
+  /// every earlier addition, with 510 and 509 both getting "focused" for the first time during the 511
+  /// step if it happens to run before 510's/509's own steps.
+  ///
+  /// <b>CONFIRMED ON REAL HARDWARE (2026-09-02) for the ORIGINAL 407 step (without 406/408/307/306/510/511
+  /// as further hops).</b> The load order through node 407 was installed and run on a real EVB: a test program's
   /// <c>lcall</c>/<c>'ret</c> round-tripped correctly through node 407 (see Node407Program's own remarks
   /// for the transaction log), which could only happen if every hop's relay/focus/port-write sequence,
-  /// all the way out to 407, was correct. <b>The NEW 406, 408, 506, 508, 509, 307, and 306 steps are NOT
-  /// yet real-hardware-tested</b> -- all seven follow the same generic relay mechanism the 407 step
-  /// already validated, but none has itself been confirmed by a transaction log the way 407 was, and
-  /// node 307's own source is not even confirmed to COMPILE yet (see Node307Program's own remarks) --
-  /// this load-order entry describes the intended MESH SHAPE regardless, which is independent of whether
-  /// any particular node's current source happens to compile today.
+  /// all the way out to 407, was correct. <b>The NEW 406, 408, 506, 508, 509, 307, 306, 510, and 511
+  /// steps are NOT yet real-hardware-tested</b> -- all nine follow the same generic relay mechanism the
+  /// 407 step already validated, but none has itself been confirmed by a transaction log the way 407
+  /// was, and node 307's own source is not even confirmed to COMPILE yet (see Node307Program's own
+  /// remarks) -- this load-order entry describes the intended MESH SHAPE regardless, which is
+  /// independent of whether any particular node's current source happens to compile today.
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
   [
@@ -439,6 +506,8 @@ public static class CvmBootStreamBuilder
     new CvmBootLoadStep(306, 307),
     new CvmBootLoadStep(407, 507),
     new CvmBootLoadStep(506, 507),
+    new CvmBootLoadStep(511, 510),
+    new CvmBootLoadStep(510, 509),
     new CvmBootLoadStep(509, 508),
     new CvmBootLoadStep(508, 507),
     new CvmBootLoadStep(507, 607),
@@ -467,6 +536,8 @@ public static class CvmBootStreamBuilder
     Node506Program.Coordinate => Node506Program.Source,
     Node508Program.Coordinate => Node508Program.Source,
     Node509Program.Coordinate => Node509Program.Source,
+    Node510Program.Coordinate => Node510Program.Source,
+    Node511Program.Coordinate => Node511Program.Source,
     Node507Program.Coordinate => Node507Program.Source,
     Node607Program.Coordinate => Node607Program.Source,
     Node707Program.Coordinate => Node707Program.Source,

@@ -406,6 +406,42 @@ public static class CvmInstructionSet
   /// <summary>How far left an address-register index (0-3) is shifted before OR-ing into <see cref="Node306AddressRegisterIndexBitMask"/>'s bits -- 1, since those bits sit at positions 2-1, not 1-0 (bit 0 is architecturally fixed at 0). See <see cref="CvmInstructionShape.ValueBitShift"/>'s own remarks.</summary>
   public const int Node306AddressRegisterIndexShift = 1;
 
+  // Node 511's four register-file ops (2026-09-07, "here are nodes 510 and 511 ... they support 32
+  // register that can be used for parameter passing to functions") -- unlike every mnemonic above,
+  // these need BOTH a live compile of a specific node (like the None/TrailingWord "tagged" mnemonics
+  // resolved in Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own NodeSymbolByMnemonic) AND an embedded
+  // operand packed into the very same word (like an EmbeddedUnsignedValue mnemonic) -- something no
+  // earlier CvmOperandEncoding case does both of at once. See CvmOperandEncoding.NodeResolvedEmbeddedValue's
+  // own remarks for why a new case was added rather than reusing None/TrailingWord/EmbeddedUnsignedValue,
+  // and Node511Program's own remarks for the full bit-by-bit derivation straight from its own r/main body.
+  //
+  // Node 511's own header ("register file, 1011_11??_????_????") fixes the top 6 bits; node 511's own
+  // r/main splits the remaining 10 bits into a 5-bit "which function" field (bits 9-5, biased by +0x20 --
+  // "the address of the function is encoded in the next 5 bits with an offset of 0x20") and a 5-bit
+  // register-index field (bits 4-0, unbiased, 0-31 -- "32 register"). The FIXED 6-bit tag prefix itself
+  // (Node511Tag) lives with the rest of this file's other live-node-resolved tag constants, in
+  // Ga144.Evb.Ide.Services.CvmAssemblyLanguage, not here -- see that file's own remarks -- since (like
+  // every other live-node-resolved tag) it is only ever combined with a RESOLVED address there, never
+  // used standalone by anything self-describing. The two field layouts below (function-select field and
+  // register field), by contrast, describe the WORD FORMAT itself, not a live-resolution detail, so they
+  // stay here alongside every other field-layout constant in this file.
+  public const string LoadRegisterFileMnemonic = "rld";
+  public const string StoreRegisterFileMnemonic = "rst";
+  public const string PopRegisterFileMnemonic = "rpop";
+  public const string PushRegisterFileMnemonic = "rpush";
+
+  /// <summary>Isolates node 511's 5-bit "which function" field (bits 9-5) -- the resolved target address (0x20-0x3F) minus <see cref="Node511FunctionFieldBaseAddress"/>, shifted left by <see cref="Node511FunctionFieldShift"/>. See <see cref="LoadRegisterFileMnemonic"/>'s own remarks.</summary>
+  public const int Node511FunctionFieldBitMask = 0x03E0;
+
+  /// <summary>How far left node 511's resolved (address - <see cref="Node511FunctionFieldBaseAddress"/>) is shifted before OR-ing into <see cref="Node511FunctionFieldBitMask"/>'s bits -- 5, since the 5-bit register field occupies bits 4-0 below it. See <see cref="LoadRegisterFileMnemonic"/>'s own remarks.</summary>
+  public const int Node511FunctionFieldShift = 5;
+
+  /// <summary>Node 511's own "# 0x20 org" -- every one of its compiled word addresses starts at 0x20, so the function-select field is the RESOLVED address minus this, never the raw address itself. See <see cref="LoadRegisterFileMnemonic"/>'s own remarks.</summary>
+  public const int Node511FunctionFieldBaseAddress = 0x20;
+
+  /// <summary>Isolates node 511's 5-bit register-index field (bits 4-0, unshifted, 0-31) -- see <see cref="LoadRegisterFileMnemonic"/>'s own remarks.</summary>
+  public const int Node511RegisterFieldBitMask = 0x001F;
+
   // CVM2's load global/store global, added per Stefan's node 508 source (2026-09-04, "here is node
   // 508. it handles access to globals.") and his own tick-naming rule ("every word that begins with a
   // ' is an opcode for the CVM with the mnemonic using the same name without the leading '"): node 508
@@ -830,6 +866,28 @@ public static class CvmInstructionSet
     /// with bit 0 architecturally fixed at 0).
     /// </summary>
     EmbeddedUnsignedValue,
+
+    /// <summary>
+    /// Node 511's four register-file ops (<c>rld</c>/<c>rst</c>/<c>rpop</c>/<c>rpush</c>, 2026-09-07)
+    /// only -- the first mnemonics in this project needing BOTH of the two things every earlier encoding
+    /// only ever needed one of: a live compile of a specific node's F18 source to resolve WHICH function
+    /// is being invoked (like <see cref="None"/>/<see cref="TrailingWord"/>), AND an embedded operand
+    /// packed into the very same word (like <see cref="EmbeddedUnsignedValue"/>). Node 511's own word
+    /// format is <c>Node511Tag | ((resolvedAddress - Node511FunctionFieldBaseAddress) &lt;&lt;
+    /// Node511FunctionFieldShift) | (registerIndex &amp; Node511RegisterFieldBitMask)</c> -- see
+    /// <see cref="LoadRegisterFileMnemonic"/>'s own remarks for the field-layout constants and the full
+    /// derivation, and <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>'s own remarks for exactly
+    /// where the "live compile" half and the "embedded operand" half are each actually combined (its
+    /// <c>BuildEncodeTable</c>/<c>BuildDecodeTable</c>/<c>Assemble</c>/<c>DisassemblePage0</c>, not here
+    /// -- unlike <see cref="EmbeddedSignedValue"/>/<see cref="EmbeddedUnsignedValue"/>, this encoding is
+    /// NOT self-describing and is deliberately excluded from <see cref="TryDescribeSelfDecodingWord"/>).
+    /// <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/> does not (yet) support this encoding at all -- it
+    /// errors out rather than silently dropping the embedded register operand, since its own
+    /// relocation-based resolution of tagged mnemonics has no way to carry a second, per-instance operand
+    /// value; only <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>'s own immediately-resolving
+    /// assembler supports it today.
+    /// </summary>
+    NodeResolvedEmbeddedValue,
   }
 
   /// <summary>
@@ -995,6 +1053,15 @@ public static class CvmInstructionSet
     new(Id: 104, DecrementAddressRegisterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306DecrementAddressRegisterTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
     new(Id: 105, LoadAddressRegisterValueMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306LoadAddressRegisterValueTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
     new(Id: 106, StoreAddressRegisterValueMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306StoreAddressRegisterValueTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
+    // Node 511's four register-file ops -- CvmOperandEncoding.NodeResolvedEmbeddedValue (needs a live
+    // compile of node 511 AND an embedded register operand; see that encoding's own remarks). Tag,
+    // ValueBitMask, and ValueBitShift are all left at their defaults here (0) -- unlike node 306's
+    // self-describing six, this shape's actual tag/field-layout combination only ever happens in
+    // Ga144.Evb.Ide.Services.CvmAssemblyLanguage against a live compile, never from this table alone.
+    new(Id: 107, LoadRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    new(Id: 108, StoreRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    new(Id: 109, PopRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    new(Id: 110, PushRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

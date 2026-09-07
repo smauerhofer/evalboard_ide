@@ -368,6 +368,28 @@ internal static class CvmAssemblyLanguage
   private const int Node408UnaryComparisonTagBits = 0xF000;
   private const int Node408BinaryComparisonTagBits = 0xF400;
 
+  // CVM2's node 511 register-file tag (2026-09-07), per Stefan's node 510/511 source ("here are nodes
+  // 510 and 511 ... they support 32 register that can be used for parameter passing to functions"):
+  // reached from node 507's CPU through node 509's own "1011_1???" sibling range (node 509 itself only
+  // answers "1011_00??_????_????", per Node509UnaryArithmeticTagBits's own remarks; node 510, "extended
+  // arithmetic, 1011_1???_????_????", relays "1011_11??" on to node 511 and locally falls through to
+  // "ex" on "1011_10??", per Node510Program's own remarks), fixing node 511's own top 6 bits at
+  // "1011_11" -- 0xBC00. UNLIKE every tag above, this one is not simply OR'd with a resolved address:
+  // node 511's own r/main packs TWO fields into the remaining 10 bits (see
+  // CvmInstructionSet.LoadRegisterFileMnemonic's own remarks for the full bit-by-bit derivation off its
+  // own body): bits 9-5 are (resolvedAddress - 0x20), which of 'rld/'rst/'rpop/'rpush is being invoked;
+  // bits 4-0 are the register index (0-31) operand, supplied by whoever writes the CVM asm line, never
+  // resolved from a node. CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue exists
+  // specifically for this shape; BuildEncodeTable/BuildDecodeTable/Assemble/DisassemblePage0 below all
+  // have one small dedicated branch each for it, since neither the ordinary "tag | resolved address"
+  // formula every other tagged mnemonic in this file uses, nor EncodeSelfDescribingWord's self-
+  // describing formula, covers a mnemonic needing both a live resolution AND an embedded operand at
+  // once. NOT YET CONFIRMED ON REAL HARDWARE (2026-09-07). (Node 407/408's own dispatch history
+  // separately mentions an UNRELATED, still-unimplemented "register file" reserved at 0xF800-0xFFFF --
+  // see Node408BinaryComparisonTagBits's own remarks; that is a different, still-unbuilt quarter, not
+  // this one.)
+  private const int Node511Tag = 0xBC00;
+
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
   // tag bits its opcode word must carry (Node508TagBits for the OLD, permanently-orphaned CVM1
   // comparison ops; Node507Cvm2LocalExecuteTagBits for CVM2's own six repointed primitives -- these
@@ -524,6 +546,15 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DivideByTwoMnemonic] = (Node509Program.Coordinate, "'div2", Node509UnaryArithmeticTagBits),
         [CvmInstructionSet.AbsoluteValueMnemonic] = (Node509Program.Coordinate, "'abs", Node509UnaryArithmeticTagBits),
         [CvmInstructionSet.BitCountMnemonic] = (Node509Program.Coordinate, "'bitcnt", Node509UnaryArithmeticTagBits),
+        // Node 511's register file (2026-09-07) -- resolved against node 511's own live compile. The Tag
+        // recorded here is only the FIXED 6-bit prefix (Node511Tag); the per-mnemonic function-select
+        // field AND the embedded register operand are both combined separately in BuildEncodeTable/
+        // BuildDecodeTable, since (unlike every entry above) this dictionary's normal "tag | resolved
+        // address" formula alone isn't enough -- see Node511Tag's own remarks.
+        [CvmInstructionSet.LoadRegisterFileMnemonic] = (Node511Program.Coordinate, "'rld", Node511Tag),
+        [CvmInstructionSet.StoreRegisterFileMnemonic] = (Node511Program.Coordinate, "'rst", Node511Tag),
+        [CvmInstructionSet.PopRegisterFileMnemonic] = (Node511Program.Coordinate, "'rpop", Node511Tag),
+        [CvmInstructionSet.PushRegisterFileMnemonic] = (Node511Program.Coordinate, "'rpush", Node511Tag),
       };
 
   /// <summary>
@@ -538,7 +569,14 @@ internal static class CvmAssemblyLanguage
   /// <c>slit</c>) has no F18 symbol by design and is filtered out here rather than added to
   /// <see cref="NodeSymbolByMnemonic"/> -- see this class's own remarks for why.
   ///
-  /// A tagged (<c>None</c>/<c>TrailingWord</c>) mnemonic that ISN'T in <see cref="NodeSymbolByMnemonic"/>
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/> (node 511's <c>rld</c>/
+  /// <c>rst</c>/<c>rpop</c>/<c>rpush</c>) is included here too, alongside <c>None</c>/<c>TrailingWord</c>
+  /// -- it still needs a live node/symbol resolved through <see cref="NodeSymbolByMnemonic"/> just like
+  /// those two, even though its own word format also needs an embedded operand neither of them has. This
+  /// tuple's own <c>Encoding</c> field is what lets <see cref="BuildEncodeTable"/>/
+  /// <see cref="BuildDecodeTable"/> tell the three apart below.
+  ///
+  /// A tagged (<c>None</c>/<c>TrailingWord</c>/<c>NodeResolvedEmbeddedValue</c>) mnemonic that ISN'T in <see cref="NodeSymbolByMnemonic"/>
   /// is also filtered out here, rather than looked up with a throwing indexer -- a genuinely new
   /// mnemonic on a node this file hasn't been taught to pair yet. A throwing indexer here made the
   /// whole class fail to load the moment ANY such gap existed (a static field initializer that throws
@@ -546,14 +584,14 @@ internal static class CvmAssemblyLanguage
   /// first added to <see cref="CvmInstructionSet"/> without a matching entry here -- filtering instead
   /// of indexing keeps a mnemonic gap on one node from taking down every other node's disassembly.
   /// </summary>
-  public static readonly IReadOnlyList<(string Mnemonic, int NodeCoordinate, string SymbolName, int Tag, int WordLength, bool HasOperand)> Instructions =
+  public static readonly IReadOnlyList<(string Mnemonic, int NodeCoordinate, string SymbolName, int Tag, int WordLength, bool HasOperand, CvmInstructionSet.CvmOperandEncoding Encoding)> Instructions =
       [.. CvmInstructionSet.Instructions
-          .Where(shape => shape.Encoding is CvmInstructionSet.CvmOperandEncoding.None or CvmInstructionSet.CvmOperandEncoding.TrailingWord)
+          .Where(shape => shape.Encoding is CvmInstructionSet.CvmOperandEncoding.None or CvmInstructionSet.CvmOperandEncoding.TrailingWord or CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
           .Where(shape => NodeSymbolByMnemonic.ContainsKey(shape.Mnemonic))
           .Select(shape =>
           {
             (int nodeCoordinate, string symbolName, int tag) = NodeSymbolByMnemonic[shape.Mnemonic];
-            return (shape.Mnemonic, nodeCoordinate, symbolName, tag, shape.WordLength, shape.HasOperand);
+            return (shape.Mnemonic, nodeCoordinate, symbolName, tag, shape.WordLength, shape.HasOperand, shape.Encoding);
           })];
 
   /// <summary>
@@ -570,32 +608,70 @@ internal static class CvmAssemblyLanguage
   /// <summary>
   /// Resolves <see cref="Instructions"/> against THIS run's own compiles (never a frozen reference
   /// copy -- every address can move as any node's source evolves) and returns the decode direction: a
-  /// map from a word's actual wire/memory VALUE to its mnemonic and word length, for
+  /// map from a word's actual wire/memory VALUE to its mnemonic, word length, and (node 511's four ops
+  /// only) the EMBEDDED register operand that word's own low bits already carry, for
   /// <see cref="CvmDebugSession.DisassemblePage0"/> to consume. Each mnemonic is looked up against its
   /// OWN node's compile (<see cref="NodeSymbolByMnemonic"/>) -- a mnemonic whose node isn't present in
   /// <paramref name="compiledRam"/> at all, or whose F18 symbol isn't defined in that node's current
   /// source, is simply omitted.
+  ///
+  /// <b>Node 511's four <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>
+  /// ops are the one exception to "one dictionary entry per mnemonic."</b> Every other mnemonic here
+  /// resolves to exactly one WORD VALUE (tag | resolved address, with no further operand of its own), so
+  /// one dictionary entry suffices. <c>rld</c>/<c>rst</c>/<c>rpop</c>/<c>rpush</c> each still resolve to
+  /// one FUNCTION address, but that address only fixes bits 9-5 of the word -- bits 4-0 (the register
+  /// index) vary independently, 0-31, so each of these four mnemonics needs 32 entries here, one per
+  /// possible register value, each pre-computed with that register value baked in as its own
+  /// <c>EmbeddedOperand</c> so <see cref="CvmDebugSession.DisassemblePage0"/> can print e.g. "rld 5"
+  /// directly from a single dictionary lookup, with no trailing operand word to read (there isn't one --
+  /// see <see cref="CvmInstructionSet.LoadRegisterFileMnemonic"/>'s own remarks).
   /// </summary>
-  public static IReadOnlyDictionary<int, (string Mnemonic, int WordLength)> BuildDecodeTable(
+  public static IReadOnlyDictionary<int, (string Mnemonic, int WordLength, int? EmbeddedOperand)> BuildDecodeTable(
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
-    var table = new Dictionary<int, (string, int)>();
-    foreach ((string mnemonic, int nodeCoordinate, string symbolName, int tag, int wordLength, _) in Instructions)
+    var table = new Dictionary<int, (string, int, int?)>();
+    foreach ((string mnemonic, int nodeCoordinate, string symbolName, int tag, int wordLength, _, CvmInstructionSet.CvmOperandEncoding encoding) in Instructions)
     {
       if (!compiledRam.TryGetValue(nodeCoordinate, out F18CompileResult? compile))
       {
         continue;
       }
 
-      if (compile.Symbols.TryGetValue(symbolName, out F18ExportedSymbol? symbol))
+      if (!compile.Symbols.TryGetValue(symbolName, out F18ExportedSymbol? symbol))
       {
-        // A CVM opcode is a 16-bit CVM word (CvmWordCodec.WordMask), not the wider 18-bit F18 wire
-        // word the symbol's own address happens to be stored as. The tag depends on which node/opcode
-        // class the mnemonic belongs to -- see NodeSymbolByMnemonic's own remarks -- never a flat
-        // 0x8000 for every mnemonic.
-        int opcode = tag | (symbol.Value & CvmWordCodec.WordMask);
-        table[opcode] = (mnemonic, wordLength);
+        continue;
       }
+
+      // A CVM opcode is a 16-bit CVM word (CvmWordCodec.WordMask), not the wider 18-bit F18 wire
+      // word the symbol's own address happens to be stored as. The tag depends on which node/opcode
+      // class the mnemonic belongs to -- see NodeSymbolByMnemonic's own remarks -- never a flat
+      // 0x8000 for every mnemonic.
+      int resolvedAddress = symbol.Value & CvmWordCodec.WordMask;
+
+      if (encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
+      {
+        // Node 511 only -- see this method's own remarks and Node511Tag's own remarks. resolvedAddress
+        // here is WHICH FUNCTION, not the whole opcode; it must fall inside the 0x20-0x3F window "#
+        // 0x20 org" reserves (32 words) for this scheme to represent it at all. A symbol resolving
+        // outside that window (node 511's own source grew past 32 words from its own entry point) is
+        // silently omitted, same as any other mnemonic whose node/symbol doesn't resolve -- Stefan's own
+        // node source is never second-guessed here.
+        int functionField = resolvedAddress - CvmInstructionSet.Node511FunctionFieldBaseAddress;
+        if (functionField < 0 || functionField > (CvmInstructionSet.Node511FunctionFieldBitMask >> CvmInstructionSet.Node511FunctionFieldShift))
+        {
+          continue;
+        }
+
+        int baseOpcode = tag | (functionField << CvmInstructionSet.Node511FunctionFieldShift);
+        for (int register = 0; register <= CvmInstructionSet.Node511RegisterFieldBitMask; register++)
+        {
+          table[baseOpcode | register] = (mnemonic, wordLength, register);
+        }
+
+        continue;
+      }
+
+      table[tag | resolvedAddress] = (mnemonic, wordLength, null);
     }
 
     return table;
@@ -605,28 +681,54 @@ internal static class CvmAssemblyLanguage
   /// The encode direction, for <see cref="Assemble"/>: resolves <see cref="Instructions"/> against
   /// THIS run's own compiles -- each mnemonic against its own node
   /// (<see cref="NodeSymbolByMnemonic"/>) -- and returns a map from mnemonic (case-insensitive) to its
-  /// opcode word, word length, and whether it takes an operand.
+  /// opcode word, word length, whether it takes an operand, and (node 511's four ops only) whether that
+  /// operand gets EMBEDDED into the same opcode word rather than appended as a separate trailing word,
+  /// plus the bit mask it's embedded under.
+  ///
+  /// For <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/> mnemonics
+  /// specifically, <c>Opcode</c> here is only the BASE word (tag | function-select field) -- the
+  /// register operand is still missing and gets OR'd in by <see cref="Assemble"/> itself once it knows
+  /// the actual operand value; see this class's own remarks on <see cref="Node511Tag"/> for why this
+  /// mnemonic needs a live resolution AND an embedded operand where every other tagged mnemonic here
+  /// only ever needed one or the other.
   /// </summary>
-  public static IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand)> BuildEncodeTable(
+  public static IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> BuildEncodeTable(
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
-    var table = new Dictionary<string, (int, int, bool)>(StringComparer.OrdinalIgnoreCase);
-    foreach ((string mnemonic, int nodeCoordinate, string symbolName, int tag, int wordLength, bool hasOperand) in Instructions)
+    var table = new Dictionary<string, (int, int, bool, bool, int)>(StringComparer.OrdinalIgnoreCase);
+    foreach ((string mnemonic, int nodeCoordinate, string symbolName, int tag, int wordLength, bool hasOperand, CvmInstructionSet.CvmOperandEncoding encoding) in Instructions)
     {
       if (!compiledRam.TryGetValue(nodeCoordinate, out F18CompileResult? compile))
       {
         continue;
       }
 
-      if (compile.Symbols.TryGetValue(symbolName, out F18ExportedSymbol? symbol))
+      if (!compile.Symbols.TryGetValue(symbolName, out F18ExportedSymbol? symbol))
       {
-        // A CVM opcode is a 16-bit CVM word (CvmWordCodec.WordMask), not the wider 18-bit F18 wire
-        // word the symbol's own address happens to be stored as. The tag depends on which node/opcode
-        // class the mnemonic belongs to -- see NodeSymbolByMnemonic's own remarks -- never a flat
-        // 0x8000 for every mnemonic.
-        int opcode = tag | (symbol.Value & CvmWordCodec.WordMask);
-        table[mnemonic] = (opcode, wordLength, hasOperand);
+        continue;
       }
+
+      // A CVM opcode is a 16-bit CVM word (CvmWordCodec.WordMask), not the wider 18-bit F18 wire
+      // word the symbol's own address happens to be stored as. The tag depends on which node/opcode
+      // class the mnemonic belongs to -- see NodeSymbolByMnemonic's own remarks -- never a flat
+      // 0x8000 for every mnemonic.
+      int resolvedAddress = symbol.Value & CvmWordCodec.WordMask;
+
+      if (encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
+      {
+        // Node 511 only -- see BuildDecodeTable's own remarks for the same 0x20-0x3F window check.
+        int functionField = resolvedAddress - CvmInstructionSet.Node511FunctionFieldBaseAddress;
+        if (functionField < 0 || functionField > (CvmInstructionSet.Node511FunctionFieldBitMask >> CvmInstructionSet.Node511FunctionFieldShift))
+        {
+          continue;
+        }
+
+        int baseOpcode = tag | (functionField << CvmInstructionSet.Node511FunctionFieldShift);
+        table[mnemonic] = (baseOpcode, wordLength, true, true, CvmInstructionSet.Node511RegisterFieldBitMask);
+        continue;
+      }
+
+      table[mnemonic] = (tag | resolvedAddress, wordLength, hasOperand, false, 0);
     }
 
     return table;
@@ -682,7 +784,7 @@ internal static class CvmAssemblyLanguage
       IReadOnlyList<CvmAsmInstruction> instructions,
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
-    IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand)> encodeTable = BuildEncodeTable(compiledRam);
+    IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> encodeTable = BuildEncodeTable(compiledRam);
 
     (IReadOnlyDictionary<string, int>? labelAddresses, string? labelError) = CollectLabelAddresses(instructions, encodeTable);
     if (labelAddresses is null)
@@ -723,14 +825,14 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
-      if (!encodeTable.TryGetValue(instruction.Mnemonic, out (int Opcode, int WordLength, bool HasOperand) entry))
+      if (!encodeTable.TryGetValue(instruction.Mnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask) entry))
       {
         if (selfDescribingShape is not null)
         {
           // A genuine CVM opcode (CvmInstructionSet knows its shape) that just has no live node to
           // answer it right now -- per Stefan, substitute node 507's own current 'nop opcode rather
           // than failing the whole assemble. See this method's own remarks.
-          if (!encodeTable.TryGetValue(NopMnemonic, out (int Opcode, int WordLength, bool HasOperand) nopEntry))
+          if (!encodeTable.TryGetValue(NopMnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask) nopEntry))
           {
             return (null, $"line {line + 1}: \"{instruction.Mnemonic}\" has no defined opcode yet, and could not be " +
                 $"substituted with \"{NopMnemonic}\" because node 507's current compile doesn't define \"'nop\" either.");
@@ -753,6 +855,19 @@ internal static class CvmAssemblyLanguage
       if (!entry.HasOperand && instruction.Operand is not null)
       {
         return (null, $"line {line + 1}: \"{instruction.Mnemonic}\" does not take an operand.");
+      }
+
+      if (entry.OperandIsEmbedded)
+      {
+        // Node 511's four ops only (see BuildEncodeTable's own remarks): the operand is a register index
+        // packed directly into entry.Opcode's own low bits, never a separate trailing word.
+        if (instruction.Operand!.Value < 0 || instruction.Operand!.Value > entry.EmbeddedValueMask)
+        {
+          return (null, $"line {line + 1}: {instruction.Operand!.Value} does not fit in \"{instruction.Mnemonic}\"'s embedded register operand (0..{entry.EmbeddedValueMask}).");
+        }
+
+        words.Add(entry.Opcode | (instruction.Operand!.Value & entry.EmbeddedValueMask));
+        continue;
       }
 
       words.Add(entry.Opcode);
@@ -780,7 +895,7 @@ internal static class CvmAssemblyLanguage
   /// </summary>
   private static (IReadOnlyDictionary<string, int>? Labels, string? Error) CollectLabelAddresses(
       IReadOnlyList<CvmAsmInstruction> instructions,
-      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand)> encodeTable)
+      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> encodeTable)
   {
     var labels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
     int address = 0;
@@ -818,7 +933,7 @@ internal static class CvmAssemblyLanguage
   /// </summary>
   private static int GetWordLength(
       string mnemonic,
-      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand)> encodeTable)
+      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> encodeTable)
   {
     CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(mnemonic);
     if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue })
@@ -826,7 +941,7 @@ internal static class CvmAssemblyLanguage
       return selfDescribingShape.WordLength;
     }
 
-    return encodeTable.TryGetValue(mnemonic, out (int Opcode, int WordLength, bool HasOperand) entry) ? entry.WordLength : 1;
+    return encodeTable.TryGetValue(mnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask) entry) ? entry.WordLength : 1;
   }
 
   /// <summary>
@@ -869,6 +984,13 @@ internal static class CvmAssemblyLanguage
       // address, so a label operand is rejected outright for both the same way.
       int maxValue = shape.ValueBitMask >> shape.ValueBitShift;
       return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" does not support a label operand -- its value is not an address; supply a literal 0..{maxValue} value instead.");
+    }
+
+    if (shape is { Encoding: CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue })
+    {
+      // Node 511's four ops take a register index (0-31, Node511RegisterFieldBitMask) -- also never an
+      // address, for the same reason as node 606/node 306's ops just above.
+      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" does not support a label operand -- its value is a register index, not an address; supply a literal 0..{CvmInstructionSet.Node511RegisterFieldBitMask} value instead.");
     }
 
     bool isRelativeBranch =
@@ -942,7 +1064,7 @@ internal static class CvmAssemblyLanguage
       IReadOnlyDictionary<int, F18CompileResult> compiledRam,
       int endAddressExclusive)
   {
-    IReadOnlyDictionary<int, (string Mnemonic, int WordLength)> decodeTable = BuildDecodeTable(compiledRam);
+    IReadOnlyDictionary<int, (string Mnemonic, int WordLength, int? EmbeddedOperand)> decodeTable = BuildDecodeTable(compiledRam);
     var notes = new Dictionary<int, string>();
     int address = 0;
     while (address < endAddressExclusive)
@@ -961,8 +1083,18 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
-      if (decodeTable.TryGetValue(word, out (string Mnemonic, int WordLength) instruction))
+      if (decodeTable.TryGetValue(word, out (string Mnemonic, int WordLength, int? EmbeddedOperand) instruction))
       {
+        if (instruction.EmbeddedOperand is int embeddedOperand)
+        {
+          // Node 511's four ops only: the operand already lives in the word's own low bits (that's how
+          // this exact dictionary entry was found at all -- see BuildDecodeTable's own remarks), never a
+          // trailing word, so there's no second word to read here.
+          notes[address] = $"{instruction.Mnemonic} {CvmInstructionSet.FormatOperand(embeddedOperand)}";
+          address += instruction.WordLength;
+          continue;
+        }
+
         int operandCount = instruction.WordLength - 1;
         if (operandCount == 1 && address + 1 < endAddressExclusive)
         {
