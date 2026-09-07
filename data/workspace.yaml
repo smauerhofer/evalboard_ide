@@ -16060,6 +16060,11 @@ projects:
 
         (
 
+        opcode call 0???_????_????_???? calls a function in the lower half of the code memory.
+
+        opcode br   1000_0???_????_???? branch relative signed 11-bit offset in opcode.
+
+
         m/call push current p on stack and jumps to function
 
         m/main CVM interpreter loop
@@ -16187,9 +16192,9 @@ projects:
 
         : g/next ( -w) A[ m/next ]] lit !b A[ !p ]] lit !b @b ;
 
-        : g/@ ( o-) A[ @p m/2@ ]] lit !b !b A[ over ]] lit !b ;
+        : g/! ( o-) A[ @p m/2@ ]] lit !b !b A[ over ]] lit !b ;
 
-        : g/! ( o-) A[ over @p ]] lit !b !b A[ m/2! ]] lit !b ;
+        : g/@ ( o-) A[ over @p ]] lit !b !b A[ m/2! ]] lit !b ;
 
         : g/leave A[ ; ]] lit !b
 
@@ -16202,44 +16207,41 @@ projects:
 
             2* -if // 1010_11??_????_????
 
-              2* -if // 1010_111?_????_????
-                // conditional branch
-                g/r@ if r> g/leave then
-              then // 1010_110?_????_????
+              // conditional branch
+              g/r@ if r> g/leave then
               // branch
-              r> 0x1ff and dup 0x100 and if drop 0xfe00 xor dup then drop A[ @p m/branch ]] lit !p !p ;
+              2* 2* 2* 2* -if drop 0xfc00 xor dup then drop A[ @p m/branch ]] lit !p !p ;
 
             then // 1010_10??_????_????
 
             // globals
             2* -if // 1010_101?_????_????
-              // load r form global
-              r> 0x1ff and g/@ ;
+              // store global into r
+              r> 0x1ff and g/! ;
             then // 1010_100?_????_????
-            // store r to global
-            r> 0x1ff and g/! ;
+            // load global from r
+            r> 0x1ff and g/@ ;
 
           then // 1010_0???_????_????
           A[ m/next ]] lit !b A[ !p ]] lit !b @b ex ;
-        : 'ldg g/next g/@ ;
+        : 'gld g/next g/@ ;
 
-        : 'stg g/next g/! ;
+        : 'gst g/next g/! ;
 
 
         (
 
-        opcode 1010_100?_????_???? store r to global. the offset is unsigned 9 bit.
+        opcode ldg 1010_100?_????_???? load global from r. the offset is unsigned 9 bit.
 
-        opcode 1010_101?_????_???? load global into r. the offset is unsigned 9 bit.
+        opcode stg 1010_101?_????_???? store global into r. the offset is unsigned 9 bit.
 
-        opcode 1010_110?_????_???? branch to offset. the offset is signed 9 bit.
-
-        opcode 1010_111?_????_???? conditional branch to offset if r == 0. the offset is signed 9 bit.
+        opcode cbr 1010_11??_????_???? conditional branch to offset if r == 0. the offset is signed 10-bit number.
 
 
-        'ldg load global to r. offset in the next word
+        'gld load global from r. address in the next word
 
-        'stg store r to global. offset in the next word
+        'gst store global into r. address in the next word
+
 
 
         )
@@ -16276,22 +16278,19 @@ projects:
       - 0x2F21F
       - 0x269B2
       - 0x115D5
-      - 0x37235
-      - 0x3722E
-      - 0x37225
+      - 0x37232
+      - 0x3722B
       - 0x13400
-      - 0x19425
+      - 0x19424
       - 0x27616
-      - 0x27DFB
-      - 0x001FF
-      - 0x04063
-      - 0x00100
+      - 0x364DA
+      - 0x37228
       - 0x3BDE3
-      - 0x0FE00
+      - 0x0FC00
       - 0x3BD36
       - 0x0561A
       - 0x15555
-      - 0x37232
+      - 0x3722F
       - 0x27DFA
       - 0x001FF
       - 0x1140E
@@ -16304,9 +16303,12 @@ projects:
       - 0x09F5D
       - 0x15555
       - 0x1340A
-      - 0x1140E
-      - 0x1340A
       - 0x11412
+      - 0x1340A
+      - 0x1140E
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       startup:
@@ -16420,12 +16422,12 @@ projects:
 
         : x/leave A[ u/leave ; ]] lit !b
 
-        : x/main # x/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r
+        : x/main A[ 2* !p !p ]] lit !b @b @b >r
           -if // 1011_11??_????_????
             // register file
             r> r--- ;
           then // 1011_10??_????_????
-          ex ;
+          ex x/leave ;
       ramWords:
       - 0x05B12
       - 0x13400
@@ -16441,14 +16443,14 @@ projects:
       - 0x0560A
       - 0x05BB2
       - 0x1140C
-      - 0x04812
-      - 0x0000C
+      - 0x05B02
       - 0x37932
-      - 0x09F02
-      - 0x2F215
+      - 0x0086B
       - 0x269B2
       - 0x115D5
       - 0x17555
+      - 0x1140C
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
