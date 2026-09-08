@@ -193,6 +193,47 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
   }
 
   /// <summary>
+  /// Resolves a Program C project's own chosen (chip project, role) into a ready-to-open
+  /// <see cref="CvmDebuggerViewModel"/> -- the piece <see cref="Ga144.Evb.Ide.Views.CProjectWindow"/>'s
+  /// "Debug" button needs but cannot build itself, since only this view model holds the live
+  /// per-(project, board, role) <see cref="KrakenLiveController"/> cache <see cref="GetKrakenController"/>
+  /// guards (see its own remarks on why a second, independently-constructed controller for the same
+  /// physical chip would be unsafe). Looks the chip project up in <see cref="Projects"/> by id --
+  /// populated for every GA144 project in the workspace at load time, so this works whether or not that
+  /// project's own <see cref="Ga144.Evb.Ide.Views.ChipWindow"/> happens to be open right now. Failure (no board selected, or the
+  /// physical chip is already owned by another project runtime) comes back as a message rather than a
+  /// thrown exception, since the caller is a plain button click with no other place to surface it.
+  /// </summary>
+  public (bool Success, string? ErrorMessage, CvmDebuggerViewModel? ViewModel) TryResolveCvmDebuggerViewModel(
+      Guid chipProjectId, Ga144ChipRole role)
+  {
+    ProjectViewModel? project = Projects.FirstOrDefault(candidate => candidate.Id == chipProjectId);
+    if (project is null)
+    {
+      return (false, "The chip project chosen for this C project no longer exists in the workspace.", null);
+    }
+
+    KrakenLiveController controller;
+    try
+    {
+      controller = GetKrakenController(project, role);
+    }
+    catch (InvalidOperationException exception)
+    {
+      return (false, exception.Message, null);
+    }
+
+    var viewModel = new CvmDebuggerViewModel(
+        project.GetChip(role),
+        RomLibrary,
+        project.Model.UserMacros,
+        controller,
+        () => ResolveKrakenEndpoint(role),
+        project.NotifyProjectChanged);
+    return (true, null, viewModel);
+  }
+
+  /// <summary>
   /// Erection is transient runtime state, never persisted to YAML. Drop it (and
   /// close the COM handle) for every cached controller. Called at startup after
   /// the workspace loads, so a resident Kraken from a previous run is never

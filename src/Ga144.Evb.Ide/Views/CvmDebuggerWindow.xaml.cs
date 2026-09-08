@@ -1,5 +1,6 @@
 using Ga144.Evb.Ide.ViewModels;
 using System.Windows;
+using Microsoft.Win32;
 
 namespace Ga144.Evb.Ide.Views;
 
@@ -26,6 +27,18 @@ public partial class CvmDebuggerWindow : Window
 
   private void OnLogTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) =>
       LogTextBox.ScrollToEnd();
+
+  // The dialog itself lives here, not in the view model -- same convention as every other file-picking
+  // action in this IDE (e.g. CProjectWindow's own "Add existing..." handlers): the view model has no UI
+  // dependency of its own, so it only ever sees the resulting path, via LoadImageFile.
+  private void OnLoadImageClick(object sender, RoutedEventArgs e)
+  {
+    var dialog = new OpenFileDialog { Title = "Load linked image", Filter = "CVM images (*.gaimg)|*.gaimg|All files (*.*)|*.*" };
+    if (dialog.ShowDialog(this) == true)
+    {
+      _viewModel.LoadImageFile(dialog.FileName);
+    }
+  }
 
   // Same pattern as CompileDiagnosticsWindow's own "Copy all": the transaction log keeps growing and
   // auto-scrolling while a Continue is in flight, which makes manually click-dragging a selection

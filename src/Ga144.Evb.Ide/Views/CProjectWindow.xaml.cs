@@ -18,10 +18,29 @@ public partial class CProjectWindow : Window
 {
   private readonly CProjectViewModel _viewModel;
 
-  public CProjectWindow(CProjectViewModel viewModel)
+  // Resolves this project's own chosen chip project/role into a ready-to-open CvmDebuggerViewModel --
+  // supplied by MainWindow (the only place that constructs this window), since only MainWindowViewModel
+  // holds the live per-(GA144 project, board, role) KrakenLiveController cache a real chip session
+  // needs (GetKrakenController's own remarks explain why a second, independent controller for the same
+  // physical chip would be unsafe). Keeping this as an injected delegate rather than a direct
+  // MainWindowViewModel reference keeps CProjectViewModel itself hardware-independent -- a C project's
+  // Build already works whether or not the GA144 side of the IDE is open at all (see
+  // ChipProjectResolver's own remarks), and Debug's own extra hardware dependency lives here in the
+  // window, not leaked into that view model.
+  private readonly Func<Guid, Ga144ChipRole, (bool Success, string? ErrorMessage, CvmDebuggerViewModel? ViewModel)> _resolveCvmDebugger;
+
+  // Same reusable, non-modal window pattern ChipWindow's own "CVM Debugger" button uses -- one window
+  // per click of Debug, reactivated (and reloaded with the freshly built image) rather than duplicated
+  // on a second click.
+  private CvmDebuggerWindow? _cvmDebuggerWindow;
+
+  public CProjectWindow(
+      CProjectViewModel viewModel,
+      Func<Guid, Ga144ChipRole, (bool Success, string? ErrorMessage, CvmDebuggerViewModel? ViewModel)> resolveCvmDebugger)
   {
     InitializeComponent();
     _viewModel = viewModel;
+    _resolveCvmDebugger = resolveCvmDebugger;
     DataContext = viewModel;
   }
 
@@ -155,6 +174,88 @@ public partial class CProjectWindow : Window
             MessageBoxButton.OK,
             result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
       });
+
+  /// <summary>
+  /// Builds this project, then opens (or reactivates) the CVM Debugger against its own chosen chip
+  /// project with the resulting .gaimg already loaded -- Stefan's own ask: "I am missing a debugger
+  /// button in the cprojectwindow, that opens directly the debugger with the program already loaded
+  /// into the debugger." Always rebuilds first (same reasoning an IDE's own "Start Debugging" always
+  /// does) so Debug never quietly runs a stale image left over from an earlier Build; a build failure
+  /// stops here with the same message Build's own button would show, and never touches an
+  /// already-open debugger window. Reuses an already-open CVM Debugger window for this C project
+  /// rather than opening a second one -- clicking Debug again after an edit reloads the freshly built
+  /// image into that SAME session (LoadImageFile is a live reprogram, not a reset, so this never
+  /// disturbs a Step/Continue/breakpoint session already in progress on unrelated addresses).
+  /// </summary>
+  private void OnDebugClick(object sender, RoutedEventArgs e) =>
+      RunGuarded(() =>
+      {
+        if (_viewModel.Model.ChipProjectId is not { } chipProjectId)
+        {
+          MessageBox.Show(this, "Choose a chip project first (\"Chip project...\") -- Debug needs to know which GA144 chip to run this program on.",
+              "Debug", MessageBoxButton.OK, MessageBoxImage.Warning);
+          return;
+        }
+
+        CBuildResult buildResult = _viewModel.Build();
+        if (!buildResult.Success)
+        {
+          MessageBox.Show(
+              this,
+              buildResult.Messages.Count > 0 ? string.Join(Environment.NewLine, buildResult.Messages) : "Build failed.",
+              "Debug -- build failed -- " + _viewModel.Name,
+              MessageBoxButton.OK,
+              MessageBoxImage.Warning);
+          return;
+        }
+
+        if (!File.Exists(_viewModel.Model.ImageOutputPath))
+        {
+          MessageBox.Show(this,
+              "Build succeeded but produced no .gaimg to debug -- check that a chip project is chosen and that this project actually links (see the Build dialog's own messages).",
+              "Debug", MessageBoxButton.OK, MessageBoxImage.Warning);
+          return;
+        }
+
+        CvmDebuggerViewModel debuggerViewModel;
+        if (_cvmDebuggerWindow is not null)
+        {
+          debuggerViewModel = (CvmDebuggerViewModel)_cvmDebuggerWindow.DataContext;
+          if (_cvmDebuggerWindow.WindowState == WindowState.Minimized)
+          {
+            _cvmDebuggerWindow.WindowState = WindowState.Normal;
+          }
+
+          _cvmDebuggerWindow.Activate();
+        }
+        else
+        {
+          (bool success, string? errorMessage, CvmDebuggerViewModel? resolvedViewModel) = _resolveCvmDebugger(chipProjectId, _viewModel.Model.ChipProjectRole);
+          if (!success || resolvedViewModel is null)
+          {
+            MessageBox.Show(this, errorMessage ?? "Could not open the CVM Debugger.", "Debug", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+          }
+
+          debuggerViewModel = resolvedViewModel;
+          var window = new CvmDebuggerWindow(debuggerViewModel) { Owner = this };
+          _cvmDebuggerWindow = window;
+          window.Closed += OnCvmDebuggerWindowClosed;
+          window.Show();
+        }
+
+        debuggerViewModel.LoadImageFile(_viewModel.Model.ImageOutputPath);
+      });
+
+  private void OnCvmDebuggerWindowClosed(object? sender, EventArgs e)
+  {
+    if (sender is CvmDebuggerWindow window)
+    {
+      window.Closed -= OnCvmDebuggerWindowClosed;
+    }
+
+    _cvmDebuggerWindow = null;
+  }
 
   private bool ConfirmRemove(string displayName) =>
       MessageBox.Show(

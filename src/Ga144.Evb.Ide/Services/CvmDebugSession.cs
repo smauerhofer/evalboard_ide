@@ -47,7 +47,10 @@ public sealed record CvmDebugTransaction(
 /// completion. That initial program is only a starting point, not permanent:
 /// <see cref="AssembleAndLoadProgram"/> lets the CVM Debugger's own Assembly Code editor overwrite it
 /// with hand-written source at any time, so trying out a new opcode no longer requires editing
-/// <see cref="CvmDebuggerDefaultProgram"/> and rebuilding the IDE.
+/// <see cref="CvmDebuggerDefaultProgram"/> and rebuilding the IDE. <see cref="LoadImage"/> is the other
+/// way a program gets in here, added 2026-09-08 once `galink` itself existed to produce one: a fully
+/// linked <c>.gaimg</c> loads straight into the same simulated SRAM, no assembly step needed since
+/// every word already carries its own final, resolved opcode tag.
 ///
 /// <b>How stepping and breakpoints actually pause real hardware.</b> There is no debug/halt line on
 /// this design -- the CVM's only synchronization point with the host is the memory interface itself
@@ -134,6 +137,29 @@ public sealed class CvmDebugSession : IDisposable
 
     _program = words;
     return (true, null);
+  }
+
+  /// <summary>
+  /// Loads a fully linked <see cref="CvmImage"/> (<c>galink</c>'s own output, a <c>.gaimg</c> file)
+  /// directly into the simulated SRAM's page 0, starting at address 0 -- no assembly step at all,
+  /// since every relocation is already applied and every opcode word already carries its final tag by
+  /// the time a <see cref="CvmImage"/> exists (see that class's own remarks). Same "zero-fill any
+  /// leftover tail from a previous, longer <see cref="Program"/>" behavior, and the same live-reprogram
+  /// contract, as <see cref="AssembleAndLoadProgram"/>: breakpoints, the transaction log, and the
+  /// chip's own P register are all left exactly as they were, only the content the chip's NEXT fetch
+  /// will see has changed. Never fails -- a malformed file is rejected earlier, by
+  /// <see cref="CvmImage.Load"/> itself, before this is ever called.
+  /// </summary>
+  public void LoadImage(CvmImage image)
+  {
+    int previousLength = _program.Count;
+    _sram.LoadProgram(image.Words);
+    if (image.Words.Count < previousLength)
+    {
+      _sram.LoadProgram(new int[previousLength - image.Words.Count], image.Words.Count);
+    }
+
+    _program = image.Words;
   }
 
   public int TransactionCount { get; private set; }

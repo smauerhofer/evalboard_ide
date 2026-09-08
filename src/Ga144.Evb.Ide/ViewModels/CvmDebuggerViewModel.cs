@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Text;
+using Ga144.Cvm.Toolchain;
 using Ga144.Evb.Ide.Compiler;
 using Ga144.Evb.Ide.Cvm;
 using Ga144.Evb.Ide.Models;
@@ -32,6 +33,18 @@ namespace Ga144.Evb.Ide.ViewModels;
 /// view model's whole lifetime, so a program can be written and checked before ever clicking Start.
 /// <see cref="StartAsync"/> re-applies <see cref="AssemblyCodeText"/> to the chip the moment it
 /// connects, so nothing assembled standalone is lost.
+///
+/// <see cref="LoadImageFile"/>, added 2026-09-08 once `galink` existed to produce a `.gaimg`, is a
+/// second, independent way to get a program running here -- for one built outside this window
+/// entirely (a Program project's own "Build") rather than typed into the Assembly Code editor by hand.
+/// It loads straight into whichever SRAM is currently live (the session's real one, or
+/// <see cref="_standaloneSram"/>) with no assembly step, since a linked image's words are already
+/// fully resolved, and its own symbol table then annotates the memory inspector's rows by name until
+/// something else (Assemble, or a fresh Start) overwrites what it loaded. The loaded image itself is
+/// also remembered (<see cref="_loadedImage"/>), so calling this with no session yet connected -- the
+/// normal case right after a Program project's own "Debug" button opens this window -- is not just an
+/// inert preview: the very next Start / Reinstall re-applies that same image to the freshly booted
+/// chip, rather than reverting to whatever the Assembly Code editor separately holds.
 /// </summary>
 public sealed class CvmDebuggerViewModel : ObservableObject
 {
@@ -69,6 +82,21 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // content.
   private readonly CvmSimulatedSram _standaloneSram = new();
   private IReadOnlyList<int> _standaloneProgram = [];
+
+  // Set by LoadImageFile, cleared the moment anything else (Assemble, or a fresh Start re-applying the
+  // Assembly Code editor) overwrites what LoadImageFile put in the SRAM -- so RefreshMemoryView never
+  // shows a linked program's own symbol names next to words that no longer belong to it.
+  private IReadOnlyList<CvmImageSymbol> _loadedImageSymbols = [];
+
+  // The full image LoadImageFile most recently loaded, kept around (not just its symbols) so a
+  // subsequent Start / Reinstall re-applies THIS to the freshly booted chip instead of falling back to
+  // AssemblyCodeText -- without this, a program loaded via the "Debug" button (a Program project's own
+  // linked .gaimg) would sit correctly in the standalone SRAM for inspection right up until Start wiped
+  // it out with whatever the Assembly Code editor happens to hold (the saved debugger scratch code, or
+  // DefaultAssemblyCode), which defeats the entire point of Debug: the just-built C program would never
+  // actually run on the connected hardware. Cleared by Assemble (the other, mutually exclusive way to
+  // decide what Start should apply) so the two never fight over which one wins.
+  private CvmImage? _loadedImage;
 
   // Source-form equivalent of CvmMemoryProtocol.TryBuildDebuggerTestProgram's own assembled words --
   // both are literally CvmDebuggerDefaultProgram.Source, so assembling this unedited reproduces
@@ -245,16 +273,30 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       InstallSummaryText = $"Install: {_session.Install.Steps.Count} boot frame(s) sent, fire-and-forget. Loaded a {_session.Program.Count}-word test program " +
           "(43 of the CVM's 73 opcodes, each with a log-checkable expected value -- see CvmDebuggerDefaultProgram's own remarks) into the simulated SRAM and woke node 708's 'start.";
 
-      // The Assembly Code editor is the single source of truth for what should be running, whether
-      // it was edited before or after Start -- re-apply it to the freshly connected chip now, so
-      // nothing already typed (or assembled standalone while no session existed) needs a second,
-      // manual click of Assemble. Assembling an untouched DefaultAssemblyCode reproduces the exact
-      // same words the install line above just described, so this is always safe and a no-op when
-      // nothing was edited.
-      (bool assembleSuccess, string? assembleError) = _session.AssembleAndLoadProgram(AssemblyCodeText);
-      if (!assembleSuccess)
+      // What should actually run on the freshly booted chip: whichever of the two mutually-exclusive
+      // "what to load" mechanisms was used most recently. A loaded linked image (_loadedImage, from
+      // LoadImageFile -- e.g. a Program project's own "Debug" button) takes priority when present,
+      // since it is already fully resolved and needs no re-assembly; otherwise the Assembly Code
+      // editor is the single source of truth, whether it was edited before or after Start, so
+      // re-applying it here needs no second, manual click of Assemble. Assembling an untouched
+      // DefaultAssemblyCode reproduces the exact same words the install line above just described, so
+      // that fallback is always safe and a no-op when nothing was edited.
+      if (_loadedImage is { } loadedImage)
       {
-        InstallSummaryText += $" Could not apply the Assembly Code editor's current contents ({assembleError}) -- the install's own default program above is still what's loaded.";
+        _session.LoadImage(loadedImage);
+        InstallSummaryText += $" Reapplied the last loaded linked image ({loadedImage.Words.Count} word(s), entry " +
+            $"{DescribeFlatAddress(loadedImage.EntryAddress)}) instead of the install's own default program -- " +
+            "exactly what \"Load linked image (.gaimg)...\" (or a Program project's own \"Debug\" button) most recently loaded.";
+        // _loadedImageSymbols already describes this exact image -- leave it alone.
+      }
+      else
+      {
+        _loadedImageSymbols = [];
+        (bool assembleSuccess, string? assembleError) = _session.AssembleAndLoadProgram(AssemblyCodeText);
+        if (!assembleSuccess)
+        {
+          InstallSummaryText += $" Could not apply the Assembly Code editor's current contents ({assembleError}) -- the install's own default program above is still what's loaded.";
+        }
       }
 
       MirrorSessionProgramIntoStandaloneSram(_session.Program);
@@ -453,6 +495,10 @@ public sealed class CvmDebuggerViewModel : ObservableObject
 
         if (success)
         {
+          // this program just replaced whatever LoadImageFile last loaded, if anything -- Assemble
+          // and LoadImageFile are mutually exclusive, so both its symbols and the image itself go.
+          _loadedImageSymbols = [];
+          _loadedImage = null;
           MirrorSessionProgramIntoStandaloneSram(_session.Program);
         }
 
@@ -465,6 +511,12 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       StatusText = standaloneSuccess
           ? $"Assembled {wordCount} word(s) into a standalone simulated SRAM -- no chip connected yet. Click Start; this program loads automatically."
           : $"Assemble failed: {standaloneError}";
+
+      if (standaloneSuccess)
+      {
+        _loadedImageSymbols = [];
+        _loadedImage = null;
+      }
 
       RefreshMemoryView();
       RefreshProgramCounter();
@@ -602,13 +654,64 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   }
 
   /// <summary>
+  /// Loads a linked <c>.gaimg</c> (<see cref="CvmImage.Load"/>) straight into whichever simulated SRAM
+  /// is currently live -- <see cref="_session"/>'s (<see cref="CvmDebugSession.LoadImage"/>) if a chip
+  /// is connected, otherwise <see cref="_standaloneSram"/> directly (via
+  /// <see cref="MirrorSessionProgramIntoStandaloneSram"/>, reused here for its own zero-fill-the-tail
+  /// logic even though nothing session-related is happening in that branch) -- entirely independent of
+  /// the Assembly Code editor: this is a second, alternate way to get a program running, for a program
+  /// that was compiled/assembled/linked outside this window (a Program project's own "Build", via
+  /// `galink`) rather than typed here by hand. Called from <see cref="Views.CvmDebuggerWindow"/>'s own
+  /// code-behind, which owns the actual <c>OpenFileDialog</c> (this view model has no UI dependency of
+  /// its own, same convention as every other file-picking action in this IDE) -- <paramref name="path"/>
+  /// is just the file the person picked. Never throws; a bad/missing file just becomes a StatusText
+  /// message, the same contract <see cref="Assemble"/> already has for a bad assembly-text edit.
+  ///
+  /// Also remembered in <see cref="_loadedImage"/> so a Start / Reinstall AFTER this call -- with no
+  /// session yet connected, e.g. right after a Program project's own "Debug" button opens this window
+  /// for the first time -- re-applies this exact image to the freshly booted chip instead of silently
+  /// reverting to whatever the Assembly Code editor holds; see <see cref="StartAsync"/>'s own remarks.
+  /// </summary>
+  public void LoadImageFile(string path)
+  {
+    if (IsBusy)
+    {
+      StatusText = "Cannot load an image while a Step/Continue/Start is in progress.";
+      return;
+    }
+
+    try
+    {
+      using FileStream stream = File.OpenRead(path);
+      CvmImage image = CvmImage.Load(stream);
+
+      _session?.LoadImage(image);
+      MirrorSessionProgramIntoStandaloneSram(image.Words);
+      _loadedImageSymbols = image.Symbols;
+      _loadedImage = image;
+
+      StatusText = $"Loaded \"{Path.GetFileName(path)}\": {image.Words.Count} word(s), entry address " +
+          $"{DescribeFlatAddress(image.EntryAddress)}, {image.Symbols.Count} symbol(s).";
+      RefreshMemoryView();
+      RefreshProgramCounter();
+    }
+    catch (Exception exception)
+    {
+      StatusText = $"Could not load \"{Path.GetFileName(path)}\": {exception.Message}";
+    }
+  }
+
+  /// <summary>
   /// Refreshes <see cref="MemoryViewText"/> starting at <see cref="MemoryBaseText"/>. The number of
   /// words shown is <see cref="MemoryViewWordCount"/> or however many words the CURRENTLY loaded
   /// program actually occupies, whichever is larger -- so opening the CVM Debugger with a short
   /// program (or none) still gets a reasonable-sized view, but a longer one like
   /// <see cref="CvmDebuggerDefaultProgram"/>'s own 156 words is never silently truncated the way a
   /// fixed 64-word window would. Recomputed on every call (not cached) since the loaded program can
-  /// change between calls (Assemble, Start).
+  /// change between calls (Assemble, Start, LoadImageFile). A row also gets a "&lt;name&gt;" note for
+  /// every symbol <see cref="_loadedImageSymbols"/> resolves to that exact address, alongside the
+  /// existing PC/breakpoint/disassembly notes -- empty, and so silently a no-op here, unless
+  /// <see cref="LoadImageFile"/> is what's currently loaded.
   /// </summary>
   private void RefreshMemoryView()
   {
@@ -660,6 +763,11 @@ public sealed class CvmDebuggerViewModel : ObservableObject
           : new Dictionary<int, string>();
     }
 
+    // Grouped by address up front (an image can legitimately have several symbols at the same
+    // address, e.g. __exit and a library-internal alias for it) so the row loop below is a plain
+    // dictionary lookup rather than an O(symbols) scan per row.
+    ILookup<int, string> loadedImageSymbolsByAddress = _loadedImageSymbols.ToLookup(symbol => symbol.Address, symbol => symbol.Name);
+
     var builder = new StringBuilder();
     builder.Append("Address   Value   Notes").Append('\n');
     for (int index = 0; index < words.Count; index++)
@@ -674,6 +782,11 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       if (breakpoints.Contains(flatAddress))
       {
         notes.Add("[BP]");
+      }
+
+      foreach (string symbolName in loadedImageSymbolsByAddress[flatAddress])
+      {
+        notes.Add($"<{symbolName}>");
       }
 
       if (disassembly.TryGetValue(flatAddress, out string? note))

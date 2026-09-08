@@ -386,7 +386,10 @@ public partial class MainWindow : Window
       return;
     }
 
-    var window = new CProjectWindow(new CProjectViewModel(project, _cProjectStore, _viewModel.CLibsDirectoryPath)) { Owner = this };
+    var window = new CProjectWindow(
+        new CProjectViewModel(project, _cProjectStore, _viewModel.CLibsDirectoryPath),
+        _viewModel.TryResolveCvmDebuggerViewModel)
+    { Owner = this };
     _openCProjectWindows[project.RootPath] = window;
     window.Closed += (_, _) => _openCProjectWindows.Remove(project.RootPath);
     window.Show();

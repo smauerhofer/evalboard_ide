@@ -91,6 +91,12 @@
           <Button Content="Restore" Command="{Binding RestoreCommand}" Padding="12,6"
                           ToolTip="Replaces this text with the original built-in test program -- the same source Start loads by default -- discarding whatever was saved." />
         </StackPanel>
+        <Separator Margin="0,10,0,8" />
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="Or, load an already-linked program instead of typing CVM assembly by hand:" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="#555" />
+          <Button Content="Load linked image (.gaimg)..." Click="OnLoadImageClick" Padding="12,6"
+                          ToolTip="Loads a .gaimg file (galink's own output, e.g. from a Program project's Build) straight into the simulated SRAM -- no assembly step, since every word is already fully resolved. Independent of the Assembly Code editor above; its own symbol table then labels the memory inspector's rows by name until Assemble or a fresh Start replaces it." />
+        </StackPanel>
       </StackPanel>
     </GroupBox>
 
