@@ -2,6 +2,11 @@
 
 #include "cvm.h"
 
+extern void _exit()
+{
+
+
+}
 
 extern void _start()
 {
@@ -9,9 +14,4 @@ extern void _start()
 
 }
 
-extern void _exit()
-{
-
-
-}
 

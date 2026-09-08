@@ -500,89 +500,14 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     return (true, null, words.Count);
   }
 
-  // CVM2 (2026-09-01): trimmed to just the CPU node. CVM1's own five nodes originally listed here
-  // (607, 507, 606, 506, 407) are ALL orphaned now -- none of them are part of CVM2's actual mesh
-  // (708/707/607/507, "the nodes from CVM1 ... will not be used in CVM2"; note 507's OWN CVM1-era
-  // mnemonics are orphaned too, even though the coordinate 507 itself is very much back in active use
-  // as CVM2's real CPU -- see CvmAssemblyLanguage's own remarks), and
-  // CvmAssemblyLanguage.NodeSymbolByMnemonic's own entries for their mnemonics (the ALU ops, leave,
-  // node 506's ops, node 407's OLD register-w/port ops) stay in the table per "don't remove any
-  // opcodes" but simply never resolve once their node isn't compiled here -- exactly the same
-  // graceful-omission behavior CvmAssemblyLanguage already has for a node missing from compiledRam
-  // altogether, so dropping them from this list changes nothing about whether those mnemonics still
-  // exist, only whether THIS standalone path wastes a compile on nodes CVM2 doesn't use. This also
-  // fixes a real bug: compiling all six unconditionally meant ANY one of them failing to compile in
-  // Stefan's own live project would abort Assemble entirely with no obvious connection to what was
-  // actually typed. See CompileStandaloneCvmNodes' own remarks for the belt-and-braces fix to that
-  // same failure mode (continue past one bad node rather than aborting on it).
-  //
-  // Node 407 added back 2026-09-02: NOT a revival of the orphaned CVM1 node -- CVM2 reuses the same
-  // coordinate for an unrelated long-call/long-jump helper (lcall/ljmp), reached from node 507's own
-  // m/main dispatch. Needed here for lcall/ljmp to resolve at all in this standalone path -- otherwise
-  // CvmAssemblyLanguage's own "undefined opcode -> nop" substitution would silently turn every lcall/
-  // ljmp into a nop, exactly as it already does for a mnemonic whose node is missing from compiledRam
-  // for any other reason. As with node 507, this compiles from THIS CHIP'S OWN LIVE PROJECT DATA for
-  // coordinate 407 (see CompileStandaloneCvmNodes' own remarks), not from Cvm.Node407Program's
-  // reference source -- that reference copy has no effect here until it's also saved into the live
-  // project via the Node Editor.
-  //
-  // Node 506 added back 2026-09-04, same reasoning: CVM2 reuses the coordinate for the stack-frame node
-  // (enter/leave/...), reached from node 507's own m/main dispatch via its RIGHT port. Only 'leave (a
-  // TAGGED mnemonic, resolved via NodeSymbolByMnemonic against a live compile) actually needs this --
-  // enter is self-describing (CvmInstructionSet.Node506EnterTag) and would resolve with or without node
-  // 506 being compiled here -- but including it costs nothing and keeps 'leave from silently degrading
-  // to the same "undefined opcode -> nop" substitution 407 hit before it was added. Same live-project-
-  // data caveat as node 407: Cvm.Node506Program's reference source has no effect here until it is also
-  // saved into node 506's own Node Editor tab for this chip.
-  //
-  // Node 508 and node 509 added 2026-09-05, plugging a real gap this list had missed until now:
-  // 'ldg/'stg (node 508) and 'inv/'inc/'dec/'neg/'abs/'mul2/'div2/'udiv2/'bitcnt (node 509) are ALL
-  // TAGGED mnemonics, so without their own node compiled here they silently degraded to the same
-  // "undefined opcode -> nop" substitution 407/506 would have hit before THEY were added -- in
-  // practice this showed up as a disassembled word (e.g. node 509's own 0xB026, 'inc) rendering with
-  // no mnemonic at all in the memory inspector's no-session view, even though the exact same word
-  // disassembled correctly during a live hardware session (Ga144CvmHardwareInstaller's own
-  // compiledRam always covers every node in CvmBootStreamBuilder.BuildLoadOrder, 508/509 included).
-  // 508 is listed first since 509 imports 508's own exports ('# 508 import') -- CompileNode resolves
-  // that import itself from the chip's own live node graph regardless of this list's order, but the
-  // order here is kept parent-before-child for readability, matching CvmBootStreamBuilder's own
-  // "compile order" (507, 407, 506, 508, 509). Same live-project-data caveat as 407/506: each
-  // NodeXxxProgram.Source reference copy has no effect here until it is also saved into that node's
-  // own Node Editor tab for this chip.
-  //
-  // Node 406 added 2026-09-05, the SAME missed-gap bug as 508/509 above, reported directly by Stefan:
-  // assembling "addi 0x0a" against a live session (whose compiledRam already covered node 406 via
-  // CvmBootStreamBuilder.BuildLoadOrder) correctly emitted 0xE424/0x000A, but the memory inspector's
-  // own no-session disassembly showed no mnemonic at all for 0xE424 -- the same "opcode's own node
-  // isn't in THIS list" gap 508/509 hit before they were added here, not a CvmAssemblyLanguage/
-  // CvmInstructionSet bug (their round-trip already verified clean against a compile that DOES
-  // include node 406 -- see CvmInstructionSet.AddConstantMnemonic's own remarks). Without node 406
-  // resolving here, decodeTable has no entry for 0xE424, so DisassemblePage0's own stateful scan (see
-  // that method's own remarks) advances only ONE word past it instead of two, leaving 0xE424 itself
-  // blank and then misreading the FOLLOWING word (its own trailing operand, 0x000A) as a fresh
-  // instruction in its own right -- since 0x000A also happens to be <= CvmInstructionSet.
-  // CallAddressMask, it self-describes as "call 0x000A", exactly the confusing symptom reported.
-  // Listed last since it imports node 407's own exports ('# 407 import'), same "parent before child,
-  // CompileNode resolves the import regardless of list order" note as 508/509 above.
-  //
-  // Node 408 added 2026-09-06, pre-emptively (before the same gap could bite): a comparison node,
-  // node 407's OWN second leaf, hanging off its previously-unanswered LEFT-port branch (see
-  // Cvm.Node407Program's/Cvm.Node408Program's own remarks) exactly the way 406 hangs off 407's RIGHT
-  // port -- same "imports node 407, must be in this list or its own tagged mnemonics silently degrade"
-  // reasoning as node 406 just above, so added alongside it rather than waiting for a bug report.
-  private static readonly IReadOnlyList<int> StandaloneCvmNodeCoordinates =
-  [
-    CvmMemoryProtocol.NopSourceNodeCoordinate, // 507, CVM2's entire CPU (corrected 2026-09-01 from 508).
-    Node407Program.Coordinate, // 407, CVM2's long-call/long-jump helper (added 2026-09-02).
-    Node506Program.Coordinate, // 506, CVM2's stack-frame node (added 2026-09-04).
-    Node508Program.Coordinate, // 508, CVM2's ldg/stg node (added 2026-09-05).
-    Node509Program.Coordinate, // 509, CVM2's unary-arithmetic node (added 2026-09-05).
-    Node406Program.Coordinate, // 406, CVM2's binary-arithmetic node (added 2026-09-05).
-    Node408Program.Coordinate, // 408, CVM2's comparison node (added 2026-09-06).
-  ];
+  // Moved 2026-09-08 to Ga144.Evb.Ide.Cvm.CvmNodeMesh.StandaloneCoordinates -- now the one shared list
+  // behind both this standalone compile path and the newer build-time CvmPrimitiveTableExporter, so a
+  // node addition/repointing (an ongoing, expected thing -- "the exact instruction set is still a
+  // moving target") only ever needs updating in one place. See that class's own remarks for the full
+  // per-node history this comment used to carry.
 
   /// <summary>
-  /// Compiles every node in <see cref="StandaloneCvmNodeCoordinates"/> (<see cref="F18NodeCompilationService"/>)
+  /// Compiles every node in <see cref="CvmNodeMesh.StandaloneCoordinates"/> (<see cref="F18NodeCompilationService"/>)
   /// purely in software -- no serial port, no connected chip -- for <see cref="AssembleStandalone"/>
   /// and the memory inspector's no-session disassembly to resolve tagged mnemonics against. IMPORTANT:
   /// this compiles from THIS CHIP'S OWN LIVE PROJECT DATA for each node coordinate (whatever is
@@ -604,7 +529,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     var compilationService = new F18NodeCompilationService(_chip, _romLibrary, _userMacros);
     var compiledRam = new Dictionary<int, F18CompileResult>();
     var failures = new List<string>();
-    foreach (int coordinate in StandaloneCvmNodeCoordinates)
+    foreach (int coordinate in CvmNodeMesh.StandaloneCoordinates)
     {
       F18NodeCompilationResult compiled = compilationService.CompileNode(coordinate);
       if (!compiled.Ram.Success)

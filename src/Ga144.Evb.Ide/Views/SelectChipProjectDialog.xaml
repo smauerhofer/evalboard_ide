@@ -1,0 +1,35 @@
+<Window x:Class="Ga144.Evb.Ide.Views.SelectChipProjectDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Choose chip project"
+        Width="420"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize">
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="200" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Grid.Row="0"
+               TextWrapping="Wrap"
+               Margin="0,0,0,10"
+               Text="Which GA144 project's chip should Build compile the live CVM2 interpreter mesh from before linking with galink? Choose &quot;(none)&quot; to leave this project's Build unlinked." />
+
+    <ListBox x:Name="ProjectListBox" Grid.Row="1" />
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0">
+      <TextBlock Text="Chip:" VerticalAlignment="Center" Margin="0,0,8,0" />
+      <RadioButton x:Name="HostRadioButton" Content="Host" GroupName="ChipRole" VerticalAlignment="Center" Margin="0,0,12,0" />
+      <RadioButton x:Name="TargetRadioButton" Content="Target" GroupName="ChipRole" VerticalAlignment="Center" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+      <Button Content="Cancel" IsCancel="True" MinWidth="90" Margin="0,0,8,0" />
+      <Button Content="OK" IsDefault="True" Click="OnOkClick" MinWidth="90" />
+    </StackPanel>
+  </Grid>
+</Window>

@@ -8,6 +8,7 @@ settings:
   baudRate: 921600
   krakenIdlePolicy: CloseAfterIdleTimeout
   recentCProjectPaths:
+  - C:\devl\GreenArray\Ga144EvalboardIde\prgs\CTest1
   - C:\devl\GreenArray\Ga144EvalboardIde\libs\cvm
   - C:\devl\GreenArray\Ga144EvalboardIde\libs\CTest1
   cWorkspaceRootPath: C:\devl\GreenArray\Ga144EvalboardIde

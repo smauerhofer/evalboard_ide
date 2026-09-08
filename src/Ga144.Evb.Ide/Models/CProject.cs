@@ -36,6 +36,34 @@ public sealed class CProjectMetadata
   /// </summary>
   public List<string> LibraryReferences { get; set; } = [];
 
+  /// <summary>
+  /// Added 2026-09-08, wiring <c>galink</c> into Build: which GA144 project's chip configuration a
+  /// <see cref="CProjectKind.Program"/> project's Build should compile the live CVM2 interpreter node
+  /// mesh from (<see cref="Ga144.Evb.Ide.Services.CvmPrimitiveTableExporter"/>) before linking. Null
+  /// means no chip project has been chosen yet -- Build then skips linking entirely, same as before
+  /// this field existed, rather than guessing.
+  ///
+  /// A GA144 project is never a file of its own (see <see cref="Ga144Project"/>'s own remarks) -- it is
+  /// one entry, by <see cref="Ga144Project.Id"/>, inside the single shared workspace document every
+  /// window in this app already reads from a fixed, well-known location
+  /// (<see cref="Ga144.Evb.Ide.Services.ConfigurationPathProvider"/>). Storing the Id here (rather than
+  /// a path, which is what Stefan's own answer named, since at the time a GA144 "project file" seemed
+  /// like it might be a stand-alone thing) resolves independently of whatever project happens to be
+  /// open in the IDE right now -- Build can load it fresh even if no GA144 project window is open at
+  /// all -- while still meaning exactly what Stefan asked for: reference a SPECIFIC GA144 project, not
+  /// "whichever one is currently active."
+  /// </summary>
+  public Guid? ChipProjectId { get; set; }
+
+  /// <summary>
+  /// Which of that project's two physical chips (<see cref="Ga144ChipRole.Host"/> or
+  /// <see cref="Ga144ChipRole.Target"/>) to compile the interpreter mesh from. Defaults to
+  /// <see cref="Ga144ChipRole.Target"/> since, on an EVB002, that is the chip a program built by this
+  /// IDE would normally be installed onto and run from -- the Host chip's own role is to talk to the
+  /// PC over serial, not to run an arbitrary C project's compiled program.
+  /// </summary>
+  public Ga144ChipRole ChipProjectRole { get; set; } = Ga144ChipRole.Target;
+
   public void Normalize()
   {
     Name = string.IsNullOrWhiteSpace(Name) ? "C Project" : Name.Trim();
@@ -103,6 +131,10 @@ public sealed class CProject
   /// <see cref="LibraryOutputPath"/>).</summary>
   public const string LibraryFileExtension = ".galib";
 
+  /// <summary>The file extension Build gives a Program project's own linked output (see
+  /// <see cref="ImageOutputPath"/>), added 2026-09-08 alongside wiring <c>galink</c> into Build.</summary>
+  public const string ImageFileExtension = ".gaimg";
+
   public required string RootPath { get; init; }
   public required CProjectMetadata Metadata { get; init; }
 
@@ -128,6 +160,13 @@ public sealed class CProject
   public string LibraryOutputPath =>
       Path.Combine(RootPath, Path.GetFileName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(RootPath))) + LibraryFileExtension);
 
+  /// <summary>Where Build writes this project's own linked output when <see cref="Kind"/> is
+  /// <see cref="CProjectKind.Program"/> and <see cref="ChipProjectId"/> is set -- named the same way
+  /// <see cref="LibraryOutputPath"/> is, after this project's own root folder name, for the same
+  /// reason (a folder name that already exists on disk is guaranteed valid; <see cref="Name"/> is not).</summary>
+  public string ImageOutputPath =>
+      Path.Combine(RootPath, Path.GetFileName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(RootPath))) + ImageFileExtension);
+
   public string Name
   {
     get => Metadata.Name;
@@ -141,6 +180,20 @@ public sealed class CProject
   }
 
   public List<string> LibraryReferences => Metadata.LibraryReferences;
+
+  /// <summary>See <see cref="CProjectMetadata.ChipProjectId"/>.</summary>
+  public Guid? ChipProjectId
+  {
+    get => Metadata.ChipProjectId;
+    set => Metadata.ChipProjectId = value;
+  }
+
+  /// <summary>See <see cref="CProjectMetadata.ChipProjectRole"/>.</summary>
+  public Ga144ChipRole ChipProjectRole
+  {
+    get => Metadata.ChipProjectRole;
+    set => Metadata.ChipProjectRole = value;
+  }
 
   public void EnsureDirectoriesExist()
   {

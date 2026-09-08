@@ -1,3 +1,5 @@
+using Ga144.Evb.Ide.Models;
+using Ga144.Evb.Ide.Services;
 using Ga144.Evb.Ide.ViewModels;
 using Microsoft.Win32;
 using System.Diagnostics;
@@ -126,6 +128,19 @@ public partial class CProjectWindow : Window
         if (_viewModel.SelectedAssemblyFile is { } file && ConfirmRemove(file))
         {
           _viewModel.RemoveAssemblyFile(file);
+        }
+      });
+
+  private void OnChooseChipProjectClick(object sender, RoutedEventArgs e) =>
+      RunGuarded(() =>
+      {
+        IReadOnlyList<ChipProjectResolver.ProjectSummary> projects = _viewModel.ListAvailableChipProjects();
+        (Guid? ProjectId, Ga144ChipRole Role)? choice = SelectChipProjectDialog.Ask(
+            this, projects, _viewModel.Model.ChipProjectId, _viewModel.Model.ChipProjectRole);
+
+        if (choice is { } selected)
+        {
+          _viewModel.SetChipProject(selected.ProjectId, selected.Role);
         }
       });
 

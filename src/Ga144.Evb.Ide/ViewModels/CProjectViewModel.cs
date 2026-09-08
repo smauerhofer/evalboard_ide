@@ -27,17 +27,24 @@ public sealed class CProjectViewModel : ObservableObject
   // list stays empty; that is not an error.
   private readonly string? _librariesDirectoryPath;
 
+  // Resolves Model.ChipProjectId/ChipProjectRole into a real chip configuration at Build time, and
+  // lists the GA144 projects a "Chip project..." picker can offer -- added 2026-09-08 wiring galink
+  // into Build. Defaults to a fresh instance reading the app's own standard workspace location so the
+  // one call site that constructs this view model (MainWindow.xaml.cs) needed no change.
+  private readonly ChipProjectResolver _chipProjectResolver;
+
   private string _statusText = "Ready";
   private string? _selectedHeaderFile;
   private string? _selectedSourceFile;
   private string? _selectedAssemblyFile;
   private bool _showAssemblyFiles;
 
-  public CProjectViewModel(CProject model, CProjectStore store, string? librariesDirectoryPath)
+  public CProjectViewModel(CProject model, CProjectStore store, string? librariesDirectoryPath, ChipProjectResolver? chipProjectResolver = null)
   {
     Model = model;
     _store = store;
     _librariesDirectoryPath = librariesDirectoryPath;
+    _chipProjectResolver = chipProjectResolver ?? new ChipProjectResolver();
     Refresh();
   }
 
@@ -132,6 +139,26 @@ public sealed class CProjectViewModel : ObservableObject
   // that select the library for this project").
   public ObservableCollection<CAvailableLibraryViewModel> AvailableLibraries { get; } = [];
 
+  /// <summary>What "Chip project..." shows next to itself -- the chosen GA144 project's own name and
+  /// chip role, or a plain "(none)" when <see cref="CProject.ChipProjectId"/> isn't set yet. Resolves
+  /// the name fresh each time it's read (Refresh doesn't cache it) since the referenced GA144 project
+  /// could have been renamed, or removed, since this window was opened.</summary>
+  public string ChipProjectDescription
+  {
+    get
+    {
+      if (Model.ChipProjectId is not { } projectId)
+      {
+        return "Chip project: (none)";
+      }
+
+      ChipProjectResolver.Result resolved = _chipProjectResolver.Resolve(projectId, Model.ChipProjectRole);
+      return resolved.Success
+          ? $"Chip project: {resolved.ProjectName} ({Model.ChipProjectRole})"
+          : $"Chip project: (missing -- {resolved.ErrorMessage})";
+    }
+  }
+
   public string? SelectedHeaderFile
   {
     get => _selectedHeaderFile;
@@ -167,13 +194,17 @@ public sealed class CProjectViewModel : ObservableObject
 
   // Updated 2026-09-07 alongside Build() below: the C compiler and gaasm are both now actually
   // wired into this window's "Build" button (see Build()'s own remarks), so this text no longer
-  // says "not implemented yet" for those two steps. galink is still a stub, so a Program project's
-  // own final link genuinely still doesn't happen -- that part of the text is unchanged.
+  // says "not implemented yet" for those two steps. Updated again 2026-09-08: galink IS now wired
+  // in -- a Program project whose "Chip project..." picker names a GA144 project has Build compile
+  // that chip's own live CVM2 mesh (CvmPrimitiveTableExporter), link against it (CvmLinker), and
+  // write a .gaimg (CProject.ImageOutputPath). A Program project with no chip project chosen yet
+  // still just stops at "compiled and assembled", same as before this date.
   public string BuildDescription => IsLibrary
       ? "Build: compiles each src/*.c file to CVM assembly, assembles it with gaasm, " +
         "and archives the resulting object files into this project's own .galib -- automatically, with no separate step."
-      : "Build: compiles each src/*.c file to CVM assembly and assembles it with gaasm. " +
-        "Linking against this project's imported libraries with galink to produce a .gaimg is not implemented yet -- galink is still a stub.";
+      : "Build: compiles each src/*.c file to CVM assembly and assembles it with gaasm, then links with galink " +
+        "against the chosen \"Chip project...\"'s own live CVM2 mesh to produce a .gaimg. Choose a chip project " +
+        "below if you haven't yet -- without one, Build stops after compiling and assembling, with no .gaimg.";
 
   public void Refresh()
   {
@@ -243,6 +274,23 @@ public sealed class CProjectViewModel : ObservableObject
     Save();
   }
 
+  /// <summary>Every GA144 project the "Chip project..." picker can offer -- see <see cref="ChipProjectResolver.ListProjects"/>.</summary>
+  public IReadOnlyList<ChipProjectResolver.ProjectSummary> ListAvailableChipProjects() => _chipProjectResolver.ListProjects();
+
+  /// <summary>Sets (or clears, when <paramref name="projectId"/> is null) which GA144 project/chip
+  /// Build should compile the CVM2 interpreter mesh from before linking, and persists it immediately --
+  /// same "mutate Model, Save, notify" pattern every other setter in this class already follows.</summary>
+  public void SetChipProject(Guid? projectId, Ga144ChipRole role)
+  {
+    Model.ChipProjectId = projectId;
+    Model.ChipProjectRole = role;
+    Save();
+    OnPropertyChanged(nameof(ChipProjectDescription));
+    StatusText = projectId is null
+        ? "Cleared this project's chip project -- Build will not link a .gaimg."
+        : "Set this project's chip project.";
+  }
+
   public string AddExistingHeaderFile(string sourceFilePath) => AddExistingFile(sourceFilePath, CFileKind.Header);
 
   public string AddExistingSourceFile(string sourceFilePath) => AddExistingFile(sourceFilePath, CFileKind.Source);
@@ -278,11 +326,20 @@ public sealed class CProjectViewModel : ObservableObject
   /// library with some members silently missing would be worse than no library at all.
   ///
   /// Every source file and every hand-written assembly file is always attempted, even after an
-  /// earlier one fails, so one broken file never hides problems in the others. A Program project's
-  /// own build stops at "compiled and assembled": <c>galink</c> is still a stub (see
-  /// <see cref="BuildDescription"/>), so no ".gaimg" is produced by this method at all.
+  /// earlier one fails, so one broken file never hides problems in the others.
   ///
-  /// Updated 2026-09-08: include resolution and object linkage now walk <see cref="AvailableLibraries"/>
+  /// <b>Updated 2026-09-08: galink is now wired in for a <see cref="CProjectKind.Program"/> project.</b>
+  /// If <see cref="CProject.ChipProjectId"/> is set (via "Chip project..."), a build whose compile and
+  /// assemble steps all succeed goes on to: export a primitive table from that chip's own live CVM2
+  /// mesh (<see cref="CvmPrimitiveTableExporter"/>), load each checked <see cref="AvailableLibraries"/>
+  /// entry's own already-built ".galib", and call <see cref="Ga144.Cvm.Toolchain.CvmLinker.Link"/>,
+  /// writing a successful link's output to <see cref="CProject.ImageOutputPath"/>. A Program project
+  /// with no chip project chosen yet still just stops at "compiled and assembled" -- exactly the
+  /// previous behavior -- since there is nothing to compile primitives against. A library referenced
+  /// by this project that hasn't been BUILT yet (no ".galib" on disk) is a link error naming which
+  /// library and telling Stefan to build it first, not a crash or a silent skip.
+  ///
+  /// Updated 2026-09-08 (separately): include resolution and object linkage now walk <see cref="AvailableLibraries"/>
   /// (checkbox-selected, physically found under the shared "libs" directory) instead of the former
   /// manually-added <c>LibraryReferences</c> list -- the underlying persisted data
   /// (<see cref="CProject.LibraryReferences"/>) is unchanged, only how this method enumerates it.
@@ -392,9 +449,77 @@ public sealed class CProjectViewModel : ObservableObject
         messages.Add($"Skipped {Path.GetFileName(libraryPath)} -- the build has errors above.");
       }
     }
+    else if (Model.ChipProjectId is not { } chipProjectId)
+    {
+      messages.Add("No chip project is chosen (see \"Chip project...\") to compile primitives from -- Build stops here, with no .gaimg produced.");
+    }
+    else if (!success)
+    {
+      messages.Add("Skipped linking -- the build has errors above.");
+    }
     else
     {
-      messages.Add("Linking is not implemented yet (galink is still a stub), so no .gaimg was produced.");
+      ChipProjectResolver.Result chipResult = _chipProjectResolver.Resolve(chipProjectId, Model.ChipProjectRole);
+      if (!chipResult.Success || chipResult.Chip is null || chipResult.RomLibrary is null)
+      {
+        success = false;
+        messages.Add($"Linking failed -- {chipResult.ErrorMessage}");
+      }
+      else
+      {
+        CvmPrimitiveTableExporter.Result exported = CvmPrimitiveTableExporter.Export(chipResult.Chip, chipResult.RomLibrary, chipResult.UserMacros);
+        messages.AddRange(exported.Messages);
+
+        if (!exported.Success)
+        {
+          success = false;
+          messages.Add("Linking failed -- no primitive table could be exported from the chosen chip project.");
+        }
+        else
+        {
+          var libraryInputs = new List<CvmLinkLibraryInput>();
+          foreach (CAvailableLibraryViewModel library in AvailableLibraries.Where(l => l.IsReferenced))
+          {
+            string libraryPath = _store.Load(library.RootPath).LibraryOutputPath;
+            if (!File.Exists(libraryPath))
+            {
+              success = false;
+              messages.Add($"Linking failed -- \"{library.Name}\" has no {Path.GetFileName(libraryPath)} yet; build \"{library.Name}\" first.");
+              continue;
+            }
+
+            using var libraryStream = File.OpenRead(libraryPath);
+            libraryInputs.Add(new CvmLinkLibraryInput(library.Name, CvmLibrary.Load(libraryStream)));
+          }
+
+          if (success)
+          {
+            var objectInputs = objectMembers
+                .Select(member => new CvmLinkObjectInput(member.Name, CvmObjectFile.Load(new MemoryStream(member.ObjectBytes))))
+                .ToList();
+
+            CvmLinker.Result linkResult = CvmLinker.Link(objectInputs, libraryInputs, exported.Table, new CvmLinkOptions());
+            messages.AddRange(linkResult.Messages);
+
+            if (!linkResult.Success || linkResult.Image is null)
+            {
+              success = false;
+            }
+            else
+            {
+              string imagePath = Model.ImageOutputPath;
+              string tempImagePath = imagePath + ".tmp";
+              using (var imageStream = File.Create(tempImagePath))
+              {
+                linkResult.Image.Save(imageStream);
+              }
+
+              File.Move(tempImagePath, imagePath, overwrite: true);
+              messages.Add($"Linked {Path.GetFileName(imagePath)}.");
+            }
+          }
+        }
+      }
     }
 
     StatusText = success ? "Build succeeded." : "Build failed -- see the build results for details.";
