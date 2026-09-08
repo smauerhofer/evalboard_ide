@@ -15,16 +15,29 @@ namespace Ga144.Evb.Ide.ViewModels;
 /// </summary>
 public sealed class CProjectViewModel : ObservableObject
 {
+  // The three kinds of managed source file this window edits, used to parameterize the shared
+  // Add/Create/Remove helpers below instead of repeating them per kind.
+  private enum CFileKind { Header, Source, Assembly }
+
   private readonly CProjectStore _store;
+
+  // The shared "libs" directory (MainWindowViewModel.CLibsDirectoryPath) that AvailableLibraries is
+  // scanned from -- added 2026-09-08 alongside the checkbox-based library-import list, replacing the
+  // former manual browse-for-a-folder flow. Null (no C workspace root chosen yet) simply means the
+  // list stays empty; that is not an error.
+  private readonly string? _librariesDirectoryPath;
+
   private string _statusText = "Ready";
   private string? _selectedHeaderFile;
   private string? _selectedSourceFile;
-  private CLibraryReferenceViewModel? _selectedLibraryReference;
+  private string? _selectedAssemblyFile;
+  private bool _showAssemblyFiles;
 
-  public CProjectViewModel(CProject model, CProjectStore store)
+  public CProjectViewModel(CProject model, CProjectStore store, string? librariesDirectoryPath)
   {
     Model = model;
     _store = store;
+    _librariesDirectoryPath = librariesDirectoryPath;
     Refresh();
   }
 
@@ -104,7 +117,20 @@ public sealed class CProjectViewModel : ObservableObject
 
   public ObservableCollection<string> HeaderFiles { get; } = [];
   public ObservableCollection<string> SourceFiles { get; } = [];
-  public ObservableCollection<CLibraryReferenceViewModel> LibraryReferences { get; } = [];
+
+  // The hand-written CVM assembly files under this project's own "asm" directory (see
+  // Model.AssemblyDirectoryPath), shown only when ShowAssemblyFiles is set. Added 2026-09-08, per
+  // Stefan: "i want to have a separate list of assembler sources (located in the 'asm' directory)
+  // which can be made visible through a checkbox. this is used to integrate assembler code into a C
+  // library/program."
+  public ObservableCollection<string> AssemblyFiles { get; } = [];
+
+  // Every C project found under the shared "libs" directory (see _librariesDirectoryPath), each with
+  // a checkbox selecting whether THIS project imports it. Replaces the former manual
+  // Add/Remove-library-reference flow entirely (2026-09-08, per Stefan: "Replace it entirely" -- "the
+  // library list must contain all the libraries from the 'libs' directory with a checkbox in front,
+  // that select the library for this project").
+  public ObservableCollection<CAvailableLibraryViewModel> AvailableLibraries { get; } = [];
 
   public string? SelectedHeaderFile
   {
@@ -118,10 +144,19 @@ public sealed class CProjectViewModel : ObservableObject
     set => SetProperty(ref _selectedSourceFile, value);
   }
 
-  public CLibraryReferenceViewModel? SelectedLibraryReference
+  public string? SelectedAssemblyFile
   {
-    get => _selectedLibraryReference;
-    set => SetProperty(ref _selectedLibraryReference, value);
+    get => _selectedAssemblyFile;
+    set => SetProperty(ref _selectedAssemblyFile, value);
+  }
+
+  // Purely a UI toggle for this window -- not persisted to the project's own metadata (project.gacproj
+  // stores what a project IS, not how one particular window happened to be displaying it last), so it
+  // resets to hidden every time the project window is reopened.
+  public bool ShowAssemblyFiles
+  {
+    get => _showAssemblyFiles;
+    set => SetProperty(ref _showAssemblyFiles, value);
   }
 
   public string StatusText
@@ -144,75 +179,93 @@ public sealed class CProjectViewModel : ObservableObject
   {
     ReplaceAll(HeaderFiles, ToDisplayPaths(Model.IncludeDirectoryPath, Model.GetHeaderFiles()));
     ReplaceAll(SourceFiles, ToDisplayPaths(Model.SourceDirectoryPath, Model.GetSourceFiles()));
-    RefreshLibraryReferences();
+    ReplaceAll(AssemblyFiles, ToDisplayPaths(Model.AssemblyDirectoryPath, Model.GetAssemblyFiles()));
+    RefreshAvailableLibraries();
   }
 
-  private void RefreshLibraryReferences()
+  private void RefreshAvailableLibraries()
   {
-    LibraryReferences.Clear();
-    foreach (string stored in Model.LibraryReferences)
+    AvailableLibraries.Clear();
+    if (string.IsNullOrWhiteSpace(_librariesDirectoryPath) || !Directory.Exists(_librariesDirectoryPath))
     {
-      LibraryReferences.Add(CLibraryReferenceViewModel.Resolve(Model, stored, _store));
+      return;
+    }
+
+    string ownFullPath = Path.GetFullPath(Model.RootPath);
+    IEnumerable<string> candidateFolders = Directory.EnumerateDirectories(_librariesDirectoryPath)
+        .Where(_store.IsProjectFolder)
+        .Where(path => !string.Equals(Path.GetFullPath(path), ownFullPath, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
+
+    foreach (string folder in candidateFolders)
+    {
+      string fullPath = Path.GetFullPath(folder);
+      string name = TryLoadName(fullPath) ?? Path.GetFileName(fullPath);
+      bool isReferenced = Model.LibraryReferences.Any(stored =>
+          string.Equals(Model.ResolveLibraryReferencePath(stored), fullPath, StringComparison.OrdinalIgnoreCase));
+      AvailableLibraries.Add(new CAvailableLibraryViewModel(this, name, fullPath, isReferenced));
     }
   }
 
-  public string AddExistingHeaderFile(string sourceFilePath) => AddExistingFile(sourceFilePath, isHeader: true);
+  private string? TryLoadName(string rootPath)
+  {
+    try
+    {
+      return _store.Load(rootPath).Name;
+    }
+    catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
+    {
+      return null;
+    }
+  }
 
-  public string AddExistingSourceFile(string sourceFilePath) => AddExistingFile(sourceFilePath, isHeader: false);
+  // Called by CAvailableLibraryViewModel.IsReferenced's setter to actually add/remove the reference
+  // in this project's own metadata and persist it.
+  internal void SetLibraryReferenced(CAvailableLibraryViewModel library, bool isReferenced)
+  {
+    if (isReferenced)
+    {
+      if (!Model.LibraryReferences.Any(existing =>
+          string.Equals(Model.ResolveLibraryReferencePath(existing), library.RootPath, StringComparison.OrdinalIgnoreCase)))
+      {
+        Model.LibraryReferences.Add(Model.MakeLibraryReferencePath(library.RootPath));
+      }
 
-  public string CreateNewHeaderFile(string fileName) => CreateNewFile(fileName, isHeader: true);
+      StatusText = $"Imported library \"{library.Name}\".";
+    }
+    else
+    {
+      Model.LibraryReferences.RemoveAll(existing =>
+          string.Equals(Model.ResolveLibraryReferencePath(existing), library.RootPath, StringComparison.OrdinalIgnoreCase));
+      StatusText = $"Removed library reference \"{library.Name}\".";
+    }
 
-  public string CreateNewSourceFile(string fileName) => CreateNewFile(fileName, isHeader: false);
+    Save();
+  }
+
+  public string AddExistingHeaderFile(string sourceFilePath) => AddExistingFile(sourceFilePath, CFileKind.Header);
+
+  public string AddExistingSourceFile(string sourceFilePath) => AddExistingFile(sourceFilePath, CFileKind.Source);
+
+  public string AddExistingAssemblyFile(string sourceFilePath) => AddExistingFile(sourceFilePath, CFileKind.Assembly);
+
+  public string CreateNewHeaderFile(string fileName) => CreateNewFile(fileName, CFileKind.Header);
+
+  public string CreateNewSourceFile(string fileName) => CreateNewFile(fileName, CFileKind.Source);
+
+  public string CreateNewAssemblyFile(string fileName) => CreateNewFile(fileName, CFileKind.Assembly);
 
   public void RemoveHeaderFile(string displayPath) => RemoveFile(Model.IncludeDirectoryPath, displayPath);
 
   public void RemoveSourceFile(string displayPath) => RemoveFile(Model.SourceDirectoryPath, displayPath);
 
+  public void RemoveAssemblyFile(string displayPath) => RemoveFile(Model.AssemblyDirectoryPath, displayPath);
+
   public string ResolveHeaderFilePath(string displayPath) => Path.Combine(Model.IncludeDirectoryPath, displayPath);
 
   public string ResolveSourceFilePath(string displayPath) => Path.Combine(Model.SourceDirectoryPath, displayPath);
 
-  public void AddLibraryReference(string targetRootPath)
-  {
-    string fullTarget = Path.GetFullPath(targetRootPath);
-    if (string.Equals(fullTarget, Model.RootPath, StringComparison.OrdinalIgnoreCase))
-    {
-      throw new InvalidOperationException("A project cannot import itself.");
-    }
-
-    if (!_store.IsProjectFolder(fullTarget))
-    {
-      throw new InvalidOperationException($"\"{fullTarget}\" does not contain a C project ({CProject.ProjectFileName} was not found).");
-    }
-
-    CProject target = _store.Load(fullTarget);
-    if (target.Kind != CProjectKind.Library)
-    {
-      throw new InvalidOperationException($"\"{target.Name}\" is a Program project. Only a Library project can be imported.");
-    }
-
-    string stored = Model.MakeLibraryReferencePath(fullTarget);
-    bool alreadyImported = Model.LibraryReferences.Any(existing =>
-        string.Equals(Model.ResolveLibraryReferencePath(existing), fullTarget, StringComparison.OrdinalIgnoreCase));
-    if (alreadyImported)
-    {
-      throw new InvalidOperationException($"\"{target.Name}\" is already imported.");
-    }
-
-    Model.LibraryReferences.Add(stored);
-    Save();
-    RefreshLibraryReferences();
-    StatusText = $"Imported library \"{target.Name}\".";
-  }
-
-  public void RemoveLibraryReference(CLibraryReferenceViewModel reference)
-  {
-    ArgumentNullException.ThrowIfNull(reference);
-    Model.LibraryReferences.Remove(reference.StoredPath);
-    Save();
-    RefreshLibraryReferences();
-    StatusText = $"Removed library reference \"{reference.DisplayName}\".";
-  }
+  public string ResolveAssemblyFilePath(string displayPath) => Path.Combine(Model.AssemblyDirectoryPath, displayPath);
 
   /// <summary>
   /// Runs this project's actual build pipeline -- added 2026-09-07, replacing the "Build" button's
@@ -229,6 +282,11 @@ public sealed class CProjectViewModel : ObservableObject
   /// own build stops at "compiled and assembled": <c>galink</c> is still a stub (see
   /// <see cref="BuildDescription"/>), so no ".gaimg" is produced by this method at all.
   ///
+  /// Updated 2026-09-08: include resolution and object linkage now walk <see cref="AvailableLibraries"/>
+  /// (checkbox-selected, physically found under the shared "libs" directory) instead of the former
+  /// manually-added <c>LibraryReferences</c> list -- the underlying persisted data
+  /// (<see cref="CProject.LibraryReferences"/>) is unchanged, only how this method enumerates it.
+  ///
   /// <b>Flagged:</b> include resolution only looks at this project's own "include" directory plus
   /// each DIRECTLY imported library's "include" directory -- not a library's own further library
   /// references (transitive includes). Stefan has not said whether transitive includes should be
@@ -242,12 +300,9 @@ public sealed class CProjectViewModel : ObservableObject
     bool success = true;
 
     var includeDirectories = new List<string> { Model.IncludeDirectoryPath };
-    foreach (CLibraryReferenceViewModel reference in LibraryReferences)
+    foreach (CAvailableLibraryViewModel library in AvailableLibraries.Where(l => l.IsReferenced))
     {
-      if (reference.IsValid)
-      {
-        includeDirectories.Add(_store.Load(reference.ResolvedFullPath).IncludeDirectoryPath);
-      }
+      includeDirectories.Add(Path.Combine(library.RootPath, CProject.IncludeDirectoryName));
     }
 
     var resolver = new FileSystemIncludeResolver(includeDirectories);
@@ -346,16 +401,15 @@ public sealed class CProjectViewModel : ObservableObject
     return new CBuildResult { Success = success, Messages = messages };
   }
 
-  private string AddExistingFile(string sourceFilePath, bool isHeader)
+  private string AddExistingFile(string sourceFilePath, CFileKind kind)
   {
-    string targetDirectory = isHeader ? Model.IncludeDirectoryPath : Model.SourceDirectoryPath;
+    string targetDirectory = TargetDirectoryFor(kind);
     Directory.CreateDirectory(targetDirectory);
     string fileName = Path.GetFileName(sourceFilePath);
     string destination = Path.Combine(targetDirectory, fileName);
     if (File.Exists(destination))
     {
-      throw new InvalidOperationException(
-          $"\"{fileName}\" already exists in this project's {(isHeader ? CProject.IncludeDirectoryName : CProject.SourceDirectoryName)} folder.");
+      throw new InvalidOperationException($"\"{fileName}\" already exists in this project's {DirectoryLabelFor(kind)} folder.");
     }
 
     File.Copy(sourceFilePath, destination);
@@ -364,21 +418,21 @@ public sealed class CProjectViewModel : ObservableObject
     return destination;
   }
 
-  private string CreateNewFile(string fileName, bool isHeader)
+  private string CreateNewFile(string fileName, CFileKind kind)
   {
     if (string.IsNullOrWhiteSpace(fileName))
     {
       throw new InvalidOperationException("Enter a file name.");
     }
 
-    string expectedExtension = isHeader ? ".h" : ".c";
+    string expectedExtension = ExpectedExtensionFor(kind);
     fileName = fileName.Trim();
     if (!fileName.EndsWith(expectedExtension, StringComparison.OrdinalIgnoreCase))
     {
       fileName += expectedExtension;
     }
 
-    string targetDirectory = isHeader ? Model.IncludeDirectoryPath : Model.SourceDirectoryPath;
+    string targetDirectory = TargetDirectoryFor(kind);
     string destination = Path.GetFullPath(Path.Combine(targetDirectory, fileName));
     if (!destination.StartsWith(Path.GetFullPath(targetDirectory), StringComparison.OrdinalIgnoreCase))
     {
@@ -391,7 +445,7 @@ public sealed class CProjectViewModel : ObservableObject
     }
 
     Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-    File.WriteAllText(destination, isHeader ? DefaultHeaderContent(fileName) : DefaultSourceContent(fileName));
+    File.WriteAllText(destination, DefaultContentFor(kind, fileName));
     Refresh();
     StatusText = $"Created {fileName}.";
     return destination;
@@ -410,6 +464,38 @@ public sealed class CProjectViewModel : ObservableObject
   }
 
   private void Save() => _store.Save(Model);
+
+  private string TargetDirectoryFor(CFileKind kind) => kind switch
+  {
+    CFileKind.Header => Model.IncludeDirectoryPath,
+    CFileKind.Source => Model.SourceDirectoryPath,
+    CFileKind.Assembly => Model.AssemblyDirectoryPath,
+    _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+  };
+
+  private static string ExpectedExtensionFor(CFileKind kind) => kind switch
+  {
+    CFileKind.Header => ".h",
+    CFileKind.Source => ".c",
+    CFileKind.Assembly => ".casm",
+    _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+  };
+
+  private static string DirectoryLabelFor(CFileKind kind) => kind switch
+  {
+    CFileKind.Header => CProject.IncludeDirectoryName,
+    CFileKind.Source => CProject.SourceDirectoryName,
+    CFileKind.Assembly => CProject.AssemblyDirectoryName,
+    _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+  };
+
+  private static string DefaultContentFor(CFileKind kind, string fileName) => kind switch
+  {
+    CFileKind.Header => DefaultHeaderContent(fileName),
+    CFileKind.Source => DefaultSourceContent(fileName),
+    CFileKind.Assembly => DefaultAssemblyContent(fileName),
+    _ => throw new ArgumentOutOfRangeException(nameof(kind)),
+  };
 
   private static IEnumerable<string> ToDisplayPaths(string baseDirectory, IReadOnlyList<string> fullPaths) =>
       fullPaths.Select(path => Path.GetRelativePath(baseDirectory, path));
@@ -430,6 +516,8 @@ public sealed class CProjectViewModel : ObservableObject
   }
 
   private static string DefaultSourceContent(string fileName) => $"// {fileName}{Environment.NewLine}";
+
+  private static string DefaultAssemblyContent(string fileName) => $"; {fileName}{Environment.NewLine}";
 
   private static string ToHeaderGuard(string fileName)
   {
@@ -455,59 +543,41 @@ public sealed class CBuildResult
 }
 
 /// <summary>
-/// A resolved snapshot of one of a <see cref="CProject"/>'s library imports, for display in a
-/// <c>CProjectWindow</c>'s library list. Recomputed wholesale on every
-/// <see cref="CProjectViewModel.Refresh"/> rather than kept live, since resolving one means loading
-/// the target project's own metadata off disk.
+/// One row in a <c>CProjectWindow</c>'s "Imported libraries" checkbox list: one C project found under
+/// the shared "libs" directory, with a mutable <see cref="IsReferenced"/> that adds/removes it from
+/// the owning project's own <see cref="CProject.LibraryReferences"/> as soon as it is toggled. Added
+/// 2026-09-08, replacing the former <c>CLibraryReferenceViewModel</c> (a read-only resolved snapshot
+/// of an already-added reference) entirely, per Stefan's "Replace it entirely" answer.
 /// </summary>
-public sealed class CLibraryReferenceViewModel
+public sealed class CAvailableLibraryViewModel
 {
-  public required string StoredPath { get; init; }
-  public required string ResolvedFullPath { get; init; }
-  public required bool IsValid { get; init; }
-  public required string DisplayName { get; init; }
-  public required string StatusText { get; init; }
+  private readonly CProjectViewModel _owner;
+  private bool _isReferenced;
 
-  public string Summary => IsValid ? DisplayName : $"{DisplayName} ({StatusText})";
-
-  public static CLibraryReferenceViewModel Resolve(CProject owner, string storedPath, CProjectStore store)
+  internal CAvailableLibraryViewModel(CProjectViewModel owner, string name, string rootPath, bool isReferenced)
   {
-    string fullPath = owner.ResolveLibraryReferencePath(storedPath);
-    if (!store.IsProjectFolder(fullPath))
-    {
-      return new CLibraryReferenceViewModel
-      {
-        StoredPath = storedPath,
-        ResolvedFullPath = fullPath,
-        IsValid = false,
-        DisplayName = storedPath,
-        StatusText = "Not found",
-      };
-    }
+    _owner = owner;
+    Name = name;
+    RootPath = rootPath;
+    _isReferenced = isReferenced;
+  }
 
-    try
+  public string Name { get; }
+
+  public string RootPath { get; }
+
+  public bool IsReferenced
+  {
+    get => _isReferenced;
+    set
     {
-      CProject target = store.Load(fullPath);
-      bool isLibrary = target.Kind == CProjectKind.Library;
-      return new CLibraryReferenceViewModel
+      if (_isReferenced == value)
       {
-        StoredPath = storedPath,
-        ResolvedFullPath = fullPath,
-        IsValid = isLibrary,
-        DisplayName = target.Name,
-        StatusText = isLibrary ? "OK" : "Not a Library project",
-      };
-    }
-    catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
-    {
-      return new CLibraryReferenceViewModel
-      {
-        StoredPath = storedPath,
-        ResolvedFullPath = fullPath,
-        IsValid = false,
-        DisplayName = storedPath,
-        StatusText = $"Error: {exception.Message}",
-      };
+        return;
+      }
+
+      _isReferenced = value;
+      _owner.SetLibraryReferenced(this, value);
     }
   }
 }

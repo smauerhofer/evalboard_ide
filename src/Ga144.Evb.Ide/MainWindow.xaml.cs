@@ -4,11 +4,18 @@ using Ga144.Evb.Ide.Services;
 using Ga144.Evb.Ide.ViewModels;
 using Ga144.Evb.Ide.Views;
 using Microsoft.Win32;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace Ga144.Evb.Ide;
+
+/// <summary>One row in MainWindow's own "libs"/"prgs" project lists (see <see
+/// cref="MainWindow.RefreshCWorkspaceProjectLists"/>) -- just enough to display a name and open the
+/// project on double-click, without pulling <c>Models.CProject</c> itself into any binding.</summary>
+public sealed record CWorkspaceProjectEntry(string Name, string RootPath);
 
 public partial class MainWindow : Window
 {
@@ -23,6 +30,11 @@ public partial class MainWindow : Window
   private bool _closeCompleted;
   private MacroEditorWindow? _macroEditor;
 
+  // The two grouped project lists shown in MainWindow's own "Libraries"/"Programs" panel (see
+  // RefreshCWorkspaceProjectLists), rebuilt from disk whenever the C workspace root changes.
+  public ObservableCollection<CWorkspaceProjectEntry> CLibraryProjects { get; } = [];
+  public ObservableCollection<CWorkspaceProjectEntry> CProgramProjects { get; } = [];
+
   public MainWindow(MainWindowViewModel viewModel)
   {
     InitializeComponent();
@@ -30,6 +42,7 @@ public partial class MainWindow : Window
     DataContext = viewModel;
     Loaded += OnLoaded;
     Closing += OnClosing;
+    _viewModel.CWorkspaceProjectsChanged += (_, _) => RefreshCWorkspaceProjectLists();
   }
 
   private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -40,6 +53,9 @@ public partial class MainWindow : Window
     // sharing a single xHCI controller through the KVM.
     _deviceWatcher ??= new SerialDeviceChangeWatcher(this, _viewModel.RequestDeviceChangeScan);
     _deviceWatcher.Start();
+
+    LibraryProjectsListBox.ItemsSource = CLibraryProjects;
+    ProgramProjectsListBox.ItemsSource = CProgramProjects;
 
     await _viewModel.InitializeAsync();
   }
@@ -207,7 +223,12 @@ public partial class MainWindow : Window
 
   private void OnNewCProjectClick(object sender, RoutedEventArgs e)
   {
-    var dialogViewModel = new NewCProjectViewModel(DefaultCProjectLocation());
+    if (string.IsNullOrWhiteSpace(_viewModel.CWorkspaceRootPath) && !ChooseCWorkspaceRoot())
+    {
+      return;
+    }
+
+    var dialogViewModel = new NewCProjectViewModel(_viewModel.CLibsDirectoryPath!, _viewModel.CPrgsDirectoryPath!);
     var dialog = new NewCProjectWindow(dialogViewModel) { Owner = this };
     if (dialog.ShowDialog() != true)
     {
@@ -218,11 +239,95 @@ public partial class MainWindow : Window
     {
       CProject project = _cProjectStore.Create(dialogViewModel.ResolvedRootPath, dialogViewModel.Name, dialogViewModel.Kind);
       OpenOrActivateCProjectWindow(project);
+      RefreshCWorkspaceProjectLists();
     }
     catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
         or InvalidOperationException or ArgumentException)
     {
       MessageBox.Show(this, exception.Message, "New C project", MessageBoxButton.OK, MessageBoxImage.Error);
+    }
+  }
+
+  private void OnChooseCWorkspaceClick(object sender, RoutedEventArgs e) => ChooseCWorkspaceRoot();
+
+  // Prompts for a folder to use as the shared C workspace root (containing "libs"/"prgs"), creating
+  // those two subfolders if they don't already exist. Returns true if a root ended up configured
+  // (either just chosen, or already set from before) -- callers that need a root before proceeding
+  // (New C Project) check this rather than assuming the prompt was accepted.
+  private bool ChooseCWorkspaceRoot()
+  {
+    var dialog = new OpenFolderDialog { Title = "Choose the C workspace folder (will contain \"libs\" and \"prgs\")" };
+    if (Directory.Exists(_viewModel.CWorkspaceRootPath))
+    {
+      dialog.InitialDirectory = _viewModel.CWorkspaceRootPath;
+    }
+
+    if (dialog.ShowDialog(this) != true)
+    {
+      return !string.IsNullOrWhiteSpace(_viewModel.CWorkspaceRootPath);
+    }
+
+    try
+    {
+      Directory.CreateDirectory(Path.Combine(dialog.FolderName, "libs"));
+      Directory.CreateDirectory(Path.Combine(dialog.FolderName, "prgs"));
+    }
+    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+    {
+      MessageBox.Show(this, exception.Message, "C workspace", MessageBoxButton.OK, MessageBoxImage.Error);
+      return !string.IsNullOrWhiteSpace(_viewModel.CWorkspaceRootPath);
+    }
+
+    _viewModel.CWorkspaceRootPath = dialog.FolderName;
+    return true;
+  }
+
+  private void OnCWorkspaceProjectDoubleClick(object sender, MouseButtonEventArgs e)
+  {
+    if (sender is ListBox { SelectedItem: CWorkspaceProjectEntry entry })
+    {
+      OpenCProjectFolder(entry.RootPath);
+    }
+  }
+
+  private void RefreshCWorkspaceProjectLists()
+  {
+    PopulateCWorkspaceProjectList(CLibraryProjects, _viewModel.CLibsDirectoryPath);
+    PopulateCWorkspaceProjectList(CProgramProjects, _viewModel.CPrgsDirectoryPath);
+  }
+
+  private void PopulateCWorkspaceProjectList(ObservableCollection<CWorkspaceProjectEntry> target, string? directoryPath)
+  {
+    target.Clear();
+    if (string.IsNullOrWhiteSpace(directoryPath) || !Directory.Exists(directoryPath))
+    {
+      return;
+    }
+
+    var entries = new List<CWorkspaceProjectEntry>();
+    foreach (string folder in Directory.EnumerateDirectories(directoryPath))
+    {
+      if (!_cProjectStore.IsProjectFolder(folder))
+      {
+        continue;
+      }
+
+      string name;
+      try
+      {
+        name = _cProjectStore.Load(folder).Name;
+      }
+      catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
+      {
+        name = Path.GetFileName(folder);
+      }
+
+      entries.Add(new CWorkspaceProjectEntry(name, Path.GetFullPath(folder)));
+    }
+
+    foreach (CWorkspaceProjectEntry entry in entries.OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase))
+    {
+      target.Add(entry);
     }
   }
 
@@ -281,7 +386,7 @@ public partial class MainWindow : Window
       return;
     }
 
-    var window = new CProjectWindow(new CProjectViewModel(project, _cProjectStore)) { Owner = this };
+    var window = new CProjectWindow(new CProjectViewModel(project, _cProjectStore, _viewModel.CLibsDirectoryPath)) { Owner = this };
     _openCProjectWindows[project.RootPath] = window;
     window.Closed += (_, _) => _openCProjectWindows.Remove(project.RootPath);
     window.Show();

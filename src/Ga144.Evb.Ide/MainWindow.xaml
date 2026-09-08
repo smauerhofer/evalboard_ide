@@ -35,6 +35,7 @@
           <Button Content="Open workspace folder" Command="{Binding OpenConfigurationFolderCommand}" />
           <Button Content="New C Project..." Click="OnNewCProjectClick" Margin="20,0,8,0" />
           <Button Content="Open C Project..." Click="OnOpenCProjectClick" />
+          <Button Content="Choose C Workspace..." Click="OnChooseCWorkspaceClick" Margin="8,0,0,0" ToolTip="Choose the shared folder that contains the &quot;libs&quot; and &quot;prgs&quot; subfolders" />
           <ComboBox ItemsSource="{Binding RecentCProjectPaths}"
                               SelectedIndex="-1"
                               Width="220"
@@ -66,6 +67,7 @@
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="285" />
         <ColumnDefinition Width="270" />
+        <ColumnDefinition Width="260" />
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="350" />
       </Grid.ColumnDefinitions>
@@ -145,7 +147,33 @@
         </Grid>
       </GroupBox>
 
-      <TabControl Grid.Column="2" Margin="4,8">
+      <GroupBox Grid.Column="2" Header="C workspace (libs / prgs)">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+
+          <TextBlock Grid.Row="0" Text="Libraries" FontWeight="SemiBold" Margin="0,0,0,4" />
+          <ListBox Grid.Row="1"
+                             x:Name="LibraryProjectsListBox"
+                             DisplayMemberPath="Name"
+                             MouseDoubleClick="OnCWorkspaceProjectDoubleClick" />
+
+          <Separator Grid.Row="2" Margin="0,8" />
+
+          <TextBlock Grid.Row="3" Text="Programs" FontWeight="SemiBold" Margin="0,0,0,4" />
+          <ListBox Grid.Row="4"
+                             x:Name="ProgramProjectsListBox"
+                             DisplayMemberPath="Name"
+                             MouseDoubleClick="OnCWorkspaceProjectDoubleClick" />
+        </Grid>
+      </GroupBox>
+
+      <TabControl Grid.Column="3" Margin="4,8">
         <TabItem Header="Board">
           <Grid Margin="8">
             <Grid.RowDefinitions>
@@ -218,7 +246,7 @@
         </TabItem>
       </TabControl>
 
-      <GroupBox Grid.Column="3" Header="Board and interface details">
+      <GroupBox Grid.Column="4" Header="Board and interface details">
         <ScrollViewer VerticalScrollBarVisibility="Auto">
           <StackPanel>
             <TextBlock Text="Selected board" FontWeight="SemiBold" FontSize="16" />

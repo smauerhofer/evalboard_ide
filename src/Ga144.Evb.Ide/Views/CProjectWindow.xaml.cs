@@ -95,22 +95,37 @@ public partial class CProjectWindow : Window
         }
       });
 
-  private void OnAddLibraryReferenceClick(object sender, RoutedEventArgs e) =>
+  private void OnNewAssemblyFileClick(object sender, RoutedEventArgs e) =>
       RunGuarded(() =>
       {
-        var dialog = new OpenFolderDialog { Title = "Choose the library project's own folder" };
-        if (dialog.ShowDialog(this) == true)
+        string? name = TextInputDialog.Ask(this, "New assembly file", "File name (a \".casm\" extension is added if you leave it off):");
+        if (name is not null)
         {
-          _viewModel.AddLibraryReference(dialog.FolderName);
+          _viewModel.SelectedAssemblyFile = RelativeTo(_viewModel.Model.AssemblyDirectoryPath, _viewModel.CreateNewAssemblyFile(name));
         }
       });
 
-  private void OnRemoveLibraryReferenceClick(object sender, RoutedEventArgs e) =>
+  private void OnAddExistingAssemblyFileClick(object sender, RoutedEventArgs e) =>
       RunGuarded(() =>
       {
-        if (_viewModel.SelectedLibraryReference is { } reference)
+        var dialog = new OpenFileDialog { Title = "Add existing assembly file", Filter = "CVM assembly (*.casm)|*.casm|All files (*.*)|*.*" };
+        if (dialog.ShowDialog(this) == true)
         {
-          _viewModel.RemoveLibraryReference(reference);
+          _viewModel.SelectedAssemblyFile = RelativeTo(_viewModel.Model.AssemblyDirectoryPath, _viewModel.AddExistingAssemblyFile(dialog.FileName));
+        }
+      });
+
+  private void OnOpenAssemblyFileClick(object sender, MouseButtonEventArgs e) => OnOpenAssemblyFileClick(sender, (RoutedEventArgs)e);
+
+  private void OnOpenAssemblyFileClick(object sender, RoutedEventArgs e) =>
+      RunGuarded(() => OpenFile(_viewModel.SelectedAssemblyFile, _viewModel.ResolveAssemblyFilePath));
+
+  private void OnRemoveAssemblyFileClick(object sender, RoutedEventArgs e) =>
+      RunGuarded(() =>
+      {
+        if (_viewModel.SelectedAssemblyFile is { } file && ConfirmRemove(file))
+        {
+          _viewModel.RemoveAssemblyFile(file);
         }
       });
 

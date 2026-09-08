@@ -100,6 +100,44 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
       RecentCProjectPaths.Add(path);
     }
   }
+
+  /// <summary>
+  /// The single, shared root folder every C project now lives under (added 2026-09-08 -- see
+  /// <see cref="AppSettings.CWorkspaceRootPath"/>'s own remarks). Setting this persists it (like
+  /// <see cref="RecentCProjectPaths"/>) and raises <see cref="CWorkspaceProjectsChanged"/> so
+  /// <c>MainWindow</c>'s own code-behind (which owns the actual "libs"/"prgs" directory scan, since
+  /// that needs <c>Services.CProjectStore</c> -- a dependency this hardware-focused view model
+  /// deliberately does not otherwise have, per <see cref="RecentCProjectPaths"/>'s own remarks) knows
+  /// to rebuild its two project lists.
+  /// </summary>
+  public string? CWorkspaceRootPath
+  {
+    get => _workspace.Settings.CWorkspaceRootPath;
+    set
+    {
+      string? normalized = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+      if (string.Equals(_workspace.Settings.CWorkspaceRootPath, normalized, StringComparison.OrdinalIgnoreCase))
+      {
+        return;
+      }
+
+      _workspace.Settings.CWorkspaceRootPath = normalized;
+      OnPropertyChanged();
+      OnPropertyChanged(nameof(CLibsDirectoryPath));
+      OnPropertyChanged(nameof(CPrgsDirectoryPath));
+      MarkWorkspaceDirty();
+      CWorkspaceProjectsChanged?.Invoke(this, EventArgs.Empty);
+    }
+  }
+
+  /// <summary>Raised whenever <see cref="CWorkspaceRootPath"/> changes, so <c>MainWindow</c> can
+  /// rescan "libs"/"prgs" and rebuild its own grouped project lists.</summary>
+  public event EventHandler? CWorkspaceProjectsChanged;
+
+  public string? CLibsDirectoryPath => string.IsNullOrWhiteSpace(CWorkspaceRootPath) ? null : Path.Combine(CWorkspaceRootPath, "libs");
+
+  public string? CPrgsDirectoryPath => string.IsNullOrWhiteSpace(CWorkspaceRootPath) ? null : Path.Combine(CWorkspaceRootPath, "prgs");
+
   public IReadOnlyList<EvalBoardModel> BoardModels { get; } = Enum.GetValues<EvalBoardModel>();
   public string ConfigurationPath { get; }
   public string RomLibraryPath { get; }
@@ -475,6 +513,7 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
       SelectedProject = Projects.FirstOrDefault(project => project.Id == _workspace.ActiveProjectId)
                         ?? Projects.FirstOrDefault();
       RefreshRecentCProjectPaths();
+      CWorkspaceProjectsChanged?.Invoke(this, EventArgs.Empty);
 
       OnPropertyChanged(nameof(AutoDetectEnabled));
       OnPropertyChanged(nameof(ActiveProbeNewPortsEnabled));

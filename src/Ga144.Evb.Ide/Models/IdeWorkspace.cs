@@ -35,6 +35,9 @@ public sealed class IdeWorkspace
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .Take(10)
         .ToList();
+    Settings.CWorkspaceRootPath = string.IsNullOrWhiteSpace(Settings.CWorkspaceRootPath)
+        ? null
+        : Settings.CWorkspaceRootPath.Trim();
 
     if (Projects.Count == 0)
     {
@@ -145,4 +148,14 @@ public sealed class AppSettings
   // C projects themselves are never stored here -- each is just a folder with its own
   // project.gacproj (see Models.CProject) -- this is only a convenience shortcut list.
   public List<string> RecentCProjectPaths { get; set; } = [];
+
+  // The single, shared root folder (chosen once, via MainWindow's "Choose C Workspace..." button)
+  // under which every C project now lives: "<CWorkspaceRootPath>/libs/<name>" for every Library
+  // project, "<CWorkspaceRootPath>/prgs/<name>" for every Program project. Added 2026-09-08, per
+  // Stefan: "libraries are located in the 'libs' directory", "programs are located in the 'prgs'
+  // directory" -- this is what makes those two directories discoverable at all, since a C project
+  // is otherwise just an arbitrary folder on disk (Models.CProject) with no central registry. Null
+  // until the person chooses one; "New C Project" and the C project window's own "Imported
+  // libraries" checkbox list are both unavailable (gracefully -- not an error) until it is set.
+  public string? CWorkspaceRootPath { get; set; }
 }
