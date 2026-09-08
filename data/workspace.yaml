@@ -15139,11 +15139,145 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 405
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >-
+        ( CVM2 node 405. multiword arithmetic, 1110_1???_????_???? )
+
+        ( A: carry bit 0 or 1 for multiword arithmetic )
+
+        # 406 import
+
+        # 0 org
+
+        entry mw/main
+
+        # 0 /a
+
+        # left /b
+
+        : mw/r@ ( -w) A[ y/r@ ]] lit !b A[ !p ]] lit !b @b ;
+
+        : mw/r! ( w) A[ @p y/r! ]] lit !b !b ;
+
+        : mw/pop ( -w) A[ y/pop ]] lit !b A[ !p ]] lit !b @b ;
+
+        : mw/leave A[ y/leave ; ]] lit !b
+
+        : mw/main  A[ drop !p ]] lit !b @b >r mw/r@ ex mw/leave ;
+
+
+        : 'tgc ( ) a 1 xor a! ;
+
+        : 'adc ( w-) mw/pop + a . + 
+
+        : mw/! ( w-) dup 0xffff mw/r! 0x10000 and
+
+        : 'ldc ( w-) if
+
+        : 'sec ( w-) dup xor a! @+ drop ;
+
+        then
+
+        : 'clc ( w-) dup xor a! ;
+
+        : 'stc ( ) a mw/r! ;
+
+        : 'sbc ( w-) 'tgc inv 'adc ;
+
+        : 'rol ( w-) 2* a xor mw/! ;
+
+        : 'ror ( w-) a if drop 0x10000 xor dup then drop dup 1 and 'stc 2/ mw/r! ;
+
+
+        (
+
+        'tgc toggle carry. invert carry.
+
+        'ldc load carry. set carry if r != 0 else clear carry
+
+        'clc clear carry
+
+        'sec set carry
+
+        'stc store carry into r
+
+        'adc add with carry. carry,r = r + pop + carry
+
+        'sbc subtract with carry. carry,r = pop - r + !carry
+
+        'rol rotate left. carry, r = r << 1, carry
+
+        'ror rotate right. r, carry = carry, r >> 1
+
+
+        )
+      ramWords:
+      - 0x05B12
+      - 0x13402
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05606
+      - 0x05B12
+      - 0x13408
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05BB2
+      - 0x11412
+      - 0x05B02
+      - 0x3B9B2
+      - 0x2F600
+      - 0x17555
+      - 0x1140A
+      - 0x23DE2
+      - 0x00001
+      - 0x2B555
+      - 0x13406
+      - 0x3CEB0
+      - 0x25DB2
+      - 0x0FFFF
+      - 0x13404
+      - 0x040B2
+      - 0x10000
+      - 0x1941E
+      - 0x243AA
+      - 0x06255
+      - 0x243AD
+      - 0x23704
+      - 0x13411
+      - 0x33714
+      - 0x36EE2
+      - 0x11416
+      - 0x23327
+      - 0x3BDE3
+      - 0x10000
+      - 0x3AD12
+      - 0x00001
+      - 0x3F61F
+      - 0x31704
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x00C
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15182,7 +15316,7 @@ projects:
         : y/main # y/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b
           -if // 1110_1???_????_????
             // more arithmetic
-            r> r--- ;
+            r> --l- ;
           then // 1110_0???_????_????
           2* -if // 1110_01??_????_????
             // binary operator with constant in next word
@@ -15235,30 +15369,30 @@ projects:
       - 0x04055
       - 0x0000F
       - 0x05B12
+      - 0x1340E
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05610
+      - 0x05B12
       - 0x13400
       - 0x0C9B2
       - 0x09F55
       - 0x05B25
-      - 0x05602
+      - 0x05612
       - 0x05B12
-      - 0x13404
-      - 0x0C9B2
-      - 0x09F55
-      - 0x05B25
-      - 0x05608
-      - 0x05B12
-      - 0x1340A
+      - 0x13414
       - 0x0C9B2
       - 0x09F55
       - 0x05BB2
-      - 0x1140E
+      - 0x11418
       - 0x04812
       - 0x00012
       - 0x0C432
       - 0x09FBA
       - 0x0121B
       - 0x269B2
-      - 0x115D5
+      - 0x11575
       - 0x3721E
       - 0x1340E
       - 0x1141F
@@ -15454,7 +15588,7 @@ projects:
 
         entry c/main
 
-        # 0 /a
+        # 0x8000 /a // toggle bit for unsigned operation
 
         # left /b
 
@@ -15464,6 +15598,8 @@ projects:
 
         : c/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;
 
+        : c/u ( xy-yx) // modify parameter for unsigned operation
+          a xor over a xor over ;
         : c/push ( w) A[ @p n/push ]] lit !b !b ;
 
         : c/leave A[ n/leave ; ]] lit !b
@@ -15477,6 +15613,14 @@ projects:
             // binary comparison
             // 'eq
             // 'ne
+            // 'lt
+            // 'le
+            // 'gt
+            // 'ge
+            // 'ult
+            // 'ule
+            // 'ugt
+            // 'uge
             c/pop
           then // 1111_00??_????_????
             // unary comparison
@@ -15507,17 +15651,25 @@ projects:
 
         : c/inc ( x-y) 1 . + ;
 
+        : 'uge ( xy-f) c/u
+
         : 'ge ( xy-f) c/cmp
 
         : 'lt0 ( x-f) 2* 2* # 'true -until 'false ;
+
+        : 'ult ( xy-f) c/u
 
         : 'lt ( xy-f) c/cmp
 
         : 'ge0 ( x-f) 'lt0 c/not ;
 
+        : 'ugt ( xy-f) c/u
+
         : 'gt ( xy-f) c/cmp
 
         : 'le0 ( x-f) 2* 2* # 'true -until 'eq0 ;
+
+        : 'ule ( xy-f) c/u
 
         : 'le ( xy-f) c/cmp
 
@@ -15540,30 +15692,36 @@ projects:
           'le binary. r is true if x <= y
           'gt binary. r is true if x > y
           'ge binary. r is true if x >= y
+          'ult unsigned binary. r is true if x < y
+          'ule unsigned binary. r is true if x <= y
+          'ugt unsigned binary. r is true if x > y
+          'uge unsigned binary. r is true if x >= y
         )
       ramWords:
+      - 0x05B12
+      - 0x1340E
+      - 0x0C9B2
+      - 0x09F55
+      - 0x05B25
+      - 0x05610
       - 0x05B12
       - 0x13400
       - 0x0C9B2
       - 0x09F55
+      - 0x22382
+      - 0x22385
       - 0x05B25
-      - 0x05602
-      - 0x05B12
-      - 0x13404
-      - 0x0C9B2
-      - 0x09F55
-      - 0x05B25
-      - 0x05608
+      - 0x05612
       - 0x05BB2
-      - 0x1140E
+      - 0x11418
       - 0x04812
-      - 0x0000C
+      - 0x0000E
       - 0x0C432
       - 0x09FBA
-      - 0x01215
+      - 0x01217
       - 0x269B2
       - 0x115D5
-      - 0x37217
+      - 0x37219
       - 0x13406
       - 0x13400
       - 0x17555
@@ -15572,42 +15730,40 @@ projects:
       - 0x00001
       - 0x24355
       - 0x389B2
-      - 0x19420
-      - 0x1141A
+      - 0x19422
       - 0x1141C
-      - 0x1341D
+      - 0x1141E
+      - 0x1341F
       - 0x04355
       - 0x00001
-      - 0x1341E
-      - 0x11422
+      - 0x13420
+      - 0x11424
       - 0x329F2
       - 0x049F5
       - 0x00001
-      - 0x13426
+      - 0x1340A
+      - 0x13428
       - 0x364B2
-      - 0x1B41A
-      - 0x1141C
-      - 0x13426
-      - 0x1342A
-      - 0x11422
-      - 0x13426
-      - 0x364B2
-      - 0x1B41A
+      - 0x1B41C
+      - 0x1141E
+      - 0x1340A
+      - 0x13428
+      - 0x1342D
       - 0x11424
-      - 0x13426
-      - 0x13431
-      - 0x11422
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1340A
+      - 0x13428
+      - 0x364B2
+      - 0x1B41C
+      - 0x11426
+      - 0x1340A
+      - 0x13428
+      - 0x13436
+      - 0x11424
       - 0x15555
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00E
+        entryPoint: 0x010
         p: 0x000
         a: 0x000
         b: 0x000
@@ -16397,10 +16553,10 @@ projects:
         parameterStack: []
     - coordinate: 510
       enabled: true
-      sourceCode: >
+      sourceCode: >-
         ( CVM2 node 510. extended arithmetic, 1011_1???_????_???? )
 
-        ( A: double register)
+        ( A: extended register x)
 
         # 509 import
 
@@ -16412,6 +16568,8 @@ projects:
 
         # left /b
 
+        : x/mask  0xffff and a! ;
+
         : x/r@ ( -w) A[ u/r@ ]] lit !b A[ !p ]] lit !b @b ;
 
         : x/r! ( w) A[ @p u/r! ]] lit !b !b ;
@@ -16422,13 +16580,48 @@ projects:
 
         : x/leave A[ u/leave ; ]] lit !b
 
-        : x/main A[ 2* !p !p ]] lit !b @b @b >r
+        : x/main # x/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r
           -if // 1011_11??_????_????
             // register file
             r> r--- ;
           then // 1011_10??_????_????
-          ex x/leave ;
+          ex ;
+
+        : x/sr16 ( w-w) 7 for 2/ 2/ unext ;
+
+        : 'addc a x/pop + x/r@ + dup x/r!
+
+        : x/csr16 ( w-c) x/sr16
+
+        : x/c! 1 and a! ;
+
+        : x/sl16 ( w-w) 7 for 2* 2* unext ;
+
+        : 'xst a x/r! ;
+
+        : 'xld x/r@ a! ;
+
+        : 'xmul2 x/r@ 2* a xor dup x/r! x/csr16 ;
+
+        : 'xdiv2 x/r@ a x/sl16 xor dup 2/ x/r! x/c! ;
+
+        : 'xumul x/pop dup x/r@ a! dup xor 8 for +* . +* unext
+          2* 2* a x/mask x/r! a x/sr16 3 and xor x/mask ;
+        (
+          'addc add with carry.
+          x/sr16 shift right 16.
+          x/csr16 shift right 16 and store carry in register x.
+          x/c! store carry into register x.
+          x/sl16 shift left 16.
+          'xld move register r into register x
+          'xst store register x into register r
+          'xmul2 left shift double
+          'xdiv2 right shift double
+          'xumul usigned multiply double
+        )
       ramWords:
+      - 0x040AD
+      - 0x0FFFF
       - 0x05B12
       - 0x13400
       - 0x0C9B2
@@ -16443,58 +16636,56 @@ projects:
       - 0x0560A
       - 0x05BB2
       - 0x1140C
-      - 0x05B02
+      - 0x04812
+      - 0x0000E
       - 0x37932
-      - 0x0086B
+      - 0x09F02
+      - 0x2F217
       - 0x269B2
       - 0x115D5
       - 0x17555
-      - 0x1140C
       - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x048B2
+      - 0x00007
+      - 0x30775
+      - 0x23608
+      - 0x3D602
+      - 0x3CDB2
+      - 0x13406
+      - 0x13419
+      - 0x040AD
+      - 0x00001
+      - 0x048B2
+      - 0x00007
+      - 0x36475
+      - 0x23706
+      - 0x13402
+      - 0x2B555
+      - 0x13402
+      - 0x36EE3
+      - 0x13406
+      - 0x11420
+      - 0x13402
+      - 0x23623
+      - 0x38DC2
+      - 0x13406
+      - 0x11421
+      - 0x13408
+      - 0x25602
+      - 0x2ADE7
+      - 0x00008
+      - 0x2E9B2
+      - 0x349D4
+      - 0x3648A
+      - 0x13400
+      - 0x13406
+      - 0x23619
+      - 0x040E2
+      - 0x00003
+      - 0x11400
       - 0x15555
       startup:
-        entryPoint: 0x00E
+        entryPoint: 0x010
         p: 0x000
         a: 0x000
         b: 0x000
