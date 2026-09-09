@@ -29,6 +29,39 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
+      dateTime: 2026-09-09T15:49:29.9703816
+      utcDateTime: 2026-09-09T15:49:29.9703816Z
+      localDateTime: 2026-09-09T17:49:29.9703816+02:00
+      date: 2026-09-09T00:00:00.0000000
+      day: 9
+      dayOfWeek: Wednesday
+      dayOfYear: 252
+      hour: 15
+      millisecond: 970
+      microsecond: 381
+      nanosecond: 600
+      minute: 49
+      month: 9
+      offset: 00:00:00
+      totalOffsetMinutes: 0
+      second: 29
+      ticks: 639245657699703816
+      utcTicks: 639245657699703816
+      timeOfDay: 15:49:29.9703816
+      year: 2026
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -49,19 +82,6 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -16053,7 +16073,7 @@ projects:
         parameterStack: []
     - coordinate: 506
       enabled: true
-      sourceCode: "( CVM2 node 506. frame, 1001_????_????_???? )\r\n( A: register f (frame pointer)\n# 507 import\n# 0 org\nentry f/main\n# 0 /a\n# right /b\r\n\r\n: par 0x1ff and ;\r\n\r\n: f/next ( -w) A[ m/next ]] lit !b ahead ;\n: f/pop ( -w) A[ m/pop ]] lit !b then A[ !p ]] lit !b @b ;\n\r\n: f/r@ ( -w) A[ over !p ]] lit !b @b ;\n: f/r! ( w) A[ @p over ]] lit !b !b ;\n: f/push ( w) A[ @p m/push ]] lit !b !b ;\r\n\r\n\r\n: f/stack@ ( o-a) // load from stack\r\n  a . +  A[ @p m/1@ ]] lit !b !b A[ over ]] lit !b ;\r\n: f/stack! ( o-a) // store to stack\r\n  a . +  A[ over @p ]] lit !b !b A[ m/1! ]] lit !b ;\r\n: f/leave A[ ; ]] lit !b\r\n: f/main // node entry point\r\n  # f/leave lit >r // prepare return address\r\n  A[ 2* !p !p ]] lit !b @b @b >r // push take over code\r\n  -if // 1001_1???_????_????\r\n    2* -if // 1001_11??_????_????\r\n\r\n      2* -if // 1001_111?_????_????\r\n        // load local\r\n        r> par inv f/stack@ ;\r\n        \r\n      then // 1001_110?_????_????\n      // load parameter\r\n      r> par f/stack@ ;\r\n\r\n    then // 1001_10??_????_????\n\r\n      2* -if // 1001_101?_????_????\r\n        // store local\r\n        r> par inv f/stack! ;\r\n\r\n      then // 1001_100?_????_????\n      // store parameter\r\n      r> par f/stack! ;\r\n\r\n  then // 1001_0???_????_????\n  2* -if // 1001_01??_????_????\r\n    r> --l- ;\r\n  then // 1001_00???_????_????\n  2* -if // 1001_001?_????_????\r\n    // enter\r\n    a A[ @p m/push ]] lit !b !b  // save frame pointer\r\n    A[ dup !p ]] lit !b @b // read stack pointer\r\n    r> par inv + a! ; // calculate new frame pointer\r\n  then // 1001_000?_????_????\r\n  ex ;\r\n\r\n: 'leave .loc\r\n  A[ m/pop ]] lit !b A[ !p ]] lit !b @b a! ;\r\n\r\n(\r\nopcode ldl 1001_111?_????_???? load local into r. the offset is 9 bit.\r\nopcode ldp 1001_110?_????_???? load parameter into r. the offset is 9 bit.\r\nopcode stl 1001_101?_????_???? store r into local. the offset is 9 bit.\r\nopcode stp 1001_100?_????_???? store r into parameter. the offset is 9 bit.\r\nopcode enter 1001_001?_????_???? enter stack frame. the offset is 9 bit.\r\nopcode 1001_01??_????_???? call node 505\r\n'leave restore stack pointer and previous frame. undo enter stack frame.\r\n)"
+      sourceCode: "( CVM2 node 506. frame, 1001_????_????_???? )\r\n( A: register f (frame pointer)\n# 507 import\n# 0 org\nentry f/main\n# 0 /a\n# right /b\r\n\r\n: par 0x1ff and ;\r\n\r\n: f/next ( -w) A[ m/next ]] lit !b ahead ;\n: f/pop ( -w) A[ m/pop ]] lit !b then A[ !p ]] lit !b @b ;\n\r\n: f/r@ ( -w) A[ over !p ]] lit !b @b ;\n: f/r! ( w) A[ @p over ]] lit !b !b ;\n: f/push ( w) A[ @p m/push ]] lit !b !b ;\r\n\r\n\r\n: f/stack@ ( o-a) // load from stack\r\n  a . +  A[ @p m/1@ ]] lit !b !b A[ over ]] lit !b ;\r\n: f/stack! ( o-a) // store to stack\r\n  a . +  A[ over @p ]] lit !b !b A[ m/1! ]] lit !b ;\r\n: f/leave A[ ; ]] lit !b\r\n: f/main // node entry point\r\n  # f/leave lit >r // prepare return address\r\n  A[ 2* !p !p ]] lit !b @b @b >r // push take over code\r\n  -if // 1001_1???_????_????\r\n    2* -if // 1001_11??_????_????\r\n\r\n      2* -if // 1001_111?_????_????\r\n        // load local\r\n        r> par inv f/stack@ ;\r\n        \r\n      then // 1001_110?_????_????\n      // load parameter\r\n      r> par f/stack@ ;\r\n\r\n    then // 1001_10??_????_????\n\r\n      2* -if // 1001_101?_????_????\r\n        // store local\r\n        r> par inv f/stack! ;\r\n\r\n      then // 1001_100?_????_????\n      // store parameter\r\n      r> par f/stack! ;\r\n\r\n  then // 1001_0???_????_????\n  2* -if // 1001_01??_????_????\r\n    r> --l- ;\r\n  then // 1001_00???_????_????\n  2* -if // 1001_001?_????_????\r\n    // enter\r\n    a A[ @p m/push ]] lit !b !b  // save frame pointer\r\n    A[ dup !p ]] lit !b @b // read stack pointer\r\n    r> par inv + a! ; // calculate new frame pointer\r\n  then // 1001_000?_????_????\r\n  ex ;\r\n\r\n: 'leave .loc\r\n  A[ m/pop ]] lit !b A[ !p ]] lit !b @b a! ;\r\n: 'f .loc\r\n  a f/r! ;\r\n: 'fpush .loc\r\n  a f/push ;\r\n\r\n(\r\nopcode ldl 1001_111?_????_???? load local into r. the offset is 9 bit.\r\nopcode ldp 1001_110?_????_???? load parameter into r. the offset is 9 bit.\r\nopcode stl 1001_101?_????_???? store r into local. the offset is 9 bit.\r\nopcode stp 1001_100?_????_???? store r into parameter. the offset is 9 bit.\r\nopcode enter 1001_001?_????_???? enter stack frame. the offset is 9 bit.\r\nopcode 1001_01??_????_???? call node 505\r\n'leave restore stack pointer and previous frame. undo enter stack frame.\r\n'f move f to register r\r\n'fpush push f onto the stack\r\n)"
       ramWords:
       - 0x04055
       - 0x001FF
@@ -16105,18 +16125,18 @@ projects:
       - 0x23D22
       - 0x0560F
       - 0x09D22
-      - 0x25955
+      - 0x259B2
       - 0x00CB2
       - 0x13400
       - 0x321AD
-      - 0x1340D
       - 0x17555
       - 0x15555
       - 0x05B12
       - 0x13401
       - 0x0C9B2
       - 0x09FAD
-      - 0x15555
+      - 0x2370B
+      - 0x2370D
       - 0x15555
       - 0x15555
       startup:

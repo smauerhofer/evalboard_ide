@@ -194,6 +194,18 @@ internal static class Node506Program
   /// specific claim above (a compiled address, a port name, a verification result) as possibly
   /// stale until re-confirmed against a fresh compile.
   ///
+  /// <b>UPDATED, 2026-09-09.</b> Stefan supplied a new revision adding two words, <c>'f</c> and
+  /// <c>'fpush</c>, right after <c>'leave</c> ("i will provide a new 506"), replacing the retired
+  /// <c>lal</c>/<c>lap</c> mnemonics: "use ''f' or 'fpush' from node 506 and add the offset to calculate
+  /// the address of a local or parameter." <c>'f</c> (<c>a f/r! ;</c>) moves the frame pointer <c>f</c>
+  /// into register <c>r</c>; <c>'fpush</c> (<c>a f/push ;</c>) pushes <c>f</c> directly onto the CVM data
+  /// stack. Both are reached the SAME way <c>'leave</c> is -- tagged/node-resolved, sharing
+  /// <c>'leave</c>'s own tag (<c>Node506LeaveTagBits</c>, <c>0x9000 | address</c> on this node's own
+  /// <c>f/main</c> "ex" fall-through) -- see <see cref="CvmInstructionSet.FrameToRegisterMnemonic"/>'s
+  /// and <see cref="CvmInstructionSet.PushFrameMnemonic"/>'s own remarks. This revision is otherwise
+  /// identical to the 2026-09-08 sync above; the specific compiled addresses that sync's own remarks
+  /// quote (e.g. <c>'leave</c> at <c>0x0038</c>) are NOT re-verified against this longer source and
+  /// should be treated with the same "possibly stale until re-confirmed" caution already noted above.
   /// </summary>
   public const string Source = """
       ( CVM2 node 506. frame, 1001_????_????_???? )
@@ -257,6 +269,10 @@ internal static class Node506Program
 
       : 'leave .loc
         A[ m/pop ]] lit !b A[ !p ]] lit !b @b a! ;
+      : 'f .loc
+        a f/r! ;
+      : 'fpush .loc
+        a f/push ;
 
       (
       opcode ldl 1001_111?_????_???? load local into r. the offset is 9 bit.
@@ -266,6 +282,8 @@ internal static class Node506Program
       opcode enter 1001_001?_????_???? enter stack frame. the offset is 9 bit.
       opcode 1001_01??_????_???? call node 505
       'leave restore stack pointer and previous frame. undo enter stack frame.
+      'f move f to register r
+      'fpush push f onto the stack
       )
       """;
 }

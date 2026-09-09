@@ -87,8 +87,9 @@ namespace Ga144.Evb.Ide.Cvm;
 /// mnemonics (a fixed tag plus a 2-bit register-index operand), the SAME shape node 606's own eight
 /// frame-pointer ops use, needing no live compile/node resolution at all -- see
 /// <see cref="CvmInstructionSet.LoadAddressRegisterMnemonic"/>'s own remarks for the full derivation,
-/// INCLUDING a flagged collision with <c>slit</c>'s own already-active tag range (0xD000-0xDFFF fully
-/// contains this family's own 0xD800-0xDBFF). That collision is unaffected by this revision.
+/// INCLUDING a collision with <c>slit</c>'s own tag range (0xD000-0xDFFF fully
+/// contained this family's own 0xD800-0xDBFF) that RESOLVED 2026-09-09 when Stefan retired <c>slit</c>
+/// in favor of <c>lit</c> -- see <see cref="CvmInstructionSet.SlitTag"/>'s own remarks.
 ///
 /// <b>Not verified against a live compile.</b> No compiler is available in this environment to confirm
 /// <c>ar/main</c>'s own body actually compiles as pasted (particularly given the unanalyzed <c>.</c>

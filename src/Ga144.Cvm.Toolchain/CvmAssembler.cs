@@ -26,7 +26,9 @@ namespace Ga144.Cvm.Toolchain;
 ///   br -3                   ; branch by a literal signed offset, -0x400..0x3FF (11 bits)
 ///   br loop                 ; or by a label defined in this same file's same section
 ///   cbr 5                   ; conditional branch, offset -0x200..0x1FF (10 bits) -- branches if r == 0
-///   slit -100                ; load a literal signed value into R, -0x800..0x7FF (12 bits)
+///   lit -100                ; node 509: load a literal signed value into R, -0x200..0x1FF (10 bits) --
+///                           ; replaces the retired "slit" (2026-09-09), which used to be a wider,
+///                           ; self-describing 12-bit form of this same idea
 ///   enter 3                 ; node 606: enter stack frame, reserve 3 locals -- unsigned, 0x00..0xFF
 ///   ldp 1                   ; node 606: load parameter at frame-relative offset 1
 ///   stl 0                   ; node 606: store to local at frame-relative offset 0
@@ -46,7 +48,7 @@ namespace Ga144.Cvm.Toolchain;
 /// IS the callee's address (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>), so it
 /// gets a plain <see cref="CvmRelocationType.AbsoluteAddress"/> relocation against its own operand
 /// instead -- the same relocation a <c>.word</c> or <c>pushlit</c> label/import operand would get.
-/// <c>br</c>/<c>cbr</c>/<c>slit</c> are different again
+/// <c>br</c>/<c>cbr</c>/<c>lit</c> are different again
 /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>): each one's word is a
 /// fixed tag OR'd with a signed value, known completely at assemble time -- no relocation, no node.
 /// <c>br</c> packs an 11-bit offset and <c>cbr</c> (renamed 2026-09-09 from the old, unconfirmed "ifbr"
@@ -57,28 +59,33 @@ namespace Ga144.Cvm.Toolchain;
 /// both accept EITHER a literal offset OR a label defined earlier in the same file's same section,
 /// resolved to that same relative-offset computation (see <see cref="EmitEmbeddedSignedValue"/>'s own
 /// remarks for the exact formula, which reads its field width straight off each shape's own
-/// <c>ValueBitMask</c> rather than assuming br's and cbr's are equal); <c>slit</c> packs a wider 12-bit
-/// value with a narrower tag, accepts only a literal (it isn't an address computation at all -- per
+/// <c>ValueBitMask</c> rather than assuming br's and cbr's are equal); <c>lit</c> (node 509's own
+/// literal-load form, which absorbed the retired <c>slit</c>'s role 2026-09-09 -- see
+/// <see cref="CvmInstructionSet.SlitTag"/>'s own remarks) packs a narrower 10-bit value with its own
+/// tag, accepts only a literal (it isn't an address computation at all -- per
 /// Stefan, it loads its value directly into the F18 interpreter's own R register). Node 606's eight
-/// frame-pointer ops (<c>enter</c>, <c>adjust</c>, <c>stl</c>, <c>stp</c>, <c>ldl</c>, <c>ldp</c>,
-/// <c>lal</c>, <c>lap</c>) are shaped the same way as br/cbr/slit -- a fixed tag OR'd with a literal
+/// frame-pointer ops (<c>enter</c>, <c>adjust</c>, <c>stl</c>, <c>stp</c>, <c>ldl</c>, <c>ldp</c>, plus
+/// the now-retired <c>lal</c>/<c>lap</c>) are shaped the same way as br/cbr/lit -- a fixed tag OR'd with a literal
 /// value, no relocation, no node -- except each packs an UNSIGNED 8-bit value
 /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>, emitted by
 /// <see cref="EmitEmbeddedUnsignedValue"/>), never a signed one. Node 306's six address-register ops
 /// (<c>ldar</c>, <c>star</c>, <c>inca</c>, <c>deca</c>, <c>lda</c>, <c>sta</c>, added 2026-09-06) are the
 /// same EmbeddedUnsignedValue shape too, just with a genuinely narrower 2-bit register-index operand
 /// that isn't at bit 0 upward -- see <see cref="EmitEmbeddedUnsignedValue"/>'s own remarks on
-/// <c>ValueBitShift</c> -- and a FLAGGED collision with <c>slit</c>'s own tag range (see
-/// <see cref="CvmInstructionSet.LoadAddressRegisterMnemonic"/>'s own remarks): assembling any of the six
-/// by name is unaffected by that collision, only disassembling an already-assembled word is ambiguous.
+/// <c>ValueBitShift</c> -- these six used to collide with the retired <c>slit</c>'s own wider tag range
+/// (see <see cref="CvmInstructionSet.LoadAddressRegisterMnemonic"/>'s own remarks), but with <c>slit</c>
+/// gone that disassembly ambiguity is resolved; assembling any of the six by name was never affected
+/// by it either way.
 /// Node 511's four register-file ops (<c>rld</c>, <c>rst</c>, <c>rpop</c>, <c>rpush</c>, added
-/// 2026-09-07, <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>) are NOT YET
-/// SUPPORTED by this assembler at all -- they need both a live-node-resolved base AND an embedded
-/// operand at once, which this assembler's relocation-based resolution of tagged mnemonics has no way to
-/// express (see that encoding's own remarks); a line using one of the four fails outright with a clear
-/// error rather than silently dropping the register operand. Only
-/// <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>'s own immediately-resolving assembler
-/// supports them today.
+/// 2026-09-07, <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>) were NEVER
+/// SUPPORTED by this assembler -- they needed both a live-node-resolved base AND an embedded operand at
+/// once, which this assembler's relocation-based resolution of tagged mnemonics has no way to express
+/// (see that encoding's own remarks) -- and RETIRED 2026-09-09 (opcode/assembler-vs-node reconciliation
+/// audit) after node 511's own re-synced source stopped naming them as separate F18 symbols at all (see
+/// <see cref="CvmInstructionSet.LoadRegisterFileMnemonic"/>'s own remarks). The
+/// <see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/> case below is now unreachable -- no entry
+/// in <see cref="CvmInstructionSet.Instructions"/> uses it any more -- but is kept rather than deleted,
+/// in case a future node's opcodes need the same "live resolution plus embedded operand" shape again.
 ///
 /// This is a two-pass assembler: pass 1 walks every line purely to compute section layout (every
 /// instruction's word length is fixed by its mnemonic alone, so a label's final offset never depends
@@ -244,15 +251,16 @@ public static class CvmAssembler
 
           if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue)
           {
-            // "br"/"cbr"/"slit"-style: also no separate tag word -- the instruction's one and only
+            // "br"/"cbr"/"lit"-style: also no separate tag word -- the instruction's one and only
             // word is shape.Tag (its own fixed high bits) OR'd with a signed value packed into
             // shape.ValueBitMask's low bits (11 bits for br, 10 for cbr -- renamed and re-confirmed
-            // 2026-09-09, one bit narrower than br's, see ConditionalBranchTag's own remarks -- 12 for
-            // slit -- EmitEmbeddedSignedValue reads the width straight off the shape, so it needs no
+            // 2026-09-09, one bit narrower than br's, see ConditionalBranchTag's own remarks -- 10 for
+            // lit, node 509's own literal-load form, which absorbed the retired slit's role 2026-09-09 --
+            // EmitEmbeddedSignedValue reads the width straight off the shape, so it needs no
             // per-mnemonic special-casing here or there). Fully self-describing from a literal operand
             // alone, so unlike the tagged mnemonics below this needs no placeholder/relocation/external
             // symbol at all. br/cbr ALSO accept a label operand now (see EmitEmbeddedSignedValue's own
-            // remarks for the relative-offset computation) -- slit does not, since it isn't an address
+            // remarks for the relative-offset computation) -- lit does not, since it isn't an address
             // computation at all.
             bool supportsRelativeLabel = shape.Mnemonic is CvmInstructionSet.BranchMnemonic or CvmInstructionSet.ConditionalBranchMnemonic;
             EmitEmbeddedSignedValue(codeSection, shape, line.Args[0], line.LineNumber, codeSection.Words.Count, supportsRelativeLabel, labelOffsets, section, imported, errors);
@@ -402,15 +410,16 @@ public static class CvmAssembler
   }
 
   /// <summary>
-  /// Emits a <c>br</c>/<c>cbr</c>/<c>slit</c> word: <paramref name="shape"/>.Tag OR'd with a signed
+  /// Emits a <c>br</c>/<c>cbr</c>/<c>lit</c> word: <paramref name="shape"/>.Tag OR'd with a signed
   /// literal value packed into <paramref name="shape"/>.ValueBitMask's low bits -- reading the field
   /// width straight off the shape (11 bits for br, 10 for cbr -- renamed and re-confirmed 2026-09-09,
-  /// see ConditionalBranchTag's own remarks -- 12 for slit) is what lets one method serve every
+  /// see ConditionalBranchTag's own remarks -- 10 for lit, node 509's own literal-load form which
+  /// absorbed the retired slit's role 2026-09-09) is what lets one method serve every
   /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/> mnemonic without a
-  /// per-mnemonic branch here; adding a fourth one someday needs no change to this method at all, only
+  /// per-mnemonic branch here; adding another one someday needs no change to this method at all, only
   /// a new <see cref="CvmInstructionSet.Instructions"/> entry with its own tag and mask.
   ///
-  /// <paramref name="supportsRelativeLabel"/> (true only for br/cbr -- <c>slit</c> isn't an address
+  /// <paramref name="supportsRelativeLabel"/> (true only for br/cbr -- <c>lit</c> isn't an address
   /// computation at all, so a label operand there wouldn't mean anything) additionally accepts a label
   /// defined earlier in pass 1, exactly the mechanical computation this method's own remarks used to
   /// flag as "known but not yet written": what the offset is relative to is confirmed against real
@@ -483,8 +492,9 @@ public static class CvmAssembler
   }
 
   /// <summary>
-  /// Emits an <c>enter</c>/<c>adjust</c>/<c>stl</c>/<c>stp</c>/<c>ldl</c>/<c>ldp</c>/<c>lal</c>/<c>lap</c>
-  /// (or, since 2026-09-06, node 306's <c>ldar</c>/<c>star</c>/<c>inca</c>/<c>deca</c>/<c>lda</c>/<c>sta</c>)
+  /// Emits an <c>enter</c>/<c>adjust</c>/<c>stl</c>/<c>stp</c>/<c>ldl</c>/<c>ldp</c>
+  /// (the now-retired <c>lal</c>/<c>lap</c> used to belong here too; or, since 2026-09-06, node 306's
+  /// <c>ldar</c>/<c>star</c>/<c>inca</c>/<c>deca</c>/<c>lda</c>/<c>sta</c>)
   /// word: <paramref name="shape"/>.Tag OR'd with an UNSIGNED literal value, left-shifted by
   /// <paramref name="shape"/>.ValueBitShift, packed into <paramref name="shape"/>.ValueBitMask's bits.
   /// This mirrors <see cref="EmitEmbeddedSignedValue"/> exactly except for the range check and parse:

@@ -52,9 +52,17 @@ namespace Ga144.C.Toolchain;
 /// <see cref="EmitLoad"/>/<see cref="EmitStore"/>/<see cref="EmitName"/>/
 /// <see cref="CacheIndirectAddress"/>/<see cref="EmitSwitch"/> and the register-parameter spill in
 /// <see cref="EmitFunction"/>, all fixed together for this. <c>lal</c>/<c>lap</c> (load ADDRESS of a
-/// local/parameter, a different pair of mnemonics) are NOT covered by Stefan's correction -- their own
-/// stack-vs-register behavior remains this compiler's unconfirmed assumption, unchanged for
-/// now.</description></item>
+/// local/parameter, a different pair of mnemonics) are RETIRED as of 2026-09-09 ("'lal' &amp; 'lap' are
+/// removed. use ''f' or 'fpush' from node 506 and add the offset to calculate the address of a local or
+/// parameter.") -- this compiler no longer emits them at all. In their place, computing the address of a
+/// local or parameter now emits <c>fpush</c> (push node 506's own frame pointer <c>f</c> directly onto
+/// the data stack) followed by <c>pushlit &lt;offset&gt;; pop; sub</c> for a LOCAL (address = f - offset,
+/// matching node 506's own <c>f/main</c> dispatch, which negates a local's offset with <c>inv</c> before
+/// adding) or <c>pushlit &lt;offset&gt;; pop; add</c> for a PARAMETER (address = f + offset, no
+/// negation) -- see <see cref="EmitAddressOf"/>'s <c>CNameExpr</c> case and <see cref="EmitName"/>'s
+/// array-decay branches, both updated together for this. This has NOT been confirmed against real
+/// hardware (no fresh self-check has been run since the change), so treat it with the same caution as
+/// every other "not yet confirmed" item in this list.</description></item>
 /// <item><description><c>cbr &lt;label&gt;</c> (formerly named <c>ifbr</c> -- Stefan, 2026-09-09: "ifbr"
 /// no longer exist and should be replaced with "cbr". it is basically the same. opcode cbr
 /// 1010_11??_????_???? conditional branch to offset if r == 0. the offset is signed 10-bit number.)
@@ -79,8 +87,9 @@ namespace Ga144.C.Toolchain;
 /// <c>pop</c>/dup.</description></item>
 /// <item><description><b>Function calling convention:</b> the caller evaluates and pushes each argument
 /// left-to-right, then <c>call</c>s; the callee's <c>enter &lt;n&gt;</c> reserves n local slots and is
-/// assumed to make the caller's pushed arguments addressable via <c>ldp</c>/<c>stp</c>/<c>lap</c>
-/// (parameter offset 0 = the first declared parameter); <c>return expr;</c> evaluates expr (leaving its
+/// assumed to make the caller's pushed arguments addressable via <c>ldp</c>/<c>stp</c> (or, for a
+/// parameter's ADDRESS rather than its value, the <c>fpush</c>-based sequence described above, now that
+/// <c>lap</c> is retired) (parameter offset 0 = the first declared parameter); <c>return expr;</c> evaluates expr (leaving its
 /// value on the stack) and branches to the function's epilogue label; the epilogue's <c>leave</c> is
 /// assumed to deallocate all locals AND the caller's pushed arguments together, leaving only the single
 /// return value (if any) on top -- a Pascal-style callee-cleanup convention -- followed by <c>ret</c>.
@@ -133,13 +142,17 @@ namespace Ga144.C.Toolchain;
 /// need a scaling multiplication; <c>arr[i]</c> is simply "base address + i" via a plain
 /// <c>add</c>.</description></item>
 /// <item><description><c>switch</c>/<c>case</c> does NOT use a real <c>tjmp</c> (table jump) instruction:
-/// unlike nodes 507/508/506/407/606, <c>tjmp</c>'s exact hardware encoding is not confirmed anywhere in
-/// the project's documentation, and this compiler follows the project's own established practice of never
-/// guessing an unconfirmed hardware encoding. Instead, a switch compiles to a straightforward,
-/// always-correct chain of equality comparisons against the selector (evaluated once into a
-/// compiler-allocated temporary local). This is flagged here as a future optimization pending Stefan
-/// supplying <c>tjmp</c>'s real encoding -- see <see cref="EmitStatement"/>'s <see cref="CSwitchStmt"/>
-/// case.</description></item>
+/// its LOCATION is now confirmed (node 507, "'tjmp is in node 507", 2026-09-09 -- the same
+/// "1000_1???" local-execute tag family as <c>nop</c>/<c>push</c>/<c>pop</c>/<c>ret</c>/<c>halt</c>, per
+/// <see cref="CvmInstructionSet.TableJumpMnemonic"/>'s own remarks), but its calling convention -- how a
+/// case table is laid out in memory, how the selector is bounds-checked and turned into an index, and
+/// whether/how out-of-range selectors fall through to a default -- is still not confirmed anywhere in the
+/// project's documentation, and this compiler follows the project's own established practice of never
+/// guessing an unconfirmed hardware/table convention. Instead, a switch still compiles to a
+/// straightforward, always-correct chain of equality comparisons against the selector (evaluated once
+/// into a compiler-allocated temporary local). This is flagged here as a future optimization pending
+/// Stefan supplying <c>tjmp</c>'s real calling convention -- see <see cref="EmitStatement"/>'s
+/// <see cref="CSwitchStmt"/> case.</description></item>
 /// </list>
 /// </summary>
 public sealed class CCodeGenerator
@@ -875,6 +888,22 @@ public sealed class CCodeGenerator
     EmitCode("push");
   }
 
+  /// <summary>Pushes the address of a local (or, since 2026-09-09, a parameter) at frame-relative
+  /// <paramref name="offset"/> -- replaces the retired <c>lal</c>/<c>lap</c> mnemonics ("'lal' &amp;
+  /// 'lap' are removed. use ''f' or 'fpush' from node 506 and add the offset to calculate the address of
+  /// a local or parameter."). <c>fpush</c> pushes node 506's own frame pointer <c>f</c> onto the data
+  /// stack; a LOCAL's address is <c>f - offset</c> (matching node 506's own <c>f/main</c> dispatch, which
+  /// negates a local's offset with <c>inv</c> before adding it to <c>f</c> for <c>ldl</c>/<c>stl</c>),
+  /// while a PARAMETER's address is <c>f + offset</c> (no negation, matching <c>ldp</c>/<c>stp</c>). Not
+  /// yet confirmed against real hardware -- see this class's own remarks.</summary>
+  private void EmitLocalOrParameterAddress(int offset, bool isParameter)
+  {
+    EmitCode("fpush");
+    EmitCode($"pushlit {offset}");
+    EmitCode("pop");
+    EmitCode(isParameter ? "add" : "sub");
+  }
+
   /// <summary>Computes and pushes the address of an lvalue expression, WITHOUT latching it into "t"
   /// (unlike <see cref="ResolveLvalue"/>) -- this is the address-of ("&amp;") operator's own codegen, and
   /// also <see cref="CIndexExpr"/>'s helper for computing an element's address before <c>xt</c>.</summary>
@@ -887,13 +916,13 @@ public sealed class CCodeGenerator
           CVarSymbol? symbol = LookupVariable(name.Name);
           if (symbol is { Kind: CVarKind.Local })
           {
-            EmitCode($"lal {symbol.Index}");
+            EmitLocalOrParameterAddress(symbol.Index, isParameter: false);
             return CType.PointerTo(symbol.Type);
           }
 
           if (symbol is { Kind: CVarKind.Parameter })
           {
-            EmitCode($"lap {symbol.Index}");
+            EmitLocalOrParameterAddress(symbol.Index, isParameter: true);
             return CType.PointerTo(symbol.Type);
           }
 
@@ -1757,7 +1786,7 @@ public sealed class CCodeGenerator
     {
       if (symbol.Type.IsArray)
       {
-        EmitCode($"lal {symbol.Index}");
+        EmitLocalOrParameterAddress(symbol.Index, isParameter: false);
         return symbol.Type.Decay();
       }
 
@@ -1770,7 +1799,7 @@ public sealed class CCodeGenerator
     {
       if (symbol.Type.IsArray)
       {
-        EmitCode($"lap {symbol.Index}");
+        EmitLocalOrParameterAddress(symbol.Index, isParameter: true);
         return symbol.Type.Decay();
       }
 
