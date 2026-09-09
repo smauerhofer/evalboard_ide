@@ -48,6 +48,14 @@ internal static class Node707Program
   /// the corrected <see cref="Node708Program"/> it imports. See the class remarks for the dispatch
   /// logic, the break from the earlier (wrongly-trusted) draft, and the compile verification this
   /// source was checked against.
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 707 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 707. SRAM communication between nodes 607 and 708 )
@@ -63,17 +71,15 @@ internal static class Node707Program
           @b -if
             // ( ~p ~a )  write word
             A[ /wr ; ]] lit !
-            @b ! ! !
-          else
-            // ( ~n p ) compare and exchange
-            A[ /cx ; ]] lit !
-            @b @b ! ! ! ! @ !b
+            >r ! r> ! @b ! main ;
           then
-        else
-          // ( p a ) read word
-          A[ /rd ; ]] lit !
-          @b ! ! @ !b
+          // ( ~n p ) compare and exchange
+          A[ /cx ; ]] lit !
+          >r ! r> ! @b ! @b ! @ !b main ;
         then
+        // ( p a ) read word
+        A[ /rd ; ]] lit !
+        ! @b ! @ !b
         main ;
       """;
 }

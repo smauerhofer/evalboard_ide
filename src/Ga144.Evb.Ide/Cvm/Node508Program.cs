@@ -187,6 +187,14 @@ internal static class Node508Program
   /// conditional-branch forms and the flagged stack-depth concern in the "branch" form's own
   /// sign-extension idiom), its derived (but not yet wired) CVM-level opcode shapes, and the confirmed
   /// LEFT port link back to node 507.
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 508 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 508. globals, 101?_????_????_???? )
@@ -209,14 +217,18 @@ internal static class Node508Program
           r> r--- ;
         then // 1010_????_????_????
         2* -if // 1010_1???_????_????
+
           2* -if // 1010_11??_????_????
+
             2* -if // 1010_111?_????_????
               // conditional branch
               g/r@ if r> g/leave then
             then // 1010_110?_????_????
             // branch
             r> 0x1ff and dup 0x100 and if drop 0xfe00 xor dup then drop A[ @p m/branch ]] lit !p !p ;
+
           then // 1010_10??_????_????
+
           // globals
           2* -if // 1010_101?_????_????
             // load r form global
@@ -224,17 +236,21 @@ internal static class Node508Program
           then // 1010_100?_????_????
           // store r to global
           r> 0x1ff and g/! ;
+
         then // 1010_0???_????_????
         A[ m/next ]] lit !b A[ !p ]] lit !b @b ex ;
       : 'ldg g/next g/@ ;
       : 'stg g/next g/! ;
+
       (
       opcode 1010_100?_????_???? store r to global. the offset is unsigned 9 bit.
       opcode 1010_101?_????_???? load global into r. the offset is unsigned 9 bit.
       opcode 1010_110?_????_???? branch to offset. the offset is signed 9 bit.
       opcode 1010_111?_????_???? conditional branch to offset if r == 0. the offset is signed 9 bit.
+
       'ldg load global to r. offset in the next word
       'stg store r to global. offset in the next word
+
       )
       """;
 }

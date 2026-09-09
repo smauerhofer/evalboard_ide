@@ -106,6 +106,14 @@ internal static class Node306Program
   /// revision fixed (the duplicated "lda" inline comment on the <c>sta</c> branch, the "1100"/"1101"
   /// nibble slips) and what remains unanalyzed (the <c>ar/inc</c>/<c>ar/dec</c> bodies' bare <c>.</c>
   /// token).
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 306 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 306. VM ternary main, 1101_10??_????_???? )
@@ -116,37 +124,46 @@ internal static class Node306Program
       entry ar/main
       # 0 /a
       # right /b
+
       : ar/inc 1 . + ;
       : ar/dec -1 . + ;
       : ar/reg 0x06 and a! ;
+
       : ar/r@ ( -w) A[ k/r@ ]] lit !b A[ !p ]] lit !b @b ;
       : ar/r! ( w) A[ @p k/r! ]] lit !b !b ;
       : ar/pop ( -w) A[ k/pop ]] lit !b A[ !p ]] lit !b @b ;
       : ar/push ( w) A[ @p k/push ]] lit !b !b ;
+
       : ar/leave A[ k/leave ; ]] lit !b
       : ar/main # ar/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r
+
         -if // 1101_101?_????_????
+
           2* -if // 1101_1011_????_????
             // ldar load r using address register
             r> ar/reg A[ k/@ ]] lit !b @+ !b @ !b ;
           then // 1101_1010_????_????
           // star store r using address register
           r> ar/reg A[ k/! ]] lit !b @+ !b @ !b ;
+
         then // 1101_100?_????_????
         2* -if // 1101_1001_????_????
           2* -if // 1101_1001_1???_????
             // inca increment address
             r> ar/reg @ ar/inc !+ 0x10000 and # ar/leave until @ ar/inc ! ;
-          then // 1101_1001_0???_????
+
+          then // 1100_1001_0???_????
           // deca decrement address
           r> ar/reg @ ar/dec !+ # ar/leave -until @ ar/dec ! ;
         then
         2* -if // 1101_1000_1???_????
           // lda load address register, address in r, page in stack
           r> ar/reg ar/r@ !+ ar/pop ! ;
-        then // 1101_1000_0???_????
-        // sta store address register, address in r, page in stack
+
+        then // 1100_1000_0???_????
+        // lda load address register, address in r, page in stack
         r> ar/reg @+ ar/r! @ ar/push ;
+
       (
       opcode ldar 1101_1011_????_?aa0 load r from address in address register
       opcode star 1101_1010_????_?aa0 store r to address in address register

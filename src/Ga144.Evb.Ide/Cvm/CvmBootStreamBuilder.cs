@@ -474,6 +474,22 @@ public static class CvmBootStreamBuilder
   /// step if it happens to run before 307's/407's own steps (their relative order among 406/408/307 is
   /// otherwise unconstrained).
   ///
+  /// <b>BUG, introduced 2026-09-06, FOUND AND FIXED 2026-09-08: the array below had this backwards.</b>
+  /// It listed <c>new CvmBootLoadStep(307, 407)</c> BEFORE <c>new CvmBootLoadStep(306, 307)</c> --
+  /// exactly the one place in this whole list that violated the "child loads before its relay parent's
+  /// own step" rule every other branch here follows (406/408 before 407; 511/510/509 before 508). Since
+  /// a node's own load step ends with <see cref="Services.Ga144CvmHardwareInstaller"/>'s own
+  /// <c>BuildProgramLeaf</c> appending a bare jump straight into that node's real compiled entry point,
+  /// running 307's own step before 306's meant node 307 had already jumped into <c>k/main</c> -- no
+  /// longer a passive ROM-level relay -- by the time the installer tried to route 306's program "via
+  /// 307". The frames meant for 306 landed on a node that was instead sitting at <c>k/main</c>'s own
+  /// <c>@b</c> read, waiting on a real command from 407: at best silently dropped, at worst consumed as
+  /// a bogus dispatch command, leaving 307 in an undefined state for good. Confirmed via Stefan's own
+  /// before/after <c>CvmBootStreamBuilder.cs</c> bisection: identical file except for this node 306/307
+  /// addition, working before, a total "0 transactions" hardware timeout after. Fixed by swapping the
+  /// two lines so 306 loads BEFORE 307's own step, matching what this very doc comment already said the
+  /// intended order was.
+  ///
   /// <b>Extended again, 2026-09-07, with node 510 -- "extended arithmetic" -- reached via 509, NOT 508
   /// directly (<c>new CvmBootLoadStep(510, 509)</c>), and node 511 -- the 32-register register-file
   /// node -- reached via 510 (<c>new CvmBootLoadStep(511, 510)</c>), one hop further still.</b> Node 510
@@ -496,14 +512,17 @@ public static class CvmBootStreamBuilder
   /// 407 step already validated, but none has itself been confirmed by a transaction log the way 407
   /// was, and node 307's own source is not even confirmed to COMPILE yet (see Node307Program's own
   /// remarks) -- this load-order entry describes the intended MESH SHAPE regardless, which is
-  /// independent of whether any particular node's current source happens to compile today.
+  /// independent of whether any particular node's current source happens to compile today. The 306/307
+  /// pair specifically went from "reordering bug silently breaking the whole mesh" (see the remarks
+  /// above) to "reordering bug fixed, still awaiting its own first real-hardware run" on 2026-09-08 --
+  /// not yet promoted to "confirmed" until Stefan reports a clean install/test after this fix.
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
   [
     new CvmBootLoadStep(406, 407),
     new CvmBootLoadStep(408, 407),
-    new CvmBootLoadStep(307, 407),
     new CvmBootLoadStep(306, 307),
+    new CvmBootLoadStep(307, 407),
     new CvmBootLoadStep(407, 507),
     new CvmBootLoadStep(506, 507),
     new CvmBootLoadStep(511, 510),

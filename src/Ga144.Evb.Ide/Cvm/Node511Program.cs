@@ -148,36 +148,40 @@ internal static class Node511Program
   /// are unchanged from the original paste. See the class remarks for the full bit-by-bit derivation of
   /// the fixed <c>r/main</c>'s own field extraction and the still-open FLAGGED missing
   /// leading-continuation idiom.
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 511 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 511. register file, 1011_11??_????_???? )
-      ( 32 register )
       # 510 import
-      # 0x20  org
+      [ 0x40 -25 + ] org
       entry r/main
       # 0 /a
       # left /b
       : r/leave A[ x/leave ; ]] lit !b
-      : r/main  A[ drop !p ]] lit !b
-        @b // get opcode
-        // set register in a
-        dup 0x1f and a!
-        // call word
-        2/ 2/ 2/ 2/ 2/ 0x1f and 0x20 xor ex r/leave ;
-        // load register
-      : 'rld A[ x/r@ ]] lit !b A[ !p ]] lit !b @b ! ;
-        // store register
-      : 'rst A[ @p x/r! ]] lit !b @ !b ;
-      : 'rpop A[ x/pop ]] lit !b A[ !p ]] lit !b @b ! ;
-      : 'rpush A[ @p x/push ]] lit !b @ !b ;
-      (
-      this node supports 32 16-bit register.
-      register are encoded in the lower 5 bits of the opcode.
-      the address of the function is encoded in the next 5 bits with an offset of 0x20, so address 0x20 to 0x3f can be encoded.
-      opcode rld   1011_11??_???a_aaaa move r to reg[a]
-      opcode rst   1011_11??_???a_aaaa move reg[a] to r
-      opcode rpop  1011_11??_???a_aaaa pop stack to reg[a]
-      opcode rpush 1011_11??_???a_aaaa push reg[a] to stack
-      )
+      : r/main # r/leave lit >r A[ !p !p ]] lit !b @b @b 0x3f and a!
+        2* -if // 1011_111?_????_????
+
+          2* -if // 1011_1111_????_????
+            // load register
+            A[ x/r@ ]] lit !b A[ !p ]] lit !b @b ! ;
+          then // 1011_1110_????_????
+          // store register
+            A[ @p x/r! ]] lit !b @ !b ;
+
+        then // 1011_110?_????_????
+
+          2* -if // 1011_1101_????_????
+            // pop register
+            A[ x/pop ]] lit !b A[ !p ]] lit !b @b ! ;
+          then // 1011_1100_????_????
+          // push register
+            A[ @p x/push ]] lit !b @ !b ;
       """;
 }

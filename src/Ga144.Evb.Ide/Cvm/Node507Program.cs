@@ -201,6 +201,14 @@ internal static class Node507Program
   /// the last two not yet hardware confirmed. See the class remarks for the dispatch logic, the ten
   /// tick-labeled opcodes, every 2026-09-02 revision, and the compile verification this source was
   /// checked against.
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 507 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 507. main CVM2 node, ????_????_????_???? )
@@ -259,6 +267,7 @@ internal static class Node507Program
       : 'xp .loc ( rs-rs) >r a over a! r> ;
       : 'halt .loc ( rs) dup xor dup inv !b !b 0x8800 !b ;
       : 'nop .loc ( rs-rs) ;
+
       (
       m/call push current p on stack and jumps to function
       m/main CVM interpreter loop

@@ -175,6 +175,14 @@ internal static class Node406Program
   /// remarks for the <c>y/main</c> dispatch cascade, the <c>ahead</c>/<c>[ swap ]</c>/<c>then</c>
   /// deferred-resolution mechanism, the twelve named ops (eight repointed, four new), the "i suffix"
   /// convention, and the tag derivation.
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 406 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 406. binary arithmetic, 1110_????_????_???? )

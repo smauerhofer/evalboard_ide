@@ -168,6 +168,14 @@ internal static class Node506Program
   /// the class remarks for the register/stack helpers, <c>f/main</c>'s dispatch cascade, its CVM-level
   /// opcode encoding (including the four newly-named ops), the bug fix, and the accepted <c>br</c>/
   /// <c>ifbr</c> tag collisions.
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 506 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 506. frame, 1001_????_????_???? )
@@ -177,12 +185,17 @@ internal static class Node506Program
       entry f/main
       # 0 /a
       # right /b
+
       : par 0x1ff and ;
+
       : f/next ( -w) A[ m/next ]] lit !b ahead ;
       : f/pop ( -w) A[ m/pop ]] lit !b then A[ !p ]] lit !b @b ;
+
       : f/r@ ( -w) A[ over !p ]] lit !b @b ;
       : f/r! ( w) A[ @p over ]] lit !b !b ;
       : f/push ( w) A[ @p m/push ]] lit !b !b ;
+
+
       : f/stack@ ( o-a) // load from stack
         a . +  A[ @p m/1@ ]] lit !b !b A[ over ]] lit !b ;
       : f/stack! ( o-a) // store to stack
@@ -193,6 +206,7 @@ internal static class Node506Program
         A[ 2* !p !p ]] lit !b @b @b >r // push take over code
         -if // 1001_1???_????_????
           2* -if // 1001_11??_????_????
+
             2* -if // 1001_111?_????_????
               // load local
               r> par inv f/stack@ ;
@@ -200,13 +214,17 @@ internal static class Node506Program
             then // 1001_110?_????_????
             // load parameter
             r> par f/stack@ ;
+
           then // 1001_10??_????_????
+
             2* -if // 1001_101?_????_????
               // store local
               r> par inv f/stack! ;
+
             then // 1001_100?_????_????
             // store parameter
             r> par f/stack! ;
+
         then // 1001_0???_????_????
         2* -if // 1001_01??_????_????
           r> --l- ;
@@ -218,8 +236,10 @@ internal static class Node506Program
           r> par inv + a! ; // calculate new frame pointer
         then // 1001_000?_????_????
         ex ;
+
       : 'leave .loc
         A[ m/pop ]] lit !b A[ !p ]] lit !b @b a! ;
+
       (
       opcode ldl 1001_111?_????_???? load local into r. the offset is 9 bit.
       opcode ldp 1001_110?_????_???? load parameter into r. the offset is 9 bit.

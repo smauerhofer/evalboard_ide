@@ -61,21 +61,31 @@ internal static class Node708Program
   /// Node 708's full resident F18 source, exactly as supplied by Stefan on 2026-09-01. See the class
   /// remarks for the word-by-word breakdown, the naming break from the earlier draft this replaces,
   /// and the compile verification this source was checked against.
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 708 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 708. PC async interface )
       # 0 org
-      # left /a
+      # io /b
       entry /start
+
       : obit ( dwn-dwx) !b over >r delay ;
       : oword ( dw-d) leap drop leap drop leap drop drop ;
       : obyt ( dw-dwx) then then then 3 obit drop
           7 for dup 1 and 3 xor obit drop 2/ next
           2 obit ;
-      : /start ( -d) io b! 18ibits drop drop --l- ;
-      : /wr ( d-d) @ >r @ >r @ oword r> oword r> oword --l- ;
-      : /rd ( d-d) @ >r @ oword r> oword : recv 18ibits drop ! --l- ;
-      : /cx ( d-d) @ >r @ >r @ >r @ oword r> oword r> oword r> oword recv ;
+      : /start ( -d) 18ibits drop drop 10 for dup unext --l- ;
+      : /wr ( d-d) left a! @ oword @ oword @ oword --l- ;
+      : /rd ( d-d) left a! @ oword @ oword : recv 18ibits drop left a! ! --l- ;
+      : /cx ( d-d) left a! @ oword @ oword @ oword @ oword recv ;
+
       (
       d is the delay is kept in T, so it can be used for every write. Any read will generate a new delay.
       /start waits from a stimulus from the PC, signaling that the PC is ready to play the SRAM.

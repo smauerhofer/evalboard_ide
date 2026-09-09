@@ -164,6 +164,14 @@ internal static class Node408Program
   /// day with three more binary ops, unmodified. See the class remarks for the <c>c/main</c> dispatch
   /// cascade, the tag derivation, the fourteen repointed mnemonics, and the two FLAGGED fall-through
   /// polarity notes.
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 408 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 408. comparison, 1111_????_????_???? )

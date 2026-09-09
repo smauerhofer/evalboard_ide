@@ -220,6 +220,14 @@ internal static class Node407Program
   /// same-day revision that had briefly added <c>'clbr</c>/<c>'lbr</c>/<c>'cljmp</c> together. See the
   /// class remarks for the removal itself, and for the reordered/new <c>n/pop</c>/<c>n/@</c>/<c>n/!</c>
   /// content this message also included but did not call out (FLAGGED there, not silently normalized).
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 407 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 407. VM secondary main, 11??_????_????_???? )
@@ -251,6 +259,9 @@ internal static class Node407Program
       : 'lcall A[ >r a ]] lit !b A[ m/push ]] lit !b A[ r> a! ]] lit !b ;
       : 'ljmp A[ a! ]] lit !b ;
       : 'lbr A[ m/branch ]] lit !b ;
+
+
+
       (
       this node provides support for extending the VM to neighbour nodes.
       tmp1 is a register available to the neighbouring nodes.

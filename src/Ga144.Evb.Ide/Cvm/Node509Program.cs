@@ -266,6 +266,14 @@ internal static class Node509Program
   /// debugger session found the <c>u/main</c> bugs described in the class remarks above. See the class
   /// remarks for the register/stack helpers, <c>u/main</c>'s dispatch cascade, the fix itself, the
   /// 'abs/'neg/'inc/'dec cross-definition fall-through, and the CVM-level opcode tag derivation.
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 509 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 509. unary arithmetic, 1011_????_????_???? )
@@ -306,8 +314,10 @@ internal static class Node509Program
       : 'parity 'bitcnt
       : 'odd 1 and ;
       : 'not until dup xor ;
+
       (
       opcode 1011_01??_????_???? load literal to r. the range of the literal is -0x200 to 0x1ff.
+
       'abs make r absolute
       'neg negate r
       'inc increment r

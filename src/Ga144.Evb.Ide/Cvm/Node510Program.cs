@@ -85,6 +85,14 @@ internal static class Node510Program
   /// Node 510's full resident F18 source, as supplied by Stefan on 2026-09-07 ("here are nodes 510 and
   /// 511"). See the class remarks for the FLAGGED opening-idiom shape (matching node 509's own pre-fix
   /// pattern, not its corrected one) and the confirmed relay chain back to node 509's own open branch.
+  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
+  /// project source for node 510 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
+  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
+  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
+  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
+  /// specific claim above (a compiled address, a port name, a verification result) as possibly
+  /// stale until re-confirmed against a fresh compile.
+  ///
   /// </summary>
   public const string Source = """
       ( CVM2 node 510. extended arithmetic, 1011_1???_????_???? )
