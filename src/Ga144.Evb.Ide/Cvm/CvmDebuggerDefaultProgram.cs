@@ -7,7 +7,7 @@ namespace Ga144.Evb.Ide.Cvm;
 /// one 'br) that only ever touched 5 of the CVM's 73 opcodes.
 ///
 /// <b>Coverage: 43 of 73 opcodes, every one with a log-checkable expected value.</b> Node 607's own
-/// five primitives (nop, pushlit, pop, push, ret) plus call/br/ifbr/slit; node 507's eleven ALU ops
+/// five primitives (nop, pushlit, pop, push, ret) plus call/br/cbr/slit; node 507's eleven ALU ops
 /// (usl, ssr, usr, add, sub, and, xor, or, inv, inc, dec); node 506's nine register-d/
 /// extended-precision ops (zext, addc, ldd, std, xd, mul2d, div2d, sext, umuld); node 407's five
 /// register-w/port ops that need no live F18A port on the far side (xpt, ldhi, ldlo, sthi, stlo);
@@ -64,14 +64,14 @@ namespace Ga144.Evb.Ide.Cvm;
 /// cluster's own boot handshake (two page-1 reads at address 0, exactly what
 /// Ga144CvmHardwareInstaller's automatic test expects right after waking node 708's 'start) followed
 /// by page-0 fetching restarting from address 0 -- i.e. 'adjust forced a full, uncommanded cluster
-/// reset. This is NOT the same class of risk as 'br'/'ifbr' below (which just fall into an existing,
+/// reset. This is NOT the same class of risk as 'br'/'cbr' below (which just fall into an existing,
 /// harmless jump-table branch) -- 'adjust visibly corrupts control flow across the whole cluster, so
 /// it stays out of this program entirely until it can be investigated further, the same treatment as
 /// 'in'/'out' above.</item>
 /// </list>
 ///
 /// <b>Two exploratory instructions, deliberately NOT asserted as "known correct":</b>
-/// 'br and 'ifbr are included only as an observation opportunity, not a real branch test:
+/// 'br and 'cbr are included only as an observation opportunity, not a real branch test:
 /// Node607.f18's own dispatch table does not actually implement a signed-offset branch for either
 /// tag yet (per this project's own CvmMemoryProtocol.cs remarks) -- today they fall into the same
 /// "100?" jump-table branch as ret/xs/xp/tjmp/pc and would be misdecoded (harmlessly, unlike
@@ -80,7 +80,7 @@ namespace Ga144.Evb.Ide.Cvm;
 /// for a particular outcome.
 ///
 /// <b>Layout note, learned the hard way on a real run (2026-08-30): the frame-pointer subroutine is
-/// placed AFTER 'br'/'ifbr, not right after its own 'call site.</b> An earlier draft placed it
+/// placed AFTER 'br'/'cbr, not right after its own 'call site.</b> An earlier draft placed it
 /// immediately after "call FRAME_TEST" (with only padding 'nop's in between), which seemed harmless
 /// since a 'call jumps straight over that padding on the way in -- but node 607 has no unconditional
 /// jump other than 'call'/'ret', so when 'ret' returned control to the padding nops, execution then
@@ -91,13 +91,13 @@ namespace Ga144.Evb.Ide.Cvm;
 /// frame test) and jumped there as if it were a return address -- landing in unused, zero-filled
 /// memory, which decodes as "call 0" (an all-zero word has no tag bit set, so it self-describes as a
 /// call to address 0) and restarted the whole program from address 0, well before ever reaching
-/// 'br'/'ifbr'. Moving the subroutine to after 'br'/'ifbr fixed the ORDERING problem -- both
+/// 'br'/'cbr'. Moving the subroutine to after 'br'/'cbr fixed the ORDERING problem -- both
 /// exploratory instructions were now guaranteed to run before any possible fall-through -- but node
 /// 607 itself still had no way to stop cleanly, so the program still ran off its own end into
 /// zero-filled "call 0" memory and restarted once, at the very end, harmlessly (true of the original
 /// 3-instruction default program too). <b>Stefan has since added a real 'halt opcode to node 606</b>
 /// (a single blocking '@b' that never returns -- see <see cref="Node606Program"/>'s own remarks), and
-/// this program now uses it: a 'halt sits right after 'ifbr's padding 'nop, so the main flow stops
+/// this program now uses it: a 'halt sits right after 'cbr's padding 'nop, so the main flow stops
 /// dead there instead of falling through into FRAME_TEST's body a second time. Only a chip reset can
 /// move execution past it now.
 ///
@@ -282,7 +282,7 @@ public static class CvmDebuggerDefaultProgram
       "nop\n" +
       "br 1              ; EXPLORATORY -- Node607.f18 has no real branch decode for this tag yet; observe, don't assume, what the log shows\n" +
       "nop\n" +
-      "ifbr 1            ; EXPLORATORY -- same caveat as br above. This is the last instruction the main flow was ever designed to reach\n" +
+      "cbr 1            ; EXPLORATORY -- same caveat as br above. This is the last instruction the main flow was ever designed to reach\n" +
       "nop\n" +
       "halt              ; stop the CPU cleanly here -- everything the main flow cares about has now been observed. Node 606's own 'halt (Stefan's addition: \"wait for a word that will never come\") parks execution in a blocking @b that never returns, so unlike every earlier revision of this program, control never falls through into FRAME_TEST's body a second time -- only a chip reset can move it now\n" +
       "enter 4           ; reserve a 4-word frame; WRITE (old f, expected 0000) at the address 'leave' will read back; new f := that write address\n" +
@@ -299,6 +299,6 @@ public static class CvmDebuggerDefaultProgram
       "lap 2             ; r := parameter #2's own address -- NO memory access; compare against the stp/ldp transactions' own address above\n" +
       "push              ; WRITE <- parameter #2's address, i.e. exactly the stp/ldp address above\n" +
       "leave             ; READ back the frame's saved old f -- expect value 0000, restoring f to its pre-enter value\n" +
-      "ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/ifbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)\n" +
+      "ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/cbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)\n" +
       "";
 }

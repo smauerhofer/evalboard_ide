@@ -148,7 +148,7 @@ internal static class CvmMemoryProtocol
   /// "Install &amp; run CVM test" step (that step still calls <see cref="TryBuildTestProgram"/>
   /// directly): that step's own pass/fail check requires every page-0 read to land at exactly the
   /// next sequential address, and this program deliberately jumps around (call/ret, and the
-  /// exploratory br/ifbr) -- folding this into the shared program would make the automatic test
+  /// exploratory br/cbr) -- folding this into the shared program would make the automatic test
   /// report a read-order "failure" that isn't actually a regression, just a check that doesn't know
   /// about jumps yet. Per Stefan's own choice, this stays a debugger-only variant instead.
   /// </summary>

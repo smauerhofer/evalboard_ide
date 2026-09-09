@@ -10,7 +10,7 @@ namespace Ga144.Evb.Ide.Services;
 /// <c>push</c>, <c>pop</c>, <c>ret</c>, <c>halt</c> -- CVM2's node 507 "local execute" primitives)
 /// layered on top of a tagged wire-level opcode convention (opcode = tag | wordAddress) -- see
 /// <see cref="Node508TagBits"/>/<see cref="Node507Cvm2LocalExecuteTagBits"/>'s own remarks. (<c>call</c>,
-/// <c>br</c>, <c>ifbr</c>, <c>slit</c>, and node 606's frame-pointer ops (<c>enter</c>, <c>adjust</c>,
+/// <c>br</c>, <c>cbr</c>, <c>slit</c>, and node 606's frame-pointer ops (<c>enter</c>, <c>adjust</c>,
 /// <c>stl</c>, <c>stp</c>, <c>ldl</c>, <c>ldp</c>, <c>lal</c>, <c>lap</c>) are the exceptions -- see this
 /// class's own remarks on why they aren't part of this tagged-opcode layer.)
 ///
@@ -106,7 +106,7 @@ namespace Ga144.Evb.Ide.Services;
 /// narrower embedded-literal opcode form (a 10-bit signed value baked directly into the opcode word) was
 /// initially left unwired the same way node 508's own two embedded-offset global forms were, but Stefan
 /// later named it explicitly ("add this range to the cvm language ... mnemonic lit") -- it is wired as
-/// <see cref="CvmInstructionSet.LitMnemonic"/> instead, self-describing like <c>br</c>/<c>ifbr</c>/
+/// <see cref="CvmInstructionSet.LitMnemonic"/> instead, self-describing like <c>br</c>/<c>cbr</c>/
 /// <c>slit</c>, so it needs NO entry in <see cref="NodeSymbolByMnemonic"/> at all (see
 /// <see cref="CvmInstructionSet.LitTag"/>'s own remarks). Two more tick-prefixed words, <c>parity</c> and
 /// <c>odd</c>, were added the same way as <c>neg</c> (2026-09-05, "I added 2 new opcodes to node 509. add
@@ -193,7 +193,7 @@ namespace Ga144.Evb.Ide.Services;
 /// Shapes whose <see cref="CvmInstructionSet.CvmInstructionShape.Encoding"/> is anything other than
 /// <see cref="CvmInstructionSet.CvmOperandEncoding.None"/>/<see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>
 /// are deliberately left out of that pairing: <c>call</c>
-/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>), <c>br</c>/<c>ifbr</c>/
+/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>), <c>br</c>/<c>cbr</c>/
 /// <c>slit</c> (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>), and node 606's
 /// eight ops plus (since 2026-09-06) node 306's six address-register ops
 /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>) have no F18
@@ -205,7 +205,7 @@ namespace Ga144.Evb.Ide.Services;
 /// memory inspector -- EXCEPT node 306's six, which are currently fully shadowed by <c>slit</c>'s own
 /// tag there (see <see cref="CvmInstructionSet.LoadAddressRegisterMnemonic"/>'s own remarks for that
 /// flagged collision). <see cref="Assemble"/> mirrors that same dual dispatch on the OTHER direction --
-/// hand-typed CVM asm source that uses <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>/node 606's or node
+/// hand-typed CVM asm source that uses <c>call</c>/<c>br</c>/<c>cbr</c>/<c>slit</c>/node 606's or node
 /// 306's ops is encoded directly from <see cref="CvmInstructionSet"/> and the operand alone, bypassing
 /// this file's own <see cref="Instructions"/>/<see cref="NodeSymbolByMnemonic"/> pairing entirely (see
 /// <see cref="Assemble"/>'s own remarks) -- so <see cref="Instructions"/> itself still omits all of
@@ -264,7 +264,7 @@ internal static class CvmAssemblyLanguage
   // local execute) against real hardware -- it only raises confidence in the shared derivation. Do not
   // upgrade this to "confirmed" without Stefan saying so directly. See CvmInstructionSet.BranchTag's own
   // remarks for the other side of this correction, and CvmInstructionSet.ConditionalBranchTag's own
-  // remarks for why THIS constant's value (0x8800) must never be reused for ifbr.
+  // remarks for why THIS constant's value (0x8800) must never be reused for cbr.
   private const int Node507Cvm2LocalExecuteTagBits = 0x8800;
 
   // CVM2's long call/long jump tag (2026-09-02), per Stefan's node 407 source and his own explanation
@@ -300,12 +300,12 @@ internal static class CvmAssemblyLanguage
   //
   // FORMERLY a KNOWN, DELIBERATE collision with br (2026-09-02): 0x9000 used to also be
   // CvmInstructionSet.BranchTag's own value, and BranchTag's mask covered this tag's entire OLD range
-  // (0x9000-0x97FF). Per Stefan: "ignore the ranges of br/ifbr. ignore the overlapping ranges. give me
+  // (0x9000-0x97FF). Per Stefan: "ignore the ranges of br/cbr. ignore the overlapping ranges. give me
   // now enter and leave mnemonics." Not resolved at the time -- accepted for a while, same as
   // CvmInstructionSet.Node506EnterTag's own collision with br. Unlike enter (self-describing, so br's
   // OWN check silently won during disassembly -- see CvmInstructionSet.TryDescribeSelfDecodingWord's own
   // remarks), leave is a TAGGED mnemonic resolved only through THIS file's own
-  // BuildDecodeTable/BuildEncodeTable against a live compile, which never consults br/ifbr at all -- so
+  // BuildDecodeTable/BuildEncodeTable against a live compile, which never consults br/cbr at all -- so
   // leave's own encode/decode through this file was never affected by the collision; it only mattered if
   // the very same 0x9038-shaped word was fetched as a plain word and run through
   // CvmInstructionSet.TryDescribeSelfDecodingWord first (which used to report "br" instead). RESOLVED
@@ -321,9 +321,12 @@ internal static class CvmAssemblyLanguage
   // As a plain 16-bit tag word (address bits zeroed) this is 0xA000 -- see
   // CvmInstructionSet.LoadGlobalMnemonic's own remarks for the full bit derivation. Unlike
   // Node506LeaveTagBits, this range (0xA000-0xA03F, node 508's own RAM is only 64 words) has no known
-  // collision with br (0x8000-0x87FF as of 2026-09-09, OLD 0x9000-0x97FF before that) or ifbr
-  // (0x9800-0x9FFF, unchanged) or with node 606's own eight orphaned frame-pointer tags
-  // (0xA800-0xAFFF) -- see Cvm.Node508Program's own remarks. NOT YET CONFIRMED ON REAL HARDWARE
+  // collision with br (0x8000-0x87FF as of 2026-09-09, OLD 0x9000-0x97FF before that) or cbr (0xAC00-
+  // 0xAFFF as of 2026-09-09, renamed and re-confirmed from the old "ifbr" placeholder's 0x9800-0x9FFF
+  // guess -- see CvmInstructionSet.ConditionalBranchTag's own remarks) or with node 606's own eight
+  // orphaned frame-pointer tags (0xA800-0xAFFF, though cbr's own new range DOES collide with two of
+  // those eight -- lal/lap, 0xAE00/0xAF00 -- see ConditionalBranchTag's own remarks for that, unrelated
+  // to node 508) -- see Cvm.Node508Program's own remarks. NOT YET CONFIRMED ON REAL HARDWARE
   // (2026-09-04). UNCHANGED by the 2026-09-06 revision to node 508's own source -- that revision only
   // restructured the SIBLING "1010_1???" branch (the four now-narrower embedded-offset forms, still not
   // wired here), never the "1010_0???" fall-through this tag is derived from; only 'ldg's/'stg's own
@@ -338,9 +341,11 @@ internal static class CvmAssemblyLanguage
   // tag/10-bit address split this time. As a plain 16-bit tag word (address bits zeroed) this is
   // 0xB000 -- see CvmInstructionSet.NegMnemonic's own remarks for the full bit derivation. Node 509's
   // own RAM is only 64 words, so this range (0xB000-0xB03F) has no known collision with br
-  // (0x8000-0x87FF as of 2026-09-09, OLD 0x9000-0x97FF before that), ifbr (0x9800-0x9FFF, unchanged),
-  // node 606's own eight orphaned frame-pointer tags (0xA800-0xAFFF), or slit
-  // (0xD000-0xDFFF) -- see Cvm.Node509Program's own remarks. NOT YET CONFIRMED ON REAL HARDWARE
+  // (0x8000-0x87FF as of 2026-09-09, OLD 0x9000-0x97FF before that), cbr (0xAC00-0xAFFF as of
+  // 2026-09-09, renamed and re-confirmed from the old "ifbr" placeholder's 0x9800-0x9FFF guess -- see
+  // CvmInstructionSet.ConditionalBranchTag's own remarks), node 606's own eight orphaned frame-pointer
+  // tags (0xA800-0xAFFF), or slit (0xD000-0xDFFF) -- see Cvm.Node509Program's own remarks. NOT YET
+  // CONFIRMED ON REAL HARDWARE
   // (2026-09-05).
   private const int Node509UnaryArithmeticTagBits = 0xB000;
 
@@ -417,7 +422,7 @@ internal static class CvmAssemblyLanguage
   // -- see this class's own remarks) has NO entry here at all any more, not an entry pointing at a
   // deleted type -- BuildDecodeTable/BuildEncodeTable never look it up, and Instructions' own filter
   // drops it from the table entirely, the graceful-omission path this file already relies on for
-  // call/br/ifbr/slit. Node 507 (CVM2's actual CPU), node 407 (CVM2's long-call/long-jump helper), node
+  // call/br/cbr/slit. Node 507 (CVM2's actual CPU), node 407 (CVM2's long-call/long-jump helper), node
   // 506 (CVM2's stack-frame node), node 508 (CVM2's globals-access node, plus its own OLD, permanently
   // orphaned CVM1 comparison ops), node 509 (CVM2's unary-arithmetic node -- a BRAND NEW coordinate, no
   // CVM1 namesake to share or orphan), node 406 (CVM2's binary-arithmetic node -- ALSO a BRAND NEW
@@ -579,7 +584,7 @@ internal static class CvmAssemblyLanguage
   /// opcodes are defined on any node; nothing else in this file needs to change. A shape whose
   /// <see cref="CvmInstructionSet.CvmInstructionShape.Encoding"/> is
   /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/> (<c>call</c>) or
-  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/> (<c>br</c>, <c>ifbr</c>,
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/> (<c>br</c>, <c>cbr</c>,
   /// <c>slit</c>) has no F18 symbol by design and is filtered out here rather than added to
   /// <see cref="NodeSymbolByMnemonic"/> -- see this class's own remarks for why.
   ///
@@ -751,7 +756,7 @@ internal static class CvmAssemblyLanguage
   /// <summary>
   /// Assembles a sequence of CVM asm instructions into opcode/operand words. Two families of
   /// mnemonic are resolved completely differently, mirroring <see cref="CvmDebugSession.DisassemblePage0"/>'s
-  /// own dual dispatch: <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>
+  /// own dual dispatch: <c>call</c>/<c>br</c>/<c>cbr</c>/<c>slit</c>
   /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>/<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>)
   /// are self-describing -- encoded directly from <see cref="CvmInstructionSet"/> and the operand
   /// alone, no live compile involved -- while every other mnemonic is resolved against THIS run's own
@@ -788,7 +793,7 @@ internal static class CvmAssemblyLanguage
   /// each operand label via <see cref="ResolveOperandLabel"/> before falling into the exact same
   /// literal-operand encoding path a hand-typed number would have used, so every existing range/arity
   /// check below applies unchanged either way. <c>call</c> and every tagged mnemonic (<c>pushlit</c>,
-  /// plus <c>slit</c>) resolve a label to its own ABSOLUTE word address; <c>br</c>/<c>ifbr</c> resolve
+  /// plus <c>slit</c>) resolve a label to its own ABSOLUTE word address; <c>br</c>/<c>cbr</c> resolve
   /// to a signed RELATIVE offset instead, since that is what their own opcode word actually encodes
   /// (see <see cref="ResolveOperandLabel"/>'s own remarks); node 606's eight
   /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/> ops don't accept a label
@@ -936,7 +941,7 @@ internal static class CvmAssemblyLanguage
   /// label) is resolved, since word length never depends on the operand's actual value. Mirrors
   /// exactly what <see cref="Assemble"/>'s own pass 2 will actually emit for the same mnemonic, so the
   /// two passes can never disagree on an address: a self-describing shape (<c>call</c>/<c>br</c>/
-  /// <c>ifbr</c>/<c>slit</c>/node 606's ops) is always its own
+  /// <c>cbr</c>/<c>slit</c>/node 606's ops) is always its own
   /// <see cref="CvmInstructionSet.CvmInstructionShape.WordLength"/>; a tagged mnemonic resolves through
   /// <paramref name="encodeTable"/> the same way pass 2 does; anything else -- a genuine opcode with no
   /// live node to answer it, which pass 2's own "undefined opcode -&gt; nop" substitution (see
@@ -966,9 +971,9 @@ internal static class CvmAssemblyLanguage
   /// tagged mnemonic resolved via <paramref name="labelAddresses"/> alone (<c>pushlit</c>, the only one
   /// with a trailing-word operand today) resolve to the label's own ABSOLUTE word address -- so does
   /// <c>slit</c>, even though it's an <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>
-  /// like <c>br</c>/<c>ifbr</c> below: loading a label's own address as a small signed literal is a
+  /// like <c>br</c>/<c>cbr</c> below: loading a label's own address as a small signed literal is a
   /// legitimate use, even though that encoding's value isn't inherently an address (see its own
-  /// remarks). <c>br</c>/<c>ifbr</c> resolve to a signed RELATIVE offset instead, per
+  /// remarks). <c>br</c>/<c>cbr</c> resolve to a signed RELATIVE offset instead, per
   /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>'s own remarks confirmed
   /// against real hardware: the target is relative to the address of the word immediately AFTER the
   /// branch's own opcode word, i.e. <c>labelAddress - (instructionAddress + 1)</c>, not the branch
@@ -1057,7 +1062,7 @@ internal static class CvmAssemblyLanguage
   /// standalone path: linearly disassembles <paramref name="sram"/>'s page 0 from address 0 up to but
   /// not including <paramref name="endAddressExclusive"/>, into CVM assembly language mnemonics
   /// resolved against <paramref name="compiledRam"/>, plus direct bit-pattern rules for
-  /// <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c> (<see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/>)
+  /// <c>call</c>/<c>br</c>/<c>cbr</c>/<c>slit</c> (<see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/>)
   /// that need no compile/symbol at all. This MUST be a stateful scan starting at 0, never an
   /// independent per-word decode: pushlit is followed by a literal operand word that would otherwise be
   /// mistaken for its own opcode if a word were decoded in isolation.
@@ -1070,9 +1075,9 @@ internal static class CvmAssemblyLanguage
   /// doesn't know about yet. The operand itself is rendered by <see cref="CvmInstructionSet.FormatOperand"/>
   /// -- fixed 2026-09-05 per Stefan so a tagged trailing-word mnemonic (e.g. <c>andi</c>) shows the SAME
   /// "0x{hex} ({decimal})" shape <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> now uses for
-  /// every self-describing mnemonic (<c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>/<c>lit</c>), rather
+  /// every self-describing mnemonic (<c>call</c>/<c>br</c>/<c>cbr</c>/<c>slit</c>/<c>lit</c>), rather
   /// than the hex-only rendering this one line used before -- see that method's own remarks. ADDED
-  /// 2026-09-09: a <c>br</c>/<c>ifbr</c> line now also carries its own RESOLVED absolute target (e.g.
+  /// 2026-09-09: a <c>br</c>/<c>cbr</c> line now also carries its own RESOLVED absolute target (e.g.
   /// <c>"br 0x0200 (512) -> 0x0202"</c>) -- see <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/>'s
   /// own remarks for why (Stefan misread a raw offset as an absolute address; this prevents that).
   /// </summary>
@@ -1088,11 +1093,11 @@ internal static class CvmAssemblyLanguage
     {
       int word = sram.Read(CvmMemoryProtocol.CombineAddress(0, address));
 
-      // "call", "br", "ifbr", and "slit" have no F18 symbol to resolve -- each one's whole word is
+      // "call", "br", "cbr", and "slit" have no F18 symbol to resolve -- each one's whole word is
       // fully determined by its own bit pattern and operand alone (CvmInstructionSet.
       // CvmOperandEncoding.EmbeddedAddress / EmbeddedSignedValue), independent of node 607's live
       // compile, so all four are checked before consulting the (symbol-driven) decode table at all.
-      // wordAddress passed through 2026-09-09 so br/ifbr's own listing line can also show the
+      // wordAddress passed through 2026-09-09 so br/cbr's own listing line can also show the
       // RESOLVED absolute target next to the raw offset -- see TryDescribeSelfDecodingWord's own
       // remarks (Stefan asked why the linker put "__exit" at "location 0x200"; it doesn't -- that
       // was always just the raw offset field, easy to misread as an address in this exact listing).
@@ -1139,10 +1144,10 @@ internal static class CvmAssemblyLanguage
   }
 
   /// <summary>
-  /// Encodes one <c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>/node-606 word directly from
+  /// Encodes one <c>call</c>/<c>br</c>/<c>cbr</c>/<c>slit</c>/node-606 word directly from
   /// <paramref name="shape"/> and its literal operand -- the same arithmetic
   /// <see cref="CvmAssembler.EmitEmbeddedSignedValue"/>/<see cref="CvmAssembler.EmitEmbeddedUnsignedValue"/>
-  /// use for <c>br</c>/<c>ifbr</c>/<c>slit</c> and node 606's eight ops respectively (mask-derived
+  /// use for <c>br</c>/<c>cbr</c>/<c>slit</c> and node 606's eight ops respectively (mask-derived
   /// min/max, tag OR'd with the value's low bits) and <see cref="CvmAssembler"/>'s own
   /// <c>EmbeddedAddress</c> case uses for <c>call</c>, kept as a small duplicate here rather than
   /// shared: that assembler resolves a label/import operand through relocations against a
@@ -1333,7 +1338,7 @@ internal static class CvmAssemblyLanguage
 
   // Handles a leading '-' before EITHER a "0x"-prefixed hex magnitude or a plain decimal one -- the
   // decimal case alone would already parse via NumberStyles.Integer's own AllowLeadingSign, but hex
-  // needs this to support a negative literal at all (needed for br/ifbr/slit operands, e.g. "-0x400").
+  // needs this to support a negative literal at all (needed for br/cbr/slit operands, e.g. "-0x400").
   private static bool TryParseOperand(string text, out int value)
   {
     if (text.StartsWith('-') && TryParseOperand(text[1..], out int magnitude))

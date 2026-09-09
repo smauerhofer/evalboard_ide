@@ -167,14 +167,20 @@ namespace Ga144.Evb.Ide.Cvm;
 /// own remarks (both updated the same day to describe four embedded forms instead of two, and 9 bits
 /// instead of 10, rather than re-deriving anything about <c>'ldg</c>/<c>'stg</c> themselves).
 ///
-/// <b>No known opcode-space collision.</b> Unlike <see cref="Node506Program"/>'s own accepted, deliberate
-/// collision with <c>ifbr</c> (see that class's own remarks), the <c>101?_????_????_????</c> range this
-/// node claims does not overlap <see cref="CvmInstructionSet.BranchTag"/> (0x8000 as of 2026-09-09, OLD
-/// 0x9000 before that, <c>1000_0xxx</c> now) or <see cref="CvmInstructionSet.ConditionalBranchTag"/>
-/// (0x9800, unchanged, <c>1001_1xxx</c>) at all -- no collision to flag here, before or after br's move.
-/// Unchanged by the 2026-09-06 revision (the range claimed at the CVM opcode level, <c>0xA000-0xA03F</c>
-/// for <c>'ldg</c>/<c>'stg</c>, is exactly as narrow as before -- node 508's own RAM is still only 64
-/// words).
+/// <b>No known opcode-space collision against this node's own LIVE-WIRED tag.</b> Unlike
+/// <see cref="Node506Program"/>'s own former, now-resolved collision (<c>ldl</c>/<c>ldp</c>/<c>stl</c>/
+/// <c>stp</c> vs. the old "ifbr" placeholder -- see that class's own remarks), this node's actual wired
+/// range (<c>0xA000-0xA03F</c> for <c>'ldg</c>/<c>'stg</c>, node 508's own RAM being only 64 words) does
+/// not overlap <see cref="CvmInstructionSet.BranchTag"/> (0x8000 as of 2026-09-09, OLD 0x9000 before
+/// that, <c>1000_0xxx</c> now) or <see cref="CvmInstructionSet.ConditionalBranchTag"/> (<c>cbr</c>,
+/// renamed and RE-TAGGED 2026-09-09 from the old "ifbr" guess to a confirmed 0xAC00-0xAFFF, <c>1010_11xx</c>
+/// -- see that constant's own remarks) at all -- no collision to flag here. NOTE, however: the wider
+/// theoretical <c>101?_????_????_????</c> range this class's own remarks describe this node as
+/// "claiming" (0xA000-0xBFFF, never all actually wired) now DOES contain cbr's real 0xAC00-0xAFFF tag --
+/// harmless today since node 508 never wires anything past 0xA03F, but worth remembering if this node's
+/// own live range is ever widened. Unchanged by the 2026-09-06 revision (the range claimed at the CVM
+/// opcode level, <c>0xA000-0xA03F</c> for <c>'ldg</c>/<c>'stg</c>, is exactly as narrow as before -- node
+/// 508's own RAM is still only 64 words).
 /// </summary>
 internal static class Node508Program
 {

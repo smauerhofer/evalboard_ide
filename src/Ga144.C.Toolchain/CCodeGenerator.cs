@@ -55,9 +55,21 @@ namespace Ga144.C.Toolchain;
 /// local/parameter, a different pair of mnemonics) are NOT covered by Stefan's correction -- their own
 /// stack-vs-register behavior remains this compiler's unconfirmed assumption, unchanged for
 /// now.</description></item>
-/// <item><description><c>ifbr &lt;label&gt;</c> branches when the condition (loaded into r by an
-/// immediately preceding <c>pop</c>) is NONZERO (true). Every control-flow codegen method below is built
-/// around this polarity.</description></item>
+/// <item><description><c>cbr &lt;label&gt;</c> (formerly named <c>ifbr</c> -- Stefan, 2026-09-09: "ifbr"
+/// no longer exist and should be replaced with "cbr". it is basically the same. opcode cbr
+/// 1010_11??_????_???? conditional branch to offset if r == 0. the offset is signed 10-bit number.)
+/// branches when the condition (loaded into r by an immediately preceding <c>pop</c>) is ZERO (false).
+/// CONFIRMED against real hardware, and the OPPOSITE polarity from this class's own former, never-
+/// confirmed assumption (the old "ifbr" placeholder was assumed to branch on NONZERO/true) -- every
+/// control-flow codegen method below was originally built around that wrong polarity and has been
+/// re-derived for this one instead. The net effect actually simplifies most call sites: "branch away
+/// from a block when its condition is false" (if/while/for/ternary's else-branch, &amp;&amp;'s short
+/// circuit) now needs no extra op at all, since <c>cbr</c> already tests exactly that; "branch when the
+/// condition is true" (do-while's loop-back, a switch case match, ||'s short circuit) now needs an
+/// explicit <c>eq0</c> first to invert the sense before branching. See <see cref="EmitStatement"/>'s
+/// <c>CIfStmt</c>/<c>CWhileStmt</c>/<c>CDoWhileStmt</c>/<c>CForStmt</c> cases, <see cref="EmitLogical"/>,
+/// <see cref="EmitConditional"/>, and <see cref="EmitSwitch"/>, all re-derived together for
+/// this.</description></item>
 /// <item><description><b>Uniform codegen invariant:</b> every non-void expression's codegen leaves
 /// EXACTLY one word on the data stack representing its value; a void-typed expression (a call to a void
 /// function) leaves nothing. An expression used as a statement emits the expression, then a bare
@@ -947,6 +959,23 @@ public sealed class CCodeGenerator
     return target.Type;
   }
 
+  /// <summary>Assignment used purely for its side effect -- a bare <c>a = expr;</c> statement, or a
+  /// plain declaration's initializer -- where nothing downstream needs the assignment's own result
+  /// value (C's rule that "a = expr" is itself an expression only matters when something actually
+  /// consumes that value, e.g. chained assignment or "if ((a = f()))"). Skips <see cref="EmitDup"/>
+  /// entirely: <see cref="EmitStore"/> already nets to "-1 word" on its own (it pops the value it
+  /// stores), which exactly cancels the "+1 word" <see cref="EmitExpr"/> just produced, so the net
+  /// stack effect of the whole assignment is zero with no discard <c>pop</c> needed either. 2026-09-09:
+  /// this is what makes <c>int a = 3;</c> compile to just <c>pushlit 3; pop; stl 0</c> instead of
+  /// dup-ing the value and immediately throwing the extra copy away. See <see cref="EmitAssign"/> for
+  /// the expression-context version that keeps the residual value.</summary>
+  private void EmitAssignForEffect(CAssignExpr assign)
+  {
+    CLvalue target = ResolveLvalue(assign.Target);
+    EmitExpr(assign.Value);
+    EmitStore(target);
+  }
+
   private CType EmitCompoundAssign(CCompoundAssignExpr expr)
   {
     CLvalue target = ResolveLvalue(expr.Target);
@@ -958,6 +987,18 @@ public sealed class CCodeGenerator
     EmitDup();
     EmitStore(target);
     return resultType;
+  }
+
+  /// <summary>The for-effect twin of <see cref="EmitCompoundAssign"/> -- see
+  /// <see cref="EmitAssignForEffect"/>'s own remarks for why skipping the dup is safe whenever nothing
+  /// needs the expression's own result (a bare <c>a += expr;</c> statement).</summary>
+  private void EmitCompoundAssignForEffect(CCompoundAssignExpr expr)
+  {
+    CLvalue target = ResolveLvalue(expr.Target);
+    EmitLoad(target);
+    CType rhsType = EmitExpr(expr.Value);
+    EmitBinaryOperation(expr.Op, target.Type, rhsType, expr.Location);
+    EmitStore(target);
   }
 
   /// <summary>Pre/post increment and decrement, both built on the same lvalue primitives. Pre- dups the
@@ -993,6 +1034,22 @@ public sealed class CCodeGenerator
     }
 
     return target.Type;
+  }
+
+  /// <summary>The for-effect twin of <see cref="EmitIncrementOrDecrement"/> -- a bare <c>i++;</c> or
+  /// <c>--i;</c> statement, where pre- vs. post- makes no observable difference (both just add or
+  /// subtract one from memory) since nothing reads the expression's own result. See
+  /// <see cref="EmitAssignForEffect"/>'s own remarks for why skipping the dup is safe here.</summary>
+  private void EmitIncrementOrDecrementForEffect(CUnaryExpr expr)
+  {
+    bool isIncrement = expr.Op is CUnaryOp.PreIncrement or CUnaryOp.PostIncrement;
+    CBinaryOp op = isIncrement ? CBinaryOp.Add : CBinaryOp.Subtract;
+
+    CLvalue target = ResolveLvalue(expr.Operand);
+    EmitLoad(target);          // stack: [old]
+    EmitCode("pushlit 1");     // stack: [old, 1]
+    EmitBinaryOperation(op, target.Type, CType.Int, expr.Location); // stack: [new]
+    EmitStore(target);         // stack: []
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -1114,11 +1171,15 @@ public sealed class CCodeGenerator
     return ComputeCommonType(leftType, rightType);
   }
 
-  /// <summary>Short-circuit "&amp;&amp;"/"||", both branching on the assumed ifbr-branches-if-nonzero
-  /// polarity documented on this class. "a &amp;&amp; b": evaluate a; if a is false, short-circuit
-  /// straight to a result of 0 without ever evaluating b; otherwise evaluate b and coerce it to exactly
-  /// 0 or 1 (matching C's own &amp;&amp;/|| result type). "a || b" mirrors this: if a is true,
-  /// short-circuit straight to 1; otherwise evaluate and coerce b the same way.</summary>
+  /// <summary>Short-circuit "&amp;&amp;"/"||", both branching on <c>cbr</c>'s CONFIRMED
+  /// branches-if-r-equals-0 polarity documented on this class. "a &amp;&amp; b": evaluate a; if a is
+  /// false, short-circuit straight to a result of 0 without ever evaluating b; otherwise evaluate b and
+  /// coerce it to exactly 0 or 1 (matching C's own &amp;&amp;/|| result type). "a || b" mirrors this: if
+  /// a is true, short-circuit straight to 1; otherwise evaluate and coerce b the same way. 2026-09-09:
+  /// since <c>cbr</c> itself already tests "r == 0", "&amp;&amp;" (short-circuits exactly on that same
+  /// condition, left == 0) needs no extra op before it; "||" (short-circuits on the OPPOSITE condition,
+  /// left != 0) needs an explicit <c>eq0</c> first to invert the sense so <c>cbr</c> fires at the right
+  /// moment -- see this class's own ABI doc comment.</summary>
   private CType EmitLogical(CBinaryExpr expr)
   {
     bool isAnd = expr.Op == CBinaryOp.LogicalAnd;
@@ -1127,8 +1188,12 @@ public sealed class CCodeGenerator
 
     EmitExpr(expr.Left);
     EmitCode("pop");
-    EmitCode(isAnd ? "eq0" : "ne0"); // && short-circuits when left is false (==0); || when left is true (!=0).
-    EmitCode($"ifbr {shortCircuitLabel}");
+    if (!isAnd)
+    {
+      EmitCode("eq0"); // || short-circuits when left is true (!=0); invert first so cbr's own "r==0" test fires on that.
+    }
+
+    EmitCode($"cbr {shortCircuitLabel}"); // && needs no inversion: it short-circuits exactly when left == 0, which is what cbr already tests.
 
     EmitExpr(expr.Right);
     EmitCode("pop");
@@ -1165,22 +1230,48 @@ public sealed class CCodeGenerator
         break;
 
       case CExprStmt exprStmt:
+        // 2026-09-09: a bare assignment/compound-assignment/increment-decrement statement is the
+        // single most common expression statement there is, and its own result value is NEVER read
+        // (there is nowhere for a statement's "value" to go) -- so these three go through their
+        // "ForEffect" twins, which skip the dup this class's own uniform stack invariant would
+        // otherwise require, rather than the generic EmitExpr-then-pop path below. See
+        // EmitAssignForEffect's own remarks.
+        switch (exprStmt.Expression)
         {
-          CType type = EmitExpr(exprStmt.Expression);
-          if (!type.IsVoid)
-          {
-            EmitCode("pop");
-          }
+          case CAssignExpr assign:
+            EmitAssignForEffect(assign);
+            break;
 
-          break;
+          case CCompoundAssignExpr compoundAssign:
+            EmitCompoundAssignForEffect(compoundAssign);
+            break;
+
+          case CUnaryExpr { Op: CUnaryOp.PreIncrement or CUnaryOp.PostIncrement or CUnaryOp.PreDecrement or CUnaryOp.PostDecrement } incDec:
+            EmitIncrementOrDecrementForEffect(incDec);
+            break;
+
+          default:
+            {
+              CType type = EmitExpr(exprStmt.Expression);
+              if (!type.IsVoid)
+              {
+                EmitCode("pop");
+              }
+
+              break;
+            }
         }
+
+        break;
 
       case CLocalVarDecl localDecl:
         DeclareLocal(localDecl);
         if (localDecl.Initializer is not null && !localDecl.IsStatic)
         {
-          EmitAssign(new CAssignExpr(localDecl.Location, new CNameExpr(localDecl.Location, localDecl.Name), localDecl.Initializer));
-          EmitCode("pop");
+          // Same "ForEffect" reasoning as CExprStmt above: a declaration's initializer value is never
+          // read either, so this goes straight to EmitAssignForEffect rather than round-tripping
+          // through a dup it would just have to discard again.
+          EmitAssignForEffect(new CAssignExpr(localDecl.Location, new CNameExpr(localDecl.Location, localDecl.Name), localDecl.Initializer));
         }
 
         break;
@@ -1191,8 +1282,11 @@ public sealed class CCodeGenerator
           string endLabel = NewLabel("endif");
           EmitExpr(ifStmt.Condition);
           EmitCode("pop");
-          EmitCode($"eq0");
-          EmitCode($"ifbr {elseLabel}");
+          // 2026-09-09: cbr branches when r == 0 (CONFIRMED, see this class's own ABI doc comment) --
+          // exactly the "condition is false, skip to else" test we need, so no eq0 is needed first any
+          // more (the old "ifbr" placeholder branched on nonzero, which is why this used to negate with
+          // eq0 first).
+          EmitCode($"cbr {elseLabel}");
           EmitStatement(ifStmt.Then);
           EmitCode($"br {endLabel}");
           EmitLabel(elseLabel);
@@ -1214,8 +1308,7 @@ public sealed class CCodeGenerator
           EmitLabel(startLabel);
           EmitExpr(whileStmt.Condition);
           EmitCode("pop");
-          EmitCode("eq0");
-          EmitCode($"ifbr {endLabel}");
+          EmitCode($"cbr {endLabel}"); // 2026-09-09: cbr already branches on r == 0 -- see EmitStatement's CIfStmt case remarks.
           EmitStatement(whileStmt.Body);
           EmitCode($"br {startLabel}");
           EmitLabel(endLabel);
@@ -1236,7 +1329,12 @@ public sealed class CCodeGenerator
           EmitLabel(continueLabel);
           EmitExpr(doWhileStmt.Condition);
           EmitCode("pop");
-          EmitCode($"ifbr {startLabel}");
+          // 2026-09-09: do-while needs to loop back when the condition is TRUE, the opposite of what
+          // cbr tests directly (r == 0) -- so, unlike if/while/for, this needs an explicit eq0 first to
+          // invert the sense before branching (see this class's own ABI doc comment). The old "ifbr"
+          // placeholder branched on nonzero, so it needed no such inversion here; cbr does.
+          EmitCode("eq0");
+          EmitCode($"cbr {startLabel}");
           EmitLabel(endLabel);
           _currentFunction.BreakLabels.Pop();
           _currentFunction.ContinueLabels.Pop();
@@ -1262,8 +1360,7 @@ public sealed class CCodeGenerator
           {
             EmitExpr(forStmt.Condition);
             EmitCode("pop");
-            EmitCode("eq0");
-            EmitCode($"ifbr {endLabel}");
+            EmitCode($"cbr {endLabel}"); // 2026-09-09: cbr already branches on r == 0 -- see EmitStatement's CIfStmt case remarks.
           }
 
           EmitStatement(forStmt.Body);
@@ -1402,7 +1499,11 @@ public sealed class CCodeGenerator
       EmitCode("pop");                    // r := value; stack: [selector]
       EmitCode("eq");                     // stack: [selector == value]
       EmitCode("pop");                    // r := comparison result; stack: []
-      EmitCode($"ifbr {label}");          // branch into this case when the comparison was true.
+      // 2026-09-09: need to branch into this case when the comparison is TRUE, the opposite of what cbr
+      // tests directly (r == 0) -- so, like do-while, this needs an explicit eq0 first to invert the
+      // sense before branching (see this class's own ABI doc comment).
+      EmitCode("eq0");
+      EmitCode($"cbr {label}");
     }
 
     EmitCode($"br {defaultLabel ?? endLabel}");
@@ -1732,8 +1833,7 @@ public sealed class CCodeGenerator
 
     EmitExpr(conditional.Condition);
     EmitCode("pop");
-    EmitCode("eq0");
-    EmitCode($"ifbr {elseLabel}");
+    EmitCode($"cbr {elseLabel}"); // 2026-09-09: cbr already branches on r == 0 -- see EmitStatement's CIfStmt case remarks.
     CType trueType = EmitExpr(conditional.WhenTrue);
     EmitCode($"br {endLabel}");
     EmitLabel(elseLabel);

@@ -21,7 +21,7 @@ namespace Ga144.Evb.Ide.Cvm;
 /// and per "only update existing opcodes where possible" they REPOINT the four matching, previously-
 /// orphaned CVM1 node-606 mnemonics (<c>ldl</c>/<c>ldp</c>/<c>stl</c>/<c>stp</c>) to this node's own real
 /// dispatch, rather than adding new ones. See the cascade paragraph below for each one's own new tag
-/// and the accepted collision with <c>ifbr</c>.
+/// and the accepted collision with <c>cbr</c>.
 ///
 /// <b>Why a separate node.</b> Same reasoning as <see cref="Node407Program"/> (node 507's own RAM is
 /// completely full): frame-management primitives need their own resident node with its own fresh
@@ -68,7 +68,7 @@ namespace Ga144.Evb.Ide.Cvm;
 /// previously-orphaned <c>ldl</c> mnemonic (CVM1's old node 606 family, node 606 itself long gone from
 /// CVM2) rather than adding a new one, per "only update existing opcodes where possible." See
 /// <see cref="CvmInstructionSet.Node506StoreParameterTag"/>'s own remarks for the accepted collision
-/// this (and its three siblings below) has with <c>ifbr</c>.</item>
+/// this (and its three siblings below) has with <c>cbr</c>.</item>
 /// <item><c>1001_110?_????_????</c> -- load parameter into r, NAMED <c>ldp</c> the same day. <c>r&gt;
 /// par f/stack@</c>: same offset extraction, no <c>inv</c> (parameters sit ABOVE the frame pointer).
 /// Wired as <see cref="CvmInstructionSet.LoadParameterMnemonic"/>, tag
@@ -105,16 +105,16 @@ namespace Ga144.Evb.Ide.Cvm;
 /// and node 407's <c>'lcall</c>/<c>'ljmp</c> use with 0xC000.</item>
 /// </list>
 ///
-/// <b>Opcode-space collision with <c>br</c>/<c>ifbr</c> -- KNOWN, PARTIALLY RESOLVED 2026-09-09.</b> The
+/// <b>Opcode-space collision with <c>br</c>/<c>cbr</c> -- KNOWN, PARTIALLY RESOLVED 2026-09-09.</b> The
 /// ENTIRE "1001_????_????_????" range (0x9000-0x9FFF) this source claims used to be fully owned by
 /// <c>br</c> (<see cref="CvmInstructionSet.BranchTag"/>, OLD value 0x9000, top 5 bits <c>10010</c>, i.e.
-/// every <c>1001_0xxx</c> word) and <c>ifbr</c> (<see cref="CvmInstructionSet.ConditionalBranchTag"/>,
+/// every <c>1001_0xxx</c> word) and <c>cbr</c> (<see cref="CvmInstructionSet.ConditionalBranchTag"/>,
 /// 0x9800, top 5 bits <c>10011</c>, every <c>1001_1xxx</c> word) -- together covering the exact same
 /// full nibble, confirmed working on real hardware (the <c>br 1</c> test --
 /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>'s own remarks). Per Stefan
-/// (2026-09-02): <c>br</c>/<c>ifbr</c> would eventually move to a new tag range ("i will specified the
+/// (2026-09-02): <c>br</c>/<c>cbr</c> would eventually move to a new tag range ("i will specified the
 /// range later. for now it is not yet defined"), but per Stefan's later explicit instruction (2026-09-04,
-/// "ignore the ranges of br/ifbr. ignore the overlapping ranges. give me now enter and leave mnemonics.")
+/// "ignore the ranges of br/cbr. ignore the overlapping ranges. give me now enter and leave mnemonics.")
 /// <c>enter</c>/<c>leave</c> were wired in anyway (<see cref="CvmInstructionSet.Instructions"/>'s
 /// <c>enter</c> entry, tag <see cref="CvmInstructionSet.Node506EnterTag"/> 0x9200; and
 /// <see cref="Services.CvmAssemblyLanguage.NodeSymbolByMnemonic"/>'s <c>leave</c> entry, tag
@@ -124,19 +124,26 @@ namespace Ga144.Evb.Ide.Cvm;
 /// first for the whole 0x9000-0x97FF range. <b>Extended 2026-09-06:</b> <c>ldl</c>/<c>ldp</c>/<c>stl</c>/
 /// <c>stp</c> were wired in too, per Stefan's follow-up revision naming all four explicitly for the
 /// first time -- see the cascade list above for each one's own tag. The SAME collision shape applied one
-/// nibble over: all four land inside <c>ifbr</c>'s own range (0x9800-0x9FFF) rather than <c>br</c>'s
-/// (0x9000-0x97FF), so disassembling one of THESE words reported <c>ifbr</c> instead, same reasoning,
+/// nibble over: all four land inside <c>cbr</c>'s own range (0x9800-0x9FFF) rather than <c>br</c>'s
+/// (0x9000-0x97FF), so disassembling one of THESE words reported <c>cbr</c> instead, same reasoning,
 /// same acceptance.
 ///
-/// <b>This is Stefan's promised range, finally specified -- but only half of it (2026-09-09).</b> Per
-/// Stefan's own correction ("'br' is wrongly encoded ... opcode br 1000_0??? ???? ???? branch relative
-/// signed 11-bit offset in opcode"), <c>br</c> moved to <see cref="CvmInstructionSet.BranchTag"/> = 0x8000
-/// (top 5 bits <c>10000</c>). This finally resolves the <c>enter</c>/<c>br</c> collision above: 0x9200
-/// no longer falls inside <c>br</c>'s range, so <c>enter</c> should now disassemble correctly. <c>ifbr</c>
-/// itself is DELIBERATELY UNCHANGED (still 0x9800, top 5 bits <c>10011</c>) -- see
-/// <see cref="CvmInstructionSet.ConditionalBranchTag"/>'s own remarks for why 0x8800 (the naive "one bit
-/// further" guess) must NOT be used for it -- so <c>ldl</c>/<c>ldp</c>/<c>stl</c>/<c>stp</c> STILL
-/// collide with <c>ifbr</c> exactly as before, unresolved, pending Stefan's own <c>ifbr</c> bit pattern.
+/// <b>This is Stefan's promised range, finally specified -- BOTH halves of it, as of later the same day
+/// (2026-09-09).</b> Per Stefan's own correction ("'br' is wrongly encoded ... opcode br 1000_0??? ????
+/// ???? branch relative signed 11-bit offset in opcode"), <c>br</c> moved to
+/// <see cref="CvmInstructionSet.BranchTag"/> = 0x8000 (top 5 bits <c>10000</c>). This finally resolves
+/// the <c>enter</c>/<c>br</c> collision above: 0x9200 no longer falls inside <c>br</c>'s range, so
+/// <c>enter</c> should now disassemble correctly. <c>ifbr</c> itself stayed at its old, unconfirmed
+/// 0x9800 placeholder for a while longer -- but Stefan then retired that guess outright and gave its
+/// real replacement, <c>cbr</c>, its own confirmed tag ("\"ifbr\" no longer exist and should be replaced
+/// with \"cbr\". it is basically the same. opcode cbr 1010_11??_????_???? conditional branch to offset
+/// if r == 0. the offset is signed 10-bit number.") -- see
+/// <see cref="CvmInstructionSet.ConditionalBranchTag"/>'s own remarks for the full derivation (0xAC00,
+/// a 6-bit tag/10-bit offset, one bit narrower than <c>br</c>'s). RESOLVED: since 0xAC00-0xAFFF doesn't
+/// touch 0x9800-0x9FFF at all, <c>ldl</c>/<c>ldp</c>/<c>stl</c>/<c>stp</c> no longer collide with
+/// <c>cbr</c> -- this node's own opcode range is now fully clear of both <c>br</c> and <c>cbr</c>. (cbr's
+/// new range trades this collision for a different, still-open one against node 606's own orphaned
+/// <c>lal</c>/<c>lap</c> tags -- unrelated to this node -- see ConditionalBranchTag's own remarks.)
 /// Only this node's own relay to node 505 (<c>1001_01??</c>) remains unwired -- node 505's source has
 /// still not been supplied.
 ///
@@ -178,7 +185,7 @@ internal static class Node506Program
   /// <c>ldl</c>/<c>ldp</c>/<c>stl</c>/<c>stp</c> for the first time, no dispatch/address changes). See
   /// the class remarks for the register/stack helpers, <c>f/main</c>'s dispatch cascade, its CVM-level
   /// opcode encoding (including the four newly-named ops), the bug fix, and the accepted <c>br</c>/
-  /// <c>ifbr</c> tag collisions.
+  /// <c>cbr</c> tag collisions.
   /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
   /// project source for node 506 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
   /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the

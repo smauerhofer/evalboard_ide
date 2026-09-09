@@ -179,7 +179,7 @@ namespace Ga144.Evb.Ide.Cvm;
 /// (<c>drop 0x03ff and dup 0x0200 and if drop 0xfc00 xor u/r! ; then drop u/r! ;</c>) -- see "What was
 /// actually wrong, and what changed" above. Per Stefan's own explicit follow-up ("add this range to the
 /// cvm language ... mnemonic lit"), wired into <see cref="CvmInstructionSet"/> as <c>lit</c>,
-/// self-describing exactly like <c>br</c>/<c>ifbr</c>/<c>slit</c> (tag 0xB400, a 6-bit tag OR'd with
+/// self-describing exactly like <c>br</c>/<c>cbr</c>/<c>slit</c> (tag 0xB400, a 6-bit tag OR'd with
 /// this same 10-bit signed field, UNCHANGED by this fix) -- see
 /// <see cref="CvmInstructionSet.LitTag"/>'s own remarks for the full derivation. <c>lit</c> needs no
 /// live node/linker resolution at all, unlike every one of node 509's own twelve TAGGED words below.</item>
