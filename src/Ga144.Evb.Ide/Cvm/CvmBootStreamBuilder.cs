@@ -287,7 +287,8 @@ public static class CvmBootStreamBuilder
     });
     ThrowIfFailed(result506);
 
-    // CVM2 (2026-09-04): node 508, the globals-access node (load/store global, 'ldg/'stg) -- reached
+    // CVM2 (2026-09-04): node 508, the globals-access node (load/store global, 'gld/'gst -- renamed
+    // 2026-09-09 from 'ldg'/'stg, see CvmInstructionSet.LoadGlobalMnemonic's own remarks) -- reached
     // from 507's own m/main dispatch via its LEFT port, a THIRD sibling of 407 and 506 (all three hang
     // directly off 507's own dispatch, none is a further link past another -- confirmed independently
     // by Models.KrakenConfiguration.PortAddress, which computes "left" on BOTH sides of 507<->508, same

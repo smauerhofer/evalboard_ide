@@ -51,7 +51,8 @@ namespace Ga144.Evb.Ide.Cvm;
 /// saved into node 506's own Node Editor tab for this chip.
 ///
 /// Node 508 and node 509 added 2026-09-05, plugging a real gap this list had missed until now:
-/// 'ldg/'stg (node 508) and 'inv/'inc/'dec/'neg/'abs/'mul2/'div2/'udiv2/'bitcnt (node 509) are ALL
+/// 'gld/'gst (node 508, renamed 2026-09-09 from 'ldg'/'stg) and
+/// 'inv/'inc/'dec/'neg/'abs/'mul2/'div2/'udiv2/'bitcnt (node 509) are ALL
 /// TAGGED mnemonics, so without their own node compiled here they silently degraded to the same
 /// "undefined opcode -> nop" substitution 407/506 would have hit before THEY were added -- in
 /// practice this showed up as a disassembled word (e.g. node 509's own 0xB026, 'inc) rendering with
@@ -80,6 +81,18 @@ namespace Ga144.Evb.Ide.Cvm;
 /// Cvm.Node407Program's/Cvm.Node408Program's own remarks) exactly the way 406 hangs off 407's RIGHT
 /// port -- same "imports node 407, must be in this list or its own tagged mnemonics silently degrade"
 /// reasoning as node 406 just above, so added alongside it rather than waiting for a bug report.
+///
+/// Nodes 306, 307, 308, 405, 505, 510, 511 added 2026-09-09 as part of the opcode/assembler-vs-node
+/// reconciliation audit against Stefan's own <c>workspace.yaml</c> project export -- the SAME missed-
+/// gap bug as 406/408/508/509 above, just for seven nodes at once: every one of these defines its own
+/// TAGGED mnemonics (306's lda/sta/arinc/ardec/arld/arst, 308's dpop/dpush/dinc/ddec/dadd/dor, 405's
+/// tgc/adc/ldc/sec/clc/stc/sbc/rol/ror, 505's fx, 510's addc/xst/xld/xmul2/xdiv2/xumul, 511's
+/// rld/rst/rpop/rpush) that would silently degrade to "undefined opcode -> nop" without their own node
+/// compiled here, exactly like every node added above it. Order is parent-before-child, following each
+/// node's own "# N import" directive: 505 imports 506; 510 imports 509; 511 imports 510; 406 imports
+/// 407 (unchanged, listed above); 405 imports 406; 307 imports 407; 308 imports 307; 306 imports 307.
+/// CompileNode resolves each import from the chip's own live node graph regardless of this list's
+/// order, but the order here is kept parent-before-child for readability, same as every prior addition.
 /// </summary>
 public static class CvmNodeMesh
 {
@@ -88,9 +101,16 @@ public static class CvmNodeMesh
     CvmMemoryProtocol.NopSourceNodeCoordinate, // 507, CVM2's entire CPU (corrected 2026-09-01 from 508).
     Node407Program.Coordinate, // 407, CVM2's long-call/long-jump helper (added 2026-09-02).
     Node506Program.Coordinate, // 506, CVM2's stack-frame node (added 2026-09-04).
-    Node508Program.Coordinate, // 508, CVM2's ldg/stg node (added 2026-09-05).
+    Node505Program.Coordinate, // 505, CVM2's frame2/more-frame-operations node (added 2026-09-09).
+    Node508Program.Coordinate, // 508, CVM2's gld/gst node (added 2026-09-05, renamed 2026-09-09).
     Node509Program.Coordinate, // 509, CVM2's unary-arithmetic node (added 2026-09-05).
+    Node510Program.Coordinate, // 510, CVM2's extended-arithmetic (double-register) node (added 2026-09-09).
+    Node511Program.Coordinate, // 511, CVM2's 32-register register-file node (added 2026-09-09).
     Node406Program.Coordinate, // 406, CVM2's binary-arithmetic node (added 2026-09-05).
+    Node405Program.Coordinate, // 405, CVM2's multiword-arithmetic (carry-flag) node (added 2026-09-09).
     Node408Program.Coordinate, // 408, CVM2's comparison node (added 2026-09-06).
+    Node307Program.Coordinate, // 307, CVM2's "VM ternary main" relay node (added 2026-09-09).
+    Node308Program.Coordinate, // 308, CVM2's 4x 32-bit "VM 32 arithmetic" register node (added 2026-09-09).
+    Node306Program.Coordinate, // 306, CVM2's 4x 32-bit address-register node (added 2026-09-09).
   ];
 }

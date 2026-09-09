@@ -343,7 +343,7 @@ public static class CvmLinker
           // CallAddressMask), on the assumption every primitive shares call's own single fixed tag
           // and 15-bit address range. That doesn't hold for CVM2 -- different primitive families tag
           // completely differently (node 507's local-execute family at 0x8800, node 506's frame ops at
-          // 0x9xxx, node 508's ldg/stg at 0xA000, node 509's unary-arithmetic family at 0xB000, node
+          // 0x9xxx, node 508's gld/gst at 0xA000, node 509's unary-arithmetic family at 0xB000, node
           // 407's long-call family at 0xC000, node 406's binary-arithmetic family at 0xE000/0xE400,
           // node 408's comparison family at 0xF000/0xF400, and so on -- see CvmPrimitiveTable's own
           // remarks). So there is no single tag this linker could re-apply: CvmPrimitiveTable now

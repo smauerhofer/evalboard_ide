@@ -188,20 +188,38 @@ internal static class Node508Program
   public const int Coordinate = 508;
 
   /// <summary>
-  /// Node 508's full resident F18 source, as supplied by Stefan on 2026-09-04 and revised 2026-09-06
-  /// ("here is node 508, where some changes happened"). See the class remarks for the register/stack
-  /// helpers, <c>g/main</c>'s now-deeper dispatch cascade (including the two brand new branch/
-  /// conditional-branch forms and the flagged stack-depth concern in the "branch" form's own
-  /// sign-extension idiom), its derived (but not yet wired) CVM-level opcode shapes, and the confirmed
-  /// LEFT port link back to node 507.
-  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
-  /// project source for node 508 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
-  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
-  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
-  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
-  /// specific claim above (a compiled address, a port name, a verification result) as possibly
-  /// stale until re-confirmed against a fresh compile.
+  /// Node 508's full resident F18 source. <b>RE-SYNCED 2026-09-09</b> verbatim against Stefan's LATEST
+  /// <c>workspace.yaml</c> upload (the same upload that surfaced node 408's missing <c>'ugt</c> family --
+  /// see <see cref="CvmInstructionSet"/>'s own class remarks) -- supersedes the 2026-09-08 sync below it
+  /// in git history and the 2026-09-06 narrative in the class remarks above, both of which described a
+  /// DIFFERENT, deeper "branch"/"conditional branch" split (two 9-bit embedded forms) that this latest
+  /// export shows never actually shipped: the real, current <c>g/main</c> keeps ONE combined
+  /// <c>1010_11??</c> form instead (skip-if-r-nonzero, else branch by a 10-bit signed offset) -- exactly
+  /// <see cref="CvmInstructionSet.ConditionalBranchTag"/>'s own already-wired <c>cbr</c> shape (0xAC00,
+  /// mask 0xFC00, 10-bit offset), so this re-sync brings the node's own source back in step with a tag
+  /// that was already correct elsewhere in the toolchain rather than changing that tag itself.
   ///
+  /// <b>Flagged, not silently fixed -- an apparent naming/body cross-wire.</b> This export also renames
+  /// node 508's own two tick-prefixed words from <c>'ldg</c>/<c>'stg</c> to <c>'gld</c>/<c>'gst</c> (see
+  /// <see cref="CvmInstructionSet.LoadGlobalMnemonic"/>'s own remarks for the mnemonic-string rename this
+  /// triggered) -- but tracing their bodies against this node's own <c>g/@</c>/<c>g/!</c> primitives
+  /// turns up something odd: <c>'gld</c> calls <c>g/@</c>, whose own body (<c>A[ over @p ]] lit !b !b A[
+  /// m/2! ]] lit !b ;</c>) ends by remotely invoking <c>m/2!</c> -- a STORE into node 507's own page-2
+  /// globals -- while <c>'gst</c> calls <c>g/!</c>, whose own body (<c>A[ @p m/2@ ]] lit !b !b A[ over ]]
+  /// lit !b ;</c>) ends by remotely invoking <c>m/2@</c>, a FETCH. That is backwards from both the
+  /// conventional Forth naming (<c>@</c> fetches, <c>!</c> stores) and from the dispatch cascade's own
+  /// inline comments below ("load r form global" / "store r to global"), which themselves match <c>g/@</c>/
+  /// <c>g/!</c> by NAME rather than by body. Per this project's own practice of never guessing at an
+  /// unconfirmed design decision: the source below reproduces this exactly as exported (including the
+  /// "form"/"from" comment typo), and neither <see cref="Node508Program"/> nor
+  /// <see cref="Services.CvmAssemblyLanguage"/> attempts to swap anything to "fix" it. Only Stefan can
+  /// say whether <c>'gld</c>/<c>'gst</c> are swapped, whether <c>g/@</c>/<c>g/!</c>'s own bodies are
+  /// swapped, or whether this is intentional.
+  ///
+  /// See the class remarks above for the register/stack helpers, the confirmed LEFT port link back to
+  /// node 507, and the general dispatch shape -- all UNCHANGED by this re-sync except where called out
+  /// here. Treat any specific numeric claim in the class remarks above (a compiled address, a bit width)
+  /// as possibly stale until re-confirmed against a fresh compile of the source immediately below.
   /// </summary>
   public const string Source = """
       ( CVM2 node 508. globals, 101?_????_????_???? )
@@ -215,8 +233,8 @@ internal static class Node508Program
       : g/pop ( -w) A[ m/pop ]] lit !b A[ !p ]] lit !b @b ;
       : g/push ( w) A[ @p m/push ]] lit !b !b ;
       : g/next ( -w) A[ m/next ]] lit !b A[ !p ]] lit !b @b ;
-      : g/@ ( o-) A[ @p m/2@ ]] lit !b !b A[ over ]] lit !b ;
-      : g/! ( o-) A[ over @p ]] lit !b !b A[ m/2! ]] lit !b ;
+      : g/! ( o-) A[ @p m/2@ ]] lit !b !b A[ over ]] lit !b ;
+      : g/@ ( o-) A[ over @p ]] lit !b !b A[ m/2! ]] lit !b ;
       : g/leave A[ ; ]] lit !b
       : g/main # g/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r
         -if // 1011_????_????_????
@@ -227,36 +245,34 @@ internal static class Node508Program
 
           2* -if // 1010_11??_????_????
 
-            2* -if // 1010_111?_????_????
-              // conditional branch
-              g/r@ if r> g/leave then
-            then // 1010_110?_????_????
+            // conditional branch
+            g/r@ if r> g/leave then
             // branch
-            r> 0x1ff and dup 0x100 and if drop 0xfe00 xor dup then drop A[ @p m/branch ]] lit !p !p ;
+            2* 2* 2* 2* -if drop 0xfc00 xor dup then drop A[ @p m/branch ]] lit !p !p ;
 
           then // 1010_10??_????_????
 
           // globals
           2* -if // 1010_101?_????_????
-            // load r form global
-            r> 0x1ff and g/@ ;
+            // store global into r
+            r> 0x1ff and g/! ;
           then // 1010_100?_????_????
-          // store r to global
-          r> 0x1ff and g/! ;
+          // load global from r
+          r> 0x1ff and g/@ ;
 
         then // 1010_0???_????_????
         A[ m/next ]] lit !b A[ !p ]] lit !b @b ex ;
-      : 'ldg g/next g/@ ;
-      : 'stg g/next g/! ;
+      : 'gld g/next g/@ ;
+      : 'gst g/next g/! ;
 
       (
-      opcode 1010_100?_????_???? store r to global. the offset is unsigned 9 bit.
-      opcode 1010_101?_????_???? load global into r. the offset is unsigned 9 bit.
-      opcode 1010_110?_????_???? branch to offset. the offset is signed 9 bit.
-      opcode 1010_111?_????_???? conditional branch to offset if r == 0. the offset is signed 9 bit.
+      opcode ldg 1010_100?_????_???? load global from r. the offset is unsigned 9 bit.
+      opcode stg 1010_101?_????_???? store global into r. the offset is unsigned 9 bit.
+      opcode cbr 1010_11??_????_???? conditional branch to offset if r == 0. the offset is signed 10-bit number.
 
-      'ldg load global to r. offset in the next word
-      'stg store r to global. offset in the next word
+      'gld load global from r. address in the next word
+      'gst store global into r. address in the next word
+
 
       )
       """;

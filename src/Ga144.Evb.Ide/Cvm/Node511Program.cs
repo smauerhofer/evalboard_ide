@@ -140,48 +140,56 @@ internal static class Node511Program
   public const int Coordinate = 511;
 
   /// <summary>
-  /// Node 511's full resident F18 source. Originally supplied by Stefan on 2026-09-07 ("here are nodes
-  /// 510 and 511"); REVISED the same day to fix a confirmed typo in <c>r/main</c> ("the register are
-  /// 16-bit so doubling the index is wrong") -- the register-index arithmetic no longer doubles before
-  /// <c>a!</c>, and the opening idiom now performs a single port-B read (<c>A[ drop !p ]] lit !b @b</c>)
-  /// rather than two. <c>r/leave</c> and all four ops (<c>'rld</c>/<c>'rst</c>/<c>'rpop</c>/<c>'rpush</c>)
-  /// are unchanged from the original paste. See the class remarks for the full bit-by-bit derivation of
-  /// the fixed <c>r/main</c>'s own field extraction and the still-open FLAGGED missing
-  /// leading-continuation idiom.
-  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
-  /// project source for node 511 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
-  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
-  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
-  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
-  /// specific claim above (a compiled address, a port name, a verification result) as possibly
-  /// stale until re-confirmed against a fresh compile.
-  ///
+  /// Node 511's full resident F18 source. See the class remarks for the four register-file ops and the
+  /// register-index typo Stefan fixed on 2026-09-07.
+  /// <b>RE-SYNCED 2026-09-09</b> against Stefan's own <c>workspace.yaml</c> project export as part of the
+  /// opcode/assembler-vs-node reconciliation audit -- REVERSED: the PRIOR "SYNCED, 2026-09-08" copy here
+  /// had drifted to a more advanced, 4-way bit-cascade dispatch (<c>[ 0x40 -25 + ] org</c>, splitting
+  /// <c>1011_111?</c>/<c>1011_110?</c> into individual load/store/pop/push branches one bit at a time).
+  /// The export restores the ORIGINAL, simpler direct-field-extraction dispatch documented in the class
+  /// remarks above: <c># 0x20 org</c>, a single <c>r/main</c> that masks the full opcode word's own low 5
+  /// bits into the register index (<c>a!</c>) and its next 5 bits (offset by 0x20) into a jump target
+  /// (<c>ex</c>), landing directly on whichever of <c>'rld</c>/<c>'rst</c>/<c>'rpop</c>/<c>'rpush</c> the
+  /// function-select field named -- each independently resolved
+  /// (<see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>, register index in the
+  /// low 5 bits of every one of these four opcodes' own CVM word) rather than reached through nested bit
+  /// tests. This un-does whatever intermediate revision produced the split-cascade shape; workspace.yaml
+  /// is ground truth per Stefan's own explicit ruling, so <c>'rld</c>/<c>'rst</c>/<c>'rpop</c>/<c>'rpush</c>
+  /// remain live, real, currently-defined opcodes on this node -- NOT retired.
   /// </summary>
   public const string Source = """
       ( CVM2 node 511. register file, 1011_11??_????_???? )
+      ( 32 register )
       # 510 import
-      [ 0x40 -25 + ] org
+      # 0x20  org
       entry r/main
       # 0 /a
       # left /b
+
       : r/leave A[ x/leave ; ]] lit !b
-      : r/main # r/leave lit >r A[ !p !p ]] lit !b @b @b 0x3f and a!
-        2* -if // 1011_111?_????_????
+      : r/main  A[ drop !p ]] lit !b
 
-          2* -if // 1011_1111_????_????
-            // load register
-            A[ x/r@ ]] lit !b A[ !p ]] lit !b @b ! ;
-          then // 1011_1110_????_????
-          // store register
-            A[ @p x/r! ]] lit !b @ !b ;
+        @b // get opcode
+        // set register in a
+        dup 0x1f and a!
+        // call word
+        2/ 2/ 2/ 2/ 2/ 0x1f and 0x20 xor ex r/leave ;
 
-        then // 1011_110?_????_????
+        // load register
+      : 'rld A[ x/r@ ]] lit !b A[ !p ]] lit !b @b ! ;
+        // store register
+      : 'rst A[ @p x/r! ]] lit !b @ !b ;
+      : 'rpop A[ x/pop ]] lit !b A[ !p ]] lit !b @b ! ;
+      : 'rpush A[ @p x/push ]] lit !b @ !b ;
 
-          2* -if // 1011_1101_????_????
-            // pop register
-            A[ x/pop ]] lit !b A[ !p ]] lit !b @b ! ;
-          then // 1011_1100_????_????
-          // push register
-            A[ @p x/push ]] lit !b @ !b ;
+      (
+      this node supports 32 16-bit register.
+      register are encoded in the lower 5 bits of the opcode.
+      the address of the function is encoded in the next 5 bits with an offset of 0x20, so address 0x20 to 0x3f can be encoded.
+      opcode rld   1011_11??_???a_aaaa move r to reg[a]
+      opcode rst   1011_11??_???a_aaaa move reg[a] to r
+      opcode rpop  1011_11??_???a_aaaa pop stack to reg[a]
+      opcode rpush 1011_11??_???a_aaaa push reg[a] to stack
+      )
       """;
 }

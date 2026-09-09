@@ -29,9 +29,10 @@ namespace Ga144.Cvm.Toolchain;
 /// see <see cref="ExchangePortMnemonic"/>'s own remarks)), plus CVM2's <c>lcall</c>/<c>ljmp</c> (long
 /// call/long jump, added 2026-09-02 -- shaped exactly like <c>pushlit</c>, resolved against node 407's
 /// own live compile too, but a DIFFERENT tag -- see <see cref="LongCallMnemonic"/>'s own remarks)), plus
-/// CVM2's <c>ldg</c>/<c>stg</c> (load global/store global, added 2026-09-04 -- shaped exactly like
-/// <c>lcall</c>/<c>ljmp</c>, resolved against node 508's own live compile, its own DIFFERENT tag again --
-/// see <see cref="LoadGlobalMnemonic"/>'s own remarks)), plus node 509's nine unary-arithmetic ops --
+/// CVM2's <c>gld</c>/<c>gst</c> (load global/store global, added 2026-09-04, renamed 2026-09-09 from
+/// <c>ldg</c>/<c>stg</c> -- shaped exactly like <c>lcall</c>/<c>ljmp</c>, resolved against node 508's own
+/// live compile, its own DIFFERENT tag again -- see <see cref="LoadGlobalMnemonic"/>'s own remarks)),
+/// plus node 509's nine unary-arithmetic ops --
 /// <c>abs</c>, <c>neg</c>, <c>inc</c>, <c>dec</c>, <c>inv</c>, <c>mul2</c>, <c>div2</c>, <c>udiv2</c>,
 /// <c>bitcnt</c> (added 2026-09-05: eight of these REPOINT existing orphaned mnemonics -- <c>inv</c>/
 /// <c>inc</c>/<c>dec</c> from node 507's old ALU-op family and <c>abs</c>/<c>mul2</c>/<c>div2</c>/
@@ -300,17 +301,20 @@ public static class CvmInstructionSet
   // ult/uge/negate/xt/ldt/stt -- remain permanently orphaned against node 508, which never defined any of
   // these 27 old F18 symbols in its own real CVM2 source.
   //
-  // FLAGGED 2026-09-09 (opcode/assembler-vs-node reconciliation audit, per Stefan's own "remove all
-  // opcodes not present in any node"): these same eight are the ONLY orphaned mnemonics in this whole
-  // table that this audit found still ACTIVELY EMITTED by Ga144.C.Toolchain.CCodeGenerator's own codegen
-  // -- "ugt"/"ule"/"ult"/"uge" for every unsigned comparison, "negate" for unary minus, and "xt"/"ldt"/
-  // "stt" for every pointer dereference (load/store through an lvalue address). Deleting their Instructions
-  // rows per the letter of "remove all opcodes not present in any node" would silently break C compilation
-  // for any program using an unsigned comparison, a unary minus, or a pointer dereference -- effectively
-  // all of them. Kept exactly as before this audit rather than removed; this is flagged for Stefan rather
-  // than resolved unilaterally, since the real fix is presumably a future node implementing this
-  // comparison-tail/pointer-dereference family (or the C compiler switching to some other already-wired
-  // primitive), neither of which this audit can decide on its own.
+  // RESOLVED 2026-09-09, in part (second pass of the opcode/assembler-vs-node reconciliation audit,
+  // against Stefan's own workspace.yaml project export -- this is the EXACT gap that prompted the whole
+  // audit: "there are 'ugt' opcodes in the nodes"). FOUR of these eight -- ugt/ule/ult/uge -- are no
+  // longer merely kept-alive orphans: node 408's own current source defines a real c/u helper plus
+  // matching 'ugt/'ule/'ult/'uge words (see Cvm.Node408Program's own remarks), so all four now REPOINT to
+  // node 408's own live compile, exactly like the other ten comparison ops already do -- see
+  // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own NodeSymbolByMnemonic for the wiring. The remaining
+  // FOUR -- negate/xt/ldt/stt -- stay permanently orphaned against every node in the current CVM2 mesh,
+  // still actively emitted by Ga144.C.Toolchain.CCodeGenerator's own codegen ("negate" for unary minus,
+  // "xt"/"ldt"/"stt" for every pointer dereference) -- deleting their Instructions rows would silently
+  // break C compilation for any program using a unary minus or a pointer dereference, so they are kept
+  // exactly as before, flagged rather than resolved unilaterally: the real fix is presumably a future
+  // node implementing this pointer-dereference family (or the C compiler switching to some other
+  // already-wired primitive), neither of which this audit can decide on its own.
   public const string EqualMnemonic = "eq";
   public const string EqualToZeroMnemonic = "eq0";
   public const string FalseMnemonic = "false";
@@ -450,53 +454,56 @@ public static class CvmInstructionSet
   // (2026-09-06) -- see Cvm.Node407Program's own remarks for the full derivation.
   public const string LongBranchMnemonic = "lbr";
 
-  // Node 306's four 32-bit address-register ops, added per Stefan's node 306 source (2026-09-06, "I
-  // change node 307 and added node 306... In 306 there are 4 32-bit address register to access the
-  // whole memory range."), reached from node 407's OWN "1101_????_????_????" sub-branch (previously
-  // FLAGGED as unresolved -- see Cvm.Node407Program's own remarks -- now filled by node 307, "VM
-  // ternary main", which itself further relays "1101_10??_????_????" specifically to node 306, "# right
-  // /b" -- see Cvm.Node307Program's/Cvm.Node306Program's own remarks). Unlike every tagged mnemonic
-  // above (lcall/ljmp/lbr/ldg/stg and the rest), these SIX are self-describing, straight from Stefan's
-  // own trailing bit-pattern table on node 306's source -- no node/linker resolution needed at all, the
-  // same CvmOperandEncoding.EmbeddedUnsignedValue shape node 606's eight frame-pointer ops use, just
-  // with a genuinely new wrinkle: the packed value is a 2-bit ADDRESS-REGISTER INDEX (0-3) that sits at
-  // bits 2-1 of the word, not bit 0 upward -- bit 0 is architecturally fixed at 0 (Stefan's own pattern
-  // ends every one of these six in "?aa0"), and the "?" nibble/bit above the tag is genuinely
-  // don't-care (node 306's own ar/main dispatch, ": ar/reg 0x06 and a! ;", never tests it), assembled as
-  // 0 here for a clean, predictable canonical encoding. This needed one new field on
-  // CvmInstructionShape, ValueBitShift (default 0, so every existing EmbeddedUnsignedValue/
-  // EmbeddedSignedValue shape is completely unaffected) -- see that field's own remarks, and
-  // CvmAssembler.EmitEmbeddedUnsignedValue's/CvmAssemblyLanguage.EncodeSelfDescribingWord's own remarks
-  // for where the shift is actually applied.
-  //
-  // ldar (1101_1011_????_?aa0) loads r from the word at the address held in address register aa;
-  // star (1101_1010_????_?aa0) stores r to that same address -- the actual pointer DEREFERENCE
-  // primitives, per the source's own trailing comments ("load/store r using address register"). inca/
-  // deca (1101_1001_1???_?aa0 / 1101_1001_0???_?aa0) increment/decrement address register aa's own
-  // address by one word. lda/sta (1101_1000_1???_?aa0 / 1101_1000_0???_?aa0) load/store address
-  // register aa's own full 32-bit value from/to {register r (address word), the CVM data stack top
-  // (page word)} -- per the source's own trailing comments ("load/store address register, address in
-  // r, page in stack"); these are how a 32-bit address gets INTO or back OUT OF a register in the first
-  // place (e.g. for the C compiler's own ABI v2 use of address registers to pass pointer arguments --
-  // see Ga144.C.Toolchain.CCodeGenerator's own ABI doc comment), as opposed to ldar/star which use an
-  // already-loaded register to access memory. NOT YET CONFIRMED ON REAL HARDWARE (2026-09-06).
-  //
-  // RESOLVED 2026-09-09 (was FLAGGED): this whole family sits at 0xD800-0xDBFF, which used to be
-  // squarely inside SlitTag's own then-active 0xD000-0xDFFF range (Stefan's own "1101 xxxx xxxx xxxx
-  // ... slit" table), so TryDescribeSelfDecodingWord checking slit BEFORE the generic
-  // EmbeddedUnsignedValue loop these six mnemonics rely on used to completely shadow all six in
-  // disassembly (a word like 0xD800 ("sta 0") showed as "slit -2048" in the memory inspector/debugger,
-  // never as "sta 0"). Stefan retired slit outright the same day ("'slit' is replaced by 'lit'. remove
-  // it from the language." -- see SlitTag's own remarks), which removed the shadowing check entirely --
-  // these six now decode correctly through the generic loop with nothing left in 0xD000-0xDFFF to
-  // collide with. Assembling FROM a mnemonic (ldar/star/inca/deca/lda/sta by name) was always unaffected
-  // by this -- only disassembly was ever ambiguous.
+  // Node 306's four 32-bit address-register ops, ORIGINALLY added per Stefan's node 306 source
+  // (2026-09-06) as a self-describing (EmbeddedUnsignedValue) family: ldar/star/inca/deca/lda/sta, a
+  // fixed tag OR'd with a 2-bit address-register index. RETIRED 2026-09-09 (opcode/assembler-vs-node
+  // reconciliation audit against Stefan's own workspace.yaml project export): node 306's OWN current
+  // source no longer defines ANY of these six self-describing words at all -- it was rewritten entirely
+  // around a different, TICK-PREFIXED/node-resolved family instead (see LoadAddressRegisterValueMnemonic's
+  // own remarks just below for the replacement). ldar/star/inca/deca have no surviving counterpart under
+  // any name on node 306 any more (their own former roles are now covered by the NEW lda/sta/arinc/
+  // ardec below, which are DIFFERENT F18 symbols with a DIFFERENT encoding shape, not merely repointed) --
+  // kept per "do not remove any opcodes," but their Instructions rows (formerly Ids 101-104) are removed;
+  // never reuse Ids 101-104 for a different instruction.
   public const string LoadAddressRegisterMnemonic = "ldar";
   public const string StoreAddressRegisterMnemonic = "star";
   public const string IncrementAddressRegisterMnemonic = "inca";
   public const string DecrementAddressRegisterMnemonic = "deca";
+
+  // lda/sta -- RE-TASKED 2026-09-09 (same audit). The mnemonic STRINGS survive (node 306's own new source
+  // still defines tick-prefixed words named 'lda and 'sta), but their MEANING and ENCODING both changed
+  // completely: the OLD lda/sta (formerly Ids 105/106, self-describing EmbeddedUnsignedValue, "load/store
+  // address register's own 32-bit value, address in r, page on the stack") are RETIRED outright -- that
+  // exact role is now covered by the genuinely NEW mnemonics arld/arst below, under different names. The
+  // NEW lda/sta (see the Instructions entries for these constants, Ids 121/122) are ordinary tick-
+  // prefixed, node-resolved (CvmOperandEncoding.None) opcodes instead -- "load/store r from/to the address
+  // held in address register aa," i.e. exactly the role the OLD ldar/star mnemonics used to play, just
+  // under new names and a completely different word format (no embedded register-index bits of their
+  // own at the CVM-opcode level any more; node 306's own ar/main dispatch resolves the register index
+  // from the CALL BYTE it receives over the port, not from bits baked into a self-describing opcode
+  // word). This is a genuine re-tasking, not a routine repoint (the encoding shape itself changed), so it
+  // is called out explicitly rather than silently treated like every other same-shape repoint elsewhere
+  // in this file. See Cvm.Node306Program's own remarks for the full node-side derivation and the
+  // <c>ar/main</c> dispatch that resolves all six of node 306's current ops (lda/sta/arinc/ardec/arld/
+  // arst) to their own compiled addresses.
   public const string LoadAddressRegisterValueMnemonic = "lda";
   public const string StoreAddressRegisterValueMnemonic = "sta";
+
+  // arinc/ardec/arld/arst -- the other four of node 306's current six ops, alongside the re-tasked
+  // lda/sta just above. arinc/ardec take over what ldar's/star's... no -- what inca's/deca's old NAMES
+  // used to mean (increment/decrement the address register), just renamed and re-encoded exactly like
+  // lda/sta. arld/arst take over what the OLD lda/sta used to mean (load/store the address register's
+  // own full 32-bit value). All four are ordinary tick-prefixed, node-resolved (CvmOperandEncoding.None)
+  // opcodes, ALL SIX of node 306's current ops (lda/sta/arinc/ardec/arld/arst) sharing the flat
+  // "1101_10??_????_????" range per node 306's own trailing comment block -- node 306's own ar/main
+  // dispatch masks the incoming call byte to select which of the six compiled words to jump to, so
+  // (unlike the OLD self-describing family) none of these six carries its own distinguishing tag bits at
+  // the CVM-opcode level at all; the same "tag | resolved local address" scheme node 507/508/509/etc.
+  // already use elsewhere applies here too, worked out in Ga144.Evb.Ide.Services.CvmAssemblyLanguage.
+  public const string ArithmeticIncrementAddressRegisterMnemonic = "arinc";
+  public const string ArithmeticDecrementAddressRegisterMnemonic = "ardec";
+  public const string ArithmeticLoadAddressRegisterMnemonic = "arld";
+  public const string ArithmeticStoreAddressRegisterMnemonic = "arst";
 
   /// <summary>Fixed high-bit pattern for <see cref="LoadAddressRegisterMnemonic"/> (<c>ldar</c>), register index 0: <c>1101_1011_0000_0000</c>. See that constant's own remarks.</summary>
   public const int Node306LoadAddressRegisterTag = 0xDB00;
@@ -542,19 +549,16 @@ public static class CvmInstructionSet
   // register field), by contrast, describe the WORD FORMAT itself, not a live-resolution detail, so they
   // stay here alongside every other field-layout constant in this file.
   //
-  // RETIRED 2026-09-09 (opcode/assembler-vs-node audit, per Stefan's own "remove all opcodes not present
-  // in any node") -- FLAGGED, not a routine retirement like the ones above. Node 511's own source was
-  // re-synced verbatim to Stefan's current live project source on 2026-09-08 (see Node511Program's own
-  // remarks), and its r/main dispatch no longer defines four separate tick-prefixed words for these
-  // operations at all: the load/store/pop/push bodies are now inlined directly into r/main's own 2-bit
-  // dispatch cascade, selected by tag bits rather than by resolving a named F18 symbol's address, so there
-  // is nothing left for LoadRegisterFileMnemonic/StoreRegisterFileMnemonic/PopRegisterFileMnemonic/
-  // PushRegisterFileMnemonic to resolve against under Stefan's own tick-naming rule. Whether this is a
-  // deliberate redesign (32-register parameter passing folded into a different encoding) or an artifact of
-  // the resync losing a since-reverted structure is NOT established either way -- reproduced and retired
-  // exactly per the letter of the current instruction, not silently kept on the strength of the 2026-09-07
-  // history above. All four are removed from Instructions below, mnemonic constants kept per "do not
-  // remove any opcodes"; Stefan should confirm before these are un-retired.
+  // UN-RETIRED 2026-09-09 (opcode/assembler-vs-node reconciliation audit against Stefan's own
+  // workspace.yaml project export). A PRIOR pass through this same audit had retired these four, based on
+  // an intermediate re-sync of node 511's source (2026-09-08) that inlined the load/store/pop/push bodies
+  // directly into r/main's own dispatch cascade with no separate named F18 symbol for any of them. The
+  // CURRENT, authoritative workspace.yaml export (Stefan's own explicit ruling: "workspace.yaml" wins
+  // whenever it disagrees with a checked-in reference file) restores node 511's ORIGINAL, simpler
+  // direct-field-extraction r/main shape (see Cvm.Node511Program's own remarks), where 'rld/'rst/'rpop/
+  // 'rpush ARE, once again, four separately named, separately addressed F18 words. These are therefore
+  // real, live, currently-defined opcodes on node 511 -- not orphaned, not retired -- and are restored to
+  // Instructions below under their ORIGINAL Ids (107-110), never renumbered.
   public const string LoadRegisterFileMnemonic = "rld";
   public const string StoreRegisterFileMnemonic = "rst";
   public const string PopRegisterFileMnemonic = "rpop";
@@ -572,10 +576,32 @@ public static class CvmInstructionSet
   /// <summary>Isolates node 511's 5-bit register-index field (bits 4-0, unshifted, 0-31) -- see <see cref="LoadRegisterFileMnemonic"/>'s own remarks.</summary>
   public const int Node511RegisterFieldBitMask = 0x001F;
 
+  // Node 308's dpop/dpush/dinc/ddec/dadd/dor (added 2026-09-09) share node 511's NodeResolvedEmbeddedValue
+  // shape (a live compile resolves which function is invoked, a register index is embedded in the same
+  // word) but with a DIFFERENT field layout, straight from Cvm.Node308Program's own d/main body:
+  // "dup 0x03 and 2* a!" isolates a 2-bit register index (bits 1-0) and doubles it before loading it as a
+  // RAM address (node 308's own 32-bit "d" registers are stored as word pairs, so each register occupies
+  // two consecutive words); "2/ 2/ 0x3f and ex" then shifts the SAME original word right by 2 (discarding
+  // the register field) and masks to 6 bits, giving the resolved function address DIRECTLY -- unlike node
+  // 511's own "# 0x20 org" bias, node 308's own compiled addresses need no base-address subtraction at
+  // all (its function field's own 0-63 range already matches "# 0x08 org" starting inside it).
+
+  /// <summary>Isolates node 308's 6-bit "which function" field (bits 7-2) -- unlike <see cref="Node511FunctionFieldBitMask"/>, this is the resolved address directly, no base-address subtraction. See <see cref="DoublePopMnemonic"/>'s own remarks.</summary>
+  public const int Node308FunctionFieldBitMask = 0x00FC;
+
+  /// <summary>How far left node 308's resolved function address is shifted before OR-ing into <see cref="Node308FunctionFieldBitMask"/>'s bits -- 2, since the 2-bit register field occupies bits 1-0 below it. See <see cref="DoublePopMnemonic"/>'s own remarks.</summary>
+  public const int Node308FunctionFieldShift = 2;
+
+  /// <summary>Node 308's own function field needs no base-address subtraction (always 0) -- unlike <see cref="Node511FunctionFieldBaseAddress"/>, its 0-63 range already starts where "# 0x08 org" does. See <see cref="DoublePopMnemonic"/>'s own remarks.</summary>
+  public const int Node308FunctionFieldBaseAddress = 0;
+
+  /// <summary>Isolates node 308's 2-bit register-index field (bits 1-0, unshifted, 0-3) -- see <see cref="DoublePopMnemonic"/>'s own remarks.</summary>
+  public const int Node308RegisterFieldBitMask = 0x0003;
+
   // CVM2's load global/store global, added per Stefan's node 508 source (2026-09-04, "here is node
   // 508. it handles access to globals.") and his own tick-naming rule ("every word that begins with a
-  // ' is an opcode for the CVM with the mnemonic using the same name without the leading '"): node 508
-  // defines ': 'ldg g/next g/@ ;' and ': 'stg g/next g/! ;', each first fetching a trailing offset word
+  // ' is an opcode for the CVM with the mnemonic using the same name without the leading '"). Node 508
+  // defines ': 'gld g/next g/@ ;' and ': 'gst g/next g/! ;', each first fetching a trailing offset word
   // via g/next (structurally the SAME m/next-relay g/next itself performs) before doing the actual
   // global read/write -- exactly the "tagged opcode word, then one trailing operand word" shape
   // pushlit/lcall/ljmp already use, so no new CvmOperandEncoding case was needed here either, just two
@@ -583,28 +609,41 @@ public static class CvmInstructionSet
   // Cvm.Node508Program's own remarks for the full derivation): node 507 hands off to node 508 once a
   // fetched CVM opcode word's top bits read "101?" (the LEFT port), and node 508's own cascade consumes
   // three more bits before falling through to its own remote-fetch-then-"ex" tail for the "1010_0"
-  // case (5 bits total: "10100") -- so 'ldg's/'stg's own CVM opcode word always has its top 5 bits
+  // case (5 bits total: "10100") -- so 'gld's/'gst's own CVM opcode word always has its top 5 bits
   // "10100" (0xA000), the same "tag | local address" scheme Node407LongCallTagBits/
   // Node506LeaveTagBits/Node507Cvm2LocalExecuteTagBits already use (in the IDE project's own
   // Services.CvmAssemblyLanguage), just a 5-bit tag/11-bit address split this time. The actual
-  // global-offset operand itself is carried separately, in the trailing word, read by 'ldg/'stg
+  // global-offset operand itself is carried separately, in the trailing word, read by 'gld/'gst
   // themselves via g/next once running on node 508 -- see Cvm.Node508Program's own remarks. Node 508's
-  // own g/main also answers FOUR further, narrower opcode forms with an offset embedded directly in the
-  // opcode word (9 bits, no trailing word) rather than via 'ldg/'stg's trailing-word form: global fetch,
-  // global store, branch, and conditional branch (the latter two added 2026-09-06, using node 507's own
-  // m/branch export -- see Cvm.Node507Program's own remarks -- for the actual jump; the offset width
-  // shrank from 10 to 9 bits that same revision to make room for the extra dispatch bit distinguishing
-  // the branch pair from the fetch/store pair). None of these four are wired in here, since Stefan's own
-  // source gives none of them a tick-prefixed name to hang a CVM mnemonic off of (only 'ldg/'stg qualify
-  // under his own naming rule) -- see Cvm.Node508Program's own remarks, including a flagged, not-fixed
-  // apparent stack-depth bug spotted in the new "branch" form's own sign-extension idiom. 'ldg's/'stg's
-  // own addresses on node 508 moved (0x002C/0x002E -> 0x003A/0x003C) when g/main grew to fit the two new
-  // forms, but since both are resolved dynamically against a live compile (never a hardcoded address),
-  // this required no change to LoadGlobalMnemonic/StoreGlobalMnemonic or their own tag derivation above.
+  // own g/main also answers TWO further, narrower opcode forms with an offset embedded directly in the
+  // opcode word (9 bits, no trailing word) rather than via 'gld/'gst's trailing-word form: global fetch
+  // and global store by embedded 9-bit offset (the CVM-level "conditional branch to offset if r == 0",
+  // 1010_11??, is a THIRD, separate top-level opcode -- see ConditionalBranchTag's own remarks; node
+  // 508's own dispatch implements its bit-test/sign-extend/relay behavior directly rather than hanging a
+  // tick-prefixed node-508 word off of it, so it was never a candidate for a NodeResolved entry here to
+  // begin with). Neither embedded-offset fetch/store form is wired in here, since Stefan's own source
+  // gives neither a tick-prefixed name to hang a CVM mnemonic off of (only 'gld/'gst qualify under his
+  // own naming rule) -- see Cvm.Node508Program's own remarks.
+  //
+  // RENAMED 2026-09-09 from LdgMnemonic="ldg"/StgMnemonic="stg" to "gld"/"gst": re-synced against
+  // Stefan's LATEST workspace.yaml upload (the one that also surfaced node 408's missing 'ugt' family --
+  // see CvmInstructionSet's own class remarks), which shows node 508's own tick-prefixed words are
+  // actually named 'gld'/'gst, not 'ldg'/'stg as an EARLIER sync of this file had it (and as this
+  // constant's own name, still LoadGlobalMnemonic/StoreGlobalMnemonic, continues to describe -- only the
+  // STRING VALUE changed, per Stefan's own tick-naming rule which derives the mnemonic from the node's
+  // own word name verbatim). Ids (75/76) and CvmOperandEncoding (TrailingWord) are unchanged -- this is
+  // a same-Id string correction, not a retirement; nothing here was ever assembled against real hardware
+  // under the old "ldg"/"stg" spelling (see the NOT-YET-CONFIRMED note below, unchanged since 2026-09-04),
+  // so no append-only concern applies. See Cvm.Node508Program's own remarks for a further FLAGGED, not
+  // silently fixed, apparent bug this same re-sync surfaced: 'gld's own body calls g/@, but g/@'s own
+  // definition performs what reads as a REMOTE STORE (m/2!), while 'gst calls g/!, whose own definition
+  // performs what reads as a REMOTE FETCH (m/2@) -- i.e. the two names/bodies appear cross-wired in
+  // Stefan's own current source. Reproduced verbatim; only Stefan can say whether 'gld and 'gst
+  // themselves are swapped, whether g/@/g/!'s own bodies are swapped, or whether this is intentional.
   // NOT YET CONFIRMED ON REAL HARDWARE (2026-09-04) -- derived the same way lcall/ljmp's own tag was
   // before its own hardware confirmation, but node 508's load has not itself been installed and run yet.
-  public const string LoadGlobalMnemonic = "ldg";
-  public const string StoreGlobalMnemonic = "stg";
+  public const string LoadGlobalMnemonic = "gld";
+  public const string StoreGlobalMnemonic = "gst";
 
   // Node 509's nine unary-arithmetic ops, added per Stefan's node 509 source (2026-09-05, "here is node
   // 509"). Node 509 is reached from node 508's own g/main dispatch (NOT from node 507 directly) once a
@@ -717,6 +756,68 @@ public static class CvmInstructionSet
   public const string SignedShiftRightConstantMnemonic = "ssri";
   public const string ReverseUnsignedShiftRightConstantMnemonic = "ruri";
   public const string UnsignedShiftRightConstantMnemonic = "usri";
+
+  // Node 308's six 4x-32-bit "VM 32 arithmetic" register ops, added 2026-09-09 (opcode/assembler-vs-node
+  // reconciliation audit against Stefan's own workspace.yaml project export) -- BRAND NEW to this
+  // toolchain, no earlier revision of node 308 existed here at all. Shaped exactly like node 511's own
+  // rld/rst/rpop/rpush (CvmOperandEncoding.NodeResolvedEmbeddedValue): a live compile of node 308 resolves
+  // WHICH function is being invoked, and a 2-bit register index (0-3) is embedded directly in the same
+  // opcode word (node 308's own d/main masks the incoming call byte's low 2 bits into the register index,
+  // per Cvm.Node308Program's own remarks). All six share node 308's own "1101_11??_????_??aa" range.
+  public const string DoublePopMnemonic = "dpop";
+  public const string DoublePushMnemonic = "dpush";
+  public const string DoubleIncrementMnemonic = "dinc";
+  public const string DoubleDecrementMnemonic = "ddec";
+  public const string DoubleAddMnemonic = "dadd";
+  public const string DoubleOrMnemonic = "dor";
+
+  // Node 405's nine "multiword arithmetic" (carry-flag) ops, added 2026-09-09 (same audit) -- BRAND NEW,
+  // no earlier revision of node 405 existed here. Shaped like every other simple tagged/node-resolved
+  // family (CvmOperandEncoding.None): node 405's own mw/main has no bit cascade of its own at all, just a
+  // single dispatch word read then an immediate "ex" (see Cvm.Node405Program's own remarks), so each of
+  // these nine is a single bare opcode word resolved only against node 405's own live compile, sharing
+  // node 406's own "1110_1???" tag OR'd with each op's own address on node 405.
+  public const string ToggleCarryMnemonic = "tgc";
+  public const string AddWithCarryFlagMnemonic = "adc";
+  public const string LoadCarryMnemonic = "ldc";
+  public const string SetCarryMnemonic = "sec";
+  public const string ClearCarryMnemonic = "clc";
+  public const string StoreCarryMnemonic = "stc";
+  public const string SubtractWithCarryMnemonic = "sbc";
+  public const string RotateLeftMnemonic = "rol";
+  public const string RotateRightMnemonic = "ror";
+
+  // Node 505's "frame2" op, added 2026-09-09 (same audit) -- BRAND NEW, no earlier revision of node 505
+  // existed here. Only 'fx is wired (CvmOperandEncoding.None, node-resolved, node 505's own f2/main also
+  // has no bit cascade -- a single dispatch word then "ex", same shape as node 405's mw/main above).
+  // Node 505's OTHER word, also spelled 'f in its own source, is DELIBERATELY left unwired: it collides
+  // with node 506's own already-wired FrameToRegisterMnemonic ("f") under a different F18 symbol on a
+  // different node -- see Cvm.Node505Program's own remarks (FLAGGED, likely a copy-paste comment typo on
+  // node 505's own trailing doc block, not silently resolved either way).
+  public const string FrameExchangeMnemonic = "fx";
+
+  // Node 510's own "extended arithmetic" (double-register) ops, added 2026-09-09 (same audit): the PRIOR
+  // sync of node 510 here (2026-09-08) described it as defining no opcodes of its own at all; the current
+  // workspace.yaml export shows it defines six. Shaped like every other simple tagged/node-resolved
+  // family (CvmOperandEncoding.None), resolved against node 510's own live compile, node 510's own
+  // "1011_10??" local-execute tag OR'd with each op's own address -- see Cvm.Node510Program's own
+  // remarks for the double-word (32-bit, register x + register a) shift/multiply mechanics.
+  //
+  // FLAGGED: 'addc REPOINTS the existing AddWithCarryMnemonic ("addc", Id 57) rather than adding a new
+  // mnemonic, per "only update existing opcodes where possible" -- node 510's own source defines a
+  // tick-prefixed word with that exact name. Unlike every earlier repoint in this file, though, the OLD
+  // "addc" mnemonic is not merely dead: it is one of the nine still actively assembled by
+  // Cvm.CvmDebuggerDefaultProgram's own hand-written default test program (see ZeroExtendMnemonic's own
+  // remarks) -- that program's own "addc" will now resolve against node 510's live compile instead of
+  // whatever CVM1's old node 506 used to produce, a real behavioral change for that legacy test, not a
+  // no-op repoint. Repointed anyway, since Stefan's own tick-naming rule leaves no alternative name for
+  // node 510's own live 'addc word -- flagged here for Stefan to confirm CvmDebuggerDefaultProgram's own
+  // expectations still hold.
+  public const string ExtendedStoreMnemonic = "xst";
+  public const string ExtendedLoadMnemonic = "xld";
+  public const string ExtendedMultiplyByTwoMnemonic = "xmul2";
+  public const string ExtendedDivideByTwoMnemonic = "xdiv2";
+  public const string ExtendedUnsignedMultiplyMnemonic = "xumul";
 
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
@@ -1008,34 +1109,49 @@ public static class CvmInstructionSet
 
   // CVM2 node 509's own literal-load form, added 2026-09-05 per Stefan's node 509 source
   // (Cvm.Node509Program) and his own follow-up naming it: "add this range to the cvm language ...
-  // mnemonic lit". Straight from that source's own bit-pattern comment:
-  //   1011 01xx xxxx xxxx   -0x200..0x1FF   lit (literal, signed value)
-  // -- a fixed 6-bit tag (bits 15-10) OR'd with a 10-bit two's-complement signed value (bits 9-0).
-  // -0x200..0x1FF is exactly a 10-bit signed value's own range, confirming the field width -- the same
-  // shape as br/cbr/slit (EmbeddedSignedValue, self-describing, no live node/linker involvement at
-  // all), just its own tag and its own narrower 10-bit field. This is the "1011_01??_????_????" branch
-  // of node 509's own u/main dispatch cascade (see Node509Program's own remarks) that was previously
-  // left unwired for lack of a name -- now named, it is wired the same way br/cbr/slit are: a direct
-  // check in TryDescribeSelfDecodingWord below, not the generic EmbeddedUnsignedValue loop (which is
-  // node 606/509's own TAGGED-dispatch family's mechanism, a different thing). Distinct from the
-  // existing <c>slit</c> (0xD000, 12-bit field) -- despite the conceptual similarity (both load a
-  // literal signed value directly into a register), Stefan named this one separately, so it is wired as
-  // its own mnemonic rather than folded into slit.
+  // mnemonic lit". ORIGINALLY (through the 2026-09-08 sync) a fixed 6-bit tag (bits 15-10) OR'd with a
+  // 10-bit two's-complement signed value (bits 9-0), range -0x200..0x1FF, tag 0xB400.
+  //
+  // CHANGED 2026-09-09 (opcode/assembler-vs-node reconciliation audit against Stefan's own workspace.yaml
+  // project export): node 509's own u/main dispatch moved lit down one more dispatch level (freeing up
+  // "1011_01??" for a second left-port relay -- see Node509Program's own remarks) and narrowed its own
+  // field width in the process. Straight from the export's own bit-pattern comment and dispatch cascade:
+  //   1011 0010 xxx xxxxxxxx   (in practice, 1011_001? consumed, the trailing "?" folded into the value)
+  //   -0x100..0xFF   lit (literal, signed value)
+  // -- a fixed 7-bit tag (bits 15-9, binary 1011001, i.e. 0xB200) OR'd with a 9-bit two's-complement
+  // signed value (bits 8-0). -0x100..0xFF is exactly a 9-bit signed value's own range, matching the
+  // source's own updated comment ("load literal -256..255") exactly. Still the same self-describing
+  // shape as br/cbr/slit (EmbeddedSignedValue, no live node/linker involvement at all), just a narrower
+  // tag/value split -- see TryDescribeSelfDecodingWord below, unchanged in mechanism.
+  //
+  // FLAGGED, not silently corrected: node 509's own body for this branch --
+  // "drop 0x01ff and dup 0x0200 and if drop 0xfe00 xor u/r! ; then drop u/r! ;" -- masks the value to 9
+  // bits (0x01ff, bits 8-0) but then tests bit 9 (0x0200) for the sign, a bit the mask just zeroed; the
+  // sign-extend XOR mask (0xfe00) likewise assumes an 8-bit-tag/9-bit-sign-at-bit-9 split rather than
+  // this 7-bit-tag/9-bit-sign-at-bit-8 one. Taken literally, this would mean the "if" branch (negative
+  // sign-extension) can never actually trigger at runtime -- effectively making the node's own real
+  // hardware behavior an UNSIGNED 0..511 load, not the signed -256..255 the header/trailing comment both
+  // promise. This looks like a leftover from the previous (10-bit-field) revision's own 0x0200/0xfc00
+  // constants not being updated to 0x0100/0xff00 when the field narrowed to 9 bits, but it is reproduced
+  // in Node509Program's own Source verbatim rather than silently "fixed" -- this toolchain's own
+  // encode/decode below follows the WORD FORMAT the tag/dispatch and header comment describe (7-bit
+  // tag, 9-bit signed field), which is what an assembler/disassembler needs regardless of whether node
+  // 509's own runtime sign-extension arithmetic works as intended; Stefan should confirm which is
+  // correct (the header comment, or the literal body) before this is relied on for a negative literal
+  // on real hardware.
+  public const int LitTag = 0xB200;
 
-  /// <summary>The fixed high-bit pattern (bits 15-10) of a <c>lit</c> word: binary 1011_01.</summary>
-  public const int LitTag = 0xB400;
+  /// <summary>Isolates a word's top 7 bits, for testing against <see cref="LitTag"/>. CHANGED 2026-09-09 (was 6 bits/0xFC00) -- see <see cref="LitTag"/>'s own remarks.</summary>
+  public const int LitTagMask = 0xFE00;
 
-  /// <summary>Isolates a word's top 6 bits, for testing against <see cref="LitTag"/>.</summary>
-  public const int LitTagMask = 0xFC00;
+  /// <summary>Isolates a word's low 9 bits -- the raw (not yet sign-extended) <c>lit</c> value field. CHANGED 2026-09-09 (was 10 bits/0x3FF) -- see <see cref="LitTag"/>'s own remarks.</summary>
+  public const int LitValueBitMask = 0x1FF;
 
-  /// <summary>Isolates a word's low 10 bits -- the raw (not yet sign-extended) <c>lit</c> value field.</summary>
-  public const int LitValueBitMask = 0x3FF;
+  /// <summary>The most negative value a 9-bit two's-complement field can hold: -0x100 (-256). CHANGED 2026-09-09 (was -0x200) -- see <see cref="LitTag"/>'s own remarks.</summary>
+  public const int LitValueMinValue = -0x100;
 
-  /// <summary>The most negative value a 10-bit two's-complement field can hold: -0x200 (-512).</summary>
-  public const int LitValueMinValue = -0x200;
-
-  /// <summary>The largest value a 10-bit two's-complement field can hold: 0x1FF (511).</summary>
-  public const int LitValueMaxValue = 0x1FF;
+  /// <summary>The largest value a 9-bit two's-complement field can hold: 0xFF (255). CHANGED 2026-09-09 (was 0x1FF) -- see <see cref="LitTag"/>'s own remarks.</summary>
+  public const int LitValueMaxValue = 0xFF;
 
   /// <summary>
   /// How a CVM instruction's operand (if it has one) is actually encoded into its word(s). See each
@@ -1208,26 +1324,23 @@ public static class CvmInstructionSet
     new(Id: 32, TrueMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 33, NotEqualMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 34, NotEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
-    // Id 35 (UnsignedGreaterThanMnemonic "ugt") -- FLAGGED, NOT retired 2026-09-09 despite no node in
-    // the current CVM2 mesh defining a matching F18 symbol: Ga144.C.Toolchain.CCodeGenerator's own
-    // unsigned-comparison codegen (ComputeCommonType(...).IsUnsigned ? "ugt" : "gt") actively emits this
-    // mnemonic for every unsigned ">" comparison in C source. Kept, permanently orphaned, exactly as
-    // before this audit -- see UnsignedGreaterThanMnemonic's own remarks.
+    // Id 35 (UnsignedGreaterThanMnemonic "ugt") -- RESOLVED 2026-09-09 (second pass): node 408's own
+    // current source defines a real 'ugt word (via its c/u helper) -- see UnsignedGreaterThanMnemonic's
+    // own remarks. No longer merely kept for CCodeGenerator's sake; now genuinely live.
     new(Id: 35, UnsignedGreaterThanMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 36, GreaterThanMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 37, GreaterThanZeroMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 38, GreaterOrEqualMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 39, GreaterOrEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
-    // Id 40 (UnsignedLessOrEqualMnemonic "ule") -- FLAGGED, NOT retired, same reason as Id 35 above:
-    // CCodeGenerator emits "ule" for every unsigned "<=" comparison.
+    // Id 40 (UnsignedLessOrEqualMnemonic "ule") -- RESOLVED 2026-09-09, same as Id 35 above: node 408
+    // defines a real 'ule word.
     new(Id: 40, UnsignedLessOrEqualMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 41, LessOrEqualMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 42, LessOrEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 43, LessThanMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 44, LessThanZeroMnemonic, 1, CvmOperandEncoding.None),
-    // Ids 45/46 (UnsignedLessThanMnemonic "ult" / UnsignedGreaterOrEqualMnemonic "uge") -- FLAGGED, NOT
-    // retired, same reason as Id 35/40 above: CCodeGenerator emits "ult"/"uge" for every unsigned "<"/">="
-    // comparison.
+    // Ids 45/46 (UnsignedLessThanMnemonic "ult" / UnsignedGreaterOrEqualMnemonic "uge") -- RESOLVED
+    // 2026-09-09, same as Id 35/40 above: node 408 defines real 'ult/'uge words.
     new(Id: 45, UnsignedLessThanMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 46, UnsignedGreaterOrEqualMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 47, MultiplyByTwoMnemonic, 1, CvmOperandEncoding.None),
@@ -1306,22 +1419,22 @@ public static class CvmInstructionSet
     // cljmp from node 407. remove it also from the CVM assembler and disassembler"), before either was
     // confirmed on real hardware. Never reuse either Id for a different instruction.
     new(Id: 99, LongBranchMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    // Node 306's six address-register ops -- self-describing (EmbeddedUnsignedValue, WordLength 1, no
-    // node/linker resolution), a 2-bit register-index operand at bits 2-1 (ValueBitShift: 1) -- see
-    // LoadAddressRegisterMnemonic's own remarks, including the FLAGGED collision with SlitTag's own
-    // 0xD000-0xDFFF range.
-    new(Id: 101, LoadAddressRegisterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306LoadAddressRegisterTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
-    new(Id: 102, StoreAddressRegisterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306StoreAddressRegisterTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
-    new(Id: 103, IncrementAddressRegisterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306IncrementAddressRegisterTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
-    new(Id: 104, DecrementAddressRegisterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306DecrementAddressRegisterTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
-    new(Id: 105, LoadAddressRegisterValueMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306LoadAddressRegisterValueTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
-    new(Id: 106, StoreAddressRegisterValueMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node306StoreAddressRegisterValueTag, ValueBitMask: Node306AddressRegisterIndexBitMask, ValueBitShift: Node306AddressRegisterIndexShift),
-    // Ids 107-110 (were LoadRegisterFileMnemonic "rld" / StoreRegisterFileMnemonic "rst" /
-    // PopRegisterFileMnemonic "rpop" / PushRegisterFileMnemonic "rpush") RETIRED 2026-09-09 -- FLAGGED,
-    // not a routine case, see LoadRegisterFileMnemonic's own remarks: node 511's own re-synced source no
-    // longer names these four operations as separate F18 symbols at all. Never reuse Ids 107-110 without
-    // first confirming with Stefan that this retirement (rather than a repoint to node 511's new inline
-    // dispatch shape) is what he actually wants.
+    // Ids 101-106 (were ldar/star/inca/deca/lda/sta, self-describing EmbeddedUnsignedValue) RETIRED
+    // 2026-09-09 -- node 306's own current source no longer defines this family at all; see
+    // LoadAddressRegisterMnemonic's own remarks. Never reuse Ids 101-106.
+
+    // Ids 107-110 (LoadRegisterFileMnemonic "rld" / StoreRegisterFileMnemonic "rst" /
+    // PopRegisterFileMnemonic "rpop" / PushRegisterFileMnemonic "rpush") -- UN-RETIRED 2026-09-09 (see
+    // LoadRegisterFileMnemonic's own remarks): workspace.yaml's own authoritative node 511 source
+    // restores these as four separately-named, separately-addressed F18 words. NodeResolvedEmbeddedValue,
+    // exactly like node 308's dpop/dpush/dinc/ddec/dadd/dor below -- a live compile of node 511 resolves
+    // which function is invoked, and a 5-bit register index is embedded in the same opcode word (see
+    // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own Node511* field-layout wiring). Restored under
+    // their ORIGINAL Ids, never renumbered.
+    new(Id: 107, LoadRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    new(Id: 108, StoreRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    new(Id: 109, PopRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    new(Id: 110, PushRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
 
     // tjmp (node 507's own table-jump primitive, confirmed located 2026-09-09 -- see
     // TableJumpMnemonic's own remarks) and node 506's new f/fpush (2026-09-09, replacing the retired
@@ -1340,6 +1453,51 @@ public static class CvmInstructionSet
     new(Id: 114, JumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
     new(Id: 115, ExchangeSMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 116, ExchangePMnemonic, 1, CvmOperandEncoding.None),
+
+    // Node 306's CURRENT six ops (2026-09-09, second pass) -- tick-prefixed, node-resolved
+    // (CvmOperandEncoding.None), replacing the retired self-describing family above (Ids 101-106). See
+    // ArithmeticIncrementAddressRegisterMnemonic's/LoadAddressRegisterValueMnemonic's own remarks.
+    new(Id: 117, ArithmeticIncrementAddressRegisterMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 118, ArithmeticDecrementAddressRegisterMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 119, ArithmeticLoadAddressRegisterMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 120, ArithmeticStoreAddressRegisterMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 121, LoadAddressRegisterValueMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 122, StoreAddressRegisterValueMnemonic, 1, CvmOperandEncoding.None),
+
+    // Node 308's six ops (2026-09-09) -- NodeResolvedEmbeddedValue, 2-bit register index embedded, same
+    // shape as node 511's rld/rst/rpop/rpush above. See DoublePopMnemonic's own remarks.
+    new(Id: 123, DoublePopMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    new(Id: 124, DoublePushMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    new(Id: 125, DoubleIncrementMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    new(Id: 126, DoubleDecrementMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    new(Id: 127, DoubleAddMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    new(Id: 128, DoubleOrMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+
+    // Node 405's nine ops (2026-09-09) -- tagged/node-resolved, CvmOperandEncoding.None. See
+    // ToggleCarryMnemonic's own remarks.
+    new(Id: 129, ToggleCarryMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 130, AddWithCarryFlagMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 131, LoadCarryMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 132, SetCarryMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 133, ClearCarryMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 134, StoreCarryMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 135, SubtractWithCarryMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 136, RotateLeftMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 137, RotateRightMnemonic, 1, CvmOperandEncoding.None),
+
+    // Node 505's 'fx (2026-09-09) -- tagged/node-resolved, CvmOperandEncoding.None. See
+    // FrameExchangeMnemonic's own remarks (including the deliberately-unwired 'f collision with node
+    // 506's own FrameToRegisterMnemonic).
+    new(Id: 138, FrameExchangeMnemonic, 1, CvmOperandEncoding.None),
+
+    // Node 510's five genuinely new ops (2026-09-09) -- tagged/node-resolved, CvmOperandEncoding.None.
+    // 'addc itself REPOINTS the existing AddWithCarryMnemonic (Id 57) rather than adding a new Id -- see
+    // ExtendedStoreMnemonic's own remarks for the FLAGGED CvmDebuggerDefaultProgram implication.
+    new(Id: 139, ExtendedStoreMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 140, ExtendedLoadMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 141, ExtendedMultiplyByTwoMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 142, ExtendedDivideByTwoMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 143, ExtendedUnsignedMultiplyMnemonic, 1, CvmOperandEncoding.None),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

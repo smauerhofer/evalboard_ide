@@ -231,7 +231,7 @@ namespace Ga144.Evb.Ide.Cvm;
 /// falling to <c>ex</c>, so every one of node 509's twelve named words' own CVM opcode word still has its
 /// top 6 bits "101100" -- tag 0xB000 OR'd with the word's own local address on node 509, the SAME
 /// "tag | local address" scheme node 507's own local execute (0x8800), node 407's <c>'lcall</c>/
-/// <c>'ljmp</c> (0xC000), node 506's <c>'leave</c> (0x9000), and node 508's <c>'ldg</c>/<c>'stg</c>
+/// <c>'ljmp</c> (0xC000), node 506's <c>'leave</c> (0x9000), and node 508's <c>'gld</c>/<c>'gst</c>
 /// (0xA000) all already use -- see <see cref="Services.CvmAssemblyLanguage.Node509UnaryArithmeticTagBits"/>'s
 /// own remarks. No known collision with any existing tag range. Directly confirmed against Stefan's own
 /// hardware log above: <c>'inc</c>'s address (0x0026) OR'd with 0xB000 is exactly <c>0xB026</c>, the
@@ -263,19 +263,35 @@ internal static class Node509Program
   public const int Coordinate = 509;
 
   /// <summary>
-  /// Node 509's full resident F18 source. Originally supplied by Stefan on 2026-09-05 ("here is node
-  /// 509"); corrected the same day ("this is the fixed code for node 509") after a real-hardware
-  /// debugger session found the <c>u/main</c> bugs described in the class remarks above. See the class
-  /// remarks for the register/stack helpers, <c>u/main</c>'s dispatch cascade, the fix itself, the
+  /// Node 509's full resident F18 source. See the class remarks for the register/stack helpers, the
   /// 'abs/'neg/'inc/'dec cross-definition fall-through, and the CVM-level opcode tag derivation.
-  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
-  /// project source for node 509 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
-  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
-  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
-  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
-  /// specific claim above (a compiled address, a port name, a verification result) as possibly
-  /// stale until re-confirmed against a fresh compile.
-  ///
+  /// <b>RE-SYNCED 2026-09-09</b> against Stefan's own <c>workspace.yaml</c> project export as part of the
+  /// opcode/assembler-vs-node reconciliation audit -- <c>u/main</c>'s own dispatch cascade changed
+  /// significantly from the prior "SYNCED, 2026-09-08" copy here:
+  /// <list type="bullet">
+  /// <item><c>1011_01??_????_????</c> is NO LONGER the embedded <c>lit</c> literal-load form -- it is now
+  /// a SECOND left-port relay (<c>--l- ;</c>), identical in shape to the existing
+  /// <c>1011_1???_????_????</c> relay branch just above it. Both are still-open, unanswered further hops
+  /// out of this node, left exactly as open as node 509's own other still-unwired relay branches (see the
+  /// class remarks on "not guessed at").</item>
+  /// <item><c>lit</c> moved DOWN one level, to <c>1011_001?_????_????</c> (narrower than before -- a
+  /// 7-bit-tag field now, not 6-bit), and its own embedded value field narrowed from a 10-bit signed range
+  /// (<c>0x03ff</c> mask, sign bit <c>0x0200</c>, sign-extend XOR <c>0xfc00</c>, range -512..511) to a
+  /// 9-bit signed range (<c>0x01ff</c> mask, sign bit <c>0x0200</c> is now itself the top bit of that
+  /// mask -- unchanged constant, narrower mask around it -- sign-extend XOR <c>0xfe00</c>, range
+  /// -256..255) -- see the source's own updated comment, "load literal -256..255." This changes
+  /// <c>lit</c>'s own CVM tag from the previous 0xB400/6-bit-tag shape to a new 7-bit-tag shape; the exact
+  /// new tag constant is worked out in <see cref="CvmInstructionSet.LitTag"/>'s own remarks.</item>
+  /// <item>The old fall-through unary branch (<c>1011_00??</c>) is now reached only after ALSO ruling out
+  /// the narrower <c>1011_001?</c> literal branch, i.e. as <c>1011_000?</c> -- one bit narrower than
+  /// before, but reaching the exact same twelve tick-prefixed words below via the same
+  /// <c>drop &gt;r u/r@ ex 0xffff and u/r! ;</c> tail, unchanged.</item>
+  /// </list>
+  /// None of the twelve named words themselves (<c>'abs</c> through <c>'not</c>) changed at all -- only
+  /// <c>u/main</c>'s own dispatch prefix widths and the literal-load range/tag. Every other specific claim
+  /// in the class remarks above (compiled addresses, the hardware-confirmed <c>'inc</c> log, the
+  /// cross-definition fall-through mechanics) is UNAFFECTED by this and remains accurate, since none of it
+  /// depends on the removed 10th dispatch bit.
   /// </summary>
   public const string Source = """
       ( CVM2 node 509. unary arithmetic, 1011_????_????_???? )
@@ -295,10 +311,13 @@ internal static class Node509Program
           --l- ;
         then // 1011_0???_????_????
         2* -if // 1011_01??_????_????
-          // load literal -512..511
-          // mnemonic lit
-          drop 0x03ff and dup 0x0200 and if drop 0xfc00 xor u/r! ; then drop u/r! ;
+          //
+          --l- ;
         then // 1011_00??_????_????
+        2* -if // 1011_001?_????_????
+          // load literal -256..255
+          drop 0x01ff and dup 0x0200 and if drop 0xfe00 xor u/r! ; then drop u/r! ;
+        then // 1011_000?_????_????
         // unary
         drop >r u/r@ ex 0xffff and u/r! ;
 
@@ -318,7 +337,7 @@ internal static class Node509Program
       : 'not until dup xor ;
 
       (
-      opcode 1011_01??_????_???? load literal to r. the range of the literal is -0x200 to 0x1ff.
+      opcode lit 1011_001?_????_???? load literal to r. the range of the literal is -0x100 to 0xff.
 
       'abs make r absolute
       'neg negate r

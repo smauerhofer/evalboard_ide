@@ -96,24 +96,16 @@ internal static class Node307Program
   public const int Coordinate = 307;
 
   /// <summary>
-  /// Node 307's full resident F18 source, as supplied by Stefan on 2026-09-06, in its second revision
-  /// ("here are the nodes without the typos you mentioned"). See the class remarks for what this
-  /// revision fixed (the stray "8 register" header line, the final branch's mislabeled bit-pattern
-  /// comment) and what it did NOT fix (the same final branch is still missing its own dispatch code and
-  /// the definition's closing <c>;</c>) -- the commented-out <c>k/next</c> is also unchanged.
-  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
-  /// project source for node 307 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
-  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
-  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
-  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
-  /// specific claim above (a compiled address, a port name, a verification result) as possibly
-  /// stale until re-confirmed against a fresh compile.
-  ///
+  /// Node 307's full resident F18 source. <b>RE-SYNCED 2026-09-09</b> against Stefan's own
+  /// <c>workspace.yaml</c> project export as part of the opcode/assembler-vs-node reconciliation audit
+  /// -- the prior "SYNCED, 2026-09-08" copy here had itself drifted from Stefan's live source by two
+  /// stray leftover header lines (a "contains 8 32-bit address register" line that belongs to node 306,
+  /// not 307) and a comment-only nibble typo, both now removed/fixed to match the export exactly. This
+  /// node still defines no tick-prefixed opcode of its own (see the class remarks above) and its final
+  /// dispatch branch is still open/incomplete in Stefan's own source, exactly as previously flagged.
   /// </summary>
   public const string Source = """
       ( CVM2 node 307. VM ternary main, 1101_????_????_???? )
-      ( contains 8 32-bit address register )
-      ( address word in x, page word in x+1 )
       # 407 import
       # 0x10 org
       entry k/main
@@ -136,10 +128,9 @@ internal static class Node307Program
         then // 1101_0???_????_????
         2* -if // 1101_01??_????_????
           r> -d-- ;
-        then // 1100_00??_????_????
+        then // 1101_00??_????_????
 
       (
-
 
       )
       """;

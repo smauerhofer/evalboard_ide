@@ -17,7 +17,7 @@ namespace Ga144.Cvm.Toolchain;
 /// then re-applied. That assumption does not hold for CVM2: per <see cref="CvmInstructionSet"/>'s own
 /// remarks, different primitive families tag completely differently depending on which node implements
 /// them (node 507's own local-execute family tags at <c>0x8800</c>, node 506's <c>leave</c>/frame ops at
-/// <c>0x9xxx</c>, node 508's <c>ldg</c>/<c>stg</c> at <c>0xA000</c>, node 509's unary-arithmetic family
+/// <c>0x9xxx</c>, node 508's <c>gld</c>/<c>gst</c> at <c>0xA000</c>, node 509's unary-arithmetic family
 /// at <c>0xB000</c>, node 407's long-call family at <c>0xC000</c>, node 406's binary-arithmetic family at
 /// <c>0xE000</c>/<c>0xE400</c>, node 408's comparison family at <c>0xF000</c>/<c>0xF400</c>, and so on --
 /// see the IDE project's own <c>Ga144.Evb.Ide.Services.CvmAssemblyLanguage</c> for where each tag is
@@ -53,7 +53,7 @@ namespace Ga144.Cvm.Toolchain;
 /// ; comment (a line starting with ';' or '#', or blank, is ignored)
 /// nop = 0x8801
 /// leave = 0x9037
-/// ldg = 0xA03A
+/// gld = 0xA03A
 /// </code>
 /// A name may appear only once; a duplicate is a load error naming both line numbers. Each value must
 /// fit a 16-bit CVM word (<see cref="CvmWordCodec.WordMask"/>) -- the FULL range, unlike a plain

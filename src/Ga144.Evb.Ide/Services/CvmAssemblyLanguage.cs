@@ -6,6 +6,23 @@ using Ga144.Evb.Ide.Cvm;
 namespace Ga144.Evb.Ide.Services;
 
 /// <summary>
+/// <b>SECOND PASS, 2026-09-09.</b> Stefan supplied a NEW zip and a NEW <c>workspace.yaml</c> project
+/// export mid-way through the opcode/assembler-vs-node reconciliation audit already described below
+/// ("there are 'ugt' opcodes in the nodes ... use this new zip file and forget any reference to the
+/// older zip file"), and then confirmed explicitly, when asked, that <c>workspace.yaml</c> -- not
+/// whatever a checked-in <c>Node*Program.cs</c> reference file claimed -- is ground truth for what each
+/// CVM2 node's F18 source actually is today. Re-running the audit against that authoritative export
+/// found a substantially larger, restructured CVM2 mesh than the remarks below describe: three brand-new
+/// nodes (308 "VM 32 arithmetic," 405 "multiword arithmetic," 505 "frame2"); node 306 completely
+/// rewritten around a new tick-prefixed word family; node 408 missing an entire unsigned-comparison
+/// sub-family (the exact <c>ugt</c> gap Stefan flagged); node 509's own <c>lit</c> narrowed and re-tagged;
+/// node 510 revealed to define six ops the prior sync had missed entirely; and node 511's own <c>rld</c>/
+/// <c>rst</c>/<c>rpop</c>/<c>rpush</c> -- retired by an EARLIER pass of this same audit, working from an
+/// intermediate node 511 re-sync -- restored as live opcodes once workspace.yaml's own simpler <c>r/main</c>
+/// shape is treated as ground truth. See each new/changed mnemonic's own remarks below and in
+/// <see cref="CvmInstructionSet"/> for the specifics; the remarks immediately following this paragraph
+/// describe the FIRST pass and are otherwise still accurate for everything they cover.
+///
 /// The CVM's own small assembly language: Stefan's mnemonics (<c>nop</c>, <c>pushlit &lt;data&gt;</c>,
 /// <c>push</c>, <c>pop</c>, <c>ret</c>, <c>halt</c> -- CVM2's node 507 "local execute" primitives)
 /// layered on top of a tagged wire-level opcode convention (opcode = tag | wordAddress) -- see
@@ -95,6 +112,27 @@ namespace Ga144.Evb.Ide.Services;
 /// grew ahead of them) but needed NO changes here at all, since <see cref="Node508LoadStoreGlobalTagBits"/>
 /// below always resolves against a live compile of <see cref="Node508Program.Source"/>, never a
 /// hardcoded address.
+///
+/// <b>RE-SYNCED 2026-09-09 against Stefan's LATEST <c>workspace.yaml</c> upload -- supersedes the
+/// 2026-09-06 paragraph above.</b> The newest export shows node 508's own tick-prefixed words are
+/// actually named <c>'gld</c>/<c>'gst</c>, not <c>'ldg</c>/<c>'stg</c> -- so <see cref="CvmInstructionSet.LoadGlobalMnemonic"/>/
+/// <see cref="CvmInstructionSet.StoreGlobalMnemonic"/>'s own string VALUES were corrected to <c>"gld"</c>/
+/// <c>"gst"</c> (their C# constant names are unchanged, since they still describe "load global"/"store
+/// global" semantically), and the two entries below now resolve against the F18 symbols <c>'gld</c>/
+/// <c>'gst</c> instead. Node 508's own dispatch cascade also reverted to a SHALLOWER shape than the
+/// 2026-09-06 paragraph above describes: the "branch"/"conditional branch" split into two separate
+/// 9-bit embedded forms never actually shipped -- the real, current source keeps ONE combined
+/// <c>1010_11??</c> form (skip-if-r-nonzero, else branch by a 10-bit signed offset relayed to node 507's
+/// own <c>m/branch</c>), which is exactly <see cref="CvmInstructionSet.ConditionalBranchTag"/>'s own
+/// already-wired <c>cbr</c> shape (0xAC00, mask 0xFC00, <see cref="CvmInstructionSet.ConditionalBranchOffsetBitMask"/>
+/// 0x3FF) -- so this re-sync needed NO change to <c>cbr</c> itself, only to <see cref="Node508Program.Source"/>
+/// (see that class's own remarks), which had drifted out of step with <c>cbr</c>'s own already-confirmed
+/// 10-bit width. <b>Flagged, not silently fixed:</b> this same re-sync surfaced an apparent naming/body
+/// cross-wire in Stefan's own current source -- <c>'gld</c> calls <c>g/@</c>, whose own body performs
+/// what reads as a remote STORE (<c>m/2!</c>), while <c>'gst</c> calls <c>g/!</c>, whose own body performs
+/// what reads as a remote FETCH (<c>m/2@</c>). See <see cref="Node508Program"/>'s own remarks; reproduced
+/// verbatim here too, since this class always resolves <c>'gld</c>/<c>'gst</c> dynamically against a live
+/// compile of that source, never a hardcoded address or body.
 ///
 /// <b><c>Node509Program.cs</c> is a BRAND NEW coordinate (2026-09-05) -- no CVM1 namesake at all.</b>
 /// Stefan's unary-arithmetic node, reached from node 508's own <c>g/main</c> dispatch (NOT node 507
@@ -319,7 +357,9 @@ internal static class CvmAssemblyLanguage
   // encoded"), so this tag's range no longer overlaps br's at all.
   private const int Node506LeaveTagBits = 0x9000;
 
-  // CVM2's node 508 'ldg/'stg tag (2026-09-04), per Stefan's node 508 source (Cvm.Node508Program): its
+  // CVM2's node 508 'gld/'gst tag (2026-09-04, renamed 2026-09-09 from 'ldg'/'stg -- see
+  // CvmInstructionSet.LoadGlobalMnemonic's own remarks), per Stefan's node 508 source
+  // (Cvm.Node508Program): its
   // own g/main dispatch cascade falls through to its own remote-fetch-then-"ex" tail (jump to whatever
   // address is in R) once the fetched CVM opcode word's top 5 bits read "1010_0" -- the same
   // "tag | local address" scheme Node407LongCallTagBits/Node506LeaveTagBits/
@@ -334,10 +374,11 @@ internal static class CvmAssemblyLanguage
   // those eight -- lal/lap, 0xAE00/0xAF00 -- but both are now retired, 2026-09-09, so that collision
   // is moot -- see ConditionalBranchTag's own remarks for that, unrelated
   // to node 508) -- see Cvm.Node508Program's own remarks. NOT YET CONFIRMED ON REAL HARDWARE
-  // (2026-09-04). UNCHANGED by the 2026-09-06 revision to node 508's own source -- that revision only
-  // restructured the SIBLING "1010_1???" branch (the four now-narrower embedded-offset forms, still not
-  // wired here), never the "1010_0???" fall-through this tag is derived from; only 'ldg's/'stg's own
-  // ADDRESSES on node 508 moved (resolved dynamically below, not re-derived here).
+  // (2026-09-04). UNCHANGED by the 2026-09-09 re-sync to node 508's own source (see
+  // Cvm.Node508Program's own remarks) -- that re-sync only restructured the SIBLING "1010_1???" branch
+  // (the fetch/store embedded forms plus the combined branch/conditional-branch form, still not wired
+  // here as their own mnemonics), never the "1010_0???" fall-through this tag is derived from; only
+  // 'gld's/'gst's own ADDRESSES on node 508 moved (resolved dynamically below, not re-derived here).
   private const int Node508LoadStoreGlobalTagBits = 0xA000;
 
   // CVM2's node 509 unary-arithmetic tag (2026-09-05), per Stefan's node 509 source
@@ -416,6 +457,14 @@ internal static class CvmAssemblyLanguage
   // see Node408BinaryComparisonTagBits's own remarks; that is a different, still-unbuilt quarter, not
   // this one.)
   private const int Node511Tag = 0xBC00;
+
+  // Node 308's dpop/dpush/dinc/ddec/dadd/dor tag (2026-09-09, opcode/assembler-vs-node reconciliation
+  // audit), the SAME NodeResolvedEmbeddedValue shape as node 511's rld/rst/rpop/rpush above but with a
+  // different field layout -- see CvmInstructionSet.Node308FunctionFieldBitMask's own remarks for the
+  // bit-by-bit derivation off node 308's own d/main body. Reached from node 307's own LEFT relay
+  // ("1101_11??_????_????" per node 307's own dispatch comment, matching node 308's own header exactly),
+  // fixing node 308's own top 6 bits at "1101_11" -- 0xDC00.
+  private const int Node308Tag = 0xDC00;
 
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
   // tag bits its opcode word must carry (Node508TagBits for the OLD, permanently-orphaned CVM1
@@ -496,13 +545,16 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.FrameToRegisterMnemonic] = (Node506Program.Coordinate, "'f", Node506LeaveTagBits),
         [CvmInstructionSet.PushFrameMnemonic] = (Node506Program.Coordinate, "'fpush", Node506LeaveTagBits),
         // CVM2's node 508 (2026-09-04) -- the globals-access node, resolved against node 508's own live
-        // compile, tag 0xA000 (Node508LoadStoreGlobalTagBits's own remarks). Only 'ldg/'stg so far, per
+        // compile, tag 0xA000 (Node508LoadStoreGlobalTagBits's own remarks). Only 'gld/'gst so far, per
         // Stefan's own tick-naming rule (only these two of node 508's own words begin with a leading
-        // '); node 508's own two narrower embedded-offset opcode forms (10-bit offset baked directly
+        // '); node 508's own two narrower embedded-offset opcode forms (9-bit offset baked directly
         // into the opcode word, no trailing word) have no tick-prefixed name to hang a mnemonic off of
-        // and are NOT wired in here -- see Node508Program's own remarks.
-        [CvmInstructionSet.LoadGlobalMnemonic] = (Node508Program.Coordinate, "'ldg", Node508LoadStoreGlobalTagBits),
-        [CvmInstructionSet.StoreGlobalMnemonic] = (Node508Program.Coordinate, "'stg", Node508LoadStoreGlobalTagBits),
+        // and are NOT wired in here -- see Node508Program's own remarks. RENAMED 2026-09-09 from
+        // 'ldg'/'stg to 'gld'/'gst -- re-synced against Stefan's latest workspace.yaml; see the class
+        // remarks above for the full re-sync note, including a flagged (not fixed) apparent naming/body
+        // cross-wire between 'gld'/'gst and node 508's own g/@/g/! primitives.
+        [CvmInstructionSet.LoadGlobalMnemonic] = (Node508Program.Coordinate, "'gld", Node508LoadStoreGlobalTagBits),
+        [CvmInstructionSet.StoreGlobalMnemonic] = (Node508Program.Coordinate, "'gst", Node508LoadStoreGlobalTagBits),
         // CVM2's node 509 (2026-09-05) -- the unary-arithmetic node, resolved against node 509's own
         // live compile, tag 0xB000 (Node509UnaryArithmeticTagBits's own remarks). 'inv/'inc/'dec REPOINT
         // three of node 507's old, permanently-orphaned ALU-op mnemonics; 'neg is genuinely new (does
@@ -571,24 +623,26 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.TrueMnemonic] = (Node408Program.Coordinate, "'true", Node408UnaryComparisonTagBits),
         [CvmInstructionSet.NotEqualMnemonic] = (Node408Program.Coordinate, "'ne", Node408BinaryComparisonTagBits),
         [CvmInstructionSet.NotEqualToZeroMnemonic] = (Node408Program.Coordinate, "'ne0", Node408UnaryComparisonTagBits),
-        // ugt/ule/ult/uge/negate/xt/ldt/stt: NOT retired 2026-09-09 despite the opcode/assembler-vs-node
-        // audit finding no node anywhere in the current CVM2 mesh defines a matching F18 symbol for any
-        // of them -- FLAGGED instead, since Ga144.C.Toolchain.CCodeGenerator's own codegen still actively
-        // emits every one of them (unsigned comparisons, unary minus, pointer dereference). Left pointed
-        // at node 508's old, permanently-orphaned CVM1 tag exactly as before this audit -- see
-        // CvmInstructionSet.UnsignedGreaterThanMnemonic's own remarks for the full flag.
-        [CvmInstructionSet.UnsignedGreaterThanMnemonic] = (Node508Program.Coordinate, "'ugt", Node508TagBits),
+        // ugt/ule/ult/uge: RESOLVED 2026-09-09 (second pass, against Stefan's own workspace.yaml export
+        // -- the exact gap that prompted the whole audit). Node 408's own current source defines a real
+        // c/u helper plus matching 'ugt/'ule/'ult/'uge words (all four binary, ( xy-f), so they use
+        // Node408BinaryComparisonTagBits like the other six binary comparison ops) -- repointed here from
+        // node 508's old, permanently-orphaned CVM1 tag to node 408's own live compile, exactly like the
+        // other ten comparison ops above. negate/xt/ldt/stt remain permanently orphaned against node 508
+        // -- FLAGGED, kept per Ga144.C.Toolchain.CCodeGenerator's own continued use -- see
+        // CvmInstructionSet.UnsignedGreaterThanMnemonic's own remarks for the full accounting.
+        [CvmInstructionSet.UnsignedGreaterThanMnemonic] = (Node408Program.Coordinate, "'ugt", Node408BinaryComparisonTagBits),
         [CvmInstructionSet.GreaterThanMnemonic] = (Node408Program.Coordinate, "'gt", Node408BinaryComparisonTagBits),
         [CvmInstructionSet.GreaterThanZeroMnemonic] = (Node408Program.Coordinate, "'gt0", Node408UnaryComparisonTagBits),
         [CvmInstructionSet.GreaterOrEqualMnemonic] = (Node408Program.Coordinate, "'ge", Node408BinaryComparisonTagBits),
         [CvmInstructionSet.GreaterOrEqualToZeroMnemonic] = (Node408Program.Coordinate, "'ge0", Node408UnaryComparisonTagBits),
-        [CvmInstructionSet.UnsignedLessOrEqualMnemonic] = (Node508Program.Coordinate, "'ule", Node508TagBits),
+        [CvmInstructionSet.UnsignedLessOrEqualMnemonic] = (Node408Program.Coordinate, "'ule", Node408BinaryComparisonTagBits),
         [CvmInstructionSet.LessOrEqualMnemonic] = (Node408Program.Coordinate, "'le", Node408BinaryComparisonTagBits),
         [CvmInstructionSet.LessOrEqualToZeroMnemonic] = (Node408Program.Coordinate, "'le0", Node408UnaryComparisonTagBits),
         [CvmInstructionSet.LessThanMnemonic] = (Node408Program.Coordinate, "'lt", Node408BinaryComparisonTagBits),
         [CvmInstructionSet.LessThanZeroMnemonic] = (Node408Program.Coordinate, "'lt0", Node408UnaryComparisonTagBits),
-        [CvmInstructionSet.UnsignedLessThanMnemonic] = (Node508Program.Coordinate, "'ult", Node508TagBits),
-        [CvmInstructionSet.UnsignedGreaterOrEqualMnemonic] = (Node508Program.Coordinate, "'uge", Node508TagBits),
+        [CvmInstructionSet.UnsignedLessThanMnemonic] = (Node408Program.Coordinate, "'ult", Node408BinaryComparisonTagBits),
+        [CvmInstructionSet.UnsignedGreaterOrEqualMnemonic] = (Node408Program.Coordinate, "'uge", Node408BinaryComparisonTagBits),
         [CvmInstructionSet.NegateMnemonic] = (Node508Program.Coordinate, "'negate", Node508TagBits),
         [CvmInstructionSet.ExchangeTMnemonic] = (Node508Program.Coordinate, "'xt", Node508TagBits),
         [CvmInstructionSet.LoadTMnemonic] = (Node508Program.Coordinate, "'ldt", Node508TagBits),
@@ -599,12 +653,104 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DivideByTwoMnemonic] = (Node509Program.Coordinate, "'div2", Node509UnaryArithmeticTagBits),
         [CvmInstructionSet.AbsoluteValueMnemonic] = (Node509Program.Coordinate, "'abs", Node509UnaryArithmeticTagBits),
         [CvmInstructionSet.BitCountMnemonic] = (Node509Program.Coordinate, "'bitcnt", Node509UnaryArithmeticTagBits),
-        // Node 511's register file (2026-09-07) -- rld/rst/rpop/rpush RETIRED 2026-09-09 (opcode/
-        // assembler-vs-node audit): node 511's own source was re-synced to Stefan's current live project
-        // source on 2026-09-08, and its r/main dispatch no longer names these four operations as separate
-        // F18 symbols at all -- see CvmInstructionSet.LoadRegisterFileMnemonic's own remarks (FLAGGED,
-        // Stefan should confirm before this is treated as final). Node511Tag is kept, unreferenced by
-        // anything now, per "do not remove any opcodes" for the constant itself.
+        // Node 511's register file (2026-09-07) -- UN-RETIRED 2026-09-09 (workspace.yaml wins, per
+        // Stefan's own explicit ruling): node 511's AUTHORITATIVE current source (its own simpler,
+        // direct-field-extraction r/main, restored from workspace.yaml) once again names 'rld/'rst/'rpop/
+        // 'rpush as four separately-addressed F18 words -- see
+        // CvmInstructionSet.LoadRegisterFileMnemonic's own remarks. A PRIOR pass of this same audit,
+        // working from an intermediate re-sync of node 511's own source, had retired these four; that
+        // retirement is reversed here.
+        [CvmInstructionSet.LoadRegisterFileMnemonic] = (Node511Program.Coordinate, "'rld", Node511Tag),
+        [CvmInstructionSet.StoreRegisterFileMnemonic] = (Node511Program.Coordinate, "'rst", Node511Tag),
+        [CvmInstructionSet.PopRegisterFileMnemonic] = (Node511Program.Coordinate, "'rpop", Node511Tag),
+        [CvmInstructionSet.PushRegisterFileMnemonic] = (Node511Program.Coordinate, "'rpush", Node511Tag),
+
+        // Node 306's CURRENT six ops (2026-09-09, second pass of the opcode/assembler-vs-node
+        // reconciliation audit against Stefan's own workspace.yaml export) -- tick-prefixed, node-
+        // resolved (CvmOperandEncoding.None), sharing node 306's own flat "1101_10??_????_????" range
+        // with no distinguishing tag bits of their own at the CVM-opcode level (node 306's own ar/main
+        // masks the call byte it receives to select which compiled word to jump to) -- see
+        // CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic's/LoadAddressRegisterValueMnemonic's
+        // own remarks. Tag 0xD800 (binary 1101_1000) -- node 306's own RAM is only 64 words, so
+        // 0xD800-0xD83F has no live collision with anything else wired here (the OLD self-describing
+        // family's own former tags, 0xD800-0xDB00, are retired alongside Instructions' own Ids 101-106).
+        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (Node306Program.Coordinate, "'arinc", 0xD800),
+        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (Node306Program.Coordinate, "'ardec", 0xD800),
+        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (Node306Program.Coordinate, "'arld", 0xD800),
+        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = (Node306Program.Coordinate, "'arst", 0xD800),
+        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = (Node306Program.Coordinate, "'lda", 0xD800),
+        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (Node306Program.Coordinate, "'sta", 0xD800),
+
+        // Node 308's six ops (2026-09-09) -- BRAND NEW, NodeResolvedEmbeddedValue (see
+        // NodeResolvedEmbeddedValueFieldLayoutByMnemonic below for the field layout, different from node
+        // 511's). Tag Node308Tag (0xDC00) -- see that constant's own remarks.
+        [CvmInstructionSet.DoublePopMnemonic] = (Node308Program.Coordinate, "'dpop", Node308Tag),
+        [CvmInstructionSet.DoublePushMnemonic] = (Node308Program.Coordinate, "'dpush", Node308Tag),
+        [CvmInstructionSet.DoubleIncrementMnemonic] = (Node308Program.Coordinate, "'dinc", Node308Tag),
+        [CvmInstructionSet.DoubleDecrementMnemonic] = (Node308Program.Coordinate, "'ddec", Node308Tag),
+        [CvmInstructionSet.DoubleAddMnemonic] = (Node308Program.Coordinate, "'dadd", Node308Tag),
+        [CvmInstructionSet.DoubleOrMnemonic] = (Node308Program.Coordinate, "'dor", Node308Tag),
+
+        // Node 405's nine ops (2026-09-09) -- BRAND NEW, tagged/node-resolved (CvmOperandEncoding.None).
+        // Node 405's own mw/main has no bit cascade of its own -- a single dispatch word then an
+        // immediate "ex" -- so it shares node 406's own "1110_1???" tag (0xE800) OR'd with each op's own
+        // address on node 405, the same "tag | resolved local address" scheme every other simple
+        // tagged/node-resolved family in this file uses.
+        [CvmInstructionSet.ToggleCarryMnemonic] = (Node405Program.Coordinate, "'tgc", 0xE800),
+        [CvmInstructionSet.AddWithCarryFlagMnemonic] = (Node405Program.Coordinate, "'adc", 0xE800),
+        [CvmInstructionSet.LoadCarryMnemonic] = (Node405Program.Coordinate, "'ldc", 0xE800),
+        [CvmInstructionSet.SetCarryMnemonic] = (Node405Program.Coordinate, "'sec", 0xE800),
+        [CvmInstructionSet.ClearCarryMnemonic] = (Node405Program.Coordinate, "'clc", 0xE800),
+        [CvmInstructionSet.StoreCarryMnemonic] = (Node405Program.Coordinate, "'stc", 0xE800),
+        [CvmInstructionSet.SubtractWithCarryMnemonic] = (Node405Program.Coordinate, "'sbc", 0xE800),
+        [CvmInstructionSet.RotateLeftMnemonic] = (Node405Program.Coordinate, "'rol", 0xE800),
+        [CvmInstructionSet.RotateRightMnemonic] = (Node405Program.Coordinate, "'ror", 0xE800),
+
+        // Node 505's 'fx (2026-09-09) -- BRAND NEW, tagged/node-resolved. Node 505's own f2/main also has
+        // no bit cascade -- a single dispatch word then "ex" -- sharing node 506's own "1001_01??" tag
+        // (0x9400) OR'd with 'fx's own address on node 505. Node 505's OTHER word, spelled 'f in its own
+        // source, is deliberately NOT given an entry here -- see FrameExchangeMnemonic's own remarks for
+        // the FLAGGED collision with FrameToRegisterMnemonic ("f") above, already wired to node 506.
+        [CvmInstructionSet.FrameExchangeMnemonic] = (Node505Program.Coordinate, "'fx", 0x9400),
+
+        // Node 510's own "extended arithmetic" ops (2026-09-09) -- tagged/node-resolved, sharing node
+        // 510's own "1011_10??" local-execute tag (0xB800) OR'd with each op's own address on node 510.
+        // 'addc REPOINTS the existing AddWithCarryMnemonic ("addc") -- FLAGGED, see
+        // ExtendedStoreMnemonic's own remarks in CvmInstructionSet for the CvmDebuggerDefaultProgram
+        // implication of this repoint.
+        [CvmInstructionSet.AddWithCarryMnemonic] = (Node510Program.Coordinate, "'addc", 0xB800),
+        [CvmInstructionSet.ExtendedStoreMnemonic] = (Node510Program.Coordinate, "'xst", 0xB800),
+        [CvmInstructionSet.ExtendedLoadMnemonic] = (Node510Program.Coordinate, "'xld", 0xB800),
+        [CvmInstructionSet.ExtendedMultiplyByTwoMnemonic] = (Node510Program.Coordinate, "'xmul2", 0xB800),
+        [CvmInstructionSet.ExtendedDivideByTwoMnemonic] = (Node510Program.Coordinate, "'xdiv2", 0xB800),
+        [CvmInstructionSet.ExtendedUnsignedMultiplyMnemonic] = (Node510Program.Coordinate, "'xumul", 0xB800),
+      };
+
+  /// <summary>
+  /// Per-mnemonic field layout for <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>
+  /// mnemonics only (node 511's <c>rld</c>/<c>rst</c>/<c>rpop</c>/<c>rpush</c> and, since 2026-09-09, node
+  /// 308's <c>dpop</c>/<c>dpush</c>/<c>dinc</c>/<c>ddec</c>/<c>dadd</c>/<c>dor</c>): unlike every other
+  /// entry in <see cref="NodeSymbolByMnemonic"/>, this shape needs to know exactly WHERE within the
+  /// resolved word its own "which function" field and its own embedded register-index operand each sit --
+  /// and, per <see cref="CvmInstructionSet.Node308FunctionFieldBitMask"/>'s own remarks, node 308's own
+  /// layout is genuinely different from node 511's (a 6-bit/2-bit split with no base-address bias, vs.
+  /// node 511's 5-bit/5-bit split biased by <see cref="CvmInstructionSet.Node511FunctionFieldBaseAddress"/>)
+  /// -- so this is a separate per-mnemonic lookup rather than a single shared set of constants
+  /// <see cref="BuildDecodeTable"/>/<see cref="BuildEncodeTable"/> could hardcode once.
+  /// </summary>
+  private static readonly IReadOnlyDictionary<string, (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask)> NodeResolvedEmbeddedValueFieldLayoutByMnemonic =
+      new Dictionary<string, (int, int, int, int)>(StringComparer.OrdinalIgnoreCase)
+      {
+        [CvmInstructionSet.LoadRegisterFileMnemonic] = (CvmInstructionSet.Node511FunctionFieldBitMask, CvmInstructionSet.Node511FunctionFieldShift, CvmInstructionSet.Node511FunctionFieldBaseAddress, CvmInstructionSet.Node511RegisterFieldBitMask),
+        [CvmInstructionSet.StoreRegisterFileMnemonic] = (CvmInstructionSet.Node511FunctionFieldBitMask, CvmInstructionSet.Node511FunctionFieldShift, CvmInstructionSet.Node511FunctionFieldBaseAddress, CvmInstructionSet.Node511RegisterFieldBitMask),
+        [CvmInstructionSet.PopRegisterFileMnemonic] = (CvmInstructionSet.Node511FunctionFieldBitMask, CvmInstructionSet.Node511FunctionFieldShift, CvmInstructionSet.Node511FunctionFieldBaseAddress, CvmInstructionSet.Node511RegisterFieldBitMask),
+        [CvmInstructionSet.PushRegisterFileMnemonic] = (CvmInstructionSet.Node511FunctionFieldBitMask, CvmInstructionSet.Node511FunctionFieldShift, CvmInstructionSet.Node511FunctionFieldBaseAddress, CvmInstructionSet.Node511RegisterFieldBitMask),
+        [CvmInstructionSet.DoublePopMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
+        [CvmInstructionSet.DoublePushMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
+        [CvmInstructionSet.DoubleIncrementMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
+        [CvmInstructionSet.DoubleDecrementMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
+        [CvmInstructionSet.DoubleAddMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
+        [CvmInstructionSet.DoubleOrMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
       };
 
   /// <summary>
@@ -701,20 +847,26 @@ internal static class CvmAssemblyLanguage
 
       if (encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
       {
-        // Node 511 only -- see this method's own remarks and Node511Tag's own remarks. resolvedAddress
-        // here is WHICH FUNCTION, not the whole opcode; it must fall inside the 0x20-0x3F window "#
-        // 0x20 org" reserves (32 words) for this scheme to represent it at all. A symbol resolving
-        // outside that window (node 511's own source grew past 32 words from its own entry point) is
-        // silently omitted, same as any other mnemonic whose node/symbol doesn't resolve -- Stefan's own
-        // node source is never second-guessed here.
-        int functionField = resolvedAddress - CvmInstructionSet.Node511FunctionFieldBaseAddress;
-        if (functionField < 0 || functionField > (CvmInstructionSet.Node511FunctionFieldBitMask >> CvmInstructionSet.Node511FunctionFieldShift))
+        // Node 511's rld/rst/rpop/rpush and (since 2026-09-09) node 308's dpop/dpush/dinc/ddec/dadd/dor --
+        // see NodeResolvedEmbeddedValueFieldLayoutByMnemonic's own remarks for why each mnemonic's own
+        // field layout is looked up individually rather than hardcoded. resolvedAddress here is WHICH
+        // FUNCTION, not the whole opcode; it must fall inside this mnemonic's own function-field window
+        // for this scheme to represent it at all. A symbol resolving outside that window (the node's own
+        // source grew past its own reserved word count) is silently omitted, same as any other mnemonic
+        // whose node/symbol doesn't resolve -- Stefan's own node source is never second-guessed here.
+        if (!NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask) layout))
         {
           continue;
         }
 
-        int baseOpcode = tag | (functionField << CvmInstructionSet.Node511FunctionFieldShift);
-        for (int register = 0; register <= CvmInstructionSet.Node511RegisterFieldBitMask; register++)
+        int functionField = resolvedAddress - layout.FunctionFieldBaseAddress;
+        if (functionField < 0 || functionField > (layout.FunctionFieldBitMask >> layout.FunctionFieldShift))
+        {
+          continue;
+        }
+
+        int baseOpcode = tag | (functionField << layout.FunctionFieldShift);
+        for (int register = 0; register <= layout.RegisterFieldBitMask; register++)
         {
           table[baseOpcode | register] = (mnemonic, wordLength, register);
         }
@@ -767,15 +919,21 @@ internal static class CvmAssemblyLanguage
 
       if (encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
       {
-        // Node 511 only -- see BuildDecodeTable's own remarks for the same 0x20-0x3F window check.
-        int functionField = resolvedAddress - CvmInstructionSet.Node511FunctionFieldBaseAddress;
-        if (functionField < 0 || functionField > (CvmInstructionSet.Node511FunctionFieldBitMask >> CvmInstructionSet.Node511FunctionFieldShift))
+        // See BuildDecodeTable's own remarks for the same per-mnemonic field-layout lookup and window
+        // check.
+        if (!NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask) layout))
         {
           continue;
         }
 
-        int baseOpcode = tag | (functionField << CvmInstructionSet.Node511FunctionFieldShift);
-        table[mnemonic] = (baseOpcode, wordLength, true, true, CvmInstructionSet.Node511RegisterFieldBitMask);
+        int functionField = resolvedAddress - layout.FunctionFieldBaseAddress;
+        if (functionField < 0 || functionField > (layout.FunctionFieldBitMask >> layout.FunctionFieldShift))
+        {
+          continue;
+        }
+
+        int baseOpcode = tag | (functionField << layout.FunctionFieldShift);
+        table[mnemonic] = (baseOpcode, wordLength, true, true, layout.RegisterFieldBitMask);
         continue;
       }
 
@@ -1039,9 +1197,15 @@ internal static class CvmAssemblyLanguage
 
     if (shape is { Encoding: CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue })
     {
-      // Node 511's four ops take a register index (0-31, Node511RegisterFieldBitMask) -- also never an
-      // address, for the same reason as node 606/node 306's ops just above.
-      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" does not support a label operand -- its value is a register index, not an address; supply a literal 0..{CvmInstructionSet.Node511RegisterFieldBitMask} value instead.");
+      // Node 511's four ops (register index 0-31) and node 308's six ops (register index 0-3) both take
+      // a register index, never an address, for the same reason as node 606/node 306's ops just above --
+      // the exact max value depends on which mnemonic's own field layout applies (see
+      // NodeResolvedEmbeddedValueFieldLayoutByMnemonic's own remarks), so it is looked up per mnemonic
+      // rather than assumed to always be node 511's own 5-bit range.
+      int maxRegister = NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(instruction.Mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask) layout)
+          ? layout.RegisterFieldBitMask
+          : CvmInstructionSet.Node511RegisterFieldBitMask;
+      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" does not support a label operand -- its value is a register index, not an address; supply a literal 0..{maxRegister} value instead.");
     }
 
     bool isRelativeBranch =

@@ -160,29 +160,36 @@ internal static class Node408Program
   public const int Coordinate = 408;
 
   /// <summary>
-  /// Node 408's full resident F18 source, as supplied by Stefan on 2026-09-06 and then extended the same
-  /// day with three more binary ops, unmodified. See the class remarks for the <c>c/main</c> dispatch
-  /// cascade, the tag derivation, the fourteen repointed mnemonics, and the two FLAGGED fall-through
-  /// polarity notes.
-  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
-  /// project source for node 408 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
-  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
-  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
-  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
-  /// specific claim above (a compiled address, a port name, a verification result) as possibly
-  /// stale until re-confirmed against a fresh compile.
-  ///
+  /// Node 408's full resident F18 source. See the class remarks for the <c>c/main</c> dispatch cascade,
+  /// the tag derivation, the repointed mnemonics, and the two FLAGGED fall-through polarity notes.
+  /// <b>RE-SYNCED 2026-09-09</b> against Stefan's own <c>workspace.yaml</c> project export as part of the
+  /// opcode/assembler-vs-node reconciliation audit -- this is the exact gap that prompted the audit
+  /// ("there are 'ugt' opcodes in the nodes"): the PRIOR "SYNCED, 2026-09-08" copy here was missing a
+  /// whole helper word, <c>c/u</c> (<c>a xor over a xor over ;</c> -- XORs both operands with register
+  /// <c>a</c>'s own held toggle-bit constant, converting a signed comparison into its unsigned equivalent
+  /// by flipping each operand's own sign bit before the shared <c>c/cmp</c> subtraction runs), and the
+  /// four unsigned comparison words that call it -- <c>'ugt</c>, <c>'ule</c>, <c>'ult</c>, <c>'uge</c> --
+  /// were entirely absent. <c>'ugt</c>/<c>'ult</c> share <c>c/u</c>+<c>c/cmp</c> the same fall-through
+  /// shape the four signed comparisons already use; <c>'uge</c>/<c>'ule</c> likewise. The register
+  /// initializer also changed from <c>\# 0 /a</c> to <c>\# 0x8000 /a</c> -- <c>a</c> now holds the sign-bit
+  /// toggle mask <c>c/u</c> needs, not zero. These four mnemonics were previously permanently orphaned
+  /// (node 508's own real CVM2 source never defined them, only its retired CVM1 27-op family named them)
+  /// -- they now repoint to this node's own live compile exactly like the other ten comparison ops. No
+  /// other content differs from the 2026-09-08 sync; every other specific claim in the class remarks above
+  /// predates this fix and should be treated as stale until re-confirmed.
   /// </summary>
   public const string Source = """
       ( CVM2 node 408. comparison, 1111_????_????_???? )
       # 407 import
       # 0 org
       entry c/main
-      # 0 /a
+      # 0x8000 /a // toggle bit for unsigned operation
       # left /b
       : c/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;
       : c/r! ( w) A[ @p n/r! ]] lit !b !b ;
       : c/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;
+      : c/u ( xy-yx) // modify parameter for unsigned operation
+        a xor over a xor over ;
       : c/push ( w) A[ @p n/push ]] lit !b !b ;
       : c/leave A[ n/leave ; ]] lit !b
       : c/main # c/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b
@@ -194,6 +201,14 @@ internal static class Node408Program
           // binary comparison
           // 'eq
           // 'ne
+          // 'lt
+          // 'le
+          // 'gt
+          // 'ge
+          // 'ult
+          // 'ule
+          // 'ugt
+          // 'uge
           c/pop
         then // 1111_00??_????_????
           // unary comparison
@@ -215,12 +230,16 @@ internal static class Node408Program
       : 'eq0 ( x-f) 'ne0 c/not ;
       : c/cmp ( xy-z) inv . +
       : c/inc ( x-y) 1 . + ;
+      : 'uge ( xy-f) c/u
       : 'ge ( xy-f) c/cmp
       : 'lt0 ( x-f) 2* 2* # 'true -until 'false ;
+      : 'ult ( xy-f) c/u
       : 'lt ( xy-f) c/cmp
       : 'ge0 ( x-f) 'lt0 c/not ;
+      : 'ugt ( xy-f) c/u
       : 'gt ( xy-f) c/cmp
       : 'le0 ( x-f) 2* 2* # 'true -until 'eq0 ;
+      : 'ule ( xy-f) c/u
       : 'le ( xy-f) c/cmp
       : 'gt0 ( x-f) 'le0 c/not ;
       (
@@ -240,6 +259,10 @@ internal static class Node408Program
         'le binary. r is true if x <= y
         'gt binary. r is true if x > y
         'ge binary. r is true if x >= y
+        'ult unsigned binary. r is true if x < y
+        'ule unsigned binary. r is true if x <= y
+        'ugt unsigned binary. r is true if x > y
+        'uge unsigned binary. r is true if x >= y
       )
       """;
 }

@@ -129,7 +129,7 @@ namespace Ga144.Evb.Ide.Cvm;
 /// SAME name with an "i" appended (<c>addi</c>, <c>subi</c>, <c>rsbi</c>, <c>andi</c>, <c>xori</c>,
 /// <c>ori</c>, <c>rsli</c>, <c>usli</c>, <c>rsri</c>, <c>ssri</c>, <c>ruri</c>, <c>usri</c>) -- twelve
 /// more, genuinely new, CVM mnemonics, shaped exactly like <c>pushlit</c>/<c>lcall</c>/<c>ljmp</c>/
-/// <c>ldg</c>/<c>stg</c> (<see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>: one tagged
+/// <c>gld</c>/<c>gst</c> (<see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/>: one tagged
 /// opcode word, one trailing literal operand word).
 ///
 /// <b>The tag derivation, 0xE000/0xE400 -- straight from this source's own trailing comment.</b>
@@ -171,18 +171,18 @@ internal static class Node406Program
   public const int Coordinate = 406;
 
   /// <summary>
-  /// Node 406's full resident F18 source, as supplied by Stefan on 2026-09-05, unmodified. See the class
-  /// remarks for the <c>y/main</c> dispatch cascade, the <c>ahead</c>/<c>[ swap ]</c>/<c>then</c>
-  /// deferred-resolution mechanism, the twelve named ops (eight repointed, four new), the "i suffix"
-  /// convention, and the tag derivation.
-  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
-  /// project source for node 406 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
-  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
-  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
-  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
-  /// specific claim above (a compiled address, a port name, a verification result) as possibly
-  /// stale until re-confirmed against a fresh compile.
-  ///
+  /// Node 406's full resident F18 source. See the class remarks for the <c>y/main</c> dispatch cascade,
+  /// the <c>ahead</c>/<c>[ swap ]</c>/<c>then</c> deferred-resolution mechanism, the twelve named ops
+  /// (eight repointed, four new), the "i suffix" convention, and the tag derivation.
+  /// <b>RE-SYNCED 2026-09-09</b> against Stefan's own <c>workspace.yaml</c> project export as part of the
+  /// opcode/assembler-vs-node reconciliation audit: the PRIOR "SYNCED, 2026-09-08" copy here had one
+  /// stale dispatch line -- the "1110_1???" ("more arithmetic") branch read <c>r&gt; r--- ;</c> (a RIGHT
+  /// relay, duplicating the very next branch's own destination) where the export reads <c>r&gt; --l- ;</c>
+  /// (a LEFT relay) -- now corrected to match the export exactly. This is node 406's own still-open relay
+  /// to node 405 (see <see cref="Node405Program"/>, "multiword arithmetic," which imports node 406 and
+  /// binds its own port B to "left" -- the matching far end of this exact link). Every other line is
+  /// unchanged from the 2026-09-08 sync; any other specific claim above (a compiled address, a
+  /// verification result) predates this fix and should be treated as stale until re-confirmed.
   /// </summary>
   public const string Source = """
       ( CVM2 node 406. binary arithmetic, 1110_????_????_???? )
@@ -201,7 +201,7 @@ internal static class Node406Program
       : y/main # y/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b
         -if // 1110_1???_????_????
           // more arithmetic
-          r> r--- ;
+          r> --l- ;
         then // 1110_0???_????_????
         2* -if // 1110_01??_????_????
           // binary operator with constant in next word

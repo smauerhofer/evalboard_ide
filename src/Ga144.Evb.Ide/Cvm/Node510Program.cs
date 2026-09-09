@@ -82,26 +82,40 @@ internal static class Node510Program
   public const int Coordinate = 510;
 
   /// <summary>
-  /// Node 510's full resident F18 source, as supplied by Stefan on 2026-09-07 ("here are nodes 510 and
-  /// 511"). See the class remarks for the FLAGGED opening-idiom shape (matching node 509's own pre-fix
-  /// pattern, not its corrected one) and the confirmed relay chain back to node 509's own open branch.
-  /// <b>SYNCED, 2026-09-08.</b> The source below was re-synced verbatim to Stefan's current live
-  /// project source for node 510 (from his own uploaded <c>workspace.yaml</c>, used to bisect the
-  /// <see cref="CvmBootStreamBuilder"/> node 306/307 load-order bug). This supersedes whatever the
-  /// remarks above describe -- those record an EARLIER revision's shape (word counts, addresses,
-  /// port bindings, exact wording) and have NOT been re-verified against this content. Treat any
-  /// specific claim above (a compiled address, a port name, a verification result) as possibly
-  /// stale until re-confirmed against a fresh compile.
-  ///
+  /// Node 510's full resident F18 source. See the class remarks for the FLAGGED opening-idiom shape
+  /// (matching node 509's own pre-fix pattern, not its corrected one) and the confirmed relay chain back
+  /// to node 509's own open branch.
+  /// <b>RE-SYNCED 2026-09-09</b> against Stefan's own <c>workspace.yaml</c> project export as part of the
+  /// opcode/assembler-vs-node reconciliation audit -- the PRIOR "SYNCED, 2026-09-08" copy here described
+  /// node 510 as defining NO opcodes of its own (only the plain relay/dispatch helpers
+  /// <c>x/r@</c>/<c>x/r!</c>/<c>x/pop</c>/<c>x/push</c>/<c>x/leave</c>/<c>x/main</c>), reached via node
+  /// 509's own now-doubled left relay. The export shows this node ALSO defines a genuine "double register"
+  /// (32-bit, held as a pair -- the low word in register <c>x</c>, per the header's second line, the high
+  /// word wherever <c>a</c> happens to point via the shift/multiply helpers below) extended-arithmetic
+  /// family, matching this node's own header name ("extended arithmetic") for the first time:
+  /// <c>x/mask</c> (a plain <c>0xffff and a!</c> helper, masking a value to 16 bits before loading it into
+  /// <c>a</c>), <c>x/sr16</c>/<c>x/sl16</c> (7-step <c>2/</c>/<c>2*</c> shift-by-16 helpers, used to move a
+  /// value fully into or out of the OTHER half of a double-word pair), <c>x/csr16</c> (shift-right-16 that
+  /// also captures the shifted-out bit as a carry), <c>x/c!</c> (store a 0/1 carry bit into register
+  /// <c>x</c>), and six new tick-prefixed CVM opcodes: <c>'addc</c> (add with carry), <c>'xst</c>/<c>'xld</c>
+  /// (store/load register <c>x</c> from/to register <c>a</c>), and <c>'xmul2</c>/<c>'xdiv2</c>/<c>'xumul</c>
+  /// (double-word shift-left, signed shift-right, and unsigned multiply). All six are node-resolved
+  /// (<see cref="CvmInstructionSet.CvmOperandEncoding.None"/>), reached exactly like every other tagged
+  /// mnemonic elsewhere in this mesh via node 510's own "ex" fall-through (<c>x/main</c>'s own
+  /// <c>1011_10??</c> tail, unchanged by this sync) -- so their own CVM opcode tag is the SAME
+  /// 0x1011_10??-derived tag every other local-execute op on this node would use, OR'd with each op's own
+  /// address on this node's live compile. This is a genuinely NEW opcode family this toolchain did not
+  /// previously know about at all, not a correction of anything previously wired incorrectly.
   /// </summary>
   public const string Source = """
       ( CVM2 node 510. extended arithmetic, 1011_1???_????_???? )
-      ( A: double register)
+      ( A: extended register x)
       # 509 import
       # 0 org
       entry x/main
       # 0 /a
       # left /b
+      : x/mask  0xffff and a! ;
       : x/r@ ( -w) A[ u/r@ ]] lit !b A[ !p ]] lit !b @b ;
       : x/r! ( w) A[ @p u/r! ]] lit !b !b ;
       : x/pop ( -w) A[ u/pop ]] lit !b A[ !p ]] lit !b @b ;
@@ -113,5 +127,29 @@ internal static class Node510Program
           r> r--- ;
         then // 1011_10??_????_????
         ex ;
+
+      : x/sr16 ( w-w) 7 for 2/ 2/ unext ;
+      : 'addc a x/pop + x/r@ + dup x/r!
+      : x/csr16 ( w-c) x/sr16
+      : x/c! 1 and a! ;
+      : x/sl16 ( w-w) 7 for 2* 2* unext ;
+      : 'xst a x/r! ;
+      : 'xld x/r@ a! ;
+      : 'xmul2 x/r@ 2* a xor dup x/r! x/csr16 ;
+      : 'xdiv2 x/r@ a x/sl16 xor dup 2/ x/r! x/c! ;
+      : 'xumul x/pop dup x/r@ a! dup xor 8 for +* . +* unext
+        2* 2* a x/mask x/r! a x/sr16 3 and xor x/mask ;
+      (
+        'addc add with carry.
+        x/sr16 shift right 16.
+        x/csr16 shift right 16 and store carry in register x.
+        x/c! store carry into register x.
+        x/sl16 shift left 16.
+        'xld move register r into register x
+        'xst store register x into register r
+        'xmul2 left shift double
+        'xdiv2 right shift double
+        'xumul usigned multiply double
+      )
       """;
 }
