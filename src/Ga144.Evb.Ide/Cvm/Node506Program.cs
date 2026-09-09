@@ -105,29 +105,40 @@ namespace Ga144.Evb.Ide.Cvm;
 /// and node 407's <c>'lcall</c>/<c>'ljmp</c> use with 0xC000.</item>
 /// </list>
 ///
-/// <b>Opcode-space collision with <c>br</c>/<c>ifbr</c> -- KNOWN, ACCEPTED, deliberately left
-/// unresolved.</b> The ENTIRE "1001_????_????_????" range (0x9000-0x9FFF) this source claims is already
-/// fully owned by <c>br</c> (<see cref="CvmInstructionSet.BranchTag"/>, 0x9000, top 5 bits <c>10010</c>,
-/// i.e. every <c>1001_0xxx</c> word) and <c>ifbr</c> (<see cref="CvmInstructionSet.ConditionalBranchTag"/>,
-/// 0x9800, top 5 bits <c>10011</c>, every <c>1001_1xxx</c> word) -- together already covering the exact
-/// same full nibble, confirmed working on real hardware (the <c>br 1</c> test --
+/// <b>Opcode-space collision with <c>br</c>/<c>ifbr</c> -- KNOWN, PARTIALLY RESOLVED 2026-09-09.</b> The
+/// ENTIRE "1001_????_????_????" range (0x9000-0x9FFF) this source claims used to be fully owned by
+/// <c>br</c> (<see cref="CvmInstructionSet.BranchTag"/>, OLD value 0x9000, top 5 bits <c>10010</c>, i.e.
+/// every <c>1001_0xxx</c> word) and <c>ifbr</c> (<see cref="CvmInstructionSet.ConditionalBranchTag"/>,
+/// 0x9800, top 5 bits <c>10011</c>, every <c>1001_1xxx</c> word) -- together covering the exact same
+/// full nibble, confirmed working on real hardware (the <c>br 1</c> test --
 /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>'s own remarks). Per Stefan
-/// (2026-09-02): <c>br</c>/<c>ifbr</c> will eventually move to a new tag range ("i will specified the
+/// (2026-09-02): <c>br</c>/<c>ifbr</c> would eventually move to a new tag range ("i will specified the
 /// range later. for now it is not yet defined"), but per Stefan's later explicit instruction (2026-09-04,
 /// "ignore the ranges of br/ifbr. ignore the overlapping ranges. give me now enter and leave mnemonics.")
-/// <c>enter</c>/<c>leave</c> ARE wired in now anyway (<see cref="CvmInstructionSet.Instructions"/>'s
+/// <c>enter</c>/<c>leave</c> were wired in anyway (<see cref="CvmInstructionSet.Instructions"/>'s
 /// <c>enter</c> entry, tag <see cref="CvmInstructionSet.Node506EnterTag"/> 0x9200; and
 /// <see cref="Services.CvmAssemblyLanguage.NodeSymbolByMnemonic"/>'s <c>leave</c> entry, tag
 /// <see cref="Services.CvmAssemblyLanguage.Node506LeaveTagBits"/> 0x9000), ENCODING correctly despite the
-/// collision -- only DISASSEMBLY of an <c>enter</c>/<c>leave</c> word is currently wrong (reported as
-/// <c>br</c> instead), since <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> checks <c>br</c>
+/// collision -- only DISASSEMBLY of an <c>enter</c>/<c>leave</c> word used to be wrong (reported as
+/// <c>br</c> instead), since <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> checked <c>br</c>
 /// first for the whole 0x9000-0x97FF range. <b>Extended 2026-09-06:</b> <c>ldl</c>/<c>ldp</c>/<c>stl</c>/
-/// <c>stp</c> are wired in too now, per Stefan's follow-up revision naming all four explicitly for the
-/// first time -- see the cascade list above for each one's own tag. The SAME collision shape applies one
+/// <c>stp</c> were wired in too, per Stefan's follow-up revision naming all four explicitly for the
+/// first time -- see the cascade list above for each one's own tag. The SAME collision shape applied one
 /// nibble over: all four land inside <c>ifbr</c>'s own range (0x9800-0x9FFF) rather than <c>br</c>'s
-/// (0x9000-0x97FF), so disassembling one of THESE words currently reports <c>ifbr</c> instead, same
-/// reasoning, same acceptance. Only this node's own relay to node 505 (<c>1001_01??</c>) remains
-/// unwired -- node 505's source has still not been supplied.
+/// (0x9000-0x97FF), so disassembling one of THESE words reported <c>ifbr</c> instead, same reasoning,
+/// same acceptance.
+///
+/// <b>This is Stefan's promised range, finally specified -- but only half of it (2026-09-09).</b> Per
+/// Stefan's own correction ("'br' is wrongly encoded ... opcode br 1000_0??? ???? ???? branch relative
+/// signed 11-bit offset in opcode"), <c>br</c> moved to <see cref="CvmInstructionSet.BranchTag"/> = 0x8000
+/// (top 5 bits <c>10000</c>). This finally resolves the <c>enter</c>/<c>br</c> collision above: 0x9200
+/// no longer falls inside <c>br</c>'s range, so <c>enter</c> should now disassemble correctly. <c>ifbr</c>
+/// itself is DELIBERATELY UNCHANGED (still 0x9800, top 5 bits <c>10011</c>) -- see
+/// <see cref="CvmInstructionSet.ConditionalBranchTag"/>'s own remarks for why 0x8800 (the naive "one bit
+/// further" guess) must NOT be used for it -- so <c>ldl</c>/<c>ldp</c>/<c>stl</c>/<c>stp</c> STILL
+/// collide with <c>ifbr</c> exactly as before, unresolved, pending Stefan's own <c>ifbr</c> bit pattern.
+/// Only this node's own relay to node 505 (<c>1001_01??</c>) remains unwired -- node 505's source has
+/// still not been supplied.
 ///
 /// <b>Bug found and fixed (2026-09-04): a stray <c>;</c> inside <c>enter</c>'s own remote
 /// read-stack-pointer step corrupted <c>'leave</c>'s compiled encoding.</b> An earlier revision of this

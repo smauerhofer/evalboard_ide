@@ -119,7 +119,7 @@ public partial class CProjectWindow : Window
   private void OnNewAssemblyFileClick(object sender, RoutedEventArgs e) =>
       RunGuarded(() =>
       {
-        string? name = TextInputDialog.Ask(this, "New assembly file", "File name (a \".casm\" extension is added if you leave it off):");
+        string? name = TextInputDialog.Ask(this, "New assembly file", "File name (a \".asm\" extension is added if you leave it off):");
         if (name is not null)
         {
           _viewModel.SelectedAssemblyFile = RelativeTo(_viewModel.Model.AssemblyDirectoryPath, _viewModel.CreateNewAssemblyFile(name));
@@ -129,7 +129,7 @@ public partial class CProjectWindow : Window
   private void OnAddExistingAssemblyFileClick(object sender, RoutedEventArgs e) =>
       RunGuarded(() =>
       {
-        var dialog = new OpenFileDialog { Title = "Add existing assembly file", Filter = "CVM assembly (*.casm)|*.casm|All files (*.*)|*.*" };
+        var dialog = new OpenFileDialog { Title = "Add existing assembly file", Filter = "CVM assembly (*.asm)|*.asm|All files (*.*)|*.*" };
         if (dialog.ShowDialog(this) == true)
         {
           _viewModel.SelectedAssemblyFile = RelativeTo(_viewModel.Model.AssemblyDirectoryPath, _viewModel.AddExistingAssemblyFile(dialog.FileName));

@@ -703,15 +703,27 @@ public sealed class CvmDebuggerViewModel : ObservableObject
 
   /// <summary>
   /// Refreshes <see cref="MemoryViewText"/> starting at <see cref="MemoryBaseText"/>. The number of
-  /// words shown is <see cref="MemoryViewWordCount"/> or however many words the CURRENTLY loaded
-  /// program actually occupies, whichever is larger -- so opening the CVM Debugger with a short
-  /// program (or none) still gets a reasonable-sized view, but a longer one like
+  /// words shown is <see cref="MemoryViewWordCount"/>, however many words the CURRENTLY loaded
+  /// program actually occupies, or one past the highest address any <see cref="_loadedImageSymbols"/>
+  /// entry resolves to -- whichever is largest -- so opening the CVM Debugger with a short program (or
+  /// none) still gets a reasonable-sized view, but a longer one like
   /// <see cref="CvmDebuggerDefaultProgram"/>'s own 156 words is never silently truncated the way a
-  /// fixed 64-word window would. Recomputed on every call (not cached) since the loaded program can
-  /// change between calls (Assemble, Start, LoadImageFile). A row also gets a "&lt;name&gt;" note for
-  /// every symbol <see cref="_loadedImageSymbols"/> resolves to that exact address, alongside the
-  /// existing PC/breakpoint/disassembly notes -- empty, and so silently a no-op here, unless
-  /// <see cref="LoadImageFile"/> is what's currently loaded.
+  /// fixed 64-word window would, AND a loaded image's own <c>__exit</c>/<c>__start</c>/named-function
+  /// symbols are always at least reachable by scrolling, even in a link whose real body sits far past
+  /// its own vector table -- see <see cref="CvmLinker"/>'s own entry-layout remarks for that shape.
+  /// EXTENDED 2026-09-09, per Stefan, "the simulated sram show only memory until 0x3f, not the whole
+  /// program": the symbol-address term is the new part here; <see cref="MemoryViewWordCount"/> and
+  /// loadedProgramLength alone were already believed sufficient (see git history for the original
+  /// Math.Max-of-those-two version this replaces) but evidently were not always reaching every symbol
+  /// in practice -- this is a defensive belt-and-suspenders addition, not a confirmed root-cause fix:
+  /// no concrete gap between a loaded image's own word count and its highest symbol address was found
+  /// by static review of <see cref="CvmLinker"/>/<see cref="CvmImage"/> (both appear to keep those two
+  /// numbers consistent), so if the view still comes up short after this, the actual defect is
+  /// probably elsewhere -- re-open with the exact steps that reproduced it. Recomputed on every call
+  /// (not cached) since the loaded program can change between calls (Assemble, Start, LoadImageFile).
+  /// A row also gets a "&lt;name&gt;" note for every symbol <see cref="_loadedImageSymbols"/> resolves
+  /// to that exact address, alongside the existing PC/breakpoint/disassembly notes -- empty, and so
+  /// silently a no-op here, unless <see cref="LoadImageFile"/> is what's currently loaded.
   /// </summary>
   private void RefreshMemoryView()
   {
@@ -722,7 +734,11 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     }
 
     int loadedProgramLength = _session?.Program.Count ?? _standaloneProgram.Count;
-    int desiredWordCount = Math.Max(MemoryViewWordCount, loadedProgramLength);
+    // +1 because "reaches this symbol" means the window must include its own address, not stop right
+    // before it -- an empty _loadedImageSymbols (nothing loaded via LoadImageFile) makes this 0, a
+    // no-op against the Math.Max below.
+    int highestSymbolAddressPlusOne = _loadedImageSymbols.Count == 0 ? 0 : _loadedImageSymbols.Max(symbol => symbol.Address) + 1;
+    int desiredWordCount = Math.Max(MemoryViewWordCount, Math.Max(loadedProgramLength, highestSymbolAddressPlusOne));
     int count = Math.Min(desiredWordCount, CvmSimulatedSram.WordCapacity - baseAddress);
     if (count <= 0)
     {

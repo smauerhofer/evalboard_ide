@@ -319,8 +319,11 @@ public sealed class CProjectViewModel : ObservableObject
   /// Runs this project's actual build pipeline -- added 2026-09-07, replacing the "Build" button's
   /// previous behavior of just showing <see cref="BuildDescription"/> in a dialog and doing nothing:
   /// compile every "src/*.c" file to CVM assembly (<see cref="CCompiler"/>), assemble every resulting
-  /// ".casm" -- both compiler-generated and this project's own hand-written "asm/*.casm" files (see
-  /// <see cref="CProject.AssemblyDirectoryName"/>) -- with <see cref="CvmAssembler"/>, and, only for a
+  /// file -- both the compiler-generated "tasm/*.casm" and this project's own hand-written
+  /// "asm/*.asm" files (see <see cref="CProject.AssemblyDirectoryName"/>; the two extensions keep the
+  /// two apart on sight, fixed 2026-09-09 -- hand-written assembly used to also be ".casm", which
+  /// could not be told apart from generated output at a glance) -- with <see cref="CvmAssembler"/>,
+  /// and, only for a
   /// <see cref="CProjectKind.Library"/> project whose ENTIRE build succeeded, archive the resulting
   /// object files into this project's own ".galib" (<see cref="CProject.LibraryOutputPath"/>) -- a
   /// library with some members silently missing would be worse than no library at all.
@@ -602,7 +605,7 @@ public sealed class CProjectViewModel : ObservableObject
   {
     CFileKind.Header => ".h",
     CFileKind.Source => ".c",
-    CFileKind.Assembly => ".casm",
+    CFileKind.Assembly => ".asm",
     _ => throw new ArgumentOutOfRangeException(nameof(kind)),
   };
 

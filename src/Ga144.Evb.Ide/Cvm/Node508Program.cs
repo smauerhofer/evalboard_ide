@@ -168,12 +168,13 @@ namespace Ga144.Evb.Ide.Cvm;
 /// instead of 10, rather than re-deriving anything about <c>'ldg</c>/<c>'stg</c> themselves).
 ///
 /// <b>No known opcode-space collision.</b> Unlike <see cref="Node506Program"/>'s own accepted, deliberate
-/// collision with <c>br</c>/<c>ifbr</c> (both squarely inside the <c>1001_????_????_????</c> range), the
-/// <c>101?_????_????_????</c> range this node claims does not overlap <see cref="CvmInstructionSet.BranchTag"/>
-/// (0x9000, <c>1001_0xxx</c>) or <see cref="CvmInstructionSet.ConditionalBranchTag"/> (0x9800,
-/// <c>1001_1xxx</c>) at all -- no collision to flag here. Unchanged by the 2026-09-06 revision (the
-/// range claimed at the CVM opcode level, <c>0xA000-0xA03F</c> for <c>'ldg</c>/<c>'stg</c>, is exactly as
-/// narrow as before -- node 508's own RAM is still only 64 words).
+/// collision with <c>ifbr</c> (see that class's own remarks), the <c>101?_????_????_????</c> range this
+/// node claims does not overlap <see cref="CvmInstructionSet.BranchTag"/> (0x8000 as of 2026-09-09, OLD
+/// 0x9000 before that, <c>1000_0xxx</c> now) or <see cref="CvmInstructionSet.ConditionalBranchTag"/>
+/// (0x9800, unchanged, <c>1001_1xxx</c>) at all -- no collision to flag here, before or after br's move.
+/// Unchanged by the 2026-09-06 revision (the range claimed at the CVM opcode level, <c>0xA000-0xA03F</c>
+/// for <c>'ldg</c>/<c>'stg</c>, is exactly as narrow as before -- node 508's own RAM is still only 64
+/// words).
 /// </summary>
 internal static class Node508Program
 {

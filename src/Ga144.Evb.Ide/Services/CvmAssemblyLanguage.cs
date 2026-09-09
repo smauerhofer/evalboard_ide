@@ -256,6 +256,15 @@ internal static class CvmAssemblyLanguage
   // not a settled fact, until Stefan confirms it. Renamed from Node508Cvm2LocalExecuteTagBits on
   // 2026-09-01 when it turned out node 507, not 508, is CVM2's real CPU -- see Node507Program's own
   // remarks and this class's own remarks above.
+  //
+  // PARTIALLY CORROBORATED 2026-09-09: Stefan's own message fixing CvmInstructionSet.BranchTag ("'br'
+  // is wrongly encoded ... opcode br 1000_0??? ???? ???? branch relative signed 11-bit offset in
+  // opcode") independently confirms this cascade's OTHER half -- "1000_0" really is br, exactly as
+  // hypothesized here. That does not by itself confirm THIS constant's own value (0x8800, "1000_1" =
+  // local execute) against real hardware -- it only raises confidence in the shared derivation. Do not
+  // upgrade this to "confirmed" without Stefan saying so directly. See CvmInstructionSet.BranchTag's own
+  // remarks for the other side of this correction, and CvmInstructionSet.ConditionalBranchTag's own
+  // remarks for why THIS constant's value (0x8800) must never be reused for ifbr.
   private const int Node507Cvm2LocalExecuteTagBits = 0x8800;
 
   // CVM2's long call/long jump tag (2026-09-02), per Stefan's node 407 source and his own explanation
@@ -289,16 +298,19 @@ internal static class CvmAssemblyLanguage
   // address split instead of a 4-bit or 5-bit one. As a plain 16-bit tag word (address bits zeroed)
   // this is 0x9000 -- see CvmInstructionSet.Node506EnterTag's own remarks for the full bit derivation.
   //
-  // KNOWN, DELIBERATE collision with br (2026-09-02): 0x9000 is also CvmInstructionSet.BranchTag's own
-  // value, and BranchTag's mask covers this tag's entire range (0x9000-0x97FF). Per Stefan: "ignore the
-  // ranges of br/ifbr. ignore the overlapping ranges. give me now enter and leave mnemonics." Not
-  // resolved -- accepted for now, same as CvmInstructionSet.Node506EnterTag's own collision with br.
-  // Unlike enter (self-describing, so br's OWN check silently wins during disassembly -- see
-  // CvmInstructionSet.TryDescribeSelfDecodingWord's own remarks), leave is a TAGGED mnemonic resolved
-  // only through THIS file's own BuildDecodeTable/BuildEncodeTable against a live compile, which never
-  // consults br/ifbr at all -- so leave's own encode/decode through this file is unaffected by the
-  // collision; it only matters if the very same 0x9038-shaped word is ever fetched as a plain word and
-  // run through CvmInstructionSet.TryDescribeSelfDecodingWord first (which will report "br" instead).
+  // FORMERLY a KNOWN, DELIBERATE collision with br (2026-09-02): 0x9000 used to also be
+  // CvmInstructionSet.BranchTag's own value, and BranchTag's mask covered this tag's entire OLD range
+  // (0x9000-0x97FF). Per Stefan: "ignore the ranges of br/ifbr. ignore the overlapping ranges. give me
+  // now enter and leave mnemonics." Not resolved at the time -- accepted for a while, same as
+  // CvmInstructionSet.Node506EnterTag's own collision with br. Unlike enter (self-describing, so br's
+  // OWN check silently won during disassembly -- see CvmInstructionSet.TryDescribeSelfDecodingWord's own
+  // remarks), leave is a TAGGED mnemonic resolved only through THIS file's own
+  // BuildDecodeTable/BuildEncodeTable against a live compile, which never consults br/ifbr at all -- so
+  // leave's own encode/decode through this file was never affected by the collision; it only mattered if
+  // the very same 0x9038-shaped word was fetched as a plain word and run through
+  // CvmInstructionSet.TryDescribeSelfDecodingWord first (which used to report "br" instead). RESOLVED
+  // 2026-09-09: br moved to 0x8000 (see CvmInstructionSet.BranchTag's own remarks, "'br' is wrongly
+  // encoded"), so this tag's range no longer overlaps br's at all.
   private const int Node506LeaveTagBits = 0x9000;
 
   // CVM2's node 508 'ldg/'stg tag (2026-09-04), per Stefan's node 508 source (Cvm.Node508Program): its
@@ -309,7 +321,8 @@ internal static class CvmAssemblyLanguage
   // As a plain 16-bit tag word (address bits zeroed) this is 0xA000 -- see
   // CvmInstructionSet.LoadGlobalMnemonic's own remarks for the full bit derivation. Unlike
   // Node506LeaveTagBits, this range (0xA000-0xA03F, node 508's own RAM is only 64 words) has no known
-  // collision with br/ifbr (0x9000-0x9FFF) or with node 606's own eight orphaned frame-pointer tags
+  // collision with br (0x8000-0x87FF as of 2026-09-09, OLD 0x9000-0x97FF before that) or ifbr
+  // (0x9800-0x9FFF, unchanged) or with node 606's own eight orphaned frame-pointer tags
   // (0xA800-0xAFFF) -- see Cvm.Node508Program's own remarks. NOT YET CONFIRMED ON REAL HARDWARE
   // (2026-09-04). UNCHANGED by the 2026-09-06 revision to node 508's own source -- that revision only
   // restructured the SIBLING "1010_1???" branch (the four now-narrower embedded-offset forms, still not
@@ -324,8 +337,9 @@ internal static class CvmAssemblyLanguage
   // Node507Cvm2LocalExecuteTagBits/Node508LoadStoreGlobalTagBits already use, just with a 6-bit
   // tag/10-bit address split this time. As a plain 16-bit tag word (address bits zeroed) this is
   // 0xB000 -- see CvmInstructionSet.NegMnemonic's own remarks for the full bit derivation. Node 509's
-  // own RAM is only 64 words, so this range (0xB000-0xB03F) has no known collision with br/ifbr
-  // (0x9000-0x9FFF), node 606's own eight orphaned frame-pointer tags (0xA800-0xAFFF), or slit
+  // own RAM is only 64 words, so this range (0xB000-0xB03F) has no known collision with br
+  // (0x8000-0x87FF as of 2026-09-09, OLD 0x9000-0x97FF before that), ifbr (0x9800-0x9FFF, unchanged),
+  // node 606's own eight orphaned frame-pointer tags (0xA800-0xAFFF), or slit
   // (0xD000-0xDFFF) -- see Cvm.Node509Program's own remarks. NOT YET CONFIRMED ON REAL HARDWARE
   // (2026-09-05).
   private const int Node509UnaryArithmeticTagBits = 0xB000;
@@ -1057,7 +1071,10 @@ internal static class CvmAssemblyLanguage
   /// -- fixed 2026-09-05 per Stefan so a tagged trailing-word mnemonic (e.g. <c>andi</c>) shows the SAME
   /// "0x{hex} ({decimal})" shape <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> now uses for
   /// every self-describing mnemonic (<c>call</c>/<c>br</c>/<c>ifbr</c>/<c>slit</c>/<c>lit</c>), rather
-  /// than the hex-only rendering this one line used before -- see that method's own remarks.
+  /// than the hex-only rendering this one line used before -- see that method's own remarks. ADDED
+  /// 2026-09-09: a <c>br</c>/<c>ifbr</c> line now also carries its own RESOLVED absolute target (e.g.
+  /// <c>"br 0x0200 (512) -> 0x0202"</c>) -- see <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/>'s
+  /// own remarks for why (Stefan misread a raw offset as an absolute address; this prevents that).
   /// </summary>
   public static IReadOnlyDictionary<int, string> DisassemblePage0(
       CvmSimulatedSram sram,
@@ -1075,7 +1092,11 @@ internal static class CvmAssemblyLanguage
       // fully determined by its own bit pattern and operand alone (CvmInstructionSet.
       // CvmOperandEncoding.EmbeddedAddress / EmbeddedSignedValue), independent of node 607's live
       // compile, so all four are checked before consulting the (symbol-driven) decode table at all.
-      string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word);
+      // wordAddress passed through 2026-09-09 so br/ifbr's own listing line can also show the
+      // RESOLVED absolute target next to the raw offset -- see TryDescribeSelfDecodingWord's own
+      // remarks (Stefan asked why the linker put "__exit" at "location 0x200"; it doesn't -- that
+      // was always just the raw offset field, easy to misread as an address in this exact listing).
+      string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word, wordAddress: address);
       if (selfDescribing is not null)
       {
         notes[address] = selfDescribing;

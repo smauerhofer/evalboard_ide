@@ -31,17 +31,30 @@ namespace Ga144.C.Toolchain;
 /// <item><description><c>xt</c>/<c>ldt</c>/<c>stt</c> are this ABI's generic pointer/memory primitives:
 /// <c>xt</c> pops an address off the stack into a "t" register; <c>ldt</c> pushes the value stored at
 /// address t without consuming t; <c>stt</c> pops a value off the stack and stores it at address t.
-/// Node 606's own frame ops -- <c>ldl</c>/<c>ldp</c>/<c>lal</c>/<c>lap</c> and <c>stl</c>/<c>stp</c> --
-/// are assumed to behave the same way, directly against the data stack (push a value / pop-and-store a
-/// value), never through register r -- a separate mechanism from the generic ALU ops' r-mediated
-/// pop+op+push above, but one consistent with a dedicated "local/parameter access" instruction needing
-/// no extra register hop. IMPORTANT: "t" has no save/restore of its own, so this compiler never assumes
-/// it survives arbitrary code emitted between resolving an Indirect lvalue's address and using it --
-/// every Indirect lvalue's address is cached into its own dedicated local slot the moment it's computed,
-/// and <c>xt</c> is re-issued from that cached slot immediately before every single load or store
-/// through it, however many other things (including further "xt"s of their own) ran in between. See
+/// IMPORTANT: "t" has no save/restore of its own, so this compiler never assumes it survives arbitrary
+/// code emitted between resolving an Indirect lvalue's address and using it -- every Indirect lvalue's
+/// address is cached into its own dedicated local slot the moment it's computed, and <c>xt</c> is
+/// re-issued from that cached slot immediately before every single load or store through it, however
+/// many other things (including further "xt"s of their own) ran in between. See
 /// <see cref="CLvalue"/>/<see cref="ResolveLvalue"/>/<see cref="CacheIndirectAddress"/>/
 /// <see cref="EmitLoad"/>/<see cref="EmitStore"/>.</description></item>
+/// <item><description><c>ldl</c>/<c>ldp</c> load a local's/parameter's value into register r WITHOUT
+/// touching the stack; <c>stl</c>/<c>stp</c> store r INTO a local/parameter, also without touching the
+/// stack -- CONFIRMED against real hardware 2026-09-09 from Stefan's own opcode bit patterns (<c>ldl</c>
+/// <c>1001_111?_????_????</c>, <c>ldp</c> <c>1001_110?_????_????</c>, <c>stl</c>
+/// <c>1001_101?_????_????</c>, <c>stp</c> <c>1001_100?_????_????</c>, each a 9-bit frame-relative
+/// offset): "locals and parameters are stored on the stack relative to the frame pointer and are NOT
+/// accessed with push and pop." This OVERTURNS this class's former, never-confirmed and now-known-wrong
+/// assumption that these four worked directly against the data stack like <c>xt</c>/<c>ldt</c>/<c>stt</c>
+/// do. They behave like the generic ALU/unary ops instead: every load site must follow with an explicit
+/// <c>push</c> to move the loaded value from r onto the stack, and every store site must precede with an
+/// explicit <c>pop</c> to move the value-to-store from the stack into r first -- see
+/// <see cref="EmitLoad"/>/<see cref="EmitStore"/>/<see cref="EmitName"/>/
+/// <see cref="CacheIndirectAddress"/>/<see cref="EmitSwitch"/> and the register-parameter spill in
+/// <see cref="EmitFunction"/>, all fixed together for this. <c>lal</c>/<c>lap</c> (load ADDRESS of a
+/// local/parameter, a different pair of mnemonics) are NOT covered by Stefan's correction -- their own
+/// stack-vs-register behavior remains this compiler's unconfirmed assumption, unchanged for
+/// now.</description></item>
 /// <item><description><c>ifbr &lt;label&gt;</c> branches when the condition (loaded into r by an
 /// immediately preceding <c>pop</c>) is NONZERO (true). Every control-flow codegen method below is built
 /// around this polarity.</description></item>
@@ -621,10 +634,14 @@ public sealed class CCodeGenerator
     // doc comment for why the value's ONLY safe lifetime inside the register is this one moment.
     foreach ((int registerIndex, int localSlot) in registerParameters)
     {
-      EmitCode($"sta {registerIndex}"); // r := this register's address word; stack.push(its page word)
-      EmitCode("push");                 // stack: [..., page, address] -- duplicates r's value onto the stack
-      EmitCode($"stl {localSlot}");     // pops "address" (the value we want) into the parameter's own local slot
-      EmitCode("pop");                  // pops the leftover page word into r and discards it (page is always 0 -- see this class's own ABI doc comment on far pointers not being supported yet)
+      // 2026-09-09: "stl" stores r directly (see this class's own ABI doc comment) -- no "push" needed
+      // to shuttle the address through the stack first. "sta" leaves the address in r AND pushes a page
+      // word onto the stack as a side effect; "stl" reads r (assumed to leave r unchanged, like "push"
+      // does) so the trailing "pop" only needs to clean up that leftover page word (always 0 -- far
+      // pointers are not supported yet, see this class's own ABI doc comment).
+      EmitCode($"sta {registerIndex}"); // r := this register's address word; stack: [..., page]
+      EmitCode($"stl {localSlot}");     // localSlot := r (the address); stack unchanged
+      EmitCode("pop");                  // r := the leftover page word, discarded; stack: [...]
     }
 
     _currentFunction = context;
@@ -694,12 +711,13 @@ public sealed class CCodeGenerator
   // a global too, which does its own "xt" and silently repoints t at globalB before the store runs.
   // The fix: an Indirect lvalue's address is computed exactly ONCE (preserving CCompoundAssignExpr's
   // own "do not re-run the target's side effects" contract) but immediately cached into a dedicated
-  // local slot (ldl/stl never touch t or r), not left sitting only in t. EmitLoad/EmitStore then each
-  // independently reload that cached address and re-issue "xt" right before their own ldt/stt --
-  // "ldl addressSlot; xt" is a pure, side-effect-free re-derivation of t from the cache, not a
-  // re-evaluation of the original target expression, so this is safe to repeat as many times as
-  // needed (compound assignment loads once and stores once; increment/decrement do the same) no
-  // matter what runs in between.
+  // local slot, not left sitting only in t. EmitLoad/EmitStore then each independently reload that
+  // cached address and re-issue "xt" right before their own ldt/stt -- "ldl addressSlot; push; xt" is a
+  // pure, side-effect-free re-derivation of t from the cache (2026-09-09: "ldl" itself only sets r, per
+  // this class's own ABI doc comment -- the "push" is what actually puts the address back on the stack
+  // for "xt" to consume), not a re-evaluation of the original target expression, so this is safe to
+  // repeat as many times as needed (compound assignment loads once and stores once; increment/decrement
+  // do the same) no matter what runs in between, or what "r" holds by the time it runs.
   // ---------------------------------------------------------------------------------------------
 
   private CLvalue ResolveLvalue(CExpr expr)
@@ -777,13 +795,20 @@ public sealed class CCodeGenerator
   /// <summary>Given an address already sitting on top of the stack, caches a copy of it into a fresh
   /// local slot (so it can be safely re-derived later regardless of what runs in between -- see this
   /// section's own remarks) and consumes the original into "t" via <c>xt</c>, leaving the stack exactly
-  /// as it was before the address was pushed.</summary>
+  /// as it was before the address was pushed.
+  ///
+  /// 2026-09-09: "stl" stores r, not the stack top (see this class's own ABI doc comment), so the
+  /// address is popped into r first, stored, then pushed back (assumed non-destructive of r, like
+  /// "push" itself) so "xt" still has it to pop off the stack afterward. No <see cref="EmitDup"/> is
+  /// needed any more -- "stl" no longer consumes anything from the stack, so a single copy suffices.
+  /// </summary>
   private CLvalue CacheIndirectAddress(CType type)
   {
     int addressSlot = _currentFunction!.NextLocalSlot++;
-    EmitDup();
-    EmitCode($"stl {addressSlot}");
-    EmitCode("xt");
+    EmitCode("pop");                    // r := address; stack: [] (one word consumed off the incoming stack)
+    EmitCode($"stl {addressSlot}");     // addressSlot := r (the address); stack unchanged, r unchanged
+    EmitCode("push");                   // stack: [address] (r pushed back, still the address)
+    EmitCode("xt");                     // t := address (popped); stack: []
     return new CLvalue(CLvalueKind.Indirect, addressSlot, type);
   }
 
@@ -793,14 +818,17 @@ public sealed class CCodeGenerator
     {
       case CLvalueKind.Local:
         EmitCode($"ldl {lvalue.Index}");
+        EmitCode("push");
         break;
       case CLvalueKind.Parameter:
         EmitCode($"ldp {lvalue.Index}");
+        EmitCode("push");
         break;
       default:
-        EmitCode($"ldl {lvalue.Index}");
-        EmitCode("xt");
-        EmitCode("ldt");
+        EmitCode($"ldl {lvalue.Index}");   // r := the cached address
+        EmitCode("push");                  // stack: [address]
+        EmitCode("xt");                    // t := address (popped); stack: []
+        EmitCode("ldt");                   // stack: [value at t]
         break;
     }
   }
@@ -810,15 +838,18 @@ public sealed class CCodeGenerator
     switch (lvalue.Kind)
     {
       case CLvalueKind.Local:
-        EmitCode($"stl {lvalue.Index}");
+        EmitCode("pop");                   // r := value to store; stack: [...] (one word consumed)
+        EmitCode($"stl {lvalue.Index}");   // the local := r
         break;
       case CLvalueKind.Parameter:
-        EmitCode($"stp {lvalue.Index}");
+        EmitCode("pop");                   // r := value to store; stack: [...] (one word consumed)
+        EmitCode($"stp {lvalue.Index}");   // the parameter := r
         break;
       default:
-        EmitCode($"ldl {lvalue.Index}");
-        EmitCode("xt");
-        EmitCode("stt");
+        EmitCode($"ldl {lvalue.Index}");   // r := the cached address
+        EmitCode("push");                  // stack: [..., value, address]
+        EmitCode("xt");                    // t := address (popped); stack: [..., value]
+        EmitCode("stt");                   // pops value, stores it at t; stack: [...]
         break;
     }
   }
@@ -1354,16 +1385,19 @@ public sealed class CCodeGenerator
     string? defaultLabel = null;
     CollectSwitchLabels(switchStmt.Body, labels, cases, ref defaultLabel, switchStmt.Location);
 
-    // Evaluate the selector exactly once and store it (per this class's own ldl/stl-act-directly-on-the-
-    // stack assumption -- see the class doc comment -- "stl" alone both pops and stores, no separate
-    // register hop needed).
-    EmitExpr(switchStmt.Selector);
+    // Evaluate the selector exactly once and store it. 2026-09-09: "stl" stores r, not the stack top
+    // (see this class's own ABI doc comment), so the selector has to be popped into r before it can be
+    // stashed away, and reloaded (ldl; push) at the top of every comparison since "eq"'s own pop
+    // clobbers r on each iteration.
+    EmitExpr(switchStmt.Selector);        // stack: [selector]
+    EmitCode("pop");                       // r := selector; stack: []
     int selectorSlot = _currentFunction!.NextLocalSlot++;
-    EmitCode($"stl {selectorSlot}");
+    EmitCode($"stl {selectorSlot}");      // selectorSlot := r (the selector)
 
     foreach ((long value, string label) in cases)
     {
-      EmitCode($"ldl {selectorSlot}");   // stack: [selector]
+      EmitCode($"ldl {selectorSlot}");   // r := selector
+      EmitCode("push");                   // stack: [selector]
       EmitCode($"pushlit {value}");      // stack: [selector, value]
       EmitCode("pop");                    // r := value; stack: [selector]
       EmitCode("eq");                     // stack: [selector == value]
@@ -1627,6 +1661,7 @@ public sealed class CCodeGenerator
       }
 
       EmitCode($"ldl {symbol.Index}");
+      EmitCode("push");
       return symbol.Type;
     }
 
@@ -1639,6 +1674,7 @@ public sealed class CCodeGenerator
       }
 
       EmitCode($"ldp {symbol.Index}");
+      EmitCode("push");
       return symbol.Type;
     }
 

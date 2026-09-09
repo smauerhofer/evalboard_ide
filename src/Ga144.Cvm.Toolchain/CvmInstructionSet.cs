@@ -597,16 +597,50 @@ public static class CvmInstructionSet
   /// </summary>
   public const int CallAddressMask = 0x7FFF;
 
-  // br/ifbr's own encoding, straight from Stefan's bit-pattern table:
+  // br's own encoding -- MOVED 2026-09-09, per Stefan: "the assembler is not up to date. 'br' is
+  // wrongly encoded ... opcode br 1000_0??? ???? ???? branch relative signed 11-bit offset in opcode."
+  // OLD (2026-09-02) table, now WRONG for br, kept here only for the paper trail:
   //   1001 0xxx xxxx xxxx   -0x400..0x3FF   br   (branch, signed offset)
   //   1001 1xxx xxxx xxxx   -0x400..0x3FF   ifbr (conditional branch, signed offset)
-  // -- a fixed 5-bit tag (bits 15-11) OR'd with an 11-bit two's-complement signed offset (bits 10-0).
-  // -0x400..0x3FF is exactly an 11-bit signed value's own range, confirming the field width.
+  // NEW (2026-09-09) table -- br ONLY, per Stefan's own words above:
+  //   1000 0xxx xxxx xxxx   -0x400..0x3FF   br   (branch, signed offset)
+  // -- still a fixed 5-bit tag (bits 15-11) OR'd with an 11-bit two's-complement signed offset (bits
+  // 10-0); -0x400..0x3FF is exactly an 11-bit signed value's own range, confirming the field width is
+  // unchanged -- only the tag's own bit pattern moved, one nibble down (1001_0 -> 1000_0).
+  //
+  // This exact "1000_0" pattern for br was ALREADY independently derived, before Stefan's correction,
+  // in Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own Node507Cvm2LocalExecuteTagBits remarks: node
+  // 507's own m/main dispatch cascade (its real F18 source) reads "1000_0???" as "branch relative" and
+  // "1000_1???" as "local execute" (jump to the address in the low bits) -- see that constant's own
+  // remarks, there marked "DERIVED, NOT YET CONFIRMED WITH STEFAN" at the time. Stefan's message here
+  // independently confirms exactly that derivation for br, which is why BranchTag below moves to
+  // 0x8000 with high confidence.
+  //
+  // ifbr's own tag is DELIBERATELY NOT CHANGED here, and must NOT be assumed to be 0x8800 (the
+  // neighboring "1000_1" slot) -- that slot is ALREADY node 507's own real, hardware-corroborated
+  // Node507Cvm2LocalExecuteTagBits (nop/pushlit/push/pop/ret/halt; see that constant's own remarks,
+  // including 'halt's body literally writing the 0x8800 constant to hardware). Moving ifbr there would
+  // trade one silent collision (with Node506StoreParameterTag, below) for a worse one, against a tag
+  // that is actually confirmed rather than merely orphaned. Stefan's message named only br's new
+  // pattern; ifbr STAYS at its OLD 0x9800 below, still colliding with Node506StoreParameterTag exactly
+  // as before -- unresolved, needs Stefan's own ifbr bit pattern before it can move anywhere.
 
-  /// <summary>The fixed high-bit pattern (bits 15-11) of a <c>br</c> word: binary 10010.</summary>
-  public const int BranchTag = 0x9000;
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-11) of a <c>br</c> word: binary 10000. CHANGED 2026-09-09 from
+  /// binary 10010 (0x9000) -- see this file's own remarks just above for Stefan's correction, the exact
+  /// wording that prompted it, and the independent node-507-dispatch derivation that agrees with it.
+  /// </summary>
+  public const int BranchTag = 0x8000;
 
-  /// <summary>The fixed high-bit pattern (bits 15-11) of an <c>ifbr</c> word: binary 10011.</summary>
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-11) of an <c>ifbr</c> word: binary 10011 (0x9800).
+  /// DELIBERATELY UNCHANGED as of 2026-09-09 even though <see cref="BranchTag"/> moved -- see this
+  /// file's own remarks just above. Do NOT set this to 0x8800: that is
+  /// Ga144.Evb.Ide.Services.CvmAssemblyLanguage.Node507Cvm2LocalExecuteTagBits, a different, already
+  /// hardware-corroborated opcode (node 507's own "local execute" dispatch, not a free slot). This
+  /// constant still collides with <see cref="Node506StoreParameterTag"/> exactly as it did before
+  /// 2026-09-09 -- see that constant's own remarks -- until Stefan gives ifbr's own correct new tag.
+  /// </summary>
   public const int ConditionalBranchTag = 0x9800;
 
   /// <summary>Isolates a word's top 5 bits, for testing against <see cref="BranchTag"/>/<see cref="ConditionalBranchTag"/>.</summary>
@@ -725,15 +759,21 @@ public static class CvmInstructionSet
   // store-local's own sign flip happens entirely inside node 506's own dispatch, via "inv", never at the
   // CVM opcode encoding level) -- EmbeddedUnsignedValue, unchanged, is the right shape after all.
   //
-  // KNOWN, DELIBERATE collision with br/ifbr (2026-09-02, extended 2026-09-06): Node506EnterTag falls
-  // inside BranchTag's own range (0x9000-0x97FF, EmbeddedSignedValue) -- per Stefan: "ignore the ranges
-  // of br/ifbr. ignore the overlapping ranges. give me now enter and leave mnemonics." Not resolved,
-  // accepted for now. The four new tags just below (stp/stl/ldp/ldl, 0x9800/0x9A00/0x9C00/0x9E00) fall
-  // the SAME way inside ConditionalBranchTag's own range (0x9800-0x9FFF) instead -- the same kind of
-  // collision, just against ifbr rather than br, accepted on the same basis: Assemble() still emits the
-  // correct tagged word for each (dispatched by mnemonic string, never by decoding), but disassembling
-  // one of THESE words back will currently report "ifbr <offset>" instead, for the same reason
-  // TryDescribeSelfDecodingWord's own remarks already document for enter/br.
+  // KNOWN, DELIBERATE collision with br/ifbr (2026-09-02, extended 2026-09-06): Node506EnterTag used to
+  // fall inside BranchTag's own range (OLD 0x9000-0x97FF, EmbeddedSignedValue) -- per Stefan: "ignore
+  // the ranges of br/ifbr. ignore the overlapping ranges. give me now enter and leave mnemonics." Not
+  // resolved at the time, accepted for a while. The four tags just below (stp/stl/ldp/ldl,
+  // 0x9800/0x9A00/0x9C00/0x9E00) fell the SAME way inside ConditionalBranchTag's own range
+  // (0x9800-0x9FFF) instead -- the same kind of collision, just against ifbr rather than br.
+  //
+  // PARTIALLY RESOLVED 2026-09-09: br's own tag moved to 0x8000 (see BranchTag's own remarks -- Stefan:
+  // "'br' is wrongly encoded"), so Node506EnterTag (0x9200, unchanged -- it comes from node 506's own
+  // real F18 dispatch, never a CVM assembler choice) no longer falls inside br's range at all; enter's
+  // collision is gone. ifbr's own tag is DELIBERATELY UNCHANGED (still 0x9800 -- see
+  // ConditionalBranchTag's own remarks; 0x8800, the naive "same move, one bit further" guess, is already
+  // a different real, confirmed opcode and must not be reused), so the four tags just below (stp/stl/
+  // ldp/ldl) STILL collide with ifbr exactly as before -- unresolved, needs Stefan's own ifbr bit
+  // pattern.
 
   /// <summary>
   /// The fixed high-bit pattern (bits 15-9) of CVM2 node 506's <c>enter</c> word: binary 1001_001,
@@ -1121,6 +1161,22 @@ public static class CvmInstructionSet
   public static string FormatOperand(int value) => $"0x{value & 0xFFFF:X4} ({value})";
 
   /// <summary>
+  /// ADDED 2026-09-09, alongside <see cref="TryDescribeSelfDecodingWord"/>'s new <c>wordAddress</c>
+  /// parameter (see that method's own remarks for why): renders <c>" -&gt; 0x{4-digit hex}"</c> for a
+  /// <c>br</c>/<c>ifbr</c> word's RESOLVED absolute target -- <c>(wordAddress + 1) + offset</c>, per
+  /// <see cref="DecodeBranchOffset"/>'s own remarks -- or an empty string when <paramref
+  /// name="wordAddress"/> is null (the caller didn't have one to give, so there's nothing to resolve).
+  /// Deliberately NOT run through <see cref="FormatOperand"/>: that method's decimal half assumes a
+  /// SIGNED 16-bit value (right for an offset, wrong for an address -- a target at or past 0x8000 would
+  /// misprint as negative), and CVM addresses can in principle exceed 16 bits entirely (the simulated
+  /// SRAM is a 20-bit, 1 Mword space -- see <see cref="Ga144.Evb.Ide.Services.CvmSimulatedSram"/>'s own
+  /// remarks -- even though a normal page-0 program never reaches that far), so this always prints a
+  /// plain hex address, at least 4 digits, never a parenthesized decimal.
+  /// </summary>
+  private static string DescribeBranchTarget(int? wordAddress, int offset) =>
+      wordAddress is int address ? $" -> 0x{address + 1 + offset:X4}" : string.Empty;
+
+  /// <summary>
   /// Decodes a single already-fetched CVM word using ONLY the two self-describing encodings
   /// (<see cref="CvmOperandEncoding.EmbeddedAddress"/>, <see cref="CvmOperandEncoding.EmbeddedSignedValue"/>)
   /// -- the ones fully determined by the word's own bit pattern, needing no live F18 compile at all to
@@ -1129,8 +1185,19 @@ public static class CvmInstructionSet
   /// Ga144.Evb.Ide.Services.CvmAssemblyLanguage.BuildDecodeTable for that half). Returns null when the
   /// word matches none of those patterns, letting the caller fall back to that live, compile-specific
   /// table next.
+  ///
+  /// <paramref name="wordAddress"/> (ADDED 2026-09-09) is this word's own flat address, needed ONLY to
+  /// also print <c>br</c>/<c>ifbr</c>'s RESOLVED absolute target next to their raw offset -- per
+  /// <see cref="DecodeBranchOffset"/>'s own remarks, the offset alone is not a target address; it must
+  /// be combined with the word's own address to become one. Added per Stefan asking why the linker
+  /// placed "__exit" at "location 0x200" (it doesn't -- see <see cref="CvmLinker"/>'s own entry-layout
+  /// remarks: __exit correctly resolves to address 1; "0x0200 (512)" in a disassembly of __exit's own
+  /// <c>br</c> word is that word's raw OFFSET field, not __exit's own address or its target's), which
+  /// is exactly the confusion this optional target annotation exists to prevent from recurring. Pass
+  /// null (the default) to keep the OLD offset-only rendering -- e.g. for a word decoded with no
+  /// meaningful address of its own (an unlinked object's raw word, say).
   /// </summary>
-  public static string? TryDescribeSelfDecodingWord(int word)
+  public static string? TryDescribeSelfDecodingWord(int word, int? wordAddress = null)
   {
     if (word <= CallAddressMask)
     {
@@ -1140,12 +1207,12 @@ public static class CvmInstructionSet
     int branchTag = word & BranchTagMask;
     if (branchTag == BranchTag)
     {
-      return $"{BranchMnemonic} {FormatOperand(DecodeBranchOffset(word))}";
+      return $"{BranchMnemonic} {FormatOperand(DecodeBranchOffset(word))}{DescribeBranchTarget(wordAddress, DecodeBranchOffset(word))}";
     }
 
     if (branchTag == ConditionalBranchTag)
     {
-      return $"{ConditionalBranchMnemonic} {FormatOperand(DecodeBranchOffset(word))}";
+      return $"{ConditionalBranchMnemonic} {FormatOperand(DecodeBranchOffset(word))}{DescribeBranchTarget(wordAddress, DecodeBranchOffset(word))}";
     }
 
     if ((word & SlitTagMask) == SlitTag)
@@ -1170,13 +1237,19 @@ public static class CvmInstructionSet
     // one bit short. Node606TagMask/DecodeNode606Value themselves are unchanged and still correct for
     // node 606's own seven still-8-bit ops.
     //
-    // NOTE: this loop is currently unreachable for "enter" specifically -- br's own self-describing
-    // check above (branchTag == BranchTag) matches FIRST for every word in 0x9000-0x97FF, which is
-    // Node506EnterTag's entire range too (0x9200's own top 5 bits equal BranchTag's). Per Stefan
-    // (2026-09-02, "ignore the ranges of br/ifbr... give me now enter and leave mnemonics") this
-    // collision is accepted for now: Assemble() still emits the correct 0x9200|offset word for "enter"
-    // (encoding dispatches by mnemonic string, not through this method), but disassembling that same
-    // word back will currently report "br <offset>" instead, until br/ifbr move to a new tag.
+    // NOTE (STALE as of 2026-09-09, kept for the paper trail): this loop used to be unreachable for
+    // "enter" specifically -- br's own self-describing check above (branchTag == BranchTag) matched
+    // FIRST for every word in 0x9000-0x97FF, which was Node506EnterTag's entire range too (0x9200's own
+    // top 5 bits equalled br's OLD tag). Per Stefan (2026-09-02, "ignore the ranges of br/ifbr... give
+    // me now enter and leave mnemonics") this collision was accepted for a while: Assemble() always
+    // emitted the correct 0x9200|offset word for "enter" (encoding dispatches by mnemonic string, never
+    // through this method), but disassembling that same word back used to report "br <offset>" instead.
+    // PARTIALLY RESOLVED 2026-09-09: br's own tag moved to 0x8000 (see BranchTag's own remarks, "'br' is
+    // wrongly encoded"), so branchTag no longer equals BranchTag for 0x9200 -- this loop should now
+    // actually be reached for "enter", not yet re-confirmed against a live disassembly. ifbr's own tag
+    // is DELIBERATELY UNCHANGED (still 0x9800 -- see ConditionalBranchTag's own remarks), so
+    // 0x9800/0x9A00/0x9C00/0x9E00 (stp/stl/ldp/ldl) still match branchTag == ConditionalBranchTag first,
+    // exactly as before -- still unreachable here, still unresolved.
     //
     // SAME SITUATION, WORSE, for node 306's six ops (ldar/star/inca/deca/lda/sta, 0xD800-0xDBFF): this
     // loop is currently UNREACHABLE for all six, since the SlitTag check just above matches FIRST for
