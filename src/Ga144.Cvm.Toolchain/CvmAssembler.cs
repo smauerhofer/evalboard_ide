@@ -32,7 +32,6 @@ namespace Ga144.Cvm.Toolchain;
 ///   enter 3                 ; node 606: enter stack frame, reserve 3 locals -- unsigned, 0x00..0xFF
 ///   ldp 1                   ; node 606: load parameter at frame-relative offset 1
 ///   stl 0                   ; node 606: store to local at frame-relative offset 0
-///   adjust 2                ; node 606: adjust stack frame by an unsigned 0x00..0xFF amount
 ///
 /// .section DATA
 /// table: .word 1, 2, 3      ; raw data words -- each may also be numeric or a label/import name
@@ -64,8 +63,8 @@ namespace Ga144.Cvm.Toolchain;
 /// <see cref="CvmInstructionSet"/>'s own remarks on the 2026-09-09 CVM1-opcode purge) packs a narrower
 /// 10-bit value with its own tag, accepts only a literal (it isn't an address computation at all -- per
 /// Stefan, it loads its value directly into the F18 interpreter's own R register). Node 606's eight
-/// frame-pointer ops (<c>enter</c>, <c>adjust</c>, <c>stl</c>, <c>stp</c>, <c>ldl</c>, <c>ldp</c>, plus
-/// the now-retired <c>lal</c>/<c>lap</c>) are shaped the same way as br/cbr/lit -- a fixed tag OR'd with a literal
+/// frame-pointer ops (<c>enter</c>, <c>stl</c>, <c>stp</c>, <c>ldl</c>, <c>ldp</c>, plus
+/// the now-retired <c>lal</c>/<c>lap</c>/<c>adjust</c>) are shaped the same way as br/cbr/lit -- a fixed tag OR'd with a literal
 /// value, no relocation, no node -- except each packs an UNSIGNED 8-bit value
 /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>, emitted by
 /// <see cref="EmitEmbeddedUnsignedValue"/>), never a signed one.
@@ -499,9 +498,10 @@ public static class CvmAssembler
   }
 
   /// <summary>
-  /// Emits an <c>enter</c>/<c>adjust</c>/<c>stl</c>/<c>stp</c>/<c>ldl</c>/<c>ldp</c>
-  /// (the now-retired <c>lal</c>/<c>lap</c> used to belong here too; or, since 2026-09-06, node 306's
-  /// <c>ldar</c>/<c>star</c>/<c>inca</c>/<c>deca</c>/<c>lda</c>/<c>sta</c>)
+  /// Emits an <c>enter</c>/<c>stl</c>/<c>stp</c>/<c>ldl</c>/<c>ldp</c>
+  /// (the now-retired <c>lal</c>/<c>lap</c>/<c>adjust</c> used to belong here too; or, since 2026-09-06, node 306's
+  /// <c>ldar</c>/<c>star</c>/<c>inca</c>/<c>deca</c>/<c>lda</c>/<c>sta</c>; or, since 2026-09-10, node
+  /// 508's <c>ldg</c>/<c>stg</c>)
   /// word: <paramref name="shape"/>.Tag OR'd with an UNSIGNED literal value, left-shifted by
   /// <paramref name="shape"/>.ValueBitShift, packed into <paramref name="shape"/>.ValueBitMask's bits.
   /// This mirrors <see cref="EmitEmbeddedSignedValue"/> exactly except for the range check and parse:

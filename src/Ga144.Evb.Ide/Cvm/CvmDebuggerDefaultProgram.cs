@@ -76,7 +76,14 @@ namespace Ga144.Evb.Ide.Cvm;
 /// reset. This is NOT the same class of risk as 'br'/'cbr' below (which just fall into an existing,
 /// harmless jump-table branch) -- 'adjust visibly corrupts control flow across the whole cluster, so
 /// it stays out of this program entirely until it can be investigated further, the same treatment as
-/// 'in'/'out' above.</item>
+/// 'in'/'out' above.
+///
+/// <b>RESOLVED, 2026-09-10 -- the "further investigation" never found a live equivalent, and Stefan has
+/// since said the opcode itself is gone:</b> "'adjust' no longer exists. you can remove it." Its own
+/// mnemonic/tag constants and <see cref="Cvm.Toolchain.CvmInstructionSet.Instructions"/> entry (formerly
+/// Id 21) are now deleted outright -- see <see cref="Cvm.Toolchain.CvmInstructionSet"/>'s own remarks.
+/// This paragraph is kept as the historical record of why it was excluded from this test program in the
+/// first place, and of the real hardware behavior observed before it was removed.</item>
 /// </list>
 ///
 /// <b>CVM1-opcode cleanup (2026-09-09): node 506's nine register-d/extended-precision ops (zext,

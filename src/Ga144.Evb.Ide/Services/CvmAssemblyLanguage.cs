@@ -27,12 +27,14 @@ namespace Ga144.Evb.Ide.Services;
 /// <c>push</c>, <c>pop</c>, <c>ret</c>, <c>halt</c> -- CVM2's node 507 "local execute" primitives)
 /// layered on top of a tagged wire-level opcode convention (opcode = tag | wordAddress) -- see
 /// <see cref="Node508TagBits"/>/<see cref="Node507Cvm2LocalExecuteTagBits"/>'s own remarks. (<c>call</c>,
-/// <c>br</c>, <c>cbr</c>, and node 606's frame-pointer ops (<c>enter</c>, <c>adjust</c>,
+/// <c>br</c>, <c>cbr</c>, and node 606's frame-pointer ops (<c>enter</c>,
 /// <c>stl</c>, <c>stp</c>, <c>ldl</c>, <c>ldp</c>) are the exceptions -- see this
 /// class's own remarks on why they aren't part of this tagged-opcode layer. <c>slit</c> and
 /// <c>lal</c>/<c>lap</c> were RETIRED 2026-09-09, and their own mnemonic/tag constants later deleted
 /// outright too -- see <see cref="CvmInstructionSet"/>'s own remarks on the 2026-09-09 CVM1-opcode
-/// purge.)
+/// purge; <c>adjust</c>, the family's ninth member, was deleted outright 2026-09-10 the same way, per
+/// Stefan's own instruction that it no longer exists -- see <see cref="CvmInstructionSet"/>'s own
+/// remarks on that removal.)
 ///
 /// <b>CVM2 (2026-09-01).</b> Stefan is rewriting the whole CVM around new, differently-numbered nodes
 /// and a more sophisticated inter-node communication scheme; CVM1's nodes are not used in CVM2 at all.

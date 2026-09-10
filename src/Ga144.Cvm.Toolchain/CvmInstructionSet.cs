@@ -7,12 +7,14 @@ namespace Ga144.Cvm.Toolchain;
 /// ops -- <c>usl</c>, <c>ssr</c>, <c>usr</c>, <c>add</c>, <c>sub</c>, <c>and</c>, <c>xor</c>, <c>or</c>
 /// (binary: register r and the top of the CVM data stack), and <c>inv</c>, <c>inc</c>, <c>dec</c>
 /// (unary: register r alone), plus node 606's frame-pointer-management ops -- <c>enter &lt;locals&gt;</c>,
-/// <c>adjust &lt;offset&gt;</c>, <c>stl &lt;offset&gt;</c>, <c>stp &lt;offset&gt;</c>,
+/// <c>stl &lt;offset&gt;</c>, <c>stp &lt;offset&gt;</c>,
 /// <c>ldl &lt;offset&gt;</c>, <c>ldp &lt;offset&gt;</c> (each self-describing, an 8-bit tag OR'd with an
 /// 8-bit unsigned value -- <c>lal</c>/<c>lap</c>, the family's other two, were RETIRED 2026-09-09 in
 /// favor of node 506's own <c>f</c>/<c>fpush</c> plus explicit offset arithmetic -- their own mnemonic
 /// and tag constants were later deleted outright, see this file's own remarks below on the 2026-09-09
-/// CVM1-opcode purge), plus
+/// CVM1-opcode purge; <c>adjust</c>, the family's ninth member, was DELETED OUTRIGHT 2026-09-10 per
+/// Stefan's own instruction, "'adjust' no longer exists. you can remove it." -- see this file's own
+/// remarks below on that removal), plus
 /// node 606's ninth mnemonic <c>leave</c> and tenth mnemonic <c>halt</c> (both tagged mnemonics like
 /// nop/push/pop/ret, NOT self-describing -- see <see cref="LeaveMnemonic"/>'s and
 /// <see cref="HaltMnemonic"/>'s own remarks)), plus node 508's 27 comparison/arithmetic ops --
@@ -155,6 +157,25 @@ namespace Ga144.Cvm.Toolchain;
 /// these specific, already-dead, already-orphaned-across-multiple-audits entries were swept out, on
 /// Stefan's own explicit one-time instruction.
 ///
+/// <b>"adjust" deleted outright (2026-09-10), a second, later one-time departure from "do not remove any
+/// opcodes."</b> Node 606's <c>adjust</c> (formerly Id 21, <c>AdjustMnemonic</c>/<c>AdjustTag</c>) had
+/// been carried since the CVM1-opcode purge above as "permanently orphaned" -- node 506's own rewritten
+/// source never named a replacement for it, unlike its seven siblings (<c>enter</c>/<c>stl</c>/<c>stp</c>/
+/// <c>ldl</c>/<c>ldp</c> were repointed to node 506; <c>lal</c>/<c>lap</c> were retired outright the same
+/// day) -- and <see cref="Ga144.Evb.Ide.Cvm.CvmDebuggerDefaultProgram"/>'s own remarks record a real
+/// hardware run where trying it corrupted the whole cluster's control flow. Per Stefan (2026-09-10): "
+/// 'adjust' no longer exists. you can remove it." -- so unlike the ordinary "kept but superseded"
+/// treatment given to node 606's OTHER superseded tags (<c>EnterTag</c>/<c>StoreLocalTag</c>/
+/// <c>StoreParameterTag</c>/<c>LoadLocalTag</c>/<c>LoadParameterTag</c>, still kept per "do not remove any
+/// opcodes" since nobody has said those no longer exist), <c>AdjustMnemonic</c> and <c>AdjustTag</c> are
+/// deleted outright, the same treatment the CVM1-opcode purge above gave truly-dead mnemonics. Former Id
+/// 21 is still never to be reused (see <see cref="Instructions"/>'s own remarks at that gap).
+/// <c>Node606TagMask</c>/<c>Node606ValueBitMask</c>/<see cref="DecodeNode606Value"/> are kept -- they were
+/// never adjust-specific to begin with (node 606's whole eight-op family shared them before five were
+/// repointed to node 506 and two were retired outright), so removing adjust leaves them merely unreferenced
+/// by <see cref="Instructions"/> today, the same "kept but currently unreferenced" state <c>EnterTag</c>'s
+/// own family has been in since 2026-09-02/06.
+///
 /// Every already-wired
 /// tagged mnemonic (<c>tjmp</c>, node 406's/408's/509's repointed families, node 306's six self-describing
 /// ops) was re-verified against each node's own current source during this same audit and found already
@@ -235,7 +256,13 @@ public static class CvmInstructionSet
   // own distinct names (stl/stp, ldl/ldp, lal/lap) rather than exposing "off"/"noff" as a separate CVM
   // concept.
   public const string EnterMnemonic = "enter";
-  public const string AdjustMnemonic = "adjust";
+  // AdjustMnemonic ("adjust") -- DELETED OUTRIGHT 2026-09-10, per Stefan: "'adjust' no longer exists. you
+  // can remove it." Unlike its long-orphaned status before this (node 506's own source never named a
+  // replacement, and a real hardware run showed executing it corrupts the whole cluster's control flow --
+  // see Ga144.Evb.Ide.Cvm.CvmDebuggerDefaultProgram's own remarks), this was not a mere continued
+  // orphaning: Stefan's own words say the opcode itself no longer exists. Former Id 21 is still never to
+  // be reused; AdjustTag (formerly 0xA900) is deleted alongside it -- see this file's own class-level
+  // remarks above and Instructions' own remarks at that gap.
   public const string StoreLocalMnemonic = "stl";
   public const string StoreParameterMnemonic = "stp";
   public const string LoadLocalMnemonic = "ldl";
@@ -257,11 +284,13 @@ public static class CvmInstructionSet
   // split (Node506StoreLocalTag/Node506StoreParameterTag/Node506LoadLocalTag/Node506LoadParameterTag,
   // Node506FrameValueBitMask) rather than CVM1's old node-606 8-bit-tag/8-bit-value one
   // (StoreLocalTag/StoreParameterTag/LoadLocalTag/LoadParameterTag, kept but superseded, per "do not
-  // remove any opcodes" -- see each superseded constant's own remarks). adjust remains permanently
-  // orphaned -- node 506's own source has never named an equivalent. lal/lap, the other two long-orphaned
-  // node-606 leftovers, were RETIRED outright 2026-09-09 rather than left orphaned, and their own
-  // mnemonic/tag constants were later deleted outright too -- see this file's own remarks above on the
-  // 2026-09-09 CVM1-opcode purge.
+  // remove any opcodes" -- see each superseded constant's own remarks). adjust, which used to remain
+  // permanently orphaned here (node 506's own source never named an equivalent), was DELETED OUTRIGHT
+  // 2026-09-10 instead, per Stefan's own instruction that it no longer exists -- see AdjustMnemonic's
+  // own former remarks, now removed, and this file's own class-level remarks above. lal/lap, the other
+  // two long-orphaned node-606 leftovers, were RETIRED outright 2026-09-09 rather than left orphaned, and
+  // their own mnemonic/tag constants were later deleted outright too -- see this file's own remarks above
+  // on the 2026-09-09 CVM1-opcode purge.
 
   // 'leave was originally node 606's ninth mnemonic (CVM1), shaped completely differently from the
   // eight self-describing ones just above: a TAGGED mnemonic, exactly like nop/pushlit/push/pop/ret on
@@ -685,9 +714,22 @@ public static class CvmInstructionSet
   // 1010_11??, is a THIRD, separate top-level opcode -- see ConditionalBranchTag's own remarks; node
   // 508's own dispatch implements its bit-test/sign-extend/relay behavior directly rather than hanging a
   // tick-prefixed node-508 word off of it, so it was never a candidate for a NodeResolved entry here to
-  // begin with). Neither embedded-offset fetch/store form is wired in here, since Stefan's own source
-  // gives neither a tick-prefixed name to hang a CVM mnemonic off of (only 'gld/'gst qualify under his
-  // own naming rule) -- see Cvm.Node508Program's own remarks.
+  // begin with).
+  //
+  // WIRED, 2026-09-10 -- see LoadGlobalEmbeddedMnemonic/StoreGlobalEmbeddedMnemonic below. These two
+  // embedded-offset forms were originally left out (this paragraph used to say so) because Stefan's
+  // source gave neither a tick-prefixed F18 word name to hang a mnemonic off of, only a plain "opcode
+  // ldg .../opcode stg ..." comment -- unlike every other mnemonic in this table, which is always named
+  // after an actual tick-prefixed or otherwise-callable F18 word. Stefan asked for them directly by
+  // those exact names ("i am missing these 2 opcodes in the assembler") and confirmed the relationship
+  // to the trailing-word forms above ("ldg is a shorter version of gld", "stg is a shorter version of
+  // gst") -- same direction as gld/gst (ldg: r := global, stg: global := r, both now
+  // hardware-confirmed -- see LoadGlobalMnemonic/StoreGlobalMnemonic's own remarks), just a fixed,
+  // self-describing 9-bit-embedded-offset encoding instead of a trailing word, for when the offset is
+  // small enough to fit (0-511) and the extra word isn't worth spending. Unlike gld/gst, these do NOT
+  // need a NodeResolved/live-compile entry at all -- ldg/stg's own tag and 9-bit field are fully fixed
+  // and self-describing from Stefan's own bit pattern comment alone, exactly like cbr/lit/node 506's
+  // enter-family ops, so they use the plain EmbeddedUnsignedValue encoding those already use.
   //
   // RENAMED 2026-09-09 from LdgMnemonic="ldg"/StgMnemonic="stg" to "gld"/"gst": re-synced against
   // Stefan's LATEST workspace.yaml upload (the one that also surfaced node 408's missing 'ugt' family --
@@ -731,6 +773,44 @@ public static class CvmInstructionSet
   // by an actual run. The 2026-09-04 "not yet confirmed" note is otherwise superseded.
   public const string LoadGlobalMnemonic = "gld";
   public const string StoreGlobalMnemonic = "gst";
+
+  // Node 508's own embedded-9-bit-offset global fetch/store, added 2026-09-10 per Stefan's own bit
+  // pattern comment (reproduced verbatim in Cvm.Node508Program's own Source):
+  //   opcode ldg 1010_100?_????_???? load global from r. the offset is unsigned 9 bit.
+  //   opcode stg 1010_101?_????_???? store global into r. the offset is unsigned 9 bit.
+  // Confirmed by Stefan to share LoadGlobalMnemonic/StoreGlobalMnemonic's own (hardware-confirmed)
+  // direction, just a shorter encoding: "ldg is a shorter version of gld" (r := global), "stg is a
+  // shorter version of gst" (global := r). Distinct C# constant names from LoadGlobalMnemonic/
+  // StoreGlobalMnemonic are needed since those already hold the STRING values "gld"/"gst" (the
+  // TrailingWord forms above) -- "ldg"/"stg" were freed up for reuse by the 2026-09-09 rename recorded
+  // above, and Stefan's new request reclaims them for this genuinely different, narrower encoding.
+  //
+  // Bit derivation: 7-bit fixed tag (bits 15-9) OR'd with a 9-bit UNSIGNED offset (bits 8-0), exactly
+  // like node 506's enter/ldl/stl/ldp/stp family (see Node506EnterTag/Node506FrameValueBitMask's own
+  // remarks) -- same EmbeddedUnsignedValue shape, ValueBitShift left at 0. ldg's tag "1010100" as a
+  // 16-bit word with the value field zeroed is 0xA800; stg's tag "1010101" is 0xAA00; both share the
+  // same 7-bit tag mask 0xFE00 and 9-bit value mask 0x1FF (matching g/main's own "r> 0x1ff and g/!"/
+  // "r> 0x1ff and g/@" masking in Cvm.Node508Program.Source). Fully self-describing and known at
+  // assemble time from a literal operand alone, exactly like cbr/lit -- no NodeResolved/live-compile
+  // entry needed, unlike gld/gst above.
+  //
+  // FLAGGED at the time this was added, then MOOTED the same day: ldg's own range (0xA800-0xA9FF) used
+  // to fully CONTAIN AdjustTag's range (0xA900-0xA9FF, node 606's old "adjust", formerly Id 21) -- any
+  // ldg with an offset of 0x100-0x1FF produced a word bit-for-bit identical to some adjust instruction.
+  // Per Stefan (2026-09-10, same day): "'adjust' no longer exists. you can remove it." -- adjust's own
+  // mnemonic/tag/Instructions entry are deleted outright (see AdjustMnemonic's own former remarks, now
+  // removed, and Instructions' own retired-Ids list), so this overlap no longer exists at all: ldg's
+  // full 0xA800-0xA9FF range is exclusively ldg's now. stg's own range (0xAA00-0xABFF) never had an
+  // overlap with anything wired.
+  //
+  // NOT YET CONFIRMED ON REAL HARDWARE -- Stefan's hardware trace confirmed gld/gst's own (TrailingWord)
+  // direction, not this embedded-offset pair specifically; no run has exercised ldg/stg yet.
+  public const int LoadGlobalEmbeddedTag = 0xA800;
+  public const int StoreGlobalEmbeddedTag = 0xAA00;
+  public const int GlobalEmbeddedTagMask = 0xFE00;
+  public const int GlobalEmbeddedOffsetBitMask = 0x1FF;
+  public const string LoadGlobalEmbeddedMnemonic = "ldg";
+  public const string StoreGlobalEmbeddedMnemonic = "stg";
 
   // Node 509's nine unary-arithmetic ops, added per Stefan's node 509 source (2026-09-05, "here is node
   // 509"). Node 509 is reached from node 508's own g/main dispatch (NOT from node 507 directly) once a
@@ -1037,7 +1117,7 @@ public static class CvmInstructionSet
 
   // Node 606's eight frame-pointer-management ops, straight from Stefan's bit-pattern table:
   //   1010 1000 xxxx xxxx   0..0xFF   enter <locals>
-  //   1010 1001 xxxx xxxx   0..0xFF   adjust <offset>
+  //   1010 1001 xxxx xxxx   0..0xFF   adjust <offset>  -- DELETED OUTRIGHT 2026-09-10, "no longer exists"
   //   1010 1010 xxxx xxxx   0..0xFF   stl <offset>
   //   1010 1011 xxxx xxxx   0..0xFF   stp <offset>
   //   1010 1100 xxxx xxxx   0..0xFF   ldl <offset>
@@ -1056,8 +1136,9 @@ public static class CvmInstructionSet
   /// </summary>
   public const int EnterTag = 0xA800;
 
-  /// <summary>The fixed high-bit pattern (bits 15-8) of an <c>adjust</c> word: binary 1010_1001.</summary>
-  public const int AdjustTag = 0xA900;
+  // AdjustTag (was 0xA900, binary 1010_1001) -- DELETED OUTRIGHT 2026-09-10 alongside AdjustMnemonic,
+  // per Stefan: "'adjust' no longer exists. you can remove it." -- see AdjustMnemonic's own former
+  // remarks and this file's own class-level remarks above. Former Id 21 is still never to be reused.
 
   /// <summary>
   /// The fixed high-bit pattern (bits 15-8) of CVM1's OLD node-606 <c>stl</c> word: binary 1010_1010.
@@ -1094,7 +1175,8 @@ public static class CvmInstructionSet
   // LoadAddressOfLocalTag (was 0xAE00, lal) / LoadAddressOfParameterTag (was 0xAF00, lap) -- RETIRED
   // 2026-09-09 per Stefan: "'lal' & 'lap' are removed. use ''f' or 'fpush' from node 506 and add the
   // offset to calculate the address of a local or parameter." Unlike the CVM1 node-606 leftovers this
-  // pair was always orphaned alongside (adjust, which stays orphaned with no replacement named), Stefan
+  // pair was always orphaned alongside (adjust, deleted outright 2026-09-10 -- see AdjustMnemonic's own
+  // former remarks and this file's own class-level remarks above), Stefan
   // gave an explicit replacement mechanism this time -- node 506's own FrameToRegisterMnemonic (f) /
   // PushFrameMnemonic (fpush) plus ordinary sub/add arithmetic against the frame pointer -- so this was
   // a real retirement, not a continued orphaning. DELETED OUTRIGHT later the same day (2026-09-09
@@ -1113,9 +1195,11 @@ public static class CvmInstructionSet
   // 15-9) OR'd with a 9-bit UNSIGNED offset (bits 8-0), rather than 606's 8-bit tag/8-bit value split --
   // per Node506Program's own remarks, derived directly from its f/main dispatch cascade: "1001_001?"
   // (7 bits fixed: 1001001) is enter, with "the offset is 9 bit" per the source's own trailing comment.
-  // enter is repointed here ("only update existing opcodes where possible"); adjust remains UNTOUCHED
-  // and still points at node 606's old 8-bit tag above -- node 506's own source has never named an
-  // "adjust" equivalent, so it stays permanently orphaned. lal/lap, which used to sit alongside adjust in
+  // enter is repointed here ("only update existing opcodes where possible"); adjust used to remain
+  // UNTOUCHED, still pointing at node 606's old 8-bit tag above (node 506's own source never named an
+  // "adjust" equivalent, so it stayed permanently orphaned), until it was DELETED OUTRIGHT 2026-09-10
+  // per Stefan's own instruction that it no longer exists -- see AdjustMnemonic's own former remarks and
+  // this file's own class-level remarks above. lal/lap, which used to sit alongside adjust in
   // this same "orphaned" bucket, were retired outright 2026-09-09 instead (see LoadAddressOfLocalTag's
   // own remarks) -- a real removal, not a continued orphaning. This also settles the
   // "may need its own new embedded-value shape" question Node506Program's own remarks once raised: the
@@ -1392,7 +1476,10 @@ public static class CvmInstructionSet
     new(Id: 18, IncrementMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 19, DecrementMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 20, EnterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506EnterTag, ValueBitMask: Node506FrameValueBitMask),
-    new(Id: 21, AdjustMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: AdjustTag, ValueBitMask: Node606ValueBitMask),
+    // Id 21 (was AdjustMnemonic "adjust") is retired -- DELETED OUTRIGHT 2026-09-10 per Stefan: "'adjust'
+    // no longer exists. you can remove it." See AdjustMnemonic's own former remarks (now removed) and
+    // this file's own class-level remarks above for the full history, including the real hardware run
+    // that showed executing it corrupted the whole cluster's control flow. Never reuse Id 21.
     new(Id: 22, StoreLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506StoreLocalTag, ValueBitMask: Node506FrameValueBitMask),
     new(Id: 23, StoreParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506StoreParameterTag, ValueBitMask: Node506FrameValueBitMask),
     new(Id: 24, LoadLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506LoadLocalTag, ValueBitMask: Node506FrameValueBitMask),
@@ -1569,6 +1656,14 @@ public static class CvmInstructionSet
     new(Id: 141, ExtendedMultiplyByTwoMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 142, ExtendedDivideByTwoMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 143, ExtendedUnsignedMultiplyMnemonic, 1, CvmOperandEncoding.None),
+
+    // Node 508's embedded-9-bit-offset global fetch/store (2026-09-10) -- see
+    // LoadGlobalEmbeddedMnemonic/StoreGlobalEmbeddedMnemonic's own remarks for the bit derivation and
+    // the relationship to gld/gst (Id 75/76) above. A tag-range overlap with AdjustTag was flagged
+    // (accepted) when this was added, then mooted the same day once adjust itself was deleted outright
+    // -- see those same remarks and this file's own class-level remarks on the 2026-09-10 removal.
+    new(Id: 144, LoadGlobalEmbeddedMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadGlobalEmbeddedTag, ValueBitMask: GlobalEmbeddedOffsetBitMask),
+    new(Id: 145, StoreGlobalEmbeddedMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: StoreGlobalEmbeddedTag, ValueBitMask: GlobalEmbeddedOffsetBitMask),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =
@@ -1709,15 +1804,18 @@ public static class CvmInstructionSet
     // unsigned value in the low ValueBitMask bits. Matched generically against every such shape in
     // Instructions rather than one if-check per mnemonic, so a new one added there later needs no
     // change here. IMPORTANT (2026-09-02): this mask/width is now taken from EACH shape's OWN
-    // ValueBitMask (derived as ~shape.ValueBitMask), not a single hardcoded width -- node 606's one
-    // remaining EmbeddedUnsignedValue op (adjust, still 8-bit tag/8-bit value, Node606TagMask/
-    // Node606ValueBitMask -- its former siblings stl/stp/ldl/ldp were repointed to node 506 and lal/lap
-    // were retired outright, see this file's own remarks above on the 2026-09-09 CVM1-opcode purge) and
-    // node 506's enter (7-bit
-    // tag/9-bit value, Node506EnterTag/Node506FrameValueBitMask) genuinely differ in width, so the OLD
-    // single-hardcoded-mask version of this loop (word & Node606TagMask for every shape) would have
-    // decoded enter's own 9-bit value one bit short. Node606TagMask/DecodeNode606Value themselves are
-    // unchanged and still correct for node 606's own remaining op.
+    // ValueBitMask (derived as ~shape.ValueBitMask), not a single hardcoded width -- this was originally
+    // proven necessary by node 606's own adjust (8-bit tag/8-bit value, Node606TagMask/
+    // Node606ValueBitMask) genuinely differing in width from node 506's enter (7-bit tag/9-bit value,
+    // Node506EnterTag/Node506FrameValueBitMask): the OLD single-hardcoded-mask version of this loop
+    // (word & Node606TagMask for every shape) would have decoded enter's own 9-bit value one bit short.
+    // adjust itself was DELETED OUTRIGHT 2026-09-10 (see AdjustMnemonic's own former remarks and this
+    // file's own class-level remarks above) -- every EmbeddedUnsignedValue op live in Instructions today
+    // (enter/stl/stp/ldl/ldp, and 2026-09-10's own ldg/stg) happens to share the same 9-bit width again,
+    // but the per-shape ValueBitMask lookup stays generic rather than being narrowed back to a single
+    // hardcoded width, since a future op could easily reintroduce a different one. Node606TagMask/
+    // Node606ValueBitMask/DecodeNode606Value themselves are unchanged and simply unreferenced by
+    // Instructions now, the same state EnterTag's own superseded-tag family has been in since 2026-09-02.
     //
     // RESOLVED 2026-09-09: this loop used to be shadowed twice over for words in this range -- cbr's own
     // check above used to shadow lal/lap (0xAE00/0xAF00), and the (since-removed) SlitTag check used to

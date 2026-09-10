@@ -233,6 +233,19 @@ internal static class Node508Program
   /// see <see cref="CvmInstructionSet.LoadGlobalMnemonic"/>'s own remarks and `c-compiler-design.md`'s
   /// "Global-scalar addressing" section for the full story, including the hardware trace.
   ///
+  /// <b>The plain "opcode ldg .../opcode stg ..." comment lines below (distinct from the tick-prefixed
+  /// <c>'gld</c>/<c>'gst</c> above) are now wired into the assembler too, 2026-09-10</b> -- Stefan asked
+  /// for them directly ("i am missing these 2 opcodes in the assembler... they are a shorter version
+  /// with a 9 bit offset") and confirmed they share <c>'gld</c>/<c>'gst</c>'s own (hardware-confirmed)
+  /// direction: "ldg is a shorter version of gld", "stg is a shorter version of gst". Unlike
+  /// <c>'gld</c>/<c>'gst</c>, these are a fixed, self-describing 7-bit-tag/9-bit-unsigned-offset shape
+  /// (no trailing word, no live-compile resolution against this node at all) -- see
+  /// <see cref="CvmInstructionSet.LoadGlobalEmbeddedMnemonic"/>/<c>StoreGlobalEmbeddedMnemonic</c>'s own
+  /// remarks for the bit derivation. A tag-range overlap with node 606's <c>adjust</c> was flagged
+  /// (accepted) when this was first wired in, but <c>adjust</c> itself was deleted outright the same
+  /// day, 2026-09-10, per Stefan ("'adjust' no longer exists. you can remove it.") -- see
+  /// <see cref="CvmInstructionSet.LoadGlobalEmbeddedMnemonic"/>'s own remarks for the current state.
+  ///
   /// See the class remarks above for the register/stack helpers, the confirmed LEFT port link back to
   /// node 507, and the general dispatch shape -- all UNCHANGED by this re-sync except where called out
   /// here. Treat any specific numeric claim in the class remarks above (a compiled address, a bit width)
