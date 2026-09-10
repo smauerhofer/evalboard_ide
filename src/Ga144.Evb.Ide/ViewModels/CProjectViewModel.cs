@@ -206,6 +206,13 @@ public sealed class CProjectViewModel : ObservableObject
         "against the chosen \"Chip project...\"'s own live CVM2 mesh to produce a .gaimg. Choose a chip project " +
         "below if you haven't yet -- without one, Build stops after compiling and assembling, with no .gaimg.";
 
+  // Added 2026-09-10 alongside EnableConstantFolding/EnablePeepholeOptimization -- shown next to their
+  // own checkboxes so it's clear from the window itself, not just a tooltip, what each one does.
+  public string OptimizerDescription =>
+      "Constant folding evaluates compile-time-constant arithmetic in the C source before code generation; " +
+      "peephole optimization removes redundant instruction sequences the code generator itself introduces " +
+      "(not yet confirmed against real hardware -- see the C compiler design doc).";
+
   public void Refresh()
   {
     ReplaceAll(HeaderFiles, ToDisplayPaths(Model.IncludeDirectoryPath, Model.GetHeaderFiles()));
@@ -291,6 +298,43 @@ public sealed class CProjectViewModel : ObservableObject
         : "Set this project's chip project.";
   }
 
+  /// <summary>Added 2026-09-10 -- see <see cref="CProjectMetadata.EnableConstantFolding"/>'s own
+  /// remarks. Same "mutate Model, Save, notify" pattern every other setter in this class already
+  /// follows.</summary>
+  public bool EnableConstantFolding
+  {
+    get => Model.EnableConstantFolding;
+    set
+    {
+      if (Model.EnableConstantFolding == value)
+      {
+        return;
+      }
+
+      Model.EnableConstantFolding = value;
+      Save();
+      OnPropertyChanged();
+    }
+  }
+
+  /// <summary>Added 2026-09-10 -- see <see cref="CProjectMetadata.EnablePeepholeOptimization"/>'s own
+  /// remarks.</summary>
+  public bool EnablePeepholeOptimization
+  {
+    get => Model.EnablePeepholeOptimization;
+    set
+    {
+      if (Model.EnablePeepholeOptimization == value)
+      {
+        return;
+      }
+
+      Model.EnablePeepholeOptimization = value;
+      Save();
+      OnPropertyChanged();
+    }
+  }
+
   public string AddExistingHeaderFile(string sourceFilePath) => AddExistingFile(sourceFilePath, CFileKind.Header);
 
   public string AddExistingSourceFile(string sourceFilePath) => AddExistingFile(sourceFilePath, CFileKind.Source);
@@ -371,7 +415,12 @@ public sealed class CProjectViewModel : ObservableObject
     foreach (string sourceFile in Model.GetSourceFiles())
     {
       string relativeName = Path.GetRelativePath(Model.SourceDirectoryPath, sourceFile);
-      CCompileResult result = CCompiler.Compile(sourceFile, File.ReadAllText(sourceFile), resolver);
+      CCompileResult result = CCompiler.Compile(
+          sourceFile,
+          File.ReadAllText(sourceFile),
+          resolver,
+          enableConstantFolding: Model.EnableConstantFolding,
+          enablePeepholeOptimization: Model.EnablePeepholeOptimization);
 
       if (result.PreprocessedText is not null)
       {

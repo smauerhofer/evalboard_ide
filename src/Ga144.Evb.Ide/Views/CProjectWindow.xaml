@@ -182,6 +182,18 @@
         <Button DockPanel.Dock="Left" Content="Debug" Click="OnDebugClick" VerticalAlignment="Top" Margin="8,0,0,0"
                         Visibility="{Binding IsProgramKind, Converter={StaticResource BoolToVis}}"
                         ToolTip="Builds this project, then opens the CVM Debugger against its own chosen chip project with the resulting .gaimg already loaded -- reuses an already-open CVM Debugger window for this chip instead of opening a second one, reloading the freshly built program into it." />
+        <CheckBox DockPanel.Dock="Left"
+                  Content="Constant folding"
+                  IsChecked="{Binding EnableConstantFolding, Mode=TwoWay}"
+                  VerticalAlignment="Center"
+                  Margin="16,0,0,0"
+                  ToolTip="{Binding OptimizerDescription}" />
+        <CheckBox DockPanel.Dock="Left"
+                  Content="Peephole optimization"
+                  IsChecked="{Binding EnablePeepholeOptimization, Mode=TwoWay}"
+                  VerticalAlignment="Center"
+                  Margin="8,0,0,0"
+                  ToolTip="{Binding OptimizerDescription}" />
         <TextBlock Text="{Binding BuildDescription}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="8,0,0,0" />
       </DockPanel>
     </Border>

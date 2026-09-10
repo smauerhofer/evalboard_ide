@@ -141,6 +141,14 @@ namespace Ga144.C.Toolchain;
 /// (see <see cref="CType.SizeInWords"/>'s own remarks) -- so pointer arithmetic and array indexing never
 /// need a scaling multiplication; <c>arr[i]</c> is simply "base address + i" via a plain
 /// <c>add</c>.</description></item>
+/// <item><description><b>Optimizer addition (2026-09-10): constant-indexed local array elements skip
+/// address computation entirely.</b> <c>arr[K]</c> for a compile-time-constant <c>K</c> on a genuinely
+/// LOCAL array is just the local at slot <c>arr's own base slot + K</c> -- loadable/storable with a plain
+/// <c>ldl</c>/<c>stl</c>, no runtime address, no node-306 indirection, no <see
+/// cref="CvmPeepholeOptimizer"/> toggle needed (it relies on nothing but this compiler's own local-slot
+/// layout and the already-confirmed <c>ldl</c>/<c>stl</c> addressing every other local already uses, so it
+/// is unconditional). See <see cref="TryGetConstantLocalArrayElementSlot"/>'s own remarks for the full
+/// reasoning and scope.</description></item>
 /// <item><description><c>switch</c>/<c>case</c> does NOT use a real <c>tjmp</c> (table jump) instruction:
 /// its LOCATION is now confirmed (node 507, "'tjmp is in node 507", 2026-09-09 -- the same
 /// "1000_1???" local-execute tag family as <c>nop</c>/<c>push</c>/<c>pop</c>/<c>ret</c>/<c>halt</c>, per
@@ -242,6 +250,20 @@ public sealed class CCodeGenerator
   private CFunctionContext? _currentFunction;
   private Dictionary<CStmt, string>? _switchLabelsByNode;
 
+  /// <summary>Optimizer step 2 of 2, added 2026-09-10 -- see <see cref="CvmPeepholeOptimizer"/>'s own
+  /// remarks. Off by default: unlike <see cref="CConstantFolder"/> (pure AST arithmetic, the same
+  /// already-used evaluator as this class's own <see cref="TryEvaluateConstantLong"/>), two of this
+  /// pass's rules lean on an assumption this codebase has flagged but not yet confirmed against real
+  /// hardware (see <see cref="EmitFunction"/>'s own ABI v2 prologue remarks on "stl"/"sta" and register
+  /// r) -- so it stays opt-in per project (<c>Ga144.Evb.Ide.Models.CProjectMetadata.EnablePeepholeOptimization</c>)
+  /// until Stefan has had a chance to verify it.</summary>
+  private readonly bool _enablePeepholeOptimization;
+
+  public CCodeGenerator(bool enablePeepholeOptimization = false)
+  {
+    _enablePeepholeOptimization = enablePeepholeOptimization;
+  }
+
   /// <summary>Generates CVM assembly text for <paramref name="unit"/>. Returns null (with at least one
   /// diagnostic) if any error was reported anywhere during generation; warnings alone still return the
   /// generated text.</summary>
@@ -283,8 +305,16 @@ public sealed class CCodeGenerator
       text.AppendLine(line);
     }
 
+    // Optimizer step 2 of 2 (see CvmPeepholeOptimizer's own remarks) -- runs over the already-fully-
+    // emitted CODE lines, after every "enter N" placeholder above has already been patched to its real
+    // value (EmitFunction patches _codeLines by INDEX while a function's body is still being emitted;
+    // by the time Generate reaches this point every function is done, so there is no patch left for this
+    // pass to disturb). DATA-section lines are never touched -- there is nothing peephole-optimizable in
+    // a plain ".word" declaration.
+    IReadOnlyList<string> codeLines = _enablePeepholeOptimization ? CvmPeepholeOptimizer.Optimize(_codeLines) : _codeLines;
+
     text.AppendLine(".section CODE");
-    foreach (string line in _codeLines)
+    foreach (string line in codeLines)
     {
       text.AppendLine(line);
     }
@@ -533,7 +563,15 @@ public sealed class CCodeGenerator
   /// <summary>Evaluates a constant integer expression at compile time (used for array bounds, case
   /// labels, and <c>sizeof</c>'s array-length interplay). Handles literals and the small set of integer
   /// operators macros commonly expand to; anything else is "not constant" rather than a hard error, so
-  /// callers can report their own, more specific diagnostic.</summary>
+  /// callers can report their own, more specific diagnostic.
+  ///
+  /// The binary-operator arithmetic itself is factored out into <see
+  /// cref="CConstantFolder.TryEvaluateBinaryOp"/> (added 2026-09-10 alongside that class), shared with
+  /// the AST-level constant-folding optimizer pass so the two can never quietly disagree about what a
+  /// compile-time integer operation computes -- this method's own job is purely walking the handful of
+  /// node shapes ITS OWN narrower callers need (a literal, a unary +/-/~ on one, sizeof, or a binary op
+  /// whose own operands are themselves already constant), not the arithmetic underneath a binary
+  /// op.</summary>
   private static bool TryEvaluateConstantLong(CExpr expr, out long value)
   {
     switch (expr)
@@ -559,20 +597,7 @@ public sealed class CCodeGenerator
         return true;
 
       case CBinaryExpr binary when TryEvaluateConstantLong(binary.Left, out long l) && TryEvaluateConstantLong(binary.Right, out long r):
-        switch (binary.Op)
-        {
-          case CBinaryOp.Add: value = l + r; return true;
-          case CBinaryOp.Subtract: value = l - r; return true;
-          case CBinaryOp.Multiply: value = l * r; return true;
-          case CBinaryOp.Divide when r != 0: value = l / r; return true;
-          case CBinaryOp.Modulo when r != 0: value = l % r; return true;
-          case CBinaryOp.BitwiseAnd: value = l & r; return true;
-          case CBinaryOp.BitwiseOr: value = l | r; return true;
-          case CBinaryOp.BitwiseXor: value = l ^ r; return true;
-          case CBinaryOp.ShiftLeft: value = l << (int)r; return true;
-          case CBinaryOp.ShiftRight: value = l >> (int)r; return true;
-          default: value = 0; return false;
-        }
+        return CConstantFolder.TryEvaluateBinaryOp(binary.Op, l, r, out value);
 
       default:
         value = 0;
@@ -745,6 +770,62 @@ public sealed class CCodeGenerator
   // do the same) no matter what runs in between, or what "r" holds by the time it runs.
   // ---------------------------------------------------------------------------------------------
 
+  /// <summary>Optimizer addition, 2026-09-10 -- Stefan's own observation on <c>d[0] = a;</c> (<c>d</c> a
+  /// local array, <c>a</c> a local scalar): "d[0] is a local variable, a is a local variable. so a simple
+  /// 'ldl d[0]; stl a' with the offset calculated for d[0] and a would have done the job." He's right, and
+  /// unlike <see cref="CvmPeepholeOptimizer"/>'s rules this needs no unconfirmed hardware assumption to
+  /// exploit: local-array element storage is entirely this compiler's OWN decision, not a hardware fact
+  /// still awaiting confirmation. Local-slot allocation (<see cref="DeclareLocal"/>) already reserves
+  /// <c>Type.SizeInWords</c> CONSECUTIVE local slots per declaration, so an array's <c>K</c>-th element
+  /// (every element type here is exactly one CVM word -- see <see cref="CType"/>'s own remarks) always
+  /// lives at local slot <c>arrayBaseSlot + K</c>. When <c>K</c> is itself known at compile time, that slot
+  /// number is just as loadable/storable with a single <c>ldl</c>/<c>stl</c> as any plain scalar local --
+  /// the exact same, already-confirmed addressing (see "ldl/ldp/stl/stp go through register r, confirmed
+  /// (2026-09-09)" in the C-compiler design doc) every OTHER local already uses. No need to ever compute a
+  /// runtime address, cache it, or indirect through it via node 306's address-register mechanism (<see
+  /// cref="EmitDereferenceLoad"/>/<see cref="EmitDereferenceStore"/>) at all.
+  ///
+  /// This only ever fires for a genuinely LOCAL array (<see cref="CVarKind.Local"/>) referenced directly
+  /// by its own bare name -- never a parameter (a parameter of array type has already decayed to a plain
+  /// runtime pointer value by the time it reaches a <see cref="CVarSymbol"/>, so there is no fixed frame
+  /// slot per element to fold into), never a global/static-local (those are addressed by a data-section
+  /// label, not a frame offset -- <see cref="CVarKind.Global"/>), and never through a further expression
+  /// (a dereferenced pointer, a function's return value, another index) -- anything this can't prove safe
+  /// at compile time falls through unchanged to the general, always-correct address-computation path
+  /// below. Because it can only ever produce EQUAL-OR-CHEAPER, equally-correct code compared to that
+  /// general path for the one narrow case it recognizes, this fast path is unconditional -- unlike
+  /// <see cref="CvmPeepholeOptimizer"/>, it is not gated behind a project optimizer toggle.</summary>
+  private bool TryGetConstantLocalArrayElementSlot(CIndexExpr index, out int slot, out CType elementType)
+  {
+    slot = 0;
+    elementType = CType.Int;
+
+    if (index.Base is not CNameExpr name)
+    {
+      return false;
+    }
+
+    CVarSymbol? symbol = LookupVariable(name.Name);
+    if (symbol is not { Kind: CVarKind.Local, Type.Kind: CTypeKind.Array })
+    {
+      return false;
+    }
+
+    if (symbol.Type.ArrayLength < 0)
+    {
+      return false;
+    }
+
+    if (!TryEvaluateConstantLong(index.Index, out long constIndex) || constIndex < 0 || constIndex >= symbol.Type.ArrayLength)
+    {
+      return false;
+    }
+
+    slot = symbol.Index + (int)constIndex;
+    elementType = symbol.Type.ElementType!;
+    return true;
+  }
+
   private CLvalue ResolveLvalue(CExpr expr)
   {
     switch (expr)
@@ -806,6 +887,11 @@ public sealed class CCodeGenerator
 
       case CIndexExpr index:
         {
+          if (TryGetConstantLocalArrayElementSlot(index, out int directSlot, out CType directElementType))
+          {
+            return new CLvalue(CLvalueKind.Local, directSlot, directElementType);
+          }
+
           CType elementType = EmitAddressOfIndex(index);
           return CacheIndirectAddress(elementType);
         }
@@ -998,9 +1084,20 @@ public sealed class CCodeGenerator
   }
 
   /// <summary>Pushes the address of <c>Base[Index]</c> (base address + index; no scaling multiplication
-  /// -- see this class's own doc comment) and returns the element's type.</summary>
+  /// -- see this class's own doc comment) and returns the element's type. When <c>Base[Index]</c> is a
+  /// compile-time-constant-indexed element of a local array, shares <see
+  /// cref="TryGetConstantLocalArrayElementSlot"/> with <see cref="ResolveLvalue"/> to compute the address
+  /// directly from the combined slot number in one <see cref="EmitLocalOrParameterAddress"/> call, rather
+  /// than evaluating the array's own base address and the index separately and adding them at
+  /// runtime.</summary>
   private CType EmitAddressOfIndex(CIndexExpr index)
   {
+    if (TryGetConstantLocalArrayElementSlot(index, out int directSlot, out CType directElementType))
+    {
+      EmitLocalOrParameterAddress(directSlot, isParameter: false);
+      return directElementType;
+    }
+
     CType baseType = EmitExpr(index.Base).Decay();
     if (!baseType.IsPointer)
     {

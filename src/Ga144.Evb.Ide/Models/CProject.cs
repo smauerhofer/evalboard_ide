@@ -64,6 +64,26 @@ public sealed class CProjectMetadata
   /// </summary>
   public Ga144ChipRole ChipProjectRole { get; set; } = Ga144ChipRole.Target;
 
+  /// <summary>
+  /// Added 2026-09-10, per Stefan ("let's build an optimizer for the C compiler" / "add option to the
+  /// compiler to activate or deactivate these optimizer steps and add the options to the C project
+  /// window"): whether Build's own call into <see cref="Ga144.C.Toolchain.CCompiler.Compile"/> runs its
+  /// AST-level constant-folding pass -- see <see cref="Ga144.C.Toolchain.CConstantFolder"/>'s own
+  /// remarks for what it does. Defaults to enabled, matching <c>CCompiler.Compile</c>'s own default --
+  /// this pass only removes runtime arithmetic the source itself already fully determines.
+  /// </summary>
+  public bool EnableConstantFolding { get; set; } = true;
+
+  /// <summary>
+  /// Same idea as <see cref="EnableConstantFolding"/>, for the OTHER optimizer step: <see
+  /// cref="Ga144.C.Toolchain.CvmPeepholeOptimizer"/>'s post-codegen pass over the emitted CVM
+  /// instructions. Defaults to DISABLED, matching <c>CCompiler.Compile</c>'s own default -- two of that
+  /// pass's rules lean on an assumption ("a store leaves r unchanged") this codebase has flagged but not
+  /// yet confirmed against real hardware, so it stays opt-in per project until Stefan has had a chance
+  /// to verify it.
+  /// </summary>
+  public bool EnablePeepholeOptimization { get; set; }
+
   public void Normalize()
   {
     Name = string.IsNullOrWhiteSpace(Name) ? "C Project" : Name.Trim();
@@ -204,6 +224,20 @@ public sealed class CProject
   {
     get => Metadata.ChipProjectRole;
     set => Metadata.ChipProjectRole = value;
+  }
+
+  /// <summary>See <see cref="CProjectMetadata.EnableConstantFolding"/>.</summary>
+  public bool EnableConstantFolding
+  {
+    get => Metadata.EnableConstantFolding;
+    set => Metadata.EnableConstantFolding = value;
+  }
+
+  /// <summary>See <see cref="CProjectMetadata.EnablePeepholeOptimization"/>.</summary>
+  public bool EnablePeepholeOptimization
+  {
+    get => Metadata.EnablePeepholeOptimization;
+    set => Metadata.EnablePeepholeOptimization = value;
   }
 
   public void EnsureDirectoriesExist()
