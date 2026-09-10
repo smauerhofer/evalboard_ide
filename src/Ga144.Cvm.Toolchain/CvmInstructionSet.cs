@@ -698,14 +698,37 @@ public static class CvmInstructionSet
   // own word name verbatim). Ids (75/76) and CvmOperandEncoding (TrailingWord) are unchanged -- this is
   // a same-Id string correction, not a retirement; nothing here was ever assembled against real hardware
   // under the old "ldg"/"stg" spelling (see the NOT-YET-CONFIRMED note below, unchanged since 2026-09-04),
-  // so no append-only concern applies. See Cvm.Node508Program's own remarks for a further FLAGGED, not
-  // silently fixed, apparent bug this same re-sync surfaced: 'gld's own body calls g/@, but g/@'s own
-  // definition performs what reads as a REMOTE STORE (m/2!), while 'gst calls g/!, whose own definition
-  // performs what reads as a REMOTE FETCH (m/2@) -- i.e. the two names/bodies appear cross-wired in
-  // Stefan's own current source. Reproduced verbatim; only Stefan can say whether 'gld and 'gst
-  // themselves are swapped, whether g/@/g/!'s own bodies are swapped, or whether this is intentional.
-  // NOT YET CONFIRMED ON REAL HARDWARE (2026-09-04) -- derived the same way lcall/ljmp's own tag was
-  // before its own hardware confirmation, but node 508's load has not itself been installed and run yet.
+  // so no append-only concern applies. See Cvm.Node508Program's own remarks for a further apparent bug
+  // this same re-sync surfaced -- 'gld's own body calls g/@, but g/@'s own definition performs what reads
+  // as a REMOTE STORE (m/2!), while 'gst calls g/!, whose own definition performs what reads as a REMOTE
+  // FETCH (m/2@) -- and for how that was RESOLVED, not just flagged, below.
+  //
+  // MIS-RESOLVED, then CORRECTED, both 2026-09-10 (prompted by Stefan's own C compiler question about
+  // whether an optimizer could route a global scalar access through these instead of the general
+  // address-register dance). First pass: asked directly whether 'gld/'gst behave as named or are
+  // swapped, Stefan answered "gld loads a global from r" / "gst stores a global into r" -- this was read
+  // as CONFIRMING the backwards direction (global := r for 'gld, r := global for 'gst) was intentional,
+  // not a bug, and Ga144.C.Toolchain.CCodeGenerator's own EmitGlobalFetch/EmitGlobalAssign were wired
+  // that way. THAT READING WAS WRONG. Stefan then ran an actual test against the real node/simulation --
+  // "lit 1 / gst 2 / gld 2 / gst 4 / nop" -- and the bus trace shows a WRITE of 1 to global page 2,
+  // address 2 on "gst 2", then a READ of that same address (returning the 1 just written) on the
+  // following "gld 2". That is: gst genuinely STORES (global := r) and gld genuinely LOADS (r := global)
+  // -- exactly what their names ordinarily mean, no reversal. The cross-wire flagged above was a REAL bug
+  // in node 508's F18 source (g/@'s and g/!'s own bodies really were swapped relative to their names),
+  // not a naming-convention quirk -- confirmed by Stefan's own words: "you were right: g/@ and g/! were
+  // swapped."
+  //
+  // FIXED by Stefan directly (2026-09-10, "here is the fixed node 508"): g/@'s and g/!'s own bodies are
+  // now swapped (each ends in the remote op its name says it should), and 'gld/'gst are declared via
+  // ".loc" directly against g/@/g/! rather than as separate g/next-wrapped words -- see
+  // Cvm.Node508Program's own remarks and its updated Source for the full fix, reproduced there verbatim.
+  // EmitGlobalFetch/EmitGlobalAssign were corrected the same day to emit gld/gst in this now
+  // hardware-confirmed direction; see c-compiler-design.md's "Global-scalar addressing" section for the
+  // full story, including the trace.
+  //
+  // Direction is now HARDWARE-CONFIRMED (2026-09-10, via the trace above) -- the one respect in which
+  // this differs from lcall/ljmp's own still-open status: those are confirmed only by derivation, these
+  // by an actual run. The 2026-09-04 "not yet confirmed" note is otherwise superseded.
   public const string LoadGlobalMnemonic = "gld";
   public const string StoreGlobalMnemonic = "gst";
 

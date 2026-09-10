@@ -149,6 +149,19 @@ namespace Ga144.C.Toolchain;
 /// layout and the already-confirmed <c>ldl</c>/<c>stl</c> addressing every other local already uses, so it
 /// is unconditional). See <see cref="TryGetConstantLocalArrayElementSlot"/>'s own remarks for the full
 /// reasoning and scope.</description></item>
+/// <item><description><b>Optimizer addition (2026-09-10): global-scalar access uses <c>gld</c>/<c>gst</c>
+/// directly, no address-register dance.</b> A plain module-scope or <c>static</c> global used to be
+/// treated exactly like a runtime pointer -- push its label, cache the "address" into a spilled local
+/// slot, then indirect through node 306's <c>arst</c>/<c>lda</c>/<c>sta</c> on every access -- even
+/// though the label is already a fixed, compile-time-constant reference the assembler/linker resolve via
+/// a relocation. It now goes straight through <c>gld</c> (fetch: r := global) / <c>gst</c> (assign:
+/// global := r), named and behaving exactly like an ordinary "load"/"store" -- see <see
+/// cref="EmitGlobalFetch"/>/<see cref="EmitGlobalAssign"/>'s own remarks for the real hardware bug this
+/// direction was hiding (node 508's own <c>g/@</c>/<c>g/!</c> primitives really were swapped) and
+/// Stefan's 2026-09-10 hardware trace that caught and corrected it. Unconditional, like the array
+/// optimization above: no case this recognizes (a compile-time-known global label) can ever need the
+/// general address-computation
+/// path.</description></item>
 /// <item><description><c>switch</c>/<c>case</c> does NOT use a real <c>tjmp</c> (table jump) instruction:
 /// its LOCATION is now confirmed (node 507, "'tjmp is in node 507", 2026-09-09 -- the same
 /// "1000_1???" local-execute tag family as <c>nop</c>/<c>push</c>/<c>pop</c>/<c>ret</c>/<c>halt</c>, per
@@ -202,6 +215,7 @@ public sealed class CCodeGenerator
   {
     Local,
     Parameter,
+    Global,
     Indirect,
   }
 
@@ -209,15 +223,24 @@ public sealed class CCodeGenerator
   /// The resolved location of an assignable expression. Local/Parameter carry no stack side-effect --
   /// <see cref="Index"/> is just the frame offset for <see cref="EmitLoad"/>/<see cref="EmitStore"/> to
   /// use directly (<c>ldl</c>/<c>stl</c>/<c>ldp</c>/<c>stp</c> take the offset right in the opcode
-  /// word). Indirect (a global, <c>*ptr</c>, or an array element) means <see cref="ResolveLvalue"/> has
-  /// already computed the address ONCE and cached it into the local slot number <see cref="Index"/>
-  /// refers to (via <see cref="CacheIndirectAddress"/>) -- NOT left sitting only in the CVM's "t"
-  /// register, which has no save/restore and does not survive arbitrary code running in between (see
-  /// this class's own doc comment). <see cref="EmitLoad"/>/<see cref="EmitStore"/> each reload that
-  /// cached address and re-issue <c>xt</c> immediately before their own <c>ldt</c>/<c>stt</c>, so they
-  /// stay correct no matter what runs between resolving the lvalue and using it.
+  /// word). Indirect (<c>*ptr</c> or a non-constant-indexed array element) means <see
+  /// cref="ResolveLvalue"/> has already computed the address ONCE and cached it into the local slot
+  /// number <see cref="Index"/> refers to (via <see cref="CacheIndirectAddress"/>) -- NOT left sitting
+  /// only in the CVM's "r" register, which has no save/restore and does not survive arbitrary code
+  /// running in between (see this class's own doc comment). <see cref="EmitLoad"/>/<see
+  /// cref="EmitStore"/> each reload that cached address and re-run the full node-306 dereference
+  /// sequence (<see cref="EmitDereferenceLoad"/>/<see cref="EmitDereferenceStore"/>) immediately before
+  /// using it, so they stay correct no matter what runs between resolving the lvalue and using it.
+  ///
+  /// Global (added 2026-09-10) is a plain module-scope or <c>static</c> global's own scalar/pointer
+  /// storage, addressed directly by its own compile-time-constant assembly <see cref="Label"/> via
+  /// <c>gld</c>/<c>gst</c> (see <see cref="EmitGlobalFetch"/>/<see cref="EmitGlobalAssign"/>'s own
+  /// remarks) -- unlike Indirect, there is nothing to cache into a local slot at all, because the
+  /// label itself (not a runtime-computed address) is already a fixed, permanently-valid reference the
+  /// assembler/linker resolve once at link time; <see cref="EmitLoad"/>/<see cref="EmitStore"/> just
+  /// re-emit <c>gld</c>/<c>gst</c> against that same label text every time.
   /// </summary>
-  private sealed record CLvalue(CLvalueKind Kind, int Index, CType Type);
+  private sealed record CLvalue(CLvalueKind Kind, int Index, CType Type, string? Label = null);
 
   private sealed class CFunctionContext
   {
@@ -869,8 +892,17 @@ public sealed class CCodeGenerator
             _imports.Add(label);
           }
 
-          EmitCode($"pushlit {label}");
-          return CacheIndirectAddress(type);
+          // 2026-09-10: a global's own label is already a fixed, compile-time-constant reference (the
+          // assembler/linker resolve it once, via a relocation exactly like pushlit's -- see
+          // EmitGlobalFetch/EmitGlobalAssign's own remarks) -- there is nothing to compute or cache into
+          // a local slot the way *ptr's or a non-constant array index's runtime address needs. This
+          // used to unconditionally do "EmitCode($\"pushlit {label}\"); return CacheIndirectAddress(type);",
+          // spending a whole address-computation-and-cache sequence (and burning a local slot) on
+          // something already known at compile time; gld/gst make that unnecessary. See
+          // "Global-scalar addressing: gld/gst replace the address-register dance (2026-09-10)" in
+          // c-compiler-design.md for the full story, including the hardware trace that caught and fixed
+          // a real bug in node 508's own g/@/g/! primitives underlying gld/gst.
+          return new CLvalue(CLvalueKind.Global, 0, type, label);
         }
 
       case CUnaryExpr { Op: CUnaryOp.Dereference } deref:
@@ -962,6 +994,37 @@ public sealed class CCodeGenerator
     EmitCode("sta");         // memory[address register 0] := r
   }
 
+  /// <summary>Fetches a global's value into r, via <c>gld</c> -- named and behaving exactly like an
+  /// ordinary CPU "load": r := the global at <paramref name="label"/>.
+  ///
+  /// CORRECTED 2026-09-10 (same day as this whole feature, superseding an earlier, WRONG resolution of
+  /// the same question). This class, <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet"/>'s own
+  /// <c>LoadGlobalMnemonic</c>/<c>StoreGlobalMnemonic</c> remarks, and <c>Node508Program</c>'s own
+  /// remarks had all flagged an apparent naming/body cross-wire in node 508's F18 source (<c>'gld</c>
+  /// calling a primitive whose body ends in a remote STORE; <c>'gst</c> calling one whose body ends in a
+  /// remote FETCH). Asked directly, Stefan's FIRST answer ("gld loads a global from r" / "gst stores a
+  /// global into r") was read as confirming that backwards direction was intentional -- <c>gld</c> :=
+  /// store, <c>gst</c> := fetch -- and this method and <see cref="EmitGlobalAssign"/> were wired that
+  /// way. That reading was WRONG: Stefan then ran an actual hardware/simulation test (<c>lit 1; gst 2;
+  /// gld 2; gst 4; nop</c>) and the trace shows a WRITE to global address 2 on the <c>gst 2</c>
+  /// instruction (storing r's value 1 there) and a READ of that same address back into r on the
+  /// following <c>gld 2</c> -- i.e. <c>gst</c> genuinely STORES (global := r) and <c>gld</c> genuinely
+  /// LOADS (r := global), exactly as their names ordinarily would suggest, with no reversal at all. The
+  /// earlier "cross-wire" was a REAL bug in node 508's original F18 source (g/@'s and g/!'s own bodies
+  /// really were swapped relative to their names), not a naming-convention quirk -- Stefan fixed it by
+  /// swapping the two bodies and re-wiring <c>'gld</c>/<c>'gst</c> to alias <c>g/@</c>/<c>g/!</c>
+  /// directly (see <c>Node508Program.Source</c>'s own updated text). Call sites should always go
+  /// through this helper (and <see cref="EmitGlobalAssign"/>), never emit <c>gld</c>/<c>gst</c>
+  /// directly, so a future correction (should one ever be needed again) has exactly one place to
+  /// change.</summary>
+  private void EmitGlobalFetch(string label) => EmitCode($"gld {label}");
+
+  /// <summary>Stores r's value into a global, via <c>gst</c> -- named and behaving exactly like an
+  /// ordinary CPU "store": the global at <paramref name="label"/> := r. See <see
+  /// cref="EmitGlobalFetch"/>'s own remarks for the full history, including the earlier WRONG
+  /// resolution this corrects and the hardware trace that corrected it.</summary>
+  private void EmitGlobalAssign(string label) => EmitCode($"gst {label}");
+
   private void EmitLoad(CLvalue lvalue)
   {
     switch (lvalue.Kind)
@@ -972,6 +1035,10 @@ public sealed class CCodeGenerator
         break;
       case CLvalueKind.Parameter:
         EmitCode($"ldp {lvalue.Index}");
+        EmitCode("push");
+        break;
+      case CLvalueKind.Global:
+        EmitGlobalFetch(lvalue.Label!);   // r := the global's value -- no address computation at all
         EmitCode("push");
         break;
       default:
@@ -992,6 +1059,10 @@ public sealed class CCodeGenerator
       case CLvalueKind.Parameter:
         EmitCode("pop");                   // r := value to store; stack: [...] (one word consumed)
         EmitCode($"stp {lvalue.Index}");   // the parameter := r
+        break;
+      case CLvalueKind.Global:
+        EmitCode("pop");                   // r := value to store; stack: [...] (one word consumed)
+        EmitGlobalAssign(lvalue.Label!);   // the global := r -- no address computation at all
         break;
       default:
         EmitCode($"ldl {lvalue.Index}");   // r := the cached address
@@ -1955,9 +2026,8 @@ public sealed class CCodeGenerator
         return symbol.Type.Decay();
       }
 
-      EmitCode($"pushlit {staticLabel}");   // stack: [address]
-      EmitCode("pop");                      // r := address; stack: []
-      EmitDereferenceLoad();
+      EmitGlobalFetch(staticLabel);   // r := the global's value -- no address computation at all
+      EmitCode("push");
       return symbol.Type;
     }
 
@@ -1970,9 +2040,8 @@ public sealed class CCodeGenerator
         return global.Type.Decay();
       }
 
-      EmitCode($"pushlit {globalLabel}");   // stack: [address]
-      EmitCode("pop");                      // r := address; stack: []
-      EmitDereferenceLoad();
+      EmitGlobalFetch(globalLabel);   // r := the global's value -- no address computation at all
+      EmitCode("push");
       return global.Type;
     }
 
@@ -1987,9 +2056,8 @@ public sealed class CCodeGenerator
     // compiler's "missing pieces become an .import" rule.
     string importedLabel = MangleExternalSymbol(name.Name);
     _imports.Add(importedLabel);
-    EmitCode($"pushlit {importedLabel}");   // stack: [address]
-    EmitCode("pop");                        // r := address; stack: []
-    EmitDereferenceLoad();
+    EmitGlobalFetch(importedLabel);   // r := the global's value -- no address computation at all
+    EmitCode("push");
     return CType.Int;
   }
 

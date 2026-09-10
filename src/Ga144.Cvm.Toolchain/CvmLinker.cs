@@ -325,13 +325,33 @@ public static class CvmLinker
 
     // Apply every relocation now that every symbol (object-defined, library-pulled, or primitive) has
     // a final address.
+    //
+    // FIXED, 2026-09-10: a relocation against a symbol THIS object defines for itself with Local
+    // binding (a "static" file-scope global's own mangled label, e.g. "_a" -- never exported, so
+    // RegisterObject above never adds it to globalSymbol/finalAddress at all) used to fall straight
+    // through to "finalAddress[relocation.SymbolName]" below and throw a raw, unhandled
+    // KeyNotFoundException the instant any program actually referenced one -- caught when Stefan's own
+    // test program ("static int a = 0; ... d[0] = a;") hit it. A Local-bound symbol is, by construction,
+    // only ever referenced from within its OWN object file (CvmAssembler itself rejects a name that is
+    // both a local label and ".import"ed in the same file -- see its own "is both a local label and
+    // .import'ed" check), so it must resolve against THAT object's own local Symbols table, never the
+    // cross-object global one. Checked first, for every relocation, before falling back to the
+    // (Global-or-primitive) finalAddress table for anything this object doesn't define for itself --
+    // for a Global symbol this object happens to define and reference itself, both paths agree (the
+    // object's own entry and finalAddress's cross-object entry resolve to the exact same address), so
+    // this changes behavior only for the previously-crashing Local case.
     foreach (CvmLinkObjectInput input in linkedObjects)
     {
       foreach (CvmRelocation relocation in input.ObjectFile.Relocations)
       {
         int baseAddress = sectionBaseAddress[(input.DisplayName, relocation.SectionName)];
         int wordIndex = baseAddress + relocation.WordOffset;
-        int resolved = finalAddress[relocation.SymbolName];
+
+        CvmSymbol? ownSymbol = input.ObjectFile.Symbols.FirstOrDefault(
+            s => s.Name == relocation.SymbolName && s.Binding != CvmSymbolBinding.External);
+        int resolved = ownSymbol is not null
+            ? FinalAddressOf(ownSymbol, input.DisplayName)
+            : finalAddress[relocation.SymbolName];
 
         words[wordIndex] = relocation.Type switch
         {

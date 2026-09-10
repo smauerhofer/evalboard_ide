@@ -29,25 +29,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-10T15:48:35.6097982
-      utcDateTime: 2026-09-10T15:48:35.6097982Z
-      localDateTime: 2026-09-10T17:48:35.6097982+02:00
+      dateTime: 2026-09-10T18:01:41.6341896
+      utcDateTime: 2026-09-10T18:01:41.6341896Z
+      localDateTime: 2026-09-10T20:01:41.6341896+02:00
       date: 2026-09-10T00:00:00.0000000
       day: 10
       dayOfWeek: Thursday
       dayOfYear: 253
-      hour: 15
-      millisecond: 609
-      microsecond: 798
-      nanosecond: 200
-      minute: 48
+      hour: 18
+      millisecond: 634
+      microsecond: 189
+      nanosecond: 600
+      minute: 1
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 35
-      ticks: 639246521156097982
-      utcTicks: 639246521156097982
-      timeOfDay: 15:48:35.6097982
+      second: 41
+      ticks: 639246601016341896
+      utcTicks: 639246601016341896
+      timeOfDay: 18:01:41.6341896
       year: 2026
   portB: 
   portC:
@@ -16370,9 +16370,13 @@ projects:
 
         : g/next ( -w) A[ m/next ]] lit !b A[ !p ]] lit !b @b ;
 
-        : g/! ( o-) A[ @p m/2@ ]] lit !b !b A[ over ]] lit !b ;
+        : 'gld .loc
 
-        : g/@ ( o-) A[ over @p ]] lit !b !b A[ m/2! ]] lit !b ;
+        : g/@ ( o-) A[ @p m/2@ ]] lit !b !b A[ over ]] lit !b ;
+
+        : 'gst .loc
+
+        : g/! ( o-) A[ over @p ]] lit !b !b A[ m/2! ]] lit !b ;
 
         : g/leave A[ ; ]] lit !b
 
@@ -16402,10 +16406,6 @@ projects:
 
           then // 1010_0???_????_????
           A[ m/next ]] lit !b A[ !p ]] lit !b @b ex ;
-        : 'gld g/next g/@ ;
-
-        : 'gst g/next g/! ;
-
 
         (
 
@@ -16471,19 +16471,19 @@ projects:
       - 0x3722F
       - 0x27DFA
       - 0x001FF
-      - 0x1140E
+      - 0x11412
       - 0x27DFA
       - 0x001FF
-      - 0x11412
+      - 0x1140E
       - 0x05B12
       - 0x13407
       - 0x0C9B2
       - 0x09F5D
       - 0x15555
-      - 0x1340A
-      - 0x11412
-      - 0x1340A
-      - 0x1140E
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -17588,25 +17588,14 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-    debuggerAssemblyCode: >-
-      pushlit 1
+    debuggerAssemblyCode: >+
+      lit 1
 
-      pushlit 2
+      stg 2
 
-      pushlit 3
+      ldg 2
 
-      enter 0x10
-
-      ldp 1
-
-      leave
-
-
-      enter 5
-
-      leave
-
-      lcall label
+      stg 4
 
       nop
 
@@ -17618,16 +17607,6 @@ projects:
 
       halt
 
-
-      label:
-
-      enter 10
-
-      leave
-
-      ret
-
-      nop
   - role: Target
     name: Target GA144
     nodes:

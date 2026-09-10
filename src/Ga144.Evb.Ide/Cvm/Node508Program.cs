@@ -199,22 +199,39 @@ internal static class Node508Program
   /// mask 0xFC00, 10-bit offset), so this re-sync brings the node's own source back in step with a tag
   /// that was already correct elsewhere in the toolchain rather than changing that tag itself.
   ///
-  /// <b>Flagged, not silently fixed -- an apparent naming/body cross-wire.</b> This export also renames
-  /// node 508's own two tick-prefixed words from <c>'ldg</c>/<c>'stg</c> to <c>'gld</c>/<c>'gst</c> (see
-  /// <see cref="CvmInstructionSet.LoadGlobalMnemonic"/>'s own remarks for the mnemonic-string rename this
-  /// triggered) -- but tracing their bodies against this node's own <c>g/@</c>/<c>g/!</c> primitives
-  /// turns up something odd: <c>'gld</c> calls <c>g/@</c>, whose own body (<c>A[ over @p ]] lit !b !b A[
-  /// m/2! ]] lit !b ;</c>) ends by remotely invoking <c>m/2!</c> -- a STORE into node 507's own page-2
-  /// globals -- while <c>'gst</c> calls <c>g/!</c>, whose own body (<c>A[ @p m/2@ ]] lit !b !b A[ over ]]
-  /// lit !b ;</c>) ends by remotely invoking <c>m/2@</c>, a FETCH. That is backwards from both the
-  /// conventional Forth naming (<c>@</c> fetches, <c>!</c> stores) and from the dispatch cascade's own
-  /// inline comments below ("load r form global" / "store r to global"), which themselves match <c>g/@</c>/
-  /// <c>g/!</c> by NAME rather than by body. Per this project's own practice of never guessing at an
-  /// unconfirmed design decision: the source below reproduces this exactly as exported (including the
-  /// "form"/"from" comment typo), and neither <see cref="Node508Program"/> nor
-  /// <see cref="Services.CvmAssemblyLanguage"/> attempts to swap anything to "fix" it. Only Stefan can
-  /// say whether <c>'gld</c>/<c>'gst</c> are swapped, whether <c>g/@</c>/<c>g/!</c>'s own bodies are
-  /// swapped, or whether this is intentional.
+  /// <b>Naming/body cross-wire -- flagged 2026-09-06/09, MIS-RESOLVED then CORRECTED, both 2026-09-10.</b>
+  /// This export also renames node 508's own two tick-prefixed words from <c>'ldg</c>/<c>'stg</c> to
+  /// <c>'gld</c>/<c>'gst</c> (see <see cref="CvmInstructionSet.LoadGlobalMnemonic"/>'s own remarks for the
+  /// mnemonic-string rename this triggered) -- tracing their bodies against this node's own <c>g/@</c>/
+  /// <c>g/!</c> primitives looked odd from the start: <c>'gld</c> called <c>g/@</c>, whose own body ended
+  /// by remotely invoking <c>m/2!</c> -- a STORE into node 507's own page-2 globals -- while <c>'gst</c>
+  /// called <c>g/!</c>, whose own body ended by remotely invoking <c>m/2@</c>, a FETCH. That reads
+  /// backwards from conventional Forth naming (<c>@</c> fetches, <c>!</c> stores).
+  ///
+  /// Asked directly, Stefan's first answer ("gld loads a global from r" / "gst stores a global into r")
+  /// was read as confirming this backwards direction was intentional -- <c>'gld</c>/<c>g/@</c> genuinely
+  /// performing <c>global := r</c>, <c>'gst</c>/<c>g/!</c> genuinely performing <c>r := global</c> -- and
+  /// <c>Ga144.C.Toolchain.CCodeGenerator.EmitGlobalFetch</c>/<c>EmitGlobalAssign</c> were wired that way.
+  /// <b>That reading was WRONG.</b> Stefan then ran an actual test against the real node/simulation --
+  /// <c>lit 1; gst 2; gld 2; gst 4; nop</c> -- and the resulting bus trace shows a WRITE of <c>1</c> to
+  /// global page 2, address 2 on the <c>gst 2</c> instruction, then a READ of that same address back
+  /// (returning the <c>1</c> just written) on the following <c>gld 2</c> instruction. That is, <c>gst</c>
+  /// genuinely STORES (<c>global := r</c>) and <c>gld</c> genuinely LOADS (<c>r := global</c>) -- exactly
+  /// what their names ordinarily mean, no reversal at all. The cross-wire flagged above was a REAL bug in
+  /// this node's F18 source, not a naming-convention quirk: <c>g/@</c>'s and <c>g/!</c>'s own bodies
+  /// really were swapped relative to their names.
+  ///
+  /// <b>Fixed by Stefan directly, 2026-09-10</b> ("here is the fixed node 508"), reflected in the source
+  /// immediately below: <c>g/@</c>'s and <c>g/!</c>'s own bodies are swapped (each now ends in the
+  /// remote op its NAME says it should -- <c>g/@</c> in the FETCH <c>m/2@</c>, <c>g/!</c> in the STORE
+  /// <c>m/2!</c>), and <c>'gld</c>/<c>'gst</c> are no longer separate compiled words that call through
+  /// <c>g/next</c> first -- each is now declared via <c>.loc</c> immediately before its own primitive
+  /// (<c>'gld</c> before <c>g/@</c>, <c>'gst</c> before <c>g/!</c>), aliasing it directly. Reproduced
+  /// here verbatim, per this project's own practice of never second-guessing or "improving" a fix Stefan
+  /// supplies himself. <see cref="Ga144.C.Toolchain.CCodeGenerator.EmitGlobalFetch"/>/<c>EmitGlobalAssign</c>
+  /// were corrected the same day to emit <c>gld</c>/<c>gst</c> in their now-confirmed-correct direction;
+  /// see <see cref="CvmInstructionSet.LoadGlobalMnemonic"/>'s own remarks and `c-compiler-design.md`'s
+  /// "Global-scalar addressing" section for the full story, including the hardware trace.
   ///
   /// See the class remarks above for the register/stack helpers, the confirmed LEFT port link back to
   /// node 507, and the general dispatch shape -- all UNCHANGED by this re-sync except where called out
@@ -233,8 +250,10 @@ internal static class Node508Program
       : g/pop ( -w) A[ m/pop ]] lit !b A[ !p ]] lit !b @b ;
       : g/push ( w) A[ @p m/push ]] lit !b !b ;
       : g/next ( -w) A[ m/next ]] lit !b A[ !p ]] lit !b @b ;
-      : g/! ( o-) A[ @p m/2@ ]] lit !b !b A[ over ]] lit !b ;
-      : g/@ ( o-) A[ over @p ]] lit !b !b A[ m/2! ]] lit !b ;
+      : 'gld .loc
+      : g/@ ( o-) A[ @p m/2@ ]] lit !b !b A[ over ]] lit !b ;
+      : 'gst .loc
+      : g/! ( o-) A[ over @p ]] lit !b !b A[ m/2! ]] lit !b ;
       : g/leave A[ ; ]] lit !b
       : g/main # g/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r
         -if // 1011_????_????_????
@@ -262,8 +281,6 @@ internal static class Node508Program
 
         then // 1010_0???_????_????
         A[ m/next ]] lit !b A[ !p ]] lit !b @b ex ;
-      : 'gld g/next g/@ ;
-      : 'gst g/next g/! ;
 
       (
       opcode ldg 1010_100?_????_???? load global from r. the offset is unsigned 9 bit.

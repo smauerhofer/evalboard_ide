@@ -128,12 +128,20 @@ namespace Ga144.Evb.Ide.Services;
 /// already-wired <c>cbr</c> shape (0xAC00, mask 0xFC00, <see cref="CvmInstructionSet.ConditionalBranchOffsetBitMask"/>
 /// 0x3FF) -- so this re-sync needed NO change to <c>cbr</c> itself, only to <see cref="Node508Program.Source"/>
 /// (see that class's own remarks), which had drifted out of step with <c>cbr</c>'s own already-confirmed
-/// 10-bit width. <b>Flagged, not silently fixed:</b> this same re-sync surfaced an apparent naming/body
-/// cross-wire in Stefan's own current source -- <c>'gld</c> calls <c>g/@</c>, whose own body performs
-/// what reads as a remote STORE (<c>m/2!</c>), while <c>'gst</c> calls <c>g/!</c>, whose own body performs
-/// what reads as a remote FETCH (<c>m/2@</c>). See <see cref="Node508Program"/>'s own remarks; reproduced
-/// verbatim here too, since this class always resolves <c>'gld</c>/<c>'gst</c> dynamically against a live
-/// compile of that source, never a hardcoded address or body.
+/// 10-bit width. <b>Naming/body cross-wire -- flagged, MIS-RESOLVED, then CORRECTED, all 2026-09-10:</b>
+/// this same re-sync surfaced what looked like a cross-wire in Stefan's own current source -- <c>'gld</c>
+/// called <c>g/@</c>, whose own body performed what reads as a remote STORE (<c>m/2!</c>), while
+/// <c>'gst</c> called <c>g/!</c>, whose own body performed what reads as a remote FETCH (<c>m/2@</c>).
+/// Asked directly, Stefan's first answer was read as confirming this was intentional naming (backwards
+/// from the usual "load = into a register" convention) rather than a bug -- WRONGLY: he then ran an
+/// actual test (<c>lit 1; gst 2; gld 2; gst 4; nop</c>) whose bus trace shows <c>gst</c> genuinely
+/// WRITES r to the global and <c>gld</c> genuinely READS the global into r, exactly as their names
+/// ordinarily mean. This was a REAL bug in <c>g/@</c>/<c>g/!</c>'s own bodies, which Stefan then fixed
+/// directly (swapping the two bodies and re-wiring <c>'gld</c>/<c>'gst</c> as direct <c>.loc</c> aliases
+/// rather than separate words). See <see cref="Node508Program"/>'s own remarks for the full history and
+/// the fix; reproduced verbatim here too, since this class always resolves
+/// <c>'gld</c>/<c>'gst</c> dynamically against a live compile of that source, never a hardcoded address or
+/// body.
 ///
 /// <b><c>Node509Program.cs</c> is a BRAND NEW coordinate (2026-09-05) -- no CVM1 namesake at all.</b>
 /// Stefan's unary-arithmetic node, reached from node 508's own <c>g/main</c> dispatch (NOT node 507
