@@ -60,22 +60,29 @@ namespace Ga144.Cvm.Toolchain;
 /// resolved to that same relative-offset computation (see <see cref="EmitEmbeddedSignedValue"/>'s own
 /// remarks for the exact formula, which reads its field width straight off each shape's own
 /// <c>ValueBitMask</c> rather than assuming br's and cbr's are equal); <c>lit</c> (node 509's own
-/// literal-load form, which absorbed the retired <c>slit</c>'s role 2026-09-09 -- see
-/// <see cref="CvmInstructionSet.SlitTag"/>'s own remarks) packs a narrower 10-bit value with its own
-/// tag, accepts only a literal (it isn't an address computation at all -- per
+/// literal-load form, which absorbed the retired, now-deleted <c>slit</c>'s role 2026-09-09 -- see
+/// <see cref="CvmInstructionSet"/>'s own remarks on the 2026-09-09 CVM1-opcode purge) packs a narrower
+/// 10-bit value with its own tag, accepts only a literal (it isn't an address computation at all -- per
 /// Stefan, it loads its value directly into the F18 interpreter's own R register). Node 606's eight
 /// frame-pointer ops (<c>enter</c>, <c>adjust</c>, <c>stl</c>, <c>stp</c>, <c>ldl</c>, <c>ldp</c>, plus
 /// the now-retired <c>lal</c>/<c>lap</c>) are shaped the same way as br/cbr/lit -- a fixed tag OR'd with a literal
 /// value, no relocation, no node -- except each packs an UNSIGNED 8-bit value
 /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>, emitted by
-/// <see cref="EmitEmbeddedUnsignedValue"/>), never a signed one. Node 306's six address-register ops
-/// (<c>ldar</c>, <c>star</c>, <c>inca</c>, <c>deca</c>, <c>lda</c>, <c>sta</c>, added 2026-09-06) are the
-/// same EmbeddedUnsignedValue shape too, just with a genuinely narrower 2-bit register-index operand
-/// that isn't at bit 0 upward -- see <see cref="EmitEmbeddedUnsignedValue"/>'s own remarks on
-/// <c>ValueBitShift</c> -- these six used to collide with the retired <c>slit</c>'s own wider tag range
-/// (see <see cref="CvmInstructionSet.LoadAddressRegisterMnemonic"/>'s own remarks), but with <c>slit</c>
-/// gone that disassembly ambiguity is resolved; assembling any of the six by name was never affected
-/// by it either way.
+/// <see cref="EmitEmbeddedUnsignedValue"/>), never a signed one.
+///
+/// <b>STALE, CORRECTED 2026-09-09 (this same paragraph used to describe node 306's OLD family as if
+/// still current):</b> node 306's original self-describing <c>ldar</c>/<c>star</c>/<c>inca</c>/<c>deca</c>
+/// (added 2026-09-06, EmbeddedUnsignedValue, a genuinely narrower 2-bit register-index operand not at
+/// bit 0 upward -- see <see cref="EmitEmbeddedUnsignedValue"/>'s own remarks on <c>ValueBitShift</c>)
+/// were RETIRED the same day node 306's own source was rewritten around a different, tick-prefixed,
+/// NODE-RESOLVED family instead (<c>arinc</c>/<c>ardec</c>/<c>arld</c>/<c>arst</c>/<c>lda</c>/<c>sta</c>,
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.None"/>, exactly like <c>nop</c>/<c>push</c>/<c>pop</c>
+/// above -- a live compile of node 306, not a literal operand, resolves each one's real word). The OLD
+/// family's own mnemonic and tag constants were later deleted outright too (2026-09-09, CVM1-opcode
+/// purge -- see <see cref="CvmInstructionSet"/>'s own remarks), so this assembler has never needed to
+/// know about node 306's address-register mechanism at all beyond treating <c>arinc</c>/<c>ardec</c>/
+/// <c>arld</c>/<c>arst</c>/<c>lda</c>/<c>sta</c> as ordinary external symbols, same as every other
+/// tagged/node-resolved mnemonic.
 /// Node 511's four register-file ops (<c>rld</c>, <c>rst</c>, <c>rpop</c>, <c>rpush</c>, added
 /// 2026-09-07, <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>) were NEVER
 /// SUPPORTED by this assembler -- they needed both a live-node-resolved base AND an embedded operand at

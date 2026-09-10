@@ -1,20 +1,21 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// The CVM Debugger's own default test program: exercises every one of the CVM's 41 opcodes that
+/// The CVM Debugger's own default test program: exercises every one of the CVM's 27 opcodes that
 /// this project can currently deliver a result for AND verify from the transaction log alone,
 /// replacing the earlier 3-instruction smoke test (5 'nop, 'plit/pop/push round trip, one 'call,
 /// one 'br) that only ever touched 5 of the CVM's 73 opcodes.
 ///
-/// <b>Coverage: 41 of 73 opcodes, every one with a log-checkable expected value.</b> Node 607's own
+/// <b>Coverage: 27 of 73 opcodes, every one with a log-checkable expected value.</b> (Was 41 of 73
+/// before this same day's later CVM1-opcode cleanup removed fourteen ops' worth of test coverage --
+/// see the cleanup note below; the "73" denominator itself will shrink separately once the now-dead
+/// mnemonics are removed from <see cref="Cvm.Toolchain.CvmInstructionSet"/>.) Node 607's own
 /// five primitives (nop, pushlit, pop, push, ret) plus call/br/cbr/lit (node 509's own literal-load
 /// form, which absorbed the retired slit's role 2026-09-09); node 507's eleven ALU ops
-/// (usl, ssr, usr, add, sub, and, xor, or, inv, inc, dec); node 506's nine register-d/
-/// extended-precision ops (zext, addc, ldd, std, xd, mul2d, div2d, sext, umuld); node 407's five
-/// register-w/port ops that need no live F18A port on the far side (xpt, ldhi, ldlo, sthi, stlo);
-/// and seven of node 606's ten mnemonics (enter, stl, stp, ldl, ldp, leave, and now halt
-/// itself -- the retired lal/lap no longer among them, 2026-09-09, see the note below and the
-/// exclusion note on 'adjust below). Every instruction that WRITES a value is immediately
+/// (usl, ssr, usr, add, sub, and, xor, or, inv, inc, dec); and seven of node 606's ten mnemonics
+/// (enter, stl, stp, ldl, ldp, leave, and now halt itself -- the retired lal/lap no longer among
+/// them, 2026-09-09, see the note below and the exclusion note on 'adjust below). Every instruction
+/// that WRITES a value is immediately
 /// followed by a comment stating the expected hex value the transaction log's own
 /// "WRITE ... &lt;- XXXX" line should show, computed and cross-checked with a Python simulation of
 /// each node's own F18 source before this program was written -- see this class's own git history /
@@ -40,7 +41,10 @@ namespace Ga144.Evb.Ide.Cvm;
 /// via 'ldd immediately afterward). r is masked to 16 bits like every other register this program
 /// exercises; only <c>d</c> (via the separate <c>ldd</c> round trip) carries the overflow. Every
 /// other opcode's value on this run matched exactly, including 'br 1 and 'halt itself -- see the
-/// Layout note below for what changed there.
+/// Layout note below for what changed there. (The register-d block that produced these addc/mul2d/
+/// div2d/umuld/zext/ldd/std/xd/sext values, and the register-w/port block above it, have since been
+/// removed from this program entirely -- see the CVM1-opcode cleanup note below. This paragraph is
+/// kept as the historical record of what was confirmed on real hardware before that removal.)
 ///
 /// <b>Three deliberate exclusions, each documented at the point it would otherwise appear:</b>
 /// <list type="bullet">
@@ -55,8 +59,11 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <item>Node 407's 'in and 'out (real, blocking F18A port reads/writes through register A) are
 /// never executed, by Stefan's own choice -- node 408, the node they would actually talk to, is not
 /// part of this booted test cluster, so calling either risks hanging the whole session waiting for a
-/// reply that will never come. Node 407's other five ops (xpt, ldhi, ldlo, sthi, stlo) never touch a
-/// real port and are exercised normally.</item>
+/// reply that will never come. Node 407's other five ops (xpt, ldhi, ldlo, sthi, stlo) used to be
+/// exercised normally here too, but per the 2026-09-09 CVM1-opcode cleanup (see below) all five have
+/// since been deleted outright -- no live CVM2 node backs them -- so they are gone from both this
+/// program and (once that cleanup's opcode-table pass lands) <see cref="Cvm.Toolchain.CvmInstructionSet"/>
+/// itself.</item>
 /// <item><b>Node 606's 'adjust is excluded for a different, more serious reason: it was tried, and
 /// it broke real hardware.</b> An earlier version of this program included 'adjust (right before the
 /// call into the frame-pointer block), on the assumption -- per Node606.f18's own header, which says
@@ -71,6 +78,27 @@ namespace Ga144.Evb.Ide.Cvm;
 /// it stays out of this program entirely until it can be investigated further, the same treatment as
 /// 'in'/'out' above.</item>
 /// </list>
+///
+/// <b>CVM1-opcode cleanup (2026-09-09): node 506's nine register-d/extended-precision ops (zext,
+/// addc, ldd, std, xd, mul2d, div2d, sext, umuld) and node 407's five register-w/port ops (xpt,
+/// ldhi, ldlo, sthi, stlo) no longer appear in this program.</b> Per Stefan's own decision to retire
+/// every CVM1-vintage mnemonic no live CVM2 node still backs, eight of those nine register-d ops
+/// (zext, ldd, std, xd, mul2d, div2d, sext, umuld) are being deleted from
+/// <see cref="Cvm.Toolchain.CvmInstructionSet"/> outright and will no longer assemble at all, so
+/// their test lines (formerly right after the ALU-ops block above) were removed here the same way
+/// lal/lap were below -- a deleted mnemonic cannot be left in a hand-written test program, unlike a
+/// merely repointed one. <c>addc</c> itself was NOT deleted -- it was REPOINTED to node 510's own
+/// <c>'addc</c> implementation, a physically different node than the one this program's removed test
+/// block was confirmed against (2026-09-01, see above) -- so that old test's expected values (in
+/// particular the carry-in-<c>d</c> behavior called out above) describe node 506's retired addc, not
+/// node 510's current one. Per this project's own "don't fabricate an unverified expected value"
+/// discipline (the same one already applied to node 508's 27 skipped ops), <c>addc</c>'s test is
+/// omitted here too rather than guessed at, until a fresh hardware run against node 510 can supply a
+/// trustworthy one. Node 407's five register-w/port ops were deleted outright the same way as the
+/// eight register-d ops above (no live CVM2 node backs them either), so their test lines are gone for
+/// the same reason. Removing these fourteen test lines shortened this program from 152 to 84 words,
+/// which moved the frame-pointer subroutine's own word address -- the <c>call</c> instruction below
+/// was updated to match; see the word-count note at the end of this summary.
 ///
 /// <b>Two exploratory instructions, deliberately NOT asserted as "known correct":</b>
 /// 'br and 'cbr are included only as an observation opportunity, not a real branch test:
@@ -158,8 +186,9 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <see cref="ViewModels.CvmDebuggerViewModel.StartAsync"/> loads by default, and
 /// <see cref="ViewModels.CvmDebuggerViewModel.DefaultAssemblyCode"/> is this same text again, so
 /// Start and an unedited click of Assemble always produce byte-identical simulated-SRAM contents.
-/// 152 words total once assembled (156 before the 2026-09-09 removal of the now-unassemblable
-/// lal/lap self-check lines -- see the note above).
+/// 84 words total once assembled (152 before this same day's later removal of the register-d and
+/// register-w/port test blocks during the CVM1-opcode cleanup above; 156 before the earlier
+/// 2026-09-09 removal of the now-unassemblable lal/lap self-check lines).
 /// </summary>
 public static class CvmDebuggerDefaultProgram
 {
@@ -227,75 +256,15 @@ public static class CvmDebuggerDefaultProgram
       "lit 0x0F0         ; Y=0x0F0\n" +
       "or                ; pop X(000F) READ <- 000F; r = 000F | 00F0 = 00FF\n" +
       "push              ; WRITE <- 00FF\n" +
-      "lit 0x0AB         ; r=0x00AB (a recognizable, non-zero marker)\n" +
-      "std               ; d := 0x00AB\n" +
-      "zext              ; d := 0 (zero-extend clears d)\n" +
-      "ldd               ; r := d = 0\n" +
-      "push              ; WRITE <- 0000 (confirms zext cleared a previously non-zero d)\n" +
-      "lit 0x0AB         ; r=0x00AB\n" +
-      "std               ; d := 0x00AB (also verifies std leaves r unchanged)\n" +
-      "push              ; WRITE <- 00AB (r unchanged by std)\n" +
-      "ldd               ; r := d -- round trip, expect 00AB back\n" +
-      "push              ; WRITE <- 00AB (confirms std+ldd round-trip)\n" +
-      "lit 0x0CD         ; r=0x00CD (d is still 0x00AB from the block above)\n" +
-      "xd                ; exchange d(00AB) and r(00CD): r:=00AB, d:=00CD\n" +
-      "push              ; WRITE <- 00AB (r took d's old value)\n" +
-      "ldd               ; r := d = 00CD\n" +
-      "push              ; WRITE <- 00CD (confirms xd truly swapped both registers)\n" +
-      "lit -1            ; r=0xFFFF\n" +
-      "sext              ; d := 0xFFFF (r's sign bit is 1)\n" +
-      "ldd               ; r := d\n" +
-      "push              ; WRITE <- FFFF (confirms sext: negative r -> d=FFFF)\n" +
-      "lit 5             ; r=0x0005\n" +
-      "sext              ; d := 0x0000 (r's sign bit is 0)\n" +
-      "ldd               ; r := d\n" +
-      "push              ; WRITE <- 0000 (confirms sext: non-negative r -> d=0000)\n" +
-      "lit 1             ; r=1\n" +
-      "std               ; d := 1\n" +
-      "lit -1            ; r=0xFFFF (this will be the popped addend X)\n" +
-      "push              ; WRITE <- FFFF\n" +
-      "lit 1             ; r=1 (restore r=1 for addc's own r operand)\n" +
-      "addc              ; pop X(FFFF) READ <- FFFF; total = d(1)+X(FFFF)+r(1) = 0x10001; r := 0x0001 (the low 16 bits -- an earlier draft of this comment claimed r keeps the raw, unmasked 18-bit sum; a real run (2026-09-01) showed otherwise, r is masked same as everything else), d := carry = 1\n" +
-      "push              ; WRITE <- 0001 (confirmed against real hardware 2026-09-01: only the low 16 bits of addc's sum reach r/external memory, NOT the raw 0x10001 an earlier draft of this comment assumed)\n" +
-      "ldd               ; r := d -- expect the captured carry\n" +
-      "push              ; WRITE <- 0001 (confirms addc's carry landed correctly in d)\n" +
-      "lit 1             ; r=1\n" +
-      "std               ; d := 1\n" +
-      "lit -1            ; r=0xFFFF (the value whose (r,d) pair mul2d will shift left)\n" +
-      "mul2d             ; shift (r=FFFF,d=1) left 1 bit: new_r = FFFF, new_d(carry) = 1 (old bit15 of r)\n" +
-      "push              ; WRITE <- FFFF\n" +
-      "ldd               ; r := d\n" +
-      "push              ; WRITE <- 0001 (confirms mul2d's carry-out)\n" +
-      "lit 1             ; r=1\n" +
-      "std               ; d := 1\n" +
-      "lit 1             ; r=1 (the (r,d) pair div2d will shift right)\n" +
-      "div2d             ; shift (r=1,d=1) right 1 bit: new_r = 8000, new_d(carry) = 1 (old bit0 of r)\n" +
-      "push              ; WRITE <- 8000\n" +
-      "ldd               ; r := d\n" +
-      "push              ; WRITE <- 0001 (confirms div2d's carry-out)\n" +
-      "lit 500           ; X=500 (0x01F4) -- reduced from the retired slit's own 2000 test value, which no longer fits lit's narrower 10-bit range\n" +
-      "push              ; WRITE <- 01F4\n" +
-      "lit 500           ; r=500 (0x01F4)\n" +
-      "umuld             ; pop X(01F4) READ <- 01F4; product = 500*500 = 250,000 = 0x3D090; r := low16 = D090, d := high = 0003\n" +
-      "push              ; WRITE <- D090\n" +
-      "ldd               ; r := d\n" +
-      "push              ; WRITE <- 0003 (confirms umuld's high half)\n" +
-      "lit 0             ; r=0 (so the first xpt's WRITE below shows A's pristine boot value cleanly)\n" +
-      "xpt               ; swap A(0x00175, boot 'left' port addr) and r(0): r:=00175, A:=00000\n" +
-      "push              ; WRITE <- 00175 (confirms A's boot-time port address)\n" +
-      "xpt               ; swap back: r:=00000 (old A), A:=00175 (restored)\n" +
-      "push              ; WRITE <- 00000\n" +
-      "lit 2             ; r=2 (0b10) -- the 2-bit 'hi' value to install\n" +
-      "sthi              ; 407's local stack holds the boot seed 0; builds (0 & 0xFFFF) xor (r<<16) = 0x20000, left on 407's OWN stack (not r)\n" +
-      "ldlo              ; loads the LOW 16 bits of that 407-local 18-bit value into r: r := 0x20000 & 0xFFFF = 0x0000 -- confirmed on real hardware 2026-08-30 (an earlier draft of this comment wrongly claimed ldlo returns the raw, unmasked 18-bit value; it does not)\n" +
-      "push              ; WRITE <- 0000 (confirms sthi placed the 2 bits above bit 15, out of ldlo's own low-16 reach)\n" +
-      "lit 0x1CD         ; r=0x01CD -- the 16-bit 'lo' value to install (reduced from the retired slit's own 0x234 test value, which no longer fits lit's narrower 10-bit range)\n" +
-      "stlo              ; combines (0x20000 & 0x30000) xor r(01CD) = 0x201CD, left on 407's OWN stack\n" +
-      "ldlo              ; loads the LOW 16 bits again: r := 0x201CD & 0xFFFF = 0x01CD\n" +
-      "push              ; WRITE <- 01CD (confirms stlo merged the new low 16 bits, keeping the earlier hi 2 bits -- ldhi below reads those back out)\n" +
-      "ldhi              ; extracts the hi 2 bits back out of 0x201CD: r := (0x201CD>>16)&3 = 2\n" +
-      "push              ; WRITE <- 0002 (confirms ldhi's own extraction)\n" +
-      "call 141          ; jump to the frame-pointer subroutine near the end of this program -- its own word address, computed by counting words (pushlit is the only 2-word instruction here); 141 (0x8D)\n" +
+      "; node 506's register-d block (zext/addc/ldd/std/xd/mul2d/div2d/sext/umuld) and node 407's\n" +
+      "; register-w/port block (xpt/sthi/ldlo/stlo/ldhi) were REMOVED here 2026-09-09 as part of the\n" +
+      "; CVM1-opcode cleanup -- eight of the nine register-d mnemonics and all five register-w/port\n" +
+      "; mnemonics no longer assemble at all (no live CVM2 node backs them), and addc's own test\n" +
+      "; (which validated node 506's now-retired addc, not addc's current home on node 510) is omitted\n" +
+      "; rather than replaced with a fabricated, unverified expected value -- see this class's own\n" +
+      "; remarks for the full explanation. Removing these lines shifted the frame-pointer subroutine's\n" +
+      "; word address from 141 (0x8D) to 73 (0x49); the 'call below was updated to match.\n" +
+      "call 73           ; jump to the frame-pointer subroutine near the end of this program -- its own word address, computed by counting words (pushlit is the only 2-word instruction here); 73 (0x49)\n" +
       "nop               ; execution resumes here once FRAME_TEST's own 'ret' returns\n" +
       "nop\n" +
       "nop\n" +

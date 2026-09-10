@@ -249,11 +249,20 @@ public static class CvmBootStreamBuilder
     // Imports 307 by name ('# 307 import', k/r@/k/r!/k/pop/k/push/k/leave), so must compile AFTER
     // result307 above -- and therefore inherits the same "not expected to succeed yet" caveat noted
     // there, since a failed result307 leaves nothing valid in result307.Exports for this import to
-    // resolve. See Node306Program's own remarks for the full source, including the six new
-    // self-describing CVM mnemonics (ldar/star/inca/deca/lda/sta) its own trailing opcode table
-    // specifies -- wired into CvmInstructionSet directly (see LoadAddressRegisterMnemonic's own
-    // remarks), not through this node's own live compile, so those six do not depend on this compile
-    // step succeeding either way.
+    // resolve. See Node306Program's own remarks for the full source.
+    //
+    // STALE COMMENT, CORRECTED 2026-09-09: this used to describe node 306's ORIGINAL six mnemonics
+    // (ldar/star/inca/deca/lda/sta) as a self-describing family needing no live compile at all -- that
+    // was true of the 2026-09-06 source, but node 306's source was rewritten the same day (second pass
+    // of the opcode/assembler-vs-node reconciliation audit) around a different, tick-prefixed,
+    // NODE-RESOLVED family instead (arinc/ardec/arld/arst/lda/sta -- see
+    // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own NodeSymbolByMnemonic and
+    // NodeResolvedFixedRegisterShiftByMnemonic for the wiring). Unlike the old family, ALL SIX of these
+    // current mnemonics DO depend on this compile step succeeding -- each one's real opcode word is
+    // resolved against result306's own F18 symbols, exactly like every other tagged/node-resolved
+    // mnemonic elsewhere in this file. The OLD family's own mnemonic and tag constants
+    // (CvmInstructionSet.LoadAddressRegisterMnemonic and its siblings) were deleted outright 2026-09-09
+    // (CVM1-opcode purge) and no longer exist.
     F18CompileResult result306 = Compile(compiler, Node306Program.Source, new F18CompilerOptions
     {
       MemorySpace = F18MemorySpace.Ram,

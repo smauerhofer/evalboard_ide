@@ -30,8 +30,9 @@ namespace Ga144.Evb.Ide.Services;
 /// <c>br</c>, <c>cbr</c>, and node 606's frame-pointer ops (<c>enter</c>, <c>adjust</c>,
 /// <c>stl</c>, <c>stp</c>, <c>ldl</c>, <c>ldp</c>) are the exceptions -- see this
 /// class's own remarks on why they aren't part of this tagged-opcode layer. <c>slit</c> and
-/// <c>lal</c>/<c>lap</c> were RETIRED 2026-09-09 -- see <see cref="CvmInstructionSet.SlitTag"/>'s and
-/// <see cref="CvmInstructionSet.LoadAddressOfLocalTag"/>'s own remarks.)
+/// <c>lal</c>/<c>lap</c> were RETIRED 2026-09-09, and their own mnemonic/tag constants later deleted
+/// outright too -- see <see cref="CvmInstructionSet"/>'s own remarks on the 2026-09-09 CVM1-opcode
+/// purge.)
 ///
 /// <b>CVM2 (2026-09-01).</b> Stefan is rewriting the whole CVM around new, differently-numbered nodes
 /// and a more sophisticated inter-node communication scheme; CVM1's nodes are not used in CVM2 at all.
@@ -143,13 +144,15 @@ namespace Ga144.Evb.Ide.Services;
 /// <c>udiv2</c>/<c>bitcnt</c> (five of node 508's own old 27-op family) all now resolve against node
 /// 509's own live compile instead, tag 0xB000 (see <see cref="Node509UnaryArithmeticTagBits"/>'s own
 /// remarks). Only <c>neg</c> is genuinely new -- node 509's own word is <c>'neg</c>, not <c>'negate</c>,
-/// so the existing, separately-orphaned <c>negate</c> mnemonic below is untouched. Node 509's own
+/// so the existing, separately-orphaned <c>negate</c> mnemonic was left untouched at the time (it was
+/// later deleted outright, 2026-09-09, once CCodeGenerator switched to emitting <c>neg</c> instead --
+/// see <see cref="CvmInstructionSet"/>'s own remarks on the CVM1-opcode purge). Node 509's own
 /// narrower embedded-literal opcode form (a 10-bit signed value baked directly into the opcode word) was
 /// initially left unwired the same way node 508's own two embedded-offset global forms were, but Stefan
 /// later named it explicitly ("add this range to the cvm language ... mnemonic lit") -- it is wired as
 /// <see cref="CvmInstructionSet.LitMnemonic"/> instead, self-describing like <c>br</c>/<c>cbr</c>
-/// (the now-retired <c>slit</c> used to be a third example -- see
-/// <see cref="CvmInstructionSet.SlitTag"/>'s own remarks), so it needs NO entry in
+/// (the now-retired, now-deleted <c>slit</c> used to be a third example -- see
+/// <see cref="CvmInstructionSet"/>'s own remarks on the 2026-09-09 CVM1-opcode purge), so it needs NO entry in
 /// <see cref="NodeSymbolByMnemonic"/> at all (see
 /// <see cref="CvmInstructionSet.LitTag"/>'s own remarks). Two more tick-prefixed words, <c>parity</c> and
 /// <c>odd</c>, were added the same way as <c>neg</c> (2026-09-05, "I added 2 new opcodes to node 509. add
@@ -245,8 +248,9 @@ namespace Ga144.Evb.Ide.Services;
 /// that, none of them need a live compile to recognize: <see cref="CvmDebugSession.DisassemblePage0"/>
 /// checks for them directly via <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> BEFORE ever
 /// consulting this file's own symbol-driven decode table, so they already show up correctly in the
-/// memory inspector -- node 306's six used to be fully shadowed there by the now-retired <c>slit</c>'s
-/// own tag (see <see cref="CvmInstructionSet.LoadAddressRegisterMnemonic"/>'s own remarks); with
+/// memory inspector -- node 306's OLD, now-deleted six-op self-describing family used to be fully
+/// shadowed there by the now-retired, now-deleted <c>slit</c>'s own tag (see
+/// <see cref="CvmInstructionSet"/>'s own remarks on the 2026-09-09 CVM1-opcode purge); with
 /// <c>slit</c> gone, that collision is resolved too. <see cref="Assemble"/> mirrors that same dual
 /// dispatch on the OTHER direction --
 /// hand-typed CVM asm source that uses <c>call</c>/<c>br</c>/<c>cbr</c>/node 606's or node
@@ -628,9 +632,10 @@ internal static class CvmAssemblyLanguage
         // c/u helper plus matching 'ugt/'ule/'ult/'uge words (all four binary, ( xy-f), so they use
         // Node408BinaryComparisonTagBits like the other six binary comparison ops) -- repointed here from
         // node 508's old, permanently-orphaned CVM1 tag to node 408's own live compile, exactly like the
-        // other ten comparison ops above. negate/xt/ldt/stt remain permanently orphaned against node 508
-        // -- FLAGGED, kept per Ga144.C.Toolchain.CCodeGenerator's own continued use -- see
-        // CvmInstructionSet.UnsignedGreaterThanMnemonic's own remarks for the full accounting.
+        // other ten comparison ops above. negate/xt/ldt/stt stayed permanently orphaned against node 508
+        // for a while longer, flagged and kept per Ga144.C.Toolchain.CCodeGenerator's own continued use,
+        // until the 2026-09-09 CVM1-opcode purge (later the same day) rewrote that codegen and deleted
+        // all four outright -- see CvmInstructionSet's own remarks on that purge for the full accounting.
         [CvmInstructionSet.UnsignedGreaterThanMnemonic] = (Node408Program.Coordinate, "'ugt", Node408BinaryComparisonTagBits),
         [CvmInstructionSet.GreaterThanMnemonic] = (Node408Program.Coordinate, "'gt", Node408BinaryComparisonTagBits),
         [CvmInstructionSet.GreaterThanZeroMnemonic] = (Node408Program.Coordinate, "'gt0", Node408UnaryComparisonTagBits),
@@ -643,10 +648,13 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.LessThanZeroMnemonic] = (Node408Program.Coordinate, "'lt0", Node408UnaryComparisonTagBits),
         [CvmInstructionSet.UnsignedLessThanMnemonic] = (Node408Program.Coordinate, "'ult", Node408BinaryComparisonTagBits),
         [CvmInstructionSet.UnsignedGreaterOrEqualMnemonic] = (Node408Program.Coordinate, "'uge", Node408BinaryComparisonTagBits),
-        [CvmInstructionSet.NegateMnemonic] = (Node508Program.Coordinate, "'negate", Node508TagBits),
-        [CvmInstructionSet.ExchangeTMnemonic] = (Node508Program.Coordinate, "'xt", Node508TagBits),
-        [CvmInstructionSet.LoadTMnemonic] = (Node508Program.Coordinate, "'ldt", Node508TagBits),
-        [CvmInstructionSet.StoreTMnemonic] = (Node508Program.Coordinate, "'stt", Node508TagBits),
+        // negate/xt/ldt/stt -- WIRED to node 508 here at the time ("'negate", "'xt", "'ldt", "'stt"),
+        // kept per Ga144.C.Toolchain.CCodeGenerator's own continued use. DELETED OUTRIGHT 2026-09-09
+        // (CVM1-opcode purge, later the same day) once CCodeGenerator was rewritten to stop emitting all
+        // four (unary minus now emits node 509's 'neg; every pointer dereference now uses node 306's own
+        // 'arst/'lda/'sta) -- CvmInstructionSet.NegateMnemonic/ExchangeTMnemonic/LoadTMnemonic/
+        // StoreTMnemonic no longer exist as constants, so these four entries are removed along with them.
+        // See CvmInstructionSet's own remarks on the 2026-09-09 CVM1-opcode purge.
         // Repointed to node 509 (2026-09-05) -- see the node 509 block above for the full explanation.
         [CvmInstructionSet.MultiplyByTwoMnemonic] = (Node509Program.Coordinate, "'mul2", Node509UnaryArithmeticTagBits),
         [CvmInstructionSet.UnsignedDivideByTwoMnemonic] = (Node509Program.Coordinate, "'udiv2", Node509UnaryArithmeticTagBits),
@@ -667,13 +675,26 @@ internal static class CvmAssemblyLanguage
 
         // Node 306's CURRENT six ops (2026-09-09, second pass of the opcode/assembler-vs-node
         // reconciliation audit against Stefan's own workspace.yaml export) -- tick-prefixed, node-
-        // resolved (CvmOperandEncoding.None), sharing node 306's own flat "1101_10??_????_????" range
-        // with no distinguishing tag bits of their own at the CVM-opcode level (node 306's own ar/main
-        // masks the call byte it receives to select which compiled word to jump to) -- see
-        // CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic's/LoadAddressRegisterValueMnemonic's
-        // own remarks. Tag 0xD800 (binary 1101_1000) -- node 306's own RAM is only 64 words, so
-        // 0xD800-0xD83F has no live collision with anything else wired here (the OLD self-describing
-        // family's own former tags, 0xD800-0xDB00, are retired alongside Instructions' own Ids 101-106).
+        // resolved (CvmOperandEncoding.None), sharing node 306's own flat "1101_10??_????_????" range.
+        // Tag 0xD800 (binary 1101_1000) -- node 306's own RAM is only 64 words, so 0xD800-0xD83F has no
+        // live collision with anything else wired here (the OLD self-describing family's own former
+        // tags, 0xD800-0xDB00, are retired alongside Instructions' own Ids 101-106).
+        //
+        // CORRECTED 2026-09-09 (same day, later pass): node 306's own ar/main does NOT just mask the
+        // call byte to select which compiled word to jump to -- it first pulls a 3-bit REGISTER-SELECT
+        // field out of the low 3 bits (`dup 0x07 and 2* a!`) and only then shifts the remaining bits
+        // right by 3 and masks to 6 bits (`2/ 2/ 2/ 0x3f and ex`) to get the actual jump target. A plain
+        // `tag | resolvedAddress` (what every other None-shaped mnemonic here uses, and what this file
+        // used for these six from when they were first wired until this correction) therefore encoded
+        // the WRONG word: it left the resolved word address sitting in the low bits ar/main reads as the
+        // register selector, instead of shifting it up into the function-select field. Fixed by routing
+        // all six through `NodeResolvedFixedRegisterShiftByMnemonic` (see that dictionary's own remarks,
+        // just below `NodeResolvedEmbeddedValueFieldLayoutByMnemonic`) in `BuildDecodeTable`/
+        // `BuildEncodeTable`'s own tails, which shifts the resolved address left by 3 and ORs in a FIXED
+        // register index of 0 -- register 0 always, since neither `CvmAssembler` (the real command-line/
+        // C-compiler-facing assembler) nor the `.gaprim` primitive-table format has any way to carry a
+        // per-call register operand for a plain `None`-shaped mnemonic; see that dictionary's own remarks
+        // for the FLAGGED gap this leaves (registers 1-3 unreachable from compiled code today).
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (Node306Program.Coordinate, "'arinc", 0xD800),
         [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (Node306Program.Coordinate, "'ardec", 0xD800),
         [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (Node306Program.Coordinate, "'arld", 0xD800),
@@ -751,6 +772,46 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoubleDecrementMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
         [CvmInstructionSet.DoubleAddMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
         [CvmInstructionSet.DoubleOrMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
+      };
+
+  /// <summary>
+  /// ADDED 2026-09-09: node 306's six address-register ops (<c>arinc</c>/<c>ardec</c>/<c>arld</c>/
+  /// <c>arst</c>/<c>lda</c>/<c>sta</c>) need the SAME "shift the resolved word address up to make room
+  /// for an embedded field" correction <see cref="NodeResolvedEmbeddedValueFieldLayoutByMnemonic"/>
+  /// applies for node 511/308 -- node 306's own <c>ar/main</c> pulls a 3-bit register-select field out
+  /// of the low bits before shifting the rest down to get its actual jump target (see
+  /// <c>NodeSymbolByMnemonic</c>'s own remarks on these six for the exact bit derivation) -- but unlike
+  /// node 511/308, none of these six is wired as <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>:
+  /// each is an ordinary <see cref="CvmInstructionSet.CvmOperandEncoding.None"/> mnemonic that resolves
+  /// to exactly ONE opcode word, with its embedded register field FIXED at 0 rather than exposed as an
+  /// assembler operand. That's a deliberate simplification, not an oversight: <c>CvmAssembler</c> (the
+  /// real command-line assembler the C compiler's own output actually goes through -- see its own
+  /// remarks on why node 511's <c>rld</c>/<c>rst</c>/<c>rpop</c>/<c>rpush</c> were NEVER assemblable
+  /// there) and the <c>.gaprim</c> primitive-table format both only know how to carry a single, whole
+  /// opcode word per mnemonic name -- neither has any notion of a per-call embedded operand the way this
+  /// file's own <see cref="Assemble"/>/<see cref="DisassemblePage0"/> (used only by the CVM Debugger's
+  /// own hand-typed assembly panel) do. Wiring node 306 as <c>NodeResolvedEmbeddedValue</c> would
+  /// therefore have made it resolve correctly only inside the debugger's own panel and silently fall
+  /// back to node 306's dead OLD self-describing shape (or simply fail to assemble) everywhere a real
+  /// <c>.casm</c> file is involved, including every C program <see cref="CCodeGenerator"/> compiles.
+  ///
+  /// <b>FLAGGED for Stefan:</b> fixing the register field at 0 means only ONE of node 306's four address
+  /// registers is reachable from compiled/assembled code today; registers 1-3 are real, addressable
+  /// hardware this scheme cannot reach until <c>CvmAssembler</c>/<c>.gaprim</c> grow a real
+  /// register-operand mechanism (mnemonic + immediate register index, the primitive table keyed by both
+  /// rather than by mnemonic name alone). Not attempted here, since inventing that mechanism now -- for a
+  /// need (more than one live pointer at a time) nothing in this compiler currently has -- would be
+  /// exactly the kind of unconfirmed design guess this project avoids.
+  /// </summary>
+  private static readonly IReadOnlyDictionary<string, int> NodeResolvedFixedRegisterShiftByMnemonic =
+      new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+      {
+        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = 3,
+        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = 3,
+        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = 3,
+        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = 3,
+        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = 3,
+        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = 3,
       };
 
   /// <summary>
@@ -874,6 +935,15 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
+      // Node 306's six ops only -- see NodeResolvedFixedRegisterShiftByMnemonic's own remarks: the
+      // resolved word address is the FUNCTION field, not the whole free-bits value, so it must be
+      // shifted up before OR-ing with the tag (the register field this vacates is always 0).
+      if (NodeResolvedFixedRegisterShiftByMnemonic.TryGetValue(mnemonic, out int fixedShift))
+      {
+        table[tag | (resolvedAddress << fixedShift)] = (mnemonic, wordLength, null);
+        continue;
+      }
+
       table[tag | resolvedAddress] = (mnemonic, wordLength, null);
     }
 
@@ -934,6 +1004,14 @@ internal static class CvmAssemblyLanguage
 
         int baseOpcode = tag | (functionField << layout.FunctionFieldShift);
         table[mnemonic] = (baseOpcode, wordLength, true, true, layout.RegisterFieldBitMask);
+        continue;
+      }
+
+      // Node 306's six ops only -- see NodeResolvedFixedRegisterShiftByMnemonic's own remarks (same
+      // shift-before-OR correction as BuildDecodeTable's own tail, just above).
+      if (NodeResolvedFixedRegisterShiftByMnemonic.TryGetValue(mnemonic, out int fixedShift))
+      {
+        table[mnemonic] = (tag | (resolvedAddress << fixedShift), wordLength, hasOperand, false, 0);
         continue;
       }
 

@@ -819,22 +819,61 @@ public sealed class CCodeGenerator
 
   /// <summary>Given an address already sitting on top of the stack, caches a copy of it into a fresh
   /// local slot (so it can be safely re-derived later regardless of what runs in between -- see this
-  /// section's own remarks) and consumes the original into "t" via <c>xt</c>, leaving the stack exactly
-  /// as it was before the address was pushed.
+  /// section's own remarks), leaving the stack exactly as it was before the address was pushed.
   ///
-  /// 2026-09-09: "stl" stores r, not the stack top (see this class's own ABI doc comment), so the
-  /// address is popped into r first, stored, then pushed back (assumed non-destructive of r, like
-  /// "push" itself) so "xt" still has it to pop off the stack afterward. No <see cref="EmitDup"/> is
-  /// needed any more -- "stl" no longer consumes anything from the stack, so a single copy suffices.
+  /// REWRITTEN 2026-09-09: this used to also "prime" node 508's pointer register "t" (via <c>xt</c>) for
+  /// whatever load/store came next -- but <see cref="EmitLoad"/>/<see cref="EmitStore"/>'s own
+  /// <c>default</c> case always re-derives the address from <paramref name="type"/>'s own cached slot
+  /// and re-runs the full dereference sequence anyway, so that priming was already dead work even before
+  /// node 508's <c>xt</c>/<c>ldt</c>/<c>stt</c> stopped resolving against any live node. Dropped outright
+  /// rather than ported to node 306's replacement sequence (see <see cref="EmitDereferenceLoad"/>'s own
+  /// remarks) -- there is nothing left here that needs it.
   /// </summary>
   private CLvalue CacheIndirectAddress(CType type)
   {
     int addressSlot = _currentFunction!.NextLocalSlot++;
     EmitCode("pop");                    // r := address; stack: [] (one word consumed off the incoming stack)
-    EmitCode($"stl {addressSlot}");     // addressSlot := r (the address); stack unchanged, r unchanged
-    EmitCode("push");                   // stack: [address] (r pushed back, still the address)
-    EmitCode("xt");                     // t := address (popped); stack: []
+    EmitCode($"stl {addressSlot}");     // addressSlot := r (the address)
     return new CLvalue(CLvalueKind.Indirect, addressSlot, type);
+  }
+
+  /// <summary>Dereferences the address already sitting in register r, pushing the value read from
+  /// memory at that address.
+  ///
+  /// ADDED 2026-09-09, replacing node 508's now-dead <c>xt</c>/<c>ldt</c> (deleted outright from
+  /// <see cref="CvmInstructionSet"/> the same day, once this codegen stopped emitting them -- see
+  /// that class's own remarks on the 2026-09-09 CVM1-opcode purge). The replacement uses node 306's address-register mechanism instead (see
+  /// <see cref="Node306Program"/>'s own remarks for the F18-level design): <c>'arst</c> ("store address
+  /// register") loads node 306's address register 0 from (address = r, page = the stack's own top word),
+  /// and <c>'lda</c> ("load r from address in address register") then reads memory at that address back
+  /// into r. Every C pointer in this compiler is a plain 16-bit CVM address (there is no notion of a
+  /// non-zero page anywhere else in this ABI), so the page pushed here is always a literal 0.
+  ///
+  /// FLAGGED for Stefan: this always uses address register 0 -- node 306 actually has four (see
+  /// Node306Program's own remarks) but wiring more than one would need a real assembler feature (an
+  /// operand that selects which register to embed) that the command-line assembler/linker pipeline does
+  /// not have today (see CvmAssembler's own remarks on why node 511's rld/rst/rpop/rpush were never
+  /// assemblable there either). Also NOT YET CONFIRMED ON REAL HARDWARE -- this sequence has not been
+  /// run against a physical GA144 board.
+  /// </summary>
+  private void EmitDereferenceLoad()
+  {
+    EmitCode("pushlit 0");   // stack: [..., 0] (page = 0)
+    EmitCode("arst");        // node 306 address register 0 := (address = r, page = pop 0); stack: [...]
+    EmitCode("lda");         // r := memory[address register 0]
+    EmitCode("push");        // stack: [..., value]
+  }
+
+  /// <summary>Dereferences the address already sitting in register r, storing the value already on top
+  /// of the stack to memory at that address. See <see cref="EmitDereferenceLoad"/>'s own remarks for the
+  /// node-306 mechanism this uses and what's flagged about it -- <c>'sta</c> ("store r to address in
+  /// address register") is <c>'lda</c>'s write-side counterpart.</summary>
+  private void EmitDereferenceStore()
+  {
+    EmitCode("pushlit 0");   // stack: [..., value, 0] (page = 0)
+    EmitCode("arst");        // node 306 address register 0 := (address = r, page = pop 0); stack: [..., value]
+    EmitCode("pop");         // r := value; stack: [...]
+    EmitCode("sta");         // memory[address register 0] := r
   }
 
   private void EmitLoad(CLvalue lvalue)
@@ -851,9 +890,7 @@ public sealed class CCodeGenerator
         break;
       default:
         EmitCode($"ldl {lvalue.Index}");   // r := the cached address
-        EmitCode("push");                  // stack: [address]
-        EmitCode("xt");                    // t := address (popped); stack: []
-        EmitCode("ldt");                   // stack: [value at t]
+        EmitDereferenceLoad();
         break;
     }
   }
@@ -872,9 +909,7 @@ public sealed class CCodeGenerator
         break;
       default:
         EmitCode($"ldl {lvalue.Index}");   // r := the cached address
-        EmitCode("push");                  // stack: [..., value, address]
-        EmitCode("xt");                    // t := address (popped); stack: [..., value]
-        EmitCode("stt");                   // pops value, stores it at t; stack: [...]
+        EmitDereferenceStore();
         break;
     }
   }
@@ -1662,9 +1697,15 @@ public sealed class CCodeGenerator
 
       case CUnaryExpr { Op: CUnaryOp.Minus } unary:
         {
+          // RENAMED 2026-09-09: node 508's own "negate" no longer resolved against any live CVM2 node,
+          // and was deleted outright from CvmInstructionSet the same day once this codegen stopped
+          // emitting it (see that class's own remarks on the 2026-09-09 CVM1-opcode purge) -- node 509's
+          // "neg" (a genuinely different mnemonic string, live and node-resolved) computes the identical
+          // two's-complement result ("inv" then "+1", see Node509Program's own remarks) and is used here
+          // instead.
           CType type = EmitExpr(unary.Operand);
           EmitCode("pop");
-          EmitCode("negate");
+          EmitCode("neg");
           EmitCode("push");
           return type;
         }
@@ -1817,9 +1858,9 @@ public sealed class CCodeGenerator
         return symbol.Type.Decay();
       }
 
-      EmitCode($"pushlit {staticLabel}");
-      EmitCode("xt");
-      EmitCode("ldt");
+      EmitCode($"pushlit {staticLabel}");   // stack: [address]
+      EmitCode("pop");                      // r := address; stack: []
+      EmitDereferenceLoad();
       return symbol.Type;
     }
 
@@ -1832,9 +1873,9 @@ public sealed class CCodeGenerator
         return global.Type.Decay();
       }
 
-      EmitCode($"pushlit {globalLabel}");
-      EmitCode("xt");
-      EmitCode("ldt");
+      EmitCode($"pushlit {globalLabel}");   // stack: [address]
+      EmitCode("pop");                      // r := address; stack: []
+      EmitDereferenceLoad();
       return global.Type;
     }
 
@@ -1849,9 +1890,9 @@ public sealed class CCodeGenerator
     // compiler's "missing pieces become an .import" rule.
     string importedLabel = MangleExternalSymbol(name.Name);
     _imports.Add(importedLabel);
-    EmitCode($"pushlit {importedLabel}");
-    EmitCode("xt");
-    EmitCode("ldt");
+    EmitCode($"pushlit {importedLabel}");   // stack: [address]
+    EmitCode("pop");                        // r := address; stack: []
+    EmitDereferenceLoad();
     return CType.Int;
   }
 

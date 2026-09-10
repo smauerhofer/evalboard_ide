@@ -10,8 +10,9 @@ namespace Ga144.Cvm.Toolchain;
 /// <c>adjust &lt;offset&gt;</c>, <c>stl &lt;offset&gt;</c>, <c>stp &lt;offset&gt;</c>,
 /// <c>ldl &lt;offset&gt;</c>, <c>ldp &lt;offset&gt;</c> (each self-describing, an 8-bit tag OR'd with an
 /// 8-bit unsigned value -- <c>lal</c>/<c>lap</c>, the family's other two, were RETIRED 2026-09-09 in
-/// favor of node 506's own <c>f</c>/<c>fpush</c> plus explicit offset arithmetic, see
-/// <see cref="LoadAddressOfLocalTag"/>'s own remarks), plus
+/// favor of node 506's own <c>f</c>/<c>fpush</c> plus explicit offset arithmetic -- their own mnemonic
+/// and tag constants were later deleted outright, see this file's own remarks below on the 2026-09-09
+/// CVM1-opcode purge), plus
 /// node 606's ninth mnemonic <c>leave</c> and tenth mnemonic <c>halt</c> (both tagged mnemonics like
 /// nop/push/pop/ret, NOT self-describing -- see <see cref="LeaveMnemonic"/>'s and
 /// <see cref="HaltMnemonic"/>'s own remarks)), plus node 508's 27 comparison/arithmetic ops --
@@ -22,11 +23,13 @@ namespace Ga144.Cvm.Toolchain;
 /// node 508's own live compile -- see <see cref="EqualMnemonic"/>'s own remarks)), plus node 506's nine
 /// register-d/extended-precision ops -- <c>zext</c>, <c>addc</c>, <c>ldd</c>, <c>std</c>, <c>xd</c>,
 /// <c>mul2d</c>, <c>div2d</c>, <c>sext</c>, <c>umuld</c> (tagged mnemonics exactly like <c>leave</c> and
-/// node 508's 27 ops, resolved against node 506's own live compile -- see
-/// <see cref="ZeroExtendMnemonic"/>'s own remarks)), plus node 407's seven register-w/port ops --
+/// node 508's 27 ops, resolved against node 506's own live compile -- eight of these nine, all but
+/// <c>addc</c>, were later deleted outright, see this file's own remarks below on the 2026-09-09
+/// CVM1-opcode purge)), plus node 407's seven register-w/port ops --
 /// <c>xpt</c>, <c>out</c>, <c>in</c>, <c>ldhi</c>, <c>ldlo</c>, <c>sthi</c>, <c>stlo</c> (tagged
 /// mnemonics exactly like node 506's and 508's ops, resolved against node 407's own live compile --
-/// see <see cref="ExchangePortMnemonic"/>'s own remarks)), plus CVM2's <c>lcall</c>/<c>ljmp</c> (long
+/// all seven were later deleted outright, see this file's own remarks below on the 2026-09-09
+/// CVM1-opcode purge)), plus CVM2's <c>lcall</c>/<c>ljmp</c> (long
 /// call/long jump, added 2026-09-02 -- shaped exactly like <c>pushlit</c>, resolved against node 407's
 /// own live compile too, but a DIFFERENT tag -- see <see cref="LongCallMnemonic"/>'s own remarks)), plus
 /// CVM2's <c>gld</c>/<c>gst</c> (load global/store global, added 2026-09-04, renamed 2026-09-09 from
@@ -38,8 +41,9 @@ namespace Ga144.Cvm.Toolchain;
 /// <c>inc</c>/<c>dec</c> from node 507's old ALU-op family and <c>abs</c>/<c>mul2</c>/<c>div2</c>/
 /// <c>udiv2</c>/<c>bitcnt</c> from node 508's old 27-op family -- to node 509's own live compile,
 /// per "only update existing opcodes where possible"; only <c>neg</c> is a genuinely new mnemonic
-/// (node 509's own <c>'neg</c> has no existing same-named counterpart -- <c>negate</c>, Id 51, stays a
-/// separate, still-orphaned mnemonic). Tagged exactly like <c>leave</c>/node 508's/node 506's/node
+/// (node 509's own <c>'neg</c> has no existing same-named counterpart -- <c>negate</c>, Id 51, stayed a
+/// separate, orphaned mnemonic for a while longer, until it too was deleted outright, see this file's
+/// own remarks below on the 2026-09-09 CVM1-opcode purge). Tagged exactly like <c>leave</c>/node 508's/node 506's/node
 /// 407's own ops, a DIFFERENT tag again -- see <see cref="NegMnemonic"/>'s own remarks), plus node
 /// 509's tenth mnemonic <c>lit</c> (added 2026-09-05, per Stefan's own explicit follow-up: "add this
 /// range to the cvm language ... mnemonic lit") -- self-describing, shaped exactly like <c>br</c>/
@@ -47,7 +51,8 @@ namespace Ga144.Cvm.Toolchain;
 /// and field width again -- see <see cref="LitTag"/>'s own remarks. <c>lit</c> is now the CVM's only
 /// self-describing literal-load mnemonic: the older, wider <c>slit</c> (12-bit value, node 507's own
 /// "1101" dispatch class) was RETIRED 2026-09-09 in its favor -- "'slit' is replaced by 'lit'. remove it
-/// from the language." -- see <see cref="SlitTag"/>'s own remarks), plus node 509's tenth and eleventh
+/// from the language." -- its own mnemonic/tag constants and decode helper were later deleted outright
+/// too, see this file's own remarks below on the 2026-09-09 CVM1-opcode purge), plus node 509's tenth and eleventh
 /// tagged ops, <c>parity</c> and <c>odd</c> (added 2026-09-05, per Stefan's own follow-up: "I added 2
 /// new opcodes to node 509. add them also to the language") -- both genuinely new (no existing orphaned
 /// mnemonic of either name to repoint), tagged exactly like the original nine (see
@@ -95,13 +100,62 @@ namespace Ga144.Cvm.Toolchain;
 /// un-retired). Every OTHER orphaned mnemonic this audit found turned out to have an active dependent
 /// elsewhere in the codebase and was deliberately left in place rather than removed: the remaining eight
 /// of node 508's old 27-op family (<c>ugt</c>/<c>ule</c>/<c>ult</c>/<c>uge</c>/<c>negate</c>/<c>xt</c>/
-/// <c>ldt</c>/<c>stt</c>) are still actively emitted by <see cref="Ga144.C.Toolchain.CCodeGenerator"/>'s
-/// own codegen (unsigned comparisons, unary minus, pointer dereference -- see
-/// <see cref="UnsignedGreaterThanMnemonic"/>'s own remarks), and all nine of node 506's old register-d
-/// family (<c>zext</c> through <c>umuld</c>) plus five of node 407's old seven register-w/port ops
-/// (<c>xpt</c>/<c>ldhi</c>/<c>ldlo</c>/<c>sthi</c>/<c>stlo</c>) are still assembled by
-/// <see cref="Ga144.Evb.Ide.Cvm.CvmDebuggerDefaultProgram"/>'s own hand-written default test program (see
-/// <see cref="ZeroExtendMnemonic"/>'s own remarks). Every already-wired
+/// <c>ldt</c>/<c>stt</c>) were at the time still actively emitted by
+/// <see cref="Ga144.C.Toolchain.CCodeGenerator"/>'s own codegen (unsigned comparisons, unary minus,
+/// pointer dereference -- see <see cref="UnsignedGreaterThanMnemonic"/>'s own remarks), and all nine of
+/// node 506's old register-d family (<c>zext</c> through <c>umuld</c>) plus five of node 407's old seven
+/// register-w/port ops (<c>xpt</c>/<c>ldhi</c>/<c>ldlo</c>/<c>sthi</c>/<c>stlo</c>) were still assembled
+/// by <see cref="Ga144.Evb.Ide.Cvm.CvmDebuggerDefaultProgram"/>'s own hand-written default test program.
+/// <b>SUPERSEDED 2026-09-09, later the same day -- see this file's own remarks immediately below on the
+/// CVM1-opcode purge:</b> both of those dependents were rewritten and every one of these now-truly-
+/// orphaned mnemonics (all but <c>ugt</c>/<c>ule</c>/<c>ult</c>/<c>uge</c>, which node 408 backs for
+/// real, and <c>addc</c>, repointed to node 510) was deleted outright.
+///
+/// <b>CVM1-opcode purge (2026-09-09, later the same day as the reconciliation audit above), per
+/// Stefan's own explicit follow-up ("how can I make you forget all CVM1 opcodes and use CVM2 opcodes
+/// only?"): every mnemonic the audit above found orphaned SOLELY because of an in-toolchain dependent
+/// (not a live CVM2 node) has since had that dependent rewritten and been deleted outright.</b>
+/// <see cref="Ga144.C.Toolchain.CCodeGenerator"/>'s own codegen was rewritten to stop emitting
+/// negate/xt/ldt/stt: unary minus now emits node 509's already-live <c>neg</c> instead, and every
+/// pointer dereference now uses node 306's own address-register mechanism (<c>arst</c>/<c>lda</c>/
+/// <c>sta</c>, fixed to address register 0 -- see <see cref="ArithmeticStoreAddressRegisterMnemonic"/>'s/
+/// <see cref="LoadAddressRegisterValueMnemonic"/>'s own remarks) instead of the old, node-less
+/// xt/ldt/stt sequence. <see cref="Ga144.Evb.Ide.Cvm.CvmDebuggerDefaultProgram"/>'s own hand-written
+/// default test program was likewise rewritten to drop its register-d block (zext/addc/ldd/std/xd/
+/// mul2d/div2d/sext/umuld) and its register-w/port block (xpt/ldhi/ldlo/sthi/stlo) entirely -- addc's
+/// own OLD test specifically, since <c>addc</c> itself is NOT deleted here (it stays live, repointed to
+/// node 510, see <see cref="AddWithCarryMnemonic"/>'s own remarks); its outdated test values simply no
+/// longer belong in a program that no longer exercises node 506's old register-d block at all. With
+/// neither dependent left, NINETEEN mnemonics -- <c>negate</c> / <c>xt</c> / <c>ldt</c> / <c>stt</c>
+/// (node 508, 4, formerly Ids 51-54), <c>zext</c> / <c>ldd</c> / <c>std</c> / <c>xd</c> / <c>mul2d</c> /
+/// <c>div2d</c> / <c>sext</c> / <c>umuld</c> (node 506's OLD register-d family minus <c>addc</c>, 8,
+/// formerly Ids 56, 58-64), and <c>xpt</c> / <c>out</c> / <c>in</c> / <c>ldhi</c> / <c>ldlo</c> /
+/// <c>sthi</c> / <c>stlo</c> (node 407's OLD register-w/port family, all 7, formerly Ids 65-71) -- are
+/// deleted from this file outright: both the mnemonic constant
+/// AND the <see cref="Instructions"/> entry are gone, not merely commented out. Their retired Ids (51-54,
+/// 56, 58-71 excluding 57) are still never to be reused (see <see cref="Instructions"/>'s own remarks at
+/// each gap), but unlike every earlier retirement in this file, the mnemonic constants themselves are
+/// gone too, since Stefan's own instruction this round was explicitly to "drop the retired historical
+/// constants" rather than leave them as permanent dead weight. <c>ugt</c>/<c>ule</c>/<c>ult</c>/<c>uge</c>
+/// (repointed to node 408) and <c>addc</c> (repointed to node 510) are NOT part of this purge -- all
+/// four have a real, live CVM2 node behind them today; only the truly node-less remainder was removed.
+/// This same instruction also reaches backwards to constants that were ALREADY retired-but-kept before
+/// this round even started: <c>SlitMnemonic</c> and its <c>SlitTag</c>/<c>SlitTagMask</c>/
+/// <c>SlitValueBitMask</c>/<c>SlitValueMinValue</c>/<c>SlitValueMaxValue</c> siblings plus the
+/// <c>DecodeSlitValue</c> method, <c>LoadAddressOfLocalMnemonic</c>/<c>LoadAddressOfParameterMnemonic</c>
+/// plus <c>LoadAddressOfLocalTag</c>/<c>LoadAddressOfParameterTag</c>, and node 306's OLD self-describing
+/// family (<c>LoadAddressRegisterMnemonic</c>/<c>StoreAddressRegisterMnemonic</c>/
+/// <c>IncrementAddressRegisterMnemonic</c>/<c>DecrementAddressRegisterMnemonic</c>, i.e. <c>ldar</c>/
+/// <c>star</c>/<c>inca</c>/<c>deca</c>, plus their six <c>Node306*Tag</c> constants and the
+/// <c>Node306AddressRegisterIndexBitMask</c>/<c>Node306AddressRegisterIndexShift</c> pair) are ALL
+/// deleted outright too. This is a deliberate, one-time departure from this file's own long-standing "do
+/// not remove any opcodes" convention -- every OTHER retirement in this file (Ids 8, 26/27, 98, 100,
+/// 101-106 among them) still follows that convention exactly (<see cref="Instructions"/> row commented
+/// out, Id never reused, constant kept) and nothing about that convention changes going forward; only
+/// these specific, already-dead, already-orphaned-across-multiple-audits entries were swept out, on
+/// Stefan's own explicit one-time instruction.
+///
+/// Every already-wired
 /// tagged mnemonic (<c>tjmp</c>, node 406's/408's/509's repointed families, node 306's six self-describing
 /// ops) was re-verified against each node's own current source during this same audit and found already
 /// consistent -- see Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own <c>NodeSymbolByMnemonic</c> for the
@@ -146,8 +200,12 @@ public static class CvmInstructionSet
   public const string BranchMnemonic = "br";
   public const string ConditionalBranchMnemonic = "cbr";
 
-  /// <summary>RETIRED 2026-09-09 ("'slit' is replaced by 'lit'. remove it from the language.") -- kept, per "do not remove any opcodes," but no longer referenced by <see cref="Instructions"/>. See <see cref="SlitTag"/>'s own remarks; use <see cref="LitMnemonic"/> instead.</summary>
-  public const string SlitMnemonic = "slit";
+  // SlitMnemonic ("slit") -- RETIRED 2026-09-09 ("'slit' is replaced by 'lit'. remove it from the
+  // language.") and DELETED OUTRIGHT (along with SlitTag/SlitTagMask/SlitValueBitMask/
+  // SlitValueMinValue/SlitValueMaxValue and the DecodeSlitValue method) later the same day, per Stefan's
+  // own instruction to drop already-retired historical constants entirely rather than keep them as dead
+  // weight -- see this file's own remarks above on the 2026-09-09 CVM1-opcode purge. Id 8 is still never
+  // to be reused. Use LitMnemonic ("lit") instead.
 
   // Node 507's ALU ops, added per Stefan's node 507 source: eight binary ops (register r combined with
   // the top of the CVM data stack) and three unary ops (register r alone). None of the eleven takes an
@@ -182,11 +240,12 @@ public static class CvmInstructionSet
   public const string StoreParameterMnemonic = "stp";
   public const string LoadLocalMnemonic = "ldl";
   public const string LoadParameterMnemonic = "ldp";
-  /// <summary>RETIRED 2026-09-09 -- see <see cref="CvmInstructionSet.LoadAddressOfLocalTag"/>'s own remarks. Use <see cref="FrameToRegisterMnemonic"/>/<see cref="PushFrameMnemonic"/> plus offset arithmetic instead.</summary>
-  public const string LoadAddressOfLocalMnemonic = "lal";
-
-  /// <summary>RETIRED 2026-09-09 alongside <see cref="LoadAddressOfLocalMnemonic"/> -- see <see cref="CvmInstructionSet.LoadAddressOfLocalTag"/>'s own remarks.</summary>
-  public const string LoadAddressOfParameterMnemonic = "lap";
+  // LoadAddressOfLocalMnemonic ("lal") / LoadAddressOfParameterMnemonic ("lap") -- RETIRED 2026-09-09
+  // ("'lal' & 'lap' are removed. use ''f' or 'fpush' from node 506 and add the offset to calculate the
+  // address of a local or parameter.") and DELETED OUTRIGHT (along with LoadAddressOfLocalTag/
+  // LoadAddressOfParameterTag) later the same day -- see this file's own remarks above on the
+  // 2026-09-09 CVM1-opcode purge. Ids 26/27 are still never to be reused. Use FrameToRegisterMnemonic
+  // ("f") / PushFrameMnemonic ("fpush") plus offset arithmetic instead.
 
   // stl/stp/ldl/ldp REPOINTED to CVM2's node 506 (2026-09-06), the same way 'leave already was
   // (2026-09-02, see the comment block just below) and 'enter (see Node506EnterTag's own remarks):
@@ -200,8 +259,9 @@ public static class CvmInstructionSet
   // (StoreLocalTag/StoreParameterTag/LoadLocalTag/LoadParameterTag, kept but superseded, per "do not
   // remove any opcodes" -- see each superseded constant's own remarks). adjust remains permanently
   // orphaned -- node 506's own source has never named an equivalent. lal/lap, the other two long-orphaned
-  // node-606 leftovers, were RETIRED outright 2026-09-09 rather than left orphaned -- see
-  // LoadAddressOfLocalTag's own remarks.
+  // node-606 leftovers, were RETIRED outright 2026-09-09 rather than left orphaned, and their own
+  // mnemonic/tag constants were later deleted outright too -- see this file's own remarks above on the
+  // 2026-09-09 CVM1-opcode purge.
 
   // 'leave was originally node 606's ninth mnemonic (CVM1), shaped completely differently from the
   // eight self-describing ones just above: a TAGGED mnemonic, exactly like nop/pushlit/push/pop/ret on
@@ -222,8 +282,8 @@ public static class CvmInstructionSet
   // work around, and is expected to resolve once br/cbr's own new tag range is chosen.
   public const string LeaveMnemonic = "leave";
 
-  // 'f/'fpush, added 2026-09-09 alongside the new node 506 source that also removes lal/lap (see
-  // LoadAddressOfLocalTag's own remarks): "'lal' & 'lap' are removed. use ''f' or 'fpush' from node 506
+  // 'f/'fpush, added 2026-09-09 alongside the new node 506 source that also removes lal/lap (see this
+  // file's own remarks above on the 2026-09-09 CVM1-opcode purge): "'lal' & 'lap' are removed. use ''f' or 'fpush' from node 506
   // and add the offset to calculate the address of a local or parameter. i will provide a new 506."
   // Shaped exactly like 'leave/'halt above -- a single bare TAGGED opcode word (CvmOperandEncoding.None),
   // reached the SAME way 'leave is (node 506's own f/main dispatch falling to "ex" once the fetched
@@ -308,13 +368,20 @@ public static class CvmInstructionSet
   // matching 'ugt/'ule/'ult/'uge words (see Cvm.Node408Program's own remarks), so all four now REPOINT to
   // node 408's own live compile, exactly like the other ten comparison ops already do -- see
   // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own NodeSymbolByMnemonic for the wiring. The remaining
-  // FOUR -- negate/xt/ldt/stt -- stay permanently orphaned against every node in the current CVM2 mesh,
-  // still actively emitted by Ga144.C.Toolchain.CCodeGenerator's own codegen ("negate" for unary minus,
-  // "xt"/"ldt"/"stt" for every pointer dereference) -- deleting their Instructions rows would silently
-  // break C compilation for any program using a unary minus or a pointer dereference, so they are kept
-  // exactly as before, flagged rather than resolved unilaterally: the real fix is presumably a future
-  // node implementing this pointer-dereference family (or the C compiler switching to some other
-  // already-wired primitive), neither of which this audit can decide on its own.
+  // FOUR -- negate/xt/ldt/stt -- stayed permanently orphaned against every node in the CVM2 mesh at the
+  // time, still actively emitted by Ga144.C.Toolchain.CCodeGenerator's own codegen ("negate" for unary
+  // minus, "xt"/"ldt"/"stt" for every pointer dereference), so deleting their Instructions rows then
+  // would have silently broken C compilation for any program using a unary minus or a pointer
+  // dereference -- kept at the time, flagged rather than resolved unilaterally.
+  //
+  // RESOLVED FOR GOOD 2026-09-09 (later the same day, "make me forget all CVM1 opcodes and use CVM2
+  // opcodes only"): CCodeGenerator's own codegen was rewritten to stop emitting all four -- unary minus
+  // now emits node 509's already-live 'neg, and every pointer dereference now uses node 306's own
+  // address-register mechanism ('arst/'lda/'sta, fixed to address register 0 -- see
+  // ArithmeticStoreAddressRegisterMnemonic's/LoadAddressRegisterValueMnemonic's own remarks) -- so
+  // negate/xt/ldt/stt were finally deleted outright, mnemonic constants and Instructions rows both; see
+  // this file's own remarks above on the CVM1-opcode purge for the full accounting. Their formerly-kept
+  // Ids (51-54) are still never to be reused.
   public const string EqualMnemonic = "eq";
   public const string EqualToZeroMnemonic = "eq0";
   public const string FalseMnemonic = "false";
@@ -337,10 +404,12 @@ public static class CvmInstructionSet
   public const string UnsignedDivideByTwoMnemonic = "udiv2";
   public const string DivideByTwoMnemonic = "div2";
   public const string AbsoluteValueMnemonic = "abs";
-  public const string NegateMnemonic = "negate";
-  public const string ExchangeTMnemonic = "xt";
-  public const string LoadTMnemonic = "ldt";
-  public const string StoreTMnemonic = "stt";
+  // NegateMnemonic ("negate") / ExchangeTMnemonic ("xt") / LoadTMnemonic ("ldt") / StoreTMnemonic
+  // ("stt") -- DELETED OUTRIGHT 2026-09-09 (formerly Ids 51-54): once CCodeGenerator's own codegen was
+  // rewritten to stop emitting them (unary minus now emits node 509's neg; every pointer dereference now
+  // uses node 306's arst/lda/sta instead), no live CVM2 node and no in-toolchain dependent backed any of
+  // these four any longer -- see this file's own remarks above on the 2026-09-09 CVM1-opcode purge.
+  // Ids 51-54 are still never to be reused.
   public const string BitCountMnemonic = "bitcnt";
 
   // Node 506's register-d/extended-precision ops, added per Stefan's node 506 source and the same
@@ -365,18 +434,23 @@ public static class CvmInstructionSet
   // Cvm.CvmDebuggerDefaultProgram's own hand-written default test program (confirmed against real hardware
   // per that class's own remarks, though that confirmation predates the CVM1->CVM2 rewrite and so verified
   // CVM1's old node 506, not anything a current CVM2 board runs). Deleting these rows would break that
-  // program's own assembly without making anything true about the current mesh either way, so they are
-  // kept exactly as before this audit -- see UnsignedGreaterThanMnemonic's own remarks for node 508's
-  // parallel case.
-  public const string ZeroExtendMnemonic = "zext";
+  // program's own assembly without making anything true about the current mesh either way, so they were
+  // kept at the time -- see UnsignedGreaterThanMnemonic's own remarks for node 508's parallel case.
+  //
+  // RESOLVED FOR GOOD 2026-09-09 (later the same day): CvmDebuggerDefaultProgram's own smoke test was
+  // rewritten to drop this entire register-d block, so eight of these nine (all but addc, separately
+  // repointed to node 510) were finally deleted outright -- see this file's own remarks above on the
+  // CVM1-opcode purge.
+  // ZeroExtendMnemonic ("zext") / LoadDMnemonic ("ldd") / StoreDMnemonic ("std") / ExchangeDMnemonic
+  // ("xd") / MultiplyByTwoDoubleMnemonic ("mul2d") / DivideByTwoDoubleMnemonic ("div2d") /
+  // SignExtendMnemonic ("sext") / UnsignedMultiplyDoubleMnemonic ("umuld") -- DELETED OUTRIGHT
+  // 2026-09-09 (formerly Ids 56, 58-64): once CvmDebuggerDefaultProgram's own smoke test (their last
+  // dependent) was rewritten to drop this register-d block entirely, no live CVM2 node and no
+  // in-toolchain dependent backed any of these eight any longer -- see this file's own remarks above on
+  // the 2026-09-09 CVM1-opcode purge. Ids 56, 58-64 are still never to be reused. AddWithCarryMnemonic
+  // ("addc", Id 57) is the ONE mnemonic from this old family that survives -- it was separately
+  // REPOINTED (not retired) to node 510's own live 'addc, see the remarks on ExtendedStoreMnemonic below.
   public const string AddWithCarryMnemonic = "addc";
-  public const string LoadDMnemonic = "ldd";
-  public const string StoreDMnemonic = "std";
-  public const string ExchangeDMnemonic = "xd";
-  public const string MultiplyByTwoDoubleMnemonic = "mul2d";
-  public const string DivideByTwoDoubleMnemonic = "div2d";
-  public const string SignExtendMnemonic = "sext";
-  public const string UnsignedMultiplyDoubleMnemonic = "umuld";
 
   // Node 407's register-w/port ops, added per Stefan's node 407 source and the same naming rule he
   // gave for nodes 508/506 ("every word that begins with a ' is an opcode for the CVM with the
@@ -399,15 +473,16 @@ public static class CvmInstructionSet
   // defined any of these seven F18 symbols, and NodeSymbolByMnemonic never had entries for them either --
   // but five of the seven (xpt/ldhi/ldlo/sthi/stlo; 'in'/'out' are deliberately excluded by Stefan's own
   // choice, see Cvm.CvmDebuggerDefaultProgram's own remarks) are still assembled by that same
-  // hand-written default test program, confirmed against real (pre-CVM2) hardware. Kept exactly as before
-  // this audit for the same reason as ZeroExtendMnemonic's own family -- see that constant's remarks.
-  public const string ExchangePortMnemonic = "xpt";
-  public const string PortWriteMnemonic = "out";
-  public const string PortReadMnemonic = "in";
-  public const string LoadHighMnemonic = "ldhi";
-  public const string LoadLowMnemonic = "ldlo";
-  public const string StoreHighMnemonic = "sthi";
-  public const string StoreLowMnemonic = "stlo";
+  // hand-written default test program, confirmed against real (pre-CVM2) hardware. Kept at the time for
+  // the same reason as node 506's register-d family above.
+  //
+  // RESOLVED FOR GOOD 2026-09-09 (later the same day): CvmDebuggerDefaultProgram's own smoke test was
+  // rewritten to drop this entire register-w/port block, so all seven (including 'in'/'out', which had
+  // no dependent at all -- they were never assembled anywhere, only excluded from testing for hang-risk
+  // reasons) were finally deleted outright -- see this file's own remarks above on the CVM1-opcode purge.
+  // ExchangePortMnemonic ("xpt") / PortWriteMnemonic ("out") / PortReadMnemonic ("in") / LoadHighMnemonic
+  // ("ldhi") / LoadLowMnemonic ("ldlo") / StoreHighMnemonic ("sthi") / StoreLowMnemonic ("stlo") --
+  // DELETED OUTRIGHT (formerly Ids 65-71); those Ids are still never to be reused.
 
   // CVM2's long call/long jump, added per Stefan's node 407 source (2026-09-02) and the memory-layout
   // change on node 507 that motivated it: page 0 now spans the FULL 0x0000-0xFFFF, so a function above
@@ -463,12 +538,19 @@ public static class CvmInstructionSet
   // own remarks just below for the replacement). ldar/star/inca/deca have no surviving counterpart under
   // any name on node 306 any more (their own former roles are now covered by the NEW lda/sta/arinc/
   // ardec below, which are DIFFERENT F18 symbols with a DIFFERENT encoding shape, not merely repointed) --
-  // kept per "do not remove any opcodes," but their Instructions rows (formerly Ids 101-104) are removed;
-  // never reuse Ids 101-104 for a different instruction.
-  public const string LoadAddressRegisterMnemonic = "ldar";
-  public const string StoreAddressRegisterMnemonic = "star";
-  public const string IncrementAddressRegisterMnemonic = "inca";
-  public const string DecrementAddressRegisterMnemonic = "deca";
+  // their Instructions rows (formerly Ids 101-104) were removed at the time; never reuse Ids 101-104 for
+  // a different instruction.
+  //
+  // DELETED OUTRIGHT 2026-09-09 (later the same day, CVM1-opcode purge -- see this file's own remarks
+  // above): LoadAddressRegisterMnemonic ("ldar") / StoreAddressRegisterMnemonic ("star") /
+  // IncrementAddressRegisterMnemonic ("inca") / DecrementAddressRegisterMnemonic ("deca"), and their six
+  // Node306LoadAddressRegisterTag/Node306StoreAddressRegisterTag/Node306IncrementAddressRegisterTag/
+  // Node306DecrementAddressRegisterTag/Node306LoadAddressRegisterValueTag/Node306StoreAddressRegisterValueTag
+  // tag constants (0xDB00/0xDA00/0xD980/0xD900/0xD880/0xD800) plus the Node306AddressRegisterIndexBitMask
+  // (0x0006)/Node306AddressRegisterIndexShift (1) pair that packed/unpacked their shared 2-bit register
+  // field, are all gone -- these were already-retired historical constants kept only per "do not remove
+  // any opcodes," and Stefan's own instruction this round was to drop that whole category entirely. Ids
+  // 101-104 are still never to be reused.
 
   // lda/sta -- RE-TASKED 2026-09-09 (same audit). The mnemonic STRINGS survive (node 306's own new source
   // still defines tick-prefixed words named 'lda and 'sta), but their MEANING and ENCODING both changed
@@ -505,29 +587,11 @@ public static class CvmInstructionSet
   public const string ArithmeticLoadAddressRegisterMnemonic = "arld";
   public const string ArithmeticStoreAddressRegisterMnemonic = "arst";
 
-  /// <summary>Fixed high-bit pattern for <see cref="LoadAddressRegisterMnemonic"/> (<c>ldar</c>), register index 0: <c>1101_1011_0000_0000</c>. See that constant's own remarks.</summary>
-  public const int Node306LoadAddressRegisterTag = 0xDB00;
-
-  /// <summary>Fixed high-bit pattern for <see cref="StoreAddressRegisterMnemonic"/> (<c>star</c>), register index 0: <c>1101_1010_0000_0000</c>. See <see cref="LoadAddressRegisterMnemonic"/>'s own remarks.</summary>
-  public const int Node306StoreAddressRegisterTag = 0xDA00;
-
-  /// <summary>Fixed high-bit pattern for <see cref="IncrementAddressRegisterMnemonic"/> (<c>inca</c>), register index 0: <c>1101_1001_1000_0000</c>. See <see cref="LoadAddressRegisterMnemonic"/>'s own remarks.</summary>
-  public const int Node306IncrementAddressRegisterTag = 0xD980;
-
-  /// <summary>Fixed high-bit pattern for <see cref="DecrementAddressRegisterMnemonic"/> (<c>deca</c>), register index 0: <c>1101_1001_0000_0000</c>. See <see cref="LoadAddressRegisterMnemonic"/>'s own remarks.</summary>
-  public const int Node306DecrementAddressRegisterTag = 0xD900;
-
-  /// <summary>Fixed high-bit pattern for <see cref="LoadAddressRegisterValueMnemonic"/> (<c>lda</c>), register index 0: <c>1101_1000_1000_0000</c>. See <see cref="LoadAddressRegisterMnemonic"/>'s own remarks.</summary>
-  public const int Node306LoadAddressRegisterValueTag = 0xD880;
-
-  /// <summary>Fixed high-bit pattern for <see cref="StoreAddressRegisterValueMnemonic"/> (<c>sta</c>), register index 0: <c>1101_1000_0000_0000</c>. See <see cref="LoadAddressRegisterMnemonic"/>'s own remarks.</summary>
-  public const int Node306StoreAddressRegisterValueTag = 0xD800;
-
-  /// <summary>Isolates the 2-bit address-register index field (bits 2-1) shared by all six of node 306's ops -- see <see cref="LoadAddressRegisterMnemonic"/>'s own remarks. Combine with <see cref="Node306AddressRegisterIndexShift"/> when packing/unpacking (the index itself is 0-3, not 0/2/4/6).</summary>
-  public const int Node306AddressRegisterIndexBitMask = 0x0006;
-
-  /// <summary>How far left an address-register index (0-3) is shifted before OR-ing into <see cref="Node306AddressRegisterIndexBitMask"/>'s bits -- 1, since those bits sit at positions 2-1, not 1-0 (bit 0 is architecturally fixed at 0). See <see cref="CvmInstructionShape.ValueBitShift"/>'s own remarks.</summary>
-  public const int Node306AddressRegisterIndexShift = 1;
+  // Node306LoadAddressRegisterTag/Node306StoreAddressRegisterTag/Node306IncrementAddressRegisterTag/
+  // Node306DecrementAddressRegisterTag/Node306LoadAddressRegisterValueTag/Node306StoreAddressRegisterValueTag
+  // and Node306AddressRegisterIndexBitMask/Node306AddressRegisterIndexShift -- DELETED OUTRIGHT
+  // 2026-09-09 alongside ldar/star/inca/deca above; see this file's own remarks above (both on the
+  // CVM1-opcode purge and on that constant's own retirement note) for the full accounting.
 
   // Node 511's four register-file ops (2026-09-07, "here are nodes 510 and 511 ... they support 32
   // register that can be used for parameter passing to functions") -- unlike every mnemonic above,
@@ -667,9 +731,10 @@ public static class CvmInstructionSet
   // with no live node to resolve against; node 509's own tick-prefixed words ('inv, 'inc, 'dec, 'abs,
   // 'mul2, 'div2, 'udiv2, 'bitcnt) match those exact mnemonic strings, so they are repointed here rather
   // than duplicated. Only NegMnemonic below is a genuinely NEW entry: node 509's own word is named
-  // 'neg, not 'negate, so it does NOT repoint the existing (still separately orphaned) NegateMnemonic
-  // ("negate", Id 51) -- taken literally, per Stefan's own tick-naming rule, rather than assumed to be a
-  // renaming of it.
+  // 'neg, not 'negate, so it did NOT repoint the old, separately orphaned "negate" mnemonic (Id 51) --
+  // taken literally, per Stefan's own tick-naming rule, rather than assumed to be a renaming of it.
+  // "negate" was itself deleted outright later (2026-09-09) once CCodeGenerator stopped emitting it in
+  // favor of this same 'neg -- see this file's own remarks above on the CVM1-opcode purge.
   public const string NegMnemonic = "neg";
 
   // CVM2 node 509's own literal-load mnemonic, added 2026-09-05 per Stefan's own explicit follow-up
@@ -806,13 +871,16 @@ public static class CvmInstructionSet
   // FLAGGED: 'addc REPOINTS the existing AddWithCarryMnemonic ("addc", Id 57) rather than adding a new
   // mnemonic, per "only update existing opcodes where possible" -- node 510's own source defines a
   // tick-prefixed word with that exact name. Unlike every earlier repoint in this file, though, the OLD
-  // "addc" mnemonic is not merely dead: it is one of the nine still actively assembled by
-  // Cvm.CvmDebuggerDefaultProgram's own hand-written default test program (see ZeroExtendMnemonic's own
-  // remarks) -- that program's own "addc" will now resolve against node 510's live compile instead of
-  // whatever CVM1's old node 506 used to produce, a real behavioral change for that legacy test, not a
-  // no-op repoint. Repointed anyway, since Stefan's own tick-naming rule leaves no alternative name for
-  // node 510's own live 'addc word -- flagged here for Stefan to confirm CvmDebuggerDefaultProgram's own
-  // expectations still hold.
+  // "addc" mnemonic was not merely dead: at the time, it was one of the nine still actively assembled by
+  // Cvm.CvmDebuggerDefaultProgram's own hand-written default test program -- that program's own "addc"
+  // would resolve against node 510's live compile instead of whatever CVM1's old node 506 used to
+  // produce, a real behavioral change for that legacy test, not a no-op repoint. Repointed anyway, since
+  // Stefan's own tick-naming rule leaves no alternative name for node 510's own live 'addc word.
+  //
+  // RESOLVED 2026-09-09 (later the same day, CVM1-opcode purge -- see this file's own remarks above):
+  // CvmDebuggerDefaultProgram's own smoke test dropped its entire register-d block, addc's own old test
+  // included, rather than carry forward expected values confirmed against a node addc no longer runs on
+  // -- so the flag above is resolved by removal, not by a fresh hardware run.
   public const string ExtendedStoreMnemonic = "xst";
   public const string ExtendedLoadMnemonic = "xld";
   public const string ExtendedMultiplyByTwoMnemonic = "xmul2";
@@ -867,8 +935,9 @@ public static class CvmInstructionSet
   // trading one collision for another -- RESOLVED FOR GOOD 2026-09-09, later the same day: Stefan retired
   // lal/lap outright ("'lal' & 'lap' are removed. use ''f' or 'fpush' from node 506 and add the offset to
   // calculate the address of a local or parameter.") rather than giving them their own confirmed tag, so
-  // there is no longer anything in Instructions for cbr's range to collide with at all -- see
-  // LoadAddressOfLocalTag's own remarks.
+  // there is no longer anything in Instructions for cbr's range to collide with at all -- see this
+  // file's own remarks above on the 2026-09-09 CVM1-opcode purge (LoadAddressOfLocalTag/
+  // LoadAddressOfParameterTag no longer exist as constants either).
 
   /// <summary>
   /// The fixed high-bit pattern (bits 15-11) of a <c>br</c> word: binary 10000. CHANGED 2026-09-09 from
@@ -884,9 +953,10 @@ public static class CvmInstructionSet
   /// AND RENAMED 2026-09-09, replacing the old, unconfirmed "ifbr" placeholder (which guessed 0x9800,
   /// a 5-bit tag) -- see this file's own remarks just above for Stefan's exact wording. Do NOT reuse
   /// the old 0x9800 value: that guess is retired along with the "ifbr" name.
-  /// RESOLVED 2026-09-09 (same day): this range (0xAC00-0xAFFF) briefly, fully contained
-  /// <see cref="LoadAddressOfLocalTag"/> (<c>lal</c>, 0xAE00) and <see cref="LoadAddressOfParameterTag"/>
-  /// (<c>lap</c>, 0xAF00) -- both then still wired in <see cref="Instructions"/>, both permanently-orphaned
+  /// RESOLVED 2026-09-09 (same day): this range (0xAC00-0xAFFF) briefly, fully contained the OLD
+  /// LoadAddressOfLocalTag (<c>lal</c>, 0xAE00) and LoadAddressOfParameterTag (<c>lap</c>, 0xAF00) --
+  /// both constants since deleted outright, see this file's own remarks above on the 2026-09-09
+  /// CVM1-opcode purge -- both then still wired in <see cref="Instructions"/>, both permanently-orphaned
   /// CVM1 node-606 leftovers with no node-506 replacement ever named. Stefan retired both outright the
   /// same day rather than giving them a real tag ("'lal' & 'lap' are removed. use ''f' or 'fpush' from
   /// node 506 and add the offset to calculate the address of a local or parameter.") -- see
@@ -931,25 +1001,16 @@ public static class CvmInstructionSet
   // the ifbr -> cbr rename (a real replacement tag), slit's role is simply absorbed into the ALREADY-
   // EXISTING, already-confirmed node-509 lit (see LitTag's own remarks) -- a narrower 10-bit field, not
   // a like-for-like swap. Removed from Instructions and from TryDescribeSelfDecodingWord's own decode
-  // checks (see that method's own remarks); this constant, its mask/value-range siblings just below, and
-  // SlitMnemonic/DecodeSlitValue are all KEPT, per "do not remove any opcodes" -- Id 8 (formerly
-  // SlitMnemonic) is retired and must never be reused for a different instruction (see Instructions'
-  // own remarks).
-
-  /// <summary>The fixed high-bit pattern (bits 15-12) of a <c>slit</c> word: binary 1101. RETIRED 2026-09-09 -- see this file's own remarks just above.</summary>
-  public const int SlitTag = 0xD000;
-
-  /// <summary>Isolates a word's top 4 bits, for testing against <see cref="SlitTag"/>. RETIRED alongside <see cref="SlitTag"/>.</summary>
-  public const int SlitTagMask = 0xF000;
-
-  /// <summary>Isolates a word's low 12 bits -- the raw (not yet sign-extended) <c>slit</c> value field. RETIRED alongside <see cref="SlitTag"/>.</summary>
-  public const int SlitValueBitMask = 0xFFF;
-
-  /// <summary>The most negative value a 12-bit two's-complement field can hold: -0x800 (-2048). RETIRED alongside <see cref="SlitTag"/>.</summary>
-  public const int SlitValueMinValue = -0x800;
-
-  /// <summary>The largest value a 12-bit two's-complement field can hold: 0x7FF (2047). RETIRED alongside <see cref="SlitTag"/>.</summary>
-  public const int SlitValueMaxValue = 0x7FF;
+  // checks (see that method's own remarks); at the time this constant, its mask/value-range siblings,
+  // SlitMnemonic, and the DecodeSlitValue method were all kept per "do not remove any opcodes" -- Id 8
+  // (formerly SlitMnemonic) is retired and must never be reused for a different instruction (see
+  // Instructions' own remarks).
+  //
+  // DELETED OUTRIGHT 2026-09-09 (later the same day, CVM1-opcode purge -- see this file's own remarks
+  // above): SlitTag (was 0xD000), SlitTagMask (0xF000), SlitValueBitMask (0xFFF), SlitValueMinValue
+  // (-0x800), SlitValueMaxValue (0x7FF), and the DecodeSlitValue method are all gone, alongside
+  // SlitMnemonic above -- Stefan's own instruction this round was to drop this whole already-retired
+  // category entirely rather than keep it as dead weight. Id 8 is still never to be reused.
 
   // Node 606's eight frame-pointer-management ops, straight from Stefan's bit-pattern table:
   //   1010 1000 xxxx xxxx   0..0xFF   enter <locals>
@@ -1007,23 +1068,16 @@ public static class CvmInstructionSet
   /// </summary>
   public const int LoadParameterTag = 0xAD00;
 
-  /// <summary>
-  /// The fixed high-bit pattern (bits 15-8) of a <c>lal</c> word: binary 1010_1110. RETIRED 2026-09-09,
-  /// per Stefan: "'lal' & 'lap' are removed. use ''f' or 'fpush' from node 506 and add the offset to
-  /// calculate the address of a local or parameter." Unlike the CVM1 node-606 leftovers this pair was
-  /// always orphaned alongside (adjust, which stays orphaned with no replacement named), Stefan gave an
-  /// explicit replacement mechanism this time -- node 506's own new <see cref="FrameToRegisterMnemonic"/>
-  /// (<c>f</c>) / <see cref="PushFrameMnemonic"/> (<c>fpush</c>) plus ordinary <c>sub</c>/<c>add</c>
-  /// arithmetic against the frame pointer -- so this is a real retirement, not a continued orphaning.
-  /// Kept, per "do not remove any opcodes," but no longer referenced by <see cref="Instructions"/>; Id 26
-  /// is retired and must never be reused for a different instruction (see <see cref="Instructions"/>'s
-  /// own remarks). See <see cref="Ga144.C.Toolchain.CCodeGenerator"/>'s own remarks for the replacement
-  /// codegen sequence.
-  /// </summary>
-  public const int LoadAddressOfLocalTag = 0xAE00;
-
-  /// <summary>The fixed high-bit pattern (bits 15-8) of a <c>lap</c> word: binary 1010_1111. RETIRED 2026-09-09 alongside <see cref="LoadAddressOfLocalTag"/> -- see that constant's own remarks; Id 27 is retired.</summary>
-  public const int LoadAddressOfParameterTag = 0xAF00;
+  // LoadAddressOfLocalTag (was 0xAE00, lal) / LoadAddressOfParameterTag (was 0xAF00, lap) -- RETIRED
+  // 2026-09-09 per Stefan: "'lal' & 'lap' are removed. use ''f' or 'fpush' from node 506 and add the
+  // offset to calculate the address of a local or parameter." Unlike the CVM1 node-606 leftovers this
+  // pair was always orphaned alongside (adjust, which stays orphaned with no replacement named), Stefan
+  // gave an explicit replacement mechanism this time -- node 506's own FrameToRegisterMnemonic (f) /
+  // PushFrameMnemonic (fpush) plus ordinary sub/add arithmetic against the frame pointer -- so this was
+  // a real retirement, not a continued orphaning. DELETED OUTRIGHT later the same day (2026-09-09
+  // CVM1-opcode purge -- see this file's own remarks above), alongside LoadAddressOfLocalMnemonic/
+  // LoadAddressOfParameterMnemonic. Ids 26/27 are still never to be reused. See
+  // Ga144.C.Toolchain.CCodeGenerator's own remarks for the replacement codegen sequence.
 
   /// <summary>Isolates a word's top 8 bits, for testing against any of node 606's eight tags above.</summary>
   public const int Node606TagMask = 0xFF00;
@@ -1188,8 +1242,9 @@ public static class CvmInstructionSet
     /// address. This is exactly the fact a future label operand would need (see
     /// <see cref="CvmAssembler"/>'s own remarks) to turn "jump to that label" into the right literal
     /// offset; it just isn't wired up yet. <c>slit</c> has no such "relative to" question at all --
-    /// its value isn't an address, just a literal loaded directly into a register (see
-    /// <see cref="SlitTag"/>'s own remarks).
+    /// its value isn't an address, just a literal loaded directly into a register. <c>slit</c> itself
+    /// was later retired in favor of <c>lit</c> and its own constants deleted outright -- see this
+    /// file's own remarks on the 2026-09-09 CVM1-opcode purge.
     /// </summary>
     EmbeddedSignedValue,
 
@@ -1202,8 +1257,8 @@ public static class CvmInstructionSet
     /// unsigned offset/count, 0x00-0xFF -- see <see cref="Node606TagMask"/>'s own remarks). Like
     /// <see cref="EmbeddedSignedValue"/>, no label/import operand is supported (yet).
     ///
-    /// Also covers node 306's six address-register ops (<see cref="LoadAddressRegisterMnemonic"/>'s own
-    /// remarks), which need one refinement: the packed field isn't at bit 0 upward like every earlier
+    /// Also covers node 306's OLD, now-deleted six address-register ops (see this file's own remarks on
+    /// the 2026-09-09 CVM1-opcode purge), which needed one refinement: the packed field isn't at bit 0 upward like every earlier
     /// EmbeddedUnsignedValue mnemonic, so <see cref="CvmInstructionShape.ValueBitShift"/> exists to left-
     /// shift the operand before OR-ing it into <see cref="CvmInstructionShape.ValueBitMask"/>'s bits (and
     /// right-shift it back out when decoding) -- 0 for every OLDER EmbeddedUnsignedValue mnemonic (node
@@ -1255,8 +1310,9 @@ public static class CvmInstructionSet
     /// reserves 6 bits for its own (confirmed 2026-09-09, one bit wider than br's) and packs a 10-bit
     /// signed offset into the rest (<see cref="ConditionalBranchOffsetBitMask"/>) -- the two no longer
     /// share a width, see <see cref="CvmInstructionSet.ConditionalBranchTag"/>'s own remarks --
-    /// <c>slit</c> reserves only 4 bits for its tag and packs a 12-bit signed value into the rest
-    /// (<see cref="SlitValueBitMask"/>), and node 606's eight ops each reserve 8 bits for their own tag
+    /// <c>slit</c> (RETIRED and later deleted outright -- see this file's own remarks on the
+    /// 2026-09-09 CVM1-opcode purge) reserved only 4 bits for its tag and packed a 12-bit signed value
+    /// into the rest, and node 606's eight ops each reserve 8 bits for their own tag
     /// and pack an 8-bit UNSIGNED value into the rest (<see cref="Node606ValueBitMask"/>). <see cref="Tag"/>
     /// is expected to already be aligned to whatever's outside this mask (i.e.
     /// <c>Tag &amp; ValueBitMask == 0</c>), so a decoder can always recover the tag bits alone via
@@ -1267,8 +1323,9 @@ public static class CvmInstructionSet
     /// <summary>
     /// How far left the operand is shifted before OR-ing it into <see cref="ValueBitMask"/>'s bits (and
     /// shifted back right when decoding) -- 0 for every EmbeddedSignedValue/EmbeddedUnsignedValue shape
-    /// except node 306's six address-register ops, whose 2-bit register-index operand sits at bits 2-1
-    /// rather than bit 0 upward (see <see cref="LoadAddressRegisterMnemonic"/>'s own remarks). Default 0
+    /// except node 306's OLD, now-deleted six address-register ops, whose 2-bit register-index operand
+    /// sat at bits 2-1 rather than bit 0 upward (see this file's own remarks on the 2026-09-09
+    /// CVM1-opcode purge). Default 0
     /// leaves every earlier shape's packing arithmetic (a plain <c>Tag | (value &amp; ValueBitMask)</c>,
     /// no shift) completely unchanged.
     /// </summary>
@@ -1297,7 +1354,9 @@ public static class CvmInstructionSet
     new(Id: 5, RetMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 6, BranchMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: BranchTag, ValueBitMask: BranchOffsetBitMask),
     new(Id: 7, ConditionalBranchMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: ConditionalBranchTag, ValueBitMask: ConditionalBranchOffsetBitMask),
-    // Id 8 (was SlitMnemonic, "slit") RETIRED 2026-09-09 -- see SlitTag's own remarks. Never reuse Id 8.
+    // Id 8 (was SlitMnemonic, "slit") RETIRED 2026-09-09, and its own mnemonic/tag constants and decode
+    // helper deleted outright later the same day -- see this file's own remarks above on the
+    // 2026-09-09 CVM1-opcode purge. Never reuse Id 8.
     new(Id: 9, UnsignedShiftLeftMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 10, SignedShiftRightMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 11, UnsignedShiftRightMnemonic, 1, CvmOperandEncoding.None),
@@ -1316,7 +1375,8 @@ public static class CvmInstructionSet
     new(Id: 24, LoadLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506LoadLocalTag, ValueBitMask: Node506FrameValueBitMask),
     new(Id: 25, LoadParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506LoadParameterTag, ValueBitMask: Node506FrameValueBitMask),
     // Ids 26/27 (were LoadAddressOfLocalMnemonic "lal" / LoadAddressOfParameterMnemonic "lap") RETIRED
-    // 2026-09-09 -- see LoadAddressOfLocalTag's own remarks. Never reuse Ids 26/27.
+    // 2026-09-09, their mnemonic/tag constants later deleted outright too -- see this file's own remarks
+    // above on the 2026-09-09 CVM1-opcode purge. Never reuse Ids 26/27.
     new(Id: 28, LeaveMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 29, EqualMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 30, EqualToZeroMnemonic, 1, CvmOperandEncoding.None),
@@ -1347,48 +1407,35 @@ public static class CvmInstructionSet
     new(Id: 48, UnsignedDivideByTwoMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 49, DivideByTwoMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 50, AbsoluteValueMnemonic, 1, CvmOperandEncoding.None),
-    // Id 51 (NegateMnemonic "negate") -- FLAGGED, NOT retired 2026-09-09: CCodeGenerator emits "negate"
-    // for unary minus (do not confuse with NegMnemonic "neg", node 509's own genuinely different, still-
-    // live mnemonic).
-    new(Id: 51, NegateMnemonic, 1, CvmOperandEncoding.None),
-    // Ids 52-54 (ExchangeTMnemonic "xt" / LoadTMnemonic "ldt" / StoreTMnemonic "stt") -- FLAGGED, NOT
-    // retired 2026-09-09: CCodeGenerator emits "xt"/"ldt"/"stt" for every pointer dereference (load/store
-    // through an lvalue address) in C source -- see UnsignedGreaterThanMnemonic's own remarks for the
-    // full flag on this whole group.
-    new(Id: 52, ExchangeTMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 53, LoadTMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 54, StoreTMnemonic, 1, CvmOperandEncoding.None),
+    // Id 51 (was NegateMnemonic "negate") -- FLAGGED at the time, NOT retired: CCodeGenerator emitted
+    // "negate" for unary minus (do not confuse with NegMnemonic "neg", node 509's own genuinely
+    // different, still-live mnemonic). DELETED OUTRIGHT 2026-09-09 (CVM1-opcode purge, later the same
+    // day) once CCodeGenerator was rewritten to emit "neg" instead -- see this file's own remarks above.
+    // Never reuse Id 51.
+    // Ids 52-54 (were ExchangeTMnemonic "xt" / LoadTMnemonic "ldt" / StoreTMnemonic "stt") -- FLAGGED at
+    // the time, NOT retired: CCodeGenerator emitted "xt"/"ldt"/"stt" for every pointer dereference
+    // (load/store through an lvalue address) in C source. DELETED OUTRIGHT 2026-09-09 (same purge) once
+    // CCodeGenerator was rewritten to use node 306's arst/lda/sta instead -- see this file's own remarks
+    // above. Never reuse Ids 52-54.
     new(Id: 55, BitCountMnemonic, 1, CvmOperandEncoding.None),
-    // Ids 56-64 (ZeroExtendMnemonic "zext" through UnsignedMultiplyDoubleMnemonic "umuld") -- FLAGGED,
-    // NOT retired 2026-09-09 despite CVM1's old node 506 (this family's own implementing node, deleted
-    // 2026-09-01, coordinate reused for CVM2's stack-frame node) never having a CVM2 replacement: this
-    // exact nine-mnemonic sequence is still assembled, word for word, by
-    // Cvm.CvmDebuggerDefaultProgram's own "default test program" (zext/addc/ldd/std/xd/mul2d/div2d/sext/
-    // umuld), confirmed against REAL HARDWARE per that class's own remarks -- but that confirmation
-    // predates the CVM1->CVM2 rewrite, so it verified CVM1's old node 506, not anything a CVM2 board now
-    // runs. Retiring these would break that program's own assembly outright without making anything true
-    // about the CURRENT CVM2 mesh either way, so they are left exactly as before this audit; see
-    // UnsignedGreaterThanMnemonic's own remarks for this audit's parallel flag on node 508's family.
-    new(Id: 56, ZeroExtendMnemonic, 1, CvmOperandEncoding.None),
+    // Ids 56, 58-64 (were ZeroExtendMnemonic "zext" through UnsignedMultiplyDoubleMnemonic "umuld",
+    // minus Id 57/addc) -- FLAGGED at the time, NOT retired, despite CVM1's old node 506 (this family's
+    // own implementing node, deleted 2026-09-01, coordinate reused for CVM2's stack-frame node) never
+    // having a CVM2 replacement: this exact nine-mnemonic sequence was still assembled, word for word,
+    // by Cvm.CvmDebuggerDefaultProgram's own "default test program" (zext/addc/ldd/std/xd/mul2d/div2d/
+    // sext/umuld), confirmed against REAL HARDWARE per that class's own remarks -- but that confirmation
+    // predated the CVM1->CVM2 rewrite, so it verified CVM1's old node 506, not anything a CVM2 board
+    // actually runs. DELETED OUTRIGHT 2026-09-09 (same purge) once CvmDebuggerDefaultProgram's own smoke
+    // test was rewritten to drop this whole block -- see this file's own remarks above. Never reuse Ids
+    // 56, 58-64. Id 57 (addc) is the sole survivor of this family -- see its own remarks just below.
     new(Id: 57, AddWithCarryMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 58, LoadDMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 59, StoreDMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 60, ExchangeDMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 61, MultiplyByTwoDoubleMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 62, DivideByTwoDoubleMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 63, SignExtendMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 64, UnsignedMultiplyDoubleMnemonic, 1, CvmOperandEncoding.None),
-    // Ids 65-71 (ExchangePortMnemonic "xpt" through StoreLowMnemonic "stlo") -- FLAGGED, NOT retired,
-    // same reason: five of these seven (xpt/ldhi/ldlo/sthi/stlo -- 'in'/'out' are deliberately excluded
-    // by Stefan's own choice, see that same class's remarks) are likewise still assembled by
-    // Cvm.CvmDebuggerDefaultProgram and were likewise confirmed only against CVM1's old node 407.
-    new(Id: 65, ExchangePortMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 66, PortWriteMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 67, PortReadMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 68, LoadHighMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 69, LoadLowMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 70, StoreHighMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 71, StoreLowMnemonic, 1, CvmOperandEncoding.None),
+    // Ids 65-71 (were ExchangePortMnemonic "xpt" through StoreLowMnemonic "stlo") -- FLAGGED at the
+    // time, NOT retired, same reason: five of these seven (xpt/ldhi/ldlo/sthi/stlo -- 'in'/'out' were
+    // deliberately excluded from testing by Stefan's own choice, though never assembled anywhere else
+    // either) were likewise still assembled by Cvm.CvmDebuggerDefaultProgram and were likewise confirmed
+    // only against CVM1's old node 407. DELETED OUTRIGHT 2026-09-09 (same purge) once
+    // CvmDebuggerDefaultProgram's own smoke test was rewritten to drop this whole block -- see this
+    // file's own remarks above. Never reuse Ids 65-71.
     new(Id: 72, HaltMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 73, LongCallMnemonic, 2, CvmOperandEncoding.TrailingWord),
     new(Id: 74, LongJumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
@@ -1420,8 +1467,9 @@ public static class CvmInstructionSet
     // confirmed on real hardware. Never reuse either Id for a different instruction.
     new(Id: 99, LongBranchMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // Ids 101-106 (were ldar/star/inca/deca/lda/sta, self-describing EmbeddedUnsignedValue) RETIRED
-    // 2026-09-09 -- node 306's own current source no longer defines this family at all; see
-    // LoadAddressRegisterMnemonic's own remarks. Never reuse Ids 101-106.
+    // 2026-09-09 -- node 306's own current source no longer defines this family at all; their mnemonic
+    // and tag constants were later deleted outright too, see this file's own remarks above on the
+    // 2026-09-09 CVM1-opcode purge. Never reuse Ids 101-106.
 
     // Ids 107-110 (LoadRegisterFileMnemonic "rld" / StoreRegisterFileMnemonic "rst" /
     // PopRegisterFileMnemonic "rpop" / PushRegisterFileMnemonic "rpush") -- UN-RETIRED 2026-09-09 (see
@@ -1492,7 +1540,7 @@ public static class CvmInstructionSet
 
     // Node 510's five genuinely new ops (2026-09-09) -- tagged/node-resolved, CvmOperandEncoding.None.
     // 'addc itself REPOINTS the existing AddWithCarryMnemonic (Id 57) rather than adding a new Id -- see
-    // ExtendedStoreMnemonic's own remarks for the FLAGGED CvmDebuggerDefaultProgram implication.
+    // ExtendedStoreMnemonic's own remarks for the (since-resolved) CvmDebuggerDefaultProgram implication.
     new(Id: 139, ExtendedStoreMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 140, ExtendedLoadMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 141, ExtendedMultiplyByTwoMnemonic, 1, CvmOperandEncoding.None),
@@ -1511,7 +1559,7 @@ public static class CvmInstructionSet
   public static CvmInstructionShape? TryGetShapeById(int id) =>
       Instructions.FirstOrDefault(shape => shape.Id == id);
 
-  /// <summary>Sign-extends the low bits of <paramref name="word"/> selected by <paramref name="valueBitMask"/> -- the shared arithmetic behind <see cref="DecodeBranchOffset"/> and <see cref="DecodeSlitValue"/>.</summary>
+  /// <summary>Sign-extends the low bits of <paramref name="word"/> selected by <paramref name="valueBitMask"/> -- the shared arithmetic behind <see cref="DecodeBranchOffset"/> and <see cref="DecodeLitValue"/> (formerly also <c>DecodeSlitValue</c>, deleted alongside <c>slit</c> itself -- see this file's own remarks on the 2026-09-09 CVM1-opcode purge).</summary>
   private static int DecodeSignedField(int word, int valueBitMask)
   {
     int raw = word & valueBitMask;
@@ -1538,13 +1586,15 @@ public static class CvmInstructionSet
   /// </summary>
   public static int DecodeConditionalBranchOffset(int word) => DecodeSignedField(word, ConditionalBranchOffsetBitMask);
 
-  /// <summary>Extracts a <c>slit</c> word's signed value field, sign-extending its low 12 bits. Unlike <see cref="DecodeBranchOffset"/>, this IS the whole answer -- a <c>slit</c> value isn't relative to anything. RETIRED alongside <c>slit</c> itself (see <see cref="SlitTag"/>'s own remarks) -- no longer called from <see cref="TryDescribeSelfDecodingWord"/>, kept only for decoding an already-shipped word that used the old encoding.</summary>
-  public static int DecodeSlitValue(int word) => DecodeSignedField(word, SlitValueBitMask);
+  // DecodeSlitValue -- extracted a slit word's signed value field (its low 12 bits). RETIRED alongside
+  // slit itself and later DELETED OUTRIGHT (2026-09-09, CVM1-opcode purge -- see this file's own
+  // remarks above) rather than kept for decoding an already-shipped word, per Stefan's own instruction
+  // to drop already-retired historical constants (and their supporting code) entirely.
 
-  /// <summary>Extracts a <c>lit</c> word's signed value field, sign-extending its low 10 bits. Like <see cref="DecodeSlitValue"/> (not <see cref="DecodeBranchOffset"/>), this IS the whole answer.</summary>
+  /// <summary>Extracts a <c>lit</c> word's signed value field, sign-extending its low 10 bits. This IS the whole answer -- unlike <see cref="DecodeBranchOffset"/>, a <c>lit</c> value isn't relative to anything.</summary>
   public static int DecodeLitValue(int word) => DecodeSignedField(word, LitValueBitMask);
 
-  /// <summary>Extracts one of node 606's eight ops' unsigned value field -- its low 8 bits, taken as-is (never sign-extended, unlike <see cref="DecodeBranchOffset"/>/<see cref="DecodeSlitValue"/>).</summary>
+  /// <summary>Extracts one of node 606's eight ops' unsigned value field -- its low 8 bits, taken as-is (never sign-extended, unlike <see cref="DecodeBranchOffset"/>).</summary>
   public static int DecodeNode606Value(int word) => word & Node606ValueBitMask;
 
   /// <summary>
@@ -1639,7 +1689,8 @@ public static class CvmInstructionSet
     // ValueBitMask (derived as ~shape.ValueBitMask), not a single hardcoded width -- node 606's one
     // remaining EmbeddedUnsignedValue op (adjust, still 8-bit tag/8-bit value, Node606TagMask/
     // Node606ValueBitMask -- its former siblings stl/stp/ldl/ldp were repointed to node 506 and lal/lap
-    // were retired outright, see LoadAddressOfLocalTag's own remarks) and node 506's enter (7-bit
+    // were retired outright, see this file's own remarks above on the 2026-09-09 CVM1-opcode purge) and
+    // node 506's enter (7-bit
     // tag/9-bit value, Node506EnterTag/Node506FrameValueBitMask) genuinely differ in width, so the OLD
     // single-hardcoded-mask version of this loop (word & Node606TagMask for every shape) would have
     // decoded enter's own 9-bit value one bit short. Node606TagMask/DecodeNode606Value themselves are
@@ -1650,9 +1701,10 @@ public static class CvmInstructionSet
     // shadow node 306's six address-register ops (0xD800-0xDBFF, inside slit's old 0xD000-0xDFFF range).
     // Both are gone now: lal/lap were retired outright the same day cbr got its real tag (see
     // ConditionalBranchTag's own remarks), and slit itself was retired later the same day, in favor of
-    // the already-existing node-509 lit (see SlitTag's own remarks) -- removing its dedicated check
-    // entirely, so node 306's six ops now fall through correctly to this loop with nothing left to
-    // shadow them.
+    // the already-existing node-509 lit (its own SlitTag check, and later its whole constant family, was
+    // removed -- see this file's own remarks above on the 2026-09-09 CVM1-opcode purge) -- removing its
+    // dedicated check entirely, so node 306's six ops now fall through correctly to this loop with
+    // nothing left to shadow them.
     foreach (CvmInstructionShape shape in Instructions)
     {
       if (shape.Encoding != CvmOperandEncoding.EmbeddedUnsignedValue)

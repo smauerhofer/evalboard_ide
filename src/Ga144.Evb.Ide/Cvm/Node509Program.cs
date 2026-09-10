@@ -183,7 +183,8 @@ namespace Ga144.Evb.Ide.Cvm;
 /// this same 10-bit signed field, UNCHANGED by this fix) -- see
 /// <see cref="CvmInstructionSet.LitTag"/>'s own remarks for the full derivation. <c>lit</c> went on to
 /// absorb the retired <c>slit</c>'s own role 2026-09-09 ("'slit' is replaced by 'lit'. remove it from
-/// the language.") -- see <see cref="CvmInstructionSet.SlitTag"/>'s own remarks. <c>lit</c> needs no
+/// the language.") -- <c>slit</c>'s own mnemonic/tag constants were later deleted outright too, see
+/// <see cref="CvmInstructionSet"/>'s own remarks on the 2026-09-09 CVM1-opcode purge. <c>lit</c> needs no
 /// live node/linker resolution at all, unlike every one of node 509's own twelve TAGGED words below.</item>
 /// <item><c>1011_00??_????_????</c> -- falls through to <c>drop &gt;r u/r@ ex 0xffff and u/r! ;</c>
 /// (the added <c>drop &gt;r</c> is the third part of the fix above): discard the leftover cascade-test
