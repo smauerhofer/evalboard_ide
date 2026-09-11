@@ -30,39 +30,6 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-11T16:08:13.4800039
-      utcDateTime: 2026-09-11T16:08:13.4800039Z
-      localDateTime: 2026-09-11T18:08:13.4800039+02:00
-      date: 2026-09-11T00:00:00.0000000
-      day: 11
-      dayOfWeek: Friday
-      dayOfYear: 254
-      hour: 16
-      millisecond: 480
-      microsecond: 3
-      nanosecond: 900
-      minute: 8
-      month: 9
-      offset: 00:00:00
-      totalOffsetMinutes: 0
-      second: 13
-      ticks: 639247396934800039
-      utcTicks: 639247396934800039
-      timeOfDay: 16:08:13.4800039
-      year: 2026
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -83,6 +50,19 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -14636,7 +14616,7 @@ projects:
 
         # 307 import
 
-        # 0x0e org
+        # 0x0c org
 
         entry ar/main
 
@@ -14675,9 +14655,13 @@ projects:
 
         : 'sta A[ k/! ]] lit ar/adr ;
 
-        : 'arinc @ ar/inc !+ 0x10000 and # ar/leave until @ ar/inc ! ;
+        : 'arinc2 leap
 
-        : 'ardec @ ar/dec !+ # ar/leave -until @ ar/dec ! ;
+        : 'arinc then @ ar/inc !+ 0x10000 and # ar/leave until @ ar/inc ! ;
+
+        : 'ardec2 leap
+
+        : 'ardec then @ ar/dec !+ # ar/leave -until @ ar/dec ! ;
 
         : 'arld ar/r@ !+ ar/pop ! ;
 
@@ -14695,14 +14679,16 @@ projects:
 
         opcode ardec 1101_10??_????_?aaa decrement address register 0..5. register encoded in aaa
 
+        opcode arinc2 1101_10??_????_?aaa increment address register 0..5 by 2. register encoded in aaa
+
+        opcode ardec2 1101_10??_????_?aaa decrement address register 0..5 by 2. register encoded in aaa
+
         opcode arld  1101_1000_1???_?aa0 load address register 0..5, address in r, page in stack. register encoded in aaa
 
         opcode arst  1101_1000_0???_?aa0 store address register 0..5, address in r, page in stack. register encoded in aaa
 
         )
       ramWords:
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -14741,32 +14727,34 @@ projects:
       - 0x31DFA
       - 0x0003F
       - 0x2F455
-      - 0x1141E
+      - 0x1141C
       - 0x049B2
       - 0x13410
       - 0x05B1A
       - 0x05DB2
       - 0x09E22
       - 0x09555
-      - 0x0572B
+      - 0x05729
       - 0x13416
-      - 0x0360E
+      - 0x13430
+      - 0x0360C
       - 0x0FDFA
       - 0x10000
-      - 0x1941E
+      - 0x1941C
+      - 0x0360C
+      - 0x0B555
+      - 0x13437
+      - 0x0360E
+      - 0x0F21C
       - 0x0360E
       - 0x0B555
-      - 0x03610
-      - 0x0F21E
-      - 0x03610
+      - 0x13410
+      - 0x0F616
       - 0x0B555
-      - 0x13412
-      - 0x0F618
-      - 0x0B555
-      - 0x07616
-      - 0x0371C
+      - 0x07614
+      - 0x0371A
       startup:
-        entryPoint: 0x020
+        entryPoint: 0x01E
         p: 0x000
         a: 0x000
         b: 0x000
@@ -14852,69 +14840,44 @@ projects:
     - coordinate: 308
       enabled: true
       sourceCode: >+
-        ( CVM2 node 308. VM 32 arithmetic, 1101_11??_????_???? )
+        ( CVM2 node 308. VM 32 bit floatingpoint register node, 1101_11??_????_???? )
 
-        ( contains 4 32-bit address register )
+        ( contains 8 floatingpoint register )
 
-        ( low word in x, high word in x+1 )
+        ( low mantissa in x, high mantissa in x+1, exp in x+2, sign in x+3 )
 
         # 307 import
 
-        # 0x08 org
+        # 0x20 org
 
-        entry d/main
+        entry fpr/main
 
         # 0 /a
 
         # left /b
 
 
-        : d/inc 1 . + ;
+        : fpr/@next ( ) A[ k/pop ]] lit !b A[ !p ]] lit !b @b !+ ;
 
-        : d/dec -1 . + ;
-
-        : d/!+ 0xffff and !+ ;
-
-        : d/pop ( -w) A[ k/pop ]] lit !b A[ !p ]] lit !b @b ;
-
-        : d/push ( w) A[ @p k/push ]] lit !b !b ;
+        : fpr/!next ( w-) A[ @p k/push ]] lit !b !b ;
 
 
-        : d/leave A[ k/leave ; ]] lit !b
+        : fpr/pop ( r-) 2* 2* a! fpr/@next fpr/@next fpr/@next fpr/@next ;  
 
-        : d/main  A[ 2* !p !p ]] lit !b @b
-          @b
-          // set register in a
-          dup 0x03 and 2* a!
-          // call word
-          2/ 2/ 0x3f and ex d/leave ;
+        : fpr/push ( r-) 2* 2* a! @+ @+ @+ @ fpr/!next fpr/!next fpr/!next fpr/!next ;
 
-        : 'dpop d/pop !+ d/pop ! ;
 
-        : 'dpush @+ @ d/push d/push ;
+        : fpr/leave A[ k/leave ; ]] lit !b
 
-        : 'dinc @ d/inc dup d/!+ 0x10000 and # d/leave until @ d/inc d/!+ ;
+        : fpr/main  A[ !p 2* !p ]] lit !b @b @b r--- fpr/leave ;
 
-        : 'ddec @ d/dec dup d/!+ # d/leave -until @ d/dec d/!+ ;
 
-        : 'dadd @ d/pop + dup d/!+ 2* -if dup xor d/inc else dup xor then @ d/pop + . + d/!+ ;
+        : fpr/@ ( r-mmes) 2* 2* a! @+ @+ @+ @ ;
 
-        : 'dor @+ inv @ inv and inv d/push
+        : fpr/! ( mmesr-) 2* 2* a! !+ !+ !+ ! ;
 
 
         (
-
-        opcode dpop  1101_11??_????_??aa pop from stack into register d[a]
-
-        opcode dpush 1101_11??_????_??aa push register d[a] onto stack
-
-        opcode dinc  1101_11??_????_??aa increment register d[a]
-
-        opcode ddec  1101_11??_????_??aa decrement register d[a]
-
-        opcode dadd  1101_11??_????_??aa add register d[a] with stack
-
-        opcode dor   1101_11??_????_??aa or hi & lo part of r[a] and push result on stack. used to detect if a register is 0
 
         )
 
@@ -14929,64 +14892,64 @@ projects:
       - 0x15555
       - 0x15555
       - 0x15555
-      - 0x049F5
-      - 0x00001
-      - 0x049F5
-      - 0x3FFFF
-      - 0x0403D
-      - 0x0FFFF
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x05B12
       - 0x13422
       - 0x0C9B2
-      - 0x09F55
+      - 0x09F3D
       - 0x05B25
       - 0x05626
+      - 0x364AA
+      - 0x13420
+      - 0x13420
+      - 0x13420
+      - 0x11420
+      - 0x364AA
+      - 0x07C1A
+      - 0x03624
+      - 0x13424
+      - 0x13424
+      - 0x11424
       - 0x05BB2
       - 0x11428
       - 0x05B02
-      - 0x37932
-      - 0x00D12
-      - 0x00003
-      - 0x3E4AA
-      - 0x30712
-      - 0x0003F
-      - 0x3F455
-      - 0x11414
-      - 0x1340E
-      - 0x0F60E
+      - 0x0C432
+      - 0x009B2
+      - 0x135D5
+      - 0x11431
+      - 0x364AA
+      - 0x07C1A
+      - 0x03555
+      - 0x364AA
+      - 0x0F83A
       - 0x0B555
-      - 0x07EB2
-      - 0x13412
-      - 0x11412
-      - 0x03608
-      - 0x2560C
-      - 0x040B2
-      - 0x10000
-      - 0x19414
-      - 0x03608
-      - 0x1140C
-      - 0x0360A
-      - 0x2560C
-      - 0x1B414
-      - 0x0360A
-      - 0x1140C
-      - 0x0360E
-      - 0x3CDB2
-      - 0x1340C
-      - 0x37238
-      - 0x243B2
-      - 0x13408
-      - 0x11439
-      - 0x243B2
-      - 0x0360E
-      - 0x3C9F2
-      - 0x1140C
-      - 0x0660A
-      - 0x320CA
-      - 0x13412
+      - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x016
+        entryPoint: 0x033
         p: 0x000
         a: 0x000
         b: 0x000
@@ -14994,11 +14957,117 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 309
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 309. VM 32 bit floatingpoint management node, 1101_11??_????_???? )
+
+        ( contains floatingpoint variables )
+
+        # 308 import
+
+        # 8 org
+
+        entry fpm/main
+
+        # 0 /a
+
+        # right /b
+
+
+        : fpm/pop  ( r-) A[ @p fpr/pop  ]] lit !b !b ;
+
+        : fpm/push ( r-) A[ @p fpr/push ]] lit !b !b ;
+
+
+        : fpm/leave A[ fpr/leave ; ]] lit !b
+
+        : fpm/main # fpm/leave lit >r A[ !p !p ]] lit !b @b
+          -if // 1101_111?_????_????
+            @b --l- ;
+          then // 1101_110?_????_????
+          @p ---u ;
+
+        : fpm/0@ dup xor
+
+        : fpm/@ ( r-mmes) 2* 2* a! @+ @+ @+ @ ;
+
+        : fpm/1@ 1 fpm/@ ;
+
+
+        : fpm/0! dup xor
+
+        : fpm/! ( mmesr-) 2* 2* a! !+ !+ !+ ! ;
+
+        : fpm/1! 1 fpm/! ;
+
+
+      ramWords:
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x05B25
+      - 0x05626
+      - 0x05B25
+      - 0x0562B
+      - 0x05BB2
+      - 0x11431
+      - 0x04812
+      - 0x0000C
+      - 0x0D9B2
+      - 0x09F6C
+      - 0x009B2
+      - 0x11575
+      - 0x049B2
+      - 0x11545
+      - 0x243B2
+      - 0x364AA
+      - 0x07C1A
+      - 0x03555
+      - 0x05717
+      - 0x00001
+      - 0x243B2
+      - 0x364AA
+      - 0x0F83A
+      - 0x0B555
+      - 0x0571D
+      - 0x00001
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x00E
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15794,8 +15863,29 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 409
-      enabled: false
-      sourceCode: ''
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 409. VM 32 bit floatingpoint unary operations, 1101_110?_????_???? )
+
+        ( contains floatingpoint variables )
+
+        # 309 import
+
+        # 0 org
+
+        entry fpu/main
+
+        # 0 /a
+
+        # right /b
+
+
+
+        : fpu/leave A[ fpm/leave ; ]] lit !b
+
+        : fpu/main # fpu/leave lit >r A[ !p ]] lit !b @b
+          dup >r 1 and A[ @p fpm/@ ]] lit !b !b
+          A[ !p !p !p !p ]]
       ramWords: []
       startup:
         entryPoint: 0x000
