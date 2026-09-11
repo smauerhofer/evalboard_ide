@@ -41,6 +41,26 @@ public sealed class CvmRelocation
   public required int WordOffset { get; init; }
   public required string SymbolName { get; init; }
   public required CvmRelocationType Type { get; init; }
+
+  /// <summary>ADDED 2026-09-11, for node 306's six address-register ops (<c>arinc</c>/<c>ardec</c>/
+  /// <c>arld</c>/<c>arst</c>/<c>lda</c>/<c>sta</c> -- see <c>Ga144.Cvm.Toolchain.CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue</c>'s
+  /// own remarks): a value already known at ASSEMBLE time (an embedded register index, 0 for every
+  /// other mnemonic) that the linker OR's into the symbol's resolved word alongside <see cref="Type"/>'s
+  /// own computation, for a <see cref="CvmRelocationType.CvmOpcode"/> relocation only. Every OTHER
+  /// relocation this toolchain has ever emitted needed exactly one unknown (the symbol's own final
+  /// address) resolved at link time; node 306's six ops are the first to need a SECOND value OR'd into
+  /// the same word that the assembler already knows in full when it emits this relocation -- so rather
+  /// than invent a whole new relocation type (and a whole new record shape the on-disk .gaobj format
+  /// would need to grow branches for), this is carried as one more plain field on the existing
+  /// CvmOpcode relocation, defaulting to 0 so every pre-existing relocation (and every mnemonic that
+  /// isn't node 306's) is completely unaffected. See <c>Ga144.Cvm.Toolchain.CvmAssembler</c>'s own
+  /// remarks on its NodeResolvedEmbeddedValue handling for where this gets populated, and
+  /// <c>Ga144.Cvm.Toolchain.CvmLinker</c>'s own remarks on its <see cref="CvmRelocationType.CvmOpcode"/>
+  /// case for where it gets applied. <b>Breaking on-disk change:</b> a <c>.gaobj</c> saved before this
+  /// field existed has no word for it in its own "RELO" chunk -- re-assemble from source rather than
+  /// loading an old object file, exactly like every other CvmObjectFile-shape change in this project's
+  /// own history (see this file's class remarks).</summary>
+  public int EmbeddedValue { get; init; }
 }
 
 /// <summary>
@@ -54,7 +74,8 @@ public sealed class CvmRelocation
 /// a "STRT" chunk (the shared string table every name below is an offset into), a "SECT" chunk (one
 /// entry per section: its name and its packed words), a "SYMT" chunk (one entry per symbol: name,
 /// binding, which section index it belongs to -- or -1 for external -- and its word-offset value),
-/// and a "RELO" chunk (one entry per relocation: section index, word offset, symbol index, type).
+/// and a "RELO" chunk (one entry per relocation: section index, word offset, symbol index, type, and --
+/// added 2026-09-11 alongside <see cref="CvmRelocation.EmbeddedValue"/> -- an embedded value).
 /// </summary>
 public sealed class CvmObjectFile
 {
@@ -116,6 +137,7 @@ public sealed class CvmObjectFile
         relocationWriter.Write(relocation.WordOffset);
         relocationWriter.Write(IndexOfSymbol(relocation.SymbolName));
         relocationWriter.Write((byte)relocation.Type);
+        relocationWriter.Write(relocation.EmbeddedValue);
       }
 
       document.AddChunk("RELO", relocationPayload.ToArray());
@@ -176,12 +198,14 @@ public sealed class CvmObjectFile
         int wordOffset = relocationReader.ReadInt32();
         int symbolIndex = relocationReader.ReadInt32();
         var type = (CvmRelocationType)relocationReader.ReadByte();
+        int embeddedValue = relocationReader.ReadInt32();
         objectFile.Relocations.Add(new CvmRelocation
         {
           SectionName = objectFile.Sections[sectionIndex].Name,
           WordOffset = wordOffset,
           SymbolName = objectFile.Symbols[symbolIndex].Name,
           Type = type,
+          EmbeddedValue = embeddedValue,
         });
       }
     }

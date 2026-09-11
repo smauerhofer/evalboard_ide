@@ -65,7 +65,12 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <c>then</c> to whatever comes next.</item>
 /// </list>
 ///
-/// <b>STILL FLAGGED, NOT fixed by the 2026-09-06 follow-up: the final branch remains unterminated,
+/// <b>SUPERSEDED 2026-09-11 -- see <see cref="Source"/>'s own remarks: Stefan confirmed directly this
+/// node compiles fine.</b> Everything in this paragraph and the two list items below it describes what
+/// was, at the time, a reasonable reading of the source as pasted -- it turned out to be based on this
+/// repo's own bundled sample data, not Stefan's real project, and is kept here only as history.
+///
+/// <b>Formerly flagged as NOT fixed by the 2026-09-06 follow-up: the final branch remains unterminated,
 /// with no dispatch code of its own.</b> The very last line is still
 /// "<c>then // 1101_00??_????_????</c>" (only its own comment's leading nibble changed, from "1100" to
 /// "1101" -- see above) followed immediately by an empty comment block (<c>( )</c>) and nothing else --
@@ -100,9 +105,27 @@ internal static class Node307Program
   /// <c>workspace.yaml</c> project export as part of the opcode/assembler-vs-node reconciliation audit
   /// -- the prior "SYNCED, 2026-09-08" copy here had itself drifted from Stefan's live source by two
   /// stray leftover header lines (a "contains 8 32-bit address register" line that belongs to node 306,
-  /// not 307) and a comment-only nibble typo, both now removed/fixed to match the export exactly. This
-  /// node still defines no tick-prefixed opcode of its own (see the class remarks above) and its final
-  /// dispatch branch is still open/incomplete in Stefan's own source, exactly as previously flagged.
+  /// not 307) and a comment-only nibble typo, both now removed/fixed to match the export exactly.
+  ///
+  /// <b>CONFIRMED COMPILING 2026-09-11, per Stefan directly ("node 307 compiles fine. just ignore your
+  /// gap. now resolve the opcodes.").</b> This overrides every earlier claim in this class's own remarks
+  /// above and in <c>claude/cvm-node306-307-address-registers.md</c> that this node's final dispatch
+  /// branch (still ending, unchanged below, in <c>then // 1101_00??_????_????</c> followed by an empty
+  /// comment block, no further dispatch code, and no closing <c>;</c> for <c>k/main</c> itself) was
+  /// incomplete/uncompilable -- that reading was drawn from this repo's own bundled
+  /// <c>data/workspace.yaml</c> sample/reference fixture, not from Stefan's actual live Node Editor
+  /// project, which this sandbox cannot read. Node 306's own six ops (see
+  /// <see cref="Node306Program"/>) resolving to real, non-<c>nop</c> opcodes in the CVM Debugger confirms
+  /// this transitively (node 306 imports node 307). The shape above is reproduced verbatim, unexplained
+  /// ending included, on Stefan's own authority that it compiles -- it is no longer flagged as a gap.
+  ///
+  /// <b>REVISED 2026-09-11 (same day, "here are the fixed nodes" -- alongside node 306/407's own fixes,
+  /// see those classes' own remarks), the SAME day as the confirmation above.</b> <c>k/main</c>'s own
+  /// prelude changed from <c>A[ 2* !p !p ]] lit !b @b @b &gt;r</c> (fetch twice, then push return) to
+  /// <c>A[ !p 2* !p ]] lit !b @b &gt;r @b</c> (reordered inside the <c>A[...]]</c> literal-emit, and the
+  /// second fetch now happens AFTER <c>&gt;r</c> rather than before it) -- everything from the first
+  /// <c>-if</c> onward, including the still-unterminated final branch, is byte-for-byte unchanged.
+  /// Reproduced verbatim; not independently re-derived here.
   /// </summary>
   public const string Source = """
       ( CVM2 node 307. VM ternary main, 1101_????_????_???? )
@@ -119,7 +142,7 @@ internal static class Node307Program
       : k/push ( w) A[ @p n/push ]] lit !b !b ;
       // : k/next ( -w) A[ n/next ]] lit !b A[ !p ]] lit !b @b ;
       : k/leave A[ n/leave ; ]] lit !b
-      : k/main # k/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r
+      : k/main # k/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b
         -if // 1101_1???_????_????
           2* -if // 1101_11??_????_????
             r> --l- ;

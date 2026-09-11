@@ -697,14 +697,17 @@ internal static class CvmAssemblyLanguage
         // `tag | resolvedAddress` (what every other None-shaped mnemonic here uses, and what this file
         // used for these six from when they were first wired until this correction) therefore encoded
         // the WRONG word: it left the resolved word address sitting in the low bits ar/main reads as the
-        // register selector, instead of shifting it up into the function-select field. Fixed by routing
-        // all six through `NodeResolvedFixedRegisterShiftByMnemonic` (see that dictionary's own remarks,
-        // just below `NodeResolvedEmbeddedValueFieldLayoutByMnemonic`) in `BuildDecodeTable`/
-        // `BuildEncodeTable`'s own tails, which shifts the resolved address left by 3 and ORs in a FIXED
-        // register index of 0 -- register 0 always, since neither `CvmAssembler` (the real command-line/
-        // C-compiler-facing assembler) nor the `.gaprim` primitive-table format has any way to carry a
-        // per-call register operand for a plain `None`-shaped mnemonic; see that dictionary's own remarks
-        // for the FLAGGED gap this leaves (registers 1-3 unreachable from compiled code today).
+        // register selector, instead of shifting it up into the function-select field -- see
+        // NodeResolvedEmbeddedValueFieldLayoutByMnemonic's own remarks. CORRECTED 2026-09-11: these six
+        // are node 306's REAL register-indexed ops, exactly the same NodeResolvedEmbeddedValue shape node
+        // 308's/511's own families use just below -- node 306 genuinely has six 32-bit address registers
+        // (0-5), and ar/main's own dispatch already carried a real 3-bit register-select field in its
+        // incoming call byte's low bits all along (see CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic's
+        // own remarks for the full correction). The stale "fixed at register 0, registers 1-3 unreachable"
+        // workaround this comment used to describe (routing all six through a separate
+        // NodeResolvedFixedRegisterShiftByMnemonic dictionary that hardcoded an embedded register index
+        // of 0) is gone -- these now flow through the exact same generic NodeResolvedEmbeddedValue path
+        // node 308/511 already use, register operand and all.
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (Node306Program.Coordinate, "'arinc", 0xD800),
         [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (Node306Program.Coordinate, "'ardec", 0xD800),
         [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (Node306Program.Coordinate, "'arld", 0xD800),
@@ -782,46 +785,20 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoubleDecrementMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
         [CvmInstructionSet.DoubleAddMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
         [CvmInstructionSet.DoubleOrMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
-      };
 
-  /// <summary>
-  /// ADDED 2026-09-09: node 306's six address-register ops (<c>arinc</c>/<c>ardec</c>/<c>arld</c>/
-  /// <c>arst</c>/<c>lda</c>/<c>sta</c>) need the SAME "shift the resolved word address up to make room
-  /// for an embedded field" correction <see cref="NodeResolvedEmbeddedValueFieldLayoutByMnemonic"/>
-  /// applies for node 511/308 -- node 306's own <c>ar/main</c> pulls a 3-bit register-select field out
-  /// of the low bits before shifting the rest down to get its actual jump target (see
-  /// <c>NodeSymbolByMnemonic</c>'s own remarks on these six for the exact bit derivation) -- but unlike
-  /// node 511/308, none of these six is wired as <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>:
-  /// each is an ordinary <see cref="CvmInstructionSet.CvmOperandEncoding.None"/> mnemonic that resolves
-  /// to exactly ONE opcode word, with its embedded register field FIXED at 0 rather than exposed as an
-  /// assembler operand. That's a deliberate simplification, not an oversight: <c>CvmAssembler</c> (the
-  /// real command-line assembler the C compiler's own output actually goes through -- see its own
-  /// remarks on why node 511's <c>rld</c>/<c>rst</c>/<c>rpop</c>/<c>rpush</c> were NEVER assemblable
-  /// there) and the <c>.gaprim</c> primitive-table format both only know how to carry a single, whole
-  /// opcode word per mnemonic name -- neither has any notion of a per-call embedded operand the way this
-  /// file's own <see cref="Assemble"/>/<see cref="DisassemblePage0"/> (used only by the CVM Debugger's
-  /// own hand-typed assembly panel) do. Wiring node 306 as <c>NodeResolvedEmbeddedValue</c> would
-  /// therefore have made it resolve correctly only inside the debugger's own panel and silently fall
-  /// back to node 306's dead OLD self-describing shape (or simply fail to assemble) everywhere a real
-  /// <c>.casm</c> file is involved, including every C program <see cref="CCodeGenerator"/> compiles.
-  ///
-  /// <b>FLAGGED for Stefan:</b> fixing the register field at 0 means only ONE of node 306's four address
-  /// registers is reachable from compiled/assembled code today; registers 1-3 are real, addressable
-  /// hardware this scheme cannot reach until <c>CvmAssembler</c>/<c>.gaprim</c> grow a real
-  /// register-operand mechanism (mnemonic + immediate register index, the primitive table keyed by both
-  /// rather than by mnemonic name alone). Not attempted here, since inventing that mechanism now -- for a
-  /// need (more than one live pointer at a time) nothing in this compiler currently has -- would be
-  /// exactly the kind of unconfirmed design guess this project avoids.
-  /// </summary>
-  private static readonly IReadOnlyDictionary<string, int> NodeResolvedFixedRegisterShiftByMnemonic =
-      new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-      {
-        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = 3,
-        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = 3,
-        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = 3,
-        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = 3,
-        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = 3,
-        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = 3,
+        // Node 306's six address-register ops (arinc/ardec/arld/arst/lda/sta) -- ADDED 2026-09-11,
+        // replacing the former NodeResolvedFixedRegisterShiftByMnemonic workaround this dictionary used
+        // to leave them out of (see CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic's own
+        // remarks for the full correction: node 306 genuinely has six 32-bit address registers, 0-5, not
+        // the single hardwired one that workaround assumed). Same field-layout shape as node 308's just
+        // above (a plain 0-based function field, no bias) -- just a 6-bit/3-bit split instead of node
+        // 308's 6-bit/2-bit one, per ar/main's own "dup 0x07 and 2* a!" / "2/ 2/ 2/ 0x3f and ex".
+        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
+        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
+        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
+        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
+        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
+        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
       };
 
   /// <summary>
@@ -945,15 +922,6 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
-      // Node 306's six ops only -- see NodeResolvedFixedRegisterShiftByMnemonic's own remarks: the
-      // resolved word address is the FUNCTION field, not the whole free-bits value, so it must be
-      // shifted up before OR-ing with the tag (the register field this vacates is always 0).
-      if (NodeResolvedFixedRegisterShiftByMnemonic.TryGetValue(mnemonic, out int fixedShift))
-      {
-        table[tag | (resolvedAddress << fixedShift)] = (mnemonic, wordLength, null);
-        continue;
-      }
-
       table[tag | resolvedAddress] = (mnemonic, wordLength, null);
     }
 
@@ -1017,18 +985,70 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
-      // Node 306's six ops only -- see NodeResolvedFixedRegisterShiftByMnemonic's own remarks (same
-      // shift-before-OR correction as BuildDecodeTable's own tail, just above).
-      if (NodeResolvedFixedRegisterShiftByMnemonic.TryGetValue(mnemonic, out int fixedShift))
-      {
-        table[mnemonic] = (tag | (resolvedAddress << fixedShift), wordLength, hasOperand, false, 0);
-        continue;
-      }
-
       table[mnemonic] = (tag | resolvedAddress, wordLength, hasOperand, false, 0);
     }
 
     return table;
+  }
+
+  /// <summary>
+  /// CORRECTED 2026-09-11: Stefan reported "arld 1" silently assembling as a bare, operand-dropped
+  /// <c>nop</c> even though node 306 is a real, wired opcode family (see <see cref="NodeSymbolByMnemonic"/>'s
+  /// own node 306 entries) -- and firmly rejected the theory this session first reached for (node 307's
+  /// own compile failing), so the real defect was in THIS file, not the node source. It was: <see cref="Assemble"/>'s
+  /// own "undefined opcode -&gt; nop" fallback (this class's own remarks on that rule, "these opcodes have
+  /// not been defined yet ... all undefined opcodes should generate a nop") only ever checked whether
+  /// <see cref="CvmInstructionSet.TryGetShape"/> recognizes the mnemonic AT ALL -- it never distinguished
+  /// a mnemonic that is genuinely, permanently unimplemented (no <see cref="NodeSymbolByMnemonic"/> entry
+  /// at all -- CVM1's orphaned ALU ops, node 508's old comparison family, etc., where nop-substitution is
+  /// exactly Stefan's own rule) from one that IS wired to a real node but simply failed to resolve THIS
+  /// run (wrong node not compiled, symbol renamed/removed, or -- node 306/308/511's own
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/> shape only -- the
+  /// resolved address falling outside that dispatch's own embeddable function-select window). The second
+  /// case is a real, surprising failure a person needs to see and act on, not a deliberate design choice --
+  /// silently reducing it to "nop" (worse: an operand-dropping nop, so "arld 1" and "arld" look identical
+  /// once assembled) hid the actual problem behind what looked like ordinary, expected behavior. This
+  /// method is <see cref="Assemble"/>'s new first check on that fallback path: it returns a precise,
+  /// actionable reason when the mnemonic IS wired (so <see cref="Assemble"/> now fails loudly instead of
+  /// nop-substituting), or null when it genuinely has no wiring at all (so <see cref="Assemble"/>'s
+  /// existing nop-substitution keeps working exactly as before for those). Never called for a mnemonic
+  /// <see cref="BuildEncodeTable"/> already resolved -- only for the ones it silently dropped.
+  /// </summary>
+  private static string? DiagnoseUnresolvedWiredMnemonic(string mnemonic, IReadOnlyDictionary<int, F18CompileResult> compiledRam)
+  {
+    if (!NodeSymbolByMnemonic.TryGetValue(mnemonic, out (int NodeCoordinate, string SymbolName, int Tag) wiring))
+    {
+      // No live-node wiring at all -- a genuinely, permanently unimplemented mnemonic (CVM1 leftovers,
+      // etc.). Stefan's own nop-substitution rule is exactly right for this case; let Assemble's existing
+      // fallback handle it unchanged.
+      return null;
+    }
+
+    if (!compiledRam.TryGetValue(wiring.NodeCoordinate, out F18CompileResult? compile))
+    {
+      return $"is implemented on node {wiring.NodeCoordinate:000}, but node {wiring.NodeCoordinate:000} did not compile (or wasn't included) this run -- fix/save it in the Node Editor, then re-assemble.";
+    }
+
+    if (!compile.Symbols.TryGetValue(wiring.SymbolName, out F18ExportedSymbol? symbol))
+    {
+      return $"is implemented on node {wiring.NodeCoordinate:000}, but that node's CURRENT source does not define \"{wiring.SymbolName}\" -- it may have been renamed or removed.";
+    }
+
+    if (NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask) layout))
+    {
+      int resolvedAddress = symbol.Value & CvmWordCodec.WordMask;
+      int functionField = resolvedAddress - layout.FunctionFieldBaseAddress;
+      int maxFunctionField = layout.FunctionFieldBitMask >> layout.FunctionFieldShift;
+      if (functionField < 0 || functionField > maxFunctionField)
+      {
+        return $"resolved to node {wiring.NodeCoordinate:000} address 0x{resolvedAddress:X}, which falls outside that node's own dispatch window (function-select field only reaches 0x0-0x{maxFunctionField:X} from base 0x{layout.FunctionFieldBaseAddress:X}) -- node {wiring.NodeCoordinate:000}'s source has likely grown too large, or \"{wiring.SymbolName}\" moved, for this opcode family's embedded-register-operand encoding.";
+      }
+    }
+
+    // Resolved a real word/function field fine -- BuildEncodeTable should have added it. Reaching this
+    // point means something unaccounted for is different between this diagnosis and BuildEncodeTable's
+    // own logic; surface that plainly rather than pretending everything is fine.
+    return $"resolved against node {wiring.NodeCoordinate:000}'s \"{wiring.SymbolName}\" but still could not be encoded, for a reason not covered by this diagnosis -- please report this as a toolchain bug.";
   }
 
   /// <summary>
@@ -1040,23 +1060,37 @@ internal static class CvmAssemblyLanguage
   /// alone, no live compile involved -- while every other mnemonic is resolved against THIS run's own
   /// compile of ITS OWN node (<see cref="NodeSymbolByMnemonic"/>) via <see cref="BuildEncodeTable"/>.
   ///
-  /// <b>Undefined-but-real opcodes assemble as 'nop, per Stefan (2026-09-01).</b> A mnemonic that IS a
-  /// genuine, named CVM opcode (<see cref="CvmInstructionSet.TryGetShape"/> finds a shape for it -- the
-  /// full 73-opcode table, not just this file's own resolvable subset) but currently has no live node
-  /// to answer it -- every one of CVM1's now-orphaned mnemonics (the ALU ops including <c>inv</c>, node
-  /// 606's <c>leave</c>, node 506/407's register ops, and CVM1's old node 508 comparison ops) -- is
-  /// substituted with node 507's own current <c>'nop</c> opcode instead of failing the whole assemble:
-  /// "these opcodes have not been defined yet and no longer have a meaning ... all undefined opcodes
-  /// should generate a nop." Any operand supplied on that line is simply discarded (nop takes none).
+  /// <b>Undefined-but-real opcodes assemble as 'nop, per Stefan (2026-09-01) -- but ONLY when they have
+  /// no live-node wiring at all.</b> A mnemonic that IS a genuine, named CVM opcode
+  /// (<see cref="CvmInstructionSet.TryGetShape"/> finds a shape for it -- the full 73-opcode table, not
+  /// just this file's own resolvable subset) AND has no entry at all in <see cref="NodeSymbolByMnemonic"/>
+  /// -- every one of CVM1's now-orphaned mnemonics (the ALU ops including <c>inv</c>, node 606's
+  /// <c>leave</c>, node 506/407's register ops, and CVM1's old node 508 comparison ops) -- is substituted
+  /// with node 507's own current <c>'nop</c> opcode instead of failing the whole assemble: "these opcodes
+  /// have not been defined yet and no longer have a meaning ... all undefined opcodes should generate a
+  /// nop." Any operand supplied on that line is simply discarded (nop takes none).
+  ///
+  /// <b>CORRECTED 2026-09-11: a WIRED mnemonic that fails to resolve is a real error, never a silent
+  /// nop.</b> Stefan hit exactly this gap directly: "arld 1" (node 306's <see cref="NodeSymbolByMnemonic"/>
+  /// entry -- a real, wired opcode family) silently became a bare, operand-dropping <c>nop</c> when it
+  /// failed to resolve, indistinguishable from a genuinely-unimplemented mnemonic hitting the SAME
+  /// substitution -- see <see cref="DiagnoseUnresolvedWiredMnemonic"/>'s own remarks for the full
+  /// incident and the fix: <see cref="DiagnoseUnresolvedWiredMnemonic"/> is now checked FIRST, before the
+  /// nop-substitution path below, and fails the assemble outright with a specific reason (the node isn't
+  /// compiled, the F18 symbol isn't defined in its current source, or -- <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>
+  /// mnemonics only -- the resolved address falls outside that node's own embeddable function-select
+  /// window) whenever <see cref="NodeSymbolByMnemonic"/> has an entry for the mnemonic at all. Only a
+  /// mnemonic with NO wiring whatsoever still gets the nop treatment, exactly as before.
+  ///
   /// This only degrades gracefully for opcodes CvmInstructionSet actually knows about -- a genuinely
   /// unrecognized token (a typo, not a real CVM mnemonic at all) still fails the assemble below, since
   /// that is a different problem than "not implemented yet." Returns a null word list with a
-  /// 1-based-line error message (never throws) when a mnemonic isn't recognized at all, node 507's own
-  /// 'nop can't be resolved either (nothing to substitute with), an operand is missing where one is
-  /// required or out of range, a label operand is undefined or unsupported for that mnemonic, or an
-  /// operand is supplied where none is allowed. This is what
-  /// <see cref="CvmDebugSession.AssembleAndLoadProgram"/> uses to turn the CVM Debugger's own
-  /// Assembly Code editor into a program loaded straight into the simulated SRAM.
+  /// 1-based-line error message (never throws) when a mnemonic isn't recognized at all, a WIRED mnemonic
+  /// fails to resolve (see above), node 507's own 'nop can't be resolved either for a genuinely orphaned
+  /// mnemonic (nothing to substitute with), an operand is missing where one is required or out of range,
+  /// a label operand is undefined or unsupported for that mnemonic, or an operand is supplied where none
+  /// is allowed. This is what <see cref="CvmDebugSession.AssembleAndLoadProgram"/> uses to turn the CVM
+  /// Debugger's own Assembly Code editor into a program loaded straight into the simulated SRAM.
   ///
   /// <b>Labels (2026-09-02, per Stefan).</b> Unlike the freestanding <c>gaasm</c>/
   /// <see cref="CvmAssembler"/>, there are still no sections, imports, or an object file here -- this
@@ -1124,6 +1158,18 @@ internal static class CvmAssemblyLanguage
 
       if (!encodeTable.TryGetValue(instruction.Mnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask) entry))
       {
+        // CORRECTED 2026-09-11 (see DiagnoseUnresolvedWiredMnemonic's own remarks for the full incident):
+        // a mnemonic that IS wired to a live node (NodeSymbolByMnemonic has an entry for it) but simply
+        // failed to resolve this run is a real, surprising failure -- fail loudly with a precise reason
+        // instead of silently falling through to the nop-substitution meant for PERMANENTLY unimplemented
+        // opcodes. Only a mnemonic with no wiring at all (DiagnoseUnresolvedWiredMnemonic returns null)
+        // still gets the nop treatment below, exactly as before.
+        string? wiredDiagnosis = DiagnoseUnresolvedWiredMnemonic(instruction.Mnemonic, compiledRam);
+        if (wiredDiagnosis is not null)
+        {
+          return (null, $"line {line + 1}: \"{instruction.Mnemonic}\" {wiredDiagnosis}");
+        }
+
         if (selfDescribingShape is not null)
         {
           // A genuine CVM opcode (CvmInstructionSet knows its shape) that just has no live node to

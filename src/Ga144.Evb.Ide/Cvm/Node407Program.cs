@@ -44,6 +44,12 @@ namespace Ga144.Evb.Ide.Cvm;
 /// compile cleanly against this node with zero changes on node 406's own side. Verified via a standalone
 /// harness compile of both together: 0 errors.
 ///
+/// <b>RESOLVED 2026-09-11 -- see the paragraph below the 2026-09-06 revisions for the fix.</b> The
+/// "1101" relay direction flagged as open throughout this paragraph is back to <c>---u</c> (UP) in the
+/// current <see cref="Source"/>, matching the original 2026-09-02 hardware-confirmed direction. This
+/// paragraph and the two 2026-09-06 paragraphs below it describe the intermediate, flagged-but-unresolved
+/// state and are kept as history.
+///
 /// <b>FLAGGED, not silently reverted or silently accepted (2026-09-05).</b> Comparing this replacement
 /// source to the immediately prior revision, the "1101_????_????_????" relay branch of <c>n/main</c>'s
 /// own dispatch cascade (below) has changed from <c>r&gt; ---u ;</c> back to <c>r&gt; -d-- ;</c> -- i.e.
@@ -228,6 +234,13 @@ internal static class Node407Program
   /// specific claim above (a compiled address, a port name, a verification result) as possibly
   /// stale until re-confirmed against a fresh compile.
   ///
+  /// <b>REVISED 2026-09-11 ("here are the fixed nodes" -- supplied alongside node 306/307's own fixes,
+  /// see those classes' own remarks), resolving the long-flagged "1101" relay-direction question above.</b>
+  /// The <c>n/main</c> dispatch cascade's own "1101_????_????_????" branch is back to <c>r&gt; ---u ;</c>
+  /// (relay UP) -- the SAME direction confirmed on real hardware 2026-09-02, reverting the 2026-09-05
+  /// regression to <c>-d--</c> (DOWN) that was flagged, never resolved, and left untouched by both
+  /// 2026-09-06 revisions above. Nothing else in this source changed. This node now compiles fine per
+  /// Stefan directly (see <see cref="Node307Program"/>'s own remarks on the same confirmation).
   /// </summary>
   public const string Source = """
       ( CVM2 node 407. VM secondary main, 11??_????_????_???? )
@@ -253,7 +266,7 @@ internal static class Node407Program
           r> r--- ;
         then // 110?_????_????_????
         2* -if // 1101_????_????_????
-          r> -d-- ;
+          r> ---u ;
         then // 1100_????_????_????
         A[ m/next ]] lit !b ex ;
       : 'lcall A[ >r a ]] lit !b A[ m/push ]] lit !b A[ r> a! ]] lit !b ;

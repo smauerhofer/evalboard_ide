@@ -8,6 +8,7 @@ settings:
   baudRate: 921600
   krakenIdlePolicy: CloseAfterIdleTimeout
   recentCProjectPaths:
+  - C:\devl\GreenArray\Ga144EvalboardIde\libs\libc
   - C:\devl\GreenArray\Ga144EvalboardIde\prgs\CTest1
   - C:\devl\GreenArray\Ga144EvalboardIde\libs\cvm
   - C:\devl\GreenArray\Ga144EvalboardIde\libs\CTest1
@@ -29,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-10T18:01:41.6341896
-      utcDateTime: 2026-09-10T18:01:41.6341896Z
-      localDateTime: 2026-09-10T20:01:41.6341896+02:00
-      date: 2026-09-10T00:00:00.0000000
-      day: 10
-      dayOfWeek: Thursday
-      dayOfYear: 253
-      hour: 18
-      millisecond: 634
-      microsecond: 189
-      nanosecond: 600
-      minute: 1
+      dateTime: 2026-09-11T16:08:13.4800039
+      utcDateTime: 2026-09-11T16:08:13.4800039Z
+      localDateTime: 2026-09-11T18:08:13.4800039+02:00
+      date: 2026-09-11T00:00:00.0000000
+      day: 11
+      dayOfWeek: Friday
+      dayOfYear: 254
+      hour: 16
+      millisecond: 480
+      microsecond: 3
+      nanosecond: 900
+      minute: 8
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 41
-      ticks: 639246601016341896
-      utcTicks: 639246601016341896
-      timeOfDay: 18:01:41.6341896
+      second: 13
+      ticks: 639247396934800039
+      utcTicks: 639247396934800039
+      timeOfDay: 16:08:13.4800039
       year: 2026
   portB: 
   portC:
@@ -14629,13 +14630,13 @@ projects:
       sourceCode: >-
         ( CVM2 node 306. VM 32 bit addres pointer, 1101_10??_????_???? )
 
-        ( contains 4 32-bit address register )
+        ( contains 6 32-bit address register )
 
         ( address word in x, page word in x+1 )
 
         # 307 import
 
-        # 0x08 org
+        # 0x0e org
 
         entry ar/main
 
@@ -14648,7 +14649,7 @@ projects:
 
         : ar/dec -1 . + ;
 
-        : ar/reg 0x06 and a! ;
+        // : ar/reg 0x06 and a! ;
 
 
         : ar/r@ ( -w) A[ k/r@ ]] lit !b A[ !p ]] lit !b @b ;
@@ -14662,17 +14663,17 @@ projects:
 
         : ar/leave A[ k/leave ; ]] lit !b
 
-        : ar/main  A[ 2* !p !p ]] lit !b @b
-
-          @b
+        : ar/main  A[ !p drop ]] lit !b @b
           // set register in a
           dup 0x07 and 2* a!
           // call word
-          2/ 2/ 2/ 0x3f and ex ar/leave ;
+          2/ 2/ 2/ 0x3f and >r ex ar/leave ;
 
-        : 'lda A[ k/@ ]] lit !b @+ !b @ !b ;
+        : 'lda A[ k/@ ]] lit
 
-        : 'sta A[ k/! ]] lit !b @+ !b @ !b ;
+        : ar/adr ( ) A[ @p @p ]] lit !b @+ !b @ !b !b ;
+
+        : 'sta A[ k/! ]] lit ar/adr ;
 
         : 'arinc @ ar/inc !+ 0x10000 and # ar/leave until @ ar/inc ! ;
 
@@ -14686,20 +14687,26 @@ projects:
 
         (
 
-        opcode lda   1101_10??_????_?aaa load r from address in address register
+        opcode lda   1101_10??_????_?aaa load r from address in address register 0..5. register encoded in aaa
 
-        opcode sta   1101_10??_????_?aaa store r to address in address register
+        opcode sta   1101_10??_????_?aaa store r to address in address register 0..5. register encoded in aaa
 
-        opcode arinc 1101_10??_????_?aaa increment address register
+        opcode arinc 1101_10??_????_?aaa increment address register 0..5. register encoded in aaa
 
-        opcode ardec 1101_10??_????_?aaa decrement address register
+        opcode ardec 1101_10??_????_?aaa decrement address register 0..5. register encoded in aaa
 
-        opcode arld  1101_1000_1???_?aa0 load address register, address in r, page in stack
+        opcode arld  1101_1000_1???_?aa0 load address register 0..5, address in r, page in stack. register encoded in aaa
 
-        opcode arst  1101_1000_0???_?aa0 store address register, address in r, page in stack
+        opcode arst  1101_1000_0???_?aa0 store address register 0..5, address in r, page in stack. register encoded in aaa
 
         )
       ramWords:
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -14712,8 +14719,6 @@ projects:
       - 0x00001
       - 0x049F5
       - 0x3FFFF
-      - 0x040AD
-      - 0x00006
       - 0x05B12
       - 0x1341C
       - 0x0C9B2
@@ -14728,44 +14733,40 @@ projects:
       - 0x05626
       - 0x05BB2
       - 0x11428
-      - 0x05B02
-      - 0x37932
-      - 0x00D12
+      - 0x05B03
+      - 0x0C2B2
+      - 0x040DA
       - 0x00007
-      - 0x3E4AA
-      - 0x307C7
+      - 0x2A7C2
+      - 0x31DFA
       - 0x0003F
-      - 0x3F455
-      - 0x1141A
-      - 0x05B1A
+      - 0x2F455
+      - 0x1141E
+      - 0x049B2
       - 0x13410
-      - 0x09E25
       - 0x05B1A
+      - 0x05DB2
+      - 0x09E22
+      - 0x09555
+      - 0x0572B
       - 0x13416
-      - 0x09E25
-      - 0x03608
+      - 0x0360E
       - 0x0FDFA
       - 0x10000
-      - 0x1941A
-      - 0x03608
+      - 0x1941E
+      - 0x0360E
       - 0x0B555
-      - 0x0360A
-      - 0x0F21A
-      - 0x0360A
+      - 0x03610
+      - 0x0F21E
+      - 0x03610
       - 0x0B555
-      - 0x1340E
-      - 0x0F614
+      - 0x13412
+      - 0x0F618
       - 0x0B555
-      - 0x07612
-      - 0x03718
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x07616
+      - 0x0371C
       startup:
-        entryPoint: 0x01C
+        entryPoint: 0x020
         p: 0x000
         a: 0x000
         b: 0x000
@@ -14774,7 +14775,7 @@ projects:
         parameterStack: []
     - coordinate: 307
       enabled: true
-      sourceCode: "( CVM2 node 307. VM ternary main, 1101_????_????_???? )\r\n# 407 import\n# 0x10 org\nentry k/main\n# 0 /a\n# up /b\r\n: k/@ ( ab-) A[ @p @p ]] lit !b !b !b A[ n/@ ]] lit !b A[ n/r! ]] lit !b ;\r\n: k/! ( ab-) A[ n/r@ ]] lit !b A[ @p @p ]] lit !b !b !b A[ n/! ]] lit !b ;\n: k/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: k/r! ( w) A[ @p n/r! ]] lit !b !b ;\n: k/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;\n: k/push ( w) A[ @p n/push ]] lit !b !b ;\n// : k/next ( -w) A[ n/next ]] lit !b A[ !p ]] lit !b @b ;\n: k/leave A[ n/leave ; ]] lit !b\n: k/main # k/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r\n  -if // 1101_1???_????_????\n    2* -if // 1101_11??_????_????\n      r> --l- ;\n    then // 1101_10??_????_????\n    r> r--- ;\n  then // 1101_0???_????_????\n  2* -if // 1101_01??_????_????\n    r> -d-- ;\n  then // 1101_00??_????_????\r\n\n(\r\n  \r\n\r\n)\n"
+      sourceCode: "( CVM2 node 307. VM ternary main, 1101_????_????_???? )\r\n# 407 import\n# 0x10 org\nentry k/main\n# 0 /a\n# up /b\r\n: k/@ ( ab-) A[ @p @p ]] lit !b !b !b A[ n/@ ]] lit !b A[ n/r! ]] lit !b ;\r\n: k/! ( ab-) A[ n/r@ ]] lit !b A[ @p @p ]] lit !b !b !b A[ n/! ]] lit !b ;\n: k/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: k/r! ( w) A[ @p n/r! ]] lit !b !b ;\n: k/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;\n: k/push ( w) A[ @p n/push ]] lit !b !b ;\n// : k/next ( -w) A[ n/next ]] lit !b A[ !p ]] lit !b @b ;\n: k/leave A[ n/leave ; ]] lit !b\n: k/main # k/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b\n  -if // 1101_1???_????_????\n    2* -if // 1101_11??_????_????\n      r> --l- ;\n    then // 1101_10??_????_????\n    r> r--- ;\n  then // 1101_0???_????_????\n  2* -if // 1101_01??_????_????\n    r> -d-- ;\n  then // 1101_00??_????_????\r\n\n(\r\n  \r\n\r\n)\n"
       ramWords:
       - 0x15555
       - 0x15555
@@ -14820,9 +14821,9 @@ projects:
       - 0x11418
       - 0x04812
       - 0x00028
-      - 0x37932
-      - 0x09F02
-      - 0x2F234
+      - 0x0C432
+      - 0x09FBA
+      - 0x01234
       - 0x37232
       - 0x269B2
       - 0x11575
@@ -15501,7 +15502,7 @@ projects:
             r> r--- ;
           then // 110?_????_????_????
           2* -if // 1101_????_????_????
-            r> -d-- ;
+            r> ---u ;
           then // 1100_????_????_????
           A[ m/next ]] lit !b ex ;
         : 'lcall A[ >r a ]] lit !b A[ m/push ]] lit !b A[ r> a! ]] lit !b ;
@@ -15565,7 +15566,7 @@ projects:
       - 0x115D5
       - 0x37227
       - 0x269B2
-      - 0x11515
+      - 0x11545
       - 0x05B5D
       - 0x13407
       - 0x15555
@@ -17591,13 +17592,15 @@ projects:
     debuggerAssemblyCode: >+
       lit 1
 
-      stg 2
+      pushlit 2
 
-      ldg 2
+      arld 1
 
-      stg 4
+      lda 1
 
-      nop
+      arst 1
+
+      push
 
       nop
 

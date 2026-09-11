@@ -119,8 +119,11 @@ namespace Ga144.Cvm.Toolchain;
 /// (not a live CVM2 node) has since had that dependent rewritten and been deleted outright.</b>
 /// <see cref="Ga144.C.Toolchain.CCodeGenerator"/>'s own codegen was rewritten to stop emitting
 /// negate/xt/ldt/stt: unary minus now emits node 509's already-live <c>neg</c> instead, and every
-/// pointer dereference now uses node 306's own address-register mechanism (<c>arst</c>/<c>lda</c>/
-/// <c>sta</c>, fixed to address register 0 -- see <see cref="ArithmeticStoreAddressRegisterMnemonic"/>'s/
+/// pointer dereference now uses node 306's own address-register mechanism (<c>arld</c>/<c>lda</c>/
+/// <c>sta</c> -- corrected 2026-09-11 from an earlier "arst" that had arld's and arst's own directions
+/// reversed, see <see cref="ArithmeticLoadAddressRegisterMnemonic"/>'s own remarks -- still always
+/// emitted against address register 0 today, though node 306 genuinely has six, see
+/// <see cref="ArithmeticStoreAddressRegisterMnemonic"/>'s/
 /// <see cref="LoadAddressRegisterValueMnemonic"/>'s own remarks) instead of the old, node-less
 /// xt/ldt/stt sequence. <see cref="Ga144.Evb.Ide.Cvm.CvmDebuggerDefaultProgram"/>'s own hand-written
 /// default test program was likewise rewritten to drop its register-d block (zext/addc/ldd/std/xd/
@@ -604,13 +607,39 @@ public static class CvmInstructionSet
   // lda/sta just above. arinc/ardec take over what ldar's/star's... no -- what inca's/deca's old NAMES
   // used to mean (increment/decrement the address register), just renamed and re-encoded exactly like
   // lda/sta. arld/arst take over what the OLD lda/sta used to mean (load/store the address register's
-  // own full 32-bit value). All four are ordinary tick-prefixed, node-resolved (CvmOperandEncoding.None)
-  // opcodes, ALL SIX of node 306's current ops (lda/sta/arinc/ardec/arld/arst) sharing the flat
-  // "1101_10??_????_????" range per node 306's own trailing comment block -- node 306's own ar/main
+  // own full 32-bit value). DIRECTION CONFIRMED 2026-09-11 by Stefan directly ("arld loads an address
+  // into an address register. lda loads r using the address of an address register."): arld is the SET
+  // direction -- register := (address = r, page = the stack's own top word), exactly the "address in r,
+  // page in stack" shape the trailing opcode table gives it -- and arst is arld's complement, reading a
+  // register's own stored (address, page) value back OUT into (r, stack). (lda/sta, by contrast, dereference
+  // THROUGH a register as a pointer -- lda: r := memory[register]; sta: memory[register] := r -- a
+  // completely different pair of operations from arld/arst, despite the superficially similar names.)
+  // See Ga144.C.Toolchain.CCodeGenerator's own EmitDereferenceLoad/EmitFunction/EmitCall remarks for the
+  // 2026-09-11 fix this confirmation required (two call sites had arld and arst's roles reversed).
+  // All six of node 306's current ops (lda/sta/arinc/ardec/arld/arst) share the
+  // flat "1101_10??_????_????" range per node 306's own trailing comment block -- node 306's own ar/main
   // dispatch masks the incoming call byte to select which of the six compiled words to jump to, so
   // (unlike the OLD self-describing family) none of these six carries its own distinguishing tag bits at
   // the CVM-opcode level at all; the same "tag | resolved local address" scheme node 507/508/509/etc.
   // already use elsewhere applies here too, worked out in Ga144.Evb.Ide.Services.CvmAssemblyLanguage.
+  //
+  // RE-TASKED AGAIN 2026-09-11, per Stefan's own follow-up ("there is more than 1 address register.
+  // change the assembler to reflect that"), pasting node 306/307's own resident source directly: node
+  // 306 has SIX 32-bit address registers (0..5), not the single hardwired one every consumer of these
+  // six mnemonics used to assume, and ar/main's own dispatch prelude ("dup 0x07 and 2* a!" .. "2/ 2/ 2/
+  // 0x3f and ex") already carried the real 3-bit register-select field in the call byte's own low bits
+  // all along -- it was this toolchain's OWN encoding (CvmOperandEncoding.None, "fixed to address
+  // register 0", see the retirement note this replaces just below) that never gave the assembler a way
+  // to express anything but register 0. All six are RE-TASKED from CvmOperandEncoding.None to
+  // CvmOperandEncoding.NodeResolvedEmbeddedValue -- the exact shape node 308's/511's own register-indexed
+  // ops already use -- with the register-index operand's own bit width recorded on each shape's own
+  // ValueBitMask (see Node306RegisterFieldBitMask's own remarks just below), so every one of these six
+  // now takes a real assembler operand (a register index 0..5, e.g. "arld 2") instead of implicitly
+  // meaning "register 0" every time. See Ga144.Cvm.Toolchain.CvmAssembler's own remarks for the new
+  // embedded-register-operand mechanism (CvmRelocation.EmbeddedValue) this correction motivated, and
+  // Ga144.C.Toolchain.CCodeGenerator's own EmitDereferenceLoad/EmitDereferenceStore remarks for why the C
+  // compiler's own codegen still only ever emits register 0 today despite the assembler now being able
+  // to express all six.
   public const string ArithmeticIncrementAddressRegisterMnemonic = "arinc";
   public const string ArithmeticDecrementAddressRegisterMnemonic = "ardec";
   public const string ArithmeticLoadAddressRegisterMnemonic = "arld";
@@ -621,6 +650,25 @@ public static class CvmInstructionSet
   // and Node306AddressRegisterIndexBitMask/Node306AddressRegisterIndexShift -- DELETED OUTRIGHT
   // 2026-09-09 alongside ldar/star/inca/deca above; see this file's own remarks above (both on the
   // CVM1-opcode purge and on that constant's own retirement note) for the full accounting.
+
+  /// <summary>Isolates node 306's 6-bit "which function" field (bits 8-3) of a resolved lda/sta/arinc/
+  /// ardec/arld/arst opcode word -- the resolved address (0-63, node 306's own "# 0x08 org" needing no
+  /// bias, exactly like node 308's own layout) shifted left by <see cref="Node306FunctionFieldShift"/>.
+  /// Derived directly from ar/main's own dispatch tail, "2/ 2/ 2/ 0x3f and ex": shifting the incoming
+  /// call byte right by 3 and masking to 6 bits recovers the function address, so encoding is the
+  /// inverse -- shift the resolved address left by 3 before OR-ing it in. See
+  /// <see cref="ArithmeticStoreAddressRegisterMnemonic"/>'s own remarks for the correction this
+  /// accompanies.</summary>
+  public const int Node306FunctionFieldBitMask = 0x01F8;
+
+  /// <summary>How far left node 306's resolved function address is shifted before OR-ing into <see cref="Node306FunctionFieldBitMask"/>'s bits -- 3, since the 3-bit register field occupies bits 2-0 below it. See <see cref="ArithmeticStoreAddressRegisterMnemonic"/>'s own remarks.</summary>
+  public const int Node306FunctionFieldShift = 3;
+
+  /// <summary>Node 306's own function field needs no base-address subtraction (always 0), exactly like <see cref="Node308FunctionFieldBaseAddress"/> -- its "# 0x08 org" range already starts inside the 0-63 window this field covers. See <see cref="ArithmeticStoreAddressRegisterMnemonic"/>'s own remarks.</summary>
+  public const int Node306FunctionFieldBaseAddress = 0;
+
+  /// <summary>Isolates node 306's 3-bit register-index field (bits 2-0, unshifted) -- straight off ar/main's own "dup 0x07 and", confirming SIX live registers (0-5; values 6-7 are unassigned, not a hardware register). Doubles as this family's <see cref="CvmInstructionShape.ValueBitMask"/> in <see cref="Instructions"/> below, so <see cref="CvmAssembler"/>'s own operand-range check reads the valid register range straight off the shape without a separate lookup. See <see cref="ArithmeticStoreAddressRegisterMnemonic"/>'s own remarks.</summary>
+  public const int Node306RegisterFieldBitMask = 0x0007;
 
   // Node 511's four register-file ops (2026-09-07, "here are nodes 510 and 511 ... they support 32
   // register that can be used for parameter passing to functions") -- unlike every mnemonic above,
@@ -1388,11 +1436,23 @@ public static class CvmInstructionSet
     /// <c>BuildEncodeTable</c>/<c>BuildDecodeTable</c>/<c>Assemble</c>/<c>DisassemblePage0</c>, not here
     /// -- unlike <see cref="EmbeddedSignedValue"/>/<see cref="EmbeddedUnsignedValue"/>, this encoding is
     /// NOT self-describing and is deliberately excluded from <see cref="TryDescribeSelfDecodingWord"/>).
-    /// <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/> does not (yet) support this encoding at all -- it
-    /// errors out rather than silently dropping the embedded register operand, since its own
-    /// relocation-based resolution of tagged mnemonics has no way to carry a second, per-instance operand
-    /// value; only <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>'s own immediately-resolving
-    /// assembler supports it today.
+    /// <b>Also node 306's six address-register ops (<c>arinc</c>/<c>ardec</c>/<c>arld</c>/<c>arst</c>/
+    /// <c>lda</c>/<c>sta</c>), RE-TASKED to this shape 2026-09-11 once Stefan's own node 306/307 source
+    /// confirmed a real 3-bit register-select field (0..5, six live registers) in ar/main's own dispatch
+    /// -- see <see cref="ArithmeticStoreAddressRegisterMnemonic"/>'s own remarks. Node 306's own field
+    /// layout (<see cref="Node306FunctionFieldBitMask"/>/<see cref="Node306FunctionFieldShift"/>/
+    /// <see cref="Node306FunctionFieldBaseAddress"/>/<see cref="Node306RegisterFieldBitMask"/>) is
+    /// structurally identical to node 308's (a plain 0-based function field, no bias), just a
+    /// 6-bit/3-bit split instead of node 308's 6-bit/2-bit one.</b>
+    ///
+    /// <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/> CORRECTED 2026-09-11 to support this encoding for
+    /// real (see that class's own remarks and <see cref="CvmRelocation.EmbeddedValue"/>'s): the
+    /// register-index operand is parsed and range-checked against the shape's own
+    /// <see cref="CvmInstructionShape.ValueBitMask"/>, then carried on the SAME <see cref="CvmRelocationType.CvmOpcode"/>
+    /// relocation the generic tagged-mnemonic path already emits, for the linker to OR into the resolved
+    /// word once it knows the live-compiled base address -- no second relocation, no new relocation
+    /// type needed. <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>'s own immediately-resolving
+    /// assembler (the CVM Debugger's own Assembly Code editor) continues to support it too, unchanged.
     /// </summary>
     NodeResolvedEmbeddedValue,
   }
@@ -1612,15 +1672,17 @@ public static class CvmInstructionSet
     new(Id: 115, ExchangeSMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 116, ExchangePMnemonic, 1, CvmOperandEncoding.None),
 
-    // Node 306's CURRENT six ops (2026-09-09, second pass) -- tick-prefixed, node-resolved
-    // (CvmOperandEncoding.None), replacing the retired self-describing family above (Ids 101-106). See
-    // ArithmeticIncrementAddressRegisterMnemonic's/LoadAddressRegisterValueMnemonic's own remarks.
-    new(Id: 117, ArithmeticIncrementAddressRegisterMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 118, ArithmeticDecrementAddressRegisterMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 119, ArithmeticLoadAddressRegisterMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 120, ArithmeticStoreAddressRegisterMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 121, LoadAddressRegisterValueMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 122, StoreAddressRegisterValueMnemonic, 1, CvmOperandEncoding.None),
+    // Node 306's CURRENT six ops (2026-09-09, second pass; RE-TASKED again 2026-09-11 to a real
+    // register operand -- see ArithmeticStoreAddressRegisterMnemonic's own remarks) -- tick-prefixed,
+    // node-resolved, with a 3-bit embedded register-index operand (CvmOperandEncoding.NodeResolvedEmbeddedValue,
+    // ValueBitMask = Node306RegisterFieldBitMask), replacing the retired self-describing family above
+    // (Ids 101-106).
+    new(Id: 117, ArithmeticIncrementAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Node306RegisterFieldBitMask),
+    new(Id: 118, ArithmeticDecrementAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Node306RegisterFieldBitMask),
+    new(Id: 119, ArithmeticLoadAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Node306RegisterFieldBitMask),
+    new(Id: 120, ArithmeticStoreAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Node306RegisterFieldBitMask),
+    new(Id: 121, LoadAddressRegisterValueMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Node306RegisterFieldBitMask),
+    new(Id: 122, StoreAddressRegisterValueMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Node306RegisterFieldBitMask),
 
     // Node 308's six ops (2026-09-09) -- NodeResolvedEmbeddedValue, 2-bit register index embedded, same
     // shape as node 511's rld/rst/rpop/rpush above. See DoublePopMnemonic's own remarks.

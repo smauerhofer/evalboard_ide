@@ -370,7 +370,14 @@ public static class CvmLinker
           // supplies each primitive's own COMPLETE, already-tagged final word directly (see how
           // `resolved` was populated from primitives.Entries above), and this linker stays entirely
           // tag-agnostic -- it just writes that word through, masked to 16 bits.
-          CvmRelocationType.CvmOpcode => resolved & CvmWordCodec.WordMask,
+          //
+          // ADDED 2026-09-11: OR in relocation.EmbeddedValue (see that field's own remarks) before
+          // masking -- 0 for every relocation except node 306's six address-register ops
+          // (arinc/ardec/arld/arst/lda/sta), where it carries the register-index operand CvmAssembler
+          // already validated and positioned at assemble time. `resolved` here is only the live-resolved
+          // BASE word (tag | function-select field); this is the one place that base and the
+          // already-known register bits are finally combined into the real opcode word.
+          CvmRelocationType.CvmOpcode => (resolved | relocation.EmbeddedValue) & CvmWordCodec.WordMask,
 
           _ => throw new NotSupportedException($"Unknown relocation type {relocation.Type}."),
         };

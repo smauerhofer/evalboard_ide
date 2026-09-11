@@ -708,11 +708,22 @@ public sealed class CCodeGenerator
     foreach ((int registerIndex, int localSlot) in registerParameters)
     {
       // 2026-09-09: "stl" stores r directly (see this class's own ABI doc comment) -- no "push" needed
-      // to shuttle the address through the stack first. "sta" leaves the address in r AND pushes a page
+      // to shuttle the address through the stack first. "arst" leaves the address in r AND pushes a page
       // word onto the stack as a side effect; "stl" reads r (assumed to leave r unchanged, like "push"
       // does) so the trailing "pop" only needs to clean up that leftover page word (always 0 -- far
       // pointers are not supported yet, see this class's own ABI doc comment).
-      EmitCode($"sta {registerIndex}"); // r := this register's address word; stack: [..., page]
+      //
+      // CORRECTED 2026-09-11: this line used to emit "sta {registerIndex}" -- flagged the moment the
+      // register-operand fix made it assemblable for the first time, since "sta"
+      // (StoreAddressRegisterValueMnemonic) is node 306's dereference-STORE role ("store r TO the
+      // address held in register aa," the same mnemonic EmitDereferenceStore uses), not "read this
+      // register's own (address, page) value back out" as this comment describes. Stefan confirmed
+      // directly: "arld loads an address into an address register. lda loads r using the address of an
+      // address register." -- i.e. arld is the SET direction (address in, from r/stack) and lda is the
+      // dereference-read direction; by elimination arst is arld's complement, reading the register's own
+      // stored value back OUT into (r, stack), which is exactly what this prologue needs. Fixed to
+      // "arst {registerIndex}".
+      EmitCode($"arst {registerIndex}"); // r := this register's address word; stack: [..., page]
       EmitCode($"stl {localSlot}");     // localSlot := r (the address); stack unchanged
       EmitCode("pop");                  // r := the leftover page word, discarded; stack: [...]
     }
@@ -961,37 +972,49 @@ public sealed class CCodeGenerator
   /// ADDED 2026-09-09, replacing node 508's now-dead <c>xt</c>/<c>ldt</c> (deleted outright from
   /// <see cref="CvmInstructionSet"/> the same day, once this codegen stopped emitting them -- see
   /// that class's own remarks on the 2026-09-09 CVM1-opcode purge). The replacement uses node 306's address-register mechanism instead (see
-  /// <see cref="Node306Program"/>'s own remarks for the F18-level design): <c>'arst</c> ("store address
-  /// register") loads node 306's address register 0 from (address = r, page = the stack's own top word),
-  /// and <c>'lda</c> ("load r from address in address register") then reads memory at that address back
-  /// into r. Every C pointer in this compiler is a plain 16-bit CVM address (there is no notion of a
-  /// non-zero page anywhere else in this ABI), so the page pushed here is always a literal 0.
+  /// <see cref="Node306Program"/>'s own remarks for the F18-level design): <c>'arld</c> ("load an address
+  /// into an address register") loads node 306's address register 0 from (address = r, page = the
+  /// stack's own top word), and <c>'lda</c> ("load r using the address of an address register") then
+  /// reads memory at that address back into r. Every C pointer in this compiler is a plain 16-bit CVM
+  /// address (there is no notion of a non-zero page anywhere else in this ABI), so the page pushed here
+  /// is always a literal 0.
   ///
-  /// FLAGGED for Stefan: this always uses address register 0 -- node 306 actually has four (see
-  /// Node306Program's own remarks) but wiring more than one would need a real assembler feature (an
-  /// operand that selects which register to embed) that the command-line assembler/linker pipeline does
-  /// not have today (see CvmAssembler's own remarks on why node 511's rld/rst/rpop/rpush were never
-  /// assemblable there either). Also NOT YET CONFIRMED ON REAL HARDWARE -- this sequence has not been
-  /// run against a physical GA144 board.
+  /// CORRECTED 2026-09-11 (twice): first, <c>arld</c>/<c>lda</c>/<c>sta</c> gained a real register-index
+  /// OPERAND (<c>CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue</c> -- see
+  /// <see cref="CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic"/>'s own remarks), since node
+  /// 306 genuinely has SIX address registers (0-5), not the single hardwired one the codebase used to
+  /// assume, and <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/> can now express any of them. Second, this
+  /// method itself used to emit <c>"arst 0"</c> for the register-setup step -- WRONG, per Stefan's own
+  /// direct follow-up confirming the direction of both mnemonics: "arld loads an address into an address
+  /// register. lda loads r using the address of an address register." <c>arld</c> is the SET direction
+  /// (address in, from r/stack); <c>arst</c> is its complement, reading a register's own stored value
+  /// back OUT (used by <see cref="EmitFunction"/>'s own ABI v2 prologue spill, not here). Fixed to
+  /// <c>"arld 0"</c>. This method still always uses register 0 -- the compiler's own pointer
+  /// representation is still a single 16-bit CVM address with no notion of which register or page it
+  /// belongs to, so there is nothing yet for a second live register to hold; using more than one address
+  /// register at once is a question for a future ABI change (e.g. a heap spanning more than one page),
+  /// not something this correction decides on its own. Also NOT YET CONFIRMED ON REAL HARDWARE -- this
+  /// sequence has not been run against a physical GA144 board.
   /// </summary>
   private void EmitDereferenceLoad()
   {
     EmitCode("pushlit 0");   // stack: [..., 0] (page = 0)
-    EmitCode("arst");        // node 306 address register 0 := (address = r, page = pop 0); stack: [...]
-    EmitCode("lda");         // r := memory[address register 0]
+    EmitCode("arld 0");      // node 306 address register 0 := (address = r, page = pop 0); stack: [...]
+    EmitCode("lda 0");       // r := memory[address register 0]
     EmitCode("push");        // stack: [..., value]
   }
 
   /// <summary>Dereferences the address already sitting in register r, storing the value already on top
   /// of the stack to memory at that address. See <see cref="EmitDereferenceLoad"/>'s own remarks for the
-  /// node-306 mechanism this uses and what's flagged about it -- <c>'sta</c> ("store r to address in
-  /// address register") is <c>'lda</c>'s write-side counterpart.</summary>
+  /// node-306 mechanism this uses (including the 2026-09-11 register-operand and arld/arst-direction
+  /// corrections) -- <c>'sta</c> ("store r to address in address register") is <c>'lda</c>'s write-side
+  /// counterpart.</summary>
   private void EmitDereferenceStore()
   {
     EmitCode("pushlit 0");   // stack: [..., value, 0] (page = 0)
-    EmitCode("arst");        // node 306 address register 0 := (address = r, page = pop 0); stack: [..., value]
+    EmitCode("arld 0");      // node 306 address register 0 := (address = r, page = pop 0); stack: [..., value]
     EmitCode("pop");         // r := value; stack: [...]
-    EmitCode("sta");         // memory[address register 0] := r
+    EmitCode("sta 0");       // memory[address register 0] := r
   }
 
   /// <summary>Fetches a global's value into r, via <c>gld</c> -- named and behaving exactly like an
@@ -2104,13 +2127,21 @@ public sealed class CCodeGenerator
     // ABI v2: an argument landing in one of node 306's address registers is evaluated exactly like any
     // other argument (so side effects and evaluation order never change), but its result is then popped
     // back off the stack and loaded into the assigned address register instead of being left there for
-    // the callee to find with ldp/stp. The register is loaded with "lda", which per node 306's own
+    // the callee to find with ldp/stp. The register is loaded with "arld", which per node 306's own
     // opcode table takes the address word from r and the page word from the CVM stack top -- so the
     // sequence is: pop the just-pushed address into r, push a literal page word of 0 (far/32-bit
     // pointers spanning pages are not yet supported -- see this file's own ABI v2 doc-comment remarks),
-    // then "lda <register>" consumes both. This mirrors the callee-side prologue spill in EmitFunction,
+    // then "arld <register>" consumes both. This mirrors the callee-side prologue spill in EmitFunction,
     // which immediately re-spills the same register back onto the stack/into a local slot -- the
     // register itself is never assumed to survive anything but this one handoff.
+    //
+    // CORRECTED 2026-09-11: this line used to emit "lda {assignedRegister}" -- flagged the moment the
+    // register-operand fix made it assemblable for the first time, since "lda"
+    // (LoadAddressRegisterValueMnemonic) is node 306's dereference-LOAD role ("load r FROM the address
+    // held in register aa"), not "SET the register from (address = r, page = stack top)" as this comment
+    // describes. Stefan confirmed directly: "arld loads an address into an address register. lda loads r
+    // using the address of an address register." -- i.e. arld is exactly the SET direction this call
+    // site needs. Fixed to "arld <register>".
     for (int i = 0; i < call.Arguments.Count; i++)
     {
       EmitExpr(call.Arguments[i]);
@@ -2120,7 +2151,7 @@ public sealed class CCodeGenerator
       {
         EmitCode("pop");
         EmitCode("pushlit 0");
-        EmitCode($"lda {assignedRegister}");
+        EmitCode($"arld {assignedRegister}");
       }
     }
 

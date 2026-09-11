@@ -88,10 +88,24 @@ namespace Ga144.Cvm.Toolchain;
 /// once, which this assembler's relocation-based resolution of tagged mnemonics has no way to express
 /// (see that encoding's own remarks) -- and RETIRED 2026-09-09 (opcode/assembler-vs-node reconciliation
 /// audit) after node 511's own re-synced source stopped naming them as separate F18 symbols at all (see
-/// <see cref="CvmInstructionSet.LoadRegisterFileMnemonic"/>'s own remarks). The
-/// <see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/> case below is now unreachable -- no entry
-/// in <see cref="CvmInstructionSet.Instructions"/> uses it any more -- but is kept rather than deleted,
-/// in case a future node's opcodes need the same "live resolution plus embedded operand" shape again.
+/// <see cref="CvmInstructionSet.LoadRegisterFileMnemonic"/>'s own remarks).
+///
+/// <b>CORRECTED 2026-09-11:</b> this assembler now DOES support <see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/>
+/// mnemonics, once node 306's six address-register ops (<c>arinc</c>/<c>ardec</c>/<c>arld</c>/<c>arst</c>/
+/// <c>lda</c>/<c>sta</c>) were re-tasked onto this exact shape (per Stefan's own follow-up, "there is
+/// more than 1 address register. change the assembler to reflect that" -- see
+/// <see cref="CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic"/>'s own remarks). The missing
+/// piece the paragraph above described -- "no way to express a second, per-instance operand value" on a
+/// relocation -- is now solved by <see cref="CvmRelocation.EmbeddedValue"/>: the register-index operand
+/// is a literal the assembler already knows in full at assemble time (unlike the symbol's own resolved
+/// address, which the linker only learns later), so it needs no relocation of its own at all -- it rides
+/// along on the SAME <see cref="CvmRelocationType.CvmOpcode"/> relocation the generic tagged-mnemonic
+/// path already emits for the live-resolved base word, and the linker simply OR's the two together (see
+/// <see cref="Ga144.Cvm.Toolchain.CvmLinker"/>'s own remarks on its <c>CvmOpcode</c> case). Node 511's
+/// own rld/rst/rpop/rpush remain retired (no live F18 symbol backs them today), so they don't exercise
+/// this path, but nothing about this fix is node-306-specific: any future NodeResolvedEmbeddedValue
+/// mnemonic assembles here the same way, automatically, via <see cref="CvmInstructionSet.CvmInstructionShape.ValueBitMask"/>
+/// alone.
 ///
 /// This is a two-pass assembler: pass 1 walks every line purely to compute section layout (every
 /// instruction's word length is fixed by its mnemonic alone, so a label's final offset never depends
@@ -282,21 +296,24 @@ public static class CvmAssembler
             break;
           }
 
+          // Node 306's six address-register ops (arinc/ardec/arld/arst/lda/sta) need BOTH a
+          // live-node-resolved base (which function -- exactly what the generic tagged path just below
+          // already provides via its own CvmOpcode relocation) AND a user-supplied embedded register
+          // operand (0..5) packed into the SAME word. Unlike the base address, the register operand is a
+          // plain literal the assembler already knows in full right now, so it needs no relocation of its
+          // own -- it is validated here against the shape's own ValueBitMask (Node306RegisterFieldBitMask,
+          // 0..5 with 6/7 unassigned) and carried on CvmRelocation.EmbeddedValue for the linker to OR into
+          // the resolved base word once that's known (see CvmRelocation.EmbeddedValue's own remarks, and
+          // CvmLinker's own remarks on its CvmOpcode case). 0 for every other mnemonic (their shapes carry
+          // no ValueBitMask at all under this encoding, so this is simply never reached for them).
+          int embeddedRegisterValue = 0;
           if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
           {
-            // Node 511's four register-file ops (rld/rst/rpop/rpush) need BOTH a live-node-resolved base
-            // (which function -- exactly what the generic tagged path below already provides via its own
-            // CvmOpcode relocation) AND a user-supplied embedded register operand packed into the SAME
-            // word -- something CvmRelocationType.CvmOpcode has no way to express: it resolves an entire
-            // word from a single symbol name at link time, with no room for a second, per-instance
-            // operand value. Falling through to the generic tagged path below would silently DROP the
-            // register operand (it only emits a trailing operand word for CvmOperandEncoding.TrailingWord,
-            // which this isn't) -- so this errors out loudly instead of doing that. Only
-            // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own immediately-resolving assembler (the CVM
-            // Debugger's own Assembly Code editor) supports these four mnemonics today; revisit here once
-            // a real linker exists and CvmRelocationType grows a shape that can carry a second operand.
-            errors.Add($"line {line.LineNumber}: \"{shape.Mnemonic}\" is not yet supported by this assembler -- use the CVM Debugger's own Assembly Code editor instead.");
-            break;
+            if (!TryParseNumericLiteral(line.Args[0], out embeddedRegisterValue) || embeddedRegisterValue < 0 || embeddedRegisterValue > shape.ValueBitMask)
+            {
+              errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register index for \"{shape.Mnemonic}\" -- expected 0..{shape.ValueBitMask}, e.g. \"{shape.Mnemonic} 0\".");
+              embeddedRegisterValue = 0;
+            }
           }
 
           int opcodeOffset = codeSection.Words.Count;
@@ -314,6 +331,7 @@ public static class CvmAssembler
             WordOffset = opcodeOffset,
             SymbolName = shape.Mnemonic,
             Type = CvmRelocationType.CvmOpcode,
+            EmbeddedValue = embeddedRegisterValue,
           });
 
           if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.TrailingWord)

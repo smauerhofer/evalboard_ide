@@ -5,11 +5,25 @@ namespace Ga144.C.Toolchain;
 /// full scope list). Input is an already-preprocessed token stream (macros expanded, directives gone)
 /// -- NewLine tokens carry no meaning in C's grammar and are stripped before parsing starts.
 ///
-/// Not supported, with a clear diagnostic rather than silent misbehavior: struct/union/enum/typedef,
+/// Not supported, with a clear diagnostic rather than silent misbehavior: struct/union/enum,
 /// float/double/long/short, multi-dimensional arrays, function pointers, bit-fields, variadic
 /// functions, and the "." / "->" member-access operators (all of which need structs). "goto"/labels,
 /// "switch"/"case"/"default", and every operator standard C defines over this compiler's supported
 /// types ARE supported.
+///
+/// <b><c>typedef</c> -- added 2026-09-11, per Stefan's own build failure trying to compile a `libc`
+/// `heap.c` against `stddef.h`/`stdlib.h` (both need `size_t`).</b> Supported for a scalar/pointer/array
+/// alias over this compiler's own existing type system ONLY -- `typedef unsigned int size_t;`,
+/// `typedef int *IntPtr;`, `typedef char Buf[16];`, and one typedef re-using another
+/// (`typedef size_t my_size_t;`) all work, and the aliased name can be used anywhere a built-in type
+/// keyword could (a declaration's base type, a parameter, a cast, `sizeof(...)`). NOT supported, for the
+/// same reason function pointers and structs generally aren't: a typedef naming a function type
+/// (`typedef int Fn(int);`) or a function-pointer type (`typedef int (*Fn)(int);`) -- both are rejected
+/// with a clear diagnostic by <see cref="ParseTypedefDeclaratorList"/> rather than silently misparsed. A
+/// typedef introduces no AST node and needs nothing from <see cref="CCodeGenerator"/> -- it is purely a
+/// compile-time name for an already-existing <see cref="CType"/>, resolved once and substituted
+/// immediately; see <see cref="_typedefs"/>'s own remarks for how that name table works and its one
+/// deliberate scope simplification.
 /// </summary>
 public sealed class CParser
 {
@@ -21,7 +35,35 @@ public sealed class CParser
     "__fastcall", "__lower",
   ];
 
-  private static readonly HashSet<string> UnsupportedTypeKeywords = ["struct", "union", "enum", "typedef", "float", "double", "long", "short"];
+  // "typedef" REMOVED 2026-09-11 -- it used to sit here alongside struct/union/enum/float/double/long/
+  // short as a recognized-but-rejected keyword (ParseDeclarationSpecifiers's own "not yet supported"
+  // check below iterates this set); it is still a reserved word (ReservedWords above, unchanged) but is
+  // now a real, supported specifier -- see this class's own remarks above and ParseDeclarationSpecifiers'
+  // own isTypedef handling.
+  private static readonly HashSet<string> UnsupportedTypeKeywords = ["struct", "union", "enum", "float", "double", "long", "short"];
+
+  /// <summary>
+  /// Every typedef name seen so far in this translation unit, mapped to the already-resolved
+  /// <see cref="CType"/> it aliases. Consulted by <see cref="LooksLikeTypeStart"/>/
+  /// <see cref="LooksLikeTypeAt"/> (so e.g. "size_t x;" is recognized as a declaration, and
+  /// "(size_t)x"/"sizeof(size_t)" is recognized as a type name rather than an expression) and by
+  /// <see cref="ParseDeclarationSpecifiers"/> itself (so "size_t" can be used anywhere a built-in type
+  /// keyword could be). A typedef's own alias is resolved to a concrete <see cref="CType"/> the moment
+  /// it is declared (there is no separate "named alias" <see cref="CTypeKind"/> -- "size_t" and
+  /// "unsigned int" become the exact same <see cref="CType"/> instance/value), so every later lookup is
+  /// a plain dictionary hit with no chained resolution needed.
+  ///
+  /// <b>One flat, unscoped table for the whole translation unit, not a stack of per-block scopes.</b> A
+  /// typedef declared inside a function body (<see cref="ParseLocalDeclaration"/>'s own isTypedef
+  /// branch) is never removed once that function's own block ends -- it remains visible for the rest of
+  /// the file too, which is technically looser than real C's block scoping but harmless for every
+  /// program this compiler is actually meant to compile (typedefs overwhelmingly come from headers
+  /// included at file scope, used by ordinary code below them). This mirrors <see cref="CCompiler"/>'s
+  /// own one-CParser-per-translation-unit model exactly: a fresh CParser (and so a fresh, empty table)
+  /// is created per file compiled, matching real C's own per-translation-unit typedef scope -- only
+  /// BLOCK scoping within a single file is simplified away.
+  /// </summary>
+  private readonly Dictionary<string, CType> _typedefs = new();
 
   /// <summary>A `__fastcall` function's pointer parameters are passed in node 306's four address
   /// registers, `ar[0]` through `ar[3]` -- see `claude/cvm-abi.md` section 2.2. A 5th pointer parameter
@@ -183,7 +225,8 @@ public sealed class CParser
   private bool LooksLikeTypeStart() =>
       CheckWord("void") || CheckWord("char") || CheckWord("int") || CheckWord("unsigned") || CheckWord("signed") ||
       CheckWord("static") || CheckWord("extern") || CheckWord("const") || CheckWord("volatile") ||
-      CheckWord("__fastcall") || CheckWord("__lower") ||
+      CheckWord("__fastcall") || CheckWord("__lower") || CheckWord("typedef") ||
+      (Current.IsIdentifier && _typedefs.ContainsKey(Current.Text)) ||
       UnsupportedTypeKeywords.Any(CheckWord);
 
   /// <summary>Consumes storage-class/qualifier keywords (in any order/quantity) and exactly one base
@@ -203,12 +246,13 @@ public sealed class CParser
   /// rejects a true <paramref name="isFastcall"/>/<paramref name="isLower"/> immediately via
   /// <see cref="RejectCallingConventionKeywords"/>, with a specific diagnostic, rather than silently
   /// dropping them or falling through to a confusing generic parse error.</summary>
-  private CType ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLower)
+  private CType ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLower, out bool isTypedef)
   {
     isStatic = false;
     isExtern = false;
     isFastcall = false;
     isLower = false;
+    isTypedef = false;
     while (true)
     {
       if (Match("static"))
@@ -226,6 +270,13 @@ public sealed class CParser
       else if (Match("__lower"))
       {
         isLower = true;
+      }
+      else if (Match("typedef"))
+      {
+        // Order-independent, same as every other specifier here -- "typedef unsigned int size_t;" and
+        // "unsigned typedef int size_t;" both parse (real C allows this too; typedef is just another
+        // storage-class specifier grammatically). See this class's own remarks on typedef support.
+        isTypedef = true;
       }
       else if (Match("const") || Match("volatile"))
       {
@@ -280,6 +331,16 @@ public sealed class CParser
     if (Match("int"))
     {
       return CType.Int;
+    }
+
+    // A previously-declared typedef name, used here as this declaration's own base type -- see
+    // _typedefs' own remarks. Checked last, after every built-in keyword, so a typedef can never shadow
+    // one of them (not that a real program would try: ExpectIdentifier already refuses to declare a
+    // typedef named "int"/"void"/etc., since those are reserved words).
+    if (Current.IsIdentifier && _typedefs.TryGetValue(Current.Text, out CType? aliasedType))
+    {
+      Advance();
+      return aliasedType;
     }
 
     throw Error(Current.Location, $"expected a type, found \"{Current.Text}\"");
@@ -344,8 +405,13 @@ public sealed class CParser
   private CType ParseAbstractType()
   {
     CSourceLocation location = Current.Location;
-    CType type = ParseDeclarationSpecifiers(out _, out _, out bool isFastcall, out bool isLower);
+    CType type = ParseDeclarationSpecifiers(out _, out _, out bool isFastcall, out bool isLower, out bool isTypedef);
     RejectCallingConventionKeywords(isFastcall, isLower, location, "a type name");
+    if (isTypedef)
+    {
+      throw Error(location, "'typedef' cannot be used in a type name");
+    }
+
     while (Match("*"))
     {
       type = CType.PointerTo(type);
@@ -455,7 +521,19 @@ public sealed class CParser
   private void ParseExternalDeclaration(List<CFunctionDecl> functions, List<CGlobalVarDecl> globals)
   {
     CSourceLocation location = Current.Location;
-    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLowerSpecified);
+    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLowerSpecified, out bool isTypedef);
+
+    if (isTypedef)
+    {
+      RejectCallingConventionKeywords(isFastcall, isLowerSpecified, location, "a typedef declaration");
+      if (isStatic || isExtern)
+      {
+        throw Error(location, "'typedef' cannot be combined with 'static' or 'extern'");
+      }
+
+      ParseTypedefDeclaratorList(baseType);
+      return;
+    }
 
     // The base type carries no pointer stars of its own -- in "int *a, b;", only "a" is a pointer, not
     // "b", so each declarator (the first one included) consumes its own stars starting fresh from
@@ -577,8 +655,13 @@ public sealed class CParser
     do
     {
       CSourceLocation specifierLocation = Current.Location;
-      CType baseType = ParseDeclarationSpecifiers(out _, out _, out bool isFastcall, out bool isLower);
+      CType baseType = ParseDeclarationSpecifiers(out _, out _, out bool isFastcall, out bool isLower, out bool isTypedef);
       RejectCallingConventionKeywords(isFastcall, isLower, specifierLocation, "a parameter declaration");
+      if (isTypedef)
+      {
+        throw Error(specifierLocation, "'typedef' cannot be used in a parameter declaration");
+      }
+
       CType type = ParseDeclaratorType(baseType, "in a parameter declaration", out string name, out _);
       parameters.Add(new CParameter(name, type.Decay()));
     } while (Match(","));
@@ -623,8 +706,22 @@ public sealed class CParser
   private void ParseLocalDeclaration(List<CStmt> statements)
   {
     CSourceLocation specifierLocation = Current.Location;
-    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out _, out bool isFastcall, out bool isLower);
+    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out _, out bool isFastcall, out bool isLower, out bool isTypedef);
     RejectCallingConventionKeywords(isFastcall, isLower, specifierLocation, "a local declaration");
+
+    if (isTypedef)
+    {
+      if (isStatic)
+      {
+        throw Error(specifierLocation, "'typedef' cannot be combined with 'static'");
+      }
+
+      // See _typedefs' own remarks: a local typedef is recorded in the same flat, unscoped table a
+      // file-scope one is, so it (harmlessly, for every program this compiler is actually meant to
+      // compile) remains visible for the rest of the file, not just the rest of this block.
+      ParseTypedefDeclaratorList(baseType);
+      return;
+    }
 
     do
     {
@@ -639,6 +736,45 @@ public sealed class CParser
     } while (Match(","));
 
     Expect(";", "after a local declaration");
+  }
+
+  /// <summary>Parses one or more comma-separated typedef declarators sharing the same base type
+  /// ("typedef int A, *B, C[4];") and records each name in <see cref="_typedefs"/> rather than emitting
+  /// any AST node -- a typedef is purely a compile-time name for an already-existing <see cref="CType"/>,
+  /// with nothing for <see cref="CCodeGenerator"/> to generate. Shared by both call sites that can start
+  /// a typedef (<see cref="ParseExternalDeclaration"/> at file scope, <see cref="ParseLocalDeclaration"/>
+  /// inside a block -- see that field's own remarks on why both write into the same flat table).
+  ///
+  /// A name already in <see cref="_typedefs"/> is accepted again, unchanged, only if it names an EQUAL
+  /// type -- re-including the same header twice (this compiler enforces no "#pragma once"/include-guard
+  /// behavior of its own; it trusts the source's own guards, exactly like a real C preprocessor would if
+  /// the guards were missing) must not be a hard error, but redefining a name to a genuinely different
+  /// type is a real bug in the source and is rejected with a specific diagnostic.</summary>
+  private void ParseTypedefDeclaratorList(CType baseType)
+  {
+    do
+    {
+      CType type = ParseDeclaratorType(baseType, "in a typedef declaration", out string name, out CSourceLocation nameLocation);
+
+      if (CheckWord("("))
+      {
+        throw Error(Current.Location, "typedef of a function type is not yet supported");
+      }
+
+      if (CheckWord("="))
+      {
+        throw Error(Current.Location, "a typedef declaration cannot have an initializer");
+      }
+
+      if (_typedefs.TryGetValue(name, out CType? existing) && !existing.Equals(type))
+      {
+        throw Error(nameLocation, $"\"{name}\" is already declared as a different type (\"{existing}\" vs \"{type}\")");
+      }
+
+      _typedefs[name] = type;
+    } while (Match(","));
+
+    Expect(";", "after a typedef declaration");
   }
 
   private CStmt ParseStatement()
@@ -907,7 +1043,8 @@ public sealed class CParser
   private bool LooksLikeTypeAt(int index)
   {
     CToken token = _tokens[index];
-    return token.IsIdentifier && (token.Text is "void" or "char" or "int" or "unsigned" or "signed" or "const" or "volatile" || UnsupportedTypeKeywords.Contains(token.Text));
+    return token.IsIdentifier && (token.Text is "void" or "char" or "int" or "unsigned" or "signed" or "const" or "volatile"
+        || UnsupportedTypeKeywords.Contains(token.Text) || _typedefs.ContainsKey(token.Text));
   }
 
   private CExpr ParseUnaryExpression()
