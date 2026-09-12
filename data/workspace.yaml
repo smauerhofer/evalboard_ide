@@ -14844,11 +14844,11 @@ projects:
 
         ( contains 8 floatingpoint register )
 
-        ( low mantissa in x, high mantissa in x+1, exp in x+2, sign in x+3 )
+        ( low word in x, high word in x+1 )
 
         # 307 import
 
-        # 0x20 org
+        # 0x10 org
 
         entry fpr/main
 
@@ -14857,27 +14857,60 @@ projects:
         # left /b
 
 
+        : fpr/const
+
+        [ // memory order hi, lo
+          0x3F31 , 0x7218 , // ln2
+          0x3FC9 , 0x0FDB , // pi/2
+          0x3F22 , 0xF983 , // 2/pi
+        ]
+
+
+        : 'fpop ( -) leap then  
+
         : fpr/@next ( ) A[ k/pop ]] lit !b A[ !p ]] lit !b @b !+ ;
+
+        : 'fpush ( -) @+ @+ leap then
 
         : fpr/!next ( w-) A[ @p k/push ]] lit !b !b ;
 
 
-        : fpr/pop ( r-) 2* 2* a! fpr/@next fpr/@next fpr/@next fpr/@next ;  
 
-        : fpr/push ( r-) 2* 2* a! @+ @+ @+ @ fpr/!next fpr/!next fpr/!next fpr/!next ;
+        : fpr/instr ( xy-i) drop dup 0x07 and 2* a! 2/ 2/ 2/ 0x1f and ;
 
+        : fpr/prepare ( xy-r) fpr/instr a >r !b !b @+ @+ !b !b r> ;
 
-        : fpr/leave A[ k/leave ; ]] lit !b
+        : fpr/leave left b! A[ k/leave ; ]] lit !b
 
-        : fpr/main  A[ !p 2* !p ]] lit !b @b @b r--- fpr/leave ;
-
-
-        : fpr/@ ( r-mmes) 2* 2* a! @+ @+ @+ @ ;
-
-        : fpr/! ( mmesr-) 2* 2* a! !+ !+ !+ ! ;
-
+        : fpr/main  A[ !p 2* !p ]] lit !b @b @b right b!
+          -if // 1101_111?_????_????
+            2* -if // 1101_1111_????_????
+            // binary
+              fpr/prepare >r @+ @+ !b !b r> ahead [ swap ]
+            then // 1101_1110_????_????
+            // unary 
+            fpr/prepare then a! @b @b !+ ! ;
+          then // 1101_110?_????_????
+          2* -if // 1101_1101_????_????
+            // constant
+            fpr/instr a >r a! @+ @ r> a! !+ ! ;
+          then // 1101_1100_????_????
+          fpr/instr >r ;
 
         (
+
+        opcode 1101_111?_????_?fff binary floatingpoint operation. first operand is fff. second operant is fff+1. result in fff
+
+        opcode 1101_1100_????_?fff unary floatingpoint operation. operand is fff. result in fff
+
+        opcode 1101_1101_????_?fff lookup constant. result in fff. offset in ?.
+
+
+        'fpop 1101_1100_????_?fff pop 32-bit floatingpoint from stack {low word first} into fp register fff {3 bits}
+
+        'fpush 1101_1100_????_?fff push 32-bit floatingpoint to stack {low word last} from fp register fff {3 bits}
+
+
 
         )
 
@@ -14900,56 +14933,56 @@ projects:
       - 0x15555
       - 0x15555
       - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x03F31
+      - 0x07218
+      - 0x03FC9
+      - 0x00FDB
+      - 0x03F22
+      - 0x0F983
+      - 0x13417
       - 0x05B12
       - 0x13422
       - 0x0C9B2
       - 0x09F3D
+      - 0x07C4C
       - 0x05B25
       - 0x05626
-      - 0x364AA
-      - 0x13420
-      - 0x13420
-      - 0x13420
-      - 0x11420
-      - 0x364AA
-      - 0x07C1A
-      - 0x03624
-      - 0x13424
-      - 0x13424
-      - 0x11424
-      - 0x05BB2
+      - 0x25DFA
+      - 0x00007
+      - 0x36AC2
+      - 0x30712
+      - 0x0001F
+      - 0x3F555
+      - 0x1341E
+      - 0x22822
+      - 0x09C1A
+      - 0x09B9D
+      - 0x04B12
+      - 0x00175
       - 0x11428
+      - 0x089B2
       - 0x05B02
       - 0x0C432
-      - 0x009B2
-      - 0x135D5
-      - 0x11431
-      - 0x364AA
-      - 0x07C1A
-      - 0x03555
-      - 0x364AA
-      - 0x0F83A
-      - 0x0B555
-      - 0x15555
-      - 0x15555
+      - 0x01DA2
+      - 0x001D5
+      - 0x1B439
+      - 0x37236
+      - 0x13424
+      - 0x2FC1A
+      - 0x09B9A
+      - 0x11437
+      - 0x13424
+      - 0x2BF02
+      - 0x0FA55
+      - 0x3723E
+      - 0x1341E
+      - 0x228AA
+      - 0x07E9A
+      - 0x2B82D
+      - 0x1341E
+      - 0x2F555
       startup:
-        entryPoint: 0x033
+        entryPoint: 0x02C
         p: 0x000
         a: 0x000
         b: 0x000
@@ -14959,92 +14992,117 @@ projects:
     - coordinate: 309
       enabled: true
       sourceCode: >+
-        ( CVM2 node 309. VM 32 bit floatingpoint management node, 1101_11??_????_???? )
+        ( CVM2 node 309. VM 32 bit floatingpoint stage 1 node )
 
-        ( contains floatingpoint variables )
+        (
+          writes and read floatingpoint pipeline & constants
+          receives 1 or 2 floatingpoints number and decomposes it into
+          1. sign: 0 => positive, 0x8000 => negative
+          2. type: ==0 => normal or denormalized, !=0 => NaN or infitinte
+          3. signed exponent -128 .. 127
+          4. mantissa high
+          5. mantissa low
+        )
 
-        # 308 import
+        # 0 org
 
-        # 8 org
+        entry fp1/main
 
-        entry fpm/main
-
-        # 0 /a
+        # left /a
 
         # right /b
 
 
-        : fpm/pop  ( r-) A[ @p fpr/pop  ]] lit !b !b ;
+        : fp1/decompose ( )
+          @b @b
+          // sign
+          dup 0x8000 and !
+          // exponent
+          dup 2/ 2/ 2/ 2/ 2/ 2/ 2/ 0xff and ..
+          ( lhe)
+          if // not denormalized
+            dup 0xff xor if // normal number
+              dup xor ! // number is valid
+              !
+              0x7f and 0x80 xor !
+              !
+            else // NaN
+              drop 0xff dup
+              !
+              !
+              0x7f and !
+              ! ;
+            then
+          then // denormalized
+            !
+            !
+            0x7f and !
+            ! ;
 
-        : fpm/push ( r-) A[ @p fpr/push ]] lit !b !b ;
+        : fp1/compose // read sehl from up and convert it to a 32-bit IEEE-754 number
+          up a!
+          // sign
+          @ 
+          // exponent
+          @ 2* 2* 2* 2* 2* 2* 2* xor
+          // mantissa high
+          @ 0x7f and xor !b
+          // mantissa low
+          @ 0xffff and !b
+        : fp1/main left a!
+          @b dup ! 0x8 and
+          if // binary
+            fp1/decompose
+          then // unary
+            fp1/decompose fp1/compose ;
 
 
-        : fpm/leave A[ fpr/leave ; ]] lit !b
-
-        : fpm/main # fpm/leave lit >r A[ !p !p ]] lit !b @b
-          -if // 1101_111?_????_????
-            @b --l- ;
-          then // 1101_110?_????_????
-          @p ---u ;
-
-        : fpm/0@ dup xor
-
-        : fpm/@ ( r-mmes) 2* 2* a! @+ @+ @+ @ ;
-
-        : fpm/1@ 1 fpm/@ ;
-
-
-        : fpm/0! dup xor
-
-        : fpm/! ( mmesr-) 2* 2* a! !+ !+ !+ ! ;
-
-        : fpm/1! 1 fpm/! ;
 
 
       ramWords:
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x05B25
-      - 0x05626
-      - 0x05B25
-      - 0x0562B
-      - 0x05BB2
-      - 0x11431
-      - 0x04812
-      - 0x0000C
-      - 0x0D9B2
-      - 0x09F6C
-      - 0x009B2
-      - 0x11575
-      - 0x049B2
-      - 0x11545
-      - 0x243B2
-      - 0x364AA
-      - 0x07C1A
-      - 0x03555
-      - 0x05717
-      - 0x00001
-      - 0x243B2
-      - 0x364AA
-      - 0x0F83A
-      - 0x0B555
-      - 0x0571D
-      - 0x00001
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x01F97
+      - 0x08000
+      - 0x3FA92
+      - 0x307C2
+      - 0x307C2
+      - 0x31DFA
+      - 0x000FF
+      - 0x19416
+      - 0x25DE2
+      - 0x000FF
+      - 0x19411
+      - 0x2432A
+      - 0x0BDFF
+      - 0x0007F
+      - 0x00080
+      - 0x39A2A
+      - 0x11416
+      - 0x3BD92
+      - 0x000FF
+      - 0x0BA12
+      - 0x0007F
+      - 0x3FA2D
+      - 0x0BA12
+      - 0x0007F
+      - 0x3FA2D
+      - 0x04A0A
+      - 0x00145
+      - 0x024DA
+      - 0x364DA
+      - 0x364E2
+      - 0x03DFA
+      - 0x0007F
+      - 0x39B0F
+      - 0x0FFFF
+      - 0x3FBB2
+      - 0x04A03
+      - 0x00175
+      - 0x0BDFA
+      - 0x00010
+      - 0x19429
+      - 0x13400
+      - 0x13400
+      - 0x11419
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15067,7 +15125,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00E
+        entryPoint: 0x023
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15075,11 +15133,123 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 310
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >-
+        ( CVM2 node 310. VM 32 bit floatingpoint stage 2 node. )
+
+        entry fp2/main
+
+        # right /a
+
+        # left /b
+
+
+        # 0x10 org // code
+
+
+
+
+        : fp2/read ( -lhes) @b >r @b >r @b >r @b r> r> r> ;
+
+
+        : fp2/bin ( -lheslhes) leap
+
+        : fp2/un ( -lhes) then ! ! ! ! ;
+
+
+        : fp2/main
+          # fp2/main lit >r
+          @b dup >r 0x8 and if fp2/read fp2/read ex fp2/bin ; then fp2/read ex fp2/un ;
+
+        : 'fneg  0x8000 xor ;
+
+
+        # 0 org // unary
+
+
+        'fneg ;
+
+        : 'fabs  dup xor ;
+
+
+        # 0x08 org // binary
+
+
+
+        (
+
+        'fneg negate number
+
+        'fabs absolute value
+
+        )
+      ramWords:
+      - 0x11423
+      - 0x24355
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x00802
+      - 0x2FFBA
+      - 0x00C9A
+      - 0x27555
+      - 0x13415
+      - 0x0BA2A
+      - 0x0B555
+      - 0x04803
+      - 0x00017
+      - 0x2FDFA
+      - 0x00008
+      - 0x19420
+      - 0x13410
+      - 0x13410
+      - 0x17555
+      - 0x11414
+      - 0x13410
+      - 0x17555
+      - 0x11415
+      - 0x04355
+      - 0x08000
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x017
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15864,31 +16034,126 @@ projects:
         parameterStack: []
     - coordinate: 409
       enabled: true
-      sourceCode: >+
-        ( CVM2 node 409. VM 32 bit floatingpoint unary operations, 1101_110?_????_???? )
+      sourceCode: >
+        ( CVM2 node 409. VM 32 bit floatingpoint final stage node )
 
-        ( contains floatingpoint variables )
+        (
+          receives 1 floatingpoints number and composes it into a IEEE-754 number.
+          1. sign: 0 => positive, 0x8000 => negative
+          2. type: ==0 => normal or denormalized, !=0 => NaN or infitinte
+          3. signed exponent -128 .. 127
+          4. mantissa high
+          5. mantissa low
+          normalize number
+          send number to node 509.
+        )
 
-        # 309 import
 
         # 0 org
 
-        entry fpu/main
+        entry fpf/main
 
-        # 0 /a
+        # left /b
 
-        # right /b
+        # up /a
 
 
+        : fpf/inc 1 . + ;
 
-        : fpu/leave A[ fpm/leave ; ]] lit !b
+        : fpf/dec -1 . + ;
 
-        : fpu/main # fpu/leave lit >r A[ !p ]] lit !b @b
-          dup >r 1 and A[ @p fpm/@ ]] lit !b !b
-          A[ !p !p !p !p ]]
-      ramWords: []
+
+        : fpf/normalize ( ehl/s-)
+
+
+        : fpf/main
+          @b >r
+          @b if // NaN or infinite
+            @b 0xff and 2* 2* 2* 2* 2* 2* 2*
+            @b 0x7f and xor r> xor !
+            @b 0xffff and ! fpf/main ;
+          then // normal number
+            // get exponent
+            @b 0xff and >r
+            @b // high mantissa
+            // check if zero
+            if // nonzero
+              @b // low mantissa
+            then
+            @b // low mantissa
+            // check if zero
+            if // nonzero
+              fpf/normalize ;
+            then // zero
+            >r !
+            dup xor ! ;
+      ramWords:
+      - 0x049F5
+      - 0x00001
+      - 0x049F5
+      - 0x3FFFF
+      - 0x00802
+      - 0x19411
+      - 0x01DFA
+      - 0x000FF
+      - 0x364DA
+      - 0x364DA
+      - 0x37F12
+      - 0x0007F
+      - 0x3E39A
+      - 0x39A07
+      - 0x0FFFF
+      - 0x3FAB2
+      - 0x11404
+      - 0x01DFA
+      - 0x000FF
+      - 0x2FF65
+      - 0x009B2
+      - 0x01317
+      - 0x11404
+      - 0x2FA92
+      - 0x39A55
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x004
         p: 0x000
         a: 0x000
         b: 0x000
