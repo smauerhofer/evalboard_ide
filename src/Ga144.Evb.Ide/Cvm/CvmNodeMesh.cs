@@ -97,10 +97,13 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <b>RENUMBERED 2026-09-15: node 306 and node 308 have swapped roles.</b> The "306's lda/sta/arinc/
 /// ardec/arld/arst" and "308's dpop/dpush/dinc/ddec/dadd/dor" attributions two paragraphs up describe
 /// the 2026-09-09 state and are no longer accurate: the address-register mnemonics (plus two new ones,
-/// arinc2/ardec2) now live on node 308, and node 306 now names an unrelated, unwired floating-point
-/// register node -- see Node308Program's and Node306Program's own remarks. Whether the dpop/dpush family
-/// still exists anywhere on the current mesh is unconfirmed and flagged there, not resolved here; both
-/// coordinates below (306 and 308) are unchanged by this swap, only which class/role each one names.
+/// arinc2/ardec2) now live on node 308, and node 306 now names an unrelated floating-point register
+/// node with one wired mnemonic of its own (<c>fpop</c>) -- see Node308Program's and Node306Program's
+/// own remarks. <b>The old dpop/dpush/dinc/ddec/dadd/dor family was REMOVED OUTRIGHT the same day</b>,
+/// per Stefan's own direct instruction ("remove the old dpop/dpush/dinc/ddec/dadd/dor family
+/// completely") -- see CvmInstructionSet's own removal note above FloatingPointFunctionFieldBitMask;
+/// both coordinates below (306 and 308) are unchanged by this swap, only which class/role each one
+/// names.
 /// </summary>
 public static class CvmNodeMesh
 {
@@ -119,6 +122,6 @@ public static class CvmNodeMesh
     Node408Program.Coordinate, // 408, CVM2's comparison node (added 2026-09-06).
     Node307Program.Coordinate, // 307, CVM2's "VM ternary main" relay node (added 2026-09-09).
     Node308Program.Coordinate, // 308, CVM2's address-register node (added 2026-09-09 as "306"; RENUMBERED 2026-09-15 -- see Node308Program's own remarks).
-    Node306Program.Coordinate, // 306, CVM2's floatingpoint register node (added 2026-09-15, RENUMBERED from the unrelated "VM 32 arithmetic" node this coordinate held 2026-09-09 through 2026-09-15 -- see Node306Program's own remarks). NOT wired into the CVM instruction set yet.
+    Node306Program.Coordinate, // 306, CVM2's floatingpoint register node (added 2026-09-15, RENUMBERED from the unrelated "VM 32 arithmetic" node this coordinate held 2026-09-09 through 2026-09-15 -- see Node306Program's own remarks). Only 'fpop is wired into the CVM instruction set so far ('fpush flagged, collides with node 506's own "fpush"; binary/constant-lookup ops are un-named in the source).
   ];
 }

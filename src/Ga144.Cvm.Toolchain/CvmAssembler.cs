@@ -307,7 +307,9 @@ public static class CvmAssembler
           // same 0-7 range) and carried on CvmRelocation.EmbeddedValue for the linker to OR into
           // the resolved base word once that's known (see CvmRelocation.EmbeddedValue's own remarks, and
           // CvmLinker's own remarks on its CvmOpcode case). 0 for every other mnemonic (their shapes carry
-          // no ValueBitMask at all under this encoding, so this is simply never reached for them).
+          // no ValueBitMask at all under this encoding, so this is simply never reached for them). Node
+          // 306's new fpop (2026-09-15, FloatingPointRegisterFieldBitMask, same 0-7 range) flows through
+          // this exact same generic path -- no mnemonic-specific code was needed to add it.
           int embeddedRegisterValue = 0;
           if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
           {

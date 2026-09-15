@@ -17,17 +17,20 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <b>Displaces this node's own PRIOR role.</b> Before this message, physical node 308 was documented as
 /// CVM2's "VM 32 arithmetic" node (<c>dpop</c>/<c>dpush</c>/<c>dinc</c>/<c>ddec</c>/<c>dadd</c>/<c>dor</c>,
 /// added 2026-09-09 from Stefan's own <c>workspace.yaml</c> export). Stefan's new source for node 308
-/// contains NONE of that -- it is the address-register mesh, not the "d" register family. Whether
-/// <c>dpop</c>/<c>dpush</c>/<c>dinc</c>/<c>ddec</c>/<c>dadd</c>/<c>dor</c> still exist anywhere on the
-/// current CVM2 mesh under a different coordinate, or have been retired outright, is NOT stated by
-/// Stefan and is not guessed at here -- their <c>Instructions</c> rows and
-/// <c>CvmAssemblyLanguage.NodeSymbolByMnemonic</c> wiring are left in place (still pointed at coordinate
-/// 308), which now means they will correctly fail to resolve (node 308's CURRENT source defines no
-/// <c>'dpop</c> et al.) rather than silently do the wrong thing -- see
-/// <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage.DiagnoseUnresolvedWiredMnemonic"/>'s own
-/// mechanism, built earlier the same week for exactly this "wired but currently unresolved" case. Flagged
-/// for Stefan to say whether <c>dpop</c>/etc. should be retired outright, moved to a different node, or
-/// were never real to begin with.
+/// contains NONE of that -- it is the address-register mesh, not the "d" register family.
+///
+/// <b>REMOVED OUTRIGHT, 2026-09-15 (same day), per Stefan's own direct instruction: "remove the old
+/// dpop/dpush/dinc/ddec/dadd/dor family completely."</b> This resolves the orphaning flag this remark
+/// used to carry (whether the family still existed under a different coordinate, or was never real) --
+/// it doesn't matter now, since Stefan asked for it gone rather than relocated. Their mnemonic
+/// constants, tag/field-layout constants, <c>Instructions</c> rows, and
+/// <c>CvmAssemblyLanguage.NodeSymbolByMnemonic</c>/<c>NodeResolvedEmbeddedValueFieldLayoutByMnemonic</c>
+/// wiring are all deleted -- see <c>Ga144.Cvm.Toolchain.CvmInstructionSet</c>'s own removal note above
+/// <c>FloatingPointFunctionFieldBitMask</c> for the full accounting. Unlike the 2026-09-09 CVM1-opcode
+/// purge (which keeps a retired Id permanently unused but on record), this was a clean removal at
+/// Stefan's own request; Ids 123-128 are still never reused, but nothing describes what they used to be
+/// beyond that file's own removal note and this project's own history in
+/// `claude/cvm-node306-307-address-registers.md`.
 ///
 /// <b>Register count, org, and today's registers-depend-on-org history.</b> Per
 /// `claude/cvm-node306-307-address-registers.md`'s own 2026-09-11 addendum, capacity is

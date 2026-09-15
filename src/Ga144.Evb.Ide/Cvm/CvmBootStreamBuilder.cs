@@ -47,11 +47,14 @@ namespace Ga144.Evb.Ide.Cvm;
 /// above, from this class-level history through <see cref="BuildLoadOrder"/>'s own doc comment, describes
 /// the 32-bit address-register node reached via 307's own port -- that node is now physical node 308 (see
 /// <see cref="Node308Program"/>), not 306. Physical node 306 now names an unrelated, brand-new
-/// floating-point register node (see <see cref="Node306Program"/>, a full rewrite) that this builder does
-/// NOT yet compile or load -- its three-way dispatch does not fit any existing operand-encoding shape, so
-/// wiring it in is deferred as an open architecture question, not guessed at here. The mesh shape itself
-/// is unchanged by this renumbering (still 507 -&gt; 407 -&gt; 307 -&gt; [address-register node], still CVM2's
-/// first five-hop-deep branch) -- only the coordinate label on the leaf moved, from 306 to 308.
+/// floating-point register node (see <see cref="Node306Program"/>, a full rewrite), a sibling of node 308
+/// under node 307. This builder compiles AND loads it (see <see cref="BuildDescriptors"/>'s own
+/// <c>result306</c> and <see cref="BuildLoadOrder"/>'s own step, both added the same day 'fpop was wired)
+/// -- but only 'fpop itself is wired as a CVM mnemonic; the node's own three-way (binary/constant/unary)
+/// dispatch still does not fit any existing operand-encoding shape beyond that one op, so wiring the rest
+/// in remains an open architecture question, not guessed at here. The mesh shape itself is unchanged by
+/// this renumbering (still 507 -&gt; 407 -&gt; 307 -&gt; [address-register node], still CVM2's first
+/// five-hop-deep branch) -- only the coordinate label on the leaf moved, from 306 to 308.
 ///
 /// <b>Node 507 (CPU), not 508 -- corrected 2026-09-01.</b> This project's own session briefly placed
 /// CVM2's CPU source on node 508 under a mistaken attribution; Stefan corrected it directly: the CPU
@@ -258,10 +261,8 @@ public static class CvmBootStreamBuilder
     // now lives on physical node 308 -- Stefan: "node 306 and 308 have swapped roles." This step now
     // compiles Node308Program.Source (not Node306Program.Source) accordingly; the variable is renamed
     // result308 to match. Node 306 itself now names an unrelated, brand-new floating-point register node
-    // (see Node306Program's own remarks) that this harness does NOT yet compile here -- it is not wired
-    // into CvmInstructionSet/CvmAssemblyLanguage at all yet (its three-way dispatch shape and its
-    // 'fpop'/'fpush' own unconfirmed "leap"/"then" body need resolving first, see Node306Program's own
-    // remarks), so adding a compile step for it here is deferred rather than guessed at.
+    // (see Node306Program's own remarks) -- see result306's own compile step further below, added the
+    // same day 'fpop was wired.
     //
     // CVM2 (2026-09-06): the address-register node -- reached from node 307's own k/main dispatch via
     // its LEFT port as of 2026-09-15 (was RIGHT, under the "node 306" name, through 2026-09-11 -- see
@@ -295,6 +296,30 @@ public static class CvmBootStreamBuilder
           : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
     });
     ThrowIfFailed(result308);
+
+    // CVM2 (2026-09-15): node 306, the new floating-point register node -- reached from node 307's own
+    // k/main dispatch via its RIGHT port (Node307Program's own "RIGHT/LEFT SWAPPED" remarks), a SIBLING
+    // of node 308 above (both are leaves hanging directly off 307's own dispatch, not a further link past
+    // each other). Imports 307 by name ('# 307 import', k/pop/k/push/k/leave), so must compile AFTER
+    // result307 above, same as result308. ADDED HERE 2026-09-15, the same day 'fpop was wired into
+    // CvmInstructionSet/CvmAssemblyLanguage (see FloatingPointPopMnemonic's own remarks) -- this harness's
+    // own "every node that has a live mnemonic depending on it gets compiled and checked, loudly" pattern
+    // now covers node 306 too. Only 'fpop's own resolution actually depends on this compile succeeding;
+    // 'fpush remains flagged/unwired (naming collision with node 506's own "fpush") and the binary/
+    // constant-lookup dispatch categories remain entirely unwired (no named F18 words to hang a mnemonic
+    // on), so this compile step's own success or failure has no effect on them either way.
+    F18CompileResult result306 = Compile(compiler, Node306Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node306Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node307Program.Coordinate
+          ? F18ImportResolution.FromExports(result307.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result306);
 
     // CVM2 (2026-09-04): node 506, the stack-frame node (enter/leave/...) -- reached from 507's own
     // m/main dispatch via its RIGHT port, a SIBLING of 407 (both are leaves hanging directly off 507,
@@ -406,6 +431,7 @@ public static class CvmBootStreamBuilder
       CvmBootDescriptor.FromCompileResult(result408),
       CvmBootDescriptor.FromCompileResult(result307),
       CvmBootDescriptor.FromCompileResult(result308),
+      CvmBootDescriptor.FromCompileResult(result306),
       CvmBootDescriptor.FromCompileResult(result506),
       CvmBootDescriptor.FromCompileResult(result511),
       CvmBootDescriptor.FromCompileResult(result510),
@@ -555,16 +581,24 @@ public static class CvmBootStreamBuilder
   /// reads <c>new CvmBootLoadStep(308, 307)</c> accordingly. Physical node 408 (the pre-existing
   /// "comparison node" step directly above it, unrelated to this renumbering) keeps its own separate
   /// coordinate; the two are not to be confused despite the similar digits. Physical node 306 now names
-  /// an unrelated floating-point register node (see <see cref="Node306Program"/>) that is NOT part of
-  /// this load order yet -- it is not wired into the CVM instruction set (its three-way dispatch does not
-  /// fit any existing operand-encoding shape) and so has no compiled program for a boot step to load;
-  /// adding it here is deferred until that architecture question is resolved.
+  /// an unrelated floating-point register node (see <see cref="Node306Program"/>), a SIBLING of node 308
+  /// under node 307 (both are one relay hop past 307, reached via its RIGHT and LEFT ports respectively --
+  /// relative order between the two does not matter, only that both precede node 307's own step).
+  ///
+  /// <b>Node 306 ADDED to this load order 2026-09-15, the same day 'fpop was wired.</b> It was left out
+  /// above (through the swap) because it had no wired mnemonic depending on a live compile of it; now
+  /// that <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointPopMnemonic"/> does, it needs a
+  /// real compiled program on real hardware too, same as every other node in this list. Its own three-way
+  /// (binary/constant/unary) dispatch still does not fit any existing operand-encoding shape for anything
+  /// beyond 'fpop -- that remains an open design question, unrelated to whether the node itself gets
+  /// loaded onto the mesh.
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
   [
     new CvmBootLoadStep(406, 407),
     new CvmBootLoadStep(408, 407),
     new CvmBootLoadStep(308, 307),
+    new CvmBootLoadStep(306, 307),
     new CvmBootLoadStep(307, 407),
     new CvmBootLoadStep(407, 507),
     new CvmBootLoadStep(506, 507),

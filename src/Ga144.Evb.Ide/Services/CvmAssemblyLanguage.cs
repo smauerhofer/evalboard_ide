@@ -472,13 +472,23 @@ internal static class CvmAssemblyLanguage
   // this one.)
   private const int Node511Tag = 0xBC00;
 
-  // Node 308's dpop/dpush/dinc/ddec/dadd/dor tag (2026-09-09, opcode/assembler-vs-node reconciliation
-  // audit), the SAME NodeResolvedEmbeddedValue shape as node 511's rld/rst/rpop/rpush above but with a
-  // different field layout -- see CvmInstructionSet.Node308FunctionFieldBitMask's own remarks for the
-  // bit-by-bit derivation off node 308's own d/main body. Reached from node 307's own LEFT relay
-  // ("1101_11??_????_????" per node 307's own dispatch comment, matching node 308's own header exactly),
-  // fixing node 308's own top 6 bits at "1101_11" -- 0xDC00.
-  private const int Node308Tag = 0xDC00;
+  // REMOVED OUTRIGHT, 2026-09-15: "Node308Tag" (0xDC00) used to tag node 308's OLD dpop/dpush/dinc/
+  // ddec/dadd/dor family (added 2026-09-09) -- removed completely per Stefan's own direct instruction,
+  // see CvmInstructionSet's own removal note above FloatingPointFunctionFieldBitMask. The numeric value
+  // 0xDC00 is NOT reused under that old name below -- it reappears, coincidentally but correctly, as
+  // FloatingPointUnaryTag just below: under node 307's OWN pre-2026-09-15 dispatch, "1101_11??" relayed
+  // LEFT to what was then physical node 308 (this old family); under the swapped, CURRENT dispatch,
+  // the SAME "1101_11??" bit pattern relays RIGHT to physical node 306 (the new floating-point node) --
+  // see Cvm.Node307Program's own "RIGHT/LEFT SWAPPED" remarks. The tag bits didn't move; which node sits
+  // behind them did.
+
+  // Node 306's new floating-point register node (2026-09-15) -- 'fpop's own unary-category tag. Per the
+  // node's own trailing opcode table, "1101_1100_????_?fff" fixes the top 8 bits at 0xDC00 (narrower
+  // than the outer "1101_11??" envelope above, since fpr/main's own cascade tests one more bit before
+  // reaching this branch -- see Cvm.Node306Program's own remarks for the binary/constant/unary split).
+  // 'fpush shares this same tag but is flagged, not wired -- see CvmInstructionSet.FloatingPointPopMnemonic's
+  // own remarks for the "fpush" naming collision with node 506's PushFrameMnemonic.
+  private const int FloatingPointUnaryTag = 0xDC00;
 
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
   // tag bits its opcode word must carry (Node508TagBits for the OLD, permanently-orphaned CVM1
@@ -724,15 +734,16 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = (Node308Program.Coordinate, "'lda", 0xD800),
         [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (Node308Program.Coordinate, "'sta", 0xD800),
 
-        // Node 308's six ops (2026-09-09) -- BRAND NEW, NodeResolvedEmbeddedValue (see
-        // NodeResolvedEmbeddedValueFieldLayoutByMnemonic below for the field layout, different from node
-        // 511's). Tag Node308Tag (0xDC00) -- see that constant's own remarks.
-        [CvmInstructionSet.DoublePopMnemonic] = (Node308Program.Coordinate, "'dpop", Node308Tag),
-        [CvmInstructionSet.DoublePushMnemonic] = (Node308Program.Coordinate, "'dpush", Node308Tag),
-        [CvmInstructionSet.DoubleIncrementMnemonic] = (Node308Program.Coordinate, "'dinc", Node308Tag),
-        [CvmInstructionSet.DoubleDecrementMnemonic] = (Node308Program.Coordinate, "'ddec", Node308Tag),
-        [CvmInstructionSet.DoubleAddMnemonic] = (Node308Program.Coordinate, "'dadd", Node308Tag),
-        [CvmInstructionSet.DoubleOrMnemonic] = (Node308Program.Coordinate, "'dor", Node308Tag),
+        // REMOVED OUTRIGHT, 2026-09-15: node 308's old dpop/dpush/dinc/ddec/dadd/dor entries (added
+        // 2026-09-09, tag Node308Tag/0xDC00) -- see CvmInstructionSet's own removal note above
+        // FloatingPointFunctionFieldBitMask for why (Stefan's own direct instruction: "remove the old
+        // dpop/dpush/dinc/ddec/dadd/dor family completely").
+
+        // Node 306's new floating-point register node (2026-09-15) -- only 'fpop is wired; 'fpush is
+        // flagged, not wired, due to its collision with the pre-existing "fpush" mnemonic (node 506's
+        // own PushFrameMnemonic) -- see CvmInstructionSet.FloatingPointPopMnemonic's own remarks. Tag
+        // FloatingPointUnaryTag (0xDC00) -- see that constant's own remarks just above.
+        [CvmInstructionSet.FloatingPointPopMnemonic] = (Node306Program.Coordinate, "'fpop", FloatingPointUnaryTag),
 
         // Node 405's nine ops (2026-09-09) -- BRAND NEW, tagged/node-resolved (CvmOperandEncoding.None).
         // Node 405's own mw/main has no bit cascade of its own -- a single dispatch word then an
@@ -771,15 +782,18 @@ internal static class CvmAssemblyLanguage
 
   /// <summary>
   /// Per-mnemonic field layout for <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>
-  /// mnemonics only (node 511's <c>rld</c>/<c>rst</c>/<c>rpop</c>/<c>rpush</c> and, since 2026-09-09, node
-  /// 308's <c>dpop</c>/<c>dpush</c>/<c>dinc</c>/<c>ddec</c>/<c>dadd</c>/<c>dor</c>): unlike every other
-  /// entry in <see cref="NodeSymbolByMnemonic"/>, this shape needs to know exactly WHERE within the
-  /// resolved word its own "which function" field and its own embedded register-index operand each sit --
-  /// and, per <see cref="CvmInstructionSet.Node308FunctionFieldBitMask"/>'s own remarks, node 308's own
-  /// layout is genuinely different from node 511's (a 6-bit/2-bit split with no base-address bias, vs.
-  /// node 511's 5-bit/5-bit split biased by <see cref="CvmInstructionSet.Node511FunctionFieldBaseAddress"/>)
-  /// -- so this is a separate per-mnemonic lookup rather than a single shared set of constants
-  /// <see cref="BuildDecodeTable"/>/<see cref="BuildEncodeTable"/> could hardcode once.
+  /// mnemonics only (node 511's <c>rld</c>/<c>rst</c>/<c>rpop</c>/<c>rpush</c>, the address-register
+  /// family's eight ops, and, since 2026-09-15, node 306's <c>fpop</c>): unlike every other entry in
+  /// <see cref="NodeSymbolByMnemonic"/>, this shape needs to know exactly WHERE within the resolved word
+  /// its own "which function" field and its own embedded register-index operand each sit -- and each
+  /// node's own layout genuinely differs (node 511's 5-bit/5-bit split is biased by
+  /// <see cref="CvmInstructionSet.Node511FunctionFieldBaseAddress"/>; the address-register node's own
+  /// 6-bit/3-bit split and node 306's own 5-bit/3-bit split both use no bias at all -- see
+  /// <see cref="CvmInstructionSet.FloatingPointFunctionFieldBitMask"/>'s own remarks for node 306's, an
+  /// UNCONFIRMED assumption) -- so this is a separate per-mnemonic lookup rather than a single shared set
+  /// of constants <see cref="BuildDecodeTable"/>/<see cref="BuildEncodeTable"/> could hardcode once.
+  /// (node 308's OLD <c>dpop</c>/<c>dpush</c>/<c>dinc</c>/<c>ddec</c>/<c>dadd</c>/<c>dor</c> family, which
+  /// used to have entries here, was removed outright 2026-09-15 per Stefan's own direct instruction.)
   /// </summary>
   private static readonly IReadOnlyDictionary<string, (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask)> NodeResolvedEmbeddedValueFieldLayoutByMnemonic =
       new Dictionary<string, (int, int, int, int)>(StringComparer.OrdinalIgnoreCase)
@@ -788,12 +802,16 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.StoreRegisterFileMnemonic] = (CvmInstructionSet.Node511FunctionFieldBitMask, CvmInstructionSet.Node511FunctionFieldShift, CvmInstructionSet.Node511FunctionFieldBaseAddress, CvmInstructionSet.Node511RegisterFieldBitMask),
         [CvmInstructionSet.PopRegisterFileMnemonic] = (CvmInstructionSet.Node511FunctionFieldBitMask, CvmInstructionSet.Node511FunctionFieldShift, CvmInstructionSet.Node511FunctionFieldBaseAddress, CvmInstructionSet.Node511RegisterFieldBitMask),
         [CvmInstructionSet.PushRegisterFileMnemonic] = (CvmInstructionSet.Node511FunctionFieldBitMask, CvmInstructionSet.Node511FunctionFieldShift, CvmInstructionSet.Node511FunctionFieldBaseAddress, CvmInstructionSet.Node511RegisterFieldBitMask),
-        [CvmInstructionSet.DoublePopMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
-        [CvmInstructionSet.DoublePushMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
-        [CvmInstructionSet.DoubleIncrementMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
-        [CvmInstructionSet.DoubleDecrementMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
-        [CvmInstructionSet.DoubleAddMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
-        [CvmInstructionSet.DoubleOrMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
+        // REMOVED OUTRIGHT, 2026-09-15: node 308's old dpop/dpush/dinc/ddec/dadd/dor field-layout entries
+        // (Node308FunctionFieldBitMask/Shift/BaseAddress/RegisterFieldBitMask) -- see CvmInstructionSet's
+        // own removal note above FloatingPointFunctionFieldBitMask for why (Stefan's own direct
+        // instruction).
+
+        // Node 306's new floating-point register node (2026-09-15) -- only 'fpop is wired (see
+        // NodeSymbolByMnemonic above for why 'fpush is flagged instead). Field layout per
+        // CvmInstructionSet.FloatingPointFunctionFieldBitMask's own remarks: a 5-bit function field / 3-bit
+        // register field, no base-address bias (an UNCONFIRMED assumption, flagged there).
+        [CvmInstructionSet.FloatingPointPopMnemonic] = (CvmInstructionSet.FloatingPointFunctionFieldBitMask, CvmInstructionSet.FloatingPointFunctionFieldShift, CvmInstructionSet.FloatingPointFunctionFieldBaseAddress, CvmInstructionSet.FloatingPointRegisterFieldBitMask),
 
         // The address-register family's eight ops (arinc/ardec/arinc2/ardec2/arld/arst/lda/sta) -- ADDED
         // 2026-09-11, replacing the former NodeResolvedFixedRegisterShiftByMnemonic workaround this
@@ -802,11 +820,11 @@ internal static class CvmAssemblyLanguage
         // 0-5, not the single hardwired one that workaround assumed). RENUMBERED 2026-09-15 from physical
         // node 306 to physical node 308 (see Cvm.Node308Program's own remarks) -- the field-layout
         // constants below were renamed from "Node306*" to "AddressRegisterFunctionField*"/
-        // "AddressRegisterRegisterFieldBitMask" accordingly (values unchanged). Same field-layout shape
-        // as the OLD node-308 "d" register family just above (a plain 0-based function field, no bias) --
-        // just a 6-bit/3-bit split instead of that family's 6-bit/2-bit one, per ar/main's own
-        // "dup 0x07 and 2* a!" / "2/ 2/ 2/ 0x3f and ex". arinc2/ardec2 (2026-09-15, "I gave up the 7th
-        // register for 2 new opcodes") share this exact same layout.
+        // "AddressRegisterRegisterFieldBitMask" accordingly (values unchanged). A plain 0-based function
+        // field, no bias, per ar/main's own "dup 0x07 and 2* a!" / "2/ 2/ 2/ 0x3f and ex" -- the same
+        // general shape node 306's own 'fpop above uses too, just a 6-bit/3-bit split here instead of
+        // 'fpop's 5-bit/3-bit one. arinc2/ardec2 (2026-09-15, "I gave up the 7th register for 2 new
+        // opcodes") share this exact same layout.
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
         [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),

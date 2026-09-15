@@ -16118,7 +16118,7 @@ projects:
         parameterStack: []
     - coordinate: 402
       enabled: true
-      sourceCode: >+
+      sourceCode: >
         ( CVM2 node 402. VM 32 bit floatingpoint stage 4a node. exponent handling )
 
         (
@@ -16287,12 +16287,24 @@ projects:
 
         entry fp3a/main
 
-        # right /a
+        # down /a
 
         # up /b
 
 
         # 8 org
+
+
+        : fp3a/swap ( t1 t2 s1 s2 )
+          A[ fp4a/swap ; ]] lit !
+          r> !b       // o
+        : fp3a/xsend ( t1 t2 s1 s2 - )
+          >r >r
+          !           // t2
+          !           // t1
+          r> r> !     // s2
+          !           // s1
+        ;
 
 
         : fp3a/minsel ( t1 t2 s1 s2 comp - t1 t2 s1 s2 sel )
@@ -16304,32 +16316,17 @@ projects:
         ;
 
 
-        : fp3a/send ( t1 t2 s1 s2 - )
-          >r >r >r
-          !b          // t1
-          r> !b       // t2
-          r> !b       // s1
-          r> !b       // s2
-        ;
-
-
-        : fp3a/or ( ab-c )
-          >r inv r> inv and inv
-        ;
-
-
-        : fp3a/swap ( t1 t2 s1 s2 )
-          A[ fp4a/swap ; ]] lit !
-          r> !b       // o
-          fp3a/send
-        ;
-
-
         : fp3a/nop ( t1 t2 s1 s2 )
           A[ fp4a/nop ; ]] lit !
           r> !b       // o
-          fp3a/send
+        : fp3a/send ( t1 t2 s1 s2 - )
+          >r >r >r
+          !           // t1
+          r> !        // t2
+          r> !        // s1
+          r> !        // s2
         ;
+
 
 
         : fp3a/mul ( t1 t2 s1 s2 )
@@ -16347,8 +16344,38 @@ projects:
 
 
 
+        // : fp3a/select ( t1 t2 s1 s2 sel - )
+
+        //  if
+
+        //    drop A[ fp4a/swap ; ]] lit !
+
+        //    fp3a/xsend ;
+
+        //  then
+
+        //  drop A[ fp4a/nop ; ]] lit !
+
+        //  fp3a/send
+
+        // ;
+
+
+
+        // : fp3a/or ( ab-c )
+
+        //   >r inv r> inv and inv
+
+        // ;
+
+
+
+
+
+
         : fp3a/min ( t1 t2 s1 s2 comp )
           fp3a/minsel
+        : fp3a/min1
           if
             drop fp3a/swap ;
           then
@@ -16357,10 +16384,7 @@ projects:
         : fp3a/max ( t1 t2 s1 s2 comp )
           fp3a/minsel
           0x8000 xor
-          if
-            drop fp3a/swap ;
-          then
-          drop fp3a/nop ;
+          fp3a/min1 ;
 
         : fp3a/sub ( t1 t2 s1 s2 comp )
           >r
@@ -16389,19 +16413,19 @@ projects:
             // same signs -> add
             A[ fp4a/add ; ]] lit !
           end
-        : fp3a/main # fp3a/main lit >r up b!
-          @b >r       // o
+        : fp3a/main up b!
+          @b dup ! >r // o
           @b          // t1
           @b          // t2
           @b          // s1
           @b          // s2
-          @b if       // compare required
-            drop @     // replace c=1 by actual compare result
+          @b right b!
+          if          // compare required
+            drop @b   // replace c=1 by actual compare result
           then
           ( t1 t2 s1 s2 comp )
-          down b!
-        ex fp3a/main ;
-
+          ex   // call jump table
+          fp3a/main ;
 
 
         # 0 org // jump table
@@ -16424,72 +16448,72 @@ projects:
         drop fp3a/swap ;
 
       ramWords:
-      - 0x1142B
-      - 0x11428
-      - 0x1141F
-      - 0x11423
-      - 0x3B719
-      - 0x3B71C
-      - 0x3B716
+      - 0x1142A
+      - 0x11427
+      - 0x11420
+      - 0x11424
+      - 0x3B71A
+      - 0x3B71D
       - 0x3B713
+      - 0x3B708
+      - 0x05A9A
+      - 0x11407
+      - 0x089B2
+      - 0x2E82A
+      - 0x0AC9A
+      - 0x0BA55
       - 0x2EF82
       - 0x39DE2
       - 0x08000
       - 0x26082
       - 0x39555
-      - 0x2E8BA
-      - 0x08C22
-      - 0x27B9A
-      - 0x09555
-      - 0x2E69A
-      - 0x320CD
-      - 0x05A9A
-      - 0x11407
-      - 0x0970D
       - 0x05A9A
       - 0x11409
-      - 0x0970D
+      - 0x089B2
+      - 0x2E8BA
+      - 0x0AC2A
+      - 0x27A9A
+      - 0x0B555
       - 0x05A9A
       - 0x1140F
-      - 0x0970D
+      - 0x09716
       - 0x05A9A
       - 0x11411
-      - 0x0970D
-      - 0x13408
-      - 0x19422
+      - 0x09716
+      - 0x1340E
+      - 0x19423
+      - 0x3B708
       - 0x3B713
-      - 0x3B716
-      - 0x13408
-      - 0x04367
+      - 0x1340E
+      - 0x04341
       - 0x08000
-      - 0x3B713
-      - 0x3B716
       - 0x2FDE2
       - 0x08000
       - 0x269B2
-      - 0x1942E
+      - 0x1942D
       - 0x3BD2B
       - 0x13407
       - 0x3AF82
-      - 0x39333
+      - 0x39332
       - 0x3BD2A
       - 0x1140D
       - 0x11400
       - 0x3BD2A
       - 0x1140B
-      - 0x11432
-      - 0x04812
-      - 0x00036
+      - 0x11431
+      - 0x04B03
       - 0x00145
-      - 0x29FBA
+      - 0x0A802
       - 0x01F02
-      - 0x01F65
-      - 0x3BEB2
-      - 0x04B5D
-      - 0x00115
-      - 0x11436
+      - 0x01DA2
+      - 0x001D5
+      - 0x1943D
+      - 0x3BFB2
+      - 0x17555
+      - 0x11435
+      - 0x15555
       startup:
-        entryPoint: 0x036
+        entryPoint: 0x035
         p: 0x000
         a: 0x000
         b: 0x000

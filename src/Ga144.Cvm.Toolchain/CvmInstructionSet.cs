@@ -663,10 +663,10 @@ public static class CvmInstructionSet
   // new arinc2/ardec2 above) moved from physical node 306 to physical node 308 -- Stefan: "node 306 and
   // 308 have swapped roles." The four field-layout constants just below were named "Node306*" up through
   // 2026-09-11 and are RENAMED here to "AddressRegisterFunctionField*"/"AddressRegisterRegisterFieldBitMask"
-  // (dropping the node number entirely) rather than becoming "Node308*" -- that name is already taken by
-  // this node's OWN prior, unrelated "VM 32 arithmetic" family (dpop/dpush/dinc/ddec/dadd/dor, see
-  // Node308FunctionFieldBitMask's own remarks below, now of uncertain status -- see
-  // Cvm.Node308Program's own remarks), and node-number-based naming has now proven unstable across this
+  // (dropping the node number entirely) rather than becoming "Node308*" -- that name was previously
+  // taken by this node's OWN prior, unrelated "VM 32 arithmetic" family (dpop/dpush/dinc/ddec/dadd/dor),
+  // since REMOVED OUTRIGHT the same day per Stefan's own direct instruction (see the removal note above
+  // FloatingPointFunctionFieldBitMask), and node-number-based naming has now proven unstable across this
   // project's own history (306 was corrected from "four" to "six" registers, then renumbered to 308
   // outright) -- a function-based name survives the next renumbering, if there is one. The VALUES are
   // completely unchanged from the "Node306*" constants they replace.
@@ -760,39 +760,51 @@ public static class CvmInstructionSet
   /// <summary>Isolates node 511's 5-bit register-index field (bits 4-0, unshifted, 0-31) -- see <see cref="LoadRegisterFileMnemonic"/>'s own remarks.</summary>
   public const int Node511RegisterFieldBitMask = 0x001F;
 
-  // FLAGGED, 2026-09-15: physical node 308's own role has changed (see Cvm.Node308Program's own
-  // remarks, "node 306 and 308 have swapped roles") -- it now runs the address-register mesh (arinc/
-  // ardec/arld/arst/lda/sta/arinc2/ardec2, see AddressRegisterFunctionFieldBitMask's own remarks just
-  // above), not the "d" register family described immediately below. Whether dpop/dpush/dinc/ddec/dadd/
-  // dor still exist anywhere on the current CVM2 mesh (under a different coordinate, or not at all) is
-  // NOT stated by Stefan. Their Instructions rows and field-layout constants below are left exactly as
-  // they were -- NOT deleted, per this file's own "do not remove any opcodes without confirmation"
-  // practice -- but their NodeSymbolByMnemonic wiring (Ga144.Evb.Ide.Services.CvmAssemblyLanguage) still
-  // points at coordinate 308, which now means a live compile will correctly fail to find 'dpop et al.
-  // there (node 308's CURRENT source defines no such symbols) rather than resolve to the wrong thing.
+  // REMOVED OUTRIGHT, 2026-09-15, per Stefan's own direct instruction ("remove the old dpop/dpush/
+  // dinc/ddec/dadd/dor family completely"). This used to be "Node308FunctionFieldBitMask"/"Shift"/
+  // "BaseAddress"/"RegisterFieldBitMask" (values 0x00FC/2/0/0x0003), the field layout for physical node
+  // 308's OWN PRIOR role -- the "VM 32 arithmetic" dpop/dpush/dinc/ddec/dadd/dor family, added
+  // 2026-09-09, orphaned by the same day's "node 306 and 308 have swapped roles" renumbering (node
+  // 308's CURRENT source is the address-register mesh, see AddressRegisterFunctionFieldBitMask's own
+  // remarks, and never defined this family in the first place). UNLIKE the 2026-09-09 CVM1-opcode purge
+  // precedent (which permanently retires an Id rather than ever reusing it for a different meaning),
+  // Stefan asked for this family removed completely rather than merely orphaned-and-flagged -- so these
+  // four constants, the six mnemonic constants below, and their six Instructions rows are deleted
+  // outright. See the Instructions table's own remark at Ids 123-128 (their numbers are still never
+  // reused, exactly like every other retired range in this file) and
+  // claude/cvm-node306-307-address-registers.md's own final addendum for the full history of how this
+  // family became orphaned before being removed here.
+
+  // Node 306's new floating-point register node (2026-09-15, "node 306 and 308 have swapped roles") --
+  // see Cvm.Node306Program's own remarks for the full source and the three-way (binary/constant/unary)
+  // dispatch this field layout is derived from. Only the UNARY category (tag 0xDC00-0xDCFF, matching
+  // node 306's own "1101_1100_????_?fff" cascade branch) has any named, tick-prefixed F18 words at all
+  // ('fpop/'fpush) -- the binary (0xDE00-0xDFFF) and constant-lookup (0xDD00-0xDDFF) categories are
+  // real, reachable encoding ranges per the source's own trailing opcode table, but name no specific
+  // operation, so nothing can be wired for either without Stefan supplying actual op names; flagged,
+  // not guessed at.
   //
-  // Node 308's dpop/dpush/dinc/ddec/dadd/dor (added 2026-09-09) share node 511's NodeResolvedEmbeddedValue
-  // shape (a live compile resolves which function is invoked, a register index is embedded in the same
-  // word) but with a DIFFERENT field layout, straight from Cvm.Node308Program's own (PRIOR, now
-  // superseded -- see the flag just above) d/main body:
-  // "dup 0x03 and 2* a!" isolates a 2-bit register index (bits 1-0) and doubles it before loading it as a
-  // RAM address (node 308's own 32-bit "d" registers are stored as word pairs, so each register occupies
-  // two consecutive words); "2/ 2/ 0x3f and ex" then shifts the SAME original word right by 2 (discarding
-  // the register field) and masks to 6 bits, giving the resolved function address DIRECTLY -- unlike node
-  // 511's own "# 0x20 org" bias, node 308's own compiled addresses need no base-address subtraction at
-  // all (its function field's own 0-63 range already matches "# 0x08 org" starting inside it).
+  // Field layout derived from fpr/instr's own body ("drop dup 0x07 and 2* a! 2/ 2/ 2/ 0x1f and"): the
+  // low 3 bits (0x0007) are the register index (0-7, unshifted, exactly like the address-register
+  // node's own register field); the next 5 bits up (0x00F8, bits 7-3) are the "which function" field,
+  // extracted by shifting right 3 and masking to 0x1f. UNCONFIRMED, flagged rather than guessed: whether
+  // the resolved function address needs a base-address subtraction (node 511's own function field does;
+  // the address-register node's own does not) cannot be derived from fpr/main's own dispatch body alone
+  // -- its unary branch ends in "fpr/instr >r ;" with no visible jump/execute of any kind, unlike
+  // ar/main's explicit "...>r ex ar/leave" pattern, so how "i" actually reaches a real F18 address at
+  // runtime is not established here. BaseAddress is set to 0 below (mirroring the address-register
+  // node's own choice, the more structurally similar precedent -- the same register/function-field
+  // extraction shape, just a narrower function field) as a working assumption, not a confirmed fact.
+  public const int FloatingPointFunctionFieldBitMask = 0x00F8;
 
-  /// <summary>Isolates node 308's 6-bit "which function" field (bits 7-2) -- unlike <see cref="Node511FunctionFieldBitMask"/>, this is the resolved address directly, no base-address subtraction. See <see cref="DoublePopMnemonic"/>'s own remarks.</summary>
-  public const int Node308FunctionFieldBitMask = 0x00FC;
+  /// <summary>How far left node 306's resolved floating-point function address is shifted before OR-ing into <see cref="FloatingPointFunctionFieldBitMask"/>'s bits -- 3, since the 3-bit register field occupies bits 2-0 below it. UNCONFIRMED base-address assumption -- see the remarks just above.</summary>
+  public const int FloatingPointFunctionFieldShift = 3;
 
-  /// <summary>How far left node 308's resolved function address is shifted before OR-ing into <see cref="Node308FunctionFieldBitMask"/>'s bits -- 2, since the 2-bit register field occupies bits 1-0 below it. See <see cref="DoublePopMnemonic"/>'s own remarks.</summary>
-  public const int Node308FunctionFieldShift = 2;
+  /// <summary>Assumed 0 (no base-address subtraction), mirroring the address-register node's own choice -- NOT independently confirmed for node 306. See the remarks above <see cref="FloatingPointFunctionFieldBitMask"/>.</summary>
+  public const int FloatingPointFunctionFieldBaseAddress = 0;
 
-  /// <summary>Node 308's own function field needs no base-address subtraction (always 0) -- unlike <see cref="Node511FunctionFieldBaseAddress"/>, its 0-63 range already starts where "# 0x08 org" does. See <see cref="DoublePopMnemonic"/>'s own remarks.</summary>
-  public const int Node308FunctionFieldBaseAddress = 0;
-
-  /// <summary>Isolates node 308's 2-bit register-index field (bits 1-0, unshifted, 0-3) -- see <see cref="DoublePopMnemonic"/>'s own remarks.</summary>
-  public const int Node308RegisterFieldBitMask = 0x0003;
+  /// <summary>Isolates node 306's 3-bit floating-point register-index field (bits 2-0, unshifted, 0-7) -- see the remarks above <see cref="FloatingPointFunctionFieldBitMask"/>.</summary>
+  public const int FloatingPointRegisterFieldBitMask = 0x0007;
 
   // CVM2's load global/store global, added per Stefan's node 508 source (2026-09-04, "here is node
   // 508. it handles access to globals.") and his own tick-naming rule ("every word that begins with a
@@ -1028,19 +1040,27 @@ public static class CvmInstructionSet
   public const string ReverseUnsignedShiftRightConstantMnemonic = "ruri";
   public const string UnsignedShiftRightConstantMnemonic = "usri";
 
-  // Node 308's six 4x-32-bit "VM 32 arithmetic" register ops, added 2026-09-09 (opcode/assembler-vs-node
-  // reconciliation audit against Stefan's own workspace.yaml project export) -- BRAND NEW to this
-  // toolchain, no earlier revision of node 308 existed here at all. Shaped exactly like node 511's own
-  // rld/rst/rpop/rpush (CvmOperandEncoding.NodeResolvedEmbeddedValue): a live compile of node 308 resolves
-  // WHICH function is being invoked, and a 2-bit register index (0-3) is embedded directly in the same
-  // opcode word (node 308's own d/main masks the incoming call byte's low 2 bits into the register index,
-  // per Cvm.Node308Program's own remarks). All six share node 308's own "1101_11??_????_??aa" range.
-  public const string DoublePopMnemonic = "dpop";
-  public const string DoublePushMnemonic = "dpush";
-  public const string DoubleIncrementMnemonic = "dinc";
-  public const string DoubleDecrementMnemonic = "ddec";
-  public const string DoubleAddMnemonic = "dadd";
-  public const string DoubleOrMnemonic = "dor";
+  // REMOVED OUTRIGHT, 2026-09-15: node 308's old dpop/dpush/dinc/ddec/dadd/dor mnemonic constants
+  // (DoublePopMnemonic "dpop", DoublePushMnemonic "dpush", DoubleIncrementMnemonic "dinc",
+  // DoubleDecrementMnemonic "ddec", DoubleAddMnemonic "dadd", DoubleOrMnemonic "dor") -- see the removal
+  // note above FloatingPointFunctionFieldBitMask for why (Stefan's own direct instruction), and the
+  // Instructions table's own remark at Ids 123-128 for the retired-and-never-reused Id range.
+
+  // 'fpop/'fpush, node 306's own tick-prefixed floating-point stack-transfer ops (pop/push a 32-bit
+  // float to/from a register), sharing the unary-category tag (0xDC00-0xDCFF, see
+  // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own field-layout wiring) -- the SAME
+  // NodeResolvedEmbeddedValue shape as the address-register family, just node 306's own narrower field
+  // widths (5-bit function / 3-bit register instead of 6-bit/3-bit).
+  //
+  // FLAGGED, NOT WIRED: 'fpush collides with the ALREADY-EXISTING "fpush" mnemonic (see
+  // PushFrameMnemonic above, node 506's own frame-pointer push -- a completely different opcode). The
+  // CVM assembly language has no way to carry two different opcodes under one mnemonic string, and this
+  // project's own established precedent for exactly this situation (node 505's own 'f vs node 506's 'f
+  // -- see claude/cvm-assembler-description.md's own "Open questions") is to leave
+  // the colliding one UNWIRED rather than silently pick a name on Stefan's behalf. Only 'fpop (no
+  // collision) is wired below; 'fpush needs a name from Stefan (renaming node 306's own version, or
+  // node 506's) before it can be added.
+  public const string FloatingPointPopMnemonic = "fpop";
 
   // Node 405's nine "multiword arithmetic" (carry-flag) ops, added 2026-09-09 (same audit) -- BRAND NEW,
   // no earlier revision of node 405 existed here. Shaped like every other simple tagged/node-resolved
@@ -1704,8 +1724,9 @@ public static class CvmInstructionSet
     // PopRegisterFileMnemonic "rpop" / PushRegisterFileMnemonic "rpush") -- UN-RETIRED 2026-09-09 (see
     // LoadRegisterFileMnemonic's own remarks): workspace.yaml's own authoritative node 511 source
     // restores these as four separately-named, separately-addressed F18 words. NodeResolvedEmbeddedValue,
-    // exactly like node 308's dpop/dpush/dinc/ddec/dadd/dor below -- a live compile of node 511 resolves
-    // which function is invoked, and a 5-bit register index is embedded in the same opcode word (see
+    // the same shape the address-register family and node 306's own 'fpop use elsewhere in this table --
+    // a live compile of node 511 resolves which function is invoked, and a 5-bit register index is
+    // embedded in the same opcode word (see
     // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own Node511* field-layout wiring). Restored under
     // their ORIGINAL Ids, never renumbered.
     new(Id: 107, LoadRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
@@ -1744,14 +1765,9 @@ public static class CvmInstructionSet
     new(Id: 121, LoadAddressRegisterValueMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
     new(Id: 122, StoreAddressRegisterValueMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
 
-    // Node 308's six ops (2026-09-09) -- NodeResolvedEmbeddedValue, 2-bit register index embedded, same
-    // shape as node 511's rld/rst/rpop/rpush above. See DoublePopMnemonic's own remarks.
-    new(Id: 123, DoublePopMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
-    new(Id: 124, DoublePushMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
-    new(Id: 125, DoubleIncrementMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
-    new(Id: 126, DoubleDecrementMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
-    new(Id: 127, DoubleAddMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
-    new(Id: 128, DoubleOrMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    // Ids 123-128 (were dpop/dpush/dinc/ddec/dadd/dor, node 308's OLD "VM 32 arithmetic" family) REMOVED
+    // OUTRIGHT 2026-09-15 per Stefan's own direct instruction -- see the removal note above
+    // FloatingPointFunctionFieldBitMask for the full history. Never reuse Ids 123-128.
 
     // Node 405's nine ops (2026-09-09) -- tagged/node-resolved, CvmOperandEncoding.None. See
     // ToggleCarryMnemonic's own remarks.
@@ -1793,6 +1809,11 @@ public static class CvmInstructionSet
     // encoding shape (same tag/field layout as arinc/ardec).
     new(Id: 146, ArithmeticIncrementAddressRegisterByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
     new(Id: 147, ArithmeticDecrementAddressRegisterByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
+
+    // Node 306's new floating-point register node (2026-09-15) -- see FloatingPointPopMnemonic's own
+    // remarks for the field-layout derivation and for why 'fpush is flagged, not wired, due to its
+    // collision with the pre-existing "fpush" (PushFrameMnemonic, node 506).
+    new(Id: 148, FloatingPointPopMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: FloatingPointRegisterFieldBitMask),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

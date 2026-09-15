@@ -55,14 +55,25 @@ namespace Ga144.Evb.Ide.Cvm;
 /// two different new node sources pasted the same day suggests it is a real, deliberate construct in
 /// Stefan's own toolchain (perhaps a genuine, newly-introduced F18 primitive this project has not
 /// encountered before) rather than a coincidence or a copy-paste artifact -- but its meaning cannot be
-/// inferred from context, so it is reproduced completely verbatim and this whole node is NOT wired into
-/// the CVM assembler/instruction set (no <c>Instructions</c> rows, no <c>NodeSymbolByMnemonic</c>
-/// entries) pending Stefan explaining what <c>leap</c>/<c>then</c> do. Separately, even once that is
-/// resolved, this node's three-way (binary/constant/unary) dispatch does not fit any
-/// <c>CvmOperandEncoding</c> shape this toolchain currently has -- every existing
-/// <c>NodeResolvedEmbeddedValue</c> family (node 308's/511's own) is a single flat function-select field,
-/// not three separately-selected categories sharing one register-index field -- so wiring this node in
-/// for real is a bigger design question than adding table rows, left entirely open here.
+/// inferred from context, so it is reproduced completely verbatim.
+///
+/// <b>PARTIALLY WIRED, 2026-09-15 (same day), per Stefan's own direct instruction to add these
+/// instructions to the CVM language.</b> <c>'fpop</c> is wired as CVM mnemonic <c>fpop</c>
+/// (<c>CvmOperandEncoding.NodeResolvedEmbeddedValue</c>, tag <c>0xDC00</c>, a 5-bit function field / 3-bit
+/// register field -- see <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointPopMnemonic</c>'s own
+/// remarks for the full field-layout derivation off <c>fpr/instr</c>'s own body), on the SAME strength
+/// as <c>'arinc2</c>/<c>'ardec2</c>'s own wiring -- the assembler only needs to know where a mnemonic's
+/// compiled address ends up, not what its F18 body does, so the <c>leap</c>/<c>then</c> uncertainty above
+/// does not block this. <b><c>'fpush</c> is FLAGGED, NOT WIRED</b>: it collides with the ALREADY-EXISTING
+/// CVM mnemonic <c>fpush</c> (node 506's own frame-pointer push, <c>PushFrameMnemonic</c>) -- a
+/// completely different opcode under the same name. This project's own established precedent for exactly
+/// this situation (node 505's own <c>'f</c> vs node 506's <c>'f</c>) is to leave the colliding mnemonic
+/// unwired rather than silently invent a disambiguated name on Stefan's behalf; <c>'fpush</c> needs a
+/// name from him (renaming this node's own version, or node 506's) before it can be added. The BINARY
+/// and CONSTANT-lookup dispatch categories remain entirely unwired and un-nameable: the source's own
+/// trailing opcode table describes their encoding shape but names no specific operation for either, so
+/// nothing can be wired without Stefan supplying actual op names -- not a design-question blocker like
+/// before, just nothing to hang a mnemonic on yet.
 /// </summary>
 internal static class Node306Program
 {
