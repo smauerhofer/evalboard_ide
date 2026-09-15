@@ -1,173 +1,129 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// Node 306's resident F18 source -- CVM2's 32-bit address-register node. Register COUNT IS NOT FIXED:
-/// per Stefan's 2026-09-11 explanation, it depends on <c>org</c> -- capacity is <c>floor(org / 2)</c>
-/// (register storage occupies word addresses <c>[0, org)</c> below this node's own code), capped at 8 by
-/// <c>ar/main</c>'s own 3-bit register-select field. See <see cref="Source"/>'s own remarks for the
-/// full history (an earlier belief that the count was a fixed "4," then "6," both superseded), reached
-/// from node 307's own RIGHT port ("1101_10??_????_????", <c># right /b</c>), holding its registers as
-/// word pairs (address word, page word) in its own local RAM, letting a fully-loaded register address any
-/// word across the whole GA144 memory space, not just this node's own RAM. Imports node 307
-/// (<c>k/r@</c>/<c>k/r!</c>/<c>k/pop</c>/<c>k/push</c>/<c>k/leave</c>). See
-/// <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic"/>'s own
-/// remarks for how the CVM assembler now reaches all six (a real embedded register-index operand,
-/// <c>CvmOperandEncoding.NodeResolvedEmbeddedValue</c>), where it used to only ever emit register 0.
+/// Node 306's resident F18 source. <b>BRAND NEW ROLE, 2026-09-15</b> -- Stefan: "node 306 and 308 have
+/// swapped roles," pasting an entirely new node under this coordinate: an 8x 32-bit floating-point
+/// register node, reached from node 307's own RIGHT port ("1101_11??_????_????", <c># right /b</c> on
+/// this node's own side -- see <see cref="Node307Program"/>'s own "RIGHT/LEFT SWAPPED" remarks). This
+/// class's ENTIRE PRIOR HISTORY (2026-09-06 through 2026-09-11: the 32-bit address-register node, its
+/// register-count corrections, the <c>arld</c>/<c>arst</c>/<c>lda</c>/<c>sta</c> direction confirmation,
+/// the "arld 1 silently becomes nop" incident, and the org-dependent-capacity discovery -- see
+/// `claude/cvm-node306-307-address-registers.md`) now belongs to physical node 308 instead -- see
+/// <see cref="Node308Program"/>, which now carries that source and that history forward. Nothing below
+/// this point describes an address register of any kind.
 ///
-/// <b>RE-SYNCED 2026-09-09</b> against Stefan's own <c>workspace.yaml</c> project export, as part of
-/// the opcode/assembler-vs-node reconciliation audit: this node's mnemonics changed from an EARLIER,
-/// self-describing <c>ldar</c>/<c>star</c>/<c>inca</c>/<c>deca</c>/<c>lda</c>/<c>sta</c> scheme (fixed
-/// 4-bit-tag/2-bit-register-index words needing no live compile) to the current <c>'lda</c>/<c>'sta</c>/
-/// <c>'arinc</c>/<c>'ardec</c>/<c>'arld</c>/<c>'arst</c> -- six ordinary TICK-PREFIXED words, resolved
-/// like every other tagged mnemonic in this mesh (<see cref="CvmInstructionSet.CvmOperandEncoding.None"/>,
-/// node-resolved against a live compile, no embedded operand of their own). <c>ar/main</c>'s own
-/// dispatch now masks the incoming call byte to 7 bits (<c>dup 0x07 and 2* a!</c>, selecting one of the
-/// four registers by its own low bits) before jumping to the called word's compiled address, the same
-/// "call word, address in opcode" idiom node 507/508/509/etc. all use elsewhere in this mesh -- NOT the
-/// old self-describing shape. Per Stefan's own trailing comment block, all six now share the flat
-/// <c>1101_10??_????_????</c> range (the earlier per-op sub-splits -- <c>1101_1011</c> for <c>ldar</c>,
-/// etc. -- no longer apply): <c>lda</c>/<c>sta</c> load/store r via the address register named in the
-/// low opcode bits; <c>arinc</c>/<c>ardec</c> increment/decrement it; <c>arld</c>/<c>arst</c> load/store
-/// the register's own 32-bit value itself (address in r, page on the data stack).
+/// <b>Floating-point register file.</b> Per this source's own header and trailing remarks, node 306 (in
+/// its new role) holds eight 32-bit floating-point registers, each a word pair (low word in <c>x</c>,
+/// high word in <c>x+1</c>, per the header's own third line -- note this is LOW-then-HIGH, the OPPOSITE
+/// word order from node 308's own address registers, which store address-then-page). The source's own
+/// leading comment block also documents port usage beyond the ordinary <c>/a</c>/<c>/b</c> pair this
+/// mesh's other nodes use (<c>out: ohlhl</c>, <c>in: hl</c>) -- their exact meaning is not otherwise
+/// explained in the source and is not guessed at here.
 ///
-/// <b>CONFIRMED WORKING 2026-09-11</b> -- see the CVM Debugger's own live disassembly, after the
-/// "<c>arld 1</c> silently becomes nop" incident (see
-/// <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage.DiagnoseUnresolvedWiredMnemonic"/>'s own remarks)
-/// was root-caused and fixed and Stefan reported "node 306 now compiles fine": a test program
-/// (<c>lit 1; pushlit 2; arld 1; lda 1; arst 1; push; nop; nop; nop; halt</c>) disassembled as
-/// <c>D9A9 arld 0x0001</c> / <c>D919 lda 0x0001</c> / <c>D9C1 arst 0x0001</c> -- all three now real,
-/// register-embedded opcodes (low bit of each = 1, matching the operand), not the bare, operand-dropping
-/// <c>nop</c> from before. Decoding each against
-/// <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.Node306FunctionFieldBitMask"/>/
-/// <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.Node306FunctionFieldShift"/> recovers tag
-/// <c>0xD800</c> plus function-select addresses 0x31 (<c>'arld</c>), 0x23 (<c>'lda</c>), and 0x38
-/// (<c>'arst</c>) -- all comfortably inside the 0-0x3F window <c>ar/main</c>'s own <c>0x3f and</c> can
-/// reach, confirming the CVM-opcode-level mechanism (unaffected by the <c>ar/main</c>/<c>'lda</c>/
-/// <c>'sta</c> body revision documented on <see cref="Source"/> below, same day) needed no further change.
+/// <b>Three-way dispatch, unlike node 308's flat one.</b> <c>fpr/main</c> reads two words via <c>@b</c>
+/// (the same "relay two bits per level" idiom used throughout this mesh), THEN diverts port B to the
+/// LEFT (<c>left b!</c>) before dispatching, and diverts it back to RIGHT (<c>right b!</c>) inside
+/// <c>fpr/leave</c> -- a port-redirection idiom not seen on any other node documented in this project so
+/// far; its purpose is not explained in the source and is not guessed at here. The dispatch itself splits
+/// three ways per the trailing opcode-table comment:
+/// <list type="bullet">
+/// <item><c>1101_111?_????_?fff</c> -- BINARY floating-point operation: operates on two registers,
+/// <c>fff</c> and <c>fff+1</c>, result in <c>fff</c>.</item>
+/// <item><c>1101_1101_????_?fff</c> -- constant lookup: loads one of <see cref="Node306Program"/>'s own
+/// four pre-defined 32-bit constants (see <c>fpr/const</c> below) into register <c>fff</c>, selected by
+/// some offset the source does not spell out precisely (the trailing table says "offset in ?" verbatim
+/// -- reproduced as Stefan wrote it, not filled in).</item>
+/// <item><c>1101_1100_????_?fff</c> -- UNARY floating-point operation (the cascade's final fallthrough):
+/// operates on one register, <c>fff</c>, result in <c>fff</c>. <c>'fpop</c>/<c>'fpush</c> (stack transfer
+/// to/from a register) share this same tag range per the trailing table, distinguished from every other
+/// unary op only by which compiled address each resolves to -- the same "shared tag, distinguished by
+/// live-compiled function address" scheme every other node-resolved family in this mesh already uses.
+/// </item>
+/// </list>
+///
+/// <c>fpr/const</c> holds four constants as raw hi/lo word pairs, per the source's own inline comments:
+/// ln2, 1/ln2, pi/2, and 2/pi.
+///
+/// <b>FLAGGED, not silently resolved or invented: <c>'fpop</c>/<c>'fpush</c>'s own bodies use the same
+/// unexplained <c>leap</c>/<c>then</c> shape node 308's new <c>'arinc2</c>/<c>'ardec2</c> also use (see
+/// <see cref="Node308Program"/>'s own remarks).</b> <c>: 'fpop ( -) leap then</c> and
+/// <c>: 'fpush ( -) @+ @+ leap then</c> both end in <c>leap then</c>, with no closing <c>;</c> for either
+/// (so, per this source's own "falls through" idiom, <c>'fpop</c> flows into <c>'fpush</c>, which flows
+/// into <c>fpr/instr</c>). <c>leap</c> is not a previously-seen F18 primitive anywhere in this project,
+/// not defined earlier in this same source, and not imported from node 307; <c>then</c> here has no
+/// preceding <c>-if</c>/<c>-until</c> opener. The fact that the identical shape appears independently on
+/// two different new node sources pasted the same day suggests it is a real, deliberate construct in
+/// Stefan's own toolchain (perhaps a genuine, newly-introduced F18 primitive this project has not
+/// encountered before) rather than a coincidence or a copy-paste artifact -- but its meaning cannot be
+/// inferred from context, so it is reproduced completely verbatim and this whole node is NOT wired into
+/// the CVM assembler/instruction set (no <c>Instructions</c> rows, no <c>NodeSymbolByMnemonic</c>
+/// entries) pending Stefan explaining what <c>leap</c>/<c>then</c> do. Separately, even once that is
+/// resolved, this node's three-way (binary/constant/unary) dispatch does not fit any
+/// <c>CvmOperandEncoding</c> shape this toolchain currently has -- every existing
+/// <c>NodeResolvedEmbeddedValue</c> family (node 308's/511's own) is a single flat function-select field,
+/// not three separately-selected categories sharing one register-index field -- so wiring this node in
+/// for real is a bigger design question than adding table rows, left entirely open here.
 /// </summary>
 internal static class Node306Program
 {
-  /// <summary>The node this program is always deployed to -- CVM2's address-register node (register count is <c>org</c>-dependent, see this class's own remarks).</summary>
+  /// <summary>The node this program is always deployed to -- CVM2's floating-point register node (NEW ROLE as of 2026-09-15; this coordinate previously held the address-register node, now at 308 -- see this class's own remarks).</summary>
   public const int Coordinate = 306;
 
   /// <summary>
-  /// Node 306's full resident F18 source. <b>RE-SYNCED 2026-09-09</b> against Stefan's own
-  /// <c>workspace.yaml</c> project export (the "CVM2" project's Host chip) as part of the opcode/
-  /// assembler-vs-node reconciliation audit -- the PRIOR "SYNCED, 2026-09-08" copy here had itself
-  /// drifted from Stefan's live source (mislabeled header comment, a differently-shaped <c>ar/main</c>
-  /// prelude). This copy is verbatim from that export. The six opcodes (<c>ldar</c>/<c>star</c>/
-  /// <c>inca</c>/<c>deca</c>/<c>lda</c>/<c>sta</c>) and their bit patterns, described in the class
-  /// remarks above, are UNCHANGED by this re-sync -- only the body of <c>ar/main</c>'s own dispatch
-  /// prelude and the source's own header line differ from the prior copy. Any other specific claim
-  /// above (a compiled address, a verification result) predates this sync and should be treated as
-  /// stale until re-confirmed against a fresh compile.
-  ///
-  /// <b>RE-PASTED 2026-09-11</b> by Stefan, correcting only the header/trailing COMMENTS (the F18 code
-  /// itself -- every actual opcode line -- is byte-for-byte identical to the 2026-09-09 copy above): "(
-  /// contains 4 32-bit address register )" was wrong and is now "( contains 6 32-bit address register
-  /// )", and the trailing opcode table's own register-count note ("register encoded in aaa") is now
-  /// spelled out per-op as "0..5". This confirms node 306 was ALWAYS a six-register node -- ar/main's
-  /// own "dup 0x07 and 2* a!" (extracting a 3-bit register-select field, values 0-7, of which only 0-5
-  /// are wired to a real register) never changed -- it was this project's OWN prior documentation and
-  /// tooling (CvmInstructionSet/CvmAssemblyLanguage/CCodeGenerator all "fixed to address register 0")
-  /// that undercounted it, not the hardware.
-  ///
-  /// <b>REVISED 2026-09-11 (same day, "here are the fixed nodes" -- supplied alongside node 307/407's own
-  /// fixes, see those classes' own remarks), confirmed compiling via the disassembly on this class's own
-  /// remarks above.</b> Runtime-mechanics changes only -- the CVM-opcode-level tag/shift/mask math
-  /// (<see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.Node306FunctionFieldBitMask"/> and siblings) is
-  /// UNAFFECTED, confirmed by the disassembly on this class's own remarks above:
-  /// <list type="bullet">
-  /// <item><c>ar/reg</c> is now commented out (<c>// : ar/reg 0x06 and a! ;</c>) -- unused by any of the
-  /// six ops' own bodies even before this (each already sets <c>a</c> directly via <c>ar/main</c>'s own
-  /// <c>dup 0x07 and 2* a!</c>), so this changes nothing observable; reproduced verbatim rather than
-  /// silently dropped.</item>
-  /// <item><c>ar/main</c>'s own body changed from <c>A[ 2* !p !p ]] lit !b @b @b ...</c> (two fetches via
-  /// <c>@b</c>) to <c>A[ !p drop ]] lit !b @b ...</c> (one fetch), and gained a <c>&gt;r</c> immediately
-  /// before its own trailing <c>ex</c> (was bare <c>... 0x3f and ex ar/leave ;</c>, now
-  /// <c>... 0x3f and &gt;r ex ar/leave ;</c>) -- pushing the computed function address onto the return
-  /// stack before executing it, the same "push target, then <c>ex</c>" idiom node 407's own <c>n/main</c>
-  /// tail already uses. Reproduced verbatim; not independently re-derived here.</item>
-  /// <item><c>'lda</c>'s own body no longer ends with its own <c>;</c> -- it now reads
-  /// <c>: 'lda A[ k/@ ]] lit</c>, flowing directly into a brand new shared helper,
-  /// <c>: ar/adr ( ) A[ @p @p ]] lit !b @+ !b @ !b !b ;</c>, which <c>'sta</c> now also calls explicitly
-  /// (<c>: 'sta A[ k/! ]] lit ar/adr ;</c>) -- the same "one definition's body flows into the next" idiom
-  /// this source already uses for <c>ar/leave</c>/<c>ar/main</c> above. Reproduced verbatim.</item>
-  /// <item><b>FLAGGED, not silently corrected:</b> this same re-paste's own header comment regressed from
-  /// "<c>( contains 6 32-bit address register )</c>" back to "<c>( contains 4 32-bit address register )</c>"
-  /// -- while the trailing opcode table (unchanged) still spells out "0..5" for every op, and the
-  /// disassembly on this class's own remarks above confirms all six are real and reachable either way.
-  /// Reproduced verbatim per this project's own practice rather than silently re-corrected to "6."</item>
-  /// </list>
-  ///
-  /// <b>REVISED AGAIN 2026-09-11 (same day): register count is NOT fixed -- it depends on <c>org</c>.</b>
-  /// Stefan: "the number of address register depends on the remaining free memory cells. currently there
-  /// is room for 7 register depending on the org offset." Register storage occupies word addresses
-  /// <c>[0, org)</c> below node 306's own code (each register a word pair, address+page), so capacity is
-  /// <c>floor(org / 2)</c>, capped at 8 by <c>ar/main</c>'s own 3-bit register-select field
-  /// (<c>dup 0x07 and</c>). Only the header line and the <c># 0x08 org</c> -&gt; <c># 0x0e org</c> directive
-  /// change from the immediately preceding revision above; every opcode line is otherwise byte-for-byte
-  /// unchanged, reproduced verbatim below.
-  ///
-  /// <b>FLAGGED, not silently corrected: the pasted comments still do not match Stefan's own stated count
-  /// for this <c>org</c> value.</b> With <c>org = 0x0e</c> (14), Stefan's own formula gives
-  /// <c>floor(14 / 2) = 7</c> registers (0-6) -- but the header comment below reads "<c>contains 6 32-bit
-  /// address register</c>" and the trailing opcode table still reads "0..5" throughout, and neither is
-  /// "7." Reproduced exactly as pasted rather than guessed-and-corrected; Stefan should say which of "6",
-  /// "7", or "0..5" is the one to trust for this <c>org</c> value.
-  ///
-  /// <b>OPEN QUESTION, not yet raised for a decision or implemented:</b> now that capacity is known to vary
-  /// with <c>org</c> rather than being a fixed hardware constant, the CVM assembler's own register-operand
-  /// range check (<see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.Node306RegisterFieldBitMask"/>, a fixed
-  /// <c>0x0007</c> that unconditionally accepts operands 0-7) cannot catch a register operand that is
-  /// in-range for the 3-bit field but out-of-range for node 306's CURRENT <c>org</c> -- such an operand
-  /// would assemble "successfully" and then alias into node 306's own live code at runtime. Making this
-  /// check dynamic (derived from the live-compiled node 306's own <c>org</c>/entry address at assemble
-  /// time, instead of the fixed mask) would close that gap, but nothing has been implemented here -- it is
-  /// only flagged for Stefan to decide.
+  /// Node 306's full resident F18 source, verbatim from Stefan's 2026-09-15 paste ("node 306 and 308
+  /// have swapped roles"). Brand new to this project -- no earlier revision of this content existed
+  /// under any coordinate.
   /// </summary>
   public const string Source = """
-      ( CVM2 node 306. VM 32 bit addres pointer, 1101_10??_????_???? )
-      ( contains 6 32-bit address register )
-      ( address word in x, page word in x+1 )
+      ( CVM2 node 306. VM 32 bit floatingpoint register node, 1101_11??_????_???? )
+      ( contains 8 floatingpoint register )
+      ( low word in x, high word in x+1 )
+      (
+        out: ohlhl
+        in: hl
+      )
       # 307 import
-      # 0x0e org
-      entry ar/main
+      # 0x10 org
+      entry fpr/main
       # 0 /a
       # right /b
 
-      : ar/inc 1 . + ;
-      : ar/dec -1 . + ;
-      // : ar/reg 0x06 and a! ;
+      : fpr/const
+      [ // memory order hi, lo
+        0x3F31 , 0x7218 , // ln2
+        0x3FB8 , 0xAA3B , // 1/ln2
+        0x3FC9 , 0x0FDB , // pi/2
+        0x3F22 , 0xF983 , // 2/pi
+      ]
 
-      : ar/r@ ( -w) A[ k/r@ ]] lit !b A[ !p ]] lit !b @b ;
-      : ar/r! ( w) A[ @p k/r! ]] lit !b !b ;
-      : ar/pop ( -w) A[ k/pop ]] lit !b A[ !p ]] lit !b @b ;
-      : ar/push ( w) A[ @p k/push ]] lit !b !b ;
+      : 'fpop ( -) leap then
+      : fpr/@next ( ) A[ k/pop ]] lit !b A[ !p ]] lit !b @b !+ ;
+      : 'fpush ( -) @+ @+ leap then
+      : fpr/!next ( w-) A[ @p k/push ]] lit !b !b ;
 
-      : ar/leave A[ k/leave ; ]] lit !b
-      : ar/main  A[ !p drop ]] lit !b @b
-        // set register in a
-        dup 0x07 and 2* a!
-        // call word
-        2/ 2/ 2/ 0x3f and >r ex ar/leave ;
 
-      : 'lda A[ k/@ ]] lit
-      : ar/adr ( ) A[ @p @p ]] lit !b @+ !b @ !b !b ;
-      : 'sta A[ k/! ]] lit ar/adr ;
-      : 'arinc @ ar/inc !+ 0x10000 and # ar/leave until @ ar/inc ! ;
-      : 'ardec @ ar/dec !+ # ar/leave -until @ ar/dec ! ;
-      : 'arld ar/r@ !+ ar/pop ! ;
-      : 'arst @+ ar/r! @ ar/push ;
-
+      : fpr/instr ( xy-ia) drop dup 0x07 and 2* a! 2/ 2/ 2/ 0x1f and ;
+      : fpr/leave right b! A[ k/leave ; ]] lit !b
+      : fpr/main  A[ !p 2* !p ]] lit !b @b @b left b!
+        -if // 1101_111?_????_????
+          // binary
+          fpr/instr a >r !b @+ @+ !b !b @+ @+ !b !b r> a! @b @b !+ ! ;
+        then // 1101_110?_????_????
+        2* -if // 1101_1101_????_????
+          // constant
+          fpr/instr a >r a! @+ @ r> a! !+ ! ;
+        then // 1101_1100_????_????
+        fpr/instr >r ;
 
       (
-      opcode lda   1101_10??_????_?aaa load r from address in address register 0..5. register encoded in aaa
-      opcode sta   1101_10??_????_?aaa store r to address in address register 0..5. register encoded in aaa
-      opcode arinc 1101_10??_????_?aaa increment address register 0..5. register encoded in aaa
-      opcode ardec 1101_10??_????_?aaa decrement address register 0..5. register encoded in aaa
-      opcode arld  1101_1000_1???_?aa0 load address register 0..5, address in r, page in stack. register encoded in aaa
-      opcode arst  1101_1000_0???_?aa0 store address register 0..5, address in r, page in stack. register encoded in aaa
+      opcode 1101_111?_????_?fff binary floatingpoint operation. first operand is fff. second operant is fff+1. result in fff
+      opcode 1101_1100_????_?fff unary floatingpoint operation. operand is fff. result in fff
+      opcode 1101_1101_????_?fff lookup constant. result in fff. offset in ?.
+
+      'fpop 1101_1100_????_?fff pop 32-bit floatingpoint from stack {low word first} into fp register fff {3 bits}
+      'fpush 1101_1100_????_?fff push 32-bit floatingpoint to stack {low word last} from fp register fff {3 bits}
+
+
       )
       """;
 }

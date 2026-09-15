@@ -14824,8 +14824,8 @@ projects:
         ( CVM2 node 303. VM 32 bit floatingpoint stage 3 node. split data stream )
 
         (
-          in: osstteehhll   {from node 304}
-          out: ossttc       {to node 403}
+          in: ottsseehhll   {from node 304}
+          out: ottssc       {to node 403}
           out: eehhllc      {to node 302}
         )
 
@@ -14836,19 +14836,68 @@ projects:
         # left /b
 
 
-        # 0 org
+
+        # 0 const op/add
+
+        # 1 const op/sub
+
+        # 2 const op/min
+
+        # 3 const op/max
+
+        # 4 const op/mul
+
+        # 5 const op/div
+
+        # 6 const op/nop
+
+        # 7 const op/swap
+
+
+        # 8 org
+
+
+        : fp3/or ( ab-c) >r inv r> inv and inv ;
+
+
+        : fp3/cmp ( t1 - t1 t2 c )
+          @b
+          over over fp3/or
+          2 and 2/ 1 xor if drop 0x8000 then
+        ;
+
+
+        : fp3/add fp3/cmp >r op/add r> ;
+
+        : fp3/sub fp3/cmp >r op/sub r> ;
+
+        : fp3/min @b op/min 0x8000 ;
+
+        : fp3/max @b op/max 0x8000 ;
+
+        : fp3/mul  @b op/mul 0 ;
+
+        : fp3/div  @b op/div 0 ;
+
+        : fp3/nop @b op/nop 0 ;
+
+        : fp3/swap @b op/swap 0 ;
+
 
 
         : fp3/main
+          @b >r // o operation
+          @b // t1
+          ex //
+          ( t1 t2 o c )
           up a!
-          @b dup ! // o operation
+          >r !  // o
+          >r ! // t1
+          r> ! // t2
           @b ! // s1
           @b ! // s2
-          @b ! // t1
-          @b ! // t2
-          ( o )
-          4 and 4 xor // !=0 => compare required
-          dup ! // send compare flag
+          r> dup ! // send compare flag
+          ( c )
           right a!
           @b ! // e1
           @b ! // e2
@@ -14861,66 +14910,86 @@ projects:
         ; 
 
 
+        # 0 org // jump table
+
+
+        fp3/add ; // add, requires compare
+
+        fp3/sub ; // sub, requires compare
+
+        fp3/min ; // min, requires compare
+
+        fp3/max ; // max, requires compare
+
+        fp3/mul ;
+
+        fp3/div ;
+
+        fp3/nop ;
+
+        fp3/swap ;
+
+
 
       ramWords:
-      - 0x04A03
+      - 0x11413
+      - 0x11416
+      - 0x11419
+      - 0x1141C
+      - 0x1141F
+      - 0x11422
+      - 0x11425
+      - 0x11428
+      - 0x2E69A
+      - 0x320CD
+      - 0x00F82
+      - 0x13408
+      - 0x040C7
+      - 0x00002
+      - 0x00001
+      - 0x39312
+      - 0x3BDB2
+      - 0x08000
+      - 0x15555
+      - 0x1340A
+      - 0x2FD9D
+      - 0x00000
+      - 0x1340A
+      - 0x2FD9D
+      - 0x00001
+      - 0x01D15
+      - 0x00002
+      - 0x08000
+      - 0x01D15
+      - 0x00003
+      - 0x08000
+      - 0x01D15
+      - 0x00004
+      - 0x00000
+      - 0x01D15
+      - 0x00005
+      - 0x00000
+      - 0x01D15
+      - 0x00006
+      - 0x00000
+      - 0x01D15
+      - 0x00007
+      - 0x00000
+      - 0x00802
+      - 0x17555
+      - 0x04ABA
       - 0x00145
+      - 0x0A82A
+      - 0x27A02
       - 0x0BF2A
-      - 0x01A02
-      - 0x0BF2F
-      - 0x00004
-      - 0x3FDE3
-      - 0x00004
-      - 0x0BDAA
+      - 0x26D2F
       - 0x001D5
+      - 0x2BF2A
       - 0x01A02
       - 0x0BF2A
       - 0x01A02
-      - 0x0BF2A
-      - 0x0B700
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x0BAB2
+      - 0x1142B
       - 0x15555
       - 0x15555
       - 0x15555
@@ -14928,7 +14997,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x02B
         p: 0x000
         a: 0x000
         b: 0x000
@@ -14937,52 +15006,36 @@ projects:
         parameterStack: []
     - coordinate: 304
       enabled: true
-      sourceCode: >+
-        ( CVM2 node 304. VM 32 bit floatingpoint stage 2 node. rearrange data stream and collect return value )
-
-        (
-          in: ostelstehl    {from node 305}
-          out: osstteehhll  {to node 303}
-          return in: sehl   {from node 404}
-          return out: sehl  {to node 305}
-        )
-
-        entry fp2/main
-
-        # right /b
-
-        # left /a
-
-
-        # 0 org
-
-
-        : fp2/return
-          up a!
-          @ !b
-          @ !b
-          @ !b
-          @ !b
-        : fp2/main left a!
-          @b !
-          @b ! // s
-          @b >r // t
-          @b >r // e
-          @b >r // h
-          @b >r // l
-          @b ! // s
-          r> r> rL r> ! // t
-          @b ! // t
-          ! // e
-          @b ! // e
-          ! // h
-          @b ! // h
-          ! // h
-          @b ! // h
-        fp2/return ;
-
-
+      sourceCode: "( CVM2 node 304. VM 32 bit floatingpoint stage 2 node. rearrange data stream and collect return value )\n(\n  in: otsehltsehl   {from node 305}\n  out: ottsseehhll  {to node 303}\n  return in: sehl   {from node 404}\n  return out: sehl  {to node 305}\n)\nentry fp2/main\n# right /b\n# left /a\n\r\n# 0 const op/add\r\n# 1 const op/sub\r\n# 2 const op/min\r\n# 3 const op/max\r\n# 4 const op/mul\r\n# 5 const op/div\r\n# 6 const op/nop\r\n# 7 const op/swap\r\n\n# 0 org\n\r\n\r\n: fp2/nop ( o t1 - t1 t2 o )\r\n  dup 0xc and\r\n  if drop\r\n    @b op/nop\r\n    ( t1 t2 o )\r\n    ;\r\n  then\r\n    drop\r\n    ( o t1 )\r\n    @b\r\n    ( o t1 t2 )\r\n    dup 0xc and\r\n    if drop\r\n      ( o t1 t2 )\r\n      op/swap\r\n      ( t1 t2 o )\r\n      ;\r\n    then drop \r\n    ( o t1 t2 )\r\n    >r over r>\r\n    ( t1 o t2 )\r\n    over >r >r drop r> r>\r\n    ( t1 t2 o )\r\n    ;\r\n    \r\n\r\n: fp2/swap ( ot-to )\r\n  dup 0xc and\r\n  if drop\r\n    @b op/swap\r\n    ( t1 t2 o )\r\n    ;\r\n  then\r\n    drop\r\n    ( o t1 )\r\n    @b\r\n    ( o t1 t2 )\r\n    dup 0xc and\r\n    if drop\r\n      ( o t1 t2 )\r\n      op/nop\r\n      ( t1 t2 o )\r\n      ;\r\n    then drop \r\n    ( o t1 t2 )\r\n    >r over r>\r\n    ( t1 o t2 )\r\n    over >r >r drop r> r>\r\n    ( t1 t2 o )\r\n    ;\r\n\r\n\n: fp2/return\n  up a!\n  @ !b\n  @ !b\n  @ !b\n  @ !b\n: fp2/main left a!\n  @b // ( o )\r\n  @b // ( o t1 )\r\n  @b >r // s1\n  @b >r // e1\n  @b >r // h1\n  @b >r // l1\r\n  ( o t1 )\n  over 2 and if drop fp2/swap else drop fp2/nop then\r\n  ( t1 t2 o )\n  ! >r ! r> ! // o t1 t2\n  r> r> r> r> ! // s1\n  @b ! // s2\n  ! // e1\n  @b ! // e2\n  ! // h1\n  @b ! // h2\n  ! // l1\n  @b ! // l2\nfp2/return ;\n\r\n\n"
       ramWords:
+      - 0x25DFA
+      - 0x0000C
+      - 0x19405
+      - 0x3BF15
+      - 0x00006
+      - 0x3BF97
+      - 0x0000C
+      - 0x3F30A
+      - 0x3BD55
+      - 0x00007
+      - 0x3A882
+      - 0x26FBA
+      - 0x2E29A
+      - 0x27555
+      - 0x25DFA
+      - 0x0000C
+      - 0x19413
+      - 0x3BF15
+      - 0x00007
+      - 0x3BF97
+      - 0x0000C
+      - 0x3F318
+      - 0x3BD55
+      - 0x00006
+      - 0x3A882
+      - 0x26FBA
+      - 0x2E29A
+      - 0x27555
       - 0x04A0A
       - 0x00145
       - 0x09E22
@@ -14990,51 +15043,23 @@ projects:
       - 0x089B2
       - 0x04A02
       - 0x00175
-      - 0x0BF2A
+      - 0x01FBA
       - 0x00802
       - 0x2FFBA
-      - 0x00802
-      - 0x0AC9A
-      - 0x135F5
-      - 0x27A02
-      - 0x0BA02
-      - 0x0BA02
-      - 0x0BA02
-      - 0x0B700
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x21DFA
+      - 0x00002
+      - 0x1942B
+      - 0x3B60E
+      - 0x1142C
+      - 0x3B600
+      - 0x0A82A
+      - 0x27A9A
+      - 0x26C9A
+      - 0x0BF2A
+      - 0x0BF2A
+      - 0x0BF2A
+      - 0x0BF2A
+      - 0x1141C
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15048,7 +15073,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x005
+        entryPoint: 0x021
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15070,8 +15095,11 @@ projects:
               0x8000  => negative
 
         2. type:
-              ==0     => finite: normal, denormal, or zero
-              !=0     => NaN or infinity
+              t = 0x00   finite nonzero
+              t = 0x01   zero
+              t = 0x02   infinity
+              t = 0x04   qNaN
+              t = 0x0c   sNaN       // NAN bit + signaling bit
 
         3. exponent:
               IEEE-754 biased exponent, 0x00 .. 0xff
@@ -15082,7 +15110,7 @@ projects:
         5. mantissa low
 
           in: ohlhl
-          out: ostehlstehl
+          out: otsehltsehl
           reply: sehl
 
         )
@@ -15096,31 +15124,71 @@ projects:
         # right /b
 
 
+        : fp1/fold ( lh-lhf) over over 0x7f and 
+
+        : fp1/or ( ab-c) >r inv r> inv and inv ;
+
+
         : fp1/decompose ( )
-          @b @b ( lh )
+          @b >r @b r> ( lh )
+
           // sign
-          dup 0x8000 and !
+          dup 0x8000 and >r
+          ( lh )                          // R: s
+
           // exponent
           dup 2/ 2/ 2/ 2/ 2/ 2/ 2/ 0xff and ..
-          ( lhe)
-          if // not denormalized
-            dup 0xff xor if // normal number
-              dup xor dup ! // number is valid
-              !
-              0x7f and 0x80 xor !
-              !
-            else // NaN or infinity
-              drop 0xff dup
-              !
-              !
-              0x7f and !
-              ! ;
+          ( lhe )
+
+          if // exp != 0
+
+            dup 0xff xor if // normal
+              dup xor !                    // t = 0
+              r> !                         // s
+              !                            // e
+              0x7f and 0x80 xor ! ! ;     // h l
             then
-          then // denormalized
-            !
-            !
-            0x7f and !
-            ! ;
+
+            // NaN or infinity
+            drop
+            ( lhe )                        // e = ff
+            >r                             // R: s e
+            fp1/fold
+
+            if // NaN
+              drop
+              ( lh )
+              dup 0x40 and 2/ 2/ 2/ 0x0c xor
+              !                            // t
+              r> r> ! !                    // s e
+
+        : fp1/final ( lh-) 0x7f and ! ! ;
+
+            then // infinity
+            drop
+            2 !                            // t
+            r> r> ! !                     // s e
+            fp1/final ;
+
+          then // denormalized or zero
+
+          ( lhe )                          // e = 0
+          >r                               // R: s e
+          fp1/fold
+
+          if // denormalized number
+            drop
+            r> dup !                       // t = e = 0, retain e
+            r> !                           // s
+            !                              // e
+            fp1/final ;
+          then
+
+          // zero
+          drop
+          1 !                              // t
+          r> r> ! !                       // s e
+          fp1/final ;
 
         : fp1/compose // read stehl from up and convert it to a 32-bit IEEE-754 number
           up a!
@@ -15133,7 +15201,7 @@ projects:
           // mantissa low
           @ 0xffff and !b
         : fp1/main left a!
-          @b !
+          @b ! // o
           fp1/decompose
           fp1/decompose
           fp1/compose ;
@@ -15142,31 +15210,55 @@ projects:
 
 
       ramWords:
-      - 0x01F97
+      - 0x20F12
+      - 0x0007F
+      - 0x3E9B2
+      - 0x2E69A
+      - 0x320CD
+      - 0x00802
+      - 0x26D12
       - 0x08000
-      - 0x3FA92
+      - 0x3E892
       - 0x307C2
       - 0x307C2
       - 0x31DFA
       - 0x000FF
-      - 0x19416
+      - 0x19428
       - 0x25DE2
       - 0x000FF
-      - 0x19411
-      - 0x24392
-      - 0x0BA12
+      - 0x19417
+      - 0x2432A
+      - 0x27A2F
       - 0x0007F
       - 0x3FDE2
       - 0x00080
-      - 0x0BA46
-      - 0x3BD92
-      - 0x000FF
-      - 0x0BA12
+      - 0x0BA55
+      - 0x3A8B2
+      - 0x13400
+      - 0x19424
+      - 0x3AD12
+      - 0x00040
+      - 0x3E7C2
+      - 0x31DE2
+      - 0x0000C
+      - 0x0AC9A
+      - 0x0BAB2
+      - 0x0402A
       - 0x0007F
-      - 0x3FA2D
-      - 0x0BA12
-      - 0x0007F
-      - 0x3FA2D
+      - 0x0B555
+      - 0x3BD2A
+      - 0x00002
+      - 0x26C2A
+      - 0x0B721
+      - 0x2F600
+      - 0x1942D
+      - 0x3AC92
+      - 0x0AC2A
+      - 0x0B721
+      - 0x3BD2A
+      - 0x00001
+      - 0x26C2A
+      - 0x0B721
       - 0x04A0A
       - 0x00145
       - 0x024DA
@@ -15179,35 +15271,11 @@ projects:
       - 0x3FBB2
       - 0x04A02
       - 0x00175
-      - 0x0B600
-      - 0x13400
-      - 0x11419
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x0B605
+      - 0x13405
+      - 0x11431
       startup:
-        entryPoint: 0x023
+        entryPoint: 0x03B
         p: 0x000
         a: 0x000
         b: 0x000
@@ -15916,14 +15984,16 @@ projects:
         ( CVM2 node 401. VM 32 bit floatingpoint stage 5a node. mantissahandling )
 
         (
+          1. read extended mantissas and comparison data from node 301
+          2. select high or low mantissa difference
+          3. send mantissa comparison to node 402
+          4. wait for operation instruction
 
-        1. read data node 301
-
-        2. wait for instructions on left
-
-          in: HHLLcdd   {from node 302}
-          out: HHLL     {to node 502}
+          in: HHLL0      {comparison not required}
+          in: HHLLcdd    {comparison required}
+          out: HHLL
         )
+
 
         entry fp5a/main
 
@@ -15949,21 +16019,28 @@ projects:
         : fp5a/div  ;
 
 
+
         : fp5a/main
-          @b @b @b @b left a!
-          if // compare required
-            @b if // 
-              @b drop
+          @b @b @b @b
+          left a!
+
+          @b if                  // compare required
+            drop                  // discard c = 0x8000
+
+            @b if                 // high mantissa delta != 0
+              @b drop             // retain high delta, consume low delta
             else
-              drop @b
+              drop @b             // high equal: use low delta
             then
           then
+
           ( H1 H2 L1 L2 comp )
-          !
+          !                       // send mantissa comparison to 402
+
           down a!
           ( H1 H2 L1 L2 )
           --l-
-          fp5a/main ; 
+          fp5a/main ;
 
 
       ramWords:
@@ -15981,8 +16058,8 @@ projects:
       - 0x01F02
       - 0x01DAA
       - 0x00175
-      - 0x19412
-      - 0x01311
+      - 0x01312
+      - 0x3BF61
       - 0x00242
       - 0x3BFB2
       - 0x0BDAA
@@ -16068,6 +16145,15 @@ projects:
         # 0 org
 
 
+        : fp4a/gt ( d-c )
+          -if                    // d < 0
+            drop 0
+          else                   // d >= 0
+            if                   // d > 0
+              drop 0x8000
+            then                 // d = 0 leaves zero
+          then
+        ;
 
 
         : fp4a/swap A[ fp5a/swap ; ]] lit ! ;
@@ -16084,23 +16170,40 @@ projects:
         : fp4a/div A[ fp5a/div ; ]] lit ! ;
 
 
-        : fp4a/main @b @b left a! ..
-          @b if // compare required
-            @b // read compare value
-            if
-              @ drop
+        : fp4a/main
+          @b @b
+          left a! ..
+
+          @b if                  // compare required
+            drop                  // discard compare-request flag
+
+            @b                    // exponent delta
+
+            if                    // exponent delta != 0
+              @ drop              // discard mantissa comparison
             else
-              drop @
+              drop @              // exponent equal: use mantissa comparison
             then
+
+            fp4a/gt               // -> 0 or 0x8000
           then
+
           down a!
           ( e1 e2 comp )
+
           r---
-          down b! !b !b
-          fp4a/main ; 
 
-
+          down b!
+          !b !b
+          fp4a/main ;
       ramWords:
+      - 0x1B403
+      - 0x3BD46
+      - 0x00000
+      - 0x19406
+      - 0x3BDB2
+      - 0x08000
+      - 0x15555
       - 0x05A55
       - 0x11400
       - 0x05A85
@@ -16116,24 +16219,17 @@ projects:
       - 0x01F12
       - 0x00175
       - 0x2A9B2
-      - 0x01313
-      - 0x01312
-      - 0x02243
+      - 0x0131B
+      - 0x3BF61
+      - 0x02242
       - 0x3BEB2
+      - 0x13400
       - 0x04AB2
       - 0x00115
       - 0x135D5
       - 0x04B22
       - 0x00115
-      - 0x0970C
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x09713
       - 0x15555
       - 0x15555
       - 0x15555
@@ -16166,7 +16262,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00C
+        entryPoint: 0x013
         p: 0x000
         a: 0x000
         b: 0x000
@@ -16181,8 +16277,8 @@ projects:
         (
           calculates final sign and type.
 
-          in: ossttc     {from node 303}
-          out: ist       {to node 503}
+          in: ottssc     {from node 303}
+          out: ottss     {to node 503}
         )
 
         # 402 import
@@ -16199,49 +16295,113 @@ projects:
         # 8 org
 
 
-        : fp3a/swap ( s1 s2 t1 t2 ) A[ fp4a/swap ; ]] lit ! r> !b >r drop !b r> !b ;
-
-        : fp3a/undefined 
-
-        : fp3a/mul
-
-        : fp3a/div 
-
-        : fp3a/nop ( s1 s2 t1 t2 ) A[ fp4a/nop ; ]] lit ! r> !b drop >r drop !b r> !b ;
+        : fp3a/minsel ( t1 t2 s1 s2 comp - t1 t2 s1 s2 sel )
+          >r
+          over over xor       // s1 xor s2
+          0x8000 xor          // 8000 if signs same, 0 if different
+          r> and              // comp only matters when signs same
+          over xor             // xor with s2
+        ;
 
 
-        : fp3a/min ( s1 s2 t1 t2 comp )
-          if drop fp3a/swap ; then fp3a/nop ;
-        : fp3a/max ( s1 s2 t1 t2 comp )
-          if drop fp3a/nop ; then fp3a/swap ;
+        : fp3a/send ( t1 t2 s1 s2 - )
+          >r >r >r
+          !b          // t1
+          r> !b       // t2
+          r> !b       // s1
+          r> !b       // s2
+        ;
 
-        : fp3a/sub ( s1 s2 t1 t2 comp )
-          >r >r >r 0x8000 xor r> r> r>
-        : fp3a/add ( s1 s2 t1 t2 comp )
+
+        : fp3a/or ( ab-c )
+          >r inv r> inv and inv
+        ;
+
+
+        : fp3a/swap ( t1 t2 s1 s2 )
+          A[ fp4a/swap ; ]] lit !
+          r> !b       // o
+          fp3a/send
+        ;
+
+
+        : fp3a/nop ( t1 t2 s1 s2 )
+          A[ fp4a/nop ; ]] lit !
+          r> !b       // o
+          fp3a/send
+        ;
+
+
+        : fp3a/mul ( t1 t2 s1 s2 )
+          A[ fp4a/mul ; ]] lit !
+          r> !b       // o
+          fp3a/send
+        ;
+
+
+        : fp3a/div ( t1 t2 s1 s2 )
+          A[ fp4a/div ; ]] lit !
+          r> !b       // o
+          fp3a/send
+        ;
+
+
+
+        : fp3a/min ( t1 t2 s1 s2 comp )
+          fp3a/minsel
+          if
+            drop fp3a/swap ;
+          then
+          drop fp3a/nop ;
+
+        : fp3a/max ( t1 t2 s1 s2 comp )
+          fp3a/minsel
+          0x8000 xor
+          if
+            drop fp3a/swap ;
+          then
+          drop fp3a/nop ;
+
+        : fp3a/sub ( t1 t2 s1 s2 comp )
+          >r
+          0x8000 xor       // invert s2
+          r>
+        : fp3a/add ( t1 t2 s1 s2 comp )
+
           // first parameter > second parameter
-          if drop A[ fp4a/swap ]] lit ! dup
-          then drop
-          // check sign
-          >r >r over over xor
-          if // different sign -> subtract
+          if
+            drop
+            A[ fp4a/swap ]] lit !
+            dup
+          then
+          drop
+
+          ( t1 t2 s1 s2 )
+
+          // check signs
+          over over xor
+          if
+            drop
+            // different signs -> subtract
             A[ fp4a/sub ; ]] lit !
-          else // same sign -> add
+          else
+            drop
+            // same signs -> add
             A[ fp4a/add ; ]] lit !
           end
-
         : fp3a/main # fp3a/main lit >r up b!
-          @b >r
-          @b  // s1
-          @b  // s2
-          @b  // t1
-          @b  // t2
-          @b if // compare required
-            // get compare result
-            drop @
+          @b >r       // o
+          @b          // t1
+          @b          // t2
+          @b          // s1
+          @b          // s2
+          @b if       // compare required
+            drop @     // replace c=1 by actual compare result
           then
-          ( s1 s2 t1 t2 comp )
+          ( t1 t2 s1 s2 comp )
           down b!
-        ; 
+        ex fp3a/main ;
+
 
 
         # 0 org // jump table
@@ -16259,77 +16419,77 @@ projects:
 
         drop fp3a/div ;
 
-        drop fp3a/undefined ;
+        drop fp3a/nop ;
 
-        drop fp3a/undefined ;
+        drop fp3a/swap ;
 
       ramWords:
-      - 0x1141B
-      - 0x11417
-      - 0x11411
-      - 0x11414
-      - 0x3B70C
-      - 0x3B70C
-      - 0x3B70C
-      - 0x3B70C
-      - 0x05A9A
-      - 0x11400
-      - 0x088EA
-      - 0x08C25
-      - 0x05A9A
-      - 0x11402
-      - 0x082BA
-      - 0x3BB9A
-      - 0x09555
-      - 0x19413
-      - 0x3B708
-      - 0x1140C
-      - 0x19416
-      - 0x3B70C
-      - 0x11408
-      - 0x2E8BF
+      - 0x1142B
+      - 0x11428
+      - 0x1141F
+      - 0x11423
+      - 0x3B719
+      - 0x3B71C
+      - 0x3B716
+      - 0x3B713
+      - 0x2EF82
+      - 0x39DE2
       - 0x08000
-      - 0x38C9A
+      - 0x26082
+      - 0x39555
+      - 0x2E8BA
+      - 0x08C22
+      - 0x27B9A
+      - 0x09555
+      - 0x2E69A
+      - 0x320CD
+      - 0x05A9A
+      - 0x11407
+      - 0x0970D
+      - 0x05A9A
+      - 0x11409
+      - 0x0970D
+      - 0x05A9A
+      - 0x1140F
+      - 0x0970D
+      - 0x05A9A
+      - 0x11411
+      - 0x0970D
+      - 0x13408
+      - 0x19422
+      - 0x3B713
+      - 0x3B716
+      - 0x13408
+      - 0x04367
+      - 0x08000
+      - 0x3B713
+      - 0x3B716
+      - 0x2FDE2
+      - 0x08000
       - 0x269B2
-      - 0x1941E
-      - 0x3B608
-      - 0x249B2
-      - 0x3A8BA
-      - 0x20FE2
-      - 0x19423
-      - 0x05A40
-      - 0x11406
-      - 0x05A41
-      - 0x11404
+      - 0x1942E
+      - 0x3BD2B
+      - 0x13407
+      - 0x3AF82
+      - 0x39333
+      - 0x3BD2A
+      - 0x1140D
+      - 0x11400
+      - 0x3BD2A
+      - 0x1140B
+      - 0x11432
       - 0x04812
-      - 0x00025
+      - 0x00036
       - 0x00145
       - 0x29FBA
       - 0x01F02
-      - 0x01F64
+      - 0x01F65
       - 0x3BEB2
-      - 0x04B55
+      - 0x04B5D
       - 0x00115
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x11436
       startup:
-        entryPoint: 0x025
+        entryPoint: 0x036
         p: 0x000
         a: 0x000
         b: 0x000
@@ -16338,10 +16498,197 @@ projects:
         parameterStack: []
     - coordinate: 404
       enabled: false
-      sourceCode: ''
-      ramWords: []
+      sourceCode: >+
+        ( CVM2 node 404. VM 32 bit floatingpoint stage 8 node. NaN handling )
+
+        (
+          calculates final values.
+
+          in: ottssehl     {from node 504}
+          out: sehl        {to node 304}
+        )
+
+
+        entry fp8/main
+
+        # up /a
+
+        # down /b
+
+
+        # 8 org
+
+
+        : fp8/or ( ab-c ) >r inv r> inv and inv ;
+
+
+        : fp8/qnan
+         @b // s1
+         @b // s2
+         @b // e
+         @b // h
+         @b // l
+         0 !  // s
+         0xff ! // e
+         0x40 ! // h
+         0 ! // l
+         ;
+
+        : fp8/pass1
+          //  -> s1 + incoming ehl
+          @b ! // s1
+          @b // s2
+          @b ! // e
+          @b ! // h
+          @b ! // l
+          ;
+
+        : fp8/pass2
+          //  -> s2 + incoming ehl
+          @b // s1
+          @b ! // s2
+          @b ! // e
+          @b ! // h
+          @b ! // l
+          ;
+
+        : fp8/anyNan ( t1 t2 - t1 t2 )
+          over over fp8/or 4 and if r> fp8/qnan ; then drop ;
+
+        : fp8/div ( t1 t2 )
+          fp8/anyNan
+          //
+          over over and
+          if // 0/0 or Inf/Inf
+            fp8/qnan ;
+          then drop
+          //
+          fp8/pass1 ;
+
+        : fp8/mul
+          fp8/anyNan
+          over over fp8/or 3 xor
+          if
+            drop fp8/pass1 ;
+          then
+          fp8/qnan ;
+
+        : fp8/add
+
+        : fp8/sub fp8/anyNan fp8/pass1 ;
+
+
+
+        : fp8/min
+
+        : fp8/max
+          over 4 and
+          if                      // t1 is NaN
+            drop
+            dup 4 and
+            if                    // both NaN
+              fp8/qnan ;
+            then
+            fp8/pass2 ;           // only t1 NaN
+          then
+          fp8/pass1 ;
+
+
+        : fp8/main 
+          @b >r       // o
+          @b          // t1
+          @b          // t2
+          ( t1 t2 )
+          ex
+          fp8/main ;
+
+
+        # 0 org // jump table
+
+
+        fp8/add ;
+
+        fp8/sub ;
+
+        fp8/min ;
+
+        fp8/max ;
+
+        fp8/mul ;
+
+        fp8/div ;
+
+        fp8/pass1 ; // nop
+
+        fp8/pass2 ; // swap
+
+      ramWords:
+      - 0x1142A
+      - 0x1142A
+      - 0x1142C
+      - 0x1142C
+      - 0x11423
+      - 0x1141E
+      - 0x11412
+      - 0x11415
+      - 0x2E69A
+      - 0x320CD
+      - 0x01F02
+      - 0x01F12
+      - 0x00000
+      - 0x0BD2F
+      - 0x000FF
+      - 0x00040
+      - 0x0BD2D
+      - 0x00000
+      - 0x01A02
+      - 0x01A02
+      - 0x0BF2D
+      - 0x01F2A
+      - 0x01A02
+      - 0x0BF2D
+      - 0x20FB2
+      - 0x13408
+      - 0x04065
+      - 0x00004
+      - 0x2770A
+      - 0x3B555
+      - 0x13418
+      - 0x20FFA
+      - 0x19422
+      - 0x1140A
+      - 0x3B712
+      - 0x13418
+      - 0x20FB2
+      - 0x13408
+      - 0x04361
+      - 0x00003
+      - 0x3B712
+      - 0x1140A
+      - 0x13418
+      - 0x11412
+      - 0x21DFA
+      - 0x00004
+      - 0x19434
+      - 0x3AD12
+      - 0x00004
+      - 0x3F333
+      - 0x1140A
+      - 0x11415
+      - 0x11412
+      - 0x00802
+      - 0x01455
+      - 0x11435
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x035
         p: 0x000
         a: 0x000
         b: 0x000

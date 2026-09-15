@@ -93,6 +93,14 @@ namespace Ga144.Evb.Ide.Cvm;
 /// 407 (unchanged, listed above); 405 imports 406; 307 imports 407; 308 imports 307; 306 imports 307.
 /// CompileNode resolves each import from the chip's own live node graph regardless of this list's
 /// order, but the order here is kept parent-before-child for readability, same as every prior addition.
+///
+/// <b>RENUMBERED 2026-09-15: node 306 and node 308 have swapped roles.</b> The "306's lda/sta/arinc/
+/// ardec/arld/arst" and "308's dpop/dpush/dinc/ddec/dadd/dor" attributions two paragraphs up describe
+/// the 2026-09-09 state and are no longer accurate: the address-register mnemonics (plus two new ones,
+/// arinc2/ardec2) now live on node 308, and node 306 now names an unrelated, unwired floating-point
+/// register node -- see Node308Program's and Node306Program's own remarks. Whether the dpop/dpush family
+/// still exists anywhere on the current mesh is unconfirmed and flagged there, not resolved here; both
+/// coordinates below (306 and 308) are unchanged by this swap, only which class/role each one names.
 /// </summary>
 public static class CvmNodeMesh
 {
@@ -110,7 +118,7 @@ public static class CvmNodeMesh
     Node405Program.Coordinate, // 405, CVM2's multiword-arithmetic (carry-flag) node (added 2026-09-09).
     Node408Program.Coordinate, // 408, CVM2's comparison node (added 2026-09-06).
     Node307Program.Coordinate, // 307, CVM2's "VM ternary main" relay node (added 2026-09-09).
-    Node308Program.Coordinate, // 308, CVM2's 4x 32-bit "VM 32 arithmetic" register node (added 2026-09-09).
-    Node306Program.Coordinate, // 306, CVM2's 4x 32-bit address-register node (added 2026-09-09).
+    Node308Program.Coordinate, // 308, CVM2's address-register node (added 2026-09-09 as "306"; RENUMBERED 2026-09-15 -- see Node308Program's own remarks).
+    Node306Program.Coordinate, // 306, CVM2's floatingpoint register node (added 2026-09-15, RENUMBERED from the unrelated "VM 32 arithmetic" node this coordinate held 2026-09-09 through 2026-09-15 -- see Node306Program's own remarks). NOT wired into the CVM instruction set yet.
   ];
 }

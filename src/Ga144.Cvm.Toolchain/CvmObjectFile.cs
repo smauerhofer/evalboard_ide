@@ -42,18 +42,21 @@ public sealed class CvmRelocation
   public required string SymbolName { get; init; }
   public required CvmRelocationType Type { get; init; }
 
-  /// <summary>ADDED 2026-09-11, for node 306's six address-register ops (<c>arinc</c>/<c>ardec</c>/
-  /// <c>arld</c>/<c>arst</c>/<c>lda</c>/<c>sta</c> -- see <c>Ga144.Cvm.Toolchain.CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue</c>'s
+  /// <summary>ADDED 2026-09-11, for the address-register family's ops (<c>arinc</c>/<c>ardec</c>/
+  /// <c>arld</c>/<c>arst</c>/<c>lda</c>/<c>sta</c>, plus <c>arinc2</c>/<c>ardec2</c> added 2026-09-15 --
+  /// node 308 as of that same date's renumbering, previously called "node 306"; see
+  /// <c>Ga144.Evb.Ide.Cvm.Node308Program</c>'s own remarks -- see
+  /// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue</c>'s
   /// own remarks): a value already known at ASSEMBLE time (an embedded register index, 0 for every
   /// other mnemonic) that the linker OR's into the symbol's resolved word alongside <see cref="Type"/>'s
   /// own computation, for a <see cref="CvmRelocationType.CvmOpcode"/> relocation only. Every OTHER
   /// relocation this toolchain has ever emitted needed exactly one unknown (the symbol's own final
-  /// address) resolved at link time; node 306's six ops are the first to need a SECOND value OR'd into
-  /// the same word that the assembler already knows in full when it emits this relocation -- so rather
-  /// than invent a whole new relocation type (and a whole new record shape the on-disk .gaobj format
-  /// would need to grow branches for), this is carried as one more plain field on the existing
-  /// CvmOpcode relocation, defaulting to 0 so every pre-existing relocation (and every mnemonic that
-  /// isn't node 306's) is completely unaffected. See <c>Ga144.Cvm.Toolchain.CvmAssembler</c>'s own
+  /// address) resolved at link time; the address-register family's ops are the first to need a SECOND
+  /// value OR'd into the same word that the assembler already knows in full when it emits this
+  /// relocation -- so rather than invent a whole new relocation type (and a whole new record shape the
+  /// on-disk .gaobj format would need to grow branches for), this is carried as one more plain field on
+  /// the existing CvmOpcode relocation, defaulting to 0 so every pre-existing relocation (and every
+  /// mnemonic outside that family) is completely unaffected. See <c>Ga144.Cvm.Toolchain.CvmAssembler</c>'s own
   /// remarks on its NodeResolvedEmbeddedValue handling for where this gets populated, and
   /// <c>Ga144.Cvm.Toolchain.CvmLinker</c>'s own remarks on its <see cref="CvmRelocationType.CvmOpcode"/>
   /// case for where it gets applied. <b>Breaking on-disk change:</b> a <c>.gaobj</c> saved before this

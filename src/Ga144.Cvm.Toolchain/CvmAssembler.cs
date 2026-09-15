@@ -296,13 +296,15 @@ public static class CvmAssembler
             break;
           }
 
-          // Node 306's six address-register ops (arinc/ardec/arld/arst/lda/sta) need BOTH a
-          // live-node-resolved base (which function -- exactly what the generic tagged path just below
-          // already provides via its own CvmOpcode relocation) AND a user-supplied embedded register
-          // operand (0..5) packed into the SAME word. Unlike the base address, the register operand is a
-          // plain literal the assembler already knows in full right now, so it needs no relocation of its
-          // own -- it is validated here against the shape's own ValueBitMask (Node306RegisterFieldBitMask,
-          // 0..5 with 6/7 unassigned) and carried on CvmRelocation.EmbeddedValue for the linker to OR into
+          // The address-register family's eight ops (arinc/ardec/arinc2/ardec2/arld/arst/lda/sta --
+          // RENUMBERED 2026-09-15 from physical node 306 to physical node 308, see Cvm.Node308Program's
+          // own remarks) need BOTH a live-node-resolved base (which function -- exactly what the generic
+          // tagged path just below already provides via its own CvmOpcode relocation) AND a user-supplied
+          // embedded register operand packed into the SAME word. Unlike the base address, the register
+          // operand is a plain literal the assembler already knows in full right now, so it needs no
+          // relocation of its own -- it is validated here against the shape's own ValueBitMask
+          // (AddressRegisterRegisterFieldBitMask, renamed 2026-09-15 from Node306RegisterFieldBitMask,
+          // same 0-7 range) and carried on CvmRelocation.EmbeddedValue for the linker to OR into
           // the resolved base word once that's known (see CvmRelocation.EmbeddedValue's own remarks, and
           // CvmLinker's own remarks on its CvmOpcode case). 0 for every other mnemonic (their shapes carry
           // no ValueBitMask at all under this encoding, so this is simply never reached for them).

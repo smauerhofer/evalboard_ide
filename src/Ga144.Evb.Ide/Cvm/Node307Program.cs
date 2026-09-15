@@ -57,14 +57,27 @@ namespace Ga144.Evb.Ide.Cvm;
 /// prefix.</b> Reads two words via <c>@b</c> (port B, the "up" link to 407) the same "relay two bits
 /// per level" idiom every other node in this mesh uses (<c>2* !p !p ... @b @b</c>):
 /// <list type="bullet">
-/// <item><c>1101_1???_????_????</c> (outer <c>-if</c> taken): further split by one more bit --
-/// <c>1101_11??</c> relays LEFT (<c>--l-</c>); else <c>1101_10??</c> relays RIGHT (<c>r---</c>) -- THIS
-/// is node 306, per that class's own header and <c># right /b</c> port binding.</item>
+/// <item><c>1101_1???_????_????</c> (outer <c>-if</c> taken): further split by one more bit -- see
+/// "RIGHT/LEFT SWAPPED 2026-09-15" below for which of <c>1101_11??</c>/<c>1101_10??</c> currently relays
+/// which direction; this reaches whichever of node 306/308 currently sits behind that physical
+/// port.</item>
 /// <item><c>1101_0???_????_????</c> (outer <c>-if</c> not taken, fallen through <c>then</c>): further
 /// split by one more bit -- <c>1101_01??</c> relays DOWN (<c>-d--</c>); else falls through the final
 /// <c>then</c> to whatever comes next.</item>
 /// </list>
 ///
+/// <b>RIGHT/LEFT SWAPPED 2026-09-15 -- "node 306 and 308 have swapped roles."</b> Stefan re-pasted this
+/// exact source with the two relay branches' own directions exchanged: <c>1101_11??_????_????</c> now
+/// relays RIGHT (<c>r---</c>, was LEFT/<c>--l-</c>) and <c>1101_10??_????_????</c> now relays LEFT
+/// (<c>--l-</c>, was RIGHT/<c>r---</c>). Alongside this, what this project had been calling "node 306"
+/// (the address-register mesh, reached via the OLD <c>1101_10??</c>/RIGHT branch) is now identified as
+/// physical node 308 (reached via the NEW <c>1101_10??</c>/LEFT branch -- see
+/// <see cref="Node308Program"/>'s own remarks), and "node 306" now names a DIFFERENT, brand-new
+/// floating-point register node reached via the NEW <c>1101_11??</c>/RIGHT branch (see
+/// <see cref="Node306Program"/>'s own remarks, a full rewrite of that class for this unrelated node).
+/// Whether this is a genuine physical re-wiring, or a correction to which coordinate this project had
+/// been mislabeling all along, is not stated by Stefan and is not guessed at here -- only the pasted
+/// source and the resulting port/coordinate mapping are reproduced.
 /// <b>SUPERSEDED 2026-09-11 -- see <see cref="Source"/>'s own remarks: Stefan confirmed directly this
 /// node compiles fine.</b> Everything in this paragraph and the two list items below it describes what
 /// was, at the time, a reasonable reading of the source as pasted -- it turned out to be based on this
@@ -126,6 +139,13 @@ internal static class Node307Program
   /// second fetch now happens AFTER <c>&gt;r</c> rather than before it) -- everything from the first
   /// <c>-if</c> onward, including the still-unterminated final branch, is byte-for-byte unchanged.
   /// Reproduced verbatim; not independently re-derived here.
+  ///
+  /// <b>REVISED AGAIN 2026-09-15 -- see this class's own "RIGHT/LEFT SWAPPED" remarks above.</b> The
+  /// ONLY change from the 2026-09-11 revision above is which relay direction each of the two
+  /// second-level branches now takes -- <c>1101_11??_????_????</c>'s own <c>r&gt; --l- ;</c> became
+  /// <c>r&gt; r--- ;</c>, and <c>1101_10??_????_????</c>'s own <c>r&gt; r--- ;</c> became
+  /// <c>r&gt; --l- ;</c>. Everything else (the prelude, the "1101_0???" branch, the still-unterminated
+  /// final branch) is byte-for-byte unchanged.
   /// </summary>
   public const string Source = """
       ( CVM2 node 307. VM ternary main, 1101_????_????_???? )
@@ -145,9 +165,9 @@ internal static class Node307Program
       : k/main # k/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b
         -if // 1101_1???_????_????
           2* -if // 1101_11??_????_????
-            r> --l- ;
+            r> r--- ;
           then // 1101_10??_????_????
-          r> r--- ;
+          r> --l- ;
         then // 1101_0???_????_????
         2* -if // 1101_01??_????_????
           r> -d-- ;

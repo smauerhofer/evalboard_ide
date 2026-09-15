@@ -43,6 +43,16 @@ namespace Ga144.Evb.Ide.Cvm;
 /// own words) -- this builder's job is to stay easy to extend as that happens, not to assume fourteen is
 /// final.
 ///
+/// <b>RENUMBERED 2026-09-15: node 306 and node 308 have swapped roles.</b> Every mention of "node 306"
+/// above, from this class-level history through <see cref="BuildLoadOrder"/>'s own doc comment, describes
+/// the 32-bit address-register node reached via 307's own port -- that node is now physical node 308 (see
+/// <see cref="Node308Program"/>), not 306. Physical node 306 now names an unrelated, brand-new
+/// floating-point register node (see <see cref="Node306Program"/>, a full rewrite) that this builder does
+/// NOT yet compile or load -- its three-way dispatch does not fit any existing operand-encoding shape, so
+/// wiring it in is deferred as an open architecture question, not guessed at here. The mesh shape itself
+/// is unchanged by this renumbering (still 507 -&gt; 407 -&gt; 307 -&gt; [address-register node], still CVM2's
+/// first five-hop-deep branch) -- only the coordinate label on the leaf moved, from 306 to 308.
+///
 /// <b>Node 507 (CPU), not 508 -- corrected 2026-09-01.</b> This project's own session briefly placed
 /// CVM2's CPU source on node 508 under a mistaken attribution; Stefan corrected it directly: the CPU
 /// is node 507. All of this builder's own compiling/loading of "the CPU node" targets
@@ -244,31 +254,39 @@ public static class CvmBootStreamBuilder
     });
     ThrowIfFailed(result307);
 
-    // CVM2 (2026-09-06): node 306, the 6x 32-bit-address-register node (register count CORRECTED
-    // 2026-09-11 -- see Node306Program's own remarks and CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic's
-    // own remarks; previously miscounted as "4x" here) -- reached from node 307's own k/main dispatch via
-    // its RIGHT port, one hop further out than 307 itself (507 -> 407 -> 307 -> 306). Imports 307 by name
-    // ('# 307 import', k/r@/k/r!/k/pop/k/push/k/leave), so must compile AFTER result307 above -- and
-    // therefore inherits the same "not expected to succeed yet" caveat noted there, since a failed
-    // result307 leaves nothing valid in result307.Exports for this import to resolve. See Node306Program's
-    // own remarks for the full source.
+    // RENUMBERED 2026-09-15: the address-register mesh this comment used to describe under "node 306"
+    // now lives on physical node 308 -- Stefan: "node 306 and 308 have swapped roles." This step now
+    // compiles Node308Program.Source (not Node306Program.Source) accordingly; the variable is renamed
+    // result308 to match. Node 306 itself now names an unrelated, brand-new floating-point register node
+    // (see Node306Program's own remarks) that this harness does NOT yet compile here -- it is not wired
+    // into CvmInstructionSet/CvmAssemblyLanguage at all yet (its three-way dispatch shape and its
+    // 'fpop'/'fpush' own unconfirmed "leap"/"then" body need resolving first, see Node306Program's own
+    // remarks), so adding a compile step for it here is deferred rather than guessed at.
     //
-    // STALE COMMENT, CORRECTED 2026-09-09: this used to describe node 306's ORIGINAL six mnemonics
+    // CVM2 (2026-09-06): the address-register node -- reached from node 307's own k/main dispatch via
+    // its LEFT port as of 2026-09-15 (was RIGHT, under the "node 306" name, through 2026-09-11 -- see
+    // Node307Program's own "RIGHT/LEFT SWAPPED" remarks), one hop further out than 307 itself
+    // (507 -> 407 -> 307 -> 308). Imports 307 by name ('# 307 import', k/r@/k/r!/k/pop/k/push/k/leave),
+    // so must compile AFTER result307 above -- and therefore inherits the same "not expected to succeed
+    // yet" caveat noted there, since a failed result307 leaves nothing valid in result307.Exports for
+    // this import to resolve. See Node308Program's own remarks for the full source.
+    //
+    // STALE COMMENT, CORRECTED 2026-09-09: this used to describe this node's ORIGINAL six mnemonics
     // (ldar/star/inca/deca/lda/sta) as a self-describing family needing no live compile at all -- that
-    // was true of the 2026-09-06 source, but node 306's source was rewritten the same day (second pass
+    // was true of the 2026-09-06 source, but this node's source was rewritten the same day (second pass
     // of the opcode/assembler-vs-node reconciliation audit) around a different, tick-prefixed,
-    // NODE-RESOLVED family instead (arinc/ardec/arld/arst/lda/sta -- see
-    // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own NodeSymbolByMnemonic and
-    // NodeResolvedEmbeddedValueFieldLayoutByMnemonic for the wiring). Unlike the old family, ALL SIX of
+    // NODE-RESOLVED family instead (arinc/ardec/arld/arst/lda/sta, plus arinc2/ardec2 added 2026-09-15 --
+    // see Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own NodeSymbolByMnemonic and
+    // NodeResolvedEmbeddedValueFieldLayoutByMnemonic for the wiring). Unlike the old family, ALL EIGHT of
     // these current mnemonics DO depend on this compile step succeeding -- each one's real opcode word is
-    // resolved against result306's own F18 symbols, exactly like every other tagged/node-resolved
+    // resolved against result308's own F18 symbols, exactly like every other tagged/node-resolved
     // mnemonic elsewhere in this file. The OLD family's own mnemonic and tag constants
     // (CvmInstructionSet.LoadAddressRegisterMnemonic and its siblings) were deleted outright 2026-09-09
     // (CVM1-opcode purge) and no longer exist.
-    F18CompileResult result306 = Compile(compiler, Node306Program.Source, new F18CompilerOptions
+    F18CompileResult result308 = Compile(compiler, Node308Program.Source, new F18CompilerOptions
     {
       MemorySpace = F18MemorySpace.Ram,
-      NodeCoordinate = Node306Program.Coordinate,
+      NodeCoordinate = Node308Program.Coordinate,
       MemoryBaseAddress = 0x000,
       MemoryWordCount = 64,
       IncludeCommonRomWords = true,
@@ -276,7 +294,7 @@ public static class CvmBootStreamBuilder
           ? F18ImportResolution.FromExports(result307.Exports)
           : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
     });
-    ThrowIfFailed(result306);
+    ThrowIfFailed(result308);
 
     // CVM2 (2026-09-04): node 506, the stack-frame node (enter/leave/...) -- reached from 507's own
     // m/main dispatch via its RIGHT port, a SIBLING of 407 (both are leaves hanging directly off 507,
@@ -387,7 +405,7 @@ public static class CvmBootStreamBuilder
       CvmBootDescriptor.FromCompileResult(result406),
       CvmBootDescriptor.FromCompileResult(result408),
       CvmBootDescriptor.FromCompileResult(result307),
-      CvmBootDescriptor.FromCompileResult(result306),
+      CvmBootDescriptor.FromCompileResult(result308),
       CvmBootDescriptor.FromCompileResult(result506),
       CvmBootDescriptor.FromCompileResult(result511),
       CvmBootDescriptor.FromCompileResult(result510),
@@ -528,12 +546,25 @@ public static class CvmBootStreamBuilder
   /// pair specifically went from "reordering bug silently breaking the whole mesh" (see the remarks
   /// above) to "reordering bug fixed, still awaiting its own first real-hardware run" on 2026-09-08 --
   /// not yet promoted to "confirmed" until Stefan reports a clean install/test after this fix.
+  ///
+  /// <b>RENUMBERED 2026-09-15: "node 306" throughout the history above is physical node 308.</b> Stefan:
+  /// "node 306 and 308 have swapped roles" -- the 32-bit address-register node this whole load-order
+  /// story is about (the 306/307 ordering bug, its fix, its real-hardware status) has NOT moved in the
+  /// mesh -- it is still one relay hop past node 307, loading before 307's own step for the exact same
+  /// reason described above -- only its coordinate label has changed, from 306 to 308. The step below
+  /// reads <c>new CvmBootLoadStep(308, 307)</c> accordingly. Physical node 408 (the pre-existing
+  /// "comparison node" step directly above it, unrelated to this renumbering) keeps its own separate
+  /// coordinate; the two are not to be confused despite the similar digits. Physical node 306 now names
+  /// an unrelated floating-point register node (see <see cref="Node306Program"/>) that is NOT part of
+  /// this load order yet -- it is not wired into the CVM instruction set (its three-way dispatch does not
+  /// fit any existing operand-encoding shape) and so has no compiled program for a boot step to load;
+  /// adding it here is deferred until that architecture question is resolved.
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
   [
     new CvmBootLoadStep(406, 407),
     new CvmBootLoadStep(408, 407),
-    new CvmBootLoadStep(306, 307),
+    new CvmBootLoadStep(308, 307),
     new CvmBootLoadStep(307, 407),
     new CvmBootLoadStep(407, 507),
     new CvmBootLoadStep(506, 507),
@@ -564,6 +595,7 @@ public static class CvmBootStreamBuilder
     Node408Program.Coordinate => Node408Program.Source,
     Node307Program.Coordinate => Node307Program.Source,
     Node306Program.Coordinate => Node306Program.Source,
+    Node308Program.Coordinate => Node308Program.Source,
     Node506Program.Coordinate => Node506Program.Source,
     Node508Program.Coordinate => Node508Program.Source,
     Node509Program.Coordinate => Node509Program.Source,

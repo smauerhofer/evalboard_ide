@@ -18,7 +18,8 @@ public sealed record CParameter(string Name, CType Type);
 /// to this function can use the compact 1-word <c>call</c> encoding instead of the 2-word <c>lcall</c>;
 /// it never needs to check <c>IsFastcall</c> for that specific question. <see cref="CParser"/>'s own
 /// parsing of these two keywords also rejects, with a specific diagnostic, a <c>__fastcall</c> function
-/// declaring more than 4 pointer parameters (node 306 has only 4 address registers, <c>ar[0..3]</c>) --
+/// declaring more than 4 pointer parameters (the address-register node -- node 308 as of 2026-09-15,
+/// previously "node 306" -- has only 4 address registers, <c>ar[0..3]</c>) --
 /// see <see cref="CParser"/>'s own remarks.</summary>
 public sealed record CFunctionDecl(CSourceLocation Location, string Name, CType ReturnType, IReadOnlyList<CParameter> Parameters, CCompoundStmt? Body, bool IsStatic, bool IsFastcall, bool IsLower);
 

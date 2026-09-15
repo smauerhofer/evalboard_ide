@@ -372,8 +372,10 @@ public static class CvmLinker
           // tag-agnostic -- it just writes that word through, masked to 16 bits.
           //
           // ADDED 2026-09-11: OR in relocation.EmbeddedValue (see that field's own remarks) before
-          // masking -- 0 for every relocation except node 306's six address-register ops
-          // (arinc/ardec/arld/arst/lda/sta), where it carries the register-index operand CvmAssembler
+          // masking -- 0 for every relocation except the address-register family's ops
+          // (arinc/ardec/arinc2/ardec2/arld/arst/lda/sta -- node 308 as of 2026-09-15's renumbering,
+          // previously node 306; see Node308Program's own remarks), where it carries the register-index
+          // operand CvmAssembler
           // already validated and positioned at assemble time. `resolved` here is only the live-resolved
           // BASE word (tag | function-select field); this is the one place that base and the
           // already-known register bits are finally combined into the real opcode word.

@@ -94,6 +94,16 @@ namespace Ga144.C.Toolchain;
 /// assumed to deallocate all locals AND the caller's pushed arguments together, leaving only the single
 /// return value (if any) on top -- a Pascal-style callee-cleanup convention -- followed by <c>ret</c>.
 /// See <see cref="EmitFunction"/>.</description></item>
+/// <item><description><b>RENUMBERED 2026-09-15: every "node 306" below is physical node 308.</b> Stefan:
+/// "node 306 and 308 have swapped roles" -- the 32-bit address-register node this whole ABI v2 section
+/// describes has not changed shape or mnemonics (still <c>arld</c>/<c>lda</c>/<c>sta</c>/etc., still
+/// wired the same way in <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet"/>/
+/// <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>), only its coordinate moved, from 306 to 308
+/// -- see <see cref="Ga144.Evb.Ide.Cvm.Node308Program"/>'s own remarks. This codegen never hardcodes the
+/// coordinate itself (it emits mnemonics, resolved against whichever node currently owns them), so no
+/// code change was needed here, only this flag; the "node 306" wording throughout the remarks below is
+/// left as Stefan originally wrote/was quoted saying it, describing the mechanism, not literally today's
+/// coordinate.</description></item>
 /// <item><description><b>ABI v2 addition (2026-09-06): address-register pointer parameters.</b> Per
 /// Stefan's own node 306 source ("In 306 there are 4 32-bit address register to access the whole memory
 /// range... for the ABI the address register are volatile and are not saved on the stack when a

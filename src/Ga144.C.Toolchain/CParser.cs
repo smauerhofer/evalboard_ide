@@ -65,8 +65,10 @@ public sealed class CParser
   /// </summary>
   private readonly Dictionary<string, CType> _typedefs = new();
 
-  /// <summary>A `__fastcall` function's pointer parameters are passed in node 306's four address
-  /// registers, `ar[0]` through `ar[3]` -- see `claude/cvm-abi.md` section 2.2. A 5th pointer parameter
+  /// <summary>A `__fastcall` function's pointer parameters are passed in the address-register node's four
+  /// registers, `ar[0]` through `ar[3]` -- node 308 as of 2026-09-15's renumbering, previously called
+  /// "node 306" (see `Ga144.Evb.Ide.Cvm.Node308Program`'s own remarks) -- see `claude/cvm-abi.md` section
+  /// 2.2. A 5th pointer parameter
   /// has nowhere to go under this convention (pointers never fall back to the stack, or to node 511's
   /// register file, for a `__fastcall` function), so it is a compiler error -- Stefan, verbatim: "a 5th
   /// __fastcall pointer parameter also rises a compiler error."</summary>
@@ -560,7 +562,8 @@ public sealed class CParser
       // "pointers must be allocated in ar[0..3] for fastcall functions" plus "a 5th __fastcall pointer
       // parameter also rises a compiler error" (Stefan, 2026-09-07, 3rd/4th rounds of claude/cvm-abi.md's
       // dictation): a __fastcall function may declare at most MaxFastcallPointerParameters pointer
-      // parameters (node 306 has exactly that many address registers, ar[0..3]) -- a 5th has nowhere
+      // parameters (the address-register node -- node 308 as of 2026-09-15, previously "node 306" --
+      // has exactly that many address registers, ar[0..3]) -- a 5th has nowhere
       // left to go under this convention (pointers are never passed via node 511's register file, and
       // never fall back to the stack for a __fastcall function per that same dictation).
       //
@@ -575,7 +578,7 @@ public sealed class CParser
         int pointerParameterCount = parameters.Count(p => p.Type.IsPointer);
         if (pointerParameterCount > MaxFastcallPointerParameters)
         {
-          throw Error(location, $"\"{name}\" is '__fastcall' but declares {pointerParameterCount} pointer parameters -- a '__fastcall' function may have at most {MaxFastcallPointerParameters} (node 306's ar[0..3])");
+          throw Error(location, $"\"{name}\" is '__fastcall' but declares {pointerParameterCount} pointer parameters -- a '__fastcall' function may have at most {MaxFastcallPointerParameters} (node 308's ar[0..3])");
         }
 
         int registerWordCount = parameters.Where(p => !p.Type.IsPointer).Sum(p => p.Type.SizeInWords);

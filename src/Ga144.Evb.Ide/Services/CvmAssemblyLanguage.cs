@@ -708,12 +708,21 @@ internal static class CvmAssemblyLanguage
         // NodeResolvedFixedRegisterShiftByMnemonic dictionary that hardcoded an embedded register index
         // of 0) is gone -- these now flow through the exact same generic NodeResolvedEmbeddedValue path
         // node 308/511 already use, register operand and all.
-        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (Node306Program.Coordinate, "'arinc", 0xD800),
-        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (Node306Program.Coordinate, "'ardec", 0xD800),
-        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (Node306Program.Coordinate, "'arld", 0xD800),
-        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = (Node306Program.Coordinate, "'arst", 0xD800),
-        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = (Node306Program.Coordinate, "'lda", 0xD800),
-        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (Node306Program.Coordinate, "'sta", 0xD800),
+        // RENUMBERED 2026-09-15: this whole family moved from physical node 306 to physical node 308 --
+        // Stefan: "node 306 and 308 have swapped roles." Coordinates below repointed from
+        // Node306Program.Coordinate to Node308Program.Coordinate accordingly; the F18 symbol names and
+        // shared tag (0xD800) are unchanged. arinc2/ardec2 are new (2026-09-15, "I gave up the 7th
+        // register for 2 new opcodes") -- see CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic's
+        // own remarks for the flagged, unconfirmed "leap"/"then" F18 body shape this wiring does not
+        // depend on.
+        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (Node308Program.Coordinate, "'arinc", 0xD800),
+        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (Node308Program.Coordinate, "'ardec", 0xD800),
+        [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (Node308Program.Coordinate, "'arinc2", 0xD800),
+        [CvmInstructionSet.ArithmeticDecrementAddressRegisterByTwoMnemonic] = (Node308Program.Coordinate, "'ardec2", 0xD800),
+        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (Node308Program.Coordinate, "'arld", 0xD800),
+        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = (Node308Program.Coordinate, "'arst", 0xD800),
+        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = (Node308Program.Coordinate, "'lda", 0xD800),
+        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (Node308Program.Coordinate, "'sta", 0xD800),
 
         // Node 308's six ops (2026-09-09) -- BRAND NEW, NodeResolvedEmbeddedValue (see
         // NodeResolvedEmbeddedValueFieldLayoutByMnemonic below for the field layout, different from node
@@ -786,19 +795,26 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoubleAddMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
         [CvmInstructionSet.DoubleOrMnemonic] = (CvmInstructionSet.Node308FunctionFieldBitMask, CvmInstructionSet.Node308FunctionFieldShift, CvmInstructionSet.Node308FunctionFieldBaseAddress, CvmInstructionSet.Node308RegisterFieldBitMask),
 
-        // Node 306's six address-register ops (arinc/ardec/arld/arst/lda/sta) -- ADDED 2026-09-11,
-        // replacing the former NodeResolvedFixedRegisterShiftByMnemonic workaround this dictionary used
-        // to leave them out of (see CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic's own
-        // remarks for the full correction: node 306 genuinely has six 32-bit address registers, 0-5, not
-        // the single hardwired one that workaround assumed). Same field-layout shape as node 308's just
-        // above (a plain 0-based function field, no bias) -- just a 6-bit/3-bit split instead of node
-        // 308's 6-bit/2-bit one, per ar/main's own "dup 0x07 and 2* a!" / "2/ 2/ 2/ 0x3f and ex".
-        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
-        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
-        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
-        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
-        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
-        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (CvmInstructionSet.Node306FunctionFieldBitMask, CvmInstructionSet.Node306FunctionFieldShift, CvmInstructionSet.Node306FunctionFieldBaseAddress, CvmInstructionSet.Node306RegisterFieldBitMask),
+        // The address-register family's eight ops (arinc/ardec/arinc2/ardec2/arld/arst/lda/sta) -- ADDED
+        // 2026-09-11, replacing the former NodeResolvedFixedRegisterShiftByMnemonic workaround this
+        // dictionary used to leave them out of (see CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic's
+        // own remarks for the full correction: this family genuinely has six 32-bit address registers,
+        // 0-5, not the single hardwired one that workaround assumed). RENUMBERED 2026-09-15 from physical
+        // node 306 to physical node 308 (see Cvm.Node308Program's own remarks) -- the field-layout
+        // constants below were renamed from "Node306*" to "AddressRegisterFunctionField*"/
+        // "AddressRegisterRegisterFieldBitMask" accordingly (values unchanged). Same field-layout shape
+        // as the OLD node-308 "d" register family just above (a plain 0-based function field, no bias) --
+        // just a 6-bit/3-bit split instead of that family's 6-bit/2-bit one, per ar/main's own
+        // "dup 0x07 and 2* a!" / "2/ 2/ 2/ 0x3f and ex". arinc2/ardec2 (2026-09-15, "I gave up the 7th
+        // register for 2 new opcodes") share this exact same layout.
+        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
+        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
+        [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
+        [CvmInstructionSet.ArithmeticDecrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
+        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
+        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
+        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
+        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
       };
 
   /// <summary>
