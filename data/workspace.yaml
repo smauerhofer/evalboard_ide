@@ -17495,11 +17495,273 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 501
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 501. VM 32 bit floatingpoint stage 5b node. implement add and multiply )
+
+        (
+          calculates result for add and multiply.
+
+          in: HHLL      {from node 401}
+          out: HL       {to node 601}
+        )
+
+
+        entry fp5b/main
+
+        # down /b
+
+        # up /a
+
+
+        # 0 org
+
+
+
+        +cy
+
+
+        : fp5b/add ( H1 H2 L1 L2 - H L )
+          clc                 // carry = 0
+
+          . + >r              // L = L1+L2, carry-out retained
+                              // H1 H2 / L
+
+          . +                 // H = H1+H2+carry
+                              // H / L
+
+          r>                  // H L
+        ;
+
+
+        : fp5b/sub ( H1 H2 L1 L2 - H L )
+
+          // force carry = 1
+          dup dup xor inv dup . + drop
+
+          // L = L1 - L2
+          inv . + >r
+
+          // H = H1 - H2 - borrow
+          inv . +
+
+          r>
+        ;
+
+
+        -cy
+
+
+        : fp5b/shr2 ( H1 H2 L1 L2 - H1 H2' L1 L2' )
+          a!                    // A = L2
+          >r                    // save L1
+          0 over                // H1 H2 0 H2
+          . +*                   // S=0, T:A = H2:L2 >> 1
+          >r drop drop           // save H2', remove 0 and old H2
+          r> r> a               // H1 H2' L1 L2'
+        ;
+
+
+        : fp5b/m9 ( h l - H L )
+          a! 17. >r
+          dup dup xor
+          begin . +* unext
+          >r drop r> a
+        ;
+
+
+        : fp5b/mul ( H1 H2 L1 L2 - H L )
+
+          // ------------------------------------------------
+          // z0 = high18(L1*L2), unsigned 18x18
+          // ------------------------------------------------
+
+          over over                 // H1 H2 L1 L2 L1 L2
+
+          dup >r a!                 // save L2, A=L2
+          17. >r
+          dup dup xor               // L1 L1 0
+          begin . +* unext          // signed L1*unsigned L2
+
+          // If L1 has bit17 set, +* interpreted it as negative.
+          // unsigned product therefore needs +L2 in high word.
+          over -if
+            drop
+            r> . +
+          else
+            drop
+            r> drop
+          then
+
+          >r drop r>               // H1 H2 L1 L2 z0
+          >r                       // / z0
+
+
+          // ------------------------------------------------
+          // z2 = H1*H2
+          //
+          // This fits completely in 18 bits because
+          // 0x1ff * 0x1ff < 0x40000.
+          // Leave it temporarily in A.
+          // ------------------------------------------------
+
+          >r >r                    // save L2,L1
+          over over fp5b/m9        // H1 H2 0 z2
+          drop drop                // A still contains z2
+          r> r>                    // restore L1,L2
+
+          a >r                     // / z2 z0
+
+
+          // ------------------------------------------------
+          // reorder
+          //
+          // H1 H2 L1 L2
+          // -> H1 L2 H2 L1
+          // ------------------------------------------------
+
+          a! >r a r>               // swap L1,L2
+          >r
+          a! >r a r>               // swap H2,L2
+          r>
+
+
+          // ------------------------------------------------
+          // cross products
+          //
+          // p2 = H2*L1
+          // p1 = H1*L2
+          // ------------------------------------------------
+
+          fp5b/m9                  // H1 L2 p2H p2L
+          >r >r                    // save p2
+
+          fp5b/m9                  // p1H p1L
+          r> r>                    // p1H p1L p2H p2L
+
+
+          // reorder for 36-bit fp5b/add:
+          //
+          // p1H p2H p1L p2L
+          //
+          >r
+          a! >r a r>
+          r>
+
+          fp5b/add                 // crossH crossL
+
+
+          // ------------------------------------------------
+          // add:
+          //
+          //     z2 << 18
+          //   + z0
+          //
+          // R has: z2 z0
+          // ------------------------------------------------
+
+          r> r>                    // crossH crossL z2 z0
+
+          >r
+          a! >r a r>
+          r>                       // crossH z2 crossL z0
+
+          fp5b/add                 // C_H C_L
+
+
+          // ------------------------------------------------
+          // result = C >> 8
+          //
+          // T:A is shifted arithmetically by +*, but the low
+          // 28 bits are correct. Mask the sign-fill from H.
+          // ------------------------------------------------
+
+          a!                       // A=C_L
+          7. >r
+          0 over                   // C_H 0 C_H
+          begin . +* unext         // shift T:A eight times
+
+          0x3ff and                // logical high result
+          >r drop drop r> a        // H L
+        ;
+
+
+        : fp5b/main
+          @b @b @b @b
+          ( H1 H2 L1 L2 )
+          --l-
+          up a!
+          >r ! r> !
+          fp5b/main
+        ;
+
+      ramWords:
+      - 0x136D3
+      - 0x2C1BA
+      - 0x3CC55
+      - 0x24DE2
+      - 0x32DB0
+      - 0x3A6B0
+      - 0x2E6B0
+      - 0x27555
+      - 0x2A812
+      - 0x00000
+      - 0x209D2
+      - 0x2E2EA
+      - 0x26C8D
+      - 0x2BDBB
+      - 0x00011
+      - 0x243B2
+      - 0x2C572
+      - 0x2E29A
+      - 0x23555
+      - 0x20F92
+      - 0x2EA12
+      - 0x00011
+      - 0x2ED92
+      - 0x389B2
+      - 0x2C572
+      - 0x2121C
+      - 0x3ACB0
+      - 0x1141D
+      - 0x3ACEA
+      - 0x2E29A
+      - 0x2E8BA
+      - 0x20FB2
+      - 0x1340D
+      - 0x3A29A
+      - 0x26EBA
+      - 0x2A88A
+      - 0x268AA
+      - 0x2EE9A
+      - 0x2760D
+      - 0x2E8B2
+      - 0x1340D
+      - 0x26CBA
+      - 0x2A88A
+      - 0x26CB2
+      - 0x13600
+      - 0x26CBA
+      - 0x2A88A
+      - 0x26CB2
+      - 0x13600
+      - 0x2BDBF
+      - 0x00007
+      - 0x00000
+      - 0x209B2
+      - 0x2C577
+      - 0x003FF
+      - 0x3E8EA
+      - 0x3AC8D
+      - 0x01F02
+      - 0x009B2
+      - 0x13575
+      - 0x04ABA
+      - 0x00145
+      - 0x0AC2A
+      - 0x11439
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x039
         p: 0x000
         a: 0x000
         b: 0x000
@@ -17507,9 +17769,102 @@ projects:
         returnStack: []
         parameterStack: []
     - coordinate: 502
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 502. VM 32 bit floatingpoint stage 5b node. implement add and multiply )
+
+        (
+          calculates result for add and multiply.
+
+          in: EE        {from node 402}
+          out: E        {to node 602}
+        )
+
+
+        entry fp4b/main
+
+        # down /b
+
+        # up /a
+
+
+        # 0 org
+
+
+        : fp4b/main
+          @b @b
+          ( E1 E2 )
+          r---
+          !
+          fp4b/main
+        ;
+
+
+      ramWords:
+      - 0x01FB2
+      - 0x135D5
+      - 0x0B700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
