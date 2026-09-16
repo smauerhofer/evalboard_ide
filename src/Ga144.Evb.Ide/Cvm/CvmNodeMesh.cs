@@ -162,7 +162,7 @@ public static class CvmNodeMesh
     Node408Program.Coordinate, // 408, CVM2's comparison node (added 2026-09-06).
     Node307Program.Coordinate, // 307, CVM2's "VM ternary main" relay node (added 2026-09-09).
     Node308Program.Coordinate, // 308, CVM2's address-register node (added 2026-09-09 as "306"; RENUMBERED 2026-09-15 -- see Node308Program's own remarks).
-    Node306Program.Coordinate, // 306, CVM2's floatingpoint register node (added 2026-09-15, RENUMBERED from the unrelated "VM 32 arithmetic" node this coordinate held 2026-09-09 through 2026-09-15 -- see Node306Program's own remarks). 'fpop, plus (2026-09-16) fadd/fsub/fmin/fmax/fmul/fdiv/fln2/filn2/fpi2/f2pi, are wired into the CVM instruction set; 'fpush is deliberately not wired (not CVM-facing, per Stefan).
+    Node306Program.Coordinate, // 306, CVM2's floatingpoint register node (added 2026-09-15, RENUMBERED from the unrelated "VM 32 arithmetic" node this coordinate held 2026-09-09 through 2026-09-15 -- see Node306Program's own remarks). 'fpop, plus (2026-09-16) fadd/fsub/fmin/fmax/fmul/fdiv/fln2/filn2/fpi2/f2pi, are wired into the CVM instruction set; 'fpush is ALSO wired (2026-09-16, per Stefan's direct override: "fpush must be wired. it is a valid opcode."), once the naming collision with node 506's own 'fpush was resolved by Stefan renaming that one to 'pushf.
 
     // The new 17-node, 32-bit floating-point pipeline (added 2026-09-16) -- see this class's own remarks
     // above for the full shape and the still-open "how does this branch attach to the rest of the mesh"

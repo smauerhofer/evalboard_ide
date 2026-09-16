@@ -486,8 +486,9 @@ internal static class CvmAssemblyLanguage
   // node's own trailing opcode table, "1101_1100_????_?fff" fixes the top 8 bits at 0xDC00 (narrower
   // than the outer "1101_11??" envelope above, since fpr/main's own cascade tests one more bit before
   // reaching this branch -- see Cvm.Node306Program's own remarks for the binary/constant/unary split).
-  // 'fpush shares this same tag but is flagged, not wired -- see CvmInstructionSet.FloatingPointPopMnemonic's
-  // own remarks for the "fpush" naming collision with node 506's PushFrameMnemonic.
+  // 'fpush shares this same tag and is ALSO wired (2026-09-16, per Stefan directly, once the naming
+  // collision with node 506's own "fpush" was resolved by Stefan renaming that one to "pushf" -- see
+  // CvmInstructionSet.FloatingPointPushMnemonic's own remarks).
   private const int FloatingPointUnaryTag = 0xDC00;
 
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
@@ -565,9 +566,11 @@ internal static class CvmAssemblyLanguage
         // add the offset to calculate the address of a local or parameter. i will provide a new 506.")
         // -- reached the SAME way 'leave is, sharing its tag (Node506LeaveTagBits, 0x9000 | address on
         // node 506's own f/main "ex" fall-through). See CvmInstructionSet.FrameToRegisterMnemonic's own
-        // remarks.
+        // remarks. RENAMED 2026-09-16: node 506's own F18 word is now "'pushf" (was "'fpush"), per
+        // Stefan's own rename resolving the CVM mnemonic collision with node 306's own 'fpush -- see
+        // CvmInstructionSet.PushFrameMnemonic's own remarks.
         [CvmInstructionSet.FrameToRegisterMnemonic] = (Node506Program.Coordinate, "'f", Node506LeaveTagBits),
-        [CvmInstructionSet.PushFrameMnemonic] = (Node506Program.Coordinate, "'fpush", Node506LeaveTagBits),
+        [CvmInstructionSet.PushFrameMnemonic] = (Node506Program.Coordinate, "'pushf", Node506LeaveTagBits),
         // CVM2's node 508 (2026-09-04) -- the globals-access node, resolved against node 508's own live
         // compile, tag 0xA000 (Node508LoadStoreGlobalTagBits's own remarks). Only 'gld/'gst so far, per
         // Stefan's own tick-naming rule (only these two of node 508's own words begin with a leading
@@ -739,11 +742,12 @@ internal static class CvmAssemblyLanguage
         // FloatingPointFunctionFieldBitMask for why (Stefan's own direct instruction: "remove the old
         // dpop/dpush/dinc/ddec/dadd/dor family completely").
 
-        // Node 306's new floating-point register node (2026-09-15) -- only 'fpop is wired; 'fpush is
-        // flagged, not wired, due to its collision with the pre-existing "fpush" mnemonic (node 506's
-        // own PushFrameMnemonic) -- see CvmInstructionSet.FloatingPointPopMnemonic's own remarks. Tag
-        // FloatingPointUnaryTag (0xDC00) -- see that constant's own remarks just above.
+        // Node 306's new floating-point register node (2026-09-15/16) -- both 'fpop and 'fpush are now
+        // wired (see CvmInstructionSet.FloatingPointPopMnemonic's and FloatingPointPushMnemonic's own
+        // remarks for the naming-collision history and its resolution, node 506's own "fpush" renamed to
+        // "pushf"). Tag FloatingPointUnaryTag (0xDC00) -- see that constant's own remarks just above.
         [CvmInstructionSet.FloatingPointPopMnemonic] = (Node306Program.Coordinate, "'fpop", FloatingPointUnaryTag),
+        [CvmInstructionSet.FloatingPointPushMnemonic] = (Node306Program.Coordinate, "'fpush", FloatingPointUnaryTag),
 
         // Node 405's nine ops (2026-09-09) -- BRAND NEW, tagged/node-resolved (CvmOperandEncoding.None).
         // Node 405's own mw/main has no bit cascade of its own -- a single dispatch word then an
@@ -807,11 +811,12 @@ internal static class CvmAssemblyLanguage
         // own removal note above FloatingPointFunctionFieldBitMask for why (Stefan's own direct
         // instruction).
 
-        // Node 306's new floating-point register node (2026-09-15) -- only 'fpop is wired (see
-        // NodeSymbolByMnemonic above for why 'fpush is flagged instead). Field layout per
-        // CvmInstructionSet.FloatingPointFunctionFieldBitMask's own remarks: a 5-bit function field / 3-bit
-        // register field, no base-address bias (an UNCONFIRMED assumption, flagged there).
+        // Node 306's new floating-point register node (2026-09-15/16) -- both 'fpop and 'fpush are wired
+        // (see NodeSymbolByMnemonic above). Field layout per CvmInstructionSet.FloatingPointFunctionFieldBitMask's
+        // own remarks: a 5-bit function field / 3-bit register field, no base-address bias (an
+        // UNCONFIRMED assumption, flagged there) -- identical for both mnemonics.
         [CvmInstructionSet.FloatingPointPopMnemonic] = (CvmInstructionSet.FloatingPointFunctionFieldBitMask, CvmInstructionSet.FloatingPointFunctionFieldShift, CvmInstructionSet.FloatingPointFunctionFieldBaseAddress, CvmInstructionSet.FloatingPointRegisterFieldBitMask),
+        [CvmInstructionSet.FloatingPointPushMnemonic] = (CvmInstructionSet.FloatingPointFunctionFieldBitMask, CvmInstructionSet.FloatingPointFunctionFieldShift, CvmInstructionSet.FloatingPointFunctionFieldBaseAddress, CvmInstructionSet.FloatingPointRegisterFieldBitMask),
 
         // The address-register family's eight ops (arinc/ardec/arinc2/ardec2/arld/arst/lda/sta) -- ADDED
         // 2026-09-11, replacing the former NodeResolvedFixedRegisterShiftByMnemonic workaround this

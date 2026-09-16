@@ -195,17 +195,27 @@ internal static class Node506Program
   /// stale until re-confirmed against a fresh compile.
   ///
   /// <b>UPDATED, 2026-09-09.</b> Stefan supplied a new revision adding two words, <c>'f</c> and
-  /// <c>'fpush</c>, right after <c>'leave</c> ("i will provide a new 506"), replacing the retired
-  /// <c>lal</c>/<c>lap</c> mnemonics: "use ''f' or 'fpush' from node 506 and add the offset to calculate
-  /// the address of a local or parameter." <c>'f</c> (<c>a f/r! ;</c>) moves the frame pointer <c>f</c>
-  /// into register <c>r</c>; <c>'fpush</c> (<c>a f/push ;</c>) pushes <c>f</c> directly onto the CVM data
-  /// stack. Both are reached the SAME way <c>'leave</c> is -- tagged/node-resolved, sharing
-  /// <c>'leave</c>'s own tag (<c>Node506LeaveTagBits</c>, <c>0x9000 | address</c> on this node's own
-  /// <c>f/main</c> "ex" fall-through) -- see <see cref="CvmInstructionSet.FrameToRegisterMnemonic"/>'s
+  /// <c>'fpush</c> (since renamed -- see below), right after <c>'leave</c> ("i will provide a new 506"),
+  /// replacing the retired <c>lal</c>/<c>lap</c> mnemonics: "use ''f' or 'fpush' from node 506 and add the
+  /// offset to calculate the address of a local or parameter." <c>'f</c> (<c>a f/r! ;</c>) moves the frame
+  /// pointer <c>f</c> into register <c>r</c>; the push word (<c>a f/push ;</c>) pushes <c>f</c> directly
+  /// onto the CVM data stack. Both are reached the SAME way <c>'leave</c> is -- tagged/node-resolved,
+  /// sharing <c>'leave</c>'s own tag (<c>Node506LeaveTagBits</c>, <c>0x9000 | address</c> on this node's
+  /// own <c>f/main</c> "ex" fall-through) -- see <see cref="CvmInstructionSet.FrameToRegisterMnemonic"/>'s
   /// and <see cref="CvmInstructionSet.PushFrameMnemonic"/>'s own remarks. This revision is otherwise
   /// identical to the 2026-09-08 sync above; the specific compiled addresses that sync's own remarks
   /// quote (e.g. <c>'leave</c> at <c>0x0038</c>) are NOT re-verified against this longer source and
   /// should be treated with the same "possibly stale until re-confirmed" caution already noted above.
+  ///
+  /// <b>RENAMED, 2026-09-16, per Stefan directly: "there is a naming conflict with fpush. i renamed
+  /// 'fpush' of node 506 into 'pushf'."</b> This node's own push word is now <c>'pushf</c> (still
+  /// <c>a f/push ;</c>, unchanged in every other respect) -- freeing the CVM mnemonic <c>fpush</c> so it
+  /// can instead name node 306's own floating-point push word, which Stefan separately required to be
+  /// wired ("'fpush' from node 306 must be wired as fpush"). <c>CvmInstructionSet.PushFrameMnemonic</c>'s
+  /// own C# identifier is unchanged; only its string VALUE changed, from <c>"fpush"</c> to <c>"pushf"</c>,
+  /// and every place that resolves this node's push word by its F18 symbol name (notably
+  /// <c>CvmAssemblyLanguage.NodeSymbolByMnemonic</c>) was updated to look up <c>"'pushf"</c> instead of
+  /// <c>"'fpush"</c>. See <c>CvmInstructionSet.PushFrameMnemonic</c>'s own remarks for the full rationale.
   /// </summary>
   public const string Source = """
       ( CVM2 node 506. frame, 1001_????_????_???? )
@@ -271,7 +281,7 @@ internal static class Node506Program
         A[ m/pop ]] lit !b A[ !p ]] lit !b @b a! ;
       : 'f .loc
         a f/r! ;
-      : 'fpush .loc
+      : 'pushf .loc
         a f/push ;
 
       (
@@ -283,7 +293,7 @@ internal static class Node506Program
       opcode 1001_01??_????_???? call node 505
       'leave restore stack pointer and previous frame. undo enter stack frame.
       'f move f to register r
-      'fpush push f onto the stack
+      'pushf push f onto the stack
       )
       """;
 }

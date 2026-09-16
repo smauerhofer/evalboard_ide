@@ -179,7 +179,8 @@ namespace Ga144.Evb.Ide.Cvm;
 /// genuinely DELETED mnemonic (unlike a merely repointed one) cannot be left in a hand-written test
 /// program at all, so this program's own two lal/lap lines (and their paired 'push transactions) have
 /// been removed entirely rather than kept as now-unassemblable text. Computing a local's or parameter's
-/// own address today instead uses <c>'fpush</c> (push node 506's own frame pointer <c>f</c> directly onto
+/// own address today instead uses <c>'pushf</c> (renamed from <c>'fpush</c> on 2026-09-16 -- see
+/// <see cref="Node506Program"/>'s own remarks; push node 506's own frame pointer <c>f</c> directly onto
 /// the data stack) plus explicit offset arithmetic (see
 /// <see cref="C.Toolchain.CCodeGenerator"/>'s own <c>EmitLocalOrParameterAddress</c> helper) -- no fresh
 /// hardware run has exercised that sequence yet, so rather than fabricate an unverified expected value
@@ -291,7 +292,7 @@ public static class CvmDebuggerDefaultProgram
       "push              ; WRITE <- 00CD (round-trips ldp's own fetch)\n" +
       "; lal/lap RETIRED 2026-09-09 -- no longer assemble at all. The self-check that used to live here\n" +
       "; (comparing lal's/lap's freshly computed addresses against the stl/ldl and stp/ldp transactions\n" +
-      "; above) is omitted rather than replaced with an unverified 'fpush-based guess -- see this class's\n" +
+      "; above) is omitted rather than replaced with an unverified 'pushf-based guess -- see this class's\n" +
       "; own remarks for why.\n" +
       "leave             ; READ back the frame's saved old f -- expect value 0000, restoring f to its pre-enter value\n" +
       "ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/cbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)\n" +

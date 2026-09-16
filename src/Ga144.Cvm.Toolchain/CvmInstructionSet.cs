@@ -10,7 +10,7 @@ namespace Ga144.Cvm.Toolchain;
 /// <c>stl &lt;offset&gt;</c>, <c>stp &lt;offset&gt;</c>,
 /// <c>ldl &lt;offset&gt;</c>, <c>ldp &lt;offset&gt;</c> (each self-describing, an 8-bit tag OR'd with an
 /// 8-bit unsigned value -- <c>lal</c>/<c>lap</c>, the family's other two, were RETIRED 2026-09-09 in
-/// favor of node 506's own <c>f</c>/<c>fpush</c> plus explicit offset arithmetic -- their own mnemonic
+/// favor of node 506's own <c>f</c>/<c>pushf</c> (renamed 2026-09-16 from <c>fpush</c>) plus explicit offset arithmetic -- their own mnemonic
 /// and tag constants were later deleted outright, see this file's own remarks below on the 2026-09-09
 /// CVM1-opcode purge; <c>adjust</c>, the family's ninth member, was DELETED OUTRIGHT 2026-09-10 per
 /// Stefan's own instruction, "'adjust' no longer exists. you can remove it." -- see this file's own
@@ -275,7 +275,7 @@ public static class CvmInstructionSet
   // address of a local or parameter.") and DELETED OUTRIGHT (along with LoadAddressOfLocalTag/
   // LoadAddressOfParameterTag) later the same day -- see this file's own remarks above on the
   // 2026-09-09 CVM1-opcode purge. Ids 26/27 are still never to be reused. Use FrameToRegisterMnemonic
-  // ("f") / PushFrameMnemonic ("fpush") plus offset arithmetic instead.
+  // ("f") / PushFrameMnemonic ("pushf", renamed 2026-09-16 from "fpush") plus offset arithmetic instead.
 
   // stl/stp/ldl/ldp REPOINTED to CVM2's node 506 (2026-09-06), the same way 'leave already was
   // (2026-09-02, see the comment block just below) and 'enter (see Node506EnterTag's own remarks):
@@ -321,13 +321,26 @@ public static class CvmInstructionSet
   // reached the SAME way 'leave is (node 506's own f/main dispatch falling to "ex" once the fetched
   // word's top 7 bits read "1001_000", tag 0x9000 | address on node 506 -- see
   // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.Node506LeaveTagBits's own remarks). 'f moves the frame
-  // pointer f into register r; 'fpush pushes f onto the CVM data stack directly. Neither takes an
-  // assembled operand -- computing "address of local/parameter N" is now the CALLER's job (push f via
-  // fpush, push the offset via pushlit, then sub/add -- locals subtract, parameters add, matching node
-  // 506's own f/main "inv" convention), not a single self-describing instruction the way lal/lap used to
-  // be. See Ga144.C.Toolchain.CCodeGenerator's own remarks for the replacement codegen sequence.
+  // pointer f into register r; 'fpush (RENAMED 'pushf, see immediately below) pushes f onto the CVM data
+  // stack directly. Neither takes an assembled operand -- computing "address of local/parameter N" is
+  // now the CALLER's job (push f via pushf, push the offset via pushlit, then sub/add -- locals subtract,
+  // parameters add, matching node 506's own f/main "inv" convention), not a single self-describing
+  // instruction the way lal/lap used to be. See Ga144.C.Toolchain.CCodeGenerator's own remarks for the
+  // replacement codegen sequence.
   public const string FrameToRegisterMnemonic = "f";
-  public const string PushFrameMnemonic = "fpush";
+
+  // RENAMED 2026-09-16, per Stefan directly: node 506's own F18 word (and this CVM mnemonic) was
+  // "'fpush"/"fpush" from 2026-09-09 until this rename. Stefan renamed node 506's own source word to
+  // "'pushf" specifically to free the name "fpush" for node 306's own, unrelated floating-point push
+  // (see FloatingPointPushMnemonic below) -- resolving the naming collision this project had previously
+  // left flagged rather than resolved unilaterally (see FloatingPointPopMnemonic's own remarks for that
+  // history). The C# constant name is kept as PushFrameMnemonic (still accurately describes what it
+  // does -- push node 506's own frame pointer) even though its own STRING value changed; every call site
+  // (Ga144.C.Toolchain.CCodeGenerator.EmitLocalOrParameterAddress, Ga144.Evb.Ide.Services.
+  // CvmAssemblyLanguage.NodeSymbolByMnemonic) goes through this constant, EXCEPT CCodeGenerator's own
+  // EmitCode("fpush") call, which had to be fixed by hand since it hardcoded the mnemonic as a raw string
+  // literal instead of referencing this constant -- see that method's own remarks.
+  public const string PushFrameMnemonic = "pushf";
 
   // 'halt, added by Stefan to node 606 ("@b // wait for a word that will never come" -- his own comment:
   // "'halt halts the CVM. only a reset of the chip can break this halt."), is the second named word
@@ -777,12 +790,12 @@ public static class CvmInstructionSet
 
   // Node 306's new floating-point register node (2026-09-15, "node 306 and 308 have swapped roles") --
   // see Cvm.Node306Program's own remarks for the full source and the three-way (binary/constant/unary)
-  // dispatch this field layout is derived from. Only the UNARY category (tag 0xDC00-0xDCFF, matching
-  // node 306's own "1101_1100_????_?fff" cascade branch) has any named, tick-prefixed F18 words at all
-  // ('fpop/'fpush) -- the binary (0xDE00-0xDFFF) and constant-lookup (0xDD00-0xDDFF) categories are
-  // real, reachable encoding ranges per the source's own trailing opcode table, but name no specific
-  // operation, so nothing can be wired for either without Stefan supplying actual op names; flagged,
-  // not guessed at.
+  // dispatch this field layout is derived from. All three categories are now named and wired: the UNARY
+  // category (tag 0xDC00-0xDCFF, matching node 306's own "1101_1100_????_?fff" cascade branch) has
+  // 'fpop/'fpush (both wired, 2026-09-15/16 -- see FloatingPointPopMnemonic's and
+  // FloatingPointPushMnemonic's own remarks); the binary (0xDE00-0xDFFF) and constant-lookup
+  // (0xDD00-0xDDFF) categories were confirmed and wired 2026-09-16 once Stefan supplied the actual op
+  // names (see FloatingPointAddMnemonic's own remarks).
   //
   // Field layout derived from fpr/instr's own body ("drop dup 0x07 and 2* a! 2/ 2/ 2/ 0x1f and"): the
   // low 3 bits (0x0007) are the register index (0-7, unshifted, exactly like the address-register
@@ -1096,14 +1109,28 @@ public static class CvmInstructionSet
   // NodeResolvedEmbeddedValue shape as the address-register family, just node 306's own narrower field
   // widths (5-bit function / 3-bit register instead of 6-bit/3-bit).
   //
-  // RESOLVED 2026-09-16, per Stefan directly: node 306's own 'fpush is NOT a CVM-facing opcode at all
-  // ("it is inside the FP pipeline and not accessible for the CVM" -- unlike 'fpop, which the header
-  // above and node 306's own dispatch DO expose to the CVM). This was originally flagged as a naming
-  // COLLISION against the pre-existing "fpush" (PushFrameMnemonic, node 506's own frame-pointer push),
-  // but Stefan's own clarification makes that moot: there is nothing of node 306's to wire under any
-  // name, colliding or not. PushFrameMnemonic (node 506) is completely unaffected and unchanged. Only
-  // 'fpop is wired below.
+  // RESOLVED 2026-09-16, FINAL, per Stefan directly ("with fpush and fpop I can see the data coming in
+  // and out of the memory. fpush must be wired. it is a valid opcode."): node 306's own 'fpush IS a real,
+  // valid, CVM-facing opcode after all and MUST be wired -- this reverses an earlier same-day message
+  // that had called it "inside the FP pipeline and not accessible for the CVM" (see the CvmAssemblyLanguage.cs's own
+  // FloatingPointUnaryTag remarks for that superseded history). The genuine blocker was never whether to
+  // wire it, but the naming COLLISION with the pre-existing "fpush" (node 506's own frame-pointer push) --
+  // resolved by Stefan RENAMING node 506's own colliding word to "'pushf" (see PushFrameMnemonic's own
+  // remarks above), freeing "fpush" for node 306's push. Both 'fpop and 'fpush share the unary-category
+  // tag and the SAME NodeResolvedEmbeddedValue shape -- see FloatingPointPushMnemonic just below.
   public const string FloatingPointPopMnemonic = "fpop";
+
+  /// <summary>
+  /// Node 306's own floating-point PUSH -- the mirror of <see cref="FloatingPointPopMnemonic"/>, pushing
+  /// a 32-bit float FROM fp register <c>fff</c> onto the CVM data stack (low word last, per the source's
+  /// own trailing remarks), rather than popping one into a register. WIRED 2026-09-16, per Stefan
+  /// directly (see <see cref="FloatingPointPopMnemonic"/>'s own remarks for the full naming-collision
+  /// history and its resolution). Shares the exact same <see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/>
+  /// shape, the same unary-category tag, and the same <see cref="FloatingPointRegisterFieldBitMask"/>
+  /// register field as <see cref="FloatingPointPopMnemonic"/> -- the two are structurally identical
+  /// opcodes on node 306, differing only in which of its two tick-prefixed words each resolves to.
+  /// </summary>
+  public const string FloatingPointPushMnemonic = "fpush";
 
   /// <summary>
   /// Node 306's six binary floating-point operation mnemonics (2026-09-16, per Stefan's own header
@@ -1407,7 +1434,8 @@ public static class CvmInstructionSet
   // pair was always orphaned alongside (adjust, deleted outright 2026-09-10 -- see AdjustMnemonic's own
   // former remarks and this file's own class-level remarks above), Stefan
   // gave an explicit replacement mechanism this time -- node 506's own FrameToRegisterMnemonic (f) /
-  // PushFrameMnemonic (fpush) plus ordinary sub/add arithmetic against the frame pointer -- so this was
+  // PushFrameMnemonic (RENAMED 2026-09-16 from "fpush" to "pushf" -- see that constant's own remarks)
+  // plus ordinary sub/add arithmetic against the frame pointer -- so this was
   // a real retirement, not a continued orphaning. DELETED OUTRIGHT later the same day (2026-09-09
   // CVM1-opcode purge -- see this file's own remarks above), alongside LoadAddressOfLocalMnemonic/
   // LoadAddressOfParameterMnemonic. Ids 26/27 are still never to be reused. See
@@ -1948,9 +1976,12 @@ public static class CvmInstructionSet
     new(Id: 147, ArithmeticDecrementAddressRegisterByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
 
     // Node 306's new floating-point register node (2026-09-15) -- see FloatingPointPopMnemonic's own
-    // remarks for the field-layout derivation and for why 'fpush is flagged, not wired, due to its
-    // collision with the pre-existing "fpush" (PushFrameMnemonic, node 506).
+    // remarks for the field-layout derivation.
     new(Id: 148, FloatingPointPopMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: FloatingPointRegisterFieldBitMask),
+
+    // Node 306's 'fpush, WIRED 2026-09-16 (see FloatingPointPushMnemonic's own remarks) once Stefan
+    // renamed node 506's own colliding "fpush" to "pushf" -- structurally identical to 'fpop just above.
+    new(Id: 159, FloatingPointPushMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: FloatingPointRegisterFieldBitMask),
 
     // Node 306's six binary floating-point ops and four constant-lookup ops (2026-09-16) -- see
     // FloatingPointAddMnemonic's own remarks for the full bit-layout derivation (straight from Stefan's

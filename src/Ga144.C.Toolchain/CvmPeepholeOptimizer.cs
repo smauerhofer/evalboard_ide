@@ -9,8 +9,10 @@ namespace Ga144.C.Toolchain;
 /// section (<c>_codeLines</c>, exposed to this pass as a plain line list, never over the DATA section).
 ///
 /// The motivating example, straight from a hand-walked review of this compiler's own output for
-/// <c>d[0] = a;</c> where <c>d</c> is a local array: computing <c>d</c>'s own address is <c>fpush;
-/// pushlit &lt;offset&gt;; pop; sub</c> (see <see cref="CCodeGenerator.EmitLocalOrParameterAddress"/>),
+/// <c>d[0] = a;</c> where <c>d</c> is a local array: computing <c>d</c>'s own address is <c>pushf;
+/// pushlit &lt;offset&gt;; pop; sub</c> (see <see cref="CCodeGenerator.EmitLocalOrParameterAddress"/>;
+/// this mnemonic was renamed from <c>fpush</c> to <c>pushf</c> on 2026-09-16 -- see that method's own
+/// remarks),
 /// then the array index contributes a SECOND, separately-emitted <c>pushlit &lt;index * elementSize&gt;;
 /// pop; add</c> -- and for <c>d[0]</c> specifically, that second literal is always zero, so the whole
 /// three-line group computes nothing at all. This sequence is never a <see cref="CBinaryExpr"/> node

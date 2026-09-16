@@ -98,12 +98,20 @@ namespace Ga144.Evb.Ide.Cvm;
 /// register field -- see <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointPopMnemonic</c>'s own
 /// remarks for the full field-layout derivation off <c>fpr/instr</c>'s own body, UNCHANGED by the
 /// 2026-09-16 binary-branch rewrite above), on the SAME strength as <c>'arinc2</c>/<c>'ardec2</c>'s own
-/// wiring. <b><c>'fpush</c> is DELIBERATELY NOT WIRED</b> -- RESOLVED 2026-09-16, per Stefan directly:
-/// this was originally flagged as a naming COLLISION against the pre-existing CVM mnemonic <c>fpush</c>
-/// (node 506's own frame-pointer push, <c>PushFrameMnemonic</c>), but Stefan's own clarification makes
-/// that moot -- node 306's own <c>'fpush</c> "is inside the FP pipeline and not accessible for the CVM"
-/// at all (unlike <c>'fpop</c>, which IS CVM-facing), so there is nothing of node 306's to wire under any
-/// name, colliding or not. <c>PushFrameMnemonic</c> (node 506) is completely unaffected.
+/// wiring. <b><c>'fpush</c> IS NOW WIRED, 2026-09-16, per Stefan's own direct, explicit override:</b> this
+/// was originally left unwired because of a naming COLLISION against the pre-existing CVM mnemonic
+/// <c>fpush</c> (node 506's own frame-pointer push, <c>PushFrameMnemonic</c>). Stefan overruled that:
+/// "with fpush and fpop I can see the data coming in and out of the memory. fpush must be wired. it is a
+/// valid opcode. \"'fpush\" from node 306 must be wired as fpush." -- the CVM Debugger has no way to read a
+/// live node's internal registers directly, so without this node's own <c>'fpush</c> wired there was no
+/// way to observe an FPU result at all, only feed inputs in via <c>'fpop</c>. The collision was resolved by
+/// Stefan himself, who renamed node 506's own push word from <c>'fpush</c> to <c>'pushf</c> ("i renamed
+/// 'fpush' of node 506 into 'pushf'") -- see <see cref="Node506Program"/>'s own remarks. This node's own
+/// <c>'fpush</c> is now wired as CVM mnemonic <c>fpush</c>
+/// (<c>CvmOperandEncoding.NodeResolvedEmbeddedValue</c>, sharing <c>'fpop</c>'s own tag
+/// <c>FloatingPointUnaryTag</c>/<c>0xDC00</c> and field layout -- see
+/// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointPushMnemonic</c>'s own remarks). <c>PushFrameMnemonic</c>
+/// (node 506) is unaffected other than its string VALUE now being <c>"pushf"</c> instead of <c>"fpush"</c>.
 ///
 /// <b>2026-09-16: the BINARY and CONSTANT-lookup categories are now fully confirmed and wired,</b> per
 /// Stefan's own updated header comment on this source (the "index operation mnemonic" table and

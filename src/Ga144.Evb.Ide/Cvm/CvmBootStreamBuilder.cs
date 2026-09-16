@@ -304,10 +304,12 @@ public static class CvmBootStreamBuilder
     // result307 above, same as result308. ADDED HERE 2026-09-15, the same day 'fpop was wired into
     // CvmInstructionSet/CvmAssemblyLanguage (see FloatingPointPopMnemonic's own remarks) -- this harness's
     // own "every node that has a live mnemonic depending on it gets compiled and checked, loudly" pattern
-    // now covers node 306 too. Only 'fpop's own resolution actually depends on this compile succeeding;
-    // 'fpush remains flagged/unwired (naming collision with node 506's own "fpush") and the binary/
-    // constant-lookup dispatch categories remain entirely unwired (no named F18 words to hang a mnemonic
-    // on), so this compile step's own success or failure has no effect on them either way.
+    // now covers node 306 too. 'fpop's own resolution depends on this compile succeeding, and so (as of
+    // 2026-09-16) does 'fpush's -- the earlier naming collision against node 506's own "fpush" was
+    // resolved by Stefan renaming that one to "pushf", freeing "fpush" to name this node's own push word,
+    // per Stefan's direct override ("fpush must be wired. it is a valid opcode."). The binary/
+    // constant-lookup dispatch categories (fadd/fsub/fmin/fmax/fmul/fdiv/fln2/filn2/fpi2/f2pi) are fully
+    // self-describing and do not depend on this compile succeeding either way.
     F18CompileResult result306 = Compile(compiler, Node306Program.Source, new F18CompilerOptions
     {
       MemorySpace = F18MemorySpace.Ram,

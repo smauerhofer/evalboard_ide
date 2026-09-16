@@ -54,9 +54,11 @@ namespace Ga144.C.Toolchain;
 /// <see cref="EmitFunction"/>, all fixed together for this. <c>lal</c>/<c>lap</c> (load ADDRESS of a
 /// local/parameter, a different pair of mnemonics) are RETIRED as of 2026-09-09 ("'lal' &amp; 'lap' are
 /// removed. use ''f' or 'fpush' from node 506 and add the offset to calculate the address of a local or
-/// parameter.") -- this compiler no longer emits them at all. In their place, computing the address of a
-/// local or parameter now emits <c>fpush</c> (push node 506's own frame pointer <c>f</c> directly onto
-/// the data stack) followed by <c>pushlit &lt;offset&gt;; pop; sub</c> for a LOCAL (address = f - offset,
+/// parameter." -- quoted verbatim as originally given; node 506's own push word was renamed from
+/// <c>'fpush</c> to <c>'pushf</c> on 2026-09-16, see below) -- this compiler no longer emits them at all.
+/// In their place, computing the address of a local or parameter now emits <c>pushf</c> (push node 506's
+/// own frame pointer <c>f</c> directly onto the data stack) followed by
+/// <c>pushlit &lt;offset&gt;; pop; sub</c> for a LOCAL (address = f - offset,
 /// matching node 506's own <c>f/main</c> dispatch, which negates a local's offset with <c>inv</c> before
 /// adding) or <c>pushlit &lt;offset&gt;; pop; add</c> for a PARAMETER (address = f + offset, no
 /// negation) -- see <see cref="EmitAddressOf"/>'s <c>CNameExpr</c> case and <see cref="EmitName"/>'s
@@ -88,7 +90,7 @@ namespace Ga144.C.Toolchain;
 /// <item><description><b>Function calling convention:</b> the caller evaluates and pushes each argument
 /// left-to-right, then <c>call</c>s; the callee's <c>enter &lt;n&gt;</c> reserves n local slots and is
 /// assumed to make the caller's pushed arguments addressable via <c>ldp</c>/<c>stp</c> (or, for a
-/// parameter's ADDRESS rather than its value, the <c>fpush</c>-based sequence described above, now that
+/// parameter's ADDRESS rather than its value, the <c>pushf</c>-based sequence described above, now that
 /// <c>lap</c> is retired) (parameter offset 0 = the first declared parameter); <c>return expr;</c> evaluates expr (leaving its
 /// value on the stack) and branches to the function's epilogue label; the epilogue's <c>leave</c> is
 /// assumed to deallocate all locals AND the caller's pushed arguments together, leaving only the single
@@ -1116,14 +1118,24 @@ public sealed class CCodeGenerator
   /// <summary>Pushes the address of a local (or, since 2026-09-09, a parameter) at frame-relative
   /// <paramref name="offset"/> -- replaces the retired <c>lal</c>/<c>lap</c> mnemonics ("'lal' &amp;
   /// 'lap' are removed. use ''f' or 'fpush' from node 506 and add the offset to calculate the address of
-  /// a local or parameter."). <c>fpush</c> pushes node 506's own frame pointer <c>f</c> onto the data
-  /// stack; a LOCAL's address is <c>f - offset</c> (matching node 506's own <c>f/main</c> dispatch, which
-  /// negates a local's offset with <c>inv</c> before adding it to <c>f</c> for <c>ldl</c>/<c>stl</c>),
-  /// while a PARAMETER's address is <c>f + offset</c> (no negation, matching <c>ldp</c>/<c>stp</c>). Not
-  /// yet confirmed against real hardware -- see this class's own remarks.</summary>
+  /// a local or parameter." -- quoted verbatim as originally given). <c>pushf</c> pushes node 506's own
+  /// frame pointer <c>f</c> onto the data stack; a LOCAL's address is <c>f - offset</c> (matching node
+  /// 506's own <c>f/main</c> dispatch, which negates a local's offset with <c>inv</c> before adding it to
+  /// <c>f</c> for <c>ldl</c>/<c>stl</c>), while a PARAMETER's address is <c>f + offset</c> (no negation,
+  /// matching <c>ldp</c>/<c>stp</c>). Not yet confirmed against real hardware -- see this class's own
+  /// remarks.
+  ///
+  /// <b>RENAMED, 2026-09-16.</b> This method used to emit the CVM mnemonic <c>fpush</c> for node 506's own
+  /// push word. Stefan required node 306's own, unrelated <c>'fpush</c> word to be wired as CVM mnemonic
+  /// <c>fpush</c> too ("'fpush' from node 306 must be wired as fpush"), which collided with this one;
+  /// Stefan resolved the collision by renaming node 506's own push word to <c>'pushf</c> ("i renamed
+  /// 'fpush' of node 506 into 'pushf'"). This method emits the literal mnemonic string directly rather
+  /// than referencing <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.PushFrameMnemonic"/>, so the rename
+  /// had to be applied here by hand, not just at the constant's definition -- see that constant's own
+  /// remarks for the full rationale.</summary>
   private void EmitLocalOrParameterAddress(int offset, bool isParameter)
   {
-    EmitCode("fpush");
+    EmitCode("pushf");
     EmitCode($"pushlit {offset}");
     EmitCode("pop");
     EmitCode(isParameter ? "add" : "sub");
