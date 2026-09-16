@@ -880,9 +880,13 @@ internal static class CvmAssemblyLanguage
   /// this and <see cref="OperandLabel"/> at once. <see cref="Operand"/> is set when the line's
   /// operand (if any) was already a literal number; <see cref="OperandLabel"/> is set instead when
   /// it was a label reference still waiting to be resolved to a literal by
-  /// <see cref="Assemble"/>'s own label pass -- never both.
+  /// <see cref="Assemble"/>'s own label pass -- never both. <see cref="Operand2"/> (2026-09-16, node
+  /// 306's six binary floating-point ops -- the first two-operand mnemonics in this file) is set only
+  /// for a line with exactly two space-separated literal operands (Stefan's own "mnemonic f g" syntax,
+  /// e.g. "fadd 3 2"); no label is (yet) supported in either position for a two-operand line, so
+  /// there is no "OperandLabel2" counterpart.
   /// </summary>
-  public sealed record CvmAsmInstruction(string Mnemonic, int? Operand, string? Label = null, string? OperandLabel = null);
+  public sealed record CvmAsmInstruction(string Mnemonic, int? Operand, string? Label = null, string? OperandLabel = null, int? Operand2 = null);
 
   /// <summary>
   /// Resolves <see cref="Instructions"/> against THIS run's own compiles (never a frozen reference
@@ -1178,9 +1182,9 @@ internal static class CvmAssemblyLanguage
       }
 
       CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
-      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue })
+      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair })
       {
-        (int? word, string? selfDescribingError) = EncodeSelfDescribingWord(selfDescribingShape, instruction.Operand, line + 1);
+        (int? word, string? selfDescribingError) = EncodeSelfDescribingWord(selfDescribingShape, instruction.Operand, instruction.Operand2, line + 1);
         if (word is null)
         {
           return (null, selfDescribingError);
@@ -1313,7 +1317,7 @@ internal static class CvmAssemblyLanguage
       IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> encodeTable)
   {
     CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(mnemonic);
-    if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue })
+    if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair })
     {
       return selfDescribingShape.WordLength;
     }
@@ -1523,8 +1527,35 @@ internal static class CvmAssemblyLanguage
   /// method is ever called, so from here a label-derived operand and a hand-typed one are
   /// indistinguishable.
   /// </summary>
-  private static (int? Word, string? Error) EncodeSelfDescribingWord(CvmInstructionSet.CvmInstructionShape shape, int? operand, int lineNumber)
+  private static (int? Word, string? Error) EncodeSelfDescribingWord(CvmInstructionSet.CvmInstructionShape shape, int? operand, int? operand2, int lineNumber)
   {
+    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair)
+    {
+      // Node 306's six binary floating-point ops (2026-09-16): the ONLY two-operand shape in this file
+      // -- Stefan's own "mnemonic f g" syntax, e.g. "fadd 3 2" means fr[3] = fr[3] + fr[2]. Mirrors
+      // CvmAssembler.EmitEmbeddedUnsignedValuePair's own per-field validate/shift/OR pattern exactly
+      // (kept as a small duplicate here per this method's own class-level remarks on why the two
+      // assemblers don't share code).
+      if (operand is not int first || operand2 is not int second)
+      {
+        return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" requires exactly two literal operands, e.g. \"{shape.Mnemonic} 3 2\".");
+      }
+
+      int firstMaxValue = shape.ValueBitMask >> shape.ValueBitShift;
+      if (first < 0 || first > firstMaxValue)
+      {
+        return (null, $"line {lineNumber}: {first} does not fit in \"{shape.Mnemonic}\"'s first (register) operand (0..{firstMaxValue}).");
+      }
+
+      int secondMaxValue = shape.SecondValueBitMask >> shape.SecondValueBitShift;
+      if (second < 0 || second > secondMaxValue)
+      {
+        return (null, $"line {lineNumber}: {second} does not fit in \"{shape.Mnemonic}\"'s second (register) operand (0..{secondMaxValue}).");
+      }
+
+      return (shape.Tag | ((first << shape.ValueBitShift) & shape.ValueBitMask) | ((second << shape.SecondValueBitShift) & shape.SecondValueBitMask), null);
+    }
+
     if (operand is not int value)
     {
       return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" requires a literal operand, e.g. \"{shape.Mnemonic} 1\".");
@@ -1570,7 +1601,10 @@ internal static class CvmAssemblyLanguage
   /// <summary>
   /// Parses CVM assembly source text into <see cref="CvmAsmInstruction"/>s ready for
   /// <see cref="Assemble"/>: one mnemonic per line, optionally followed by a "0x"-prefixed hex or
-  /// plain decimal operand OR a label name (see below); blank lines and ";" or "//" line comments are
+  /// plain decimal operand OR a label name (see below), OR (2026-09-16, node 306's six binary
+  /// floating-point ops only) exactly TWO space-separated literal operands, e.g. "fadd 3 2" (Stefan's
+  /// own "mnemonic f g" syntax) -- neither position accepts a label in that two-operand form; blank
+  /// lines and ";" or "//" line comments are
   /// ignored. This is purely textual -- it does not know or care whether a mnemonic actually resolves
   /// against a live node's current compile (that's <see cref="Assemble"/>'s job) or whether a label
   /// name it records here is ever actually defined anywhere (also <see cref="Assemble"/>'s job, via
@@ -1637,6 +1671,17 @@ internal static class CvmAssemblyLanguage
           instructions.Add(new CvmAsmInstruction(parts[0], null, label, parts[1]));
           continue;
         }
+      }
+
+      if (parts.Length == 3 && TryParseOperand(parts[1], out int firstOperand) && TryParseOperand(parts[2], out int secondOperand))
+      {
+        // Node 306's six binary floating-point ops (2026-09-16) are the only two-operand mnemonics in
+        // this file -- Stefan's own "mnemonic f g" syntax, e.g. "fadd 3 2". Neither position supports a
+        // label operand (yet); whether THIS particular mnemonic actually takes two operands at all is
+        // Assemble's own concern (see CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair),
+        // not this purely-syntactic parse.
+        instructions.Add(new CvmAsmInstruction(parts[0], firstOperand, label, Operand2: secondOperand));
+        continue;
       }
 
       return (null, $"line {lineNumber + 1}: could not parse \"{original.Trim()}\".");

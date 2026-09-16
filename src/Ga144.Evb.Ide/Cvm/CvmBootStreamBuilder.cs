@@ -424,6 +424,137 @@ public static class CvmBootStreamBuilder
     });
     ThrowIfFailed(result511);
 
+    // ----------------------------------------------------------------------------------------------
+    // The new 17-node, 32-bit floating-point pipeline (added 2026-09-16) -- an entirely separate mesh
+    // branch from the CVM instruction-dispatch tree above: none of these 17 nodes import, or are
+    // imported by, any node compiled above. See CvmNodeMesh's own remarks for the full pipeline shape
+    // (301-305 unpack/rearrange/split, fanning out at 303 into three control chains -- "3a"
+    // 403->402->401, "3b" 503->502->501, "3c" 603->602->601 -- converging back at 604/504/404) and the
+    // still-open question of exactly which node/port relays this branch's own entry point (node 305)
+    // into the rest of the mesh. Node 306 (see Node306Program's own remarks) is the obvious candidate --
+    // its own header lists the exact same 8 binary operations (add/sub/min/max/mul/div/-/-) this
+    // pipeline implements, and its coordinate (row 3, column 6) is numerically adjacent to node 305's
+    // (row 3, column 5) -- but neither source actually names the other, so these 17 are compiled here
+    // (for standalone tooling/disassembly) but deliberately left OUT of BuildLoadOrder below until
+    // Stefan confirms that link.
+    //
+    // Compile order: within each control chain, the IMPORTED node compiles first, exactly like every
+    // "# N import" chain above (401 before 402 before 403, matching 403's own "# 402 import" and 402's
+    // own "# 401 import"; same pattern for 501/502/503 and 601/602/603). The row-300 nodes (301-305) and
+    // the no-import siblings (404, 504, 604) have no ordering constraint of their own.
+    // ----------------------------------------------------------------------------------------------
+
+    F18CompileResult result305 = Compile(compiler, Node305Program.Source, F18CompilerOptions.ForRam(Node305Program.Coordinate));
+    ThrowIfFailed(result305);
+
+    F18CompileResult result304 = Compile(compiler, Node304Program.Source, F18CompilerOptions.ForRam(Node304Program.Coordinate));
+    ThrowIfFailed(result304);
+
+    F18CompileResult result303 = Compile(compiler, Node303Program.Source, F18CompilerOptions.ForRam(Node303Program.Coordinate));
+    ThrowIfFailed(result303);
+
+    F18CompileResult result302 = Compile(compiler, Node302Program.Source, F18CompilerOptions.ForRam(Node302Program.Coordinate));
+    ThrowIfFailed(result302);
+
+    F18CompileResult result301 = Compile(compiler, Node301Program.Source, F18CompilerOptions.ForRam(Node301Program.Coordinate));
+    ThrowIfFailed(result301);
+
+    F18CompileResult result401 = Compile(compiler, Node401Program.Source, F18CompilerOptions.ForRam(Node401Program.Coordinate));
+    ThrowIfFailed(result401);
+
+    F18CompileResult result402 = Compile(compiler, Node402Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node402Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node401Program.Coordinate
+          ? F18ImportResolution.FromExports(result401.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result402);
+
+    F18CompileResult result403 = Compile(compiler, Node403Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node403Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node402Program.Coordinate
+          ? F18ImportResolution.FromExports(result402.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result403);
+
+    F18CompileResult result404 = Compile(compiler, Node404Program.Source, F18CompilerOptions.ForRam(Node404Program.Coordinate));
+    ThrowIfFailed(result404);
+
+    F18CompileResult result501 = Compile(compiler, Node501Program.Source, F18CompilerOptions.ForRam(Node501Program.Coordinate));
+    ThrowIfFailed(result501);
+
+    F18CompileResult result502 = Compile(compiler, Node502Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node502Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node501Program.Coordinate
+          ? F18ImportResolution.FromExports(result501.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result502);
+
+    F18CompileResult result503 = Compile(compiler, Node503Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node503Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node502Program.Coordinate
+          ? F18ImportResolution.FromExports(result502.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result503);
+
+    F18CompileResult result504 = Compile(compiler, Node504Program.Source, F18CompilerOptions.ForRam(Node504Program.Coordinate));
+    ThrowIfFailed(result504);
+
+    F18CompileResult result601 = Compile(compiler, Node601Program.Source, F18CompilerOptions.ForRam(Node601Program.Coordinate));
+    ThrowIfFailed(result601);
+
+    F18CompileResult result602 = Compile(compiler, Node602Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node602Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node601Program.Coordinate
+          ? F18ImportResolution.FromExports(result601.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result602);
+
+    F18CompileResult result603 = Compile(compiler, Node603Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node603Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node602Program.Coordinate
+          ? F18ImportResolution.FromExports(result602.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result603);
+
+    F18CompileResult result604 = Compile(compiler, Node604Program.Source, F18CompilerOptions.ForRam(Node604Program.Coordinate));
+    ThrowIfFailed(result604);
+
     return
     [
       CvmBootDescriptor.FromCompileResult(result407),
@@ -441,6 +572,23 @@ public static class CvmBootStreamBuilder
       CvmBootDescriptor.FromCompileResult(result607),
       CvmBootDescriptor.FromCompileResult(result707),
       CvmBootDescriptor.FromCompileResult(result708),
+      CvmBootDescriptor.FromCompileResult(result305),
+      CvmBootDescriptor.FromCompileResult(result304),
+      CvmBootDescriptor.FromCompileResult(result303),
+      CvmBootDescriptor.FromCompileResult(result302),
+      CvmBootDescriptor.FromCompileResult(result301),
+      CvmBootDescriptor.FromCompileResult(result401),
+      CvmBootDescriptor.FromCompileResult(result402),
+      CvmBootDescriptor.FromCompileResult(result403),
+      CvmBootDescriptor.FromCompileResult(result404),
+      CvmBootDescriptor.FromCompileResult(result501),
+      CvmBootDescriptor.FromCompileResult(result502),
+      CvmBootDescriptor.FromCompileResult(result503),
+      CvmBootDescriptor.FromCompileResult(result504),
+      CvmBootDescriptor.FromCompileResult(result601),
+      CvmBootDescriptor.FromCompileResult(result602),
+      CvmBootDescriptor.FromCompileResult(result603),
+      CvmBootDescriptor.FromCompileResult(result604),
     ];
   }
 
@@ -588,16 +736,40 @@ public static class CvmBootStreamBuilder
   /// <b>Node 306 ADDED to this load order 2026-09-15, the same day 'fpop was wired.</b> It was left out
   /// above (through the swap) because it had no wired mnemonic depending on a live compile of it; now
   /// that <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointPopMnemonic"/> does, it needs a
-  /// real compiled program on real hardware too, same as every other node in this list. Its own three-way
-  /// (binary/constant/unary) dispatch still does not fit any existing operand-encoding shape for anything
-  /// beyond 'fpop -- that remains an open design question, unrelated to whether the node itself gets
-  /// loaded onto the mesh.
+  /// real compiled program on real hardware too, same as every other node in this list. UPDATED
+  /// 2026-09-16: node 306's binary and constant-lookup categories are now ALSO wired (<c>fadd</c>/
+  /// <c>fsub</c>/<c>fmin</c>/<c>fmax</c>/<c>fmul</c>/<c>fdiv</c>/<c>fln2</c>/<c>filn2</c>/<c>fpi2</c>/
+  /// <c>f2pi</c>, both fully self-describing -- see <see cref="Cvm.Node306Program"/>'s own remarks) --
+  /// unlike 'fpop, neither needs a live compile of node 306 to resolve, but node 306 still needs to be
+  /// present and loaded on real hardware for these opcodes to mean anything once executed.
+  ///
+  /// <b>The node 306 &lt;-&gt; node 305 link is now CONFIRMED, 2026-09-16, per Stefan directly: "node 306
+  /// talks to node 305 to perform binary floatingpoint instructions."</b> This was previously flagged
+  /// (through the "DELIBERATELY NOT included" remarks this paragraph replaces) as unconfirmed, since
+  /// neither node 305's own source nor node 306's own source named the other. <c>new
+  /// CvmBootLoadStep(305, 306)</c> is now added below, right before node 306's own existing step (306 via
+  /// 307) -- matching the "child loads before its immediate relay parent" rule every other branch in this
+  /// method already follows, since node 306 is the relay and node 305 (the 17-node pipeline's own entry
+  /// point) is the child reached through it.
+  ///
+  /// <b>The REST of the 17-node floating-point pipeline's own internal load order (301-304/401-404/
+  /// 501-504/601-604) remains DELIBERATELY NOT included below.</b> Stefan's confirmation above covers only
+  /// the single 305/306 link -- which node/port feeds node 305 itself -- not the pipeline's own internal
+  /// relay topology (e.g. which of node 603's ports its own up-stream neighbor uses, an ambiguity flagged
+  /// when these 17 nodes were first added). <see cref="BuildDescriptors"/> already compiles all 17 (for
+  /// standalone tooling/disassembly) using only each node's own explicit "# N import" directive, which is
+  /// a fully separate, already-confirmed fact from the physical relay chain this method needs. Once the
+  /// rest of the internal topology is confirmed, it can be derived the same way every other branch above
+  /// was: within each control chain, the node further from the entry point loads before the relay it
+  /// passes through (401 before 402 before 403, matching the pattern above; same shape for 501/502/503
+  /// and 601/602/603).
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
   [
     new CvmBootLoadStep(406, 407),
     new CvmBootLoadStep(408, 407),
     new CvmBootLoadStep(308, 307),
+    new CvmBootLoadStep(305, 306), // CONFIRMED 2026-09-16, per Stefan: "node 306 talks to node 305".
     new CvmBootLoadStep(306, 307),
     new CvmBootLoadStep(307, 407),
     new CvmBootLoadStep(407, 507),
@@ -639,6 +811,23 @@ public static class CvmBootStreamBuilder
     Node607Program.Coordinate => Node607Program.Source,
     Node707Program.Coordinate => Node707Program.Source,
     Node708Program.Coordinate => Node708Program.Source,
+    Node305Program.Coordinate => Node305Program.Source,
+    Node304Program.Coordinate => Node304Program.Source,
+    Node303Program.Coordinate => Node303Program.Source,
+    Node302Program.Coordinate => Node302Program.Source,
+    Node301Program.Coordinate => Node301Program.Source,
+    Node401Program.Coordinate => Node401Program.Source,
+    Node402Program.Coordinate => Node402Program.Source,
+    Node403Program.Coordinate => Node403Program.Source,
+    Node404Program.Coordinate => Node404Program.Source,
+    Node501Program.Coordinate => Node501Program.Source,
+    Node502Program.Coordinate => Node502Program.Source,
+    Node503Program.Coordinate => Node503Program.Source,
+    Node504Program.Coordinate => Node504Program.Source,
+    Node601Program.Coordinate => Node601Program.Source,
+    Node602Program.Coordinate => Node602Program.Source,
+    Node603Program.Coordinate => Node603Program.Source,
+    Node604Program.Coordinate => Node604Program.Source,
     _ => null,
   };
 

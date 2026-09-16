@@ -806,6 +806,50 @@ public static class CvmInstructionSet
   /// <summary>Isolates node 306's 3-bit floating-point register-index field (bits 2-0, unshifted, 0-7) -- see the remarks above <see cref="FloatingPointFunctionFieldBitMask"/>.</summary>
   public const int FloatingPointRegisterFieldBitMask = 0x0007;
 
+  // Node 306's BINARY and CONSTANT-lookup floating-point categories -- field layout CONFIRMED 2026-09-16
+  // once Stefan pasted a rewritten fpr/main binary branch that finally spells out the full bit pattern
+  // ("1101_111o_oogg_gfff", where the earlier 2026-09-15 source's own header only had "1101_11??_????_
+  // ????"). See Cvm.Node306Program's own remarks for the full derivation and the still-open naming/
+  // encoding-shape question that keeps these two categories from being wired as real CVM mnemonics yet:
+  // ooo (the binary operation, 0=add/1=sub/2=min/3=max/4=mul/5=div) is a small FIXED per-mnemonic
+  // constant, not a live-resolved F18 address like every other NodeResolvedEmbeddedValue mnemonic in
+  // this mesh, and the shape itself -- one fixed tag plus TWO independently-selected embedded register
+  // operands (fff, ggg) -- does not fit any CvmOperandEncoding case this toolchain has today (every
+  // existing case supports at most one embedded operand). These constants record the confirmed WORD
+  // FORMAT only; no mnemonic strings or Instructions rows exist for either category yet.
+
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-6, "1101111ooo" with ooo=0) of node 306's BINARY floating-point
+  /// operation word family, with every variable field (ooo/ggg/fff) zeroed: binary 1101_1110_0000_0000.
+  /// See the remarks above <see cref="FloatingPointRegisterFieldBitMask"/>.
+  /// </summary>
+  public const int FloatingPointBinaryOperationTag = 0xDE00;
+
+  /// <summary>Isolates node 306's 3-bit binary-operation field (bits 8-6: 0=add, 1=sub, 2=min, 3=max, 4=mul, 5=div, 6-7 unused) of a <see cref="FloatingPointBinaryOperationTag"/> word. See the remarks above <see cref="FloatingPointRegisterFieldBitMask"/>.</summary>
+  public const int FloatingPointBinaryOperationFieldBitMask = 0x01C0;
+
+  /// <summary>How far left the binary operation code is shifted before OR-ing into <see cref="FloatingPointBinaryOperationFieldBitMask"/>'s bits -- 6, since the 3-bit <c>ggg</c> field (bits 5-3) and 3-bit <c>fff</c> field (bits 2-0) both sit below it. See the remarks above <see cref="FloatingPointRegisterFieldBitMask"/>.</summary>
+  public const int FloatingPointBinaryOperationFieldShift = 6;
+
+  /// <summary>Isolates node 306's 3-bit second-operand register field, <c>ggg</c> (bits 5-3, unshifted, 0-7) of a <see cref="FloatingPointBinaryOperationTag"/> word. See the remarks above <see cref="FloatingPointRegisterFieldBitMask"/>.</summary>
+  public const int FloatingPointSecondOperandRegisterFieldBitMask = 0x0038;
+
+  /// <summary>How far left the second-operand register index is shifted before OR-ing into <see cref="FloatingPointSecondOperandRegisterFieldBitMask"/>'s bits -- 3, since the 3-bit <c>fff</c> field occupies bits 2-0 below it. See the remarks above <see cref="FloatingPointRegisterFieldBitMask"/>.</summary>
+  public const int FloatingPointSecondOperandRegisterFieldShift = 3;
+
+  /// <summary>
+  /// The fixed high-bit pattern (bits 15-8, "11011101") of node 306's CONSTANT-lookup floating-point
+  /// word family, with the 5-bit offset and 3-bit <c>fff</c> fields zeroed: binary 1101_1101_0000_0000.
+  /// See the remarks above <see cref="FloatingPointRegisterFieldBitMask"/>.
+  /// </summary>
+  public const int FloatingPointConstantLookupTag = 0xDD00;
+
+  /// <summary>Isolates node 306's 5-bit constant-offset field (bits 7-3) of a <see cref="FloatingPointConstantLookupTag"/> word -- which of <c>fpr/const</c>'s own four 32-bit constants (ln2/1-over-ln2/pi-over-2/2-over-pi) this selects is NOT spelled out in the source (its own trailing table says "offset in ?????" verbatim) and is not guessed at here. See the remarks above <see cref="FloatingPointRegisterFieldBitMask"/>.</summary>
+  public const int FloatingPointConstantOffsetFieldBitMask = 0x00F8;
+
+  /// <summary>How far left the constant offset is shifted before OR-ing into <see cref="FloatingPointConstantOffsetFieldBitMask"/>'s bits -- 3, since the 3-bit <c>fff</c> field occupies bits 2-0 below it. See the remarks above <see cref="FloatingPointRegisterFieldBitMask"/>.</summary>
+  public const int FloatingPointConstantOffsetFieldShift = 3;
+
   // CVM2's load global/store global, added per Stefan's node 508 source (2026-09-04, "here is node
   // 508. it handles access to globals.") and his own tick-naming rule ("every word that begins with a
   // ' is an opcode for the CVM with the mnemonic using the same name without the leading '"). Node 508
@@ -1052,15 +1096,77 @@ public static class CvmInstructionSet
   // NodeResolvedEmbeddedValue shape as the address-register family, just node 306's own narrower field
   // widths (5-bit function / 3-bit register instead of 6-bit/3-bit).
   //
-  // FLAGGED, NOT WIRED: 'fpush collides with the ALREADY-EXISTING "fpush" mnemonic (see
-  // PushFrameMnemonic above, node 506's own frame-pointer push -- a completely different opcode). The
-  // CVM assembly language has no way to carry two different opcodes under one mnemonic string, and this
-  // project's own established precedent for exactly this situation (node 505's own 'f vs node 506's 'f
-  // -- see claude/cvm-assembler-description.md's own "Open questions") is to leave
-  // the colliding one UNWIRED rather than silently pick a name on Stefan's behalf. Only 'fpop (no
-  // collision) is wired below; 'fpush needs a name from Stefan (renaming node 306's own version, or
-  // node 506's) before it can be added.
+  // RESOLVED 2026-09-16, per Stefan directly: node 306's own 'fpush is NOT a CVM-facing opcode at all
+  // ("it is inside the FP pipeline and not accessible for the CVM" -- unlike 'fpop, which the header
+  // above and node 306's own dispatch DO expose to the CVM). This was originally flagged as a naming
+  // COLLISION against the pre-existing "fpush" (PushFrameMnemonic, node 506's own frame-pointer push),
+  // but Stefan's own clarification makes that moot: there is nothing of node 306's to wire under any
+  // name, colliding or not. PushFrameMnemonic (node 506) is completely unaffected and unchanged. Only
+  // 'fpop is wired below.
   public const string FloatingPointPopMnemonic = "fpop";
+
+  /// <summary>
+  /// Node 306's six binary floating-point operation mnemonics (2026-09-16, per Stefan's own header
+  /// comment on node 306: "index operation mnemonic" table), and the four constant-lookup mnemonics
+  /// pulled from <c>fpr/const</c>'s own inline "mnemonic fXXX" comments -- both self-describing
+  /// (<see cref="CvmOperandEncoding.EmbeddedUnsignedValuePair"/>/<see cref="CvmOperandEncoding.EmbeddedUnsignedValue"/>
+  /// respectively), needing no live node compile to resolve, since (per Stefan) "node 306 is the node
+  /// providing opcodes to the CVM" -- unlike 'fpop just above, which needs a live compile of node 306
+  /// itself to resolve its base tag (<see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/>).
+  ///
+  /// Binary op bit layout, confirmed directly from node 306's header (<c>1101_111o_oogg_gfff</c>):
+  /// fixed prefix bits 15-9 = 1101111 (<see cref="FloatingPointBinaryOperationTag"/>, 0xDE00), <c>ooo</c>
+  /// (bits 8-6, <see cref="FloatingPointBinaryOperationFieldBitMask"/>/<see cref="FloatingPointBinaryOperationFieldShift"/>)
+  /// selects the operation, <c>ggg</c> (bits 5-3, <see cref="FloatingPointSecondOperandRegisterFieldBitMask"/>)
+  /// is the second operand register (read-only), <c>fff</c> (bits 2-0, <see cref="FloatingPointRegisterFieldBitMask"/>)
+  /// is the first operand register (also where the result is written). Assembler syntax, per Stefan
+  /// verbatim: "mnemonic f g", e.g. "fadd 3 2" means <c>fr[3] = fr[3] + fr[2]</c> -- <c>f</c> first,
+  /// <c>g</c> second. Per-mnemonic tag = <see cref="FloatingPointBinaryOperationTag"/> | (ooo &lt;&lt;
+  /// <see cref="FloatingPointBinaryOperationFieldShift"/>): add=0, sub=1, min=2, max=3, mul=4, div=5;
+  /// indices 6-7 are unused ("-" in Stefan's own table) and have no mnemonic.
+  ///
+  /// Constant-lookup bit layout (<c>1101_1101_????_?fff</c>): fixed prefix per
+  /// <see cref="FloatingPointConstantLookupTag"/> (0xDD00); <c>fff</c> (bits 2-0,
+  /// same <see cref="FloatingPointRegisterFieldBitMask"/> as above) is the destination register; the
+  /// 5-bit offset field (bits 7-3, <see cref="FloatingPointConstantOffsetFieldBitMask"/>) selects which
+  /// of <c>fpr/const</c>'s own four 32-bit constants to load, in the SAME order Stefan's own inline
+  /// comments give them: offset 0 = ln2 (fln2), offset 1 = 1/ln2 (filn2), offset 2 = pi/2 (fpi2),
+  /// offset 3 = 2/pi (f2pi) -- this offset-to-constant mapping is Stefan's own inline comment, not
+  /// inferred or guessed at here.
+  /// </summary>
+  public const string FloatingPointAddMnemonic = "fadd";
+  public const string FloatingPointSubtractMnemonic = "fsub";
+  public const string FloatingPointMinimumMnemonic = "fmin";
+  public const string FloatingPointMaximumMnemonic = "fmax";
+  public const string FloatingPointMultiplyMnemonic = "fmul";
+  public const string FloatingPointDivideMnemonic = "fdiv";
+
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointAddMnemonic"/> -- operation index 0 (<see cref="FloatingPointBinaryOperationTag"/> | (0 &lt;&lt; <see cref="FloatingPointBinaryOperationFieldShift"/>)).</summary>
+  public const int FloatingPointAddTag = FloatingPointBinaryOperationTag | (0 << FloatingPointBinaryOperationFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointSubtractMnemonic"/> -- operation index 1.</summary>
+  public const int FloatingPointSubtractTag = FloatingPointBinaryOperationTag | (1 << FloatingPointBinaryOperationFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointMinimumMnemonic"/> -- operation index 2.</summary>
+  public const int FloatingPointMinimumTag = FloatingPointBinaryOperationTag | (2 << FloatingPointBinaryOperationFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointMaximumMnemonic"/> -- operation index 3.</summary>
+  public const int FloatingPointMaximumTag = FloatingPointBinaryOperationTag | (3 << FloatingPointBinaryOperationFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointMultiplyMnemonic"/> -- operation index 4.</summary>
+  public const int FloatingPointMultiplyTag = FloatingPointBinaryOperationTag | (4 << FloatingPointBinaryOperationFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointDivideMnemonic"/> -- operation index 5.</summary>
+  public const int FloatingPointDivideTag = FloatingPointBinaryOperationTag | (5 << FloatingPointBinaryOperationFieldShift);
+
+  public const string FloatingPointLn2Mnemonic = "fln2";
+  public const string FloatingPointInverseLn2Mnemonic = "filn2";
+  public const string FloatingPointPiOverTwoMnemonic = "fpi2";
+  public const string FloatingPointTwoOverPiMnemonic = "f2pi";
+
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointLn2Mnemonic"/> -- fpr/const offset 0 (<see cref="FloatingPointConstantLookupTag"/> | (0 &lt;&lt; <see cref="FloatingPointConstantOffsetFieldShift"/>)).</summary>
+  public const int FloatingPointLn2Tag = FloatingPointConstantLookupTag | (0 << FloatingPointConstantOffsetFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointInverseLn2Mnemonic"/> -- fpr/const offset 1.</summary>
+  public const int FloatingPointInverseLn2Tag = FloatingPointConstantLookupTag | (1 << FloatingPointConstantOffsetFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointPiOverTwoMnemonic"/> -- fpr/const offset 2.</summary>
+  public const int FloatingPointPiOverTwoTag = FloatingPointConstantLookupTag | (2 << FloatingPointConstantOffsetFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointTwoOverPiMnemonic"/> -- fpr/const offset 3.</summary>
+  public const int FloatingPointTwoOverPiTag = FloatingPointConstantLookupTag | (3 << FloatingPointConstantOffsetFieldShift);
 
   // Node 405's nine "multiword arithmetic" (carry-flag) ops, added 2026-09-09 (same audit) -- BRAND NEW,
   // no earlier revision of node 405 existed here. Shaped like every other simple tagged/node-resolved
@@ -1534,6 +1640,23 @@ public static class CvmInstructionSet
     /// assembler (the CVM Debugger's own Assembly Code editor) continues to support it too, unchanged.
     /// </summary>
     NodeResolvedEmbeddedValue,
+
+    /// <summary>
+    /// Node 306's six binary floating-point operations (<c>fadd</c>/<c>fsub</c>/<c>fmin</c>/<c>fmax</c>/
+    /// <c>fmul</c>/<c>fdiv</c>, 2026-09-16) -- the first mnemonics in this project needing TWO
+    /// independently-packed embedded operands in one word, both self-describing (no live node compile
+    /// involved at all, unlike <see cref="NodeResolvedEmbeddedValue"/>): a fixed
+    /// <see cref="CvmInstructionShape.Tag"/> (one per mnemonic, baking in node 306's 3-bit operation
+    /// code) OR'd with a first unsigned value in <see cref="CvmInstructionShape.ValueBitMask"/> (register
+    /// <c>fff</c> -- the first operand, and where the result is written) and a second unsigned value in
+    /// <see cref="CvmInstructionShape.SecondValueBitMask"/> (register <c>ggg</c> -- the second operand,
+    /// read-only). Assembler syntax is "mnemonic f g" (space-separated, exactly two positional
+    /// arguments), per Stefan verbatim -- e.g. "fadd 3 2" means <c>fr[3] = fr[3] + fr[2]</c>. Like
+    /// <see cref="EmbeddedSignedValue"/>/<see cref="EmbeddedUnsignedValue"/>, fully known at assemble
+    /// time from two literal operands alone, with no label/import operand support (yet), and IS checked
+    /// by <see cref="TryDescribeSelfDecodingWord"/>.
+    /// </summary>
+    EmbeddedUnsignedValuePair,
   }
 
   /// <summary>
@@ -1576,6 +1699,20 @@ public static class CvmInstructionSet
     /// no shift) completely unchanged.
     /// </summary>
     public int ValueBitShift { get; init; } = ValueBitShift;
+
+    /// <summary>
+    /// For an <see cref="CvmOperandEncoding.EmbeddedUnsignedValuePair"/> shape ONLY (node 306's six
+    /// binary floating-point ops): which bits of the word hold the SECOND embedded operand (register
+    /// <c>ggg</c>), distinct from <see cref="ValueBitMask"/>'s first operand (register <c>fff</c>). Zero
+    /// (the default) for every other shape, which have no second operand at all.
+    /// </summary>
+    public int SecondValueBitMask { get; init; }
+
+    /// <summary>
+    /// How far left the second operand is shifted before OR-ing it into <see cref="SecondValueBitMask"/>'s
+    /// bits (and shifted back right when decoding). Zero (the default) for every other shape.
+    /// </summary>
+    public int SecondValueBitShift { get; init; }
   }
 
   /// <summary>
@@ -1814,6 +1951,25 @@ public static class CvmInstructionSet
     // remarks for the field-layout derivation and for why 'fpush is flagged, not wired, due to its
     // collision with the pre-existing "fpush" (PushFrameMnemonic, node 506).
     new(Id: 148, FloatingPointPopMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: FloatingPointRegisterFieldBitMask),
+
+    // Node 306's six binary floating-point ops and four constant-lookup ops (2026-09-16) -- see
+    // FloatingPointAddMnemonic's own remarks for the full bit-layout derivation (straight from Stefan's
+    // own header comment/table on node 306, plus fpr/const's own inline "mnemonic fXXX" comments). Both
+    // families are fully self-describing (Stefan: "node 306 is the node providing opcodes to the CVM"),
+    // unlike 'fpop just above. The binary ops use the brand-new EmbeddedUnsignedValuePair shape (first
+    // register in ValueBitMask/fff, second register in SecondValueBitMask/ggg); the constant lookups
+    // need no new shape at all -- they fit the existing EmbeddedUnsignedValue encoding exactly, with the
+    // fpr/const offset baked into each one's own Tag.
+    new(Id: 149, FloatingPointAddMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointAddTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    new(Id: 150, FloatingPointSubtractMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointSubtractTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    new(Id: 151, FloatingPointMinimumMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMinimumTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    new(Id: 152, FloatingPointMaximumMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMaximumTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    new(Id: 153, FloatingPointMultiplyMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMultiplyTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    new(Id: 154, FloatingPointDivideMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointDivideTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    new(Id: 155, FloatingPointLn2Mnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointLn2Tag, ValueBitMask: FloatingPointRegisterFieldBitMask),
+    new(Id: 156, FloatingPointInverseLn2Mnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointInverseLn2Tag, ValueBitMask: FloatingPointRegisterFieldBitMask),
+    new(Id: 157, FloatingPointPiOverTwoMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointPiOverTwoTag, ValueBitMask: FloatingPointRegisterFieldBitMask),
+    new(Id: 158, FloatingPointTwoOverPiMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointTwoOverPiTag, ValueBitMask: FloatingPointRegisterFieldBitMask),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =
@@ -1987,6 +2143,26 @@ public static class CvmInstructionSet
       if ((word & tagMask) == shape.Tag)
       {
         return $"{shape.Mnemonic} {FormatOperand((word & shape.ValueBitMask) >> shape.ValueBitShift)}";
+      }
+    }
+
+    // Node 306's six binary floating-point ops (EmbeddedUnsignedValuePair, 2026-09-16) -- the same
+    // generic per-shape matching as the EmbeddedUnsignedValue loop just above, except the tag mask must
+    // exclude BOTH embedded fields (fff and ggg), and both are rendered, first operand (also the result
+    // register) before second, matching Stefan's own "mnemonic f g" assembler syntax.
+    foreach (CvmInstructionShape shape in Instructions)
+    {
+      if (shape.Encoding != CvmOperandEncoding.EmbeddedUnsignedValuePair)
+      {
+        continue;
+      }
+
+      int tagMask = ~(shape.ValueBitMask | shape.SecondValueBitMask) & 0xFFFF;
+      if ((word & tagMask) == shape.Tag)
+      {
+        int first = (word & shape.ValueBitMask) >> shape.ValueBitShift;
+        int second = (word & shape.SecondValueBitMask) >> shape.SecondValueBitShift;
+        return $"{shape.Mnemonic} {FormatOperand(first)} {FormatOperand(second)}";
       }
     }
 

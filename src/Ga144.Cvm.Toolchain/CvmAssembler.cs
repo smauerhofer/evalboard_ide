@@ -187,11 +187,23 @@ public static class CvmAssembler
             break;
           }
 
-          if (shape.HasOperand != (line.Args.Count == 1) || line.Args.Count > 1)
+          // Node 306's six binary floating-point ops (EmbeddedUnsignedValuePair, 2026-09-16) are the
+          // ONE mnemonic family here needing exactly TWO operands -- comma-separated, matching this
+          // assembler's own established ".word 1, 2, 3" convention (e.g. "fadd 3, 2"), rather than
+          // Stefan's own space-separated "fadd 3 2" example, which describes the CVM Debugger's
+          // separate, immediately-resolving assembler (Ga144.Evb.Ide.Services.CvmAssemblyLanguage,
+          // whose own tokenizer splits on whitespace, not commas) -- the two assemblers' syntax
+          // conventions genuinely differ here, so each keeps its own rather than forcing one into the
+          // other's mold.
+          int requiredArgCount = shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair ? 2 : shape.HasOperand ? 1 : 0;
+          if (line.Args.Count != requiredArgCount)
           {
-            errors.Add(shape.HasOperand
-                ? $"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly one operand, e.g. \"{shape.Mnemonic} 0x1234\"."
-                : $"line {line.LineNumber}: \"{shape.Mnemonic}\" does not take an operand.");
+            errors.Add(requiredArgCount switch
+            {
+              2 => $"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly two operands, e.g. \"{shape.Mnemonic} 3, 2\".",
+              1 => $"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly one operand, e.g. \"{shape.Mnemonic} 0x1234\".",
+              _ => $"line {line.LineNumber}: \"{shape.Mnemonic}\" does not take an operand."
+            });
             break;
           }
 
@@ -293,6 +305,16 @@ public static class CvmAssembler
             // packed into shape.ValueBitMask's low bits (8 bits for all eight of them). Also fully
             // self-describing, so also no placeholder/relocation/external symbol.
             EmitEmbeddedUnsignedValue(codeSection, shape, line.Args[0], line.LineNumber, errors);
+            break;
+          }
+
+          if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair)
+          {
+            // Node 306's six binary floating-point ops: also no separate tag word -- shape.Tag OR'd
+            // with TWO independently-packed unsigned register operands (fff in shape.ValueBitMask,
+            // ggg in shape.SecondValueBitMask). Also fully self-describing, so also no
+            // placeholder/relocation/external symbol.
+            EmitEmbeddedUnsignedValuePair(codeSection, shape, line.Args[0], line.Args[1], line.LineNumber, errors);
             break;
           }
 
@@ -565,6 +587,59 @@ public static class CvmAssembler
     }
 
     targetSection.Words.Add(shape.Tag | ((value << shift) & valueBitMask));
+  }
+
+  /// <summary>
+  /// Emits one of node 306's six binary floating-point ops (<c>fadd</c>/<c>fsub</c>/<c>fmin</c>/
+  /// <c>fmax</c>/<c>fmul</c>/<c>fdiv</c>, 2026-09-16): <paramref name="shape"/>.Tag OR'd with TWO
+  /// independently-packed UNSIGNED register operands -- <paramref name="firstOperand"/> (register
+  /// <c>fff</c>, the first operand and result register) into <paramref name="shape"/>.ValueBitMask, and
+  /// <paramref name="secondOperand"/> (register <c>ggg</c>, the second operand, read-only) into
+  /// <paramref name="shape"/>.SecondValueBitMask. Otherwise a straight duplicate of
+  /// <see cref="EmitEmbeddedUnsignedValue"/>'s own per-field validate/shift/OR pattern, just run twice.
+  /// Like that method, this does NOT (yet) accept a label or import operand for either register, and an
+  /// out-of-range or non-numeric literal in either position is a hard error, never silently truncated.
+  /// </summary>
+  private static void EmitEmbeddedUnsignedValuePair(
+      CvmSection targetSection,
+      CvmInstructionSet.CvmInstructionShape shape,
+      string firstOperand,
+      string secondOperand,
+      int lineNumber,
+      List<string> errors)
+  {
+    int firstMaxValue = shape.ValueBitMask >> shape.ValueBitShift;
+    int secondMaxValue = shape.SecondValueBitMask >> shape.SecondValueBitShift;
+
+    if (!TryParseNumericLiteral(firstOperand, out int first))
+    {
+      errors.Add($"line {lineNumber}: \"{firstOperand}\" is not a literal unsigned value -- \"{shape.Mnemonic}\" does not (yet) support a label/import operand.");
+      targetSection.Words.Add(shape.Tag);
+      return;
+    }
+
+    if (!TryParseNumericLiteral(secondOperand, out int second))
+    {
+      errors.Add($"line {lineNumber}: \"{secondOperand}\" is not a literal unsigned value -- \"{shape.Mnemonic}\" does not (yet) support a label/import operand.");
+      targetSection.Words.Add(shape.Tag);
+      return;
+    }
+
+    if (first < 0 || first > firstMaxValue)
+    {
+      errors.Add($"line {lineNumber}: {first} does not fit in \"{shape.Mnemonic}\"'s first (register) operand (0..{firstMaxValue}).");
+      targetSection.Words.Add(shape.Tag);
+      return;
+    }
+
+    if (second < 0 || second > secondMaxValue)
+    {
+      errors.Add($"line {lineNumber}: {second} does not fit in \"{shape.Mnemonic}\"'s second (register) operand (0..{secondMaxValue}).");
+      targetSection.Words.Add(shape.Tag);
+      return;
+    }
+
+    targetSection.Words.Add(shape.Tag | ((first << shape.ValueBitShift) & shape.ValueBitMask) | ((second << shape.SecondValueBitShift) & shape.SecondValueBitMask));
   }
 
   /// <summary>Like <see cref="TryParseNumericLiteral"/>, but also accepts a leading '-' for a negative decimal or hex magnitude.</summary>

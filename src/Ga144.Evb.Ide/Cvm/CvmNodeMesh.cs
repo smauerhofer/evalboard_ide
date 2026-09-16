@@ -104,6 +104,31 @@ namespace Ga144.Evb.Ide.Cvm;
 /// completely") -- see CvmInstructionSet's own removal note above FloatingPointFunctionFieldBitMask;
 /// both coordinates below (306 and 308) are unchanged by this swap, only which class/role each one
 /// names.
+///
+/// <b>Nodes 301-305, 401-404, 501-504, 601-604 added 2026-09-16: the new 17-node, 32-bit
+/// floating-point PIPELINE Stefan pasted node-by-node this same session.</b> This is an entirely
+/// separate mesh branch from the CVM instruction-dispatch tree above -- these 17 nodes never appear in
+/// any "# N import" directive belonging to 507/407/307/306/etc., and none of THEIR OWN "# N import"
+/// directives names any node already in this list. Internal shape, per each node's own header and this
+/// project's own per-node analysis (see each Node3xx/4xx/5xx/6xxProgram's own remarks): 305-&gt;304-&gt;
+/// 303 (stages 1-3, unpack/rearrange/split), fanning out at 303 into three parallel control chains --
+/// "3a" (403-&gt;402-&gt;401, comparison/operand-order control), "3b" (503-&gt;502-&gt;501, add/sub/mul
+/// mantissa arithmetic), "3c" (603-&gt;602-&gt;601, final sign/normalization/division) -- all three
+/// converging back at 604 (stage 6, classify), then 504 (stage 7, classification override), then 404
+/// (stage 8, round and reduce to binary32). Listed here in "imported node before its importer" order
+/// within each control chain (401 before 402 before 403, matching 403's own "# 402 import" and 402's own
+/// "# 401 import"; same pattern for 501/502/503 and 601/602/603), matching this list's own established
+/// convention elsewhere -- see <see cref="CvmBootStreamBuilder.BuildDescriptors"/>'s own compile steps
+/// for these seventeen. <b>The node/port relaying this pipeline's own entry point (node 305) into the
+/// rest of the mesh is now CONFIRMED, 2026-09-16, per Stefan directly: "node 306 talks to node 305 to
+/// perform binary floatingpoint instructions."</b> This was previously flagged as an unconfirmed guess
+/// (node 306 was the "obvious candidate" -- its own header lists the same 8 binary operations this
+/// pipeline implements, and its coordinate, row 3 column 6, is numerically adjacent to node 305's, row 3
+/// column 5 -- but neither source named the other) and has now been added to
+/// <see cref="CvmBootStreamBuilder.BuildLoadOrder"/> as <c>new CvmBootLoadStep(305, 306)</c>. The REST of
+/// this 17-node pipeline's own internal relay topology (which port feeds which node within each control
+/// chain) is still NOT included there -- Stefan's confirmation covers only this one link, not the
+/// pipeline's own internal wiring -- see <see cref="CvmBootStreamBuilder.BuildLoadOrder"/>'s own remarks.
 /// </summary>
 public static class CvmNodeMesh
 {
@@ -122,6 +147,28 @@ public static class CvmNodeMesh
     Node408Program.Coordinate, // 408, CVM2's comparison node (added 2026-09-06).
     Node307Program.Coordinate, // 307, CVM2's "VM ternary main" relay node (added 2026-09-09).
     Node308Program.Coordinate, // 308, CVM2's address-register node (added 2026-09-09 as "306"; RENUMBERED 2026-09-15 -- see Node308Program's own remarks).
-    Node306Program.Coordinate, // 306, CVM2's floatingpoint register node (added 2026-09-15, RENUMBERED from the unrelated "VM 32 arithmetic" node this coordinate held 2026-09-09 through 2026-09-15 -- see Node306Program's own remarks). Only 'fpop is wired into the CVM instruction set so far ('fpush flagged, collides with node 506's own "fpush"; binary/constant-lookup ops are un-named in the source).
+    Node306Program.Coordinate, // 306, CVM2's floatingpoint register node (added 2026-09-15, RENUMBERED from the unrelated "VM 32 arithmetic" node this coordinate held 2026-09-09 through 2026-09-15 -- see Node306Program's own remarks). 'fpop, plus (2026-09-16) fadd/fsub/fmin/fmax/fmul/fdiv/fln2/filn2/fpi2/f2pi, are wired into the CVM instruction set; 'fpush is deliberately not wired (not CVM-facing, per Stefan).
+
+    // The new 17-node, 32-bit floating-point pipeline (added 2026-09-16) -- see this class's own remarks
+    // above for the full shape and the still-open "how does this branch attach to the rest of the mesh"
+    // question. Order below: imported node before its importer within each control chain, matching this
+    // list's own established convention.
+    Node305Program.Coordinate, // 305, stage 1 (unpack/pack).
+    Node304Program.Coordinate, // 304, stage 2 (rearrange/collect).
+    Node303Program.Coordinate, // 303, stage 3 (split into the 3a/3b/3c control chains).
+    Node302Program.Coordinate, // 302, stage 4 (split exponent/mantissa).
+    Node301Program.Coordinate, // 301, stage 5 (extend mantissa).
+    Node401Program.Coordinate, // 401, stage 5a (mantissa handling, end of the "3a" control chain).
+    Node402Program.Coordinate, // 402, stage 4a (exponent handling, imports/controls 401).
+    Node403Program.Coordinate, // 403, stage 3a (sign & type handling, imports/controls 402).
+    Node404Program.Coordinate, // 404, stage 8 (rounding, reduce to binary32).
+    Node501Program.Coordinate, // 501, stage 5b (36-bit add/sub/multiply, end of the "3b" chain).
+    Node502Program.Coordinate, // 502, stage 4b (exponent arithmetic, imports/controls 501).
+    Node503Program.Coordinate, // 503, stage 3b (implements add/multiply, imports/controls 502).
+    Node504Program.Coordinate, // 504, stage 7 (classify/finalize: pass-through/zero/infinity/qNaN).
+    Node601Program.Coordinate, // 601, stage 5c (non-restoring binary division, end of the "3c" chain).
+    Node602Program.Coordinate, // 602, stage 4c (normalize result, imports/controls 601).
+    Node603Program.Coordinate, // 603, stage 3c (final sign/normalization control, imports/controls 602).
+    Node604Program.Coordinate, // 604, stage 6 (classify operand types into a result class k).
   ];
 }

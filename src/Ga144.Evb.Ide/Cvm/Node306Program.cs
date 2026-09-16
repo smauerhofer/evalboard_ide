@@ -27,12 +27,13 @@ namespace Ga144.Evb.Ide.Cvm;
 /// far; its purpose is not explained in the source and is not guessed at here. The dispatch itself splits
 /// three ways per the trailing opcode-table comment:
 /// <list type="bullet">
-/// <item><c>1101_111?_????_?fff</c> -- BINARY floating-point operation: operates on two registers,
-/// <c>fff</c> and <c>fff+1</c>, result in <c>fff</c>.</item>
+/// <item><c>1101_111o_oogg_gfff</c> -- BINARY floating-point operation: operates on two registers,
+/// <c>fff</c> (first operand, also where the result is stored) and <c>ggg</c> (second operand), selected
+/// independently -- NOT <c>fff</c>/<c>fff+1</c> as an earlier revision of this source implied.</item>
 /// <item><c>1101_1101_????_?fff</c> -- constant lookup: loads one of <see cref="Node306Program"/>'s own
 /// four pre-defined 32-bit constants (see <c>fpr/const</c> below) into register <c>fff</c>, selected by
-/// some offset the source does not spell out precisely (the trailing table says "offset in ?" verbatim
-/// -- reproduced as Stefan wrote it, not filled in).</item>
+/// some offset the source does not spell out precisely (the trailing table says "offset in ?????"
+/// verbatim -- reproduced as Stefan wrote it, not filled in).</item>
 /// <item><c>1101_1100_????_?fff</c> -- UNARY floating-point operation (the cascade's final fallthrough):
 /// operates on one register, <c>fff</c>, result in <c>fff</c>. <c>'fpop</c>/<c>'fpush</c> (stack transfer
 /// to/from a register) share this same tag range per the trailing table, distinguished from every other
@@ -41,8 +42,36 @@ namespace Ga144.Evb.Ide.Cvm;
 /// </item>
 /// </list>
 ///
+/// <b>UPDATED 2026-09-16: Stefan pasted a fully rewritten <c>fpr/main</c> BINARY branch</b> (the unary
+/// and constant-lookup branches, and <c>fpr/instr</c> itself, are byte-for-byte unchanged from the
+/// 2026-09-15 source), replacing the earlier generic "<c>fpr/instr a &gt;r ...</c>" call with an inline
+/// decode that finally spells out the exact bit layout the header's own comment
+/// ("1101_11??_????_????") only hinted at before: <c>1101_111o_oogg_gfff</c> -- a fixed 7-bit prefix
+/// (bits 15-9, "1101111"), then <c>ooo</c> (bits 8-6, the operation: 0=add/1=sub/2=min/3=max/4=mul/5=div,
+/// 6/7 unused, per the header's own binary-operation table -- the SAME 6-operation family this project's
+/// own 17-node, 32-bit floating-point pipeline pasted this same session implements, strongly suggesting
+/// this node is exactly where that pipeline's own results land, though neither source names the other --
+/// see <see cref="CvmNodeMesh"/>'s own remarks), <c>ggg</c> (bits 5-3, the second operand register), and
+/// <c>fff</c> (bits 2-0, the first operand / result register). Traced against the new body
+/// (<c>drop dup 7 and dup &gt;r a! / over 2/ 2/ 2/ 7 and &gt;r / over 2/ 2/ 2/ 2/ 2/ 2/ 7 and / !b / @+ @
+/// !b !b / r&gt; a! / @+ @ !b !b / r&gt; a! / @b @b !+ ! ;</c>): the low 3 bits (<c>7 and</c>) give
+/// <c>fff</c>, shifting right 3 more bits (<c>2/ 2/ 2/</c>) then masking to 3 bits gives <c>ggg</c>, and
+/// shifting right 6 more bits total gives <c>ooo</c> -- exactly matching the header's own bit positions.
+/// <b>FLAGGED, not resolved:</b> Stefan's own inline comment after the first extraction step
+/// (<c>( x f / f )</c>) shows TWO items on the data stack, but a literal token-by-token trace of
+/// <c>drop dup 7 and dup &gt;r a!</c> leaves only ONE (<c>x</c>; both copies of the masked <c>fff</c>
+/// value are consumed, one by <c>&gt;r</c> and one by <c>a!</c>) -- which would leave the following
+/// <c>over</c> with nothing meaningful to duplicate. This is reproduced exactly as pasted rather than
+/// "corrected" to match either reading; it doesn't affect the header-confirmed field-layout facts this
+/// class's own field-layout constants are built from (see
+/// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointBinaryOperationFieldBitMask</c> and siblings),
+/// only the exact step-by-step mechanics of how <c>ggg</c>/<c>ooo</c> get isolated from <c>fff</c> in the
+/// live F18 body.
+///
 /// <c>fpr/const</c> holds four constants as raw hi/lo word pairs, per the source's own inline comments:
-/// ln2, 1/ln2, pi/2, and 2/pi.
+/// ln2, 1/ln2, pi/2, and 2/pi -- likely selected by the constant-lookup opcode's own 5-bit offset field
+/// as index 0-3 (matching array order), though this specific offset-to-index mapping is not spelled out
+/// in the source and is not guessed at here.
 ///
 /// <b>FLAGGED, not silently resolved or invented: <c>'fpop</c>/<c>'fpush</c>'s own bodies use the same
 /// unexplained <c>leap</c>/<c>then</c> shape node 308's new <c>'arinc2</c>/<c>'ardec2</c> also use (see
@@ -57,23 +86,36 @@ namespace Ga144.Evb.Ide.Cvm;
 /// encountered before) rather than a coincidence or a copy-paste artifact -- but its meaning cannot be
 /// inferred from context, so it is reproduced completely verbatim.
 ///
-/// <b>PARTIALLY WIRED, 2026-09-15 (same day), per Stefan's own direct instruction to add these
-/// instructions to the CVM language.</b> <c>'fpop</c> is wired as CVM mnemonic <c>fpop</c>
+/// <b>WIRED, 2026-09-15/16, per Stefan's own direct instruction to add these instructions to the CVM
+/// language.</b> <c>'fpop</c> is wired as CVM mnemonic <c>fpop</c>
 /// (<c>CvmOperandEncoding.NodeResolvedEmbeddedValue</c>, tag <c>0xDC00</c>, a 5-bit function field / 3-bit
 /// register field -- see <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointPopMnemonic</c>'s own
-/// remarks for the full field-layout derivation off <c>fpr/instr</c>'s own body), on the SAME strength
-/// as <c>'arinc2</c>/<c>'ardec2</c>'s own wiring -- the assembler only needs to know where a mnemonic's
-/// compiled address ends up, not what its F18 body does, so the <c>leap</c>/<c>then</c> uncertainty above
-/// does not block this. <b><c>'fpush</c> is FLAGGED, NOT WIRED</b>: it collides with the ALREADY-EXISTING
-/// CVM mnemonic <c>fpush</c> (node 506's own frame-pointer push, <c>PushFrameMnemonic</c>) -- a
-/// completely different opcode under the same name. This project's own established precedent for exactly
-/// this situation (node 505's own <c>'f</c> vs node 506's <c>'f</c>) is to leave the colliding mnemonic
-/// unwired rather than silently invent a disambiguated name on Stefan's behalf; <c>'fpush</c> needs a
-/// name from him (renaming this node's own version, or node 506's) before it can be added. The BINARY
-/// and CONSTANT-lookup dispatch categories remain entirely unwired and un-nameable: the source's own
-/// trailing opcode table describes their encoding shape but names no specific operation for either, so
-/// nothing can be wired without Stefan supplying actual op names -- not a design-question blocker like
-/// before, just nothing to hang a mnemonic on yet.
+/// remarks for the full field-layout derivation off <c>fpr/instr</c>'s own body, UNCHANGED by the
+/// 2026-09-16 binary-branch rewrite above), on the SAME strength as <c>'arinc2</c>/<c>'ardec2</c>'s own
+/// wiring. <b><c>'fpush</c> is DELIBERATELY NOT WIRED</b> -- RESOLVED 2026-09-16, per Stefan directly:
+/// this was originally flagged as a naming COLLISION against the pre-existing CVM mnemonic <c>fpush</c>
+/// (node 506's own frame-pointer push, <c>PushFrameMnemonic</c>), but Stefan's own clarification makes
+/// that moot -- node 306's own <c>'fpush</c> "is inside the FP pipeline and not accessible for the CVM"
+/// at all (unlike <c>'fpop</c>, which IS CVM-facing), so there is nothing of node 306's to wire under any
+/// name, colliding or not. <c>PushFrameMnemonic</c> (node 506) is completely unaffected.
+///
+/// <b>2026-09-16: the BINARY and CONSTANT-lookup categories are now fully confirmed and wired,</b> per
+/// Stefan's own updated header comment on this source (the "index operation mnemonic" table and
+/// <c>fpr/const</c>'s own inline "mnemonic fXXX" comments, both reproduced verbatim above) plus his own
+/// direct follow-up messages: "node 306 is the node providing opcodes to the CVM" (both categories are
+/// fully self-describing -- no live node compile needed to resolve them, unlike <c>'fpop</c> just above)
+/// and the exact assembler syntax, "mnemonic f g", e.g. "fadd 3 2" means <c>fr[3] = fr[3] + fr[2]</c>.
+/// Binary ops (tag <c>0xDE00</c>, <c>ooo</c> at bits 8-6, <c>ggg</c> at bits 5-3, <c>fff</c> at bits 2-0)
+/// are wired as CVM mnemonics <c>fadd</c>/<c>fsub</c>/<c>fmin</c>/<c>fmax</c>/<c>fmul</c>/<c>fdiv</c>
+/// (indices 0-5; 6-7 remain unnamed, per Stefan's own "-" table entries) via the brand-new
+/// <c>CvmOperandEncoding.EmbeddedUnsignedValuePair</c> shape -- the first shape in this toolchain to pack
+/// TWO independent embedded register operands into one self-describing word -- see
+/// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointAddMnemonic</c>'s own remarks for the full
+/// per-mnemonic tag derivation. Constant-lookup ops (tag <c>0xDD00</c>, 5-bit offset at bits 7-3,
+/// <c>fff</c> at bits 2-0) are wired as <c>fln2</c>/<c>filn2</c>/<c>fpi2</c>/<c>f2pi</c> (offsets 0-3,
+/// matching <c>fpr/const</c>'s own array order) via the EXISTING <c>EmbeddedUnsignedValue</c> shape --
+/// no new toolchain infrastructure was needed for these four, just one <c>Instructions</c> row each with
+/// the offset baked into its own tag.
 /// </summary>
 internal static class Node306Program
 {
@@ -81,9 +123,17 @@ internal static class Node306Program
   public const int Coordinate = 306;
 
   /// <summary>
-  /// Node 306's full resident F18 source, verbatim from Stefan's 2026-09-15 paste ("node 306 and 308
-  /// have swapped roles"). Brand new to this project -- no earlier revision of this content existed
-  /// under any coordinate.
+  /// Node 306's full resident F18 source. Originally pasted 2026-09-15 ("node 306 and 308 have swapped
+  /// roles"); UPDATED 2026-09-16 with a fully rewritten <c>fpr/main</c> BINARY branch (the unary and
+  /// constant-lookup EXECUTABLE branches, and every other word in this source, are byte-for-byte
+  /// unchanged) -- see this class's own remarks above for the full derivation of the now-confirmed
+  /// <c>1101_111o_oogg_gfff</c> bit layout, and the FLAGGED stack-depth discrepancy between Stefan's own
+  /// <c>( x f / f )</c> comment and a literal trace of the extraction code, reproduced verbatim either
+  /// way. RE-SYNCED 2026-09-16 (same day, later message) with Stefan's own updated HEADER COMMENT ONLY
+  /// (the "index operation mnemonic" table, the assembler-syntax example, and <c>fpr/const</c>'s own
+  /// inline "mnemonic fXXX" comments) -- no executable word changed, this only adds the mnemonic names
+  /// Stefan placed directly into the source's own comments, confirming what this class's docstring above
+  /// records as wired.
   /// </summary>
   public const string Source = """
       ( CVM2 node 306. VM 32 bit floatingpoint register node, 1101_11??_????_???? )
@@ -92,6 +142,22 @@ internal static class Node306Program
       (
         out: ohlhl
         in: hl
+
+      binary operation ooo:
+      index operation mnemonic
+      0 add fadd
+      1 sub fsub
+      2 min fmin
+      3 max fmax
+      4 mul fmul
+      5 div fdiv
+      6 -
+      7 -
+
+      the assembler instruction is:
+      mnemonic f g
+      so e.g. "fadd 3 2" means fr[3] = fr[3] + fr[2]
+
       )
       # 307 import
       # 0x10 org
@@ -101,10 +167,10 @@ internal static class Node306Program
 
       : fpr/const
       [ // memory order hi, lo
-        0x3F31 , 0x7218 , // ln2
-        0x3FB8 , 0xAA3B , // 1/ln2
-        0x3FC9 , 0x0FDB , // pi/2
-        0x3F22 , 0xF983 , // 2/pi
+        0x3F31 , 0x7218 , // ln2, mnemonic fln2
+        0x3FB8 , 0xAA3B , // 1/ln2, mnemonic filn2
+        0x3FC9 , 0x0FDB , // pi/2, mnemonic fpi2
+        0x3F22 , 0xF983 , // 2/pi, mnemonic f2pi
       ]
 
       : 'fpop ( -) leap then
@@ -116,9 +182,21 @@ internal static class Node306Program
       : fpr/instr ( xy-ia) drop dup 0x07 and 2* a! 2/ 2/ 2/ 0x1f and ;
       : fpr/leave right b! A[ k/leave ; ]] lit !b
       : fpr/main  A[ !p 2* !p ]] lit !b @b @b left b!
-        -if // 1101_111?_????_????
+        -if // 1101_111o_oogg_gfff
           // binary
-          fpr/instr a >r !b @+ @+ !b !b @+ @+ !b !b r> a! @b @b !+ ! ;
+          ( x y )
+          drop dup 7 and dup >r a!
+          ( x f / f )
+          over 2/ 2/ 2/ 7 and >r
+          ( x f / f g )
+          over 2/ 2/ 2/ 2/ 2/ 2/ 7 and
+          ( x f o / f g )
+          !b           // o
+          @+ @ !b !b   // h l
+          r> a!
+          @+ @ !b !b   // h l
+          r> a!
+          @b @b !+ ! ;
         then // 1101_110?_????_????
         2* -if // 1101_1101_????_????
           // constant
@@ -127,9 +205,8 @@ internal static class Node306Program
         fpr/instr >r ;
 
       (
-      opcode 1101_111?_????_?fff binary floatingpoint operation. first operand is fff. second operant is fff+1. result in fff
-      opcode 1101_1100_????_?fff unary floatingpoint operation. operand is fff. result in fff
-      opcode 1101_1101_????_?fff lookup constant. result in fff. offset in ?.
+      opcode 1101_111o_oogg_gfff binary floatingpoint operation. first operand is fff. second operant is ggg. result in fff. operation in ooo
+      opcode 1101_1101_????_?fff lookup constant. result in fff. offset in ?????.
 
       'fpop 1101_1100_????_?fff pop 32-bit floatingpoint from stack {low word first} into fp register fff {3 bits}
       'fpush 1101_1100_????_?fff push 32-bit floatingpoint to stack {low word last} from fp register fff {3 bits}
