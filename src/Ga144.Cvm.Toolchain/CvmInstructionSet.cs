@@ -1666,7 +1666,7 @@ public static class CvmInstructionSet
   /// meaningful for <see cref="CvmOperandEncoding.EmbeddedSignedValue"/>/<see cref="CvmOperandEncoding.EmbeddedUnsignedValue"/>
   /// shapes -- every other encoding ignores them (default 0).
   /// </summary>
-  public sealed record CvmInstructionShape(int Id, string Mnemonic, int WordLength, CvmOperandEncoding Encoding, int Tag = 0, int ValueBitMask = 0, int ValueBitShift = 0)
+  public sealed record CvmInstructionShape(int Id, string Mnemonic, int WordLength, CvmOperandEncoding Encoding, int Tag = 0, int ValueBitMask = 0, int ValueBitShift = 0, int SecondValueBitMask = 0, int SecondValueBitShift = 0)
   {
     /// <summary>True for every encoding except <see cref="CvmOperandEncoding.None"/> -- whether the assembler requires exactly one operand argument for this mnemonic.</summary>
     public bool HasOperand => Encoding != CvmOperandEncoding.None;
@@ -1706,13 +1706,13 @@ public static class CvmInstructionSet
     /// <c>ggg</c>), distinct from <see cref="ValueBitMask"/>'s first operand (register <c>fff</c>). Zero
     /// (the default) for every other shape, which have no second operand at all.
     /// </summary>
-    public int SecondValueBitMask { get; init; }
+    public int SecondValueBitMask { get; init; } = SecondValueBitMask;
 
     /// <summary>
     /// How far left the second operand is shifted before OR-ing it into <see cref="SecondValueBitMask"/>'s
     /// bits (and shifted back right when decoding). Zero (the default) for every other shape.
     /// </summary>
-    public int SecondValueBitShift { get; init; }
+    public int SecondValueBitShift { get; init; } = SecondValueBitShift;
   }
 
   /// <summary>

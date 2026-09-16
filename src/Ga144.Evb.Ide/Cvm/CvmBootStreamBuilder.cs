@@ -743,33 +743,70 @@ public static class CvmBootStreamBuilder
   /// unlike 'fpop, neither needs a live compile of node 306 to resolve, but node 306 still needs to be
   /// present and loaded on real hardware for these opcodes to mean anything once executed.
   ///
-  /// <b>The node 306 &lt;-&gt; node 305 link is now CONFIRMED, 2026-09-16, per Stefan directly: "node 306
-  /// talks to node 305 to perform binary floatingpoint instructions."</b> This was previously flagged
-  /// (through the "DELIBERATELY NOT included" remarks this paragraph replaces) as unconfirmed, since
-  /// neither node 305's own source nor node 306's own source named the other. <c>new
-  /// CvmBootLoadStep(305, 306)</c> is now added below, right before node 306's own existing step (306 via
-  /// 307) -- matching the "child loads before its immediate relay parent" rule every other branch in this
-  /// method already follows, since node 306 is the relay and node 305 (the 17-node pipeline's own entry
-  /// point) is the child reached through it.
+  /// <b>The ENTIRE 17-node floating-point pipeline's own internal relay topology is now CONFIRMED,
+  /// 2026-09-16, per Stefan directly, verbatim:</b>
+  /// <code>
+  ///   306-&gt;305-&gt;304-&gt;303-&gt;302-&gt;301
+  ///   304-&gt;404-&gt;403-&gt;402-&gt;401
+  ///   404-&gt;504-&gt;503-&gt;502-&gt;501
+  ///   504-&gt;604-&gt;603-&gt;602-&gt;601
+  /// </code>
+  /// Read as "left relays to right" (the SAME direction as every <c>CvmBootLoadStep(child, via)</c> pair
+  /// elsewhere in this method, e.g. <c>(406, 407)</c> for "406 via 407"), this is a branching tree, not
+  /// four independent chains: 304 has TWO children -- 303 (heading a simple 302-&gt;301 tail) AND 404;
+  /// 404 in turn has two children -- 403 (heading a simple 402-&gt;401 tail) AND 504; 504 in turn has two
+  /// children -- 503 (heading a simple 502-&gt;501 tail) AND 604; 604 has one child, 603 (heading a simple
+  /// 602-&gt;601 tail). This is BOOT-TIME PORT-RELAY ADJACENCY only -- a separate fact from the COMPILE-
+  /// order "# N import" chains <see cref="BuildDescriptors"/> already uses (401 imports nothing extra
+  /// beyond 402's own import of it, etc.), which remain unaffected.
   ///
-  /// <b>The REST of the 17-node floating-point pipeline's own internal load order (301-304/401-404/
-  /// 501-504/601-604) remains DELIBERATELY NOT included below.</b> Stefan's confirmation above covers only
-  /// the single 305/306 link -- which node/port feeds node 305 itself -- not the pipeline's own internal
-  /// relay topology (e.g. which of node 603's ports its own up-stream neighbor uses, an ambiguity flagged
-  /// when these 17 nodes were first added). <see cref="BuildDescriptors"/> already compiles all 17 (for
-  /// standalone tooling/disassembly) using only each node's own explicit "# N import" directive, which is
-  /// a fully separate, already-confirmed fact from the physical relay chain this method needs. Once the
-  /// rest of the internal topology is confirmed, it can be derived the same way every other branch above
-  /// was: within each control chain, the node further from the entry point loads before the relay it
-  /// passes through (401 before 402 before 403, matching the pattern above; same shape for 501/502/503
-  /// and 601/602/603).
+  /// <b>IMPORTANT, per Stefan directly (2026-09-16), on what this topology does NOT establish:</b> "the
+  /// order in which nodes interact is independent of the order they are loaded in the boot stream, because
+  /// once a node is loaded and started it is waiting for a stimulus, but it receives this stimulus only
+  /// after all nodes have been booted. so the boot stream need not reflect the processing stream." This
+  /// confirmed relay chain answers ONLY "which port does node X's boot frame travel through," not "which
+  /// node computes first" or "which node sends its result to which next" once the pipeline is actually
+  /// running. The earlier, separate, still-speculative per-node "stage 1 unpack ... stage 8 round" /
+  /// "fanning out at 303 into three parallel control chains" narrative in <see cref="Cvm.CvmNodeMesh"/>'s
+  /// own remarks was a claim about that different, RUNTIME processing order -- it is neither confirmed nor
+  /// refuted by the boot-relay topology above, and this docstring no longer claims otherwise.
+  ///
+  /// Per <see cref="Cvm.CvmBootLoadStep"/>'s own remarks ("leaves first / root last", a post-order walk:
+  /// every child finishes loading and is left running its own real program before its parent gives up its
+  /// relay role), the 17 steps below are ordered so each subtree fully completes before the node relaying
+  /// it takes on its own program -- 301 first (the deepest leaf), 305 last (306's own only child, so 306's
+  /// own pre-existing step below can stay exactly where it already was, now correctly preceded by this
+  /// entire subtree instead of by nothing). This load ORDER is purely administrative (per Stefan's own
+  /// note above), unrelated to the pipeline's own eventual runtime processing order.
   /// </summary>
   public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
   [
     new CvmBootLoadStep(406, 407),
     new CvmBootLoadStep(408, 407),
     new CvmBootLoadStep(308, 307),
-    new CvmBootLoadStep(305, 306), // CONFIRMED 2026-09-16, per Stefan: "node 306 talks to node 305".
+
+    // The 17-node floating-point pipeline's own internal relay topology, CONFIRMED 2026-09-16 per
+    // Stefan (see this method's own remarks above for the full derivation and the verbatim
+    // "306->305->304->303->302->301" etc. Stefan gave) -- leaves first, root (of this subtree, node
+    // 305) last, so each branch fully completes before the node relaying it takes over.
+    new CvmBootLoadStep(301, 302),
+    new CvmBootLoadStep(302, 303),
+    new CvmBootLoadStep(303, 304),
+    new CvmBootLoadStep(401, 402),
+    new CvmBootLoadStep(402, 403),
+    new CvmBootLoadStep(403, 404),
+    new CvmBootLoadStep(501, 502),
+    new CvmBootLoadStep(502, 503),
+    new CvmBootLoadStep(503, 504),
+    new CvmBootLoadStep(601, 602),
+    new CvmBootLoadStep(602, 603),
+    new CvmBootLoadStep(603, 604),
+    new CvmBootLoadStep(604, 504),
+    new CvmBootLoadStep(504, 404),
+    new CvmBootLoadStep(404, 304),
+    new CvmBootLoadStep(304, 305),
+    new CvmBootLoadStep(305, 306),
+
     new CvmBootLoadStep(306, 307),
     new CvmBootLoadStep(307, 407),
     new CvmBootLoadStep(407, 507),

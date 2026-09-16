@@ -109,26 +109,41 @@ namespace Ga144.Evb.Ide.Cvm;
 /// floating-point PIPELINE Stefan pasted node-by-node this same session.</b> This is an entirely
 /// separate mesh branch from the CVM instruction-dispatch tree above -- these 17 nodes never appear in
 /// any "# N import" directive belonging to 507/407/307/306/etc., and none of THEIR OWN "# N import"
-/// directives names any node already in this list. Internal shape, per each node's own header and this
-/// project's own per-node analysis (see each Node3xx/4xx/5xx/6xxProgram's own remarks): 305-&gt;304-&gt;
-/// 303 (stages 1-3, unpack/rearrange/split), fanning out at 303 into three parallel control chains --
-/// "3a" (403-&gt;402-&gt;401, comparison/operand-order control), "3b" (503-&gt;502-&gt;501, add/sub/mul
-/// mantissa arithmetic), "3c" (603-&gt;602-&gt;601, final sign/normalization/division) -- all three
-/// converging back at 604 (stage 6, classify), then 504 (stage 7, classification override), then 404
-/// (stage 8, round and reduce to binary32). Listed here in "imported node before its importer" order
-/// within each control chain (401 before 402 before 403, matching 403's own "# 402 import" and 402's own
-/// "# 401 import"; same pattern for 501/502/503 and 601/602/603), matching this list's own established
-/// convention elsewhere -- see <see cref="CvmBootStreamBuilder.BuildDescriptors"/>'s own compile steps
-/// for these seventeen. <b>The node/port relaying this pipeline's own entry point (node 305) into the
-/// rest of the mesh is now CONFIRMED, 2026-09-16, per Stefan directly: "node 306 talks to node 305 to
-/// perform binary floatingpoint instructions."</b> This was previously flagged as an unconfirmed guess
-/// (node 306 was the "obvious candidate" -- its own header lists the same 8 binary operations this
-/// pipeline implements, and its coordinate, row 3 column 6, is numerically adjacent to node 305's, row 3
-/// column 5 -- but neither source named the other) and has now been added to
-/// <see cref="CvmBootStreamBuilder.BuildLoadOrder"/> as <c>new CvmBootLoadStep(305, 306)</c>. The REST of
-/// this 17-node pipeline's own internal relay topology (which port feeds which node within each control
-/// chain) is still NOT included there -- Stefan's confirmation covers only this one link, not the
-/// pipeline's own internal wiring -- see <see cref="CvmBootStreamBuilder.BuildLoadOrder"/>'s own remarks.
+/// directives names any node already in this list. Listed here in "imported node before its importer"
+/// order within each control chain (401 before 402 before 403, matching 403's own "# 402 import" and
+/// 402's own "# 401 import"; same pattern for 501/502/503 and 601/602/603), matching this list's own
+/// established convention elsewhere -- see <see cref="CvmBootStreamBuilder.BuildDescriptors"/>'s own
+/// compile steps for these seventeen. This COMPILE-order fact (which node imports which) is separate
+/// from, and unaffected by, the physical relay topology described next.
+///
+/// <b>The pipeline's ENTIRE internal BOOT-STREAM relay topology -- the physical port-adjacency chain the
+/// boot loader walks to deposit each node's program -- is now CONFIRMED, 2026-09-16, per Stefan directly,
+/// verbatim:</b>
+/// <code>
+///   306-&gt;305-&gt;304-&gt;303-&gt;302-&gt;301
+///   304-&gt;404-&gt;403-&gt;402-&gt;401
+///   404-&gt;504-&gt;503-&gt;502-&gt;501
+///   504-&gt;604-&gt;603-&gt;602-&gt;601
+/// </code>
+/// 304 relays to BOTH 303 (heading a simple 303-&gt;302-&gt;301 tail) AND 404; 404 relays to both 403
+/// (heading a simple 403-&gt;402-&gt;401 tail) AND 504; 504 relays to both 503 (heading a simple
+/// 503-&gt;502-&gt;501 tail) AND 604, which itself relays on to a simple 604-&gt;603-&gt;602-&gt;601 tail.
+/// Node 306 (the floating-point register node, see <see cref="Node306Program"/>) is confirmed as the
+/// relay feeding this whole pipeline's own entry point (node 305) into the rest of the mesh. All of this
+/// has been added to <see cref="CvmBootStreamBuilder.BuildLoadOrder"/> -- see that method's own remarks
+/// for the full post-order (leaves-first) derivation.
+///
+/// <b>IMPORTANT, per Stefan directly (2026-09-16), on what this topology does NOT tell us:</b> "the order
+/// in which nodes interact is independent of the order they are loaded in the boot stream, because once a
+/// node is loaded and started it is waiting for a stimulus, but it receives this stimulus only after all
+/// nodes have been booted. so the boot stream need not reflect the processing stream." The confirmed
+/// arrows above are BOOT-TIME port-relay adjacency only -- which physical port each node's boot frames
+/// travel through to reach it -- and do NOT by themselves establish the pipeline's actual RUNTIME data-
+/// flow/processing order (which node computes first, which sends its result to which next). The earlier,
+/// separate, still-speculative per-node "stage 1 unpack... stage 8 round" narrative (inferred from each
+/// node's own header, once phrased here as "fanning out at 303 into three parallel control chains") was a
+/// claim about PROCESSING order, a genuinely different fact from this BOOT topology -- it is neither
+/// confirmed nor refuted by the arrows above, and is not restated here to avoid re-conflating the two.
 /// </summary>
 public static class CvmNodeMesh
 {

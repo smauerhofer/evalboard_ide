@@ -49,24 +49,30 @@ namespace Ga144.Evb.Ide.Cvm;
 /// ("1101_11??_????_????") only hinted at before: <c>1101_111o_oogg_gfff</c> -- a fixed 7-bit prefix
 /// (bits 15-9, "1101111"), then <c>ooo</c> (bits 8-6, the operation: 0=add/1=sub/2=min/3=max/4=mul/5=div,
 /// 6/7 unused, per the header's own binary-operation table -- the SAME 6-operation family this project's
-/// own 17-node, 32-bit floating-point pipeline pasted this same session implements, strongly suggesting
-/// this node is exactly where that pipeline's own results land, though neither source names the other --
-/// see <see cref="CvmNodeMesh"/>'s own remarks), <c>ggg</c> (bits 5-3, the second operand register), and
+/// own 17-node, 32-bit floating-point pipeline pasted this same session implements. Node 306 is now
+/// CONFIRMED (2026-09-16, per Stefan) as the BOOT-RELAY parent feeding this pipeline's own entry point
+/// (node 305) into the rest of the mesh -- see <see cref="CvmNodeMesh"/>'s own remarks -- but per
+/// Stefan's own separate clarification the same day ("the boot stream need not reflect the processing
+/// stream"), that boot-relay link does NOT by itself confirm the original speculation here, that this
+/// node is where the pipeline's own RUNTIME results actually land; that remains a distinct, still-open
+/// question this project has not asserted an answer to. <c>ggg</c> (bits 5-3, the second operand register), and
 /// <c>fff</c> (bits 2-0, the first operand / result register). Traced against the new body
 /// (<c>drop dup 7 and dup &gt;r a! / over 2/ 2/ 2/ 7 and &gt;r / over 2/ 2/ 2/ 2/ 2/ 2/ 7 and / !b / @+ @
 /// !b !b / r&gt; a! / @+ @ !b !b / r&gt; a! / @b @b !+ ! ;</c>): the low 3 bits (<c>7 and</c>) give
 /// <c>fff</c>, shifting right 3 more bits (<c>2/ 2/ 2/</c>) then masking to 3 bits gives <c>ggg</c>, and
 /// shifting right 6 more bits total gives <c>ooo</c> -- exactly matching the header's own bit positions.
-/// <b>FLAGGED, not resolved:</b> Stefan's own inline comment after the first extraction step
-/// (<c>( x f / f )</c>) shows TWO items on the data stack, but a literal token-by-token trace of
-/// <c>drop dup 7 and dup &gt;r a!</c> leaves only ONE (<c>x</c>; both copies of the masked <c>fff</c>
-/// value are consumed, one by <c>&gt;r</c> and one by <c>a!</c>) -- which would leave the following
-/// <c>over</c> with nothing meaningful to duplicate. This is reproduced exactly as pasted rather than
-/// "corrected" to match either reading; it doesn't affect the header-confirmed field-layout facts this
-/// class's own field-layout constants are built from (see
-/// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointBinaryOperationFieldBitMask</c> and siblings),
-/// only the exact step-by-step mechanics of how <c>ggg</c>/<c>ooo</c> get isolated from <c>fff</c> in the
-/// live F18 body.
+/// <b>RESOLVED 2026-09-16 (same day, later message): the stack-depth discrepancy previously flagged
+/// here was Stefan's own typo, now corrected by him directly ("you were right. my comments were
+/// wrong").</b> The inline stack comments after each extraction step were originally pasted as
+/// <c>( x f / f )</c> and <c>( x f o / f g )</c> (each showing an extra, spurious <c>f</c>) and have been
+/// corrected to <c>( x / f )</c> and <c>( x o / f g )</c>, now matching a literal token-by-token trace of
+/// <c>drop dup 7 and dup &gt;r a!</c> exactly: it leaves only <c>x</c> on the data stack (both copies of
+/// the masked <c>fff</c> value are consumed, one by <c>&gt;r</c> and one by <c>a!</c>), so <c>over</c>
+/// duplicating <c>x</c> next is now fully accounted for. This confirms, rather than merely leaves
+/// unaffected, the header-derived field-layout facts this class's own field-layout constants are built
+/// from (see <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointBinaryOperationFieldBitMask</c> and
+/// siblings) -- no toolchain code needed to change, since those constants were always derived from the
+/// header's own bit pattern, never from this stack-comment trace.
 ///
 /// <c>fpr/const</c> holds four constants as raw hi/lo word pairs, per the source's own inline comments:
 /// ln2, 1/ln2, pi/2, and 2/pi -- likely selected by the constant-lookup opcode's own 5-bit offset field
@@ -127,13 +133,14 @@ internal static class Node306Program
   /// roles"); UPDATED 2026-09-16 with a fully rewritten <c>fpr/main</c> BINARY branch (the unary and
   /// constant-lookup EXECUTABLE branches, and every other word in this source, are byte-for-byte
   /// unchanged) -- see this class's own remarks above for the full derivation of the now-confirmed
-  /// <c>1101_111o_oogg_gfff</c> bit layout, and the FLAGGED stack-depth discrepancy between Stefan's own
-  /// <c>( x f / f )</c> comment and a literal trace of the extraction code, reproduced verbatim either
-  /// way. RE-SYNCED 2026-09-16 (same day, later message) with Stefan's own updated HEADER COMMENT ONLY
-  /// (the "index operation mnemonic" table, the assembler-syntax example, and <c>fpr/const</c>'s own
-  /// inline "mnemonic fXXX" comments) -- no executable word changed, this only adds the mnemonic names
-  /// Stefan placed directly into the source's own comments, confirming what this class's docstring above
-  /// records as wired.
+  /// <c>1101_111o_oogg_gfff</c> bit layout. RE-SYNCED 2026-09-16 (same day, later message) with Stefan's
+  /// own updated HEADER COMMENT (the "index operation mnemonic" table, the assembler-syntax example, and
+  /// <c>fpr/const</c>'s own inline "mnemonic fXXX" comments) -- no executable word changed, this only
+  /// added the mnemonic names Stefan placed directly into the source's own comments. RE-SYNCED AGAIN
+  /// 2026-09-16 (same day, a further message: "you were right. my comments were wrong") with Stefan's own
+  /// CORRECTED inline stack comments in the binary branch (<c>( x f / f )</c> -&gt; <c>( x / f )</c> and
+  /// <c>( x f o / f g )</c> -&gt; <c>( x o / f g )</c>) -- again no executable word changed, only his own
+  /// typo fixed; see this class's own remarks above for why this now matches a literal trace exactly.
   /// </summary>
   public const string Source = """
       ( CVM2 node 306. VM 32 bit floatingpoint register node, 1101_11??_????_???? )
@@ -186,11 +193,11 @@ internal static class Node306Program
           // binary
           ( x y )
           drop dup 7 and dup >r a!
-          ( x f / f )
+          ( x / f )
           over 2/ 2/ 2/ 7 and >r
-          ( x f / f g )
+          ( x / f g )
           over 2/ 2/ 2/ 2/ 2/ 2/ 7 and
-          ( x f o / f g )
+          ( x o / f g )
           !b           // o
           @+ @ !b !b   // h l
           r> a!

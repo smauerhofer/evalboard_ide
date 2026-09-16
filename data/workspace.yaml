@@ -15372,11 +15372,11 @@ projects:
             // binary
             ( x y )
             drop dup 7 and dup >r a!
-            ( x f / f )
+            ( x / f )
             over 2/ 2/ 2/ 7 and >r
-            ( x f / f g )
+            ( x / f g )
             over 2/ 2/ 2/ 2/ 2/ 2/ 7 and
-            ( x f o / f g )
+            ( x o / f g )
             !b           // o
             @+ @ !b !b   // h l
             r> a!
