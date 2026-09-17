@@ -2,7 +2,7 @@ namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
 /// Node 306's resident F18 source. <b>BRAND NEW ROLE, 2026-09-15</b> -- Stefan: "node 306 and 308 have
-/// swapped roles," pasting an entirely new node under this coordinate: an 8x 32-bit floating-point
+/// swapped roles," pasting an entirely new node under this coordinate: a 32-bit floating-point
 /// register node, reached from node 307's own RIGHT port ("1101_11??_????_????", <c># right /b</c> on
 /// this node's own side -- see <see cref="Node307Program"/>'s own "RIGHT/LEFT SWAPPED" remarks). This
 /// class's ENTIRE PRIOR HISTORY (2026-09-06 through 2026-09-11: the 32-bit address-register node, its
@@ -12,8 +12,18 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <see cref="Node308Program"/>, which now carries that source and that history forward. Nothing below
 /// this point describes an address register of any kind.
 ///
+/// <b>CORRECTED, 2026-09-17, per Stefan directly: "there are only 4 FP register."</b> Every earlier
+/// revision of this source and its own remarks (2026-09-15/16) claimed EIGHT floating-point registers --
+/// that count was wrong and is superseded everywhere it appeared. Register storage is 4 registers x 2
+/// words = 8 words (word addresses 0x0-0x7), and the resident code's own <c># N org</c> shrank to match:
+/// <c>0x10</c> (which fit an 8-register/16-word file) is now <c>0x8</c> (fitting the smaller 4-register/
+/// 8-word file exactly) -- the two facts corroborate each other. <c>fff</c> (the register-index field
+/// embedded in every node 306 opcode) is still 3 bits wide (0-7) at the CVM opcode level -- unchanged,
+/// since the field's own width is fixed by the opcode format, not by how many registers actually exist
+/// behind it -- but only values 0-3 now name a real register; 4-7 are out of range on real hardware.
+///
 /// <b>Floating-point register file.</b> Per this source's own header and trailing remarks, node 306 (in
-/// its new role) holds eight 32-bit floating-point registers, each a word pair (low word in <c>x</c>,
+/// its new role) holds four 32-bit floating-point registers, each a word pair (low word in <c>x</c>,
 /// high word in <c>x+1</c>, per the header's own third line -- note this is LOW-then-HIGH, the OPPOSITE
 /// word order from node 308's own address registers, which store address-then-page). The source's own
 /// leading comment block also documents port usage beyond the ordinary <c>/a</c>/<c>/b</c> pair this
@@ -31,9 +41,17 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <c>fff</c> (first operand, also where the result is stored) and <c>ggg</c> (second operand), selected
 /// independently -- NOT <c>fff</c>/<c>fff+1</c> as an earlier revision of this source implied.</item>
 /// <item><c>1101_1101_????_?fff</c> -- constant lookup: loads one of <see cref="Node306Program"/>'s own
-/// four pre-defined 32-bit constants (see <c>fpr/const</c> below) into register <c>fff</c>, selected by
-/// some offset the source does not spell out precisely (the trailing table says "offset in ?????"
-/// verbatim -- reproduced as Stefan wrote it, not filled in).</item>
+/// four pre-defined 32-bit constants (see <c>fpr/const</c> below) into register <c>fff</c>. The 5-bit
+/// offset field (the trailing table's own "offset in ?????") is RESOLVED, 2026-09-17, per Stefan
+/// directly: "the offset to the constant must be encoded in the opcode. it is index*2 + fpr/const" --
+/// i.e. the field's actual value is <c>fpr/const</c>'s own LIVE-COMPILED ADDRESS plus <c>index*2</c>
+/// (index 0-3, matching <c>fpr/const</c>'s own array order: ln2/1-over-ln2/pi-over-2/2-over-pi, each
+/// constant occupying 2 words). This means the constant-lookup mnemonics (<c>fln2</c>/<c>filn2</c>/
+/// <c>fpi2</c>/<c>f2pi</c>) are NOT self-describing after all -- see
+/// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointLn2Mnemonic</c>'s own remarks for the
+/// resulting encoding correction (EmbeddedUnsignedValue -&gt; NodeResolvedEmbeddedValue, resolving
+/// <c>fpr/const</c>'s address from a live compile of this node, exactly like <c>'fpop</c>/<c>'fpush</c>
+/// just below).</item>
 /// <item><c>1101_1100_????_?fff</c> -- UNARY floating-point operation (the cascade's final fallthrough):
 /// operates on one register, <c>fff</c>, result in <c>fff</c>. <c>'fpop</c>/<c>'fpush</c> (stack transfer
 /// to/from a register) share this same tag range per the trailing table, distinguished from every other
@@ -116,20 +134,32 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <b>2026-09-16: the BINARY and CONSTANT-lookup categories are now fully confirmed and wired,</b> per
 /// Stefan's own updated header comment on this source (the "index operation mnemonic" table and
 /// <c>fpr/const</c>'s own inline "mnemonic fXXX" comments, both reproduced verbatim above) plus his own
-/// direct follow-up messages: "node 306 is the node providing opcodes to the CVM" (both categories are
-/// fully self-describing -- no live node compile needed to resolve them, unlike <c>'fpop</c> just above)
-/// and the exact assembler syntax, "mnemonic f g", e.g. "fadd 3 2" means <c>fr[3] = fr[3] + fr[2]</c>.
+/// direct follow-up messages: "node 306 is the node providing opcodes to the CVM" and the exact
+/// assembler syntax, "mnemonic f g", e.g. "fadd 3 2" means <c>fr[3] = fr[3] + fr[2]</c>.
 /// Binary ops (tag <c>0xDE00</c>, <c>ooo</c> at bits 8-6, <c>ggg</c> at bits 5-3, <c>fff</c> at bits 2-0)
 /// are wired as CVM mnemonics <c>fadd</c>/<c>fsub</c>/<c>fmin</c>/<c>fmax</c>/<c>fmul</c>/<c>fdiv</c>
 /// (indices 0-5; 6-7 remain unnamed, per Stefan's own "-" table entries) via the brand-new
 /// <c>CvmOperandEncoding.EmbeddedUnsignedValuePair</c> shape -- the first shape in this toolchain to pack
-/// TWO independent embedded register operands into one self-describing word -- see
-/// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointAddMnemonic</c>'s own remarks for the full
-/// per-mnemonic tag derivation. Constant-lookup ops (tag <c>0xDD00</c>, 5-bit offset at bits 7-3,
-/// <c>fff</c> at bits 2-0) are wired as <c>fln2</c>/<c>filn2</c>/<c>fpi2</c>/<c>f2pi</c> (offsets 0-3,
-/// matching <c>fpr/const</c>'s own array order) via the EXISTING <c>EmbeddedUnsignedValue</c> shape --
-/// no new toolchain infrastructure was needed for these four, just one <c>Instructions</c> row each with
-/// the offset baked into its own tag.
+/// TWO independent embedded register operands into one self-describing word (genuinely self-describing:
+/// unlike the constant-lookup family below, the binary ops' own tag needs no live compile at all to
+/// resolve) -- see <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointAddMnemonic</c>'s own remarks for
+/// the full per-mnemonic tag derivation. Constant-lookup ops (tag <c>0xDD00</c>, 5-bit offset at bits
+/// 7-3, <c>fff</c> at bits 2-0) are wired as <c>fln2</c>/<c>filn2</c>/<c>fpi2</c>/<c>f2pi</c> (indices
+/// 0-3, matching <c>fpr/const</c>'s own array order).
+///
+/// <b>CORRECTED, 2026-09-17: the constant-lookup family is NOT self-describing after all,</b> per
+/// Stefan's own direct correction: "the offset to the constant must be encoded in the opcode. it is
+/// index*2 + fpr/const." The 2026-09-16 wiring above (a fixed <c>EmbeddedUnsignedValue</c> tag per
+/// mnemonic, baking in offset 0/1/2/3 directly) was WRONG -- the opcode's real 5-bit offset field must
+/// hold <c>fpr/const</c>'s own LIVE-COMPILED ADDRESS plus <c>index*2</c> (each constant is 2 words), a
+/// value only known once node 306 is actually compiled, exactly like <c>'fpop</c>/<c>'fpush</c>'s own
+/// resolved function address. All four constant mnemonics now resolve the SAME F18 symbol,
+/// <c>fpr/const</c>, via <c>CvmOperandEncoding.NodeResolvedEmbeddedValue</c>, each with its own
+/// per-mnemonic additive offset (0, 2, 4, 6 words for <c>fln2</c>/<c>filn2</c>/<c>fpi2</c>/<c>f2pi</c>
+/// respectively) folded into its own field-layout entry -- see
+/// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointLn2Mnemonic</c>'s own remarks for the full
+/// derivation and <c>Ga144.Evb.Ide.Services.CvmAssemblyLanguage.NodeResolvedEmbeddedValueFieldLayoutByMnemonic</c>
+/// for the resolution wiring.
 /// </summary>
 internal static class Node306Program
 {
@@ -149,10 +179,48 @@ internal static class Node306Program
   /// CORRECTED inline stack comments in the binary branch (<c>( x f / f )</c> -&gt; <c>( x / f )</c> and
   /// <c>( x f o / f g )</c> -&gt; <c>( x o / f g )</c>) -- again no executable word changed, only his own
   /// typo fixed; see this class's own remarks above for why this now matches a literal trace exactly.
+  ///
+  /// <b>REPLACED, 2026-09-17,</b> with Stefan's own corrected full source, per his direct message: "here
+  /// is node 306. there are only 4 FP register. the offset to the constant must be encoded in the
+  /// opcode. it is index*2 + fpr/const." Differences from the 2026-09-16 revision above, all reproduced
+  /// exactly as pasted (none interpreted or silently "fixed" here -- see this class's own remarks for the
+  /// facts this project DOES draw from them):
+  /// <list type="bullet">
+  /// <item>Header: "contains 8 floatingpoint register" -&gt; "contains 4 floatingpoint register";
+  /// <c># 0x10 org</c> -&gt; <c># 0x8 org</c> (register storage shrank from 16 words to 8, so the
+  /// resident code's own origin moved down to match -- see this class's own remarks above).</item>
+  /// <item><c>fpr/const</c>, <c>'fpop</c>, <c>'fpush</c>, <c>fpr/begin</c> (see next item) each gained an
+  /// explicit <c>.loc</c> marker right after their name, matching the style already used on node 506's
+  /// own words -- no functional change, just Stefan syncing this source's own style.</item>
+  /// <item><c>fpr/instr</c> renamed <c>fpr/begin</c>; its own stack comment shortened from <c>( xy-ia)</c>
+  /// to <c>( x y - i )</c> (no longer documents the "a" register side-effect in the comment, though the
+  /// word still sets it); its own body is otherwise the same computation, just reformatted onto two
+  /// lines and with <c>0x07</c>/<c>0x1f</c> spelled <c>7</c>/<c>x1f</c> in the new text -- reproduced
+  /// exactly as Stefan wrote it, including the "x1f" spelling (presumably <c>0x1f</c>; not silently
+  /// corrected here).</item>
+  /// <item><c>fpr/main</c> gained a new first line, <c># fpr/leave lit &gt;r</c>, not present in any
+  /// earlier revision -- stashes <c>fpr/leave</c>'s own address on the return stack before dispatching.
+  /// </item>
+  /// <item><c>left b!</c> MOVED: the 2026-09-16 revision ran it unconditionally, immediately after the
+  /// initial <c>@b @b</c> dispatch reads and before the <c>-if</c> branch test at all; this revision runs
+  /// it only INSIDE the binary branch (right after entering <c>-if</c>), so the constant-lookup and
+  /// unary (<c>'fpop</c>/<c>'fpush</c>) branches no longer redirect port B left at all.</item>
+  /// <item>The binary branch's own inline stack comments dropped their leading <c>over</c>-tracking
+  /// tokens (<c>( x / f g )</c>/<c>( x o / f g )</c> instead of the 2026-09-16 text's identical-looking
+  /// comments -- these read the same; the executable words <c>over 2/ 2/ 2/</c> became plain <c>2/ 2/
+  /// 2/</c>, since <c>over</c> is no longer needed once the extra <c>drop dup</c> pairing changed slightly
+  /// -- reproduced exactly, not re-derived, since the confirmed bit-layout facts this project's own
+  /// constants are built from come from the header, not this trace, per this class's own remarks above).
+  /// </item>
+  /// <item>The constant branch's own body changed from <c>fpr/instr a &gt;r a! @+ @ r&gt; a! !+ ! ;</c>
+  /// to <c>fpr/begin a &gt;r a! @+ @ ( h l / f ) r&gt; a! ! ! ;</c> -- the trailing store sequence
+  /// changed from <c>!+ !</c> (store-with-increment then store) to <c>! !</c> (two plain stores), and an
+  /// inline stack comment <c>( h l / f )</c> was added. Reproduced exactly; not interpreted here.</item>
+  /// </list>
   /// </summary>
   public const string Source = """
       ( CVM2 node 306. VM 32 bit floatingpoint register node, 1101_11??_????_???? )
-      ( contains 8 floatingpoint register )
+      ( contains 4 floatingpoint register )
       ( low word in x, high word in x+1 )
       (
         out: ohlhl
@@ -175,12 +243,12 @@ internal static class Node306Program
 
       )
       # 307 import
-      # 0x10 org
+      # 0x8 org
       entry fpr/main
       # 0 /a
       # right /b
 
-      : fpr/const
+      : fpr/const .loc
       [ // memory order hi, lo
         0x3F31 , 0x7218 , // ln2, mnemonic fln2
         0x3FB8 , 0xAA3B , // 1/ln2, mnemonic filn2
@@ -188,24 +256,29 @@ internal static class Node306Program
         0x3F22 , 0xF983 , // 2/pi, mnemonic f2pi
       ]
 
-      : 'fpop ( -) leap then
+      : 'fpop ( -) .loc
+        leap then
       : fpr/@next ( ) A[ k/pop ]] lit !b A[ !p ]] lit !b @b !+ ;
-      : 'fpush ( -) @+ @+ leap then
+      : 'fpush ( -) .loc
+         @+ @+ leap then
       : fpr/!next ( w-) A[ @p k/push ]] lit !b !b ;
 
-
-      : fpr/instr ( xy-ia) drop dup 0x07 and 2* a! 2/ 2/ 2/ 0x1f and ;
+      : fpr/begin ( x y - i )
+        drop dup 7 and 2* a! 2/ 2/ 2/ x1f and ;
       : fpr/leave right b! A[ k/leave ; ]] lit !b
-      : fpr/main  A[ !p 2* !p ]] lit !b @b @b left b!
+      : fpr/main
+        # fpr/leave lit >r
+        A[ !p 2* !p ]] lit !b @b @b
         -if // 1101_111o_oogg_gfff
+          left b!
           // binary
           ( x y )
           drop dup 7 and dup >r a!
           ( x / f )
-          over 2/ 2/ 2/ 7 and >r
+          2/ 2/ 2/ dup 7 and >r
           ( x / f g )
-          over 2/ 2/ 2/ 2/ 2/ 2/ 7 and
-          ( x o / f g )
+          2/ 2/ 2/ 7 and
+          ( o / f g )
           !b           // o
           @+ @ !b !b   // h l
           r> a!
@@ -215,13 +288,18 @@ internal static class Node306Program
         then // 1101_110?_????_????
         2* -if // 1101_1101_????_????
           // constant
-          fpr/instr a >r a! @+ @ r> a! !+ ! ;
+          ( x y )
+          fpr/begin a >r a!
+          @+ @
+          ( h l / f )
+          r> a! ! !
+          ;
         then // 1101_1100_????_????
-        fpr/instr >r ;
+        fpr/begin >r ;
 
       (
       opcode 1101_111o_oogg_gfff binary floatingpoint operation. first operand is fff. second operant is ggg. result in fff. operation in ooo
-      opcode 1101_1101_????_?fff lookup constant. result in fff. offset in ?????.
+      opcode 1101_1101_????_?fff lookup constant. result in fff. offset of constant in ?????.
 
       'fpop 1101_1100_????_?fff pop 32-bit floatingpoint from stack {low word first} into fp register fff {3 bits}
       'fpush 1101_1100_????_?fff push 32-bit floatingpoint to stack {low word last} from fp register fff {3 bits}

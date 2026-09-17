@@ -30,6 +30,39 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
+      dateTime: 2026-09-17T05:45:31.2330810
+      utcDateTime: 2026-09-17T05:45:31.2330810Z
+      localDateTime: 2026-09-17T07:45:31.2330810+02:00
+      date: 2026-09-17T00:00:00.0000000
+      day: 17
+      dayOfWeek: Thursday
+      dayOfYear: 260
+      hour: 5
+      millisecond: 233
+      microsecond: 81
+      nanosecond: 0
+      minute: 45
+      month: 9
+      offset: 00:00:00
+      totalOffsetMinutes: 0
+      second: 31
+      ticks: 639252207312330810
+      utcTicks: 639252207312330810
+      timeOfDay: 05:45:31.2330810
+      year: 2026
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -50,19 +83,6 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -15293,7 +15313,7 @@ projects:
       sourceCode: >+
         ( CVM2 node 306. VM 32 bit floatingpoint register node, 1101_11??_????_???? )
 
-        ( contains 8 floatingpoint register )
+        ( contains 4 floatingpoint register )
 
         ( low word in x, high word in x+1 )
 
@@ -15334,7 +15354,7 @@ projects:
 
         # 307 import
 
-        # 0x10 org
+        # 0x8 org
 
         entry fpr/main
 
@@ -15343,7 +15363,7 @@ projects:
         # right /b
 
 
-        : fpr/const
+        : fpr/const .loc
 
         [ // memory order hi, lo
           0x3F31 , 0x7218 , // ln2, mnemonic fln2
@@ -15353,30 +15373,32 @@ projects:
         ]
 
 
-        : 'fpop ( -) leap then  
-
+        : 'fpop ( -) .loc
+          leap then  
         : fpr/@next ( ) A[ k/pop ]] lit !b A[ !p ]] lit !b @b !+ ;
 
-        : 'fpush ( -) @+ @+ leap then
-
+        : 'fpush ( -) .loc
+           @+ @+ leap then
         : fpr/!next ( w-) A[ @p k/push ]] lit !b !b ;
 
 
-
-        : fpr/instr ( xy-ia) drop dup 0x07 and 2* a! 2/ 2/ 2/ 0x1f and ;
-
+        : fpr/begin ( x y - i )
+          drop dup 7 and 2* a! 2/ 2/ 2/ x1f and ;
         : fpr/leave right b! A[ k/leave ; ]] lit !b
 
-        : fpr/main  A[ !p 2* !p ]] lit !b @b @b left b!
+        : fpr/main
+          # fpr/leave lit >r
+          A[ !p 2* !p ]] lit !b @b @b
           -if // 1101_111o_oogg_gfff
+            left b!
             // binary
             ( x y )
             drop dup 7 and dup >r a!
             ( x / f )
-            over 2/ 2/ 2/ 7 and >r
+            2/ 2/ 2/ dup 7 and >r
             ( x / f g )
-            over 2/ 2/ 2/ 2/ 2/ 2/ 7 and
-            ( x o / f g )
+            2/ 2/ 2/ 7 and
+            ( o / f g )
             !b           // o
             @+ @ !b !b   // h l
             r> a!
@@ -15386,15 +15408,20 @@ projects:
           then // 1101_110?_????_????
           2* -if // 1101_1101_????_????
             // constant
-            fpr/instr a >r a! @+ @ r> a! !+ ! ;
+            ( x y )
+            fpr/begin a >r a!
+            @+ @
+            ( h l / f )
+            r> a! !+ !
+            ;
           then // 1101_1100_????_????
-          fpr/instr >r ;
+          fpr/begin >r ;
 
         (
 
         opcode 1101_111o_oogg_gfff binary floatingpoint operation. first operand is fff. second operant is ggg. result in fff. operation in ooo
 
-        opcode 1101_1101_????_?fff lookup constant. result in fff. offset in ?????.
+        opcode 1101_1101_????_?fff lookup constant. result in fff. offset of constant in ?????.
 
 
         'fpop 1101_1100_????_?fff pop 32-bit floatingpoint from stack {low word first} into fp register fff {3 bits}
@@ -15408,14 +15435,6 @@ projects:
 
 
       ramWords:
-      - 0x13420
-      - 0x228AA
-      - 0x07E9A
-      - 0x2B82D
-      - 0x13420
-      - 0x2F555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15432,7 +15451,7 @@ projects:
       - 0x00FDB
       - 0x03F22
       - 0x0F983
-      - 0x13419
+      - 0x13411
       - 0x05B12
       - 0x13422
       - 0x0C9B2
@@ -15450,20 +15469,20 @@ projects:
       - 0x001D5
       - 0x11428
       - 0x089B2
-      - 0x05B02
+      - 0x04812
+      - 0x0001E
       - 0x0C432
-      - 0x01DA2
+      - 0x09F02
+      - 0x1B437
+      - 0x04BEB
       - 0x00175
-      - 0x1B43F
-      - 0x3AD12
+      - 0x04092
       - 0x00007
-      - 0x3EDBA
-      - 0x2AFC2
+      - 0x2EAC2
+      - 0x30797
+      - 0x00007
+      - 0x3E8C2
       - 0x30712
-      - 0x00007
-      - 0x3E882
-      - 0x307C2
-      - 0x307C7
       - 0x00007
       - 0x3FB1A
       - 0x03B22
@@ -15471,9 +15490,17 @@ projects:
       - 0x03B22
       - 0x26A02
       - 0x0182D
-      - 0x37244
+      - 0x3723C
+      - 0x13418
+      - 0x228AA
+      - 0x07E9A
+      - 0x2BA2D
+      - 0x13418
+      - 0x2F555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x02A
+        entryPoint: 0x022
         p: 0x000
         a: 0x000
         b: 0x000
@@ -21224,17 +21251,10 @@ projects:
         returnStack: []
         parameterStack: []
     debuggerAssemblyCode: >+
-      lit 1
+      fln2 0
 
-      pushlit 2
+      fpush 0
 
-      arld 1
-
-      lda 1
-
-      arst 1
-
-      push
 
       nop
 

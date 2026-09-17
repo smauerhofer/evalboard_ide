@@ -749,6 +749,18 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.FloatingPointPopMnemonic] = (Node306Program.Coordinate, "'fpop", FloatingPointUnaryTag),
         [CvmInstructionSet.FloatingPointPushMnemonic] = (Node306Program.Coordinate, "'fpush", FloatingPointUnaryTag),
 
+        // Node 306's four constant-lookup mnemonics. CORRECTED 2026-09-17 (see
+        // CvmInstructionSet.FloatingPointLn2Mnemonic's own remarks): these are NOT self-describing --
+        // Stefan: "the offset to the constant must be encoded in the opcode. it is index*2 + fpr/const",
+        // so all four resolve the SAME F18 symbol, "fpr/const" (a data label, not a tick-prefixed
+        // executable word -- resolved the same way any other named location in a live compile is), with
+        // tag FloatingPointConstantLookupTag (0xDD00). Each mnemonic's own index*2 additive offset lives
+        // in its own NodeResolvedEmbeddedValueFieldLayoutByMnemonic entry below, not here.
+        [CvmInstructionSet.FloatingPointLn2Mnemonic] = (Node306Program.Coordinate, "fpr/const", CvmInstructionSet.FloatingPointConstantLookupTag),
+        [CvmInstructionSet.FloatingPointInverseLn2Mnemonic] = (Node306Program.Coordinate, "fpr/const", CvmInstructionSet.FloatingPointConstantLookupTag),
+        [CvmInstructionSet.FloatingPointPiOverTwoMnemonic] = (Node306Program.Coordinate, "fpr/const", CvmInstructionSet.FloatingPointConstantLookupTag),
+        [CvmInstructionSet.FloatingPointTwoOverPiMnemonic] = (Node306Program.Coordinate, "fpr/const", CvmInstructionSet.FloatingPointConstantLookupTag),
+
         // Node 405's nine ops (2026-09-09) -- BRAND NEW, tagged/node-resolved (CvmOperandEncoding.None).
         // Node 405's own mw/main has no bit cascade of its own -- a single dispatch word then an
         // immediate "ex" -- so it shares node 406's own "1110_1???" tag (0xE800) OR'd with each op's own
@@ -817,6 +829,18 @@ internal static class CvmAssemblyLanguage
         // UNCONFIRMED assumption, flagged there) -- identical for both mnemonics.
         [CvmInstructionSet.FloatingPointPopMnemonic] = (CvmInstructionSet.FloatingPointFunctionFieldBitMask, CvmInstructionSet.FloatingPointFunctionFieldShift, CvmInstructionSet.FloatingPointFunctionFieldBaseAddress, CvmInstructionSet.FloatingPointRegisterFieldBitMask),
         [CvmInstructionSet.FloatingPointPushMnemonic] = (CvmInstructionSet.FloatingPointFunctionFieldBitMask, CvmInstructionSet.FloatingPointFunctionFieldShift, CvmInstructionSet.FloatingPointFunctionFieldBaseAddress, CvmInstructionSet.FloatingPointRegisterFieldBitMask),
+
+        // Node 306's four constant-lookup mnemonics. CORRECTED 2026-09-17 (see NodeSymbolByMnemonic's own
+        // remarks just above and CvmInstructionSet.FloatingPointLn2Mnemonic's own remarks): all four share
+        // the 5-bit/3-bit field split already defined for FloatingPointConstantOffsetFieldBitMask/Shift,
+        // but each needs its OWN FunctionFieldBaseAddress, since all four resolve the same symbol
+        // ("fpr/const") yet must each add a different index*2 word offset on top of it -- see each
+        // constant's own remarks in CvmInstructionSet for the "negative base address as additive offset"
+        // derivation (functionField = resolvedAddress - FunctionFieldBaseAddress).
+        [CvmInstructionSet.FloatingPointLn2Mnemonic] = (CvmInstructionSet.FloatingPointConstantOffsetFieldBitMask, CvmInstructionSet.FloatingPointConstantOffsetFieldShift, CvmInstructionSet.FloatingPointLn2FunctionFieldBaseAddress, CvmInstructionSet.FloatingPointRegisterFieldBitMask),
+        [CvmInstructionSet.FloatingPointInverseLn2Mnemonic] = (CvmInstructionSet.FloatingPointConstantOffsetFieldBitMask, CvmInstructionSet.FloatingPointConstantOffsetFieldShift, CvmInstructionSet.FloatingPointInverseLn2FunctionFieldBaseAddress, CvmInstructionSet.FloatingPointRegisterFieldBitMask),
+        [CvmInstructionSet.FloatingPointPiOverTwoMnemonic] = (CvmInstructionSet.FloatingPointConstantOffsetFieldBitMask, CvmInstructionSet.FloatingPointConstantOffsetFieldShift, CvmInstructionSet.FloatingPointPiOverTwoFunctionFieldBaseAddress, CvmInstructionSet.FloatingPointRegisterFieldBitMask),
+        [CvmInstructionSet.FloatingPointTwoOverPiMnemonic] = (CvmInstructionSet.FloatingPointConstantOffsetFieldBitMask, CvmInstructionSet.FloatingPointConstantOffsetFieldShift, CvmInstructionSet.FloatingPointTwoOverPiFunctionFieldBaseAddress, CvmInstructionSet.FloatingPointRegisterFieldBitMask),
 
         // The address-register family's eight ops (arinc/ardec/arinc2/ardec2/arld/arst/lda/sta) -- ADDED
         // 2026-09-11, replacing the former NodeResolvedFixedRegisterShiftByMnemonic workaround this
