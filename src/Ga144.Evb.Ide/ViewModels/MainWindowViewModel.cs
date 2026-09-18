@@ -229,7 +229,8 @@ public sealed class MainWindowViewModel : ObservableObject, IAsyncDisposable
         project.Model.UserMacros,
         controller,
         () => ResolveKrakenEndpoint(role),
-        project.NotifyProjectChanged);
+        project.NotifyProjectChanged,
+        project.Model.DefaultNodeColor);
     return (true, null, viewModel);
   }
 

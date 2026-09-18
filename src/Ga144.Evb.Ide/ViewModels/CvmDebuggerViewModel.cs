@@ -66,6 +66,11 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   private readonly KrakenLiveController _krakenController;
   private readonly Func<KrakenEndpointInfo?> _resolveEndpoint;
 
+  // Only used to color the post-mortem GA144 window a Core Dump opens -- the project's DefaultNodeColor
+  // itself, not a live ProjectViewModel reference, same "just the hex string" convention already used
+  // for NodeViewModel/NodeEditorViewModel's own projectDefaultColor parameter.
+  private readonly string _projectDefaultNodeColor;
+
   // Bubbles up to the owning project (ProjectViewModel.NotifyProjectChanged, ultimately
   // MainWindowViewModel's debounced auto-save) -- the same mechanism every other edit in this IDE
   // rides, so clicking Save here needs no bespoke save-to-disk logic of its own.
@@ -128,7 +133,8 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       IReadOnlyList<F18MacroDefinition> userMacros,
       KrakenLiveController krakenController,
       Func<KrakenEndpointInfo?> resolveEndpoint,
-      Action notifyProjectChanged)
+      Action notifyProjectChanged,
+      string projectDefaultNodeColor)
   {
     _chip = chip ?? throw new ArgumentNullException(nameof(chip));
     _romLibrary = romLibrary ?? throw new ArgumentNullException(nameof(romLibrary));
@@ -136,6 +142,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     _krakenController = krakenController ?? throw new ArgumentNullException(nameof(krakenController));
     _resolveEndpoint = resolveEndpoint ?? throw new ArgumentNullException(nameof(resolveEndpoint));
     _notifyProjectChanged = notifyProjectChanged ?? throw new ArgumentNullException(nameof(notifyProjectChanged));
+    _projectDefaultNodeColor = string.IsNullOrWhiteSpace(projectDefaultNodeColor) ? NodeColorPalette.DefaultColor : projectDefaultNodeColor;
 
     StartCommand = new AsyncRelayCommand(StartAsync, () => !IsBusy);
     StepCommand = new AsyncRelayCommand(StepAsync, () => !IsBusy && IsSessionActive);
@@ -150,6 +157,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     SaveCommand = new RelayCommand(SaveAssemblyCode);
     LoadCommand = new RelayCommand(LoadAssemblyCode, () => _chip.DebuggerAssemblyCode is not null);
     RestoreCommand = new RelayCommand(RestoreAssemblyCode);
+    CoreDumpCommand = new AsyncRelayCommand(CoreDumpAsync, () => !IsBusy);
 
     // Reopen where Stefan left off: if this chip has ever had assembly code Saved from a previous
     // CVM Debugger session, start the editor from that instead of DefaultAssemblyCode -- otherwise
@@ -226,6 +234,18 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   public RelayCommand SaveCommand { get; }
   public RelayCommand LoadCommand { get; }
   public RelayCommand RestoreCommand { get; }
+  public AsyncRelayCommand CoreDumpCommand { get; }
+
+  /// <summary>Exposed only so Views.CvmDebuggerWindow can construct a PostMortemChipViewModel for a
+  /// completed Core Dump -- this view model does no window creation of its own (same convention as
+  /// every other file-picking/window-opening action in this IDE).</summary>
+  public Ga144ChipConfiguration Chip => _chip;
+  public Ga144RomLibrary RomLibrary => _romLibrary;
+  public IReadOnlyList<F18MacroDefinition> UserMacros => _userMacros;
+
+  /// <summary>Raised once a Core Dump finishes building its snapshot -- the window's code-behind
+  /// opens a new post-mortem GA144 window from it.</summary>
+  public event Action<PostMortemSnapshot>? CoreDumpCompleted;
 
   /// <summary>Tied to the debugger window's Closed event -- stops any in-flight Continue and releases the port.</summary>
   public void Cancel()
@@ -418,6 +438,146 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     RefreshProgramCounter();
     OnPropertyChanged(nameof(IsSessionActive));
     NotifyCommandStates();
+  }
+
+  /// <summary>
+  /// "Core Dump...": captures the ENTIRE chip's live state through Kraken for the post-mortem
+  /// window. Sequence, per Stefan's own spec and follow-up answers: (1) an active CVM Debug session
+  /// is stopped first (it owns the same COM port directly, bypassing Kraken entirely -- the two
+  /// cannot run at once, and "the debug session is done, Kraken is only needed to read out the
+  /// current chip state" is Stefan's own framing for why stopping it here, rather than refusing, is
+  /// the right call); (2) the chip is reset (<see cref="KrakenLiveController.ResetChipAsync"/> -- the
+  /// standalone reset primitive, not a fused reset+erect); (3) Kraken is installed on node 708
+  /// (<see cref="KrakenLiveController.EnsureOnlineAsync"/>, same call <see cref="ViewModels.ChipViewModel.ToggleKrakenAsync"/>
+  /// uses); (4) every other node (708 itself has no live-state read path of its own) is read in
+  /// tentacle/position order, same iteration shape as
+  /// <see cref="ViewModels.ChipViewModel.VerifyAllRomsAsync"/> -- one node's transport failure is
+  /// recorded and skipped, not fatal to the rest of the dump. Reading the stacks is destructive
+  /// (confirmed acceptable: a Core Dump is taken right after a reset, before anything is running).
+  /// Kraken is deliberately left resident afterward -- same as every other Kraken operation in this
+  /// app, nothing auto-tears it down -- so StatusText says so, since it blocks a subsequent Start
+  /// until Stefan removes it via the GA144 window's own Kraken button.
+  /// </summary>
+  private async Task CoreDumpAsync()
+  {
+    if (_krakenController.HardwareErected)
+    {
+      StatusText = "Core Dump cannot run while a Kraken is already erected on this chip -- remove it first (the GA144 window's Kraken button), then try again. Core Dump always starts from a fresh reset.";
+      return;
+    }
+
+    KrakenEndpointInfo? endpoint = _resolveEndpoint();
+    if (endpoint is null)
+    {
+      StatusText = "No serial endpoint is assigned to this chip. Assign a COM port before running Core Dump.";
+      return;
+    }
+
+    if (IsSessionActive)
+    {
+      Stop();
+    }
+
+    IsBusy = true;
+    StatusText = "Core Dump: resetting the chip…";
+    var nodeSnapshots = new Dictionary<int, PostMortemNodeSnapshot>();
+    var failedNodes = new List<string>();
+    try
+    {
+      await _krakenController.ResetChipAsync();
+
+      IReadOnlyDictionary<int, KrakenNodeRoute> routes = KrakenTopology.BuildRouteMap(_chip.Kraken);
+      List<KrakenNodeRoute> orderedRoutes = routes.Values
+          .Where(route => !route.IsHead)
+          .OrderBy(route => route.TentacleNumber)
+          .ThenBy(route => route.Position)
+          .ToList();
+
+      if (orderedRoutes.Count == 0)
+      {
+        StatusText = "Core Dump failed: no Kraken routes are defined for this chip.";
+        return;
+      }
+
+      StatusText = "Core Dump: installing Kraken on node 708…";
+      await _krakenController.EnsureOnlineAsync(orderedRoutes[0], verifyTarget: false, allowErect: true);
+
+      await _krakenController.BeginKeepOpenAsync();
+      try
+      {
+        for (int index = 0; index < orderedRoutes.Count; index++)
+        {
+          KrakenNodeRoute route = orderedRoutes[index];
+          StatusText = $"Core Dump: reading node {route.Coordinate:000} ({index + 1} of {orderedRoutes.Count})…";
+          string? nodeColor = _chip.GetNode(route.Coordinate).Color;
+          try
+          {
+            int a = await _krakenController.ReadAAsync(route);
+            int io = await _krakenController.ReadIoAsync(route);
+            IReadOnlyList<int> ram = await _krakenController.ReadRamAsync(route);
+            IReadOnlyList<int> rom = await _krakenController.ReadRomAsync(route);
+            // Destructive by nature (Stefan confirmed this is acceptable here): 'readPStack'/
+            // 'readRStack' POP the stacks off the live node as part of reading them. Nothing here
+            // writes them back.
+            IReadOnlyList<int> parameterStack = await _krakenController.ReadParameterStackAsync(route);
+            IReadOnlyList<int> returnStack = await _krakenController.ReadReturnStackAsync(route);
+
+            nodeSnapshots[route.Coordinate] = new PostMortemNodeSnapshot
+            {
+              Coordinate = route.Coordinate,
+              A = a,
+              Io = io,
+              Ram = [.. ram],
+              Rom = [.. rom],
+              ParameterStack = [.. parameterStack],
+              ReturnStack = [.. returnStack],
+              Color = nodeColor
+            };
+          }
+          catch (Exception exception) when (exception is IOException or TimeoutException or InvalidOperationException)
+          {
+            failedNodes.Add($"{route.Coordinate:000} ({exception.Message})");
+            nodeSnapshots[route.Coordinate] = new PostMortemNodeSnapshot
+            {
+              Coordinate = route.Coordinate,
+              Error = exception.Message,
+              Color = nodeColor
+            };
+            // One node's transport failure does not abort the rest of the dump -- same policy as
+            // ChipViewModel.VerifyAllRomsAsync's own per-node scan.
+          }
+        }
+      }
+      finally
+      {
+        await _krakenController.EndKeepOpenAsync();
+      }
+
+      var snapshot = new PostMortemSnapshot
+      {
+        CapturedAtUtc = DateTime.UtcNow,
+        ChipRole = _chip.Role,
+        ChipName = _chip.Name,
+        ProjectDefaultNodeColor = _projectDefaultNodeColor,
+        Nodes = nodeSnapshots
+      };
+
+      StatusText = (failedNodes.Count == 0
+          ? $"Core Dump complete: read {nodeSnapshots.Count} node(s)."
+          : $"Core Dump complete with {failedNodes.Count} failed node(s): {string.Join(", ", failedNodes)}.") +
+          " Kraken remains installed on this chip -- remove it (the GA144 window's Kraken button) before starting the CVM Debugger again.";
+
+      CoreDumpCompleted?.Invoke(snapshot);
+    }
+    catch (Exception exception)
+    {
+      StatusText = "Core Dump failed: " + exception.Message;
+    }
+    finally
+    {
+      IsBusy = false;
+      NotifyCommandStates();
+    }
   }
 
   private void AddBreakpoint()
@@ -924,6 +1084,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     RefreshMemoryCommand.NotifyCanExecuteChanged();
     AssembleCommand.NotifyCanExecuteChanged();
     LoadCommand.NotifyCanExecuteChanged();
+    CoreDumpCommand.NotifyCanExecuteChanged();
     OnPropertyChanged(nameof(IsContinuing));
     OnPropertyChanged(nameof(IsSessionActive));
   }

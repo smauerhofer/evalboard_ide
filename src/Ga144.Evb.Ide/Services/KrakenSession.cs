@@ -652,7 +652,11 @@ internal sealed class KrakenSession : IAsyncDisposable
   // 'writeB' words do -- they just use a different instruction SHAPE to get
   // there, and the new protocol's post-erection operations only ever depend
   // on that final state, never on how it was reached.
-  private void ErectOnto(NativeWindowsSerialPort port, CancellationToken cancellationToken)
+  // The exact, hardware-verified DTR/RTS reset sequence, extracted so both
+  // ErectOnto (reset, then load the head program and erect every tentacle) and
+  // the standalone PulseResetOnPort below (reset only, nothing loaded) share one
+  // implementation instead of two copies that could drift apart.
+  private static void PulseReset(NativeWindowsSerialPort port, CancellationToken cancellationToken)
   {
     cancellationToken.ThrowIfCancellationRequested();
     port.SetDtr(true);
@@ -662,6 +666,47 @@ internal sealed class KrakenSession : IAsyncDisposable
     port.PurgeInputOutput();
     port.SetRts(true);
     Thread.Sleep(ResetReleaseMilliseconds);
+  }
+
+  /// <summary>
+  /// Opens <paramref name="portName"/> just long enough to pulse the GA144's
+  /// hardware reset line -- the same DTR/RTS sequence <see cref="ErectOnto"/>
+  /// always performs first -- then closes it again. No head program is loaded
+  /// and no Kraken is erected: every node in the array reboots into its own
+  /// boot ROM and simply stays there. This exists as its own primitive so a
+  /// plain "reset the chip" operation (for example, a Core Dump's post-mortem
+  /// snapshot, or any future reset-only control) does not have to erect a
+  /// Kraken it does not want, matching only the DTR/RTS side effect actually
+  /// requested rather than the fused reset+erect that <see cref="ConnectAndErectAsync"/>
+  /// always performs. Requires that nothing else currently holds this COM
+  /// port open (see <see cref="KrakenLiveController.ResetChipAsync"/>, its only caller).
+  /// </summary>
+  public static void PulseResetOnPort(string portName, CancellationToken cancellationToken)
+  {
+    ArgumentException.ThrowIfNullOrWhiteSpace(portName);
+    NativeWindowsSerialPort port = NativeWindowsSerialPort.Open(
+        portName,
+        OnlineBaudRate,
+        readTimeoutMilliseconds: 50,
+        writeTimeoutMilliseconds: 2_000);
+    try
+    {
+      PulseReset(port, cancellationToken);
+    }
+    finally
+    {
+      // Leave RESET- inactive/high before closing, exactly like ConnectAndErect's
+      // own failure path and DisposeAsync's teardown -- never park the chip with
+      // reset still asserted.
+      try { port.SetRts(true); } catch { }
+      try { port.SetDtr(true); } catch { }
+      port.Dispose();
+    }
+  }
+
+  private void ErectOnto(NativeWindowsSerialPort port, CancellationToken cancellationToken)
+  {
+    PulseReset(port, cancellationToken);
 
     // Load the current head program into RAM, but point completion at
     // ser-exec (NOT at 'main's entry) -- unlike the single-frame boot this

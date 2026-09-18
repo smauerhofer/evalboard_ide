@@ -327,7 +327,8 @@ public partial class ChipWindow : Window
         _viewModel.Project.Model.UserMacros,
         _viewModel.KrakenController,
         _viewModel.KrakenEndpointResolver,
-        _viewModel.Project.NotifyProjectChanged);
+        _viewModel.Project.NotifyProjectChanged,
+        _viewModel.Project.Model.DefaultNodeColor);
     var window = new CvmDebuggerWindow(viewModel)
     {
       Owner = this

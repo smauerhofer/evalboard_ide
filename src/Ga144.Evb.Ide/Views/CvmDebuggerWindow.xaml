@@ -39,6 +39,8 @@
                           ToolTip="Stops the current Continue after its transaction in progress finishes." />
           <Button Content="Stop" Command="{Binding StopCommand}" Padding="12,6" Margin="0,0,8,0"
                           ToolTip="Ends this debugging session: cancels any run in progress and closes the serial port to the chip. The window stays open -- click Start / Reinstall to reconnect." />
+          <Button Content="Core Dump..." Command="{Binding CoreDumpCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Stops any active debug session, resets the chip, installs Kraken on node 708, and reads every other node's A, IO, RAM, ROM, and both stacks -- opening a read-only post-mortem GA144 window with the result. Reading the stacks pops them off the live node. Kraken remains installed afterward." />
           <TextBlock Text="PC:" VerticalAlignment="Center" Margin="14,0,4,0" FontWeight="SemiBold" />
           <TextBlock Text="{Binding ProgramCounterText}" VerticalAlignment="Center" FontFamily="Consolas" FontWeight="SemiBold" />
         </StackPanel>

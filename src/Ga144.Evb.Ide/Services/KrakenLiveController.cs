@@ -100,6 +100,42 @@ public sealed class KrakenLiveController : IAsyncDisposable
     }
   }
 
+  /// <summary>
+  /// Pulses the GA144's hardware reset line and releases it again, WITHOUT
+  /// loading a head program or erecting Kraken -- every node in the array
+  /// reboots into its own boot ROM and stays there. This briefly opens the
+  /// board's endpoint purely to toggle DTR/RTS (see
+  /// <see cref="KrakenSession.PulseResetOnPort"/>) and closes it again
+  /// immediately, so it is safe to call as a standalone "reset the chip"
+  /// operation from anywhere that needs one without also erecting a Kraken it
+  /// does not want (for example, the first step of a Core Dump, before
+  /// installing Kraken separately via <see cref="EnsureOnlineAsync"/>).
+  ///
+  /// Requires that no Kraken is currently resident: reset while erected would
+  /// silently wipe the very Kraken this controller believes is still live.
+  /// Call <see cref="ResetTransientErectionAsync"/> first to tear one down.
+  /// </summary>
+  public async Task ResetChipAsync(CancellationToken cancellationToken = default)
+  {
+    await _gate.WaitAsync(cancellationToken);
+    try
+    {
+      ThrowIfDisposed();
+      if (_hardwareErected)
+      {
+        throw new InvalidOperationException(
+            "A Kraken is currently resident. Call ResetTransientErectionAsync to release it before pulsing a standalone reset.");
+      }
+
+      KrakenEndpointInfo endpoint = ResolveEndpoint();
+      await Task.Run(() => KrakenSession.PulseResetOnPort(endpoint.PortName, cancellationToken), cancellationToken);
+    }
+    finally
+    {
+      _gate.Release();
+    }
+  }
+
   public event EventHandler? StateChanged;
 
   /// <summary>True while the resident hardware Kraken is usable, even if the host COM handle is parked.</summary>

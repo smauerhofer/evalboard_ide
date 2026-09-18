@@ -1,0 +1,96 @@
+<Window x:Class="Ga144.Evb.Ide.Views.PostMortemChipWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GA144 post-mortem"
+        Width="1992"
+        Height="1104"
+        MinWidth="1512"
+        MinHeight="864"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        WindowStartupLocation="CenterOwner">
+  <Grid Margin="10">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <Grid Margin="0,0,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+
+      <TextBlock Grid.Column="0"
+                       Text="{Binding Title, Mode=OneWay}"
+                       FontSize="20"
+                       FontWeight="SemiBold"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap" />
+
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button Content="Export…"
+                        Click="OnExportClick"
+                        Padding="12,6"
+                        Margin="0,0,8,0"
+                        ToolTip="Saves this post-mortem snapshot as a YAML file." />
+        <Button Content="Import…"
+                        Click="OnImportClick"
+                        Padding="12,6"
+                        ToolTip="Replaces the data shown here with a previously exported post-mortem YAML file. Closes every open node detail window first, since each one belongs to the data being replaced." />
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="1" Background="White">
+      <ItemsControl ItemsSource="{Binding Nodes}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <UniformGrid Columns="18" Rows="8" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Button Click="OnNodeClick"
+                            Margin="8"
+                            Padding="0"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch"
+                            ToolTip="{Binding ToolTip}"
+                            Tag="{Binding}">
+              <Button.Style>
+                <Style TargetType="Button">
+                  <Setter Property="Background" Value="Transparent" />
+                  <Setter Property="BorderThickness" Value="0" />
+                </Style>
+              </Button.Style>
+              <Border BorderBrush="{Binding NodeBorderBrushColor}"
+                              BorderThickness="3"
+                              Background="{Binding NodeBackgroundBrush}"
+                              CornerRadius="4">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <TextBlock Text="{Binding CoordinateText}"
+                                       FontFamily="Consolas"
+                                       FontWeight="Bold"
+                                       FontSize="20"
+                                       HorizontalAlignment="Center" />
+                  <TextBlock Text="error"
+                                       FontSize="11"
+                                       FontWeight="Bold"
+                                       Foreground="#B33A3A"
+                                       HorizontalAlignment="Center"
+                                       Visibility="{Binding ErrorVisibility}" />
+                </StackPanel>
+              </Border>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Grid>
+
+    <Border Grid.Row="2" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="8" Margin="0,8,0,0">
+      <TextBlock TextWrapping="Wrap"
+                       Text="Read-only snapshot of the chip's live state at capture time, colored using this project's node colors. Click a node to see its registers, both stacks (with symbolic port names for values that match a known port address), and a RAM/ROM disassembly with differences from this project's currently compiled source highlighted. Node 708 (the Kraken head) has no live-state read path of its own and is not included." />
+    </Border>
+  </Grid>
+</Window>
