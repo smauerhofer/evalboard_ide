@@ -84,6 +84,8 @@ public sealed class PostMortemChipViewModel : ObservableObject
 
     IReadOnlyList<int>? compiledRamWords = null;
     IReadOnlyList<int>? compiledRomWords = null;
+    IReadOnlyDictionary<string, F18ExportedSymbol>? compiledRamSymbols = null;
+    IReadOnlyDictionary<string, F18ExportedSymbol>? compiledRomSymbols = null;
     if (_liveChip is not null && _romLibrary is not null)
     {
       try
@@ -92,6 +94,8 @@ public sealed class PostMortemChipViewModel : ObservableObject
         F18NodeCompilationResult compiled = compileService.CompileNode(coordinate);
         compiledRamWords = compiled.Ram.Success ? compiled.Ram.Words : null;
         compiledRomWords = compiled.Rom.Success ? compiled.Rom.Words : null;
+        compiledRamSymbols = compiled.Ram.Success ? compiled.Ram.Symbols : null;
+        compiledRomSymbols = compiled.Rom.Success ? compiled.Rom.Symbols : null;
       }
       catch
       {
@@ -101,7 +105,13 @@ public sealed class PostMortemChipViewModel : ObservableObject
       }
     }
 
-    return new PostMortemNodeDetailViewModel(nodeSnapshot, _snapshot.ProjectDefaultNodeColor, compiledRamWords, compiledRomWords);
+    return new PostMortemNodeDetailViewModel(
+        nodeSnapshot,
+        _snapshot.ProjectDefaultNodeColor,
+        compiledRamWords,
+        compiledRomWords,
+        compiledRamSymbols,
+        compiledRomSymbols);
   }
 
   // Builds exactly 144 cells, one per coordinate, in the same descending-row/ascending-column order

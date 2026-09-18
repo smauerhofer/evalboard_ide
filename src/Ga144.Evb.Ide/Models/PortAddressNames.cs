@@ -27,15 +27,17 @@ public static class PortAddressNames
   public static bool IsPortAddress(int value) => ByAddress.ContainsKey(value);
 
   /// <summary>
-  /// Formats <paramref name="value"/> as its zero-padded hex literal ("0x145" style,
-  /// matching this project's existing register/word display convention), followed by
-  /// its symbolic port name in parentheses when known (e.g. "0x175 (left)") -- showing
-  /// the hex value always, so nothing is hidden behind the translated name, with the
-  /// name appended only where the value is recognized.
+  /// Formats <paramref name="value"/> as a zero-padded hex literal with no "0x" prefix
+  /// -- 5 digits by default, matching the 18-bit width of a full register/stack word
+  /// (e.g. "00175") -- followed by its symbolic port name in parentheses when known
+  /// (e.g. "00175 (left)"). Showing the hex value always, so nothing is hidden behind
+  /// the translated name, with the name appended only where the value is recognized.
+  /// Pass <paramref name="hexDigits"/> = 3 for a value known to be a 10-bit address
+  /// instead of a full word.
   /// </summary>
-  public static string Format(int value, int hexDigits = 3)
+  public static string Format(int value, int hexDigits = 5)
   {
-    string hex = $"0x{value.ToString("X" + hexDigits)}";
+    string hex = value.ToString("X" + hexDigits);
     return TryGetName(value) is { } name ? $"{hex} ({name})" : hex;
   }
 

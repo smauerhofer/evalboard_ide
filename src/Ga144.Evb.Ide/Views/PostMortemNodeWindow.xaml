@@ -107,9 +107,12 @@
             </ListView.ItemContainerStyle>
             <ListView.View>
               <GridView>
-                <GridViewColumn Header="Address" DisplayMemberBinding="{Binding AddressHex}" Width="80" />
-                <GridViewColumn Header="On-chip" DisplayMemberBinding="{Binding Disassembly}" Width="280" />
-                <GridViewColumn Header="Compiled" DisplayMemberBinding="{Binding CompiledDisassembly}" Width="280" />
+                <GridViewColumn Header="Address" DisplayMemberBinding="{Binding AddressHex}" Width="60" />
+                <GridViewColumn Header="Label" DisplayMemberBinding="{Binding Label}" Width="90" />
+                <GridViewColumn Header="Hex" DisplayMemberBinding="{Binding HexText}" Width="60" />
+                <GridViewColumn Header="On-chip" DisplayMemberBinding="{Binding Disassembly}" Width="200" />
+                <GridViewColumn Header="Hex" DisplayMemberBinding="{Binding CompiledHexText}" Width="60" />
+                <GridViewColumn Header="Compiled" DisplayMemberBinding="{Binding CompiledDisassembly}" Width="200" />
               </GridView>
             </ListView.View>
           </ListView>
@@ -137,9 +140,12 @@
             </ListView.ItemContainerStyle>
             <ListView.View>
               <GridView>
-                <GridViewColumn Header="Address" DisplayMemberBinding="{Binding AddressHex}" Width="80" />
-                <GridViewColumn Header="On-chip" DisplayMemberBinding="{Binding Disassembly}" Width="280" />
-                <GridViewColumn Header="Compiled" DisplayMemberBinding="{Binding CompiledDisassembly}" Width="280" />
+                <GridViewColumn Header="Address" DisplayMemberBinding="{Binding AddressHex}" Width="60" />
+                <GridViewColumn Header="Label" DisplayMemberBinding="{Binding Label}" Width="90" />
+                <GridViewColumn Header="Hex" DisplayMemberBinding="{Binding HexText}" Width="60" />
+                <GridViewColumn Header="On-chip" DisplayMemberBinding="{Binding Disassembly}" Width="200" />
+                <GridViewColumn Header="Hex" DisplayMemberBinding="{Binding CompiledHexText}" Width="60" />
+                <GridViewColumn Header="Compiled" DisplayMemberBinding="{Binding CompiledDisassembly}" Width="200" />
               </GridView>
             </ListView.View>
           </ListView>

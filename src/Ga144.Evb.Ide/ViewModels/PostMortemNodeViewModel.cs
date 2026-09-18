@@ -61,5 +61,5 @@ public sealed class PostMortemNodeViewModel
       ? $"Node {CoordinateText} (Kraken head): no live-state read path of its own -- not captured."
       : HasError
           ? $"Node {CoordinateText}: read failed -- {Snapshot!.Error}"
-          : $"Node {CoordinateText}\nA: {PortAddressNames.Format(Snapshot!.A)}   IO: 0x{Snapshot.Io:X5}\nClick for registers, both stacks, and a RAM/ROM disassembly.";
+          : $"Node {CoordinateText}\nA: {PortAddressNames.Format(Snapshot!.A)}   IO: {Snapshot.Io:X5}\nClick for registers, both stacks, and a RAM/ROM disassembly.";
 }
