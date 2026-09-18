@@ -454,6 +454,12 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// <see cref="ViewModels.ChipViewModel.VerifyAllRomsAsync"/> -- one node's transport failure is
   /// recorded and skipped, not fatal to the rest of the dump. Reading the stacks is destructive
   /// (confirmed acceptable: a Core Dump is taken right after a reset, before anything is running).
+  /// Within one node, the PARAMETER STACK (T, S, and the rest) is read FIRST, before anything else --
+  /// per Stefan's own correction: every other read (A, IO, RAM, ROM, the return stack) works by having
+  /// the node route its result through T before transmitting it, which would otherwise clobber the
+  /// true, as-found top of the parameter stack before it had been captured. Once the parameter stack
+  /// is safely read, the remaining reads may happen in any order, since by then every one of them is
+  /// expected (and harmless) to pass its own result through T on the way out.
   /// Kraken is deliberately left resident afterward -- same as every other Kraken operation in this
   /// app, nothing auto-tears it down -- so StatusText says so, since it blocks a subsequent Start
   /// until Stefan removes it via the GA144 window's own Kraken button.
@@ -512,14 +518,21 @@ public sealed class CvmDebuggerViewModel : ObservableObject
           string? nodeColor = _chip.GetNode(route.Coordinate).Color;
           try
           {
-            int a = await _krakenController.ReadAAsync(route);
-            int io = await _krakenController.ReadIoAsync(route);
-            IReadOnlyList<int> ram = await _krakenController.ReadRamAsync(route);
-            IReadOnlyList<int> rom = await _krakenController.ReadRomAsync(route);
+            // Parameter stack FIRST, ahead of every other read on this node (Stefan's own correction):
+            // A/IO/RAM/ROM/return-stack reads all route their result through T on the way out, which
+            // would otherwise overwrite the true, as-found T/S before they had been captured here.
             // Destructive by nature (Stefan confirmed this is acceptable here): 'readPStack'/
             // 'readRStack' POP the stacks off the live node as part of reading them. Nothing here
             // writes them back.
             IReadOnlyList<int> parameterStack = await _krakenController.ReadParameterStackAsync(route);
+
+            // From here on, order no longer matters: every remaining read is already expected to pass
+            // its own result through T before transmitting it, now that the parameter stack itself is
+            // safely captured above.
+            int a = await _krakenController.ReadAAsync(route);
+            int io = await _krakenController.ReadIoAsync(route);
+            IReadOnlyList<int> ram = await _krakenController.ReadRamAsync(route);
+            IReadOnlyList<int> rom = await _krakenController.ReadRomAsync(route);
             IReadOnlyList<int> returnStack = await _krakenController.ReadReturnStackAsync(route);
 
             nodeSnapshots[route.Coordinate] = new PostMortemNodeSnapshot

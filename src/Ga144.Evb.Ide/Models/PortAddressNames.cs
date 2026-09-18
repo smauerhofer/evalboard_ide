@@ -27,12 +27,17 @@ public static class PortAddressNames
   public static bool IsPortAddress(int value) => ByAddress.ContainsKey(value);
 
   /// <summary>
-  /// Formats <paramref name="value"/> as its symbolic port name when known,
-  /// otherwise as a zero-padded hex literal ("0x145" style, matching this
-  /// project's existing register/word display convention).
+  /// Formats <paramref name="value"/> as its zero-padded hex literal ("0x145" style,
+  /// matching this project's existing register/word display convention), followed by
+  /// its symbolic port name in parentheses when known (e.g. "0x175 (left)") -- showing
+  /// the hex value always, so nothing is hidden behind the translated name, with the
+  /// name appended only where the value is recognized.
   /// </summary>
-  public static string Format(int value, int hexDigits = 3) =>
-      TryGetName(value) is { } name ? name : $"0x{value.ToString("X" + hexDigits)}";
+  public static string Format(int value, int hexDigits = 3)
+  {
+    string hex = $"0x{value.ToString("X" + hexDigits)}";
+    return TryGetName(value) is { } name ? $"{hex} ({name})" : hex;
+  }
 
   private static IReadOnlyDictionary<int, string> BuildReverseMap()
   {
