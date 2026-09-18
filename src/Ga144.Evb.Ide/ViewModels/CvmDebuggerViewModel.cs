@@ -447,22 +447,54 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// cannot run at once, and "the debug session is done, Kraken is only needed to read out the
   /// current chip state" is Stefan's own framing for why stopping it here, rather than refusing, is
   /// the right call); (2) the chip is reset (<see cref="KrakenLiveController.ResetChipAsync"/> -- the
-  /// standalone reset primitive, not a fused reset+erect); (3) Kraken is installed on node 708
-  /// (<see cref="KrakenLiveController.EnsureOnlineAsync"/>, same call <see cref="ViewModels.ChipViewModel.ToggleKrakenAsync"/>
-  /// uses); (4) every other node (708 itself has no live-state read path of its own) is read in
-  /// tentacle/position order, same iteration shape as
-  /// <see cref="ViewModels.ChipViewModel.VerifyAllRomsAsync"/> -- one node's transport failure is
-  /// recorded and skipped, not fatal to the rest of the dump. Reading the stacks is destructive
-  /// (confirmed acceptable: a Core Dump is taken right after a reset, before anything is running).
-  /// Within one node, the PARAMETER STACK (T, S, and the rest) is read FIRST, before anything else --
-  /// per Stefan's own correction: every other read (A, IO, RAM, ROM, the return stack) works by having
-  /// the node route its result through T before transmitting it, which would otherwise clobber the
-  /// true, as-found top of the parameter stack before it had been captured. Once the parameter stack
-  /// is safely read, the remaining reads may happen in any order, since by then every one of them is
-  /// expected (and harmless) to pass its own result through T on the way out.
-  /// Kraken is deliberately left resident afterward -- same as every other Kraken operation in this
-  /// app, nothing auto-tears it down -- so StatusText says so, since it blocks a subsequent Start
-  /// until Stefan removes it via the GA144 window's own Kraken button.
+  /// standalone reset primitive, not a fused reset+erect); (3) node 708's own head program alone is
+  /// brought up (<see cref="KrakenLiveController.EnsureHeadOnlineAsync"/>) -- NOT the ordinary bulk
+  /// "Install Kraken" erection (<see cref="KrakenLiveController.EnsureOnlineAsync"/>,
+  /// <see cref="ViewModels.ChipViewModel.ToggleKrakenAsync"/>'s own call); (4) every tentacle node is
+  /// then wired AND read together, one node at a time, in tentacle/position order (708 itself has no
+  /// live-state read path of its own and is skipped) -- one node's transport failure is recorded and
+  /// skipped, not fatal to the rest of the dump, though it does mean every LATER node on the SAME
+  /// tentacle becomes unreachable too, since the physical relay chain breaks at that point, and each
+  /// of them will fail its own Focus call in turn and be recorded the same way.
+  ///
+  /// Per-node sequence, Stefan's own explicit correction (his exact numbering):
+  ///   1) send a focusing call (<see cref="KrakenLiveController.FocusAsync"/>) to this node, reached
+  ///      through however many hops are ALREADY wired from earlier iterations.
+  ///   2) read the parameter stack (<see cref="KrakenLiveController.ReadParameterStackAsync"/>) --
+  ///      MUST happen immediately after focusing and before anything else touches this node: focus's
+  ///      own reply mechanism uses exactly 1 word of this node's parameter stack, so reading it now is
+  ///      what recovers its true, as-found top of stack before that happens.
+  ///   3) read the rest of this node's state (A, IO, RAM, ROM, return stack) -- order among these no
+  ///      longer matters, since each is independently expected to round-trip through T.
+  ///   4) only THEN write B (<see cref="KrakenLiveController.WriteBAsync"/>) to extend the tentacle one
+  ///      hop further, making the NEXT node reachable for the next iteration. Doing this any earlier
+  ///      would let writeB's own reply mechanism disturb this node's stack before step 2 had read it.
+  /// Reading the stacks is destructive (confirmed acceptable: a Core Dump is taken right after a
+  /// reset, before anything is running); nothing here writes them back.
+  ///
+  /// This whole node-by-node erect-and-read approach is DELIBERATELY separate from, and never used
+  /// by, the ordinary "Install Kraken" button: it relies on live, per-node focus/writeB transactions
+  /// through node 708's 'w/r' head protocol (<see cref="KrakenSession.FocusAsync"/>,
+  /// <see cref="KrakenProtocol.BuildFocus"/>/<see cref="KrakenProtocol.BuildWriteB"/>) -- the SAME
+  /// dynamic, per-word-acknowledged construction the project's own node-300-erection-investigation
+  /// found unreliable for BULK erection, which is why <see cref="KrakenSession.ErectOnto"/> uses
+  /// fire-and-forget boot frames instead for everyday CVM Debug use. Stefan's own explicit direction
+  /// was to use it here anyway, scoped to Core Dump only. Node 300's live focus call has since
+  /// reproduced that exact timeout on real hardware, so per Stefan's follow-up direction, Core Dump
+  /// now builds its routes from <see cref="KrakenConfiguration.CreateForPostMortemExcludingNode300"/>
+  /// instead of the chip's normal, resident <see cref="Ga144ChipConfiguration.Kraken"/>: node 300 is
+  /// left out of the path entirely (never focused, never read) and Tentacle 1 is rerouted around it so
+  /// the rest of the tentacle stays reachable. This substitution is scoped to Core Dump alone -- the
+  /// chip's own <c>Kraken</c> structure, and everything "Install Kraken" does with it, is untouched.
+  ///
+  /// Unlike every other Kraken operation in this app, this erection is torn down again as soon as the
+  /// dump is over (success, partial failure, or exception alike): Core Dump's head-only/per-node
+  /// erection is a diagnostic scan, not an install, so it must never linger the way "Install Kraken"
+  /// deliberately does. The teardown is <see cref="KrakenLiveController.ResetTransientErectionAsync"/>
+  /// -- exactly what the GA144 window's own Kraken button calls to "remove" a Kraken (drops IDE
+  /// erection state and parks the COM handle, no chip reset) -- so once Core Dump finishes, the GA144
+  /// window again shows no Kraken erected and <see cref="StartAsync"/>'s resident-Kraken guard no
+  /// longer blocks a fresh debug session.
   /// </summary>
   private async Task CoreDumpAsync()
   {
@@ -492,7 +524,11 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     {
       await _krakenController.ResetChipAsync();
 
-      IReadOnlyDictionary<int, KrakenNodeRoute> routes = KrakenTopology.BuildRouteMap(_chip.Kraken);
+      // Deliberately NOT _chip.Kraken: see this method's own remarks above node 300 -- Core Dump
+      // reads from a post-mortem-only route set with node 300 omitted and Tentacle 1 rerouted around
+      // it, never the chip's normal, resident Kraken structure used by "Install Kraken".
+      IReadOnlyDictionary<int, KrakenNodeRoute> routes =
+          KrakenTopology.BuildRouteMap(KrakenConfiguration.CreateForPostMortemExcludingNode300());
       List<KrakenNodeRoute> orderedRoutes = routes.Values
           .Where(route => !route.IsHead)
           .OrderBy(route => route.TentacleNumber)
@@ -505,82 +541,100 @@ public sealed class CvmDebuggerViewModel : ObservableObject
         return;
       }
 
-      StatusText = "Core Dump: installing Kraken on node 708…";
-      await _krakenController.EnsureOnlineAsync(orderedRoutes[0], verifyTarget: false, allowErect: true);
+      StatusText = "Core Dump: bringing up the Kraken head (node 708)…";
+      await _krakenController.EnsureHeadOnlineAsync(orderedRoutes[0]);
 
-      await _krakenController.BeginKeepOpenAsync();
       try
       {
-        for (int index = 0; index < orderedRoutes.Count; index++)
+        await _krakenController.BeginKeepOpenAsync();
+        try
         {
-          KrakenNodeRoute route = orderedRoutes[index];
-          StatusText = $"Core Dump: reading node {route.Coordinate:000} ({index + 1} of {orderedRoutes.Count})…";
-          string? nodeColor = _chip.GetNode(route.Coordinate).Color;
-          try
+          for (int index = 0; index < orderedRoutes.Count; index++)
           {
-            // Parameter stack FIRST, ahead of every other read on this node (Stefan's own correction):
-            // A/IO/RAM/ROM/return-stack reads all route their result through T on the way out, which
-            // would otherwise overwrite the true, as-found T/S before they had been captured here.
-            // Destructive by nature (Stefan confirmed this is acceptable here): 'readPStack'/
-            // 'readRStack' POP the stacks off the live node as part of reading them. Nothing here
-            // writes them back.
-            IReadOnlyList<int> parameterStack = await _krakenController.ReadParameterStackAsync(route);
-
-            // From here on, order no longer matters: every remaining read is already expected to pass
-            // its own result through T before transmitting it, now that the parameter stack itself is
-            // safely captured above.
-            int a = await _krakenController.ReadAAsync(route);
-            int io = await _krakenController.ReadIoAsync(route);
-            IReadOnlyList<int> ram = await _krakenController.ReadRamAsync(route);
-            IReadOnlyList<int> rom = await _krakenController.ReadRomAsync(route);
-            IReadOnlyList<int> returnStack = await _krakenController.ReadReturnStackAsync(route);
-
-            nodeSnapshots[route.Coordinate] = new PostMortemNodeSnapshot
+            KrakenNodeRoute route = orderedRoutes[index];
+            StatusText = $"Core Dump: wiring and reading node {route.Coordinate:000} ({index + 1} of {orderedRoutes.Count})…";
+            string? nodeColor = _chip.GetNode(route.Coordinate).Color;
+            try
             {
-              Coordinate = route.Coordinate,
-              A = a,
-              Io = io,
-              Ram = [.. ram],
-              Rom = [.. rom],
-              ParameterStack = [.. parameterStack],
-              ReturnStack = [.. returnStack],
-              Color = nodeColor
-            };
-          }
-          catch (Exception exception) when (exception is IOException or TimeoutException or InvalidOperationException)
-          {
-            failedNodes.Add($"{route.Coordinate:000} ({exception.Message})");
-            nodeSnapshots[route.Coordinate] = new PostMortemNodeSnapshot
+              // 1) Focus this node -- reached through whatever hops earlier iterations already wired.
+              int incomingPort = KrakenTopology.PortAddress(route.Coordinate, route.PreviousCoordinate ?? KrakenTopology.HeadCoordinate);
+              await _krakenController.FocusAsync(route, incomingPort);
+
+              // 2) Parameter stack, immediately -- see this method's own remarks on why this must come
+              // right after focus and before anything else. Destructive (Stefan confirmed acceptable):
+              // 'readPStack' pops the stack off the live node as part of reading it.
+              IReadOnlyList<int> parameterStack = await _krakenController.ReadParameterStackAsync(route);
+
+              // 3) Everything else -- order no longer matters among these.
+              int a = await _krakenController.ReadAAsync(route);
+              int io = await _krakenController.ReadIoAsync(route);
+              IReadOnlyList<int> ram = await _krakenController.ReadRamAsync(route);
+              IReadOnlyList<int> rom = await _krakenController.ReadRomAsync(route);
+              IReadOnlyList<int> returnStack = await _krakenController.ReadReturnStackAsync(route);
+
+              // 4) Only now extend the tentacle one hop further, so the NEXT node becomes reachable.
+              int nextPort = route.OutgoingBAddress ?? KrakenSession.IoAddress;
+              await _krakenController.WriteBAsync(route, nextPort);
+
+              nodeSnapshots[route.Coordinate] = new PostMortemNodeSnapshot
+              {
+                Coordinate = route.Coordinate,
+                A = a,
+                Io = io,
+                Ram = [.. ram],
+                Rom = [.. rom],
+                ParameterStack = [.. parameterStack],
+                ReturnStack = [.. returnStack],
+                Color = nodeColor
+              };
+            }
+            catch (Exception exception) when (exception is IOException or TimeoutException or InvalidOperationException)
             {
-              Coordinate = route.Coordinate,
-              Error = exception.Message,
-              Color = nodeColor
-            };
-            // One node's transport failure does not abort the rest of the dump -- same policy as
-            // ChipViewModel.VerifyAllRomsAsync's own per-node scan.
+              failedNodes.Add($"{route.Coordinate:000} ({exception.Message})");
+              nodeSnapshots[route.Coordinate] = new PostMortemNodeSnapshot
+              {
+                Coordinate = route.Coordinate,
+                Error = exception.Message,
+                Color = nodeColor
+              };
+              // One node's transport failure does not abort the rest of the dump -- same policy as
+              // ChipViewModel.VerifyAllRomsAsync's own per-node scan. NOTE: since this node could not be
+              // wired, every LATER node on the SAME tentacle is now unreachable too (the physical relay
+              // chain breaks here) -- each will fail its own Focus call in turn and be recorded the same
+              // way, rather than aborting the whole dump.
+            }
           }
         }
+        finally
+        {
+          await _krakenController.EndKeepOpenAsync();
+        }
+
+        var snapshot = new PostMortemSnapshot
+        {
+          CapturedAtUtc = DateTime.UtcNow,
+          ChipRole = _chip.Role,
+          ChipName = _chip.Name,
+          ProjectDefaultNodeColor = _projectDefaultNodeColor,
+          Nodes = nodeSnapshots
+        };
+
+        StatusText = failedNodes.Count == 0
+            ? $"Core Dump complete: read {nodeSnapshots.Count} node(s). The Kraken used for the dump has been released."
+            : $"Core Dump complete with {failedNodes.Count} failed node(s): {string.Join(", ", failedNodes)}. The Kraken used for the dump has been released.";
+
+        CoreDumpCompleted?.Invoke(snapshot);
       }
       finally
       {
-        await _krakenController.EndKeepOpenAsync();
+        // Core Dump's erection is diagnostic-only and must never linger: release it exactly like the
+        // GA144 window's own "remove Kraken" button would (drops IDE erection state and parks the COM
+        // handle, no chip reset), regardless of whether the dump above succeeded, partially failed, or
+        // threw. Without this the GA144 window would go on showing this chip's Kraken as erected, and
+        // StartAsync's own resident-Kraken guard would block every subsequent debug session until
+        // Stefan noticed and removed it by hand.
+        await _krakenController.ResetTransientErectionAsync();
       }
-
-      var snapshot = new PostMortemSnapshot
-      {
-        CapturedAtUtc = DateTime.UtcNow,
-        ChipRole = _chip.Role,
-        ChipName = _chip.Name,
-        ProjectDefaultNodeColor = _projectDefaultNodeColor,
-        Nodes = nodeSnapshots
-      };
-
-      StatusText = (failedNodes.Count == 0
-          ? $"Core Dump complete: read {nodeSnapshots.Count} node(s)."
-          : $"Core Dump complete with {failedNodes.Count} failed node(s): {string.Join(", ", failedNodes)}.") +
-          " Kraken remains installed on this chip -- remove it (the GA144 window's Kraken button) before starting the CVM Debugger again.";
-
-      CoreDumpCompleted?.Invoke(snapshot);
     }
     catch (Exception exception)
     {

@@ -275,6 +275,74 @@ public sealed class KrakenLiveController : IAsyncDisposable
     }
   }
 
+  /// <summary>
+  /// Core-Dump-ONLY: brings up JUST node 708's own head program and stops
+  /// there -- no tentacle node is focused or wired (see
+  /// <see cref="KrakenSession.ConnectAndErectHeadOnlyAsync"/> for the full
+  /// rationale). Unlike <see cref="EnsureOnlineAsync"/>, this always performs
+  /// a fresh reset + head bring-up: it is only ever called at the very start
+  /// of a Core Dump, never to "ensure" an existing session is usable, so
+  /// there is no already-erected branch here. The caller (CvmDebuggerViewModel's
+  /// Core Dump) is responsible for wiring and reading every tentacle node
+  /// itself afterward, one hop at a time, via <see cref="FocusAsync"/>,
+  /// <see cref="WriteBAsync"/>, and the normal per-node reads.
+  /// </summary>
+  public async Task EnsureHeadOnlineAsync(KrakenNodeRoute initialTargetRoute, CancellationToken cancellationToken = default)
+  {
+    ArgumentNullException.ThrowIfNull(initialTargetRoute);
+    await _gate.WaitAsync(cancellationToken);
+    try
+    {
+      ThrowIfDisposed();
+      if (_hardwareErected)
+      {
+        throw new InvalidOperationException(
+            "A Kraken is already resident. Head-only erection is only for the start of a fresh Core Dump.");
+      }
+
+      KrakenEndpointInfo endpoint = ResolveEndpoint();
+      if (_session is not null)
+      {
+        throw new InvalidOperationException("An unexpected Kraken session already exists before erection.");
+      }
+
+      bool reopenResetsChip = endpoint.Role == Ga144ChipRole.Host;
+      var session = new KrakenSession(_configuration, initialTargetRoute, _chip, _romLibrary, _idlePolicy, reopenResetsChip);
+      try
+      {
+        await session.ConnectAndErectHeadOnlyAsync(endpoint.PortName, cancellationToken);
+        _session = session;
+        _endpoint = endpoint;
+        _hardwareErected = true;
+        _transportFaulted = false;
+        _faultText = null;
+        RaiseStateChanged();
+      }
+      catch
+      {
+        // No partial-erection state is worth preserving here (unlike
+        // EnsureOnlineAsync's own catch): ConnectAndErectHeadOnlyAsync does
+        // no post-erection verification of its own to fail after the fact.
+        await session.DisposeAsync();
+        throw;
+      }
+    }
+    finally
+    {
+      _gate.Release();
+    }
+  }
+
+  /// <summary>
+  /// Core-Dump-ONLY: focuses <paramref name="route"/>'s node onto the given
+  /// port via a live transaction (<see cref="KrakenSession.FocusAsync"/>).
+  /// See that method's own remarks: its reply mechanism uses 1 word of the
+  /// node's parameter stack, so the caller must read the parameter stack
+  /// immediately afterward, before anything else touches this node.
+  /// </summary>
+  public Task FocusAsync(KrakenNodeRoute route, int port, CancellationToken cancellationToken = default) =>
+      RunForRouteAsync(route, session => session.FocusAsync(port, cancellationToken), cancellationToken);
+
   public Task<int> ReadAAsync(KrakenNodeRoute route, CancellationToken cancellationToken = default) =>
       RunForRouteValueAsync(route, session => session.ReadAAsync(cancellationToken), cancellationToken);
 

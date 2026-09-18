@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-18T13:04:14.0923120
-      utcDateTime: 2026-09-18T13:04:14.0923120Z
-      localDateTime: 2026-09-18T15:04:14.0923120+02:00
+      dateTime: 2026-09-18T14:43:14.7859944
+      utcDateTime: 2026-09-18T14:43:14.7859944Z
+      localDateTime: 2026-09-18T16:43:14.7859944+02:00
       date: 2026-09-18T00:00:00.0000000
       day: 18
       dayOfWeek: Friday
       dayOfYear: 261
-      hour: 13
-      millisecond: 92
-      microsecond: 312
-      nanosecond: 0
-      minute: 4
+      hour: 14
+      millisecond: 785
+      microsecond: 994
+      nanosecond: 400
+      minute: 43
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
       second: 14
-      ticks: 639253334540923120
-      utcTicks: 639253334540923120
-      timeOfDay: 13:04:14.0923120
+      ticks: 639253393947859944
+      utcTicks: 639253393947859944
+      timeOfDay: 14:43:14.7859944
       year: 2026
   portB: 
   portC:
@@ -25418,9 +25418,9 @@ projects:
 
         entry fp1/main
 
-        # left /a
+        # left /b
 
-        # right /b
+        # right /a
 
 
         : fp1/fold ( lh-lhf) over over 0x7f and 
@@ -25499,7 +25499,7 @@ projects:
           @ 0x7f and xor !b
           // mantissa low
           @ 0xffff and !b
-        : fp1/main left a!
+        : fp1/main right a!
           @b ! // o
           fp1/decompose
           fp1/decompose

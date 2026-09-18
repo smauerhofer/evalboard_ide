@@ -30,7 +30,10 @@ internal sealed class KrakenSession : IAsyncDisposable
   // line rate as the node-708 detector and the head-protocol probe.
   public const int OnlineBaudRate = Ga144Serial.MaximumBaudRate;
 
-  private const int IoAddress = 0x15D;
+  // internal (not private): CvmDebuggerViewModel's own Core Dump erection
+  // loop needs this as the 'writeB' terminator value for the last node of a
+  // tentacle, matching ErectOnto's own use of it below exactly.
+  internal const int IoAddress = 0x15D;
   private const int ResetAssertMilliseconds = 20;
   private const int ResetReleaseMilliseconds = 1;
   private const int ResponseTimeoutMilliseconds = 1_000;
@@ -213,6 +216,48 @@ internal sealed class KrakenSession : IAsyncDisposable
     {
       ThrowIfDisposed();
       await Task.Run(() => ConnectAndErect(portName, cancellationToken, verifyTarget: false, parkWhenComplete: false), cancellationToken);
+    }
+    finally
+    {
+      _gate.Release();
+    }
+  }
+
+  /// <summary>
+  /// Core-Dump-ONLY entry point: brings up JUST node 708's own head program
+  /// (reset, load 'main', trigger it) and stops there -- no tentacle node is
+  /// focused or wired. This deliberately does NOT call <see cref="ErectOnto"/>;
+  /// Core Dump wires (and reads) every tentacle node itself afterward, one hop
+  /// at a time, via live <see cref="FocusAsync"/>/<see cref="WriteBAsync"/>/
+  /// read transactions through 'main's own 'w/r' head protocol -- see
+  /// CvmDebuggerViewModel.CoreDumpAsync's own remarks for why (capturing each
+  /// node's true, undisturbed parameter stack requires reading it before that
+  /// SAME node's own erection step can disturb it, which is only possible when
+  /// erection happens node-by-node instead of as one upfront burst). Per
+  /// Stefan's own explicit direction, this dynamic 'w/r'-based construction --
+  /// the same one the node-300 investigation found unreliable for BULK
+  /// erection and which <see cref="ErectOnto"/> deliberately avoids -- is used
+  /// here ANYWAY, scoped to Core Dump only, accepting the risk that a specific
+  /// node (node 300 is the one known prior offender) might need to be skipped
+  /// for post-mortem purposes if it proves unreachable this way. The ordinary
+  /// "Install Kraken" erection path (<see cref="ConnectAndErectAsync"/>/
+  /// <see cref="ConnectAndErectForCheckAsync"/>) is completely unaffected.
+  /// No target-route verification happens here (unlike <see cref="ConnectAndErectAsync"/>):
+  /// at this point no tentacle node has been focused/wired yet, so there is
+  /// nothing through <see cref="_targetRoute"/> to read yet -- the caller's own
+  /// per-node Focus + ReadParameterStack calls are the real verification, one
+  /// node at a time, as it wires each one.
+  /// </summary>
+  public async Task ConnectAndErectHeadOnlyAsync(string portName, CancellationToken cancellationToken = default)
+  {
+    ArgumentException.ThrowIfNullOrWhiteSpace(portName);
+    await _gate.WaitAsync(cancellationToken);
+    try
+    {
+      ThrowIfDisposed();
+      await Task.Run(
+          () => ConnectAndErect(portName, cancellationToken, verifyTarget: false, parkWhenComplete: false, headOnly: true),
+          cancellationToken);
     }
     finally
     {
@@ -548,7 +593,7 @@ internal sealed class KrakenSession : IAsyncDisposable
     }
   }
 
-  private void ConnectAndErect(string portName, CancellationToken cancellationToken, bool verifyTarget, bool parkWhenComplete)
+  private void ConnectAndErect(string portName, CancellationToken cancellationToken, bool verifyTarget, bool parkWhenComplete, bool headOnly = false)
   {
     if (_port is not null || _hardwareErectionCompleted)
     {
@@ -564,7 +609,15 @@ internal sealed class KrakenSession : IAsyncDisposable
 
     try
     {
-      ErectOnto(port, cancellationToken);
+      if (headOnly)
+      {
+        ErectHeadOnly(port, cancellationToken);
+      }
+      else
+      {
+        ErectOnto(port, cancellationToken);
+      }
+
       _port = port;
       _hardwareErectionCompleted = true;
 
@@ -766,6 +819,67 @@ internal sealed class KrakenSession : IAsyncDisposable
     SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
     port.PurgeInput();
   }
+
+  /// <summary>
+  /// Core-Dump-ONLY: identical to the first and last steps of <see cref="ErectOnto"/>
+  /// (reset, load 'main' into RAM behind ser-exec, settle for every boot
+  /// node's own reasonableness check, then trigger 'main') but with
+  /// <see cref="ErectOnto"/>'s own per-tentacle fire-and-forget focus/writeB
+  /// burst removed entirely -- no tentacle node is touched here. 'main' is
+  /// running by the time this returns, so the caller (CvmDebuggerViewModel's
+  /// Core Dump) can immediately drive every tentacle node itself, one hop at
+  /// a time, via live <see cref="FocusAsync"/>/<see cref="WriteBAsync"/>/read
+  /// transactions through 'main's own 'w/r' head protocol -- see
+  /// <see cref="ConnectAndErectHeadOnlyAsync"/>'s own remarks for why.
+  /// </summary>
+  private void ErectHeadOnly(NativeWindowsSerialPort port, CancellationToken cancellationToken)
+  {
+    PulseReset(port, cancellationToken);
+
+    // Load 'main' into RAM, completion pointed at ser-exec so this frame
+    // alone does not yet jump into it -- see ErectOnto's own remarks. Here,
+    // though, nothing else is coming before the trigger frame below: there is
+    // no per-tentacle burst to send first.
+    (int[] headProgram, Node708HeadAddresses addresses) = BuildHeadProgram();
+    SendBootFrame(port, AsyncSerialContinuationAddress, 0x000, headProgram);
+    _headAddresses = addresses;
+
+    // Same settle as ErectOnto: every OTHER boot node in the array needs time
+    // to finish its own reasonableness check and revert to 'warm' before
+    // Kraken's live Focus calls can reach it -- see
+    // BootNodeReasonablenessCheckSettleMilliseconds's own remarks. Nothing
+    // here depends on the per-tentacle burst ErectOnto sends during this same
+    // window; the settle time itself is what matters.
+    Thread.Sleep(BootNodeReasonablenessCheckSettleMilliseconds);
+
+    // Enter 'main' immediately -- no tentacle wiring burst first. Every node
+    // besides 708 itself is still sitting in its own boot ROM, unfocused,
+    // exactly as it was right after reset; the caller wires (and reads) each
+    // one from here via live per-node transactions.
+    SendBootFrame(port, 0x000, 0x000, []);
+
+    SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);
+    port.PurgeInput();
+  }
+
+  /// <summary>
+  /// Core-Dump-ONLY: 'focus = A[ @p dup >r ; ], port, A[ !p ]' (see
+  /// <see cref="KrakenProtocol.BuildFocus"/>) sent as a live transaction
+  /// through 'main's own 'w/r' head protocol, exactly like every other
+  /// per-node operation below. Confirmed (Stefan, real hardware/protocol
+  /// knowledge): this call's own reply mechanism uses exactly 1 word of the
+  /// just-focused node's parameter stack -- the caller MUST read the
+  /// parameter stack (<see cref="ReadParameterStackAsync"/>) immediately
+  /// after this, before any other operation on the same node, to capture its
+  /// true pre-focus top of stack; see CvmDebuggerViewModel.CoreDumpAsync's
+  /// own remarks for the full required ordering.
+  /// </summary>
+  public Task FocusAsync(int port, CancellationToken cancellationToken = default) =>
+      RunExclusiveAsync(() =>
+      {
+        _ = Transact(_targetRoute, KrakenProtocol.BuildFocus(port), wordsToRead: 1, cancellationToken);
+        return 0;
+      }, cancellationToken);
 
   // ---- node-708 word transport --------------------------------------------
   // Every request/reply to/from node 708 travels as plain async-encoded words
