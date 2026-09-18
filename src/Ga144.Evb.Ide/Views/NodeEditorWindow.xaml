@@ -10,6 +10,7 @@
   <Grid Margin="12">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
@@ -33,7 +34,49 @@
       </StackPanel>
     </DockPanel>
 
-    <TabControl Grid.Row="1">
+    <DockPanel Grid.Row="1" Margin="0,0,0,10" LastChildFill="False">
+      <TextBlock DockPanel.Dock="Left" Text="Node color:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
+      <Border DockPanel.Dock="Left" Width="24" Height="24" Margin="0,0,10,0" CornerRadius="4"
+                        Background="{Binding EffectiveColorBrush}" BorderBrush="#999999" BorderThickness="1"
+                        VerticalAlignment="Center" ToolTip="{Binding EffectiveColorHex}" />
+      <ItemsControl DockPanel.Dock="Left" ItemsSource="{Binding ColorOptions}" VerticalAlignment="Center">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Border Width="20" Height="20" Margin="0,0,4,0" CornerRadius="3"
+                                    Background="{Binding Brush}" BorderBrush="#999999" BorderThickness="1"
+                                    Cursor="Hand" Tag="{Binding Hex}" ToolTip="{Binding Hex}"
+                                    MouseLeftButtonDown="OnNodeColorSwatchClick">
+              <Border.Style>
+                <Style TargetType="Border">
+                  <Style.Triggers>
+                    <DataTrigger Value="True">
+                      <DataTrigger.Binding>
+                        <MultiBinding Converter="{StaticResource ColorEqualsConverter}">
+                          <Binding Path="Hex" />
+                          <Binding Path="DataContext.EffectiveColorHex" RelativeSource="{RelativeSource AncestorType=Window}" />
+                        </MultiBinding>
+                      </DataTrigger.Binding>
+                      <Setter Property="BorderBrush" Value="#222222" />
+                      <Setter Property="BorderThickness" Value="3" />
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Border.Style>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <Button DockPanel.Dock="Left" Content="Use project default" Click="OnUseProjectDefaultColorClick"
+                      Margin="10,0,0,0" Padding="8,3" MinHeight="24"
+                      ToolTip="Clears this node's own color so it goes back to following the project's default node color (set in MainWindow's Active project panel)." />
+    </DockPanel>
+
+    <TabControl Grid.Row="2">
       <TabItem Header="RAM source">
         <Grid Margin="8">
           <Grid.RowDefinitions>
@@ -351,7 +394,7 @@
       </TabItem>
     </TabControl>
 
-    <DockPanel Grid.Row="2" Margin="0,10,0,0" LastChildFill="False">
+    <DockPanel Grid.Row="3" Margin="0,10,0,0" LastChildFill="False">
       <StackPanel DockPanel.Dock="Left" Width="900">
         <TextBlock Text="A successful compile replaces the ROM image first and then the RAM image; RAM entry point is updated from the RAM compile. Save node persists project RAM/startup state and any changed system ROM source/image."
                            TextWrapping="Wrap" VerticalAlignment="Center" Foreground="#555" />

@@ -141,7 +141,7 @@
                   <Setter Property="BorderThickness" Value="0" />
                 </Style>
               </Button.Style>
-              <Border x:Name="NodeBorder" BorderBrush="#54705C" BorderThickness="2" Background="#F7FBF8" CornerRadius="4">
+              <Border x:Name="NodeBorder" BorderBrush="{Binding NodeBorderBrushColor}" BorderThickness="{Binding NodeBorderThickness}" Background="{Binding NodeBackgroundBrush}" CornerRadius="4">
                 <Grid Margin="4">
                   <Border BorderBrush="{Binding KrakenBrush}"
                                             BorderThickness="3"
@@ -204,13 +204,6 @@
                 </Grid>
               </Border>
             </Button>
-            <DataTemplate.Triggers>
-              <DataTrigger Binding="{Binding IsConfigured}" Value="True">
-                <Setter TargetName="NodeBorder" Property="Background" Value="#FFF1C7" />
-                <Setter TargetName="NodeBorder" Property="BorderBrush" Value="#B57A16" />
-                <Setter TargetName="NodeBorder" Property="BorderThickness" Value="3" />
-              </DataTrigger>
-            </DataTemplate.Triggers>
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
@@ -220,7 +213,7 @@
     </Grid>
 
     <Border Grid.Row="2" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="8" Margin="0,8,0,0">
-      <TextBlock Text="Click a node to edit its F18 source, ROM, compiled RAM words, entry point, registers, and startup stacks. Configured nodes are highlighted. When a Kraken is installed, colored arrows show each tentacle's directed path from node 708. Check Kraken verifies RAM[0] outward from the three direct neighbors along all tentacles. Once hardware Kraken is erected, its COM endpoint remains exclusively reserved and all subsequent chip access goes through Kraken/Tentacles; the native handle is opened only for explicit operations and parked while idle. Reset, node-708 probe, port reassignment, and re-erection are disabled."
+      <TextBlock Text="Click a node to edit its F18 source, ROM, compiled RAM words, entry point, registers, and startup stacks. Configured nodes are highlighted using this project's default node color, or a node's own color if it was given one in the node editor. When a Kraken is installed, colored arrows show each tentacle's directed path from node 708. Check Kraken verifies RAM[0] outward from the three direct neighbors along all tentacles. Once hardware Kraken is erected, its COM endpoint remains exclusively reserved and all subsequent chip access goes through Kraken/Tentacles; the native handle is opened only for explicit operations and parked while idle. Reset, node-708 probe, port reassignment, and re-erection are disabled."
                        TextWrapping="Wrap" />
     </Border>
   </Grid>

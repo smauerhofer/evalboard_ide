@@ -12,6 +12,18 @@ public sealed class Ga144Project
   public List<Ga144ChipConfiguration> Chips { get; set; } = [];
   public List<F18MacroDefinition> UserMacros { get; set; } = [];
 
+  /// <summary>
+  /// One of the 16 <see cref="NodeColorPalette"/> swatches (MainWindow's "Active project" panel
+  /// picks it), applied to every configured node in this project's Host/Target chips that has no
+  /// color of its own (<see cref="Ga144NodeConfiguration.Color"/> is null) -- see
+  /// <see cref="ViewModels.NodeViewModel.EffectiveColorHex"/> for where the two are combined.
+  /// Deliberately not baked into each node here in Normalize(): leaving a node's Color null
+  /// means it keeps following this default live if it's changed later, exactly like it did
+  /// before this feature existed (every node pale yellow, from ChipWindow.xaml's old fixed
+  /// #FFF1C7 DataTrigger).
+  /// </summary>
+  public string DefaultNodeColor { get; set; } = NodeColorPalette.DefaultColor;
+
   public static Ga144Project Create(string name)
   {
     var project = new Ga144Project
@@ -38,6 +50,9 @@ public sealed class Ga144Project
     Chips ??= [];
     UserMacros ??= [];
     F18MacroDefinition.NormalizeList(UserMacros);
+    DefaultNodeColor = NodeColorPalette.IsPaletteColor(DefaultNodeColor)
+        ? DefaultNodeColor
+        : NodeColorPalette.DefaultColor;
 
     EnsureChip(Ga144ChipRole.Host);
     EnsureChip(Ga144ChipRole.Target);

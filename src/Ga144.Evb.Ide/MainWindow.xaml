@@ -142,6 +142,68 @@
                                        TextWrapping="Wrap"
                                        Foreground="#555"
                                        Margin="0,5,0,0" />
+
+              <TextBlock Text="Default node color" FontWeight="SemiBold" Margin="0,10,0,4" />
+              <ItemsControl ItemsSource="{Binding SelectedProject.DefaultNodeColorOptions}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel />
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <!--
+                        Outer selection ring: a plain black rectangle drawn AROUND the swatch,
+                        rather than recoloring the swatch's own border. Transparent (invisible)
+                        for every swatch except the one matching the project's current
+                        DefaultNodeColor, per Stefan's own wording ("a black rectangle around the
+                        selected default color").
+                    -->
+                    <Border Width="28" Height="28" Margin="0,0,4,4" Padding="2" CornerRadius="4">
+                      <Border.Style>
+                        <!--
+                            BorderThickness/BorderBrush live ONLY as Style Setters here, never as
+                            local attributes on this Border. A local attribute value always wins
+                            over a Style trigger's Setter in WPF's property value precedence, which
+                            is exactly why the ring never appeared when this used to be written
+                            with BorderThickness/BorderBrush set directly on the Border element:
+                            the trigger was firing correctly but could never win against that
+                            local value.
+                        -->
+                        <Style TargetType="Border">
+                          <Setter Property="BorderThickness" Value="2" />
+                          <Setter Property="BorderBrush" Value="Transparent" />
+                          <Style.Triggers>
+                            <DataTrigger Value="True">
+                              <DataTrigger.Binding>
+                                <MultiBinding Converter="{StaticResource ColorEqualsConverter}">
+                                  <Binding Path="Hex" />
+                                  <Binding Path="DataContext.SelectedProject.DefaultNodeColor" RelativeSource="{RelativeSource AncestorType=Window}" />
+                                </MultiBinding>
+                              </DataTrigger.Binding>
+                              <Setter Property="BorderBrush" Value="Black" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </Border.Style>
+                      <!--
+                          Exactly fills the 20x20 left inside the outer ring (28 outer, minus 2*2
+                          for its BorderThickness, minus 2*2 for its Padding). A size mismatch
+                          here previously let this swatch overflow past the ring and draw over it,
+                          hiding the black border entirely no matter which swatch was selected.
+                      -->
+                      <Border Width="20" Height="20" CornerRadius="3"
+                                              Background="{Binding Brush}" BorderBrush="#999999" BorderThickness="1"
+                                              Cursor="Hand" Tag="{Binding Hex}" ToolTip="{Binding Hex}"
+                                              MouseLeftButtonDown="OnDefaultNodeColorSwatchClick" />
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Text="Configured nodes in this project use this pale color by default in the GA144 chip window; pick a node there to give it its own color instead."
+                                       TextWrapping="Wrap"
+                                       Foreground="#555"
+                                       Margin="0,4,0,0" />
             </StackPanel>
           </Border>
         </Grid>

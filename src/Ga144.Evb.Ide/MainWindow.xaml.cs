@@ -114,6 +114,16 @@ public partial class MainWindow : Window
     await _viewModel.AssignSelectedPortToBoardPortAsync(e.Role);
   }
 
+  // One of the 16 NodeColorPalette swatches in the "Active project" panel's "Default node
+  // color" picker was clicked -- sets it as the selected project's own default (ProjectViewModel
+  // validates it against the palette and marks the project dirty).
+  private void OnDefaultNodeColorSwatchClick(object sender, MouseButtonEventArgs e)
+  {
+    if (sender is FrameworkElement { Tag: string hex } && _viewModel.SelectedProject is { } project)
+    {
+      project.DefaultNodeColor = hex;
+    }
+  }
 
   private void OnMacrosClick(object sender, RoutedEventArgs e)
   {

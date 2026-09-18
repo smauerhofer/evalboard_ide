@@ -110,7 +110,8 @@ public partial class ChipWindow : Window
       node.KrakenRoute,
       _viewModel.KrakenEndpointResolver,
       _viewModel.KrakenController,
-      _viewModel.AllProjects.Where(project => project != _viewModel.Project).ToList());
+      _viewModel.AllProjects.Where(project => project != _viewModel.Project).ToList(),
+      _viewModel.Project.Model.DefaultNodeColor);
     var editor = new NodeEditorWindow(editorViewModel)
     {
       Owner = this

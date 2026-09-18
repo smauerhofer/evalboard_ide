@@ -8,6 +8,17 @@ public sealed class Ga144NodeConfiguration
   public List<string> RamWords { get; set; } = [];
   public StartupConfiguration Startup { get; set; } = new();
 
+  /// <summary>
+  /// This node's own color override, one of the 16 <see cref="NodeColorPalette"/> swatches
+  /// (NodeEditorWindow's "Node color" picker), or null to follow the owning project's
+  /// <see cref="Ga144Project.DefaultNodeColor"/> instead -- null is the ordinary state for
+  /// every node that has never had its own color picked. Copying a node to another project
+  /// (NodeEditorViewModel.CopyCurrentSourceTo, ChipViewModel.CopyAllNodesToProject) writes the
+  /// node's *resolved* color here explicitly, so the copy looks the same in the destination
+  /// project even if that project's own default differs.
+  /// </summary>
+  public string? Color { get; set; }
+
   public static Ga144NodeConfiguration Create(int coordinate) => new()
   {
     Coordinate = coordinate,
@@ -21,6 +32,7 @@ public sealed class Ga144NodeConfiguration
     RamWords ??= [];
     Startup ??= new StartupConfiguration();
     Startup.Normalize();
+    Color = string.IsNullOrWhiteSpace(Color) ? null : Color.Trim();
   }
 }
 

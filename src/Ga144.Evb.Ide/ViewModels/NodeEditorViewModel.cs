@@ -1,6 +1,7 @@
 using Ga144.Evb.Ide.Compiler;
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.Services;
+using System.Windows.Media;
 
 namespace Ga144.Evb.Ide.ViewModels;
 
@@ -12,7 +13,9 @@ public sealed class NodeEditorViewModel : ObservableObject
   private readonly IReadOnlyList<F18MacroDefinition> _userMacros;
   private readonly string _originalRomSource;
   private readonly string _originalRomWords;
+  private readonly string _projectDefaultNodeColor;
   private bool _enabled;
+  private string? _color;
   private string _sourceCode;
   private string _romSourceCode;
   private string _ramWordsText;
@@ -42,7 +45,8 @@ public sealed class NodeEditorViewModel : ObservableObject
       KrakenNodeRoute? krakenRoute,
       Func<KrakenEndpointInfo?> krakenEndpointResolver,
       KrakenLiveController krakenController,
-      IReadOnlyList<ProjectViewModel> otherProjects)
+      IReadOnlyList<ProjectViewModel> otherProjects,
+      string projectDefaultNodeColor)
   {
     Node = node;
     _chip = chip;
@@ -54,6 +58,9 @@ public sealed class NodeEditorViewModel : ObservableObject
     KrakenEndpointResolver = krakenEndpointResolver;
     KrakenController = krakenController;
     OtherProjects = otherProjects ?? [];
+    _projectDefaultNodeColor = string.IsNullOrWhiteSpace(projectDefaultNodeColor)
+        ? NodeColorPalette.DefaultColor
+        : projectDefaultNodeColor;
 
     node.Normalize();
     chip.Normalize();
@@ -62,6 +69,7 @@ public sealed class NodeEditorViewModel : ObservableObject
     _romNode.Normalize();
 
     _enabled = node.Enabled;
+    _color = node.Color;
     _sourceCode = node.SourceCode;
     _romSourceCode = _romNode.SourceCode;
     _ramWordsText = Join(node.RamWords);
@@ -115,6 +123,43 @@ public sealed class NodeEditorViewModel : ObservableObject
   public int UserMacroCount => _userMacros.Count;
 
   public bool Enabled { get => _enabled; set => SetProperty(ref _enabled, value); }
+
+  /// <summary>The 16 fixed swatches the "Node color" picker offers -- the same set
+  /// MainWindow's project "Default node color" picker offers, via the same NodeColorOption.Palette.</summary>
+  public IReadOnlyList<NodeColorOption> ColorOptions => NodeColorOption.Palette;
+
+  /// <summary>This node's own color override, or null to follow the project's default. Null
+  /// until "Node color…" is used to pick one of the 16 swatches, or forever if "Use project
+  /// default" is clicked afterward.</summary>
+  public string? Color
+  {
+    get => _color;
+    private set
+    {
+      if (SetProperty(ref _color, string.IsNullOrWhiteSpace(value) ? null : value))
+      {
+        OnPropertyChanged(nameof(UsesProjectDefaultColor));
+        OnPropertyChanged(nameof(EffectiveColorHex));
+        OnPropertyChanged(nameof(EffectiveColorBrush));
+      }
+    }
+  }
+
+  public bool UsesProjectDefaultColor => Color is null;
+
+  /// <summary>Color if this node has its own, otherwise the project's default -- always one of
+  /// the 16 NodeColorPalette swatches either way.</summary>
+  public string EffectiveColorHex => Color ?? _projectDefaultNodeColor;
+
+  public Brush EffectiveColorBrush => NodeColorOption.BrushFromHex(EffectiveColorHex);
+
+  /// <summary>Picks one of the 16 <see cref="ColorOptions"/> swatches as this node's own color
+  /// override. Bound to each swatch's click in NodeEditorWindow.xaml.cs.</summary>
+  public void SetColor(string hex) => Color = hex;
+
+  /// <summary>Clears this node's own color override so it goes back to following the project's
+  /// default node color (<see cref="EffectiveColorHex"/> then reads from there instead).</summary>
+  public void UseProjectDefaultColor() => Color = null;
 
   public string SourceCode
   {
@@ -354,6 +399,7 @@ public sealed class NodeEditorViewModel : ObservableObject
   {
     Node.Enabled = Enabled;
     Node.SourceCode = SourceCode;
+    Node.Color = Color;
     Node.RamWords = Split(RamWordsText, RamWordCount);
     Node.Startup.EntryPoint = NormalizeWord(EntryPoint, "0x000");
     Node.Startup.P = NormalizeWord(P, "0x000");
@@ -383,6 +429,10 @@ public sealed class NodeEditorViewModel : ObservableObject
   ///
   /// Does not touch this editor's own node or the "Apply on Save" flow; the
   /// target project is marked dirty so the workspace autosave picks it up.
+  ///
+  /// This node's color (EffectiveColorHex -- its own override, or this project's default if it
+  /// has none) travels with it too, baked in explicitly so the destination shows the same color
+  /// regardless of that project's own default.
   /// </summary>
   public string CopyCurrentSourceTo(ProjectViewModel targetProject, Ga144ChipRole targetRole)
   {
@@ -393,6 +443,10 @@ public sealed class NodeEditorViewModel : ObservableObject
 
     targetNode.Enabled = Enabled;
     targetNode.SourceCode = SourceCode;
+    // Bakes in this editor's *resolved* color (its own override, or the project's default if it
+    // has none) rather than the possibly-null Color field verbatim -- so the copy looks the same
+    // in the destination project even if that project's own default differs.
+    targetNode.Color = EffectiveColorHex;
     targetNode.RamWords = Split(RamWordsText, RamWordCount);
     targetNode.Startup.EntryPoint = NormalizeWord(EntryPoint, "0x000");
     targetNode.Startup.P = NormalizeWord(P, "0x000");

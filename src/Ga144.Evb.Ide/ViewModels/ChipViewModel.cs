@@ -670,6 +670,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   // dialog (CopyNodeToProjectWindow/CopyNodeToProjectViewModel) and destination policy (ROM is
   // shared across every project and is never copied) as the node editor's own single-node
   // "Copy to project…" button, just applied to every configured node at once instead of one.
+  // Each node's resolved color (Model.NodeViewModel.EffectiveColorHex's own logic, reproduced
+  // here as sourceNode.Color ?? Project.Model.DefaultNodeColor) travels with it too.
   private void CopyAllNodesToProject()
   {
     IReadOnlyList<ProjectViewModel> otherProjects = AllProjects.Where(project => project != Project).ToList();
@@ -720,6 +722,10 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       Ga144NodeConfiguration targetNode = targetChip.GetNode(sourceNode.Coordinate);
       targetNode.Enabled = sourceNode.Enabled;
       targetNode.SourceCode = sourceNode.SourceCode;
+      // Bakes in the node's *resolved* color (its own override, or this project's default if it
+      // has none) rather than copying the possibly-null Color field verbatim -- so the copy
+      // looks the same in the destination project even if that project's own default differs.
+      targetNode.Color = sourceNode.Color ?? Project.Model.DefaultNodeColor;
       targetNode.RamWords = [.. sourceNode.RamWords];
       targetNode.Startup.EntryPoint = sourceNode.Startup.EntryPoint;
       targetNode.Startup.P = sourceNode.Startup.P;
@@ -750,7 +756,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       .ThenBy(item => item.Coordinate % 100))
     {
       routes.TryGetValue(node.Coordinate, out KrakenNodeRoute? route);
-      Nodes.Add(new NodeViewModel(node, route, krakenActive));
+      Nodes.Add(new NodeViewModel(node, route, krakenActive, Project.Model.DefaultNodeColor));
     }
   }
 

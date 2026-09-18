@@ -6,11 +6,23 @@ namespace Ga144.Evb.Ide.ViewModels;
 
 public sealed class NodeViewModel
 {
-  public NodeViewModel(Ga144NodeConfiguration model, KrakenNodeRoute? krakenRoute = null, bool krakenActive = false)
+  private static readonly Brush NeutralBackgroundBrush = NodeColorOption.BrushFromHex("#F7FBF8");
+  private static readonly Brush NeutralBorderBrush = NodeColorOption.BrushFromHex("#54705C");
+
+  private readonly string _projectDefaultColor;
+
+  public NodeViewModel(
+      Ga144NodeConfiguration model,
+      KrakenNodeRoute? krakenRoute = null,
+      bool krakenActive = false,
+      string projectDefaultColor = NodeColorPalette.DefaultColor)
   {
     Model = model;
     KrakenRoute = krakenRoute;
     KrakenActive = krakenActive;
+    _projectDefaultColor = string.IsNullOrWhiteSpace(projectDefaultColor)
+        ? NodeColorPalette.DefaultColor
+        : projectDefaultColor;
   }
 
   public Ga144NodeConfiguration Model { get; }
@@ -35,6 +47,32 @@ public sealed class NodeViewModel
   // "configured" highlight sticky forever after a node's first compile,
   // even once the source was deleted and the boot checkbox unchecked.
   public bool IsConfigured => Model.Enabled || !string.IsNullOrWhiteSpace(Model.SourceCode);
+
+  /// <summary>
+  /// This node's own color (Model.Color) if it has one, otherwise the owning project's
+  /// DefaultNodeColor passed in at construction (ChipViewModel.RebuildNodes) -- always one of
+  /// the 16 NodeColorPalette swatches either way. Recomputed live from Model.Color on every
+  /// access, so picking "Use project default" in the node editor (which clears Model.Color to
+  /// null) or changing the project's own default both show up the next time this chip's node
+  /// grid is rebuilt.
+  /// </summary>
+  public string EffectiveColorHex => string.IsNullOrWhiteSpace(Model.Color) ? _projectDefaultColor : Model.Color;
+
+  /// <summary>
+  /// The chip grid's per-node background: the neutral, uncolored look for a node that isn't
+  /// configured yet, or this node's EffectiveColorHex once it is -- replaces ChipWindow.xaml's
+  /// old fixed "#FFF1C7 when IsConfigured" DataTrigger now that the color is configurable.
+  /// </summary>
+  public Brush NodeBackgroundBrush => IsConfigured ? NodeColorOption.BrushFromHex(EffectiveColorHex) : NeutralBackgroundBrush;
+
+  /// <summary>A darker accent shade of NodeBackgroundBrush for the node's border (see
+  /// NodeColorPalette.Darken), or the same fixed neutral border as before when unconfigured.</summary>
+  public Brush NodeBorderBrushColor => IsConfigured
+      ? NodeColorOption.BrushFromHex(NodeColorPalette.Darken(EffectiveColorHex))
+      : NeutralBorderBrush;
+
+  /// <summary>3px once configured (matching the old DataTrigger), 2px otherwise.</summary>
+  public Thickness NodeBorderThickness => new(IsConfigured ? 3 : 2);
 
   public Visibility NorthVisibility => Row < 7 ? Visibility.Visible : Visibility.Collapsed;
   public Visibility SouthVisibility => Row > 0 ? Visibility.Visible : Visibility.Collapsed;
