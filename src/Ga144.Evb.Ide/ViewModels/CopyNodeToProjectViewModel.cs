@@ -3,10 +3,12 @@ using Ga144.Evb.Ide.Models;
 namespace Ga144.Evb.Ide.ViewModels;
 
 /// <summary>
-/// Backs the small "Copy to project…" picker dialog opened from the node
-/// editor. Lets the user choose which other open project, and which chip
-/// role (Host/Target) within it, receives a copy of the current node's RAM
-/// source and startup state.
+/// Backs the small "Copy to project…" picker dialog, shared by the node editor's own single-node
+/// "Copy to project…" button and (since 2026-09-18) the GA144 chip window's "Copy all nodes to
+/// project…" button. Lets the user choose which other open project, and which chip role (Host/Target)
+/// within it, receives the copy -- what is actually being copied (one node's live editor state vs.
+/// every configured node's persisted model) is entirely up to the caller; this view model only picks
+/// the destination.
 /// </summary>
 public sealed class CopyNodeToProjectViewModel : ObservableObject
 {
@@ -16,20 +18,17 @@ public sealed class CopyNodeToProjectViewModel : ObservableObject
   public CopyNodeToProjectViewModel(
       IReadOnlyList<ProjectViewModel> availableProjects,
       Ga144ChipRole defaultRole,
-      string nodeCoordinateText)
+      string introText)
   {
     AvailableProjects = availableProjects;
-    NodeCoordinateText = nodeCoordinateText;
+    IntroText = introText;
     _selectedProject = availableProjects.Count > 0 ? availableProjects[0] : null;
     _selectedRole = defaultRole;
   }
 
   public IReadOnlyList<ProjectViewModel> AvailableProjects { get; }
-  public string NodeCoordinateText { get; }
 
-  public string IntroText =>
-      $"Copy node {NodeCoordinateText}'s RAM source and startup state into the same node coordinate in another project. " +
-      "ROM is shared across every project and does not need to be copied.";
+  public string IntroText { get; }
 
   public ProjectViewModel? SelectedProject
   {

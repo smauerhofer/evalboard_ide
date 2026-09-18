@@ -805,8 +805,8 @@ internal static class CvmAssemblyLanguage
   /// node's own layout genuinely differs (node 511's 5-bit/5-bit split is biased by
   /// <see cref="CvmInstructionSet.Node511FunctionFieldBaseAddress"/>; the address-register node's own
   /// 6-bit/3-bit split and node 306's own 5-bit/3-bit split both use no bias at all -- see
-  /// <see cref="CvmInstructionSet.FloatingPointFunctionFieldBitMask"/>'s own remarks for node 306's, an
-  /// UNCONFIRMED assumption) -- so this is a separate per-mnemonic lookup rather than a single shared set
+  /// <see cref="CvmInstructionSet.FloatingPointFunctionFieldBitMask"/>'s own remarks for node 306's,
+  /// CONFIRMED against real hardware 2026-09-18) -- so this is a separate per-mnemonic lookup rather than a single shared set
   /// of constants <see cref="BuildDecodeTable"/>/<see cref="BuildEncodeTable"/> could hardcode once.
   /// (node 308's OLD <c>dpop</c>/<c>dpush</c>/<c>dinc</c>/<c>ddec</c>/<c>dadd</c>/<c>dor</c> family, which
   /// used to have entries here, was removed outright 2026-09-15 per Stefan's own direct instruction.)
@@ -825,8 +825,9 @@ internal static class CvmAssemblyLanguage
 
         // Node 306's new floating-point register node (2026-09-15/16) -- both 'fpop and 'fpush are wired
         // (see NodeSymbolByMnemonic above). Field layout per CvmInstructionSet.FloatingPointFunctionFieldBitMask's
-        // own remarks: a 5-bit function field / 3-bit register field, no base-address bias (an
-        // UNCONFIRMED assumption, flagged there) -- identical for both mnemonics.
+        // own remarks: a 5-bit function field / 3-bit register field, no base-address bias -- CONFIRMED
+        // against real hardware 2026-09-18 (a manual 'fpop 0 / 'fpush 0 round trip came back byte-for-byte
+        // correct; see that constant's own remarks for the transaction log) -- identical for both mnemonics.
         [CvmInstructionSet.FloatingPointPopMnemonic] = (CvmInstructionSet.FloatingPointFunctionFieldBitMask, CvmInstructionSet.FloatingPointFunctionFieldShift, CvmInstructionSet.FloatingPointFunctionFieldBaseAddress, CvmInstructionSet.FloatingPointRegisterFieldBitMask),
         [CvmInstructionSet.FloatingPointPushMnemonic] = (CvmInstructionSet.FloatingPointFunctionFieldBitMask, CvmInstructionSet.FloatingPointFunctionFieldShift, CvmInstructionSet.FloatingPointFunctionFieldBaseAddress, CvmInstructionSet.FloatingPointRegisterFieldBitMask),
 

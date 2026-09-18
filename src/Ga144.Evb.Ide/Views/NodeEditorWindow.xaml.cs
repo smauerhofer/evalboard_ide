@@ -119,7 +119,8 @@ public partial class NodeEditorWindow : Window
     var pickerViewModel = new CopyNodeToProjectViewModel(
         _viewModel.OtherProjects,
         _viewModel.ChipRole,
-        _viewModel.NodeCoordinate);
+        $"Copy node {_viewModel.NodeCoordinate}'s RAM source and startup state into the same node " +
+        "coordinate in another project. ROM is shared across every project and does not need to be copied.");
     var picker = new CopyNodeToProjectWindow(pickerViewModel)
     {
       Owner = this

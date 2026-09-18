@@ -73,9 +73,10 @@ internal static class CvmMemoryProtocol
   public const int LocalExecuteTagBits = 0x8800;
 
   // How many leading 'nop opcodes the shared test program starts with before 'plit, and how much
-  // trailing 'nop padding follows 'pop/'push -- see Ga144CvmHardwareInstaller.RunSramBackedProgramStep
-  // for why the padding exists (so the interpreter has more of its own, already-understood 'nop
-  // opcode to fetch rather than running into zero-initialized simulated SRAM).
+  // trailing 'nop padding follows 'pop/'push -- padding exists so the interpreter has more of its
+  // own, already-understood 'nop opcode to fetch rather than running into zero-initialized simulated
+  // SRAM. (Originally sized for Ga144CvmHardwareInstaller's now-removed RunSramBackedProgramStep,
+  // 2026-09-18 -- this program is still built the same way for StartDebugSession's own fallback.)
   public const int LeadingNopCount = 5;
   public const int TrailingNopCount = 8;
 
@@ -144,13 +145,14 @@ internal static class CvmMemoryProtocol
   /// own remarks for exactly which opcodes are covered, which are deliberately excluded (and why),
   /// and which two blocks are exploratory rather than asserted-correct.
   ///
-  /// Deliberately NOT used by <see cref="Ga144CvmHardwareInstaller.InstallAndRunAsync"/>'s automatic
-  /// "Install &amp; run CVM test" step (that step still calls <see cref="TryBuildTestProgram"/>
-  /// directly): that step's own pass/fail check requires every page-0 read to land at exactly the
-  /// next sequential address, and this program deliberately jumps around (call/ret, and the
-  /// exploratory br/cbr) -- folding this into the shared program would make the automatic test
-  /// report a read-order "failure" that isn't actually a regression, just a check that doesn't know
-  /// about jumps yet. Per Stefan's own choice, this stays a debugger-only variant instead.
+  /// Deliberately kept separate from <see cref="TryBuildTestProgram"/>'s own minimal smoke test
+  /// (used by <see cref="Ga144CvmHardwareInstaller.StartDebugSessionAsync"/>'s own fallback, and
+  /// formerly by the GA144 window's "Install &amp; run CVM test" button, removed 2026-09-18): that
+  /// simpler program's own pass/fail check requires every page-0 read to land at exactly the next
+  /// sequential address, and this program deliberately jumps around (call/ret, and the exploratory
+  /// br/cbr) -- folding this into the shared program would make that check report a read-order
+  /// "failure" that isn't actually a regression, just a check that doesn't know about jumps yet. Per
+  /// Stefan's own choice, this stays a debugger-only variant instead.
   /// </summary>
   public static (List<int>? Program, string? MissingSymbolDescription) TryBuildDebuggerTestProgram(
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)

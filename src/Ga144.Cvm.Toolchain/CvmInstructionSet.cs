@@ -800,20 +800,27 @@ public static class CvmInstructionSet
   // Field layout derived from fpr/instr's own body ("drop dup 0x07 and 2* a! 2/ 2/ 2/ 0x1f and"): the
   // low 3 bits (0x0007) are the register index (0-7, unshifted, exactly like the address-register
   // node's own register field); the next 5 bits up (0x00F8, bits 7-3) are the "which function" field,
-  // extracted by shifting right 3 and masking to 0x1f. UNCONFIRMED, flagged rather than guessed: whether
-  // the resolved function address needs a base-address subtraction (node 511's own function field does;
-  // the address-register node's own does not) cannot be derived from fpr/main's own dispatch body alone
-  // -- its unary branch ends in "fpr/instr >r ;" with no visible jump/execute of any kind, unlike
-  // ar/main's explicit "...>r ex ar/leave" pattern, so how "i" actually reaches a real F18 address at
-  // runtime is not established here. BaseAddress is set to 0 below (mirroring the address-register
-  // node's own choice, the more structurally similar precedent -- the same register/function-field
-  // extraction shape, just a narrower function field) as a working assumption, not a confirmed fact.
+  // extracted by shifting right 3 and masking to 0x1f.
+  //
+  // CONFIRMED, 2026-09-18, against real hardware: Stefan ran a manual 'fpop 0 / 'fpush 0 round-trip
+  // (pushlit 0x3F80; pushlit 0x0000; fpop 0; fpush 0) through the CVM Debugger and posted the resulting
+  // wire-transaction log. 'fpop's own word decoded as 0xDC80 (function field 0x10, register 0) and
+  // 'fpush's as 0xDCA8 (function field 0x15, register 0) -- both resolved with BaseAddress 0 (no
+  // subtraction), and the round trip came back byte-for-byte correct: 'fpop read the stack low-word-first
+  // (READ 1:FFFD -> 0000, READ 1:FFFE -> 3F80) and 'fpush wrote it back low-word-last (WRITE 1:FFFE <-
+  // 3F80, WRITE 1:FFFD <- 0000), an EXACT mirror of the original two pushlit writes. This settles what
+  // used to be flagged below as an unconfirmed assumption: BaseAddress 0 is correct for node 306, not
+  // just a working guess borrowed from the address-register node's own precedent. (This particular run
+  // was against the PRE-2026-09-17 node 306 build -- 8 registers, "# 0x10 org" -- so these specific
+  // resolved values (0x10/0x15) will shift once Stefan rebuilds against the corrected 4-register/
+  // "# 0x8 org" source; the mechanism this confirms -- tag/field layout/BaseAddress 0 -- does not change,
+  // since it's resolved fresh from each live compile, not hardcoded.)
   public const int FloatingPointFunctionFieldBitMask = 0x00F8;
 
-  /// <summary>How far left node 306's resolved floating-point function address is shifted before OR-ing into <see cref="FloatingPointFunctionFieldBitMask"/>'s bits -- 3, since the 3-bit register field occupies bits 2-0 below it. UNCONFIRMED base-address assumption -- see the remarks just above.</summary>
+  /// <summary>How far left node 306's resolved floating-point function address is shifted before OR-ing into <see cref="FloatingPointFunctionFieldBitMask"/>'s bits -- 3, since the 3-bit register field occupies bits 2-0 below it.</summary>
   public const int FloatingPointFunctionFieldShift = 3;
 
-  /// <summary>Assumed 0 (no base-address subtraction), mirroring the address-register node's own choice -- NOT independently confirmed for node 306. See the remarks above <see cref="FloatingPointFunctionFieldBitMask"/>.</summary>
+  /// <summary>No base-address subtraction, mirroring the address-register node's own choice -- CONFIRMED against real hardware 2026-09-18 (see the remarks above <see cref="FloatingPointFunctionFieldBitMask"/> for the 'fpop/'fpush round-trip that confirmed it).</summary>
   public const int FloatingPointFunctionFieldBaseAddress = 0;
 
   /// <summary>Isolates node 306's 3-bit floating-point register-index field (bits 2-0, unshifted, 0-7) -- see the remarks above <see cref="FloatingPointFunctionFieldBitMask"/>.</summary>

@@ -12,12 +12,6 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   private bool _verifyBusy;
   private string _verifyStatus = "";
 
-  // Reused (not re-created per run) so repeated "Install & run CVM test" attempts refresh the same
-  // window instead of stacking new ones -- same convention as NodeEditorWindow's own
-  // CompileDiagnosticsWindow instance. Non-modal (Show(), not ShowDialog()) so the chip window
-  // stays usable while a long sent/received transcript is still open for reading or copying.
-  private Views.CompileDiagnosticsWindow? _cvmTestResultWindow;
-
   public ChipViewModel(
     ProjectViewModel project,
     Ga144ChipRole role,
@@ -43,8 +37,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     VerifyNode708RomCommand = new AsyncRelayCommand(VerifyNode708RomAsync, () => !_verifyBusy);
     RunNode708EchoTestCommand = new AsyncRelayCommand(RunNode708EchoTestAsync, () => !_verifyBusy);
     RunNode708DispatchTestCommand = new AsyncRelayCommand(RunNode708DispatchTestAsync, () => !_verifyBusy);
-    CompileCvmTestCommand = new AsyncRelayCommand(CompileCvmTestAsync, () => !_verifyBusy);
-    InstallAndRunCvmTestCommand = new AsyncRelayCommand(InstallAndRunCvmTestAsync, () => !_verifyBusy);
+    CopyAllNodesToProjectCommand = new RelayCommand(CopyAllNodesToProject);
     RebuildNodes();
   }
 
@@ -60,7 +53,9 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   /// <summary>
   /// Every project currently open in the workspace, including this chip
   /// window's own project. Used by the node editor's "Copy to project…"
-  /// action to offer the other projects a node's source can be copied into.
+  /// action, and by this chip window's own "Copy all nodes to project…"
+  /// action, to offer the other projects a node (or every configured node)
+  /// can be copied into.
   /// </summary>
   public IReadOnlyList<ProjectViewModel> AllProjects { get; }
   public ObservableCollection<NodeViewModel> Nodes { get; } = [];
@@ -69,8 +64,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public AsyncRelayCommand VerifyNode708RomCommand { get; }
   public AsyncRelayCommand RunNode708EchoTestCommand { get; }
   public AsyncRelayCommand RunNode708DispatchTestCommand { get; }
-  public AsyncRelayCommand CompileCvmTestCommand { get; }
-  public AsyncRelayCommand InstallAndRunCvmTestCommand { get; }
+  public RelayCommand CopyAllNodesToProjectCommand { get; }
 
   public string VerifyStatus
   {
@@ -89,8 +83,6 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
         VerifyNode708RomCommand.NotifyCanExecuteChanged();
         RunNode708EchoTestCommand.NotifyCanExecuteChanged();
         RunNode708DispatchTestCommand.NotifyCanExecuteChanged();
-        CompileCvmTestCommand.NotifyCanExecuteChanged();
-        InstallAndRunCvmTestCommand.NotifyCanExecuteChanged();
       }
     }
   }
@@ -662,275 +654,90 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     }
   }
 
-  // Compile-and-display dry run only -- no hardware I/O. Delivering these
-  // images and register/stack initializations across the mesh (a per-hop
-  // relay through 707/607/507, since 607 and 507 each have to sit in a
-  // temporary pass-through role while their own children load -- see
-  // CvmBootStreamBuilder's remarks) is a separate, not-yet-built step.
+  // The chip window's old "Compile CVM test" (dry-run compile of this project's node sources
+  // through CvmBootStreamBuilder's load order) and "Install & run CVM test" (real hardware
+  // delivery through Ga144CvmHardwareInstaller.InstallAndRunAsync, then a runtime smoke test)
+  // buttons were retired 2026-09-18 in favor of the "Copy all nodes to project…" button below.
+  // Their implementations (CompileCvmTestAsync, InstallAndRunCvmTestAsync, ShowCvmTestResult, and
+  // the _cvmTestResultWindow field) were removed along with them; see
+  // Ga144CvmHardwareInstaller.cs for the corresponding removal note on the hardware-install side
+  // (InstallAndRunAsync/InstallAndRun and the post-install runtime test).
   //
-  // Unlike CvmBootStreamBuilder.BuildDescriptors/BuildLoadPlan (which compile
-  // this project's team's fixed reference sources -- Node607Program.Source
-  // and so on, baked into the assembly, and are dead code as far as the
-  // shipped app is concerned), this compiles the CURRENTLY SELECTED
-  // PROJECT's own node sources for these coordinates
-  // (Chip.GetNode(coordinate).SourceCode), through the same
-  // F18NodeCompilationService/RomLibrary path the node editor's own
-  // "Compile ROM + RAM" button uses. That is the point of "test": bring a
-  // CVM node into this project (e.g. via the node editor's "Copy to
-  // project…" from the reference source), edit it here, and this button
-  // compiles exactly what is currently in the project, live -- not a frozen
-  // reference copy -- so a change can be tried immediately without touching
-  // the shipped Node*Program.cs files at all.
-  //
-  // CVM2 (2026-09-01), per Stefan: "take the nodes code in the project and
-  // not the NodeXxxProgram code, which should only be used if no code in the
-  // project is defined." So a coordinate with no project source yet no
-  // longer just gets skipped with a "not configured" message -- it falls
-  // back to CvmBootStreamBuilder.ReferenceSourceFor's fixed reference source
-  // instead (via F18NodeCompilationService.CompileNode's own
-  // ramSourceOverride parameter) so this dry run still shows what an actual
-  // install would do, and the summary below says explicitly which nodes (if
-  // any) had to fall back rather than compiling their own project source.
-  //
-  // The confirmed load order/tree shape (leaves first, root last) still
-  // comes from CvmBootStreamBuilder.BuildLoadOrder(), since that shape is
-  // about the physical mesh topology, not about which source compiled it.
-  private async Task CompileCvmTestAsync()
+  // Copies every "configured" node (NodeViewModel.IsConfigured's own predicate, reproduced here
+  // since this operates on the underlying Ga144NodeConfiguration models rather than the open
+  // node editor's live/unsaved textbox state: Enabled, or a non-blank SourceCode) from this
+  // chip into the same node coordinates of another open project's chip -- the same picker
+  // dialog (CopyNodeToProjectWindow/CopyNodeToProjectViewModel) and destination policy (ROM is
+  // shared across every project and is never copied) as the node editor's own single-node
+  // "Copy to project…" button, just applied to every configured node at once instead of one.
+  private void CopyAllNodesToProject()
   {
-    if (_verifyBusy)
+    IReadOnlyList<ProjectViewModel> otherProjects = AllProjects.Where(project => project != Project).ToList();
+    if (otherProjects.Count == 0)
+    {
+      MessageBox.Show(
+          "There are no other projects open to copy into. Create another project first.",
+          "Copy all nodes to project",
+          MessageBoxButton.OK,
+          MessageBoxImage.Information);
+      return;
+    }
+
+    List<Ga144NodeConfiguration> configuredNodes = Chip.Nodes
+        .Where(node => node.Enabled || !string.IsNullOrWhiteSpace(node.SourceCode))
+        .ToList();
+    if (configuredNodes.Count == 0)
+    {
+      MessageBox.Show(
+          "This chip has no configured nodes (enabled, or with RAM source) to copy.",
+          "Copy all nodes to project",
+          MessageBoxButton.OK,
+          MessageBoxImage.Information);
+      return;
+    }
+
+    var pickerViewModel = new CopyNodeToProjectViewModel(
+        otherProjects,
+        Role,
+        $"Copy this chip's {configuredNodes.Count} configured node(s) -- RAM source and startup "
+        + "state -- into the same node coordinates in another project. ROM is shared across "
+        + "every project and does not need to be copied.");
+    var picker = new Views.CopyNodeToProjectWindow(pickerViewModel)
+    {
+      Owner = Application.Current?.Windows
+          .OfType<Window>()
+          .FirstOrDefault(window => window.IsActive)
+    };
+
+    if (picker.ShowDialog() != true || pickerViewModel.SelectedProject is null)
     {
       return;
     }
 
-    VerifyBusy = true;
-    VerifyStatus = "Compiling CVM boot stream from this project's nodes…";
-    try
+    Ga144ChipConfiguration targetChip = pickerViewModel.SelectedProject.GetChip(pickerViewModel.SelectedRole);
+    foreach (Ga144NodeConfiguration sourceNode in configuredNodes)
     {
-      IReadOnlyList<CvmBootLoadStep> loadOrder = CvmBootStreamBuilder.BuildLoadOrder();
-      var compileService = new Compiler.F18NodeCompilationService(Chip, RomLibrary, Project.Model.UserMacros);
-
-      var summary = new System.Text.StringBuilder();
-      summary.AppendLine(
-          $"CVM boot stream -- compiled from \"{Project.Name}\" ({Chip.Name})'s own node sources, "
-          + "not the fixed reference copy. Compile + dry run only, no hardware I/O yet. Confirmed "
-          + "load order, leaves first / root last:");
-      summary.AppendLine();
-
-      bool anyFailed = false;
-      bool anyUnavailable = false;
-      bool anyReferenceFallback = false;
-
-      await Task.Run(() =>
-      {
-        foreach (CvmBootLoadStep step in loadOrder)
-        {
-          string via = step.ViaNodeCoordinate.HasValue ? $"via {step.ViaNodeCoordinate.Value:000}" : "(boot node, no via)";
-          Ga144NodeConfiguration node = Chip.GetNode(step.NodeCoordinate);
-
-          string? ramSourceOverride = null;
-          string fallbackNote = "";
-          if (string.IsNullOrWhiteSpace(node.SourceCode))
-          {
-            string? referenceSource = CvmBootStreamBuilder.ReferenceSourceFor(step.NodeCoordinate);
-            if (referenceSource is null)
-            {
-              anyUnavailable = true;
-              summary.AppendLine($"Node {step.NodeCoordinate:000} {via} -- not configured in this project (no RAM source), and no reference source exists to fall back to. Use \"Copy to project…\" in the node editor once this node's source is available.");
-              continue;
-            }
-
-            ramSourceOverride = referenceSource;
-            anyReferenceFallback = true;
-            fallbackNote = " [reference source -- not yet defined in this project; use \"Copy to project…\" in the node editor to bring it in and edit it here]";
-          }
-
-          Compiler.F18NodeCompilationResult compiled = compileService.CompileNode(step.NodeCoordinate, ramSourceOverride: ramSourceOverride);
-          if (!compiled.Success)
-          {
-            anyFailed = true;
-            int errorCount = compiled.Rom.Diagnostics.Concat(compiled.Ram.Diagnostics)
-                .Count(diagnostic => diagnostic.Severity == Compiler.F18DiagnosticSeverity.Error);
-            summary.AppendLine($"Node {step.NodeCoordinate:000} {via} -- COMPILE FAILED ({errorCount} error(s)){fallbackNote}. Open this node in the editor and press \"Compile ROM + RAM\" for full diagnostics.");
-            continue;
-          }
-
-          CvmBootDescriptor descriptor = CvmBootDescriptor.FromCompileResult(compiled.Ram);
-          summary.AppendLine(
-              $"Node {step.NodeCoordinate:000} {via} -- {descriptor.Words.Count} words, entry "
-              + $"{(descriptor.EntryPoint.HasValue ? $"0x{descriptor.EntryPoint.Value:X3}" : "<none>")}, "
-              + $"A={(descriptor.InitialA.HasValue ? $"0x{descriptor.InitialA.Value:X3}" : "-")} "
-              + $"B={(descriptor.InitialB.HasValue ? $"0x{descriptor.InitialB.Value:X3}" : "-")} "
-              + $"IO={(descriptor.InitialIo.HasValue ? $"0x{descriptor.InitialIo.Value:X3}" : "-")} "
-              + $"stack=[{string.Join(",", descriptor.InitialStack)}]{fallbackNote}");
-        }
-      });
-
-      summary.AppendLine();
-      summary.AppendLine(anyFailed || anyUnavailable
-          ? "Not every node in this project is ready yet -- see above."
-          : "All nodes in this project's CVM load order compiled successfully."
-            + (anyReferenceFallback ? " (One or more used the fixed reference source, noted above, because this project doesn't define them yet.)" : ""));
-      summary.AppendLine();
-      summary.AppendLine("This does not touch hardware. Delivering these images across the mesh is a separate step, not yet built.");
-
-      VerifyStatus = anyFailed || anyUnavailable
-          ? "CVM boot stream compiled with errors -- see summary."
-          : "CVM boot stream compiled -- see summary.";
-      MessageBox.Show(
-          summary.ToString(),
-          "Install CVM test (dry run)",
-          MessageBoxButton.OK,
-          anyFailed || anyUnavailable ? MessageBoxImage.Warning : MessageBoxImage.Information);
-    }
-    catch (Exception exception)
-    {
-      VerifyStatus = "CVM boot stream compile failed.";
-      MessageBox.Show(
-          $"The CVM boot stream could not be compiled:\n\n{exception.Message}",
-          "Install CVM test (dry run)",
-          MessageBoxButton.OK,
-          MessageBoxImage.Error);
-    }
-    finally
-    {
-      VerifyBusy = false;
-    }
-  }
-
-  // Real hardware delivery: compiles this project's own 9 CVM node sources (same live-project
-  // compile CompileCvmTestAsync above uses, not the frozen reference copy), resets the chip,
-  // loads all 9 nodes across the branching mesh through node 708 (see
-  // Ga144CvmHardwareInstaller's own remarks for the technique -- a tree-shaped generalization of
-  // KrakenSession.ErectOnto's hardware-proven fire-and-forget boot-frame erection), then runs the
-  // first live functional test Stefan described: wake node 708's 'start with one word, then read
-  // back the CVM's first memory request (expected: two words, both 0).
-  //
-  // This is genuinely new, first-of-its-kind hardware code for a BRANCHING topology in this
-  // project -- every prior hardware feature here (Kraken's tentacles, the SRAM Tentacle) needed
-  // multiple rounds of real-hardware bring-up even for simpler, linear topologies. Expect the
-  // same here; the per-frame CvmInstallReport below is meant to help localize exactly where a
-  // first attempt goes wrong, not to promise it won't.
-  private async Task InstallAndRunCvmTestAsync()
-  {
-    if (_verifyBusy)
-    {
-      return;
+      Ga144NodeConfiguration targetNode = targetChip.GetNode(sourceNode.Coordinate);
+      targetNode.Enabled = sourceNode.Enabled;
+      targetNode.SourceCode = sourceNode.SourceCode;
+      targetNode.RamWords = [.. sourceNode.RamWords];
+      targetNode.Startup.EntryPoint = sourceNode.Startup.EntryPoint;
+      targetNode.Startup.P = sourceNode.Startup.P;
+      targetNode.Startup.A = sourceNode.Startup.A;
+      targetNode.Startup.B = sourceNode.Startup.B;
+      targetNode.Startup.Io = sourceNode.Startup.Io;
+      targetNode.Startup.ReturnStack = [.. sourceNode.Startup.ReturnStack];
+      targetNode.Startup.ParameterStack = [.. sourceNode.Startup.ParameterStack];
     }
 
-    if (KrakenController.HardwareErected)
-    {
-      MessageBox.Show(
-          "Install & run CVM test cannot run while a Kraken is erected on this chip. This test "
-          + "resets the whole chip to load the CVM cluster, and a resident Kraken must never be "
-          + "reset. Remove the Kraken first, then try again.",
-          "Install & run CVM test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
+    pickerViewModel.SelectedProject.NotifyProjectChanged();
 
-    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
-    if (endpoint is null)
-    {
-      MessageBox.Show(
-          "No serial endpoint is assigned to this chip. Assign a COM port before installing the CVM test on hardware.",
-          "Install & run CVM test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    VerifyBusy = true;
-    VerifyStatus = "Installing CVM cluster on hardware…";
-    try
-    {
-      var compileService = new Compiler.F18NodeCompilationService(Chip, RomLibrary, Project.Model.UserMacros);
-      var installer = new Ga144CvmHardwareInstaller();
-      CvmInstallAndTestReport report = await installer.InstallAndRunAsync(endpoint.PortName, Chip, compileService);
-
-      var summary = new System.Text.StringBuilder();
-      summary.AppendLine($"CVM install -- compiled from \"{Project.Name}\" ({Chip.Name})'s own node sources, reset the chip, and delivered all 9 nodes across the mesh through node 708.");
-      summary.AppendLine();
-
-      if (!report.Install.Success)
-      {
-        summary.AppendLine($"INSTALL FAILED before any hardware was touched: {report.Install.FailureMessage}");
-        VerifyStatus = "CVM install failed (nothing sent to hardware).";
-      }
-      else
-      {
-        summary.AppendLine($"Install: {report.Install.Steps.Count} boot frame(s) sent, fire-and-forget (no reply is read during install -- this matches the technique KrakenSession.ErectOnto already proved on real hardware).");
-        summary.AppendLine();
-        summary.AppendLine("Runtime test:");
-        bool anyFailed = false;
-        bool anyInconclusive = false;
-        foreach (CvmTestStepResult step in report.TestSteps)
-        {
-          string outcome = step.Passed switch
-          {
-            true => "PASSED",
-            false => "FAILED",
-            null => "INCONCLUSIVE"
-          };
-          if (step.Passed == false)
-          {
-            anyFailed = true;
-          }
-          else if (step.Passed is null)
-          {
-            anyInconclusive = true;
-          }
-
-          summary.AppendLine($"  [{outcome}] {step.Description}");
-          if (step.Detail is not null)
-          {
-            summary.AppendLine($"      {step.Detail}");
-          }
-        }
-
-        VerifyStatus = anyFailed
-            ? "CVM installed; runtime test FAILED -- see summary."
-            : anyInconclusive
-                ? "CVM installed; runtime test inconclusive -- see summary."
-                : "CVM installed and runtime test passed.";
-      }
-
-      ShowCvmTestResult("Install & run CVM test", summary.ToString());
-    }
-    catch (Exception exception)
-    {
-      VerifyStatus = "Install & run CVM test failed.";
-      ShowCvmTestResult("Install & run CVM test -- could not complete", exception.ToString());
-    }
-    finally
-    {
-      VerifyBusy = false;
-    }
-  }
-
-  // MessageBox's own text is selectable with Ctrl+C on Windows, but that copies the whole dialog
-  // (title, buttons, everything) as one undiscoverable trick rather than letting Stefan select
-  // just the transcript he wants -- and this report only grows as more test steps get added later.
-  // A real read-only, selectable TextBox with an explicit "Copy all" button (the same window
-  // NodeEditorWindow already uses for compile diagnostics) fixes that directly.
-  private void ShowCvmTestResult(string header, string body)
-  {
-    if (_cvmTestResultWindow is null)
-    {
-      _cvmTestResultWindow = new Views.CompileDiagnosticsWindow
-      {
-        Owner = Application.Current?.Windows
-            .OfType<Window>()
-            .FirstOrDefault(window => window.IsActive)
-      };
-
-      // The window's own "Close" button only Hide()s it (so ShowDiagnostics can reuse it next
-      // run), but the native title-bar X still Close()s it -- a closed WPF window throws if
-      // reused, so drop the cached reference then and let the next call create a fresh one.
-      _cvmTestResultWindow.Closed += (_, _) => _cvmTestResultWindow = null;
-    }
-
-    _cvmTestResultWindow.ShowDiagnostics(header, body);
+    MessageBox.Show(
+        $"Copied {configuredNodes.Count} configured node(s) from \"{Project.Name}\" ({Chip.Name}) "
+        + $"into \"{pickerViewModel.SelectedProject.DisplayName}\" ({pickerViewModel.SelectedRole}).",
+        "Copy all nodes to project",
+        MessageBoxButton.OK,
+        MessageBoxImage.Information);
   }
 
   private void RebuildNodes()
