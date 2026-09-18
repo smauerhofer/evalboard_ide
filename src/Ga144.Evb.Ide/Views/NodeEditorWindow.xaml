@@ -47,12 +47,21 @@
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Border Width="20" Height="20" Margin="0,0,4,0" CornerRadius="3"
-                                    Background="{Binding Brush}" BorderBrush="#999999" BorderThickness="1"
-                                    Cursor="Hand" Tag="{Binding Hex}" ToolTip="{Binding Hex}"
-                                    MouseLeftButtonDown="OnNodeColorSwatchClick">
+            <!--
+                Outer selection ring, same technique as MainWindow's "Default node color" picker:
+                a black rectangle drawn AROUND the swatch, transparent (invisible) except for
+                whichever one matches this node's current EffectiveColorHex. BorderThickness/
+                BorderBrush live ONLY as Style Setters, never as local attributes on the Border
+                itself: a local attribute value always wins over a Style trigger's Setter in
+                WPF's property value precedence, which is exactly why this never appeared when it
+                used to be a single Border with BorderBrush/BorderThickness set directly on it and
+                the trigger only ever fighting (and losing to) those local values.
+            -->
+            <Border Width="28" Height="28" Margin="0,0,4,0" Padding="2" CornerRadius="4">
               <Border.Style>
                 <Style TargetType="Border">
+                  <Setter Property="BorderThickness" Value="2" />
+                  <Setter Property="BorderBrush" Value="Transparent" />
                   <Style.Triggers>
                     <DataTrigger Value="True">
                       <DataTrigger.Binding>
@@ -61,12 +70,18 @@
                           <Binding Path="DataContext.EffectiveColorHex" RelativeSource="{RelativeSource AncestorType=Window}" />
                         </MultiBinding>
                       </DataTrigger.Binding>
-                      <Setter Property="BorderBrush" Value="#222222" />
-                      <Setter Property="BorderThickness" Value="3" />
+                      <Setter Property="BorderBrush" Value="Black" />
                     </DataTrigger>
                   </Style.Triggers>
                 </Style>
               </Border.Style>
+              <!-- Exactly fills the 20x20 left inside the outer ring (28 outer, minus 2*2 for
+                   its BorderThickness, minus 2*2 for its Padding); a size mismatch here would
+                   let this swatch overflow past the ring and draw over it, hiding the border. -->
+              <Border Width="20" Height="20" CornerRadius="3"
+                                      Background="{Binding Brush}" BorderBrush="#999999" BorderThickness="1"
+                                      Cursor="Hand" Tag="{Binding Hex}" ToolTip="{Binding Hex}"
+                                      MouseLeftButtonDown="OnNodeColorSwatchClick" />
             </Border>
           </DataTemplate>
         </ItemsControl.ItemTemplate>

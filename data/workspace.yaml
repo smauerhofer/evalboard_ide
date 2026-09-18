@@ -1,6 +1,6 @@
 schemaVersion: 7
 activeBoardId: d6e6f99b-8d7d-4604-9709-4d6a0b6820f7
-activeProjectId: 6f706653-dd18-4880-8fa0-a69b52146b8c
+activeProjectId: 0b82b025-33c0-4c4b-b948-acc38bb23ca3
 settings:
   autoDetect: false
   activeProbeNewFtdiPorts: true
@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-18T06:25:51.5688592
-      utcDateTime: 2026-09-18T06:25:51.5688592Z
-      localDateTime: 2026-09-18T08:25:51.5688592+02:00
+      dateTime: 2026-09-18T06:40:52.8843739
+      utcDateTime: 2026-09-18T06:40:52.8843739Z
+      localDateTime: 2026-09-18T08:40:52.8843739+02:00
       date: 2026-09-18T00:00:00.0000000
       day: 18
       dayOfWeek: Friday
       dayOfYear: 261
       hour: 6
-      millisecond: 568
-      microsecond: 859
-      nanosecond: 200
-      minute: 25
+      millisecond: 884
+      microsecond: 373
+      nanosecond: 900
+      minute: 40
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 51
-      ticks: 639253095515688592
-      utcTicks: 639253095515688592
-      timeOfDay: 06:25:51.5688592
+      second: 52
+      ticks: 639253104528843739
+      utcTicks: 639253104528843739
+      timeOfDay: 06:40:52.8843739
       year: 2026
   portB: 
   portC:
@@ -16511,7 +16511,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#FFCFC2'
     - coordinate: 308
       enabled: true
       sourceCode: >-
@@ -16668,7 +16668,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#FBD6EC'
     - coordinate: 309
       enabled: false
       sourceCode: ''
@@ -17917,7 +17917,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#DCEEFA'
     - coordinate: 406
       enabled: true
       sourceCode: >-
@@ -18072,7 +18072,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D6ECF7'
     - coordinate: 407
       enabled: true
       sourceCode: >-
@@ -18212,7 +18212,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#FFCFC2'
     - coordinate: 408
       enabled: true
       sourceCode: >
@@ -18406,62 +18406,10 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D6ECF7'
     - coordinate: 409
-      enabled: true
-      sourceCode: >
-        ( CVM2 node 409. VM 32 bit floatingpoint final stage node )
-
-        (
-          receives 1 floatingpoints number and composes it into a IEEE-754 number.
-          1. sign: 0 => positive, 0x8000 => negative
-          2. type: ==0 => normal or denormalized, !=0 => NaN or infitinte
-          3. signed exponent -128 .. 127
-          4. mantissa high
-          5. mantissa low
-          normalize number
-          send number to node 509.
-        )
-
-
-        # 0 org
-
-        entry fpf/main
-
-        # left /b
-
-        # up /a
-
-
-        : fpf/inc 1 . + ;
-
-        : fpf/dec -1 . + ;
-
-
-        : fpf/normalize ( ehl/s-)
-
-
-        : fpf/main
-          @b >r
-          @b if // NaN or infinite
-            @b 0xff and 2* 2* 2* 2* 2* 2* 2*
-            @b 0x7f and xor r> xor !
-            @b 0xffff and ! fpf/main ;
-          then // normal number
-            // get exponent
-            @b 0xff and >r
-            @b // high mantissa
-            // check if zero
-            if // nonzero
-              @b // low mantissa
-            then
-            @b // low mantissa
-            // check if zero
-            if // nonzero
-              fpf/normalize ;
-            then // zero
-            >r !
-            dup xor ! ;
+      enabled: false
+      sourceCode: ''
       ramWords:
       - 0x049F5
       - 0x00001
@@ -19629,7 +19577,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D7E5D2'
     - coordinate: 506
       enabled: true
       sourceCode: "( CVM2 node 506. frame, 1001_????_????_???? )\r\n( A: register f (frame pointer)\n# 507 import\n# 0 org\nentry f/main\n# 0 /a\n# right /b\r\n\r\n: par 0x1ff and ;\r\n\r\n: f/next ( -w) A[ m/next ]] lit !b ahead ;\n: f/pop ( -w) A[ m/pop ]] lit !b then A[ !p ]] lit !b @b ;\n\r\n: f/r@ ( -w) A[ over !p ]] lit !b @b ;\n: f/r! ( w) A[ @p over ]] lit !b !b ;\n: f/push ( w) A[ @p m/push ]] lit !b !b ;\r\n\r\n\r\n: f/stack@ ( o-a) // load from stack\r\n  a . +  A[ @p m/1@ ]] lit !b !b A[ over ]] lit !b ;\r\n: f/stack! ( o-a) // store to stack\r\n  a . +  A[ over @p ]] lit !b !b A[ m/1! ]] lit !b ;\r\n: f/leave A[ ; ]] lit !b\r\n: f/main // node entry point\r\n  # f/leave lit >r // prepare return address\r\n  A[ 2* !p !p ]] lit !b @b @b >r // push take over code\r\n  -if // 1001_1???_????_????\r\n    2* -if // 1001_11??_????_????\r\n\r\n      2* -if // 1001_111?_????_????\r\n        // load local\r\n        r> par inv f/stack@ ;\r\n        \r\n      then // 1001_110?_????_????\n      // load parameter\r\n      r> par f/stack@ ;\r\n\r\n    then // 1001_10??_????_????\n\r\n      2* -if // 1001_101?_????_????\r\n        // store local\r\n        r> par inv f/stack! ;\r\n\r\n      then // 1001_100?_????_????\n      // store parameter\r\n      r> par f/stack! ;\r\n\r\n  then // 1001_0???_????_????\n  2* -if // 1001_01??_????_????\r\n    r> --l- ;\r\n  then // 1001_00???_????_????\n  2* -if // 1001_001?_????_????\r\n    // enter\r\n    a A[ @p m/push ]] lit !b !b  // save frame pointer\r\n    A[ dup !p ]] lit !b @b // read stack pointer\r\n    r> par inv + a! ; // calculate new frame pointer\r\n  then // 1001_000?_????_????\r\n  ex ;\r\n\r\n: 'leave .loc\r\n  A[ m/pop ]] lit !b A[ !p ]] lit !b @b a! ;\r\n: 'f .loc\r\n  a f/r! ;\r\n: 'pushf .loc\r\n  a f/push ;\r\n\r\n(\r\nopcode ldl 1001_111?_????_???? load local into r. the offset is 9 bit.\r\nopcode ldp 1001_110?_????_???? load parameter into r. the offset is 9 bit.\r\nopcode stl 1001_101?_????_???? store r into local. the offset is 9 bit.\r\nopcode stp 1001_100?_????_???? store r into parameter. the offset is 9 bit.\r\nopcode enter 1001_001?_????_???? enter stack frame. the offset is 9 bit.\r\nopcode 1001_01??_????_???? call node 505\r\n'leave restore stack pointer and previous frame. undo enter stack frame.\r\n'f move f to register r\r\n'pushf push f onto the stack\r\n)"
@@ -19706,7 +19654,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D7E5D2'
     - coordinate: 507
       enabled: true
       sourceCode: >
@@ -19905,7 +19853,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#FFCFC2'
     - coordinate: 508
       enabled: true
       sourceCode: >+
@@ -20058,7 +20006,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D7E5D2'
     - coordinate: 509
       enabled: true
       sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ g/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p g/r! ]] lit !b !b ;\n: u/pop ( -w) A[ g/pop ]] lit !b A[ !p ]] lit !b @b ;\n: u/push ( w) A[ @p g/push ]] lit !b !b ;\n: u/leave A[ g/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ !p 2* !p ]] lit !b @b @b\n  -if // 1011_1???_????_????\n    // \n    --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // \n    --l- ;\n  then // 1011_00??_????_????\n  2* -if // 1011_001?_????_????\n    // load literal -256..255\r\n    drop 0x01ff and dup 0x0200 and if drop 0xfe00 xor u/r! ; then drop u/r! ;\n  then // 1011_000?_????_????\r\n  // unary\n  drop >r u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\nbegin [ swap ]\r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\r\n: 'parity 'bitcnt\r\n: 'odd 1 and ;\r\n: 'not until dup xor ;\n\r\n(\r\nopcode lit 1011_01??_????_???? load literal to r. the range of the literal is -0x200 to 0x1ff.\r\n\r\n'abs make r absolute\r\n'neg negate r\n'inc increment r\r\n'dec decrement r\r\n'inv invert all bits in r\r\n'mul2 shift left r\r\n'div2 signed shift right of r\r\n'udiv2 unsigned shift right of r\r\n'bitcnt count 1 bits in r\r\n'parity if r contains an odd number of 1 bits, then r becomes 1 otherwise r becomes 0.\r\n'odd r becomes 1 of r is odd, otherwise r becomes 0.\r\n'not logical not. if r is 0 then r = 1, otherwise r = 0\r\n)\r\n"
@@ -20135,7 +20083,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D6ECF7'
     - coordinate: 510
       enabled: true
       sourceCode: >-
@@ -20277,7 +20225,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D6ECF7'
     - coordinate: 511
       enabled: true
       sourceCode: "( CVM2 node 511. register file, 1011_11??_????_???? )\r\n( 32 register )\n# 510 import\n# 0x20  org\nentry r/main\n# 0 /a\n# left /b\n\r\n: r/leave A[ x/leave ; ]] lit !b\n: r/main  A[ drop !p ]] lit !b\n\n  @b // get opcode\n  // set register in a\n  dup 0x1f and a!\n  // call word\n  2/ 2/ 2/ 2/ 2/ 0x1f and 0x20 xor ex r/leave ;\n\r\n  // load register\n: 'rld A[ x/r@ ]] lit !b A[ !p ]] lit !b @b ! ;\n  // store register\n: 'rst A[ @p x/r! ]] lit !b @ !b ;\n: 'rpop A[ x/pop ]] lit !b A[ !p ]] lit !b @b ! ;\r\n: 'rpush A[ @p x/push ]] lit !b @ !b ;\r\n\r\n(\r\nthis node supports 32 16-bit register.\r\nregister are encoded in the lower 5 bits of the opcode.\r\nthe address of the function is encoded in the next 5 bits with an offset of 0x20, so address 0x20 to 0x3f can be encoded.\r\nopcode rld   1011_11??_???a_aaaa move r to reg[a]\nopcode rst   1011_11??_???a_aaaa move reg[a] to r\nopcode rpop  1011_11??_???a_aaaa pop stack to reg[a]\nopcode rpush 1011_11??_???a_aaaa push reg[a] to stack\n)\r\n\n "
@@ -20354,7 +20302,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E8E8E8'
     - coordinate: 512
       enabled: false
       sourceCode: ''
@@ -21701,7 +21649,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#F5E6B8'
     - coordinate: 608
       enabled: false
       sourceCode: ''
@@ -22028,7 +21976,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#F5E6B8'
     - coordinate: 708
       enabled: true
       sourceCode: >-
@@ -22143,7 +22091,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#F5E6B8'
     - coordinate: 709
       enabled: false
       sourceCode: ''
@@ -25028,7 +24976,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 302
       enabled: true
       sourceCode: >+
@@ -25164,7 +25112,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 303
       enabled: true
       sourceCode: >+
@@ -25280,7 +25228,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 304
       enabled: true
       sourceCode: >-
@@ -25430,7 +25378,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 305
       enabled: true
       sourceCode: >+
@@ -25633,7 +25581,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 306
       enabled: true
       sourceCode: >+
@@ -25833,7 +25781,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 307
       enabled: true
       sourceCode: "( CVM2 node 307. VM ternary main, 1101_????_????_???? )\r\n# 407 import\n# 0x10 org\nentry k/main\n# 0 /a\n# up /b\r\n: k/@ ( ab-) A[ @p @p ]] lit !b !b !b A[ n/@ ]] lit !b A[ n/r! ]] lit !b ;\r\n: k/! ( ab-) A[ n/r@ ]] lit !b A[ @p @p ]] lit !b !b !b A[ n/! ]] lit !b ;\n: k/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: k/r! ( w) A[ @p n/r! ]] lit !b !b ;\n: k/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;\n: k/push ( w) A[ @p n/push ]] lit !b !b ;\n// : k/next ( -w) A[ n/next ]] lit !b A[ !p ]] lit !b @b ;\n: k/leave A[ n/leave ; ]] lit !b\n: k/main # k/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b\n  -if // 1101_1???_????_????\n    2* -if // 1101_11??_????_????\n      r> r--- ;\n    then // 1101_10??_????_????\n    r> --l- ;\n  then // 1101_0???_????_????\n  2* -if // 1101_01??_????_????\n    r> -d-- ;\n  then // 1101_00??_????_????\r\n\n(\r\n  \r\n\r\n)\n"
@@ -25910,7 +25858,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#FFCFC2'
     - coordinate: 308
       enabled: true
       sourceCode: >-
@@ -26067,7 +26015,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#FBD6EC'
     - coordinate: 309
       enabled: false
       sourceCode: ''
@@ -26336,7 +26284,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 402
       enabled: true
       sourceCode: >
@@ -26490,7 +26438,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 403
       enabled: true
       sourceCode: >+
@@ -26716,7 +26664,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 404
       enabled: true
       sourceCode: >-
@@ -26977,7 +26925,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 405
       enabled: true
       sourceCode: >-
@@ -27124,7 +27072,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#DCEEFA'
     - coordinate: 406
       enabled: true
       sourceCode: >-
@@ -27279,7 +27227,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D6ECF7'
     - coordinate: 407
       enabled: true
       sourceCode: >-
@@ -27419,7 +27367,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#FFCFC2'
     - coordinate: 408
       enabled: true
       sourceCode: >
@@ -27613,7 +27561,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D6ECF7'
     - coordinate: 409
       enabled: true
       sourceCode: >
@@ -28146,7 +28094,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 502
       enabled: true
       sourceCode: >
@@ -28320,7 +28268,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 503
       enabled: true
       sourceCode: >+
@@ -28468,7 +28416,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 504
       enabled: true
       sourceCode: >-
@@ -28724,7 +28672,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 505
       enabled: true
       sourceCode: >-
@@ -28836,7 +28784,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D7E5D2'
     - coordinate: 506
       enabled: true
       sourceCode: "( CVM2 node 506. frame, 1001_????_????_???? )\r\n( A: register f (frame pointer)\n# 507 import\n# 0 org\nentry f/main\n# 0 /a\n# right /b\r\n\r\n: par 0x1ff and ;\r\n\r\n: f/next ( -w) A[ m/next ]] lit !b ahead ;\n: f/pop ( -w) A[ m/pop ]] lit !b then A[ !p ]] lit !b @b ;\n\r\n: f/r@ ( -w) A[ over !p ]] lit !b @b ;\n: f/r! ( w) A[ @p over ]] lit !b !b ;\n: f/push ( w) A[ @p m/push ]] lit !b !b ;\r\n\r\n\r\n: f/stack@ ( o-a) // load from stack\r\n  a . +  A[ @p m/1@ ]] lit !b !b A[ over ]] lit !b ;\r\n: f/stack! ( o-a) // store to stack\r\n  a . +  A[ over @p ]] lit !b !b A[ m/1! ]] lit !b ;\r\n: f/leave A[ ; ]] lit !b\r\n: f/main // node entry point\r\n  # f/leave lit >r // prepare return address\r\n  A[ 2* !p !p ]] lit !b @b @b >r // push take over code\r\n  -if // 1001_1???_????_????\r\n    2* -if // 1001_11??_????_????\r\n\r\n      2* -if // 1001_111?_????_????\r\n        // load local\r\n        r> par inv f/stack@ ;\r\n        \r\n      then // 1001_110?_????_????\n      // load parameter\r\n      r> par f/stack@ ;\r\n\r\n    then // 1001_10??_????_????\n\r\n      2* -if // 1001_101?_????_????\r\n        // store local\r\n        r> par inv f/stack! ;\r\n\r\n      then // 1001_100?_????_????\n      // store parameter\r\n      r> par f/stack! ;\r\n\r\n  then // 1001_0???_????_????\n  2* -if // 1001_01??_????_????\r\n    r> --l- ;\r\n  then // 1001_00???_????_????\n  2* -if // 1001_001?_????_????\r\n    // enter\r\n    a A[ @p m/push ]] lit !b !b  // save frame pointer\r\n    A[ dup !p ]] lit !b @b // read stack pointer\r\n    r> par inv + a! ; // calculate new frame pointer\r\n  then // 1001_000?_????_????\r\n  ex ;\r\n\r\n: 'leave .loc\r\n  A[ m/pop ]] lit !b A[ !p ]] lit !b @b a! ;\r\n: 'f .loc\r\n  a f/r! ;\r\n: 'pushf .loc\r\n  a f/push ;\r\n\r\n(\r\nopcode ldl 1001_111?_????_???? load local into r. the offset is 9 bit.\r\nopcode ldp 1001_110?_????_???? load parameter into r. the offset is 9 bit.\r\nopcode stl 1001_101?_????_???? store r into local. the offset is 9 bit.\r\nopcode stp 1001_100?_????_???? store r into parameter. the offset is 9 bit.\r\nopcode enter 1001_001?_????_???? enter stack frame. the offset is 9 bit.\r\nopcode 1001_01??_????_???? call node 505\r\n'leave restore stack pointer and previous frame. undo enter stack frame.\r\n'f move f to register r\r\n'pushf push f onto the stack\r\n)"
@@ -28913,7 +28861,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D7E5D2'
     - coordinate: 507
       enabled: true
       sourceCode: >
@@ -29112,7 +29060,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#FFCFC2'
     - coordinate: 508
       enabled: true
       sourceCode: >+
@@ -29265,7 +29213,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D7E5D2'
     - coordinate: 509
       enabled: true
       sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ g/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p g/r! ]] lit !b !b ;\n: u/pop ( -w) A[ g/pop ]] lit !b A[ !p ]] lit !b @b ;\n: u/push ( w) A[ @p g/push ]] lit !b !b ;\n: u/leave A[ g/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ !p 2* !p ]] lit !b @b @b\n  -if // 1011_1???_????_????\n    // \n    --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // \n    --l- ;\n  then // 1011_00??_????_????\n  2* -if // 1011_001?_????_????\n    // load literal -256..255\r\n    drop 0x01ff and dup 0x0200 and if drop 0xfe00 xor u/r! ; then drop u/r! ;\n  then // 1011_000?_????_????\r\n  // unary\n  drop >r u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\nbegin [ swap ]\r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\r\n: 'parity 'bitcnt\r\n: 'odd 1 and ;\r\n: 'not until dup xor ;\n\r\n(\r\nopcode lit 1011_01??_????_???? load literal to r. the range of the literal is -0x200 to 0x1ff.\r\n\r\n'abs make r absolute\r\n'neg negate r\n'inc increment r\r\n'dec decrement r\r\n'inv invert all bits in r\r\n'mul2 shift left r\r\n'div2 signed shift right of r\r\n'udiv2 unsigned shift right of r\r\n'bitcnt count 1 bits in r\r\n'parity if r contains an odd number of 1 bits, then r becomes 1 otherwise r becomes 0.\r\n'odd r becomes 1 of r is odd, otherwise r becomes 0.\r\n'not logical not. if r is 0 then r = 1, otherwise r = 0\r\n)\r\n"
@@ -29342,7 +29290,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D6ECF7'
     - coordinate: 510
       enabled: true
       sourceCode: >-
@@ -29484,7 +29432,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#D6ECF7'
     - coordinate: 511
       enabled: true
       sourceCode: "( CVM2 node 511. register file, 1011_11??_????_???? )\r\n( 32 register )\n# 510 import\n# 0x20  org\nentry r/main\n# 0 /a\n# left /b\n\r\n: r/leave A[ x/leave ; ]] lit !b\n: r/main  A[ drop !p ]] lit !b\n\n  @b // get opcode\n  // set register in a\n  dup 0x1f and a!\n  // call word\n  2/ 2/ 2/ 2/ 2/ 0x1f and 0x20 xor ex r/leave ;\n\r\n  // load register\n: 'rld A[ x/r@ ]] lit !b A[ !p ]] lit !b @b ! ;\n  // store register\n: 'rst A[ @p x/r! ]] lit !b @ !b ;\n: 'rpop A[ x/pop ]] lit !b A[ !p ]] lit !b @b ! ;\r\n: 'rpush A[ @p x/push ]] lit !b @ !b ;\r\n\r\n(\r\nthis node supports 32 16-bit register.\r\nregister are encoded in the lower 5 bits of the opcode.\r\nthe address of the function is encoded in the next 5 bits with an offset of 0x20, so address 0x20 to 0x3f can be encoded.\r\nopcode rld   1011_11??_???a_aaaa move r to reg[a]\nopcode rst   1011_11??_???a_aaaa move reg[a] to r\nopcode rpop  1011_11??_???a_aaaa pop stack to reg[a]\nopcode rpush 1011_11??_???a_aaaa push reg[a] to stack\n)\r\n\n "
@@ -29561,7 +29509,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E8E8E8'
     - coordinate: 512
       enabled: false
       sourceCode: ''
@@ -29954,7 +29902,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 602
       enabled: true
       sourceCode: >-
@@ -30190,7 +30138,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 603
       enabled: true
       sourceCode: >-
@@ -30465,7 +30413,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 604
       enabled: true
       sourceCode: >-
@@ -30770,7 +30718,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 605
       enabled: false
       sourceCode: ''
@@ -30908,7 +30856,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#F5E6B8'
     - coordinate: 608
       enabled: false
       sourceCode: ''
@@ -31235,7 +31183,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#F5E6B8'
     - coordinate: 708
       enabled: true
       sourceCode: >-
@@ -31350,7 +31298,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#F5E6B8'
     - coordinate: 709
       enabled: false
       sourceCode: ''
