@@ -110,23 +110,27 @@ public sealed class Ga144CvmHardwareInstaller
       string portName,
       Ga144ChipConfiguration chip,
       F18NodeCompilationService compileService,
-      CancellationToken cancellationToken = default)
+      CancellationToken cancellationToken = default,
+      bool fillStacksWithDebugPoison = true)
   {
     ArgumentException.ThrowIfNullOrWhiteSpace(portName);
     ArgumentNullException.ThrowIfNull(chip);
     ArgumentNullException.ThrowIfNull(compileService);
 
-    return Task.Run(() => StartDebugSession(portName, chip, compileService, cancellationToken), cancellationToken);
+    return Task.Run(
+        () => StartDebugSession(portName, chip, compileService, cancellationToken, fillStacksWithDebugPoison),
+        cancellationToken);
   }
 
   private static CvmDebugSession StartDebugSession(
       string portName,
       Ga144ChipConfiguration chip,
       F18NodeCompilationService compileService,
-      CancellationToken cancellationToken)
+      CancellationToken cancellationToken,
+      bool fillStacksWithDebugPoison)
   {
     NativeWindowsSerialPort? port = OpenAndBootMesh(
-        portName, chip, compileService, cancellationToken, out CvmInstallReport install, out var compiledRam);
+        portName, chip, compileService, cancellationToken, fillStacksWithDebugPoison, out CvmInstallReport install, out var compiledRam);
     if (port is null)
     {
       throw new InvalidOperationException(install.FailureMessage ?? "CVM install failed; the debug session cannot start.");
@@ -192,6 +196,7 @@ public sealed class Ga144CvmHardwareInstaller
       Ga144ChipConfiguration chip,
       F18NodeCompilationService compileService,
       CancellationToken cancellationToken,
+      bool fillStacksWithDebugPoison,
       out CvmInstallReport install,
       out IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
@@ -347,7 +352,7 @@ public sealed class Ga144CvmHardwareInstaller
         }
 
         CvmBootDescriptor descriptor = descriptors[step.NodeCoordinate];
-        IReadOnlyList<int> programLeaf = BuildProgramLeaf(descriptor);
+        IReadOnlyList<int> programLeaf = BuildProgramLeaf(descriptor, fillStacksWithDebugPoison);
         IReadOnlyList<int> wrapped = CvmRelayProtocol.WrapForward(chain.Count, programLeaf);
         SendBootFrame(port, transferAddress, wrapped);
         string loadDescription = $"Load node {step.NodeCoordinate:000}'s own program (entry 0x{descriptor.EntryPoint:X3})"
@@ -395,10 +400,32 @@ public sealed class Ga144CvmHardwareInstaller
         ?? throw new InvalidOperationException($"No node in the load order is reached directly via node {rootStep.NodeCoordinate:000}.");
   }
 
-  // WriteRam (no reply) + whatever register/stack initialization this node's own source directives
-  // specified + a bare (no-reply) jump into its real entry point. Order follows DB013 6.1.2.3's
-  // own listed sequence (IO, A, B, then stacks, then P last).
-  private static IReadOnlyList<int> BuildProgramLeaf(CvmBootDescriptor descriptor)
+  // Every non-root node's return and parameter stack is 9 words deep on real hardware (the visible
+  // register -- R or T -- plus 8 circular cells behind it) -- see KrakenSession's own
+  // ReadReturnStackAsync/ReadParameterStackAsync remarks for the same fact from the live-read side.
+  // Stefan's own numbering for the debug fill below: position 0 = top of stack, position 8 = the
+  // deepest/bottom cell.
+  private const int DebugPoisonStackDepth = 9;
+
+  // 0x1555x sentinel base -- Stefan's own chosen pattern ("filled up with a 0x1555x pattern were x
+  // is the stack position"), deliberately similar to the silicon's own 0x15555 idle/NOP fill so it
+  // reads as "this is filler," while the low nibble (0-8) still identifies exactly which of the 9
+  // stack positions a value came from once read back.
+  private const int DebugPoisonBaseValue = 0x15550;
+
+  // WriteRam (no reply) + this node's own real register/stack initialization + a bare (no-reply)
+  // jump into its real entry point. Order follows DB013 6.1.2.3's own listed sequence (IO, A, B,
+  // then stacks -- return before parameter -- then P last).
+  //
+  // When fillStacksWithDebugPoison is set, an EXTRA debug-only step runs just before that real
+  // stack initialization: both stacks are first fully overwritten with the 0x1555x sentinel
+  // pattern (return stack, then parameter stack -- Stefan's own requested order), so that any
+  // sentinel value still on a stack once the program is actually running identifies a slot the
+  // program never touched. The node's own real InitialReturnStack/InitialStack values are pushed
+  // afterward exactly as before, landing on top of (and, past 9 real values, overwriting) that
+  // poison fill -- this step never changes what a node's own directives asked for, only what sat
+  // underneath it beforehand.
+  private static IReadOnlyList<int> BuildProgramLeaf(CvmBootDescriptor descriptor, bool fillStacksWithDebugPoison)
   {
     var leaf = new List<int>(CvmRelayProtocol.BuildWriteRamNoReply(descriptor.Words));
 
@@ -417,6 +444,24 @@ public sealed class Ga144CvmHardwareInstaller
       leaf.AddRange(CvmRelayProtocol.BuildSetB(descriptor.InitialB.Value));
     }
 
+    if (fillStacksWithDebugPoison)
+    {
+      foreach (int value in DebugPoisonFillValues())
+      {
+        leaf.AddRange(CvmRelayProtocol.BuildPushR(value));
+      }
+
+      foreach (int value in DebugPoisonFillValues())
+      {
+        leaf.AddRange(CvmRelayProtocol.BuildPushS(value));
+      }
+    }
+
+    foreach (int value in descriptor.InitialReturnStack)
+    {
+      leaf.AddRange(CvmRelayProtocol.BuildPushR(value));
+    }
+
     foreach (int value in descriptor.InitialStack)
     {
       leaf.AddRange(CvmRelayProtocol.BuildPushS(value));
@@ -424,6 +469,21 @@ public sealed class Ga144CvmHardwareInstaller
 
     leaf.Add(CvmRelayProtocol.BuildBareJump(descriptor.EntryPoint!.Value));
     return leaf;
+  }
+
+  // Values in PUSH order (first element pushed first). The LAST value pushed ends up on TOP, so to
+  // land position 0 (0x15550) on top per Stefan's own numbering, this pushes the deepest position
+  // (8, value 0x15558) first and the shallowest (0, value 0x15550) last.
+  private static IReadOnlyList<int> DebugPoisonFillValues()
+  {
+    var values = new int[DebugPoisonStackDepth];
+    for (int i = 0; i < DebugPoisonStackDepth; i++)
+    {
+      int position = DebugPoisonStackDepth - 1 - i;
+      values[i] = DebugPoisonBaseValue + position;
+    }
+
+    return values;
   }
 
   // The "post-install runtime test" section that used to live here (RunTests, MissingSymbolStep,

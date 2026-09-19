@@ -5,7 +5,7 @@ public sealed class F18Compiler
   private static readonly HashSet<string> ReservedCompilerWords = new(StringComparer.OrdinalIgnoreCase)
     {
         ":", ";", "[", "]", "org", "entry", "const", "constant", "equ", "f18var", "label", "data", "word", ".word", ",",
-        "align", "..", "lit", "literal", "'", "/a", "/b", "/io", "/p", "/stack", "A[", "]]", "call", "jump", "jmp",
+        "align", "..", "lit", "literal", "'", "/a", "/b", "/io", "/p", "/stack", "/rstack", "A[", "]]", "call", "jump", "jmp",
         "branch-if", "branch--if", "branch-next", "begin", "again", "until", "-until",
         "if", "-if", "zif", "else", "then", "ahead", "leap", "for", "next", "unext", "while", "-while",
         "repeat", "recurse", "exit", "import", "swap", "here", "end", "*next", "avail", "+cy", "-cy",
@@ -39,6 +39,7 @@ public sealed class F18Compiler
   private int? _initialB;
   private int? _initialIo;
   private IReadOnlyList<int>? _initialStack;
+  private IReadOnlyList<int>? _initialReturnStack;
   private F18CompilerOptions _options = F18CompilerOptions.ForRam();
 
   public F18CompileResult Compile(string source, F18CompilerOptions? options = null)
@@ -97,7 +98,8 @@ public sealed class F18Compiler
       InitialA = _initialA,
       InitialB = _initialB,
       InitialIo = _initialIo,
-      InitialStack = _initialStack ?? []
+      InitialStack = _initialStack ?? [],
+      InitialReturnStack = _initialReturnStack ?? []
     };
   }
 
@@ -217,6 +219,7 @@ public sealed class F18Compiler
     _initialB = null;
     _initialIo = null;
     _initialStack = null;
+    _initialReturnStack = null;
     _builder = null;
     _interpreter = new F18CompileTimeInterpreter(AddDiagnostic);
   }
@@ -271,6 +274,9 @@ public sealed class F18Compiler
         return;
       case "/stack":
         CompileInitialStack(token);
+        return;
+      case "/rstack":
+        CompileInitialReturnStack(token);
         return;
       case "const":
       case "constant":
@@ -1023,7 +1029,7 @@ public sealed class F18Compiler
     _entryToken = ReadRequiredToken(token, "entry-point symbol or address");
   }
 
-  // DB013 "node configuration" directives: '/a', '/b', '/io', '/p', '/stack'.
+  // DB013 "node configuration" directives: '/a', '/b', '/io', '/p', '/stack', '/rstack'.
   // Unlike ordinary source, these describe how a DEPLOYER should configure a
   // node's registers/stack when LOADING this image -- not F18A opcodes, and
   // not compiled into Words at all (there is no "set B" instruction; a real
@@ -1032,7 +1038,7 @@ public sealed class F18Compiler
   // matches every other value-taking directive in this file's dialect (e.g.
   // 'org'): push explicitly with '#' first, e.g. '# xA9 /p'.
   //
-  // All five are module-level, matching 'entry': a node's startup
+  // All six are module-level, matching 'entry': a node's startup
   // configuration is a property of the whole image, not something that makes
   // sense mid-definition.
   private void CompileInitialA(F18Token token)
@@ -1152,6 +1158,57 @@ public sealed class F18Compiler
     }
 
     _initialStack = values;
+  }
+
+  // '/rstack (<n values> n)': the return-stack counterpart to '/stack' above,
+  // same syntax and same "trailing count consumed first" convention -- '# 30
+  // # 20 # 3 /rstack' preloads a 2-deep return stack of [30 20] (20 on top).
+  // DB013 6.1.2.3's "Push R" boot-load form pushes one value onto the return
+  // stack per word (packing '@p' and '>r' together, unlike Push S's single
+  // '@p'), so this is a real, hardware-loadable initial return stack -- not
+  // the compile-time interpreter's own scratch InterpreterReturnStack (see
+  // that field's remarks), which is unrelated bookkeeping used only while
+  // this compiler itself is evaluating directives.
+  private void CompileInitialReturnStack(F18Token token)
+  {
+    if (_inDefinition)
+    {
+      AddError("F18C070", "'/rstack' is a module-level startup-configuration directive and cannot appear inside a definition.", token.Location);
+      return;
+    }
+
+    if (_initialReturnStack is not null)
+    {
+      AddError("F18C071", "'/rstack' was already specified once in this source.", token.Location);
+      return;
+    }
+
+    if (!Interpreter.TryPopData(token, out int count))
+    {
+      return;
+    }
+
+    if (count < 0 || count > F18CompileTimeInterpreter.ReturnStackCapacity)
+    {
+      AddError(
+          "F18C072",
+          $"'/rstack' count must be between 0 and {F18CompileTimeInterpreter.ReturnStackCapacity} (the F18A-compatible return stack limit), got {count}.",
+          token.Location);
+      return;
+    }
+
+    var values = new int[count];
+    for (int i = count - 1; i >= 0; i--)
+    {
+      if (!Interpreter.TryPopData(token, out int value))
+      {
+        return;
+      }
+
+      values[i] = value;
+    }
+
+    _initialReturnStack = values;
   }
 
   private void CompileLabel(F18Token token)
@@ -2205,7 +2262,7 @@ public sealed class F18Compiler
   // '#'/''' forms (PushHashValue/PushTickValue) that push a single resolved value
   // or word address without opening a bracket at all. Every value pushed there is
   // meant to be consumed by something -- a directive like '/a', '/b', '/io',
-  // '/stack', '..', ',', '.word', or an explicit 'lit'/'literal' to compile it as
+  // '/stack', '/rstack', '..', ',', '.word', or an explicit 'lit'/'literal' to compile it as
   // an actual object-code literal -- before the node finishes compiling. A value
   // still sitting on either stack once the WHOLE node has finished compiling means
   // one of those pushes was never picked up (or an '>r' was never matched by an
@@ -2222,7 +2279,7 @@ public sealed class F18Compiler
           $"Compile-time data stack is not empty after compiling this node: {Interpreter.DataStack.Count} " +
           $"value(s) left over ({string.Join(", ", Interpreter.DataStack.Select(v => $"0x{v:X5} ({v})"))}). " +
           "Every value pushed by a '[ ... ]' section or a '#'/''' shorthand must be consumed -- by a directive " +
-          "such as '/a', '/b', '/io', '/stack', '..', ',', '.word', or an explicit 'lit'/'literal' -- before compilation ends.",
+          "such as '/a', '/b', '/io', '/stack', '/rstack', '..', ',', '.word', or an explicit 'lit'/'literal' -- before compilation ends.",
           LastLocation());
     }
 

@@ -108,6 +108,14 @@ internal static class CvmRelayProtocol
   public static int[] BuildPushS(int value) => [Pack("@p"), Mask(value)];
 
   /// <summary>
+  /// 'Push R' per DB013 6.1.2.3 (048B2 @p &gt;r / value) -- pushes one value directly onto the
+  /// return stack, no reply. Unlike <see cref="BuildPushS"/> (a single '@p' op), DB013 packs TWO
+  /// ops into this instruction word ('@p' followed by '&gt;r'): '@p' fetches the following literal
+  /// word, '&gt;r' moves it from the data stack onto the return stack in the same step.
+  /// </summary>
+  public static int[] BuildPushR(int value) => [Pack("@p", ">r"), Mask(value)];
+
+  /// <summary>
   /// Wraps <paramref name="leaf"/> with <paramref name="position"/> levels of pump relay --
   /// verbatim the technique in <see cref="LegacyKrakenProtocol.BuildX1"/>/<c>WrapForward</c>, with
   /// no return hop (nothing here ever expects a reply): position 0 sends <paramref name="leaf"/>

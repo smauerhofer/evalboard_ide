@@ -168,16 +168,23 @@ public sealed class F18CompileResult
   public IReadOnlyList<int> InterpreterReturnStack { get; init; } = [];
 
   // Startup/boot configuration (DB013 "node configuration" directives --
-  // '/b', '/a', '/io', '/stack'; '/p' feeds EntryPoint above, alongside
-  // 'entry'). Null/empty means the directive was not used in this source, so
-  // the node's reset default applies (B = the IO register address, A
-  // unspecified, IO register untouched, P = 0xA9/warm, an empty initial data
-  // stack) -- these are metadata about how a deployer should configure the
-  // node when loading this image, not instructions compiled into Words.
+  // '/b', '/a', '/io', '/stack', '/rstack'; '/p' feeds EntryPoint above,
+  // alongside 'entry'). Null/empty means the directive was not used in this
+  // source, so the node's reset default applies (B = the IO register
+  // address, A unspecified, IO register untouched, P = 0xA9/warm, empty
+  // initial data and return stacks) -- these are metadata about how a
+  // deployer should configure the node when loading this image, not
+  // instructions compiled into Words.
   public int? InitialA { get; init; }
   public int? InitialB { get; init; }
   public int? InitialIo { get; init; }
   public IReadOnlyList<int> InitialStack { get; init; } = [];
+
+  // '/rstack' -- see InitialStack's own remarks above; this is its return-stack
+  // counterpart. Distinct from InterpreterReturnStack below, which is the
+  // compile-time interpreter's own scratch stack and unrelated to a node's real
+  // boot-time return stack contents.
+  public IReadOnlyList<int> InitialReturnStack { get; init; } = [];
 
   // Backward-compatible name used by the current node editor.
   public IReadOnlyList<int> RamWords => Words;

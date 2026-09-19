@@ -81,6 +81,41 @@ public sealed class PostMortemNodeDetailViewModel
   public IReadOnlyList<PostMortemWordRow> RamRows { get; }
   public IReadOnlyList<PostMortemWordRow> RomRows { get; }
 
+  /// <summary>
+  /// Plain-text rendering of exactly what the "Registers"/"Parameter stack"/"Return stack" panel at
+  /// the top of <see cref="Views.PostMortemNodeWindow"/> shows -- same values, same top-first stack
+  /// order, same symbolic port-name formatting (<see cref="PortAddressNames"/>) already baked into
+  /// <see cref="AText"/>/<see cref="IoText"/>/<see cref="PostMortemStackRow.ValueText"/>. This is the
+  /// "Copy" button's own source of truth, so the clipboard always mirrors what is on screen at the
+  /// moment it is clicked rather than re-deriving it from <see cref="Snapshot"/> a second, possibly
+  /// divergent way.
+  /// </summary>
+  public string BuildClipboardText()
+  {
+    var lines = new List<string>
+    {
+      $"Node {CoordinateText}",
+      $"A:  {AText}",
+      $"IO: {IoText}",
+      string.Empty,
+      "Parameter stack (top first):"
+    };
+
+    foreach (PostMortemStackRow row in ParameterStackRows)
+    {
+      lines.Add($"{row.Label}: {row.ValueText}");
+    }
+
+    lines.Add(string.Empty);
+    lines.Add("Return stack (top first):");
+    foreach (PostMortemStackRow row in ReturnStackRows)
+    {
+      lines.Add($"{row.Label}: {row.ValueText}");
+    }
+
+    return string.Join(Environment.NewLine, lines);
+  }
+
   // Storage is bottom-to-top (see KrakenLiveController.ReadParameterStackAsync/ReadReturnStackAsync's
   // own remarks), so labels are assigned counting IN from the end, then the display order is reversed
   // to show the top of stack first -- the order someone reading a stack dump actually wants.

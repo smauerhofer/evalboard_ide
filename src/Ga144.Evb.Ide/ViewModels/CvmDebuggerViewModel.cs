@@ -127,6 +127,11 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   private string? _selectedBreakpoint;
   private string _assemblyCodeText = DefaultAssemblyCode;
 
+  // Debug stack-poison toggle -- see FillStacksWithDebugPoison's own remarks. Defaults to ON per
+  // Stefan: he wants this visible by default and to opt OUT for the rare run where a clean (real
+  // values only, no 0x1555x filler) stack matters instead.
+  private bool _fillStacksWithDebugPoison = true;
+
   public CvmDebuggerViewModel(
       Ga144ChipConfiguration chip,
       Ga144RomLibrary romLibrary,
@@ -181,6 +186,20 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   public bool IsContinuing => _continueCts is not null;
 
   public bool IsSessionActive => _session is not null;
+
+  /// <summary>
+  /// When on (the default), Start fills BOTH the return and parameter stack of every non-root CVM
+  /// mesh node with a recognizable 0x1555x sentinel pattern (position 0 = top, position 8 = bottom
+  /// of each 9-word stack -- so a freshly booted, untouched stack reads 0x15550 on top down to
+  /// 0x15558 at the bottom) before that node's own real /rstack //stack (and IO/A/B) initialization
+  /// is applied. The point is purely diagnostic: any of these sentinel values still showing up
+  /// once the program is running immediately identifies a stack slot the program never actually
+  /// touched, which is otherwise indistinguishable from a slot that happens to hold a real,
+  /// coincidentally-similar value. Only affects what Start loads -- turning it off does not remove
+  /// or alter a node's own real /stack//rstack directives, it just stops the extra poison push that
+  /// precedes them.
+  /// </summary>
+  public bool FillStacksWithDebugPoison { get => _fillStacksWithDebugPoison; set => SetProperty(ref _fillStacksWithDebugPoison, value); }
 
   public string StatusText { get => _statusText; private set => SetProperty(ref _statusText, value); }
 
@@ -288,7 +307,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
 
       var compileService = new F18NodeCompilationService(_chip, _romLibrary, _userMacros);
       var installer = new Ga144CvmHardwareInstaller();
-      _session = await installer.StartDebugSessionAsync(endpoint.PortName, _chip, compileService);
+      _session = await installer.StartDebugSessionAsync(endpoint.PortName, _chip, compileService, fillStacksWithDebugPoison: FillStacksWithDebugPoison);
 
       InstallSummaryText = $"Install: {_session.Install.Steps.Count} boot frame(s) sent, fire-and-forget. Loaded a {_session.Program.Count}-word test program " +
           "(43 of the CVM's 73 opcodes, each with a log-checkable expected value -- see CvmDebuggerDefaultProgram's own remarks) into the simulated SRAM and woke node 708's 'start.";
