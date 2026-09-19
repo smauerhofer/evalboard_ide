@@ -400,17 +400,32 @@ public sealed class Ga144CvmHardwareInstaller
         ?? throw new InvalidOperationException($"No node in the load order is reached directly via node {rootStep.NodeCoordinate:000}.");
   }
 
-  // Every non-root node's return and parameter stack is 9 words deep on real hardware (the visible
-  // register -- R or T -- plus 8 circular cells behind it) -- see KrakenSession's own
-  // ReadReturnStackAsync/ReadParameterStackAsync remarks for the same fact from the live-read side.
-  // Stefan's own numbering for the debug fill below: position 0 = top of stack, position 8 = the
-  // deepest/bottom cell.
-  private const int DebugPoisonStackDepth = 9;
+  // The two hardware stacks are NOT the same depth, per DB001 (F18A datasheet) 2.3.2 and DB013
+  // (arrayForth 3 User's Manual) 5.1.3.2's own "UPD" command description:
+  //
+  //   - Return stack: R (1 directly-addressable register) + an 8-word circular buffer behind it =
+  //     9 words total -- matches KrakenSession's own ReadReturnStackAsync remarks and this
+  //     project's own F18CompileTimeInterpreter.ReturnStackCapacity.
+  //   - Data/parameter stack: T AND S (TWO directly-addressable registers, not one) + the SAME
+  //     8-word circular buffer behind THEM = 10 words total -- DB013 5.1.3.2 is explicit: "UPD
+  //     retrieves all TEN words of the data stack ... indexed (T, S, and the eight elements in the
+  //     F18 stack)". This project's own F18CompileTimeInterpreter.DataStackCapacity already uses
+  //     10 for exactly this reason (see its own remarks) -- an earlier version of this file used a
+  //     single shared depth of 9 for BOTH stacks, which under-filled the data stack's own real
+  //     10th (deepest) word, leaving whatever was already there before this boot untouched. That
+  //     surfaced on real hardware as a "10th" post-mortem row that looked lost/duplicated rather
+  //     than freshly poisoned -- this project's own node-301 post-mortem investigation notes.
+  //
+  // Stefan's own numbering for the debug fill below: position 0 = top of stack (T or R), the
+  // HIGHEST position number = the deepest/bottom cell for that stack (8 for the return stack, 9
+  // for the data stack).
+  private const int DebugPoisonReturnStackDepth = 9;
+  private const int DebugPoisonDataStackDepth = 10;
 
   // 0x1555x sentinel base -- Stefan's own chosen pattern ("filled up with a 0x1555x pattern were x
   // is the stack position"), deliberately similar to the silicon's own 0x15555 idle/NOP fill so it
-  // reads as "this is filler," while the low nibble (0-8) still identifies exactly which of the 9
-  // stack positions a value came from once read back.
+  // reads as "this is filler," while the low nibble still identifies exactly which stack position a
+  // value came from once read back (0-8 for the return stack, 0-9 for the data stack).
   private const int DebugPoisonBaseValue = 0x15550;
 
   // WriteRam (no reply) + this node's own real register/stack initialization + a bare (no-reply)
@@ -446,12 +461,12 @@ public sealed class Ga144CvmHardwareInstaller
 
     if (fillStacksWithDebugPoison)
     {
-      foreach (int value in DebugPoisonFillValues())
+      foreach (int value in DebugPoisonFillValues(DebugPoisonReturnStackDepth))
       {
         leaf.AddRange(CvmRelayProtocol.BuildPushR(value));
       }
 
-      foreach (int value in DebugPoisonFillValues())
+      foreach (int value in DebugPoisonFillValues(DebugPoisonDataStackDepth))
       {
         leaf.AddRange(CvmRelayProtocol.BuildPushS(value));
       }
@@ -471,15 +486,17 @@ public sealed class Ga144CvmHardwareInstaller
     return leaf;
   }
 
-  // Values in PUSH order (first element pushed first). The LAST value pushed ends up on TOP, so to
-  // land position 0 (0x15550) on top per Stefan's own numbering, this pushes the deepest position
-  // (8, value 0x15558) first and the shallowest (0, value 0x15550) last.
-  private static IReadOnlyList<int> DebugPoisonFillValues()
+  // Values in PUSH order (first element pushed first), for a stack of the given real depth (9 for
+  // the return stack, 10 for the data stack -- see DebugPoisonReturnStackDepth/
+  // DebugPoisonDataStackDepth's own remarks). The LAST value pushed ends up on TOP, so to land
+  // position 0 (0x15550) on top per Stefan's own numbering, this pushes the deepest position
+  // (depth-1, e.g. 0x15559 for a 10-deep stack) first and the shallowest (0, value 0x15550) last.
+  private static IReadOnlyList<int> DebugPoisonFillValues(int depth)
   {
-    var values = new int[DebugPoisonStackDepth];
-    for (int i = 0; i < DebugPoisonStackDepth; i++)
+    var values = new int[depth];
+    for (int i = 0; i < depth; i++)
     {
-      int position = DebugPoisonStackDepth - 1 - i;
+      int position = depth - 1 - i;
       values[i] = DebugPoisonBaseValue + position;
     }
 

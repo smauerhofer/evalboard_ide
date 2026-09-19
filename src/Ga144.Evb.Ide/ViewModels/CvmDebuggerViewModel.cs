@@ -189,15 +189,16 @@ public sealed class CvmDebuggerViewModel : ObservableObject
 
   /// <summary>
   /// When on (the default), Start fills BOTH the return and parameter stack of every non-root CVM
-  /// mesh node with a recognizable 0x1555x sentinel pattern (position 0 = top, position 8 = bottom
-  /// of each 9-word stack -- so a freshly booted, untouched stack reads 0x15550 on top down to
-  /// 0x15558 at the bottom) before that node's own real /rstack //stack (and IO/A/B) initialization
-  /// is applied. The point is purely diagnostic: any of these sentinel values still showing up
-  /// once the program is running immediately identifies a stack slot the program never actually
-  /// touched, which is otherwise indistinguishable from a slot that happens to hold a real,
-  /// coincidentally-similar value. Only affects what Start loads -- turning it off does not remove
-  /// or alter a node's own real /stack//rstack directives, it just stops the extra poison push that
-  /// precedes them.
+  /// mesh node with a recognizable 0x1555x sentinel pattern (position 0 = top, the highest position
+  /// = bottom -- so a freshly booted, untouched stack reads 0x15550 on top down to 0x15558 at the
+  /// bottom of the 9-word return stack, and down to 0x15559 at the bottom of the 10-word data
+  /// stack -- the two are NOT the same depth, see Ga144CvmHardwareInstaller's own remarks) before
+  /// that node's own real /rstack//stack (and IO/A/B) initialization is applied. The point is
+  /// purely diagnostic: any of these sentinel values still showing up once the program is running
+  /// immediately identifies a stack slot the program never actually touched, which is otherwise
+  /// indistinguishable from a slot that happens to hold a real, coincidentally-similar value. Only
+  /// affects what Start loads -- turning it off does not remove or alter a node's own real
+  /// /stack//rstack directives, it just stops the extra poison push that precedes them.
   /// </summary>
   public bool FillStacksWithDebugPoison { get => _fillStacksWithDebugPoison; set => SetProperty(ref _fillStacksWithDebugPoison, value); }
 

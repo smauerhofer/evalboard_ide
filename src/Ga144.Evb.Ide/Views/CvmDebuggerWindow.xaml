@@ -46,7 +46,7 @@
         </StackPanel>
         <CheckBox Content="Fill stacks with 0x1555x debug pattern before starting" Margin="0,6,0,0"
                         IsChecked="{Binding FillStacksWithDebugPoison}"
-                        ToolTip="On (default): before each node's own real return/parameter stack initialization, Start/Reinstall first overwrites both 9-word stacks with a 0x15550 (top) .. 0x15558 (bottom) sentinel pattern, so any of these values still on a stack once the program is running identifies a slot it never actually touched. Turn off for a run where only the node's own real stack values should be present at boot." />
+                        ToolTip="On (default): before each node's own real return/parameter stack initialization, Start/Reinstall first overwrites both stacks with a 0x15550 (top) .. sentinel pattern down to the bottom -- 0x15558 for the 9-word return stack, 0x15559 for the 10-word data stack -- so any of these values still on a stack once the program is running identifies a slot it never actually touched. Turn off for a run where only the node's own real stack values should be present at boot." />
         <TextBox Margin="0,7,0,0" Text="{Binding StatusText, Mode=OneWay}"
                         IsReadOnly="True" IsReadOnlyCaretVisible="True"
                         BorderThickness="0" Background="Transparent"
