@@ -27,16 +27,6 @@ public sealed class KrakenConfiguration
   new(KrakenTopology.CreateDefaultTentacles());
 
   /// <summary>
-  /// Post-mortem-only structure with node 300 omitted from Tentacle 1's path -- see
-  /// <see cref="KrakenTopology.CreatePostMortemTentaclesExcludingNode300"/> for why. Used ONLY by
-  /// <see cref="ViewModels.CvmDebuggerViewModel"/>'s Core Dump; every other consumer (in particular
-  /// the "Install Kraken" button's <see cref="Services.KrakenSession.ErectOnto"/>) keeps using
-  /// <see cref="CreateFixed"/>, unaffected, with node 300 still in its normal place.
-  /// </summary>
-  public static KrakenConfiguration CreateForPostMortemExcludingNode300() =>
-  new(KrakenTopology.CreatePostMortemTentaclesExcludingNode300());
-
-  /// <summary>
   /// Always true: the structure is a constant and is always defined. Retained so
   /// existing consumers (route map building, session erection) that guarded on a
   /// former persisted flag keep compiling and behave as "structure present".
@@ -200,74 +190,27 @@ public static class KrakenTopology
     return true;
   }
 
-  // ---- Post-mortem: Tentacle 1 rerouted around node 300 -------------------
-  // Core Dump's node-by-node live erect-and-read (CvmDebuggerViewModel.CoreDumpAsync) sends node 300
-  // a live focusing call (KrakenSession.FocusAsync) as part of wiring the tentacle one hop at a time.
-  // That is the same dynamic, per-word-acknowledged mechanism the project's own
-  // node-300-erection-investigation found unreliable at this exact node, and on real hardware it has
-  // reproduced here too: node 300's focus reply times out, and since the tentacle is a physical relay
-  // chain, every node after it (200 through 005 in the fixed array) becomes unreachable in the same
-  // run.
+  // ---- Post-mortem: node 300 via a boot-frame prefix, live beyond it -------
+  // Core Dump's node-by-node live erect-and-read (CvmDebuggerViewModel.CoreDumpAsync) sends every
+  // tentacle node a live focusing call (KrakenSession.FocusAsync) as part of wiring the tentacle one
+  // hop at a time. That is the same dynamic, per-word-acknowledged mechanism the project's own
+  // node-300-erection-investigation found unreliable at node 300 specifically, and on real hardware
+  // it has reproduced here too: node 300's focus reply times out.
   //
-  // Rather than lose the rest of Tentacle 1 to one bad node, this path omits node 300 entirely and
-  // reroutes around it: where the fixed array goes 301 -> 300 -> 200 (300 is the only link between
-  // row 3 and row 2 at column 0), this one goes 301 -> 201 instead, then snakes column-by-column
-  // through rows 0-2 so every other node in that corner (200 included) still gets visited exactly
-  // once. Verified by hand as a valid chain of physically adjacent nodes (KrakenTopology.AreAdjacent),
-  // same as the fixed arrays above.
+  // Stefan's own compromise: reach node 300 (and everything before it) the RELIABLE way instead --
+  // the same fire-and-forget boot-frame mechanism KrakenSession.ErectOnto uses for a normal "Install
+  // Kraken", which the hardware investigation confirmed DOES reliably reach node 300. Every node
+  // wired this way pays the same 1-word top-of-stack disturbance any Kraken erection always costs
+  // (an accepted, KNOWN loss, unlike an unpredictable live timeout); every node beyond it keeps Core
+  // Dump's usual live, lossless capture. See KrakenSession.ErectHeadWithTentacle1PrefixViaBootFrame
+  // and CvmDebuggerViewModel.CoreDumpAsync's own remarks for the full mechanism.
   //
-  // This is post-mortem-only, per Stefan's own direction ("let's include node 300 for now, maybe we
-  // will have to skip node 300 for post-mortem") -- it is never used to build the real, resident
-  // Kraken (KrakenConfiguration.CreateFixed/ErectOnto keep the normal 50-node Tentacle 1, node 300
-  // included), so it has no effect on ordinary CVM Debug use. Node 300 simply has no entry in a Core
-  // Dump snapshot taken this way -- the post-mortem chip window already renders a node with no
-  // captured data as blank (the same way it already renders head node 708, which is never captured).
-  private static readonly int[] PostMortemTentacle1NodesExcludingNode300 =
-  [
-    707, 706, 705, 704, 703, 702, 701, 700,
-    600, 601, 602, 603, 604, 605,
-    505, 504, 503, 502, 501, 500,
-    400, 401, 402, 403, 404, 405,
-    305, 205, 105, 005, 004, 104, 204, 304, 303, 203, 103, 003, 002, 102, 202, 302, 301, 201, 101, 001, 000, 100, 200
-  ];
-
-  /// <summary>
-  /// Post-mortem-only tentacle set: Tentacle 1 is <see cref="PostMortemTentacle1NodesExcludingNode300"/>
-  /// (node 300 omitted, everything else rerouted around it); Tentacles 2 and 3 are the ordinary fixed
-  /// arrays, untouched. See the remarks above <see cref="PostMortemTentacle1NodesExcludingNode300"/>
-  /// for why this exists and why it must never replace <see cref="CreateDefaultTentacles"/>.
-  /// </summary>
-  public static List<KrakenTentacleConfiguration> CreatePostMortemTentaclesExcludingNode300()
-  {
-    var result = new List<KrakenTentacleConfiguration>
-    {
-      CreateTentacle(1, "West", PostMortemTentacle1NodesExcludingNode300),
-      CreateTentacle(2, "East", Tentacle2Nodes),
-      CreateTentacle(3, "South", Tentacle3Nodes)
-    };
-
-    foreach (KrakenTentacleConfiguration tentacle in result)
-    {
-      int previous = HeadCoordinate;
-      foreach (int coordinate in tentacle.Nodes)
-      {
-        if (coordinate == 300)
-        {
-          throw new InvalidOperationException("Post-mortem Tentacle topology must not include node 300.");
-        }
-
-        if (!AreAdjacent(previous, coordinate))
-        {
-          throw new InvalidOperationException(
-              $"Post-mortem Tentacle {tentacle.Number} path is not a valid adjacency chain at node {coordinate:000}.");
-        }
-
-        previous = coordinate;
-      }
-    }
-
-    return result;
-  }
+  // PostMortemTentacle1BootFramePrefixNodeCount below is how many of Tentacle 1's OWN, ORDINARY,
+  // never-modified Tentacle1Nodes (position 0 = 707) are covered by that boot frame: 32 positions
+  // (0-31) reaches exactly through node 300 (position 31). No topology change is needed for this --
+  // unlike the SRAM cluster detour above, Tentacle 1's node list and routes are the normal fixed
+  // ones; only HOW the first 32 of them get wired differs.
+  public const int PostMortemTentacle1BootFramePrefixNodeCount = 32;
 
   public static List<KrakenTentacleConfiguration> CreateDefaultTentacles()
   {

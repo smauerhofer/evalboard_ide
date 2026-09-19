@@ -20,6 +20,16 @@ public partial class NodeEditorWindow : Window
     Closed += OnEditorClosed;
   }
 
+  /// <summary>
+  /// Raised when "Save node" is clicked. Non-modal (this window is opened with <c>Show()</c>, not
+  /// <c>ShowDialog()</c> -- see ChipWindow.OnNodeClick's own remarks), so there is no DialogResult for
+  /// the owner to read back after the fact: the owner subscribes to this instead, does the actual
+  /// apply/refresh work (NodeEditorViewModel.Apply, saving the ROM library, redrawing the chip), and
+  /// closes this window itself once that is done -- exactly the same division of labor the old
+  /// ShowDialog()==true branch had, just event-driven instead of return-value-driven.
+  /// </summary>
+  public event EventHandler? Saved;
+
   private void OnDiagnosticsRequested(string header, string diagnostics)
   {
     // Reuse a single non-modal diagnostics window for this editor.
@@ -100,10 +110,27 @@ public partial class NodeEditorWindow : Window
 
   private void OnSaveClick(object sender, RoutedEventArgs e)
   {
-    DialogResult = true;
+    Saved?.Invoke(this, EventArgs.Empty);
   }
 
-  // One of the 16 NodeColorPalette swatches in the "Node color" row was clicked -- gives this
+  private void OnCancelClick(object sender, RoutedEventArgs e)
+  {
+    Close();
+  }
+
+  // Preserves the old IsCancel="True" Escape-to-close convenience now that this window is non-modal
+  // (IsCancel itself only works on a window shown via ShowDialog -- it sets DialogResult, which throws
+  // on a Show()-opened window).
+  private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+  {
+    if (e.Key == Key.Escape)
+    {
+      Close();
+      e.Handled = true;
+    }
+  }
+
+  // One of the 24 NodeColorPalette swatches in the "Node color" row was clicked -- gives this
   // node its own color override.
   private void OnNodeColorSwatchClick(object sender, MouseButtonEventArgs e)
   {

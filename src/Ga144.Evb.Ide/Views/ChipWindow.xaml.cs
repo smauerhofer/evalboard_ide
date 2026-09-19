@@ -20,6 +20,12 @@ public partial class ChipWindow : Window
   private KrakenCheckWindow? _krakenCheckWindow;
   private KrakenCheckViewModel? _krakenCheckViewModel;
 
+  // Keyed by coordinate so a second click on the same node re-activates its already-open editor
+  // instead of opening a duplicate -- same reuse pattern PostMortemChipWindow's own node windows use,
+  // needed now that the editor is non-modal (OnNodeClick's own remarks): two editors open on the same
+  // node would each apply its own stale snapshot on Save.
+  private readonly Dictionary<int, NodeEditorWindow> _openNodeEditors = [];
+
   public ChipWindow(ChipViewModel viewModel)
   {
     InitializeComponent();
@@ -82,7 +88,7 @@ public partial class ChipWindow : Window
     }
   }
 
-  private async void OnNodeClick(object sender, RoutedEventArgs e)
+  private void OnNodeClick(object sender, RoutedEventArgs e)
   {
     // Keep the chip visible while Check Kraken runs, but do not allow a
     // second online operation to be started concurrently with the path
@@ -97,6 +103,15 @@ public partial class ChipWindow : Window
 
     if (sender is not Button { Tag: NodeViewModel node })
     {
+      return;
+    }
+
+    // Non-modal (Show, not ShowDialog): the chip window, and every other node's editor, stay usable
+    // while this one is open. Reuse an already-open editor for this same node instead of opening a
+    // duplicate -- see _openNodeEditors' own remarks.
+    if (_openNodeEditors.TryGetValue(node.Model.Coordinate, out NodeEditorWindow? existingEditor))
+    {
+      existingEditor.Activate();
       return;
     }
 
@@ -117,32 +132,40 @@ public partial class ChipWindow : Window
       Owner = this
     };
 
-    if (editor.ShowDialog() == true)
+    editor.Saved += async (_, _) => await OnNodeEditorSavedAsync(editorViewModel, editor);
+    editor.Closed += (_, _) => _openNodeEditors.Remove(node.Model.Coordinate);
+    _openNodeEditors[node.Model.Coordinate] = editor;
+    editor.Show();
+  }
+
+  // Same apply/refresh work the old "if (editor.ShowDialog() == true)" branch did -- just reached from
+  // NodeEditorWindow's own Saved event now that the editor is non-modal, instead of a dialog result.
+  private async Task OnNodeEditorSavedAsync(NodeEditorViewModel editorViewModel, NodeEditorWindow editor)
+  {
+    var romChanged = editorViewModel.Apply();
+    _viewModel.Project.NotifyProjectChanged();
+
+    if (romChanged)
     {
-      var romChanged = editorViewModel.Apply();
-      _viewModel.Project.NotifyProjectChanged();
-
-      if (romChanged)
+      try
       {
-        try
-        {
-          await _viewModel.SaveRomLibraryAsync();
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-          MessageBox.Show(
-            this,
-            $"The node was saved to the project, but the system-wide ROM library could not be saved.\n\n{exception.Message}",
-            "ROM library save error",
-            MessageBoxButton.OK,
-            MessageBoxImage.Error);
-        }
+        await _viewModel.SaveRomLibraryAsync();
       }
-
-      // Rebuild node presentation so configured-state and Kraken highlighting are refreshed.
-      _viewModel.RefreshNodes();
-      DrawKrakenPaths();
+      catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+      {
+        MessageBox.Show(
+          this,
+          $"The node was saved to the project, but the system-wide ROM library could not be saved.\n\n{exception.Message}",
+          "ROM library save error",
+          MessageBoxButton.OK,
+          MessageBoxImage.Error);
+      }
     }
+
+    // Rebuild node presentation so configured-state and Kraken highlighting are refreshed.
+    _viewModel.RefreshNodes();
+    DrawKrakenPaths();
+    editor.Close();
   }
 
   private void OnCheckKrakenClick(object sender, RoutedEventArgs e)

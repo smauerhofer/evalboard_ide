@@ -224,39 +224,46 @@ internal sealed class KrakenSession : IAsyncDisposable
   }
 
   /// <summary>
-  /// Core-Dump-ONLY entry point: brings up JUST node 708's own head program
-  /// (reset, load 'main', trigger it) and stops there -- no tentacle node is
-  /// focused or wired. This deliberately does NOT call <see cref="ErectOnto"/>;
-  /// Core Dump wires (and reads) every tentacle node itself afterward, one hop
-  /// at a time, via live <see cref="FocusAsync"/>/<see cref="WriteBAsync"/>/
-  /// read transactions through 'main's own 'w/r' head protocol -- see
-  /// CvmDebuggerViewModel.CoreDumpAsync's own remarks for why (capturing each
-  /// node's true, undisturbed parameter stack requires reading it before that
-  /// SAME node's own erection step can disturb it, which is only possible when
-  /// erection happens node-by-node instead of as one upfront burst). Per
-  /// Stefan's own explicit direction, this dynamic 'w/r'-based construction --
-  /// the same one the node-300 investigation found unreliable for BULK
-  /// erection and which <see cref="ErectOnto"/> deliberately avoids -- is used
-  /// here ANYWAY, scoped to Core Dump only, accepting the risk that a specific
-  /// node (node 300 is the one known prior offender) might need to be skipped
-  /// for post-mortem purposes if it proves unreachable this way. The ordinary
-  /// "Install Kraken" erection path (<see cref="ConnectAndErectAsync"/>/
-  /// <see cref="ConnectAndErectForCheckAsync"/>) is completely unaffected.
-  /// No target-route verification happens here (unlike <see cref="ConnectAndErectAsync"/>):
-  /// at this point no tentacle node has been focused/wired yet, so there is
-  /// nothing through <see cref="_targetRoute"/> to read yet -- the caller's own
-  /// per-node Focus + ReadParameterStack calls are the real verification, one
-  /// node at a time, as it wires each one.
+  /// Core-Dump-ONLY entry point: brings up node 708's own head program (reset, load 'main', trigger
+  /// it), then -- unlike a plain head-only bring-up -- ALSO wires Tentacle 1's own first
+  /// <paramref name="tentacle1BootFramePrefixNodeCount"/> nodes (707 onward) via the exact same
+  /// reliable, fire-and-forget boot-frame mechanism <see cref="ErectOnto"/> uses for a normal
+  /// "Install Kraken" (see the hardware-investigation remarks above <see cref="ErectOnto"/>: that
+  /// method is proven to reliably reach every node, node 300 included). This deliberately does NOT
+  /// call <see cref="ErectOnto"/> itself, and touches no node beyond that prefix -- every other node
+  /// (the rest of Tentacle 1, and all of Tentacles 2 and 3) is wired (and read) by the caller
+  /// afterward, one hop at a time, via live <see cref="FocusAsync"/>/<see cref="WriteBAsync"/>/read
+  /// transactions through 'main's own 'w/r' head protocol -- see CvmDebuggerViewModel.CoreDumpAsync's
+  /// own remarks for the full rationale (capturing each node's true, undisturbed parameter stack
+  /// requires reading it before that SAME node's own erection step can disturb it, which is only
+  /// possible when erection happens node-by-node instead of as one upfront burst; the boot-framed
+  /// prefix trades that lossless capture for reaching node 300 reliably, per Stefan's own explicit
+  /// compromise).
+  ///
+  /// A dynamic, per-word-acknowledged live focus (the one the node-300 investigation found unreliable
+  /// for BULK erection, and which real hardware has since reproduced timing out specifically at node
+  /// 300) is used ONLY beyond this prefix; nothing here relies on it. The ordinary "Install Kraken"
+  /// erection path (<see cref="ConnectAndErectAsync"/>/<see cref="ConnectAndErectForCheckAsync"/>) is
+  /// completely unaffected -- pass 0 for <paramref name="tentacle1BootFramePrefixNodeCount"/> for a
+  /// plain head-only bring-up with no tentacle node touched at all.
+  ///
+  /// No target-route verification happens here (unlike <see cref="ConnectAndErectAsync"/>): the
+  /// caller's own per-node reads (immediate, for the boot-framed prefix; Focus + ReadParameterStack,
+  /// for everything beyond it) are the real verification, one node at a time.
   /// </summary>
-  public async Task ConnectAndErectHeadOnlyAsync(string portName, CancellationToken cancellationToken = default)
+  public async Task ConnectAndErectHeadWithTentacle1PrefixAsync(
+      string portName, int tentacle1BootFramePrefixNodeCount, CancellationToken cancellationToken = default)
   {
     ArgumentException.ThrowIfNullOrWhiteSpace(portName);
+    ArgumentOutOfRangeException.ThrowIfNegative(tentacle1BootFramePrefixNodeCount);
     await _gate.WaitAsync(cancellationToken);
     try
     {
       ThrowIfDisposed();
       await Task.Run(
-          () => ConnectAndErect(portName, cancellationToken, verifyTarget: false, parkWhenComplete: false, headOnly: true),
+          () => ConnectAndErect(
+              portName, cancellationToken, verifyTarget: false, parkWhenComplete: false,
+              tentacle1BootFramePrefixNodeCount: tentacle1BootFramePrefixNodeCount),
           cancellationToken);
     }
     finally
@@ -593,7 +600,9 @@ internal sealed class KrakenSession : IAsyncDisposable
     }
   }
 
-  private void ConnectAndErect(string portName, CancellationToken cancellationToken, bool verifyTarget, bool parkWhenComplete, bool headOnly = false)
+  private void ConnectAndErect(
+      string portName, CancellationToken cancellationToken, bool verifyTarget, bool parkWhenComplete,
+      int? tentacle1BootFramePrefixNodeCount = null)
   {
     if (_port is not null || _hardwareErectionCompleted)
     {
@@ -609,9 +618,9 @@ internal sealed class KrakenSession : IAsyncDisposable
 
     try
     {
-      if (headOnly)
+      if (tentacle1BootFramePrefixNodeCount is int prefixCount)
       {
-        ErectHeadOnly(port, cancellationToken);
+        ErectHeadWithTentacle1Prefix(port, prefixCount, cancellationToken);
       }
       else
       {
@@ -822,40 +831,75 @@ internal sealed class KrakenSession : IAsyncDisposable
 
   /// <summary>
   /// Core-Dump-ONLY: identical to the first and last steps of <see cref="ErectOnto"/>
-  /// (reset, load 'main' into RAM behind ser-exec, settle for every boot
-  /// node's own reasonableness check, then trigger 'main') but with
-  /// <see cref="ErectOnto"/>'s own per-tentacle fire-and-forget focus/writeB
-  /// burst removed entirely -- no tentacle node is touched here. 'main' is
-  /// running by the time this returns, so the caller (CvmDebuggerViewModel's
-  /// Core Dump) can immediately drive every tentacle node itself, one hop at
-  /// a time, via live <see cref="FocusAsync"/>/<see cref="WriteBAsync"/>/read
-  /// transactions through 'main's own 'w/r' head protocol -- see
-  /// <see cref="ConnectAndErectHeadOnlyAsync"/>'s own remarks for why.
+  /// (reset, load 'main' into RAM behind ser-exec, settle for every boot node's own reasonableness
+  /// check, then trigger 'main'), but instead of <see cref="ErectOnto"/>'s own full-143-node
+  /// fire-and-forget focus/writeB burst, only Tentacle 1's own first
+  /// <paramref name="tentacle1BootFramePrefixNodeCount"/> nodes (starting at 707) are wired that way
+  /// -- the SAME reliable mechanism, just stopped early. Pass 0 for a plain head-only bring-up (no
+  /// tentacle node touched at all). Tentacles 2 and 3 are never touched here regardless of the count,
+  /// nor is any Tentacle-1 node beyond the prefix: 'main' is running by the time this returns, so the
+  /// caller (CvmDebuggerViewModel's Core Dump) can immediately read the boot-framed prefix directly
+  /// (no focus needed -- its nodes are already wired) and drive every remaining tentacle node itself,
+  /// one hop at a time, via live <see cref="FocusAsync"/>/<see cref="WriteBAsync"/>/read transactions
+  /// through 'main's own 'w/r' head protocol -- see
+  /// <see cref="ConnectAndErectHeadWithTentacle1PrefixAsync"/>'s own remarks for the full rationale.
   /// </summary>
-  private void ErectHeadOnly(NativeWindowsSerialPort port, CancellationToken cancellationToken)
+  private void ErectHeadWithTentacle1Prefix(
+      NativeWindowsSerialPort port, int tentacle1BootFramePrefixNodeCount, CancellationToken cancellationToken)
   {
     PulseReset(port, cancellationToken);
 
     // Load 'main' into RAM, completion pointed at ser-exec so this frame
     // alone does not yet jump into it -- see ErectOnto's own remarks. Here,
-    // though, nothing else is coming before the trigger frame below: there is
-    // no per-tentacle burst to send first.
+    // though, at most one tentacle's own prefix burst comes before the
+    // trigger frame below -- never a burst for every tentacle.
     (int[] headProgram, Node708HeadAddresses addresses) = BuildHeadProgram();
     SendBootFrame(port, AsyncSerialContinuationAddress, 0x000, headProgram);
     _headAddresses = addresses;
 
     // Same settle as ErectOnto: every OTHER boot node in the array needs time
-    // to finish its own reasonableness check and revert to 'warm' before
-    // Kraken's live Focus calls can reach it -- see
-    // BootNodeReasonablenessCheckSettleMilliseconds's own remarks. Nothing
-    // here depends on the per-tentacle burst ErectOnto sends during this same
-    // window; the settle time itself is what matters.
+    // to finish its own reasonableness check and revert to 'warm' before this
+    // prefix burst (or Kraken's own live Focus calls, for the remainder) can
+    // reach it -- see BootNodeReasonablenessCheckSettleMilliseconds's own
+    // remarks.
     Thread.Sleep(BootNodeReasonablenessCheckSettleMilliseconds);
 
-    // Enter 'main' immediately -- no tentacle wiring burst first. Every node
-    // besides 708 itself is still sitting in its own boot ROM, unfocused,
-    // exactly as it was right after reset; the caller wires (and reads) each
-    // one from here via live per-node transactions.
+    // Old-method erection, exactly like ErectOnto's own per-tentacle loop below (fire-and-forget,
+    // host-precomputed focus/writeB boot frames, no reply read or checked), but restricted to
+    // Tentacle 1's own first tentacle1BootFramePrefixNodeCount positions -- Tentacles 2 and 3, and
+    // the rest of Tentacle 1, are left completely unwired for the caller's own live per-node method.
+    if (tentacle1BootFramePrefixNodeCount > 0)
+    {
+      KrakenTentacleConfiguration tentacle1 = _configuration.Tentacles.Single(item => item.Number == 1);
+      int tentacleHeadPort = KrakenTopology.PortAddress(KrakenTopology.HeadCoordinate, tentacle1.Nodes[0]);
+      for (int position = 0; position < tentacle1BootFramePrefixNodeCount; position++)
+      {
+        cancellationToken.ThrowIfCancellationRequested();
+        int coordinate = tentacle1.Nodes[position];
+        int previous = position == 0
+            ? KrakenTopology.HeadCoordinate
+            : tentacle1.Nodes[position - 1];
+
+        int incomingPort = KrakenTopology.PortAddress(coordinate, previous);
+        int focusJump = F18InstructionSet.EncodeSlot0Control(0x02, incomingPort);
+        IReadOnlyList<int> focusSequence = LegacyKrakenProtocol.BuildX1(position, focusJump);
+        SendBootFrame(port, AsyncSerialContinuationAddress, tentacleHeadPort, focusSequence);
+
+        // Unlike ErectOnto's own loop (which always has either a "next" node or IoAddress to
+        // write), the prefix's LAST node's real next hop lives beyond the prefix -- tentacle1.Nodes
+        // is the full, ordinary array, never truncated, so tentacle1.Nodes[position + 1] is still
+        // that real next node (e.g. node 300's own next hop, 200) even at the prefix boundary.
+        int b = position + 1 < tentacle1.Nodes.Count
+            ? KrakenTopology.PortAddress(coordinate, tentacle1.Nodes[position + 1])
+            : IoAddress;
+        IReadOnlyList<int> bSequence = LegacyKrakenProtocol.BuildW1(position, LegacyKrakenProtocol.WriteBInstruction, b);
+        SendBootFrame(port, AsyncSerialContinuationAddress, tentacleHeadPort, bSequence);
+      }
+    }
+
+    // Enter 'main' now. Every node besides 708 itself and the prefix just wired is still sitting in
+    // its own boot ROM, unfocused, exactly as it was right after reset; the caller wires (and reads)
+    // each of those from here via live per-node transactions, and simply reads the prefix directly.
     SendBootFrame(port, 0x000, 0x000, []);
 
     SettleUsb(OnlineTransactionSettleMilliseconds, cancellationToken);

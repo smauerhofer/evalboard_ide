@@ -6,7 +6,8 @@
         Height="860"
         MinWidth="980"
         MinHeight="680"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="CenterOwner"
+        PreviewKeyDown="OnPreviewKeyDown">
   <Grid Margin="12">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />
@@ -419,7 +420,7 @@
                     <Run Text=" project user." />
         </TextBlock>
       </StackPanel>
-      <Button Content="Cancel" IsCancel="True" MinWidth="90" Margin="8,0,0,0" />
+      <Button Content="Cancel" Click="OnCancelClick" MinWidth="90" Margin="8,0,0,0" />
       <Button Content="Save node" IsDefault="True" Click="OnSaveClick" MinWidth="110" Margin="8,0,0,0" />
     </DockPanel>
   </Grid>

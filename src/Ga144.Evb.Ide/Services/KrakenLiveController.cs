@@ -276,18 +276,21 @@ public sealed class KrakenLiveController : IAsyncDisposable
   }
 
   /// <summary>
-  /// Core-Dump-ONLY: brings up JUST node 708's own head program and stops
-  /// there -- no tentacle node is focused or wired (see
-  /// <see cref="KrakenSession.ConnectAndErectHeadOnlyAsync"/> for the full
-  /// rationale). Unlike <see cref="EnsureOnlineAsync"/>, this always performs
-  /// a fresh reset + head bring-up: it is only ever called at the very start
-  /// of a Core Dump, never to "ensure" an existing session is usable, so
-  /// there is no already-erected branch here. The caller (CvmDebuggerViewModel's
-  /// Core Dump) is responsible for wiring and reading every tentacle node
-  /// itself afterward, one hop at a time, via <see cref="FocusAsync"/>,
+  /// Core-Dump-ONLY: brings up node 708's own head program and ALSO wires Tentacle 1's own first
+  /// <paramref name="tentacle1BootFramePrefixNodeCount"/> nodes (707 onward) via the reliable
+  /// boot-frame mechanism -- see <see cref="KrakenSession.ConnectAndErectHeadWithTentacle1PrefixAsync"/>
+  /// for the full rationale (Stefan's own compromise for node 300: reach it and everything before it
+  /// the reliable way, at the cost of the usual lossless top-of-stack capture for just those nodes;
+  /// pass 0 for a plain head-only bring-up touching no tentacle node at all). Unlike
+  /// <see cref="EnsureOnlineAsync"/>, this always performs a fresh reset + bring-up: it is only ever
+  /// called at the very start of a Core Dump, never to "ensure" an existing session is usable, so
+  /// there is no already-erected branch here. The caller (CvmDebuggerViewModel's Core Dump) reads the
+  /// boot-framed prefix directly (no focus needed) and is responsible for wiring and reading every
+  /// remaining tentacle node itself afterward, one hop at a time, via <see cref="FocusAsync"/>,
   /// <see cref="WriteBAsync"/>, and the normal per-node reads.
   /// </summary>
-  public async Task EnsureHeadOnlineAsync(KrakenNodeRoute initialTargetRoute, CancellationToken cancellationToken = default)
+  public async Task EnsureHeadWithTentacle1PrefixOnlineAsync(
+      KrakenNodeRoute initialTargetRoute, int tentacle1BootFramePrefixNodeCount, CancellationToken cancellationToken = default)
   {
     ArgumentNullException.ThrowIfNull(initialTargetRoute);
     await _gate.WaitAsync(cancellationToken);
@@ -297,7 +300,7 @@ public sealed class KrakenLiveController : IAsyncDisposable
       if (_hardwareErected)
       {
         throw new InvalidOperationException(
-            "A Kraken is already resident. Head-only erection is only for the start of a fresh Core Dump.");
+            "A Kraken is already resident. This erection is only for the start of a fresh Core Dump.");
       }
 
       KrakenEndpointInfo endpoint = ResolveEndpoint();
@@ -310,7 +313,7 @@ public sealed class KrakenLiveController : IAsyncDisposable
       var session = new KrakenSession(_configuration, initialTargetRoute, _chip, _romLibrary, _idlePolicy, reopenResetsChip);
       try
       {
-        await session.ConnectAndErectHeadOnlyAsync(endpoint.PortName, cancellationToken);
+        await session.ConnectAndErectHeadWithTentacle1PrefixAsync(endpoint.PortName, tentacle1BootFramePrefixNodeCount, cancellationToken);
         _session = session;
         _endpoint = endpoint;
         _hardwareErected = true;
@@ -321,8 +324,8 @@ public sealed class KrakenLiveController : IAsyncDisposable
       catch
       {
         // No partial-erection state is worth preserving here (unlike
-        // EnsureOnlineAsync's own catch): ConnectAndErectHeadOnlyAsync does
-        // no post-erection verification of its own to fail after the fact.
+        // EnsureOnlineAsync's own catch): ConnectAndErectHeadWithTentacle1PrefixAsync does no
+        // post-erection verification of its own to fail after the fact.
         await session.DisposeAsync();
         throw;
       }

@@ -447,19 +447,37 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// cannot run at once, and "the debug session is done, Kraken is only needed to read out the
   /// current chip state" is Stefan's own framing for why stopping it here, rather than refusing, is
   /// the right call); (2) the chip is reset (<see cref="KrakenLiveController.ResetChipAsync"/> -- the
-  /// standalone reset primitive, not a fused reset+erect); (3) node 708's own head program alone is
-  /// brought up (<see cref="KrakenLiveController.EnsureHeadOnlineAsync"/>) -- NOT the ordinary bulk
-  /// "Install Kraken" erection (<see cref="KrakenLiveController.EnsureOnlineAsync"/>,
+  /// standalone reset primitive, not a fused reset+erect); (3) node 708's head program is brought up
+  /// AND Tentacle 1's own boot-frame prefix is wired in the same step
+  /// (<see cref="KrakenLiveController.EnsureHeadWithTentacle1PrefixOnlineAsync"/>, see below) -- NOT
+  /// the ordinary bulk "Install Kraken" erection (<see cref="KrakenLiveController.EnsureOnlineAsync"/>,
   /// <see cref="ViewModels.ChipViewModel.ToggleKrakenAsync"/>'s own call); (4) every tentacle node is
-  /// then wired AND read together, one node at a time, in tentacle/position order (708 itself has no
-  /// live-state read path of its own and is skipped) -- one node's transport failure is recorded and
-  /// skipped, not fatal to the rest of the dump, though it does mean every LATER node on the SAME
-  /// tentacle becomes unreachable too, since the physical relay chain breaks at that point, and each
-  /// of them will fail its own Focus call in turn and be recorded the same way.
+  /// then read, in tentacle/position order (708 itself has no live-state read path of its own and is
+  /// skipped) -- one node's transport failure is recorded and skipped, not fatal to the rest of the
+  /// dump, though for a LIVE (non-boot-framed) node it does mean every LATER node on the SAME tentacle
+  /// becomes unreachable too, since the physical relay chain breaks at that point, and each of them
+  /// will fail its own Focus call in turn and be recorded the same way.
   ///
-  /// Per-node sequence, Stefan's own explicit correction (his exact numbering):
+  /// Node 300 (Tentacle 1, position 31) is a known problem for the live method below: its live focus
+  /// call has been observed timing out on real hardware, the same failure the project's own
+  /// node-300-erection-investigation found for BULK erection via this mechanism. Per Stefan's own
+  /// compromise, Tentacle 1's prefix -- its first <see cref="KrakenTopology.PostMortemTentacle1BootFramePrefixNodeCount"/>
+  /// nodes (707 through, and including, node 300) -- is instead wired up front via the RELIABLE
+  /// fire-and-forget boot-frame mechanism <see cref="KrakenSession.ErectOnto"/> already uses for
+  /// "Install Kraken" (confirmed by the hardware investigation to reliably reach node 300). Every one
+  /// of these nodes is then simply READ (no live Focus/WriteB -- the boot frame already wired every
+  /// B register in that prefix in one shot), at the cost of the same 1-word top-of-stack disturbance
+  /// any Kraken erection always pays (an accepted, KNOWN loss, unlike an unpredictable live timeout).
+  /// Every node beyond the prefix -- the rest of Tentacle 1 (200 series onward), plus all of Tentacles
+  /// 2 and 3, neither of which has shown this problem -- keeps the fully lossless live method below.
+  /// This is scoped to Core Dump alone; routes still come from the chip's own, ordinary
+  /// <see cref="Ga144ChipConfiguration.Kraken"/> (the normal Tentacle 1 node list, node 300 included,
+  /// untouched) -- only HOW the prefix gets wired differs from a live Core Dump node.
+  ///
+  /// Per-node sequence for every node BEYOND the boot-framed prefix, Stefan's own explicit correction
+  /// (his exact numbering):
   ///   1) send a focusing call (<see cref="KrakenLiveController.FocusAsync"/>) to this node, reached
-  ///      through however many hops are ALREADY wired from earlier iterations.
+  ///      through however many hops are ALREADY wired from earlier iterations (boot-framed or live).
   ///   2) read the parameter stack (<see cref="KrakenLiveController.ReadParameterStackAsync"/>) --
   ///      MUST happen immediately after focusing and before anything else touches this node: focus's
   ///      own reply mechanism uses exactly 1 word of this node's parameter stack, so reading it now is
@@ -469,23 +487,9 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   ///   4) only THEN write B (<see cref="KrakenLiveController.WriteBAsync"/>) to extend the tentacle one
   ///      hop further, making the NEXT node reachable for the next iteration. Doing this any earlier
   ///      would let writeB's own reply mechanism disturb this node's stack before step 2 had read it.
-  /// Reading the stacks is destructive (confirmed acceptable: a Core Dump is taken right after a
-  /// reset, before anything is running); nothing here writes them back.
-  ///
-  /// This whole node-by-node erect-and-read approach is DELIBERATELY separate from, and never used
-  /// by, the ordinary "Install Kraken" button: it relies on live, per-node focus/writeB transactions
-  /// through node 708's 'w/r' head protocol (<see cref="KrakenSession.FocusAsync"/>,
-  /// <see cref="KrakenProtocol.BuildFocus"/>/<see cref="KrakenProtocol.BuildWriteB"/>) -- the SAME
-  /// dynamic, per-word-acknowledged construction the project's own node-300-erection-investigation
-  /// found unreliable for BULK erection, which is why <see cref="KrakenSession.ErectOnto"/> uses
-  /// fire-and-forget boot frames instead for everyday CVM Debug use. Stefan's own explicit direction
-  /// was to use it here anyway, scoped to Core Dump only. Node 300's live focus call has since
-  /// reproduced that exact timeout on real hardware, so per Stefan's follow-up direction, Core Dump
-  /// now builds its routes from <see cref="KrakenConfiguration.CreateForPostMortemExcludingNode300"/>
-  /// instead of the chip's normal, resident <see cref="Ga144ChipConfiguration.Kraken"/>: node 300 is
-  /// left out of the path entirely (never focused, never read) and Tentacle 1 is rerouted around it so
-  /// the rest of the tentacle stays reachable. This substitution is scoped to Core Dump alone -- the
-  /// chip's own <c>Kraken</c> structure, and everything "Install Kraken" does with it, is untouched.
+  /// A boot-framed prefix node skips straight to step 3 (no focus, no writeB -- both already done by
+  /// the boot frame). Reading the stacks is destructive (confirmed acceptable: a Core Dump is taken
+  /// right after a reset, before anything is running); nothing here writes them back.
   ///
   /// Unlike every other Kraken operation in this app, this erection is torn down again as soon as the
   /// dump is over (success, partial failure, or exception alike): Core Dump's head-only/per-node
@@ -524,11 +528,9 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     {
       await _krakenController.ResetChipAsync();
 
-      // Deliberately NOT _chip.Kraken: see this method's own remarks above node 300 -- Core Dump
-      // reads from a post-mortem-only route set with node 300 omitted and Tentacle 1 rerouted around
-      // it, never the chip's normal, resident Kraken structure used by "Install Kraken".
-      IReadOnlyDictionary<int, KrakenNodeRoute> routes =
-          KrakenTopology.BuildRouteMap(KrakenConfiguration.CreateForPostMortemExcludingNode300());
+      // The chip's own, ordinary Kraken structure -- node 300 included, in its normal place. See
+      // this method's own remarks above: only HOW the Tentacle-1 prefix gets wired differs below.
+      IReadOnlyDictionary<int, KrakenNodeRoute> routes = KrakenTopology.BuildRouteMap(_chip.Kraken);
       List<KrakenNodeRoute> orderedRoutes = routes.Values
           .Where(route => !route.IsHead)
           .OrderBy(route => route.TentacleNumber)
@@ -541,8 +543,10 @@ public sealed class CvmDebuggerViewModel : ObservableObject
         return;
       }
 
-      StatusText = "Core Dump: bringing up the Kraken head (node 708)…";
-      await _krakenController.EnsureHeadOnlineAsync(orderedRoutes[0]);
+      const int tentacle1BootFramePrefixNodeCount = KrakenTopology.PostMortemTentacle1BootFramePrefixNodeCount;
+
+      StatusText = "Core Dump: bringing up the Kraken head (node 708) and node 300's boot-frame prefix…";
+      await _krakenController.EnsureHeadWithTentacle1PrefixOnlineAsync(orderedRoutes[0], tentacle1BootFramePrefixNodeCount);
 
       try
       {
@@ -552,18 +556,35 @@ public sealed class CvmDebuggerViewModel : ObservableObject
           for (int index = 0; index < orderedRoutes.Count; index++)
           {
             KrakenNodeRoute route = orderedRoutes[index];
-            StatusText = $"Core Dump: wiring and reading node {route.Coordinate:000} ({index + 1} of {orderedRoutes.Count})…";
+            bool isBootFramePrefixNode = route.TentacleNumber == 1 && route.Position < tentacle1BootFramePrefixNodeCount;
+            StatusText = isBootFramePrefixNode
+                ? $"Core Dump: reading boot-frame-wired node {route.Coordinate:000} ({index + 1} of {orderedRoutes.Count})…"
+                : $"Core Dump: wiring and reading node {route.Coordinate:000} ({index + 1} of {orderedRoutes.Count})…";
             string? nodeColor = _chip.GetNode(route.Coordinate).Color;
             try
             {
-              // 1) Focus this node -- reached through whatever hops earlier iterations already wired.
-              int incomingPort = KrakenTopology.PortAddress(route.Coordinate, route.PreviousCoordinate ?? KrakenTopology.HeadCoordinate);
-              await _krakenController.FocusAsync(route, incomingPort);
+              IReadOnlyList<int> parameterStack;
+              if (isBootFramePrefixNode)
+              {
+                // Already focused AND wired by the boot-frame prefix erection above
+                // (EnsureHeadWithTentacle1PrefixOnlineAsync/KrakenSession.ErectHeadWithTentacle1Prefix)
+                // -- no live focus/writeB needed for this node, just read. This node pays the same
+                // 1-word top-of-stack disturbance every Kraken erection always costs, in exchange for
+                // reliably including it -- see this method's own remarks on Stefan's compromise.
+                parameterStack = await _krakenController.ReadParameterStackAsync(route);
+              }
+              else
+              {
+                // 1) Focus this node -- reached through whatever hops earlier iterations already
+                // wired (boot-framed, for the first live node right after the prefix, or live).
+                int incomingPort = KrakenTopology.PortAddress(route.Coordinate, route.PreviousCoordinate ?? KrakenTopology.HeadCoordinate);
+                await _krakenController.FocusAsync(route, incomingPort);
 
-              // 2) Parameter stack, immediately -- see this method's own remarks on why this must come
-              // right after focus and before anything else. Destructive (Stefan confirmed acceptable):
-              // 'readPStack' pops the stack off the live node as part of reading it.
-              IReadOnlyList<int> parameterStack = await _krakenController.ReadParameterStackAsync(route);
+                // 2) Parameter stack, immediately -- see this method's own remarks on why this must
+                // come right after focus and before anything else. Destructive (Stefan confirmed
+                // acceptable): 'readPStack' pops the stack off the live node as part of reading it.
+                parameterStack = await _krakenController.ReadParameterStackAsync(route);
+              }
 
               // 3) Everything else -- order no longer matters among these.
               int a = await _krakenController.ReadAAsync(route);
@@ -572,9 +593,13 @@ public sealed class CvmDebuggerViewModel : ObservableObject
               IReadOnlyList<int> rom = await _krakenController.ReadRomAsync(route);
               IReadOnlyList<int> returnStack = await _krakenController.ReadReturnStackAsync(route);
 
-              // 4) Only now extend the tentacle one hop further, so the NEXT node becomes reachable.
-              int nextPort = route.OutgoingBAddress ?? KrakenSession.IoAddress;
-              await _krakenController.WriteBAsync(route, nextPort);
+              if (!isBootFramePrefixNode)
+              {
+                // 4) Only now extend the tentacle one hop further, so the NEXT node becomes
+                // reachable. A boot-framed prefix node's B is already set by the boot frame itself.
+                int nextPort = route.OutgoingBAddress ?? KrakenSession.IoAddress;
+                await _krakenController.WriteBAsync(route, nextPort);
+              }
 
               nodeSnapshots[route.Coordinate] = new PostMortemNodeSnapshot
               {
@@ -598,10 +623,13 @@ public sealed class CvmDebuggerViewModel : ObservableObject
                 Color = nodeColor
               };
               // One node's transport failure does not abort the rest of the dump -- same policy as
-              // ChipViewModel.VerifyAllRomsAsync's own per-node scan. NOTE: since this node could not be
-              // wired, every LATER node on the SAME tentacle is now unreachable too (the physical relay
-              // chain breaks here) -- each will fail its own Focus call in turn and be recorded the same
-              // way, rather than aborting the whole dump.
+              // ChipViewModel.VerifyAllRomsAsync's own per-node scan. NOTE: for a LIVE node (beyond
+              // the boot-framed prefix), this also means every LATER node on the SAME tentacle is now
+              // unreachable too (the physical relay chain breaks here) -- each will fail its own
+              // Focus call in turn and be recorded the same way. A boot-framed prefix node's own read
+              // failure does NOT break that chain (every prefix node's B was already set independently
+              // by the boot frame), so later prefix nodes, and the live nodes beyond them, are
+              // unaffected by one prefix node's read failing.
             }
           }
         }
