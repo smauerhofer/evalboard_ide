@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-20T15:26:17.7079315
-      utcDateTime: 2026-09-20T15:26:17.7079315Z
-      localDateTime: 2026-09-20T17:26:17.7079315+02:00
+      dateTime: 2026-09-20T15:36:48.8159761
+      utcDateTime: 2026-09-20T15:36:48.8159761Z
+      localDateTime: 2026-09-20T17:36:48.8159761+02:00
       date: 2026-09-20T00:00:00.0000000
       day: 20
       dayOfWeek: Sunday
       dayOfYear: 263
       hour: 15
-      millisecond: 707
-      microsecond: 931
-      nanosecond: 500
-      minute: 26
+      millisecond: 815
+      microsecond: 976
+      nanosecond: 100
+      minute: 36
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 17
-      ticks: 639255147777079315
-      utcTicks: 639255147777079315
-      timeOfDay: 15:26:17.7079315
+      second: 48
+      ticks: 639255154088159761
+      utcTicks: 639255154088159761
+      timeOfDay: 15:36:48.8159761
       year: 2026
   portB: 
   portC:
@@ -22231,72 +22231,125 @@ projects:
         parameterStack: []
       color: 
     debuggerAssemblyCode: >-
-      // Consecutive FSUB stress test.
+      // Exact-cancellation FADD / FSUB test.
 
       //
 
-      // fr0 starts at +1.0
+      // Under round-to-nearest-even, all four exact cancellations
 
-      // fr1 stays at +2.0
+      // should produce +0.0 = 0x00000000.
 
       //
 
-      // Expected:
+      // Tests:
 
-      //   1 - 2  = -1
+      //   +1 + (-1) = +0
 
-      //  -1 - 2  = -3
+      //   -1 + (+1) = +0
 
-      //  -3 - 2  = -5
+      //   +1 - (+1) = +0
 
-      //  -5 - 2  = -7
-
-      //  -7 - 2  = -9
+      //   -1 - (-1) = +0
 
 
-      pushlit 0x3F80    ; +1.0 = 0x3F800000
 
-      pushlit 0x0000
+      // fr1 = +1.0
 
-      fpop 0
-
-
-      pushlit 0x4000    ; +2.0 = 0x40000000
+      pushlit 0x3F80
 
       pushlit 0x0000
 
       fpop 1
 
 
+      // fr2 = -1.0
 
-      fsub 0 1          ;  1 - 2 = -1
+      pushlit 0xBF80
+
+      pushlit 0x0000
+
+      fpop 2
+
+
+
+      // ------------------------------------------------------------
+
+      // +1 + (-1) = +0
+
+      // ------------------------------------------------------------
+
+
+      pushlit 0x3F80
+
+      pushlit 0x0000
+
+      fpop 0
+
+
+      fadd 0 2
 
       fpush 0
-                        ; expect BF80 0000
+                        ; expect 0000 0000
 
 
-      fsub 0 1          ; -1 - 2 = -3
+      // ------------------------------------------------------------
 
-      fpush 0
-                        ; expect C040 0000
+      // -1 + (+1) = +0
 
-
-      fsub 0 1          ; -3 - 2 = -5
-
-      fpush 0
-                        ; expect C0A0 0000
+      // ------------------------------------------------------------
 
 
-      fsub 0 1          ; -5 - 2 = -7
+      pushlit 0xBF80
 
-      fpush 0
-                        ; expect C0E0 0000
+      pushlit 0x0000
+
+      fpop 0
 
 
-      fsub 0 1          ; -7 - 2 = -9
+      fadd 0 1
 
       fpush 0
-                        ; expect C110 0000
+                        ; expect 0000 0000
+
+
+      // ------------------------------------------------------------
+
+      // +1 - (+1) = +0
+
+      // ------------------------------------------------------------
+
+
+      pushlit 0x3F80
+
+      pushlit 0x0000
+
+      fpop 0
+
+
+      fsub 0 1
+
+      fpush 0
+                        ; expect 0000 0000
+
+
+      // ------------------------------------------------------------
+
+      // -1 - (-1) = +0
+
+      // ------------------------------------------------------------
+
+
+      pushlit 0xBF80
+
+      pushlit 0x0000
+
+      fpop 0
+
+
+      fsub 0 2
+
+      fpush 0
+                        ; expect 0000 0000
 
 
       nop
