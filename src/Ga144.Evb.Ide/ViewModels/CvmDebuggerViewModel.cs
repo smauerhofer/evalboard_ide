@@ -19,19 +19,32 @@ namespace Ga144.Evb.Ide.ViewModels;
 /// longer needs a code change and a rebuild, just an edit and a click. Stefan can keep SEVERAL such
 /// programs on one chip (<see cref="Programs"/>, backed by <see cref="Ga144ChipConfiguration.DebuggerPrograms"/>
 /// -- added 2026-09-20, replacing an earlier single-scratch-buffer design): <see cref="SelectedProgram"/>
-/// is the program selector's own binding, <see cref="AddProgramCommand"/> ("Add") creates a new,
-/// empty, uniquely-named one, and <see cref="ProgramNameText"/> is a rename box that only actually
-/// takes effect when <see cref="SaveCommand"/> runs (which also persists the whole list onto this
-/// chip's own project data so it survives closing the debugger), while <see cref="LoadCommand"/>
-/// reverts every program back to what Save last persisted and <see cref="RestoreCommand"/> replaces
-/// just the CURRENTLY selected program's own text with the original built-in test program. The
-/// constructor itself re-opens where Stefan left off: <see cref="InitializePrograms"/> rebuilds
+/// is the program selector's own binding -- switching it AUTOMATICALLY loads that program's text into
+/// the editor and re-assembles it (there is deliberately no separate "Load" button/step any more;
+/// selecting IS loading), <see cref="AddProgramCommand"/> ("Add") creates a new, empty, uniquely-named
+/// one, and <see cref="ProgramNameText"/> is a rename box that only actually takes effect when
+/// <see cref="SaveCommand"/> runs (which also persists the whole list onto this chip's own project
+/// data so it survives closing the debugger), while <see cref="RestoreCommand"/> (added 2026-09-20,
+/// REPURPOSED from an earlier "reset to the built-in test program" behavior, per Stefan's own request)
+/// reloads the CURRENTLY selected program from what is actually persisted on this chip -- i.e. undoes
+/// any unsaved edits (both to the Assembly Code text and to a not-yet-saved rename in
+/// <see cref="ProgramNameText"/>) back to whatever <see cref="SaveCommand"/> last actually wrote.
+/// Selecting the
+/// program literally named "default" is special-cased to always (re)load
+/// <see cref="CvmDebuggerDefaultProgram.Source"/> itself into the editor, regardless of whatever text
+/// happens to be saved under that name -- see <see cref="LoadEditorFromProgram"/>'s own remarks; every
+/// OTHER program's own saved <see cref="Ga144DebuggerProgramConfiguration.Source"/> loads normally. The
+/// constructor itself re-opens EXACTLY where Stefan left off: <see cref="InitializePrograms"/> rebuilds
 /// <see cref="Programs"/> from this chip's own Saved list (migrating an older single-program save, or
 /// seeding a fresh "default" one, the first time -- see <see cref="Ga144ChipConfiguration.Normalize"/>'s
-/// own remarks) and selects the first entry, then the constructor immediately calls
-/// <see cref="Assemble"/> once so the window opens with its program already assembled into the
-/// standalone simulated SRAM -- not just sitting as unassembled text in the editor waiting for a
-/// manual click.
+/// own remarks), then reselects whichever program
+/// <see cref="Ga144ChipConfiguration.LastSelectedDebuggerProgramName"/> names (falling back to the
+/// first entry if that program no longer exists, or this is the very first time the chip's debugger
+/// has ever been opened) -- persisted immediately whenever <see cref="SelectedProgram"/> changes, not
+/// gated behind Save, since which program was last open is UI state, not program content. Either way
+/// the constructor immediately calls <see cref="Assemble"/> once so the window opens with its program
+/// already assembled into the standalone simulated SRAM -- not just sitting as unassembled text in the
+/// editor waiting for a manual click.
 ///
 /// Assemble itself never actually needed a connected chip -- node 607's source compiles the same way
 /// whether or not one is attached -- so it no longer requires an active session: with none, it
@@ -177,15 +190,17 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     AssembleCommand = new RelayCommand(Assemble, () => !IsBusy);
     AddProgramCommand = new RelayCommand(AddProgram, () => !IsBusy);
     SaveCommand = new RelayCommand(SaveProgram);
-    LoadCommand = new RelayCommand(LoadPrograms);
-    RestoreCommand = new RelayCommand(RestoreAssemblyCode);
+    RestoreCommand = new RelayCommand(RestoreProgram);
     CoreDumpCommand = new AsyncRelayCommand(CoreDumpAsync, () => !IsBusy);
 
-    // Reopen where Stefan left off: rebuilds Programs from this chip's own Saved
+    // Reopen EXACTLY where Stefan left off: rebuilds Programs from this chip's own Saved
     // Ga144ChipConfiguration.DebuggerPrograms (migrating an older single-program save the first time,
     // and seeding a brand-new chip with one "default" program, if either applies -- see
-    // Ga144ChipConfiguration.Normalize's own remarks), selects the first entry (always "default" for a
-    // chip that has never renamed it away), and loads its text/name into the editor.
+    // Ga144ChipConfiguration.Normalize's own remarks), reselects whichever program
+    // LastSelectedDebuggerProgramName names (falling back to the first entry -- "default" -- if that
+    // program no longer exists or this chip's debugger has never been opened before), and loads its
+    // text/name into the editor (LoadEditorFromProgram's own "default always loads the built-in
+    // program" special case applies here too, same as any other selection).
     InitializePrograms();
 
     // Assemble immediately on open (the no-session half of Assemble() -- see its own remarks; needs
@@ -255,14 +270,17 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   public ObservableCollection<Ga144DebuggerProgramConfiguration> Programs { get; } = [];
 
   /// <summary>
-  /// The program selector's own <c>SelectedItem</c>. Switching this first commits
+  /// The program selector's own <c>SelectedItem</c> -- there is deliberately no separate "Load" step
+  /// any more (Stefan's own request): switching this IS loading. Switching first commits
   /// <see cref="AssemblyCodeText"/>'s CURRENT contents back into the program being switched AWAY from
   /// (so bouncing between programs before ever clicking Save does not silently discard edited source
   /// text -- only a not-yet-saved RENAME of the program name box is discarded that way, per
-  /// <see cref="ProgramNameText"/>'s own remarks), then loads the newly selected program's own
-  /// Source/Name into <see cref="AssemblyCodeText"/>/<see cref="ProgramNameText"/> and immediately
-  /// re-assembles it (same reasoning as the constructor's own up-front <see cref="Assemble"/> call:
-  /// the editor should never show text that looks loaded but isn't actually assembled yet).
+  /// <see cref="ProgramNameText"/>'s own remarks), then loads the newly selected program's own text via
+  /// <see cref="LoadEditorFromProgram"/> (which special-cases "default" -- see its own remarks) and
+  /// immediately re-assembles it (same reasoning as the constructor's own up-front
+  /// <see cref="Assemble"/> call: the editor should never show text that looks loaded but isn't
+  /// actually assembled yet). Also persists <see cref="Ga144ChipConfiguration.LastSelectedDebuggerProgramName"/>
+  /// right away, not gated behind Save -- see that property's own remarks for why.
   /// </summary>
   public Ga144DebuggerProgramConfiguration? SelectedProgram
   {
@@ -279,12 +297,12 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       OnPropertyChanged();
       if (value is not null)
       {
-        _assemblyCodeText = value.Source;
-        OnPropertyChanged(nameof(AssemblyCodeText));
-        _programNameText = value.Name;
-        OnPropertyChanged(nameof(ProgramNameText));
+        LoadEditorFromProgram(value);
         Assemble();
       }
+
+      _chip.LastSelectedDebuggerProgramName = value?.Name;
+      _notifyProjectChanged();
     }
   }
 
@@ -323,7 +341,6 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   public RelayCommand AssembleCommand { get; }
   public RelayCommand AddProgramCommand { get; }
   public RelayCommand SaveCommand { get; }
-  public RelayCommand LoadCommand { get; }
   public RelayCommand RestoreCommand { get; }
   public AsyncRelayCommand CoreDumpCommand { get; }
 
@@ -998,13 +1015,15 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// <summary>
   /// (Re)builds <see cref="Programs"/>/<see cref="SelectedProgram"/>/<see cref="AssemblyCodeText"/>/
   /// <see cref="ProgramNameText"/> from this chip's own <see cref="Ga144ChipConfiguration.DebuggerPrograms"/>
-  /// -- called once by the constructor, and again by <see cref="LoadPrograms"/> to discard every
-  /// in-memory edit (unsaved source text, unsaved renames, unsaved newly-Added programs alike) and
-  /// revert to exactly what was last Saved. <see cref="Ga144ChipConfiguration.Normalize"/> is what
+  /// -- called once, by the constructor. <see cref="Ga144ChipConfiguration.Normalize"/> is what
   /// actually guarantees at least one ("default") entry exists (including migrating an older single-
   /// program save the first time) -- this method just mirrors whatever it produces into fresh, working
   /// copies (never the SAME <see cref="Ga144DebuggerProgramConfiguration"/> instances _chip holds) so
-  /// nothing typed here reaches the project's own data ahead of <see cref="SaveProgram"/>.
+  /// nothing typed here reaches the project's own data ahead of <see cref="SaveProgram"/>. Reselects
+  /// whichever program <see cref="Ga144ChipConfiguration.LastSelectedDebuggerProgramName"/> names
+  /// (falling back to the first entry -- always "default" for a chip that has never renamed it away --
+  /// if that name is null or no longer matches any program), so the window reopens on exactly the
+  /// program Stefan had selected last time, not always "default".
   /// </summary>
   private void InitializePrograms()
   {
@@ -1015,13 +1034,44 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       Programs.Add(new Ga144DebuggerProgramConfiguration { Name = saved.Name, Source = saved.Source });
     }
 
-    _selectedProgram = Programs[0];
+    Ga144DebuggerProgramConfiguration selected = Programs.FirstOrDefault(
+        program => string.Equals(program.Name, _chip.LastSelectedDebuggerProgramName, StringComparison.OrdinalIgnoreCase))
+        ?? Programs[0];
+
+    _selectedProgram = selected;
     OnPropertyChanged(nameof(SelectedProgram));
-    _assemblyCodeText = _selectedProgram.Source;
+    LoadEditorFromProgram(selected);
+  }
+
+  /// <summary>
+  /// Loads one program's text/name into <see cref="AssemblyCodeText"/>/<see cref="ProgramNameText"/> --
+  /// shared by <see cref="InitializePrograms"/> (opening the window) and <see cref="SelectedProgram"/>'s
+  /// own setter (switching programs), so both go through the exact same rule: <b>the program literally
+  /// named "default" always loads <see cref="CvmDebuggerDefaultProgram.Source"/> itself</b> (Stefan's
+  /// own request), regardless of whatever text happens to be sitting in that program's own
+  /// <see cref="Ga144DebuggerProgramConfiguration.Source"/> -- "default" is the one fixed, always-known-
+  /// good starting point that selecting it can always get back to. <see cref="RestoreCommand"/> reuses
+  /// this exact same method (and so this exact same override) when reloading "default" from storage, so
+  /// restoring "default" shows the same canonical text as simply selecting it, never whatever raw text a
+  /// hand-edited project file might hold under that name.
+  /// Every OTHER program loads its own actually-saved <see cref="Ga144DebuggerProgramConfiguration.Source"/>
+  /// normally. Does not call <see cref="Assemble"/> itself -- both call sites do that on their own right
+  /// after, once they also know whether this is the very first load or a live switch.
+  /// </summary>
+  private void LoadEditorFromProgram(Ga144DebuggerProgramConfiguration program)
+  {
+    _assemblyCodeText = IsDefaultProgramName(program.Name) ? DefaultAssemblyCode : program.Source;
     OnPropertyChanged(nameof(AssemblyCodeText));
-    _programNameText = _selectedProgram.Name;
+    _programNameText = program.Name;
     OnPropertyChanged(nameof(ProgramNameText));
   }
+
+  /// <summary>The exact "default" name test <see cref="LoadEditorFromProgram"/> uses -- same
+  /// case-insensitive comparison <see cref="Ga144ChipConfiguration.Normalize"/>'s own "default" check
+  /// and <see cref="SaveProgram"/>'s own name-collision check use, kept here as its own named helper
+  /// only so this one call site reads clearly; the Models-side check lives separately since this
+  /// ViewModels-side helper is not reachable from there.</summary>
+  private static bool IsDefaultProgramName(string name) => string.Equals(name, "default", StringComparison.OrdinalIgnoreCase);
 
   /// <summary>Writes <see cref="AssemblyCodeText"/>'s current contents back into <see cref="SelectedProgram"/>'s
   /// own <see cref="Ga144DebuggerProgramConfiguration.Source"/> -- called before switching
@@ -1123,23 +1173,42 @@ public sealed class CvmDebuggerViewModel : ObservableObject
         : $"Saved \"{newName}\" to the project.";
   }
 
-  /// <summary>"Load": reverts EVERY program back to what <see cref="SaveProgram"/> last persisted for
-  /// this chip, discarding every in-memory edit (unsaved source text, unsaved renames, and any
-  /// unsaved <see cref="AddProgramCommand"/> addition alike) -- the multi-program equivalent of the
-  /// single editor's old "revert to last save," done for the whole list at once rather than trying to
-  /// correlate one possibly-renamed, possibly brand-new program back to a specific saved entry by name.</summary>
-  private void LoadPrograms()
+  /// <summary>
+  /// "Restore" (REPURPOSED, 2026-09-20, per Stefan's own request -- previously reset the editor to the
+  /// built-in test program regardless of what was selected): reloads the CURRENTLY selected program
+  /// from what is actually persisted on this chip (<see cref="Ga144ChipConfiguration.DebuggerPrograms"/>
+  /// -- "storage"), undoing whatever has been typed or renamed here since the last
+  /// <see cref="SaveCommand"/>. Matches the selected program's persisted counterpart by
+  /// <see cref="SelectedProgram"/>'s own <see cref="Ga144DebuggerProgramConfiguration.Name"/> -- which
+  /// only ever changes at Save time, so this still finds the right persisted entry even with an
+  /// unsaved, not-yet-saved rename sitting in <see cref="ProgramNameText"/> -- and reuses
+  /// <see cref="LoadEditorFromProgram"/> so the "default" always-loads-the-built-in-program override
+  /// applies exactly the same way it does when simply selecting "default" (see that method's own
+  /// remarks). Loading also overwrites <see cref="ProgramNameText"/> back to the persisted name, which
+  /// is what discards an in-progress, not-yet-saved rename attempt. A program <see cref="AddProgramCommand"/>
+  /// created that has never been saved has no persisted counterpart at all -- restoring it would mean
+  /// deleting it, which is not what "undo unsaved writing" means for a program that was never written
+  /// anywhere yet, so this is a no-op (with an explanatory status message) instead.
+  /// </summary>
+  private void RestoreProgram()
   {
-    InitializePrograms();
-    Assemble();
-    StatusText = "Reloaded every program from the project (any unsaved edits were discarded).";
-  }
+    if (SelectedProgram is not { } selected)
+    {
+      return;
+    }
 
-  /// <summary>Replaces <see cref="AssemblyCodeText"/> with the original built-in test program (<see cref="DefaultAssemblyCode"/>), bypassing whatever <see cref="SelectedProgram"/> currently holds -- a clean way back to a known-good starting point for WHICHEVER program is selected. Only takes effect on that program once <see cref="SaveCommand"/> is clicked afterward, same as any other edit here.</summary>
-  private void RestoreAssemblyCode()
-  {
-    AssemblyCodeText = DefaultAssemblyCode;
-    StatusText = "Restored the original test Assembly Code.";
+    Ga144DebuggerProgramConfiguration? persisted = _chip.DebuggerPrograms.FirstOrDefault(
+        program => string.Equals(program.Name, selected.Name, StringComparison.Ordinal));
+    if (persisted is null)
+    {
+      StatusText = $"\"{selected.Name}\" has never been saved -- nothing in the project to restore from.";
+      return;
+    }
+
+    LoadEditorFromProgram(persisted);
+    selected.Source = _assemblyCodeText;
+    Assemble();
+    StatusText = $"Restored \"{selected.Name}\" to what was last saved.";
   }
 
   /// <summary>
@@ -1413,7 +1482,6 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     RefreshMemoryCommand.NotifyCanExecuteChanged();
     AssembleCommand.NotifyCanExecuteChanged();
     AddProgramCommand.NotifyCanExecuteChanged();
-    LoadCommand.NotifyCanExecuteChanged();
     CoreDumpCommand.NotifyCanExecuteChanged();
     OnPropertyChanged(nameof(IsContinuing));
     OnPropertyChanged(nameof(IsSessionActive));

@@ -36,6 +36,18 @@ public sealed class Ga144ChipConfiguration
   public List<Ga144DebuggerProgramConfiguration> DebuggerPrograms { get; set; } = [];
 
   /// <summary>
+  /// The name of whichever <see cref="DebuggerPrograms"/> entry the CVM Debugger had selected the last
+  /// time it was open on this chip. <see cref="ViewModels.CvmDebuggerViewModel"/> reselects the program
+  /// with this name when it opens (falling back to <see cref="DebuggerPrograms"/>'s own first entry if
+  /// no program by this name exists any more -- renamed, never saved, or this is the chip's very first
+  /// debugger session), so reopening the window picks up exactly where Stefan left off instead of
+  /// always resetting to "default". Null until a program has ever been selected. Updated immediately
+  /// whenever the selected program changes -- unlike <see cref="DebuggerPrograms"/>'s own content, this
+  /// is UI state, not program content, so it is not gated behind Save.
+  /// </summary>
+  public string? LastSelectedDebuggerProgramName { get; set; }
+
+  /// <summary>
   /// The Kraken structure (head 708 + three fixed tentacles) is a constant of the
   /// GA144 array and the boot protocol, not per-chip configuration. It is never
   /// persisted: it is always the one fixed topology, recreated in memory. Whether
