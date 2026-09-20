@@ -30,18 +30,30 @@ namespace Ga144.Evb.Ide.Cvm;
 /// before (crossed vs. straight write order).</item>
 /// </list>
 ///
+/// <b>REVISED AGAIN, 2026-09-20 (later the same day), with Stefan's own further paste of nodes 401 and
+/// 402 together</b> -- posted as a matched pair, so cross-checked against <see cref="Node402Program"/>'s
+/// own same-day companion revision. Adds one new word, <c>fp5a/swapc</c>, ahead of the existing
+/// <c>fp5a/swap</c> -- everything else in this source is unchanged from the first same-day rewrite.
+/// <c>fp4a/swapc</c> (node 402) now dispatches to this new word instead of plain <c>fp5a/swap</c>.
+/// Traced by hand against its own stack comments: starting from <c>( H1 H2 L1 L2 )</c>, <c>over &gt;r
+/// &gt;r drop</c> leaves <c>( H1 H2 )</c> on the data stack with <c>L1 L2</c> parked on the return stack
+/// (matching the source's own <c>( H1 H2 / L1 L2 )</c> comment), and <c>over r&gt; r&gt;</c> then leaves
+/// <c>( H1 H2 H1 L2 L1 )</c> -- i.e. relative to <c>fp5a/swap</c>'s own straight relay, this inserts an
+/// extra copy of <c>H1</c> ahead of the two low words and reverses <c>L1</c>/<c>L2</c> into <c>L2 L1</c>
+/// order.
+///
 /// <b>NOT YET added to <see cref="CvmNodeMesh"/> or <see cref="CvmBootStreamBuilder"/>, and NOT wired
 /// into the CVM instruction set</b> -- deferred pending Stefan's own go-ahead for this whole pipeline.
 /// </summary>
 internal static class Node401Program
 {
-  /// <summary>The node this program is always deployed to -- CVM2's 32-bit floating-point pipeline, stage 5a (mantissa relay, end of the control chain), added 2026-09-16, rewritten 2026-09-20.</summary>
+  /// <summary>The node this program is always deployed to -- CVM2's 32-bit floating-point pipeline, stage 5a (mantissa relay, end of the control chain), added 2026-09-16, rewritten 2026-09-20 (twice).</summary>
   public const int Coordinate = 401;
 
   /// <summary>
-  /// Node 401's full resident F18 source, verbatim from Stefan's 2026-09-20 paste (his final,
-  /// simplified rewrite -- see this class's own remarks above for what changed from the original
-  /// 2026-09-16 draft and why).
+  /// Node 401's full resident F18 source, verbatim from Stefan's second 2026-09-20 paste (posted
+  /// together with <see cref="Node402Program"/>'s own matching revision) -- see this class's own remarks
+  /// above for what changed since the first same-day rewrite and why.
   /// </summary>
   public const string Source = """
       ( CVM2 node 401. VM 32 bit floatingpoint stage 5a node. mantissa handling )
@@ -58,6 +70,14 @@ internal static class Node401Program
       # up /b
 
       # 0 org
+
+      : fp5a/swapc
+        ( H1 H2 L1 L2 )
+        over >r >r  drop
+        ( H1 H2 / L1 L2 )
+        over r> r>
+        ( H1 H2 H1 L2 L1 )
+      ;
 
       : fp5a/swap
         ( H1 H2 L1 L2 )

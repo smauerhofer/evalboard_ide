@@ -212,40 +212,75 @@ public static class F18Disassembler
   /// <summary>
   /// Maps each address that a compiled word (colon-definition entry point) or an explicit label
   /// names to that symbol's own name -- the shared lookup a "Label" column/gutter uses next to a
-  /// disassembled/decoded word image. Originally private to <c>PostMortemNodeDetailViewModel</c>
-  /// (Core Dump's own RAM/ROM comparison view); pulled out here, unchanged, so
+  /// disassembled/decoded word image, and what a control-transfer's own destination is checked
+  /// against for the "(&lt;name&gt;)" annotation (<see cref="F18DisassembledSlot.Format"/>).
+  /// Originally private to <c>PostMortemNodeDetailViewModel</c> (Core Dump's own RAM/ROM comparison
+  /// view); pulled out here, unchanged in its "which name wins" rule, so
   /// <see cref="ViewModels.NodeEditorViewModel"/>'s own RAM/ROM display can share exactly the same
-  /// "which name wins" rule rather than re-deriving it: a plain in-body <see cref="F18ExportKind.Label"/>
-  /// and a colon-definition's own <see cref="F18ExportKind.Word"/> entry point can both name the same
-  /// address, and <see cref="F18ExportKind.Word"/> always wins (added second, unconditionally
-  /// overwriting) as the more meaningful name for that spot. <see cref="F18ExportKind.Constant"/> is
-  /// skipped entirely -- its <see cref="F18ExportedSymbol.Value"/> is a compile-time constant, not an
-  /// address, so it never belongs in an address-keyed map.
+  /// logic rather than re-deriving it.
+  ///
+  /// <paramref name="symbols"/> is <see cref="F18CompileResult.Symbols"/> -- names this compile
+  /// defined directly (a colon-definition or an explicit label in THIS source).
+  /// <paramref name="externalSymbols"/> is <see cref="F18CompileResult.ExternalSymbols"/> -- names
+  /// this compile only RESOLVED, not defined: a genuine cross-node <c>import</c>, or (for a RAM
+  /// compile) this SAME node's own just-compiled ROM dictionary, automatically in scope -- e.g. a
+  /// call to a ROM-resident routine like "clc" compiles to a real control transfer whose destination
+  /// is only known via <see cref="F18CompileResult.ExternalSymbols"/>, never <see cref="F18CompileResult.Symbols"/>,
+  /// so omitting it here left such a call's destination unannotated ("call 0x2D3" instead of
+  /// "call 0x2D3 (clc)") even though the name was known all along. Both are merged into one
+  /// address-keyed map: a name from <paramref name="symbols"/> always wins a same-address collision
+  /// over one from <paramref name="externalSymbols"/> (this node's own current source is the more
+  /// specific, relevant name for that spot), and within each, a colon-definition's own
+  /// <see cref="F18ExportKind.Word"/> entry point always wins over a plain <see cref="F18ExportKind.Label"/>
+  /// at the same address. <see cref="F18ExportKind.Constant"/> is skipped entirely -- its
+  /// <see cref="F18ExportedSymbol.Value"/> is a compile-time constant, not an address, so it never
+  /// belongs in an address-keyed map.
   /// </summary>
-  public static Dictionary<int, string> BuildLabelsByAddress(IReadOnlyDictionary<string, F18ExportedSymbol>? symbols)
+  public static Dictionary<int, string> BuildLabelsByAddress(
+      IReadOnlyDictionary<string, F18ExportedSymbol>? symbols,
+      IReadOnlyDictionary<string, F18ExportedSymbol>? externalSymbols = null)
   {
     var labelsByAddress = new Dictionary<int, string>();
-    if (symbols is null)
-    {
-      return labelsByAddress;
-    }
 
-    foreach (F18ExportedSymbol symbol in symbols.Values)
-    {
-      if (symbol.Kind == F18ExportKind.Label)
-      {
-        labelsByAddress.TryAdd(symbol.Value, symbol.Name);
-      }
-    }
+    // Label pass: TryAdd (first writer wins) -- externalSymbols first, symbols second, so a local
+    // Label always outranks a same-address Label coming from an import/ROM-seeded name.
+    AddByKind(externalSymbols, F18ExportKind.Label, labelsByAddress, overwrite: false);
+    AddByKind(symbols, F18ExportKind.Label, labelsByAddress, overwrite: false);
 
-    foreach (F18ExportedSymbol symbol in symbols.Values)
-    {
-      if (symbol.Kind == F18ExportKind.Word)
-      {
-        labelsByAddress[symbol.Value] = symbol.Name;
-      }
-    }
+    // Word pass: plain assignment (last writer wins) -- same order, so a local Word has the final
+    // say over both an external Word AND any Label already recorded above.
+    AddByKind(externalSymbols, F18ExportKind.Word, labelsByAddress, overwrite: true);
+    AddByKind(symbols, F18ExportKind.Word, labelsByAddress, overwrite: true);
 
     return labelsByAddress;
+  }
+
+  private static void AddByKind(
+      IReadOnlyDictionary<string, F18ExportedSymbol>? source,
+      F18ExportKind kind,
+      Dictionary<int, string> target,
+      bool overwrite)
+  {
+    if (source is null)
+    {
+      return;
+    }
+
+    foreach (F18ExportedSymbol symbol in source.Values)
+    {
+      if (symbol.Kind != kind)
+      {
+        continue;
+      }
+
+      if (overwrite)
+      {
+        target[symbol.Value] = symbol.Name;
+      }
+      else
+      {
+        target.TryAdd(symbol.Value, symbol.Name);
+      }
+    }
   }
 }

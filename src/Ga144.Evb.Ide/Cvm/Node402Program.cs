@@ -33,19 +33,37 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <c>fp4a/nop</c>'s own unexplained trailing <c>over</c> is unchanged, and the <c>r---</c> token stays in
 /// the same structural position, same open question as before.
 ///
+/// <b>REVISED AGAIN, 2026-09-20 (later the same day), with Stefan's own further paste of nodes 401 and
+/// 402 together</b> -- posted as a matched pair, so cross-checked against <see cref="Node401Program"/>'s
+/// own same-day companion revision below:
+/// <list type="bullet">
+/// <item>The trailing <c>over</c> flagged above as "unexplained" on <c>fp4a/nop</c> has moved: it is now
+/// gone from <c>fp4a/nop</c> (<c>A[ fp5a/nop ; ]] lit ! ;</c>) and instead appears on BOTH <c>fp4a/swapc</c>
+/// and <c>fp4a/swap</c> (each now ends <c>lit ! over ;</c>). Resolves the asymmetry flagged when this
+/// pair was first reviewed.</item>
+/// <item><c>fp4a/swapc</c> now dispatches through node 401's new <c>fp5a/swapc</c> (see
+/// <see cref="Node401Program"/>) instead of plain <c>fp5a/swap</c> -- <c>A[ fp5a/swapc ]] lit ! over ;</c>,
+/// no <c>;</c> inside the brackets, same as before.</item>
+/// <item><c>fp4a/main</c>'s tail changed from <c>r--- !b !b fp4a/main ;</c> (write <c>e2</c> then
+/// <c>e1</c>, since <c>!b</c> consumes the stack top first) to <c>r--- &gt;r !b r&gt; !b fp4a/main ;</c>
+/// (write <c>e1</c> then <c>e2</c> -- the return-stack round trip reverses which of the two reaches the
+/// down port first). Comments <c>// e1</c> / <c>// e2</c> added at each <c>!b</c> to make the new order
+/// explicit.</item>
+/// </list>
+///
 /// <b>NOT YET added to <see cref="CvmNodeMesh"/> or <see cref="CvmBootStreamBuilder"/>, and NOT wired
 /// into the CVM instruction set</b> -- deferred pending Stefan's own go-ahead for this whole pipeline.
 /// </summary>
 internal static class Node402Program
 {
-  /// <summary>The node this program is always deployed to -- CVM2's 32-bit floating-point pipeline, stage 4a (exponent relay, controls node 401), added 2026-09-16, rewritten 2026-09-20.</summary>
+  /// <summary>The node this program is always deployed to -- CVM2's 32-bit floating-point pipeline, stage 4a (exponent relay, controls node 401), added 2026-09-16, rewritten 2026-09-20 (twice).</summary>
   public const int Coordinate = 402;
 
   /// <summary>
-  /// Node 402's full resident F18 source, verbatim from Stefan's 2026-09-20 paste (his final,
-  /// simplified rewrite -- see this class's own remarks above for what changed from the original
-  /// 2026-09-16 draft and why). The unresolved <c>r---</c> token and <c>fp4a/nop</c>'s own trailing
-  /// <c>over</c> are reproduced exactly as pasted, not corrected.
+  /// Node 402's full resident F18 source, verbatim from Stefan's second 2026-09-20 paste (posted
+  /// together with <see cref="Node401Program"/>'s own matching revision) -- see this class's own remarks
+  /// above for what changed since the first same-day rewrite and why. The unresolved <c>r---</c> token is
+  /// reproduced exactly as pasted, not corrected.
   /// </summary>
   public const string Source = """
       ( CVM2 node 402. VM 32 bit floatingpoint stage 4a node. exponent handling )
@@ -64,10 +82,10 @@ internal static class Node402Program
 
       # 0 org
 
-      : fp4a/swapc A[ fp5a/swap ]] lit ! ;
+      : fp4a/swapc A[ fp5a/swapc ]] lit ! over ;
 
-      : fp4a/swap A[ fp5a/swap ; ]] lit ! ;
-      : fp4a/nop A[ fp5a/nop ; ]] lit ! over ;
+      : fp4a/swap A[ fp5a/swap ; ]] lit ! over ;
+      : fp4a/nop A[ fp5a/nop ; ]] lit ! ;
 
       : fp4a/add A[ fp5a/add ; ]] lit ! ;
       : fp4a/sub A[ fp5a/sub ; ]] lit ! ;
@@ -85,8 +103,8 @@ internal static class Node402Program
         ( e1 e2 )
 
         r---
-        !b
-        !b
+        >r !b	           // e1
+        r> !b           // e2
         fp4a/main ;
       """;
 }

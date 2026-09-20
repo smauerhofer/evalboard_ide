@@ -302,7 +302,7 @@ public sealed class NodeEditorViewModel : ObservableObject
 
   private static string BuildLabelGutterText(F18CompileResult? result, int baseAddress, int wordCount)
   {
-    Dictionary<int, string> labelsByAddress = F18Disassembler.BuildLabelsByAddress(result?.Symbols);
+    Dictionary<int, string> labelsByAddress = F18Disassembler.BuildLabelsByAddress(result?.Symbols, result?.ExternalSymbols);
     var lines = new List<string>(wordCount);
     for (int index = 0; index < wordCount; index++)
     {
@@ -320,7 +320,7 @@ public sealed class NodeEditorViewModel : ObservableObject
   // needed at all, since PortAddressNames.Format's own registry is global, not per-node.
   private static string BuildDisassemblyGutterText(string wordsText, int baseAddress, int wordCount, F18CompileResult? labelsFrom)
   {
-    Dictionary<int, string> labelsByAddress = F18Disassembler.BuildLabelsByAddress(labelsFrom?.Symbols);
+    Dictionary<int, string> labelsByAddress = F18Disassembler.BuildLabelsByAddress(labelsFrom?.Symbols, labelsFrom?.ExternalSymbols);
     List<string> tokens = Split(wordsText, wordCount);
     var lines = new List<string>(wordCount);
     for (int index = 0; index < wordCount; index++)

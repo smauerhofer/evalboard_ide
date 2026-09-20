@@ -49,7 +49,9 @@ public sealed class PostMortemNodeDetailViewModel
       IReadOnlyList<int>? compiledRamWords,
       IReadOnlyList<int>? compiledRomWords,
       IReadOnlyDictionary<string, F18ExportedSymbol>? compiledRamSymbols = null,
-      IReadOnlyDictionary<string, F18ExportedSymbol>? compiledRomSymbols = null)
+      IReadOnlyDictionary<string, F18ExportedSymbol>? compiledRomSymbols = null,
+      IReadOnlyDictionary<string, F18ExportedSymbol>? compiledRamExternalSymbols = null,
+      IReadOnlyDictionary<string, F18ExportedSymbol>? compiledRomExternalSymbols = null)
   {
     Snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
     string effectiveColor = string.IsNullOrWhiteSpace(snapshot.Color) ? projectDefaultColor : snapshot.Color;
@@ -62,8 +64,8 @@ public sealed class PostMortemNodeDetailViewModel
     ParameterStackRows = BuildStackRows(snapshot.ParameterStack, topLabels: ["T", "S"]);
     ReturnStackRows = BuildStackRows(snapshot.ReturnStack, topLabels: ["R"]);
 
-    RamRows = BuildWordRows(snapshot.Coordinate, snapshot.Ram, baseAddress: 0x000, compiledRamWords, compiledRamSymbols);
-    RomRows = BuildWordRows(snapshot.Coordinate, snapshot.Rom, baseAddress: 0x080, compiledRomWords, compiledRomSymbols);
+    RamRows = BuildWordRows(snapshot.Coordinate, snapshot.Ram, baseAddress: 0x000, compiledRamWords, compiledRamSymbols, compiledRamExternalSymbols);
+    RomRows = BuildWordRows(snapshot.Coordinate, snapshot.Rom, baseAddress: 0x080, compiledRomWords, compiledRomSymbols, compiledRomExternalSymbols);
 
     HasCompiledComparison = compiledRamWords is not null || compiledRomWords is not null;
   }
@@ -145,7 +147,8 @@ public sealed class PostMortemNodeDetailViewModel
       IReadOnlyList<int> words,
       int baseAddress,
       IReadOnlyList<int>? compiledWords,
-      IReadOnlyDictionary<string, F18ExportedSymbol>? compiledSymbols)
+      IReadOnlyDictionary<string, F18ExportedSymbol>? compiledSymbols,
+      IReadOnlyDictionary<string, F18ExportedSymbol>? compiledExternalSymbols = null)
   {
     IReadOnlyList<F18DisassembledWord> decoded = F18Disassembler.DisassembleImage(words, baseAddress);
 
@@ -162,7 +165,7 @@ public sealed class PostMortemNodeDetailViewModel
       }
     }
 
-    Dictionary<int, string> labelsByAddress = BuildLabelMap(compiledSymbols);
+    Dictionary<int, string> labelsByAddress = BuildLabelMap(compiledSymbols, compiledExternalSymbols);
 
     var rows = new List<PostMortemWordRow>(decoded.Count);
     // MayConsumeNextWordAsLiteral describes the NEXT word (the one a '@p'/'!p' in THIS word would
@@ -198,7 +201,12 @@ public sealed class PostMortemNodeDetailViewModel
   }
 
   // Shared with NodeEditorViewModel's own RAM/ROM display -- see F18Disassembler.BuildLabelsByAddress's
-  // own remarks for the "Word wins over Label" rule this now just delegates to.
-  private static Dictionary<int, string> BuildLabelMap(IReadOnlyDictionary<string, F18ExportedSymbol>? symbols) =>
-      F18Disassembler.BuildLabelsByAddress(symbols);
+  // own remarks for the "Word wins over Label" and "local wins over external" rules this now just
+  // delegates to. externalSymbols carries names this compile only RESOLVED (a cross-node import, or
+  // -- for RAM -- this same node's own ROM dictionary, automatically in scope), so a call to a
+  // ROM-resident routine like "clc" gets its "(clc)" annotation from there, not from symbols.
+  private static Dictionary<int, string> BuildLabelMap(
+      IReadOnlyDictionary<string, F18ExportedSymbol>? symbols,
+      IReadOnlyDictionary<string, F18ExportedSymbol>? externalSymbols = null) =>
+      F18Disassembler.BuildLabelsByAddress(symbols, externalSymbols);
 }

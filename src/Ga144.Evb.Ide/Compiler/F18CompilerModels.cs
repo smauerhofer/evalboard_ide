@@ -157,6 +157,21 @@ public sealed class F18CompileResult
   public required IReadOnlyList<int> Words { get; init; }
   public required IReadOnlyList<F18Diagnostic> Diagnostics { get; init; }
   public required IReadOnlyDictionary<string, F18ExportedSymbol> Symbols { get; init; }
+
+  /// <summary>
+  /// Every name this compile resolved through <c>_externalSymbols</c> rather than a colon-definition
+  /// or label compiled directly from this source: a genuine cross-node <c>import</c>, a RAM compile's
+  /// automatic access to this SAME node's own just-compiled ROM dictionary (<see cref="Symbols"/> only
+  /// ever holds the memory space actually being compiled, so a RAM compile's ROM-resident call targets
+  /// like "clc" live here, not there), or a built-in name (the documented multiport addresses, "warm"/
+  /// "cold"). Exposed separately from <see cref="Symbols"/> -- rather than merged into it -- because
+  /// <see cref="Exports"/> below must keep re-exporting only what THIS node's own source defines, never
+  /// what it merely imported or inherited from its own ROM; a disassembly label lookup
+  /// (<see cref="Compiler.F18Disassembler.BuildLabelsByAddress"/>) wants both together and takes this
+  /// as a separate argument for exactly that reason.
+  /// </summary>
+  public required IReadOnlyDictionary<string, F18ExportedSymbol> ExternalSymbols { get; init; }
+
   public required IReadOnlyDictionary<string, int> Constants { get; init; }
   public required F18MemorySpace MemorySpace { get; init; }
   public required int MemoryBaseAddress { get; init; }
@@ -290,6 +305,7 @@ public sealed class F18CompileResult
                 new F18SourceLocation(1, 1))
       ],
         Symbols = new Dictionary<string, F18ExportedSymbol>(StringComparer.OrdinalIgnoreCase),
+        ExternalSymbols = new Dictionary<string, F18ExportedSymbol>(StringComparer.OrdinalIgnoreCase),
         Constants = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase),
         MemorySpace = memorySpace,
         MemoryBaseAddress = memoryBaseAddress,

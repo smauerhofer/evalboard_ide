@@ -86,6 +86,8 @@ public sealed class PostMortemChipViewModel : ObservableObject
     IReadOnlyList<int>? compiledRomWords = null;
     IReadOnlyDictionary<string, F18ExportedSymbol>? compiledRamSymbols = null;
     IReadOnlyDictionary<string, F18ExportedSymbol>? compiledRomSymbols = null;
+    IReadOnlyDictionary<string, F18ExportedSymbol>? compiledRamExternalSymbols = null;
+    IReadOnlyDictionary<string, F18ExportedSymbol>? compiledRomExternalSymbols = null;
     if (_liveChip is not null && _romLibrary is not null)
     {
       try
@@ -96,6 +98,12 @@ public sealed class PostMortemChipViewModel : ObservableObject
         compiledRomWords = compiled.Rom.Success ? compiled.Rom.Words : null;
         compiledRamSymbols = compiled.Ram.Success ? compiled.Ram.Symbols : null;
         compiledRomSymbols = compiled.Rom.Success ? compiled.Rom.Symbols : null;
+        // ExternalSymbols carries names this node's compile only RESOLVED, not defined: a genuine
+        // import, or -- for RAM -- this same node's own just-compiled ROM dictionary, automatically
+        // in scope. Without it, a call to a ROM-resident routine (e.g. "clc") never got its
+        // "(clc)" annotation in the word view below, even though the name was known all along.
+        compiledRamExternalSymbols = compiled.Ram.Success ? compiled.Ram.ExternalSymbols : null;
+        compiledRomExternalSymbols = compiled.Rom.Success ? compiled.Rom.ExternalSymbols : null;
       }
       catch
       {
@@ -111,7 +119,9 @@ public sealed class PostMortemChipViewModel : ObservableObject
         compiledRamWords,
         compiledRomWords,
         compiledRamSymbols,
-        compiledRomSymbols);
+        compiledRomSymbols,
+        compiledRamExternalSymbols,
+        compiledRomExternalSymbols);
   }
 
   // Builds exactly 144 cells, one per coordinate, in the same descending-row/ascending-column order

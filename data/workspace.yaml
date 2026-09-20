@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-20T14:02:38.3055776
-      utcDateTime: 2026-09-20T14:02:38.3055776Z
-      localDateTime: 2026-09-20T16:02:38.3055776+02:00
+      dateTime: 2026-09-20T15:26:17.7079315
+      utcDateTime: 2026-09-20T15:26:17.7079315Z
+      localDateTime: 2026-09-20T17:26:17.7079315+02:00
       date: 2026-09-20T00:00:00.0000000
       day: 20
       dayOfWeek: Sunday
       dayOfYear: 263
-      hour: 14
-      millisecond: 305
-      microsecond: 577
-      nanosecond: 600
-      minute: 2
+      hour: 15
+      millisecond: 707
+      microsecond: 931
+      nanosecond: 500
+      minute: 26
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 38
-      ticks: 639255097583055776
-      utcTicks: 639255097583055776
-      timeOfDay: 14:02:38.3055776
+      second: 17
+      ticks: 639255147777079315
+      utcTicks: 639255147777079315
+      timeOfDay: 15:26:17.7079315
       year: 2026
   portB: 
   portC:
@@ -16951,6 +16951,15 @@ projects:
         # 0 org
 
 
+        : fp5a/swapc
+          ( H1 H2 L1 L2 )
+          over >r >r  drop
+          ( H1 H2 / L1 L2 )
+          over r> r>
+          ( H1 H2 H1 L2 L1 )
+        ;
+
+
         : fp5a/swap
           ( H1 H2 L1 L2 )
           >r >r 
@@ -16992,6 +17001,9 @@ projects:
 
 
       ramWords:
+      - 0x208BA
+      - 0x3AF9A
+      - 0x27555
       - 0x2E82A
       - 0x0AC9A
       - 0x0BA55
@@ -17002,10 +17014,7 @@ projects:
       - 0x01F02
       - 0x009B2
       - 0x13575
-      - 0x11407
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1140A
       - 0x15555
       - 0x15555
       - 0x15555
@@ -17057,7 +17066,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x007
+        entryPoint: 0x00A
         p: 0x000
         a: 0x000
         b: 0x000
@@ -17093,7 +17102,7 @@ projects:
         # 0 org
 
 
-        : fp4a/swapc A[ fp5a/swap ]] lit ! over ;
+        : fp4a/swapc A[ fp5a/swapc ]] lit ! over ;
 
 
         : fp4a/swap A[ fp5a/swap ; ]] lit ! over ;
@@ -17128,17 +17137,17 @@ projects:
       - 0x05A85
       - 0x13400
       - 0x05A85
-      - 0x11400
-      - 0x05A55
       - 0x11403
       - 0x05A55
-      - 0x11403
+      - 0x11406
       - 0x05A55
-      - 0x11403
+      - 0x11406
       - 0x05A55
-      - 0x11403
+      - 0x11406
       - 0x05A55
-      - 0x11403
+      - 0x11406
+      - 0x05A55
+      - 0x11406
       - 0x04B02
       - 0x00145
       - 0x01DA2
@@ -22221,22 +22230,74 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-    debuggerAssemblyCode: >+
-      pushlit 0x3FC0    ; hi(1.5)
+    debuggerAssemblyCode: >-
+      // Consecutive FSUB stress test.
 
-      pushlit 0x0000    ; lo(1.5)
+      //
 
-      fpop 0            ; fr[0] = 1.0
+      // fr0 starts at +1.0
 
-      pushlit 0xBF80    ; hi(-1.0)
+      // fr1 stays at +2.0
 
-      pushlit 0x0000    ; lo(-1.0)
+      //
 
-      fpop 1            ; fr[1] = 2.0
+      // Expected:
 
-      fadd 0 1          ; fr[0] = 1.0 + 2.0
+      //   1 - 2  = -1
+
+      //  -1 - 2  = -3
+
+      //  -3 - 2  = -5
+
+      //  -5 - 2  = -7
+
+      //  -7 - 2  = -9
+
+
+      pushlit 0x3F80    ; +1.0 = 0x3F800000
+
+      pushlit 0x0000
+
+      fpop 0
+
+
+      pushlit 0x4000    ; +2.0 = 0x40000000
+
+      pushlit 0x0000
+
+      fpop 1
+
+
+
+      fsub 0 1          ;  1 - 2 = -1
 
       fpush 0
+                        ; expect BF80 0000
+
+
+      fsub 0 1          ; -1 - 2 = -3
+
+      fpush 0
+                        ; expect C040 0000
+
+
+      fsub 0 1          ; -3 - 2 = -5
+
+      fpush 0
+                        ; expect C0A0 0000
+
+
+      fsub 0 1          ; -5 - 2 = -7
+
+      fpush 0
+                        ; expect C0E0 0000
+
+
+      fsub 0 1          ; -7 - 2 = -9
+
+      fpush 0
+                        ; expect C110 0000
+
 
       nop
 
@@ -22245,7 +22306,6 @@ projects:
       nop
 
       halt
-
   - role: Target
     name: Target GA144
     nodes:

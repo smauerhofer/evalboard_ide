@@ -86,6 +86,7 @@ public sealed class F18Compiler
       Words = Builder.CreateImage(ResolveUnwrittenRomFillWord()),
       Diagnostics = _diagnostics.ToArray(),
       Symbols = new Dictionary<string, F18ExportedSymbol>(_symbols, StringComparer.OrdinalIgnoreCase),
+      ExternalSymbols = new Dictionary<string, F18ExportedSymbol>(_externalSymbols, StringComparer.OrdinalIgnoreCase),
       Constants = new Dictionary<string, int>(_userConstants, StringComparer.OrdinalIgnoreCase),
       MemorySpace = _options.MemorySpace,
       MemoryBaseAddress = _options.MemoryBaseAddress,
