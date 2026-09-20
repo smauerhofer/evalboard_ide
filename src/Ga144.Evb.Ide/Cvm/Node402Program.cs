@@ -1,79 +1,59 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// Node 402's resident F18 source, verbatim from Stefan's 2026-09-16 paste -- the eighth of 17 new nodes
-/// in this batch. Per its own header: "CVM2 node 402. VM 32 bit floatingpoint stage 4a node. exponent
-/// handling" -- continuing the control branch <see cref="Node403Program"/> began (403 controls 402, and
-/// this node in turn imports from and controls node 401, via the identical
-/// "<c>A[ fp5a/word ; ]] lit !</c>" remote-dispatch idiom node 403 used for IT).
+/// Node 402's resident F18 source. Originally pasted 2026-09-16 with a variable-length input protocol
+/// (<c>ee0</c> / <c>eecd</c>), a stale header line ("read sign &amp; types from node 302" -- the actual
+/// fields were always exponents, not sign/type), an <c>fp4a/gt</c> comparison word, and a body that read a
+/// compare-request flag, conditionally selected between the exponent delta and a mantissa comparison read
+/// from node 401, and sent the result on.
 ///
-/// <b>FLAGGED: the header's own prose is inconsistent with its own field list.</b> Point 1 says "read
-/// sign &amp; types from node 302," but the <c>in:</c> lines that follow describe EXPONENT data
-/// (<c>ee0</c>, <c>eecd</c>), not sign/type -- likely stale prose copied from elsewhere and not updated;
-/// reproduced exactly as pasted, not corrected.
-///
-/// <b>What the body appears to do (worked out from the two input shapes and the branch structure, not
-/// spelled out this plainly by Stefan):</b> the two <c>in:</c> lines describe TWO possible shapes of the
-/// same incoming message from node 302 -- <c>ee0</c> (exponent pair plus a literal 0) when no exponent-
-/// vs-mantissa compare is needed, or <c>eecd</c> (exponent pair, a nonzero compare-request flag, and the
-/// exponent delta) when it is. <c>fp4a/main</c> reads the shared <c>ee</c> prefix, then reads and tests
-/// the third word as the compare flag; when it's the literal 0 from the <c>ee0</c> shape, the single-armed
-/// `if` skips the whole compare block and (per this dialect's own apparent "if doesn't consume the tested
-/// value" behavior, already inferred in <see cref="Node301Program"/>'s own remarks) that same 0 is left
-/// on the stack, conveniently doubling as an already-correct "not greater" comparison result. When the
-/// flag IS set, the node reads the exponent delta, and picks between it and a mantissa-comparison value
-/// read from node 401 (`left`, per <c># left /a`) depending on whether the exponent delta is zero --
-/// exactly the "compare exponent first, mantissa only as a tie-breaker" shape node 302's own pipeline
-/// stage already established. <c>fp4a/gt</c> then converts whichever value won into the same 0/<c>0x8000</c>
-/// flag convention used throughout this pipeline.
-///
-/// <b>FLAGGED, not resolved: <c>fp4a/swap</c>/<c>fp4a/nop</c>/<c>fp4a/add</c>/<c>fp4a/sub</c>/
-/// <c>fp4a/mul</c>/<c>fp4a/div</c> are defined here (mirroring node 403's own identical six, this time
-/// forwarding to node 401's <c>fp5a/*</c> exports) but are never called anywhere in this pasted
-/// <c>fp4a/main</c>.</b> Given node 403's own header ("wait for instructions on right") clearly implies
-/// this node is meant to receive and act on the operation address node 403 sends it, either the dispatch
-/// happens through a mechanism this source doesn't show (a receive-and-<c>ex</c> step this paste omits,
-/// possibly the very thing <c>r---</c> below stands in for), or something else. Not guessed at further.
-///
-/// <b>FLAGGED, not resolved: <c>r---</c>.</b> Appears alone, mid-<c>fp4a/main</c>, right after a stack
-/// comment showing three live values (<c>e1 e2 comp</c>) and right before the two port writes that only
-/// account for TWO of them (matching the header's own "out: ee" -- just e1/e2). Not a token this project
-/// has seen anywhere before (its shape doesn't resemble any other F18 word seen so far, including the
-/// dash-suffixed relay directives like <c>---u</c> this project HAS seen, though the resemblance is
-/// noted). Whether it disposes of `comp` some other way, is where the missing instruction-dispatch from
-/// the paragraph above actually happens, or is an incomplete/stubbed line, is not stated by Stefan and is
-/// not guessed at here.
-///
-/// <b>Other observations, flagged rather than resolved:</b> the bare <c>..</c> token appears again
-/// (after <c>left a!</c>, near the very top of <c>fp4a/main</c>) -- its fifth appearance across this
-/// batch so far. <c>fp4a/nop</c>'s own body has a trailing <c>over</c> that its five siblings
-/// (<c>fp4a/swap</c>/<c>add</c>/<c>sub</c>/<c>mul</c>/<c>div</c>) don't share -- reproduced as pasted, not
-/// resolved. <c>fp4a/gt</c> restates the same three-way sign comparison as node 302's own <c>fp4/gt</c>,
-/// but structured with a proper `-if`/`else`/`if`/`then`/`then` nesting instead of two sibling `if`
-/// blocks -- a different but equivalent shape, not treated as an inconsistency.
+/// <b>REPLACED, 2026-09-20, with Stefan's own final version</b> -- rewritten in the same direction as
+/// <see cref="Node401Program"/>'s own same-day rewrite (which lost its own comparison-selection logic):
+/// <list type="bullet">
+/// <item>Header prose fixed: "read sign &amp; types from node 302" -&gt; "read exponents from node 302" --
+/// a real correction of the stale wording the original draft's own remarks had flagged, not just a
+/// rewording. Protocol simplified to a single fixed shape, <c>in: ee {from node 302}</c> (down from the
+/// two variable <c>ee0</c>/<c>eecd</c> shapes); <c>out: ee {to node 502}</c> unchanged.</item>
+/// <item><c>fp4a/gt</c> removed entirely -- the whole three-way sign-comparison word is gone.</item>
+/// <item>New word <c>fp4a/swapc</c> (<c>A[ fp5a/swap ]] lit !</c>, no <c>;</c> inside the brackets --
+/// distinct from <c>fp4a/swap</c>'s own <c>A[ fp5a/swap ; ]] lit !</c>, which does have one). This exists
+/// specifically so <see cref="Node403Program"/>'s own <c>fp3a/add</c> can dispatch through it instead of
+/// plain <c>fp4a/swap</c>/<c>fp3a/swap</c> -- confirmed by node 403's own matching 2026-09-20 change (its
+/// "normalize so |1| &gt;= |2|" block now calls <c>A[ fp4a/swapc ]] lit !</c> where it used to call
+/// <c>A[ fp4a/swap ]] lit !</c>).</item>
+/// <item><c>fp4a/main</c> simplified to match node 401: reads <c>e1 e2</c> and relays them straight
+/// through -- no more <c>left a!</c>, no compare flag, no <c>fp4a/gt</c> call, no read from node 401.</item>
+/// <item><b>Likely bugfix:</b> <c>fp4a/main</c> now opens with <c>up b!</c> before its two <c>@b</c> reads.
+/// The prior draft never reset B back to <c>up</c> -- since the body's own tail leaves B pointed at
+/// <c>down</c> (for the final <c>!b !b</c> writes) and the word tail-calls itself, every iteration AFTER
+/// the first would have read <c>e1</c>/<c>e2</c> from the wrong port (node 502, not node 302). The new
+/// <c>up b!</c> at the top of the loop resets B to the input port on every pass, closing what looks like a
+/// real "only works on the first call" bug in the original draft.</item>
+/// </list>
+/// <c>fp4a/nop</c>'s own unexplained trailing <c>over</c> is unchanged, and the <c>r---</c> token stays in
+/// the same structural position, same open question as before.
 ///
 /// <b>NOT YET added to <see cref="CvmNodeMesh"/> or <see cref="CvmBootStreamBuilder"/>, and NOT wired
-/// into the CVM instruction set</b> -- same reasoning as its siblings, and this node's own missing
-/// dispatch mechanism (above) is reason enough on its own to hold off.
+/// into the CVM instruction set</b> -- deferred pending Stefan's own go-ahead for this whole pipeline.
 /// </summary>
 internal static class Node402Program
 {
-  /// <summary>The node this program is always deployed to -- CVM2's new 32-bit floating-point pipeline, stage 4a (exponent handling, controls node 401), added 2026-09-16.</summary>
+  /// <summary>The node this program is always deployed to -- CVM2's 32-bit floating-point pipeline, stage 4a (exponent relay, controls node 401), added 2026-09-16, rewritten 2026-09-20.</summary>
   public const int Coordinate = 402;
 
   /// <summary>
-  /// Node 402's full resident F18 source, verbatim from Stefan's 2026-09-16 paste. The unresolved
-  /// <c>r---</c> and <c>..</c> tokens noted in this class's own remarks above are reproduced exactly as
-  /// pasted, not corrected.
+  /// Node 402's full resident F18 source, verbatim from Stefan's 2026-09-20 paste (his final,
+  /// simplified rewrite -- see this class's own remarks above for what changed from the original
+  /// 2026-09-16 draft and why). The unresolved <c>r---</c> token and <c>fp4a/nop</c>'s own trailing
+  /// <c>over</c> are reproduced exactly as pasted, not corrected.
   /// </summary>
   public const string Source = """
       ( CVM2 node 402. VM 32 bit floatingpoint stage 4a node. exponent handling )
       (
-      1. read sign & types from node 302
+      1. read exponents from node 302
       2. wait for instructions on right
 
-        in: ee0     {from node 302}
-        in: eecd    {from node 302}
+        in: ee      {from node 302}
         out: ee     {to node 502}
       )
       # 401 import
@@ -84,15 +64,7 @@ internal static class Node402Program
 
       # 0 org
 
-      : fp4a/gt ( d-c )
-        -if                    // d < 0
-          drop 0
-        else                   // d >= 0
-          if                   // d > 0
-            drop 0x8000
-          then                 // d = 0 leaves zero
-        then
-      ;
+      : fp4a/swapc A[ fp5a/swap ]] lit ! ;
 
       : fp4a/swap A[ fp5a/swap ; ]] lit ! ;
       : fp4a/nop A[ fp5a/nop ; ]] lit ! over ;
@@ -103,30 +75,18 @@ internal static class Node402Program
       : fp4a/div A[ fp5a/div ; ]] lit ! ;
 
       : fp4a/main
-        @b @b
-        left a! ..
-
-        @b if                  // compare required
-          drop                  // discard compare-request flag
-
-          @b                    // exponent delta
-
-          if                    // exponent delta != 0
-            @ drop              // discard mantissa comparison
-          else
-            drop @              // exponent equal: use mantissa comparison
-          then
-
-          fp4a/gt               // -> 0 or 0x8000
-        then
-
-        down a!
-        ( e1 e2 comp )
-
-        r---
+        up b!
+        @b
+        ( e1 )
+        @b
+        ( e1 e2 )
 
         down b!
-        !b !b
+        ( e1 e2 )
+
+        r---
+        !b
+        !b
         fp4a/main ;
       """;
 }

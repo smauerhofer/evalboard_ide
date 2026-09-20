@@ -68,6 +68,17 @@ namespace Ga144.Evb.Ide.Cvm;
 /// every sibling so far -- once node 402's own source is in hand, these two may be ready to add to the
 /// mesh/boot order together, parent-before-child per this project's usual convention. Held for now since
 /// node 402 hasn't been pasted yet.
+///
+/// <b>UPDATED, 2026-09-20.</b> Two changes from a side-by-side comparison against what was on file:
+/// <list type="bullet">
+/// <item>Header gained a "c: magnitude compare result" block documenting the single-word <c>c</c> channel
+/// (<c>0x8000</c> = f1 &gt; f2, <c>0</c> = f1 &lt;= f2) -- the same addition made to
+/// <see cref="Node302Program"/>/<see cref="Node303Program"/>'s own headers, no code change.</item>
+/// <item><c>fp3a/add</c>'s own "normalize so |1| &gt;= |2|" block now dispatches through
+/// <see cref="Node402Program"/>'s new <c>fp4a/swapc</c> (<c>A[ fp4a/swapc ]] lit !</c>) instead of the
+/// plain <c>fp4a/swap</c> it used before -- this is the confirmation for node 402's own otherwise-
+/// unexplained new word: it exists specifically to be called from here.</item>
+/// </list>
 /// </summary>
 internal static class Node403Program
 {
@@ -75,7 +86,9 @@ internal static class Node403Program
   public const int Coordinate = 403;
 
   /// <summary>
-  /// Node 403's full resident F18 source, verbatim from Stefan's 2026-09-16 paste.
+  /// Node 403's full resident F18 source, verbatim from Stefan's 2026-09-16 paste, updated 2026-09-20
+  /// with the header's "c" documentation and the <c>fp4a/swapc</c> dispatch change (see this class's own
+  /// remarks above).
   /// </summary>
   public const string Source = """
       ( CVM2 node 403. VM 32 bit floatingpoint stage 3a node. sign & type handling )
@@ -88,6 +101,10 @@ internal static class Node403Program
         For add/sub on output:
             |operand1| >= |operand2|
             s1,s2 are effective signs
+
+        c: magnitude compare result
+          0x8000 : f1 >  f2
+          0      : f1 <= f2
       )
 
       # 402 import
@@ -162,7 +179,7 @@ internal static class Node403Program
         0x8000 xor       // 8000 => swap, 0 => keep order
         dup >r
         if
-          A[ fp4a/swap ]] lit !
+          A[ fp4a/swapc ]] lit !
         then
         drop
 

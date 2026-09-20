@@ -50,6 +50,24 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <b>NOT YET added to <see cref="CvmNodeMesh"/> or <see cref="CvmBootStreamBuilder"/>, and NOT wired
 /// into the CVM instruction set</b> -- same reasoning as its siblings, plus the open jump-table-addressing
 /// question above.
+///
+/// <b>UPDATED, 2026-09-20,</b> per a side-by-side comparison against what was on file plus Stefan's own
+/// direct confirmations:
+/// <list type="bullet">
+/// <item><c>fp7/zero</c>/<c>fp7/inf</c> refactored into a shared <c>fp7/zeroinfo ( s mask - )</c> (preserve
+/// sign, discard the calculated e/h/l, fall through -- no <c>;</c> -- into a new word
+/// <c>fp7/sendx00</c> that stores the mask as <c>e</c> and zero for <c>h</c>/<c>l</c>); <c>fp7/zero</c>/
+/// <c>fp7/inf</c> become one-liners calling it with <c>0</c>/<c>0xff</c>. Same output as the two
+/// independent bodies this replaces.</item>
+/// <item><c>fp7/pass</c>'s "e &gt;= 255 -&gt; infinity" branch lost its <c>drop drop // comparison,
+/// original e</c> (the two values left over from the earlier <c>-if</c> test). Per Stefan directly: "the 2
+/// drops were unnecessary" -- a confirmed, deliberate optimization, not a bug. (The leftover values are
+/// harmless here because nothing downstream ever pops back far enough to reach them before they cycle out
+/// of the ring on later pushes.)</item>
+/// <item><c>fp7/main</c>: <c>dup 0x4000 and</c> -&gt; <c>dup 0x4000 . and</c> -- the bare <c>.</c> token
+/// appears in a new position (immediately before <c>and</c>, not before a <c>+</c> as in every other
+/// sighting across this batch). Not resolved; reproduced exactly as pasted.</item>
+/// </list>
 /// </summary>
 internal static class Node504Program
 {
@@ -57,9 +75,9 @@ internal static class Node504Program
   public const int Coordinate = 504;
 
   /// <summary>
-  /// Node 504's full resident F18 source, verbatim from Stefan's 2026-09-16 paste. The unresolved
-  /// <c>.</c>/<c>..</c> tokens noted in this class's own remarks above are reproduced exactly as pasted,
-  /// not corrected.
+  /// Node 504's full resident F18 source, verbatim from Stefan's 2026-09-20 paste (updated from the
+  /// original 2026-09-16 paste -- see this class's own remarks above for what changed and why). The
+  /// unresolved <c>.</c>/<c>..</c> tokens are reproduced exactly as pasted, not corrected.
   /// </summary>
   public const string Source = """
       ( CVM2 node 504. VM 32 bit floatingpoint stage 7 node. final values )
@@ -94,12 +112,28 @@ internal static class Node504Program
         r> !                   // l
       ;
 
+      : fp7/zeroinfo ( s mask  - )
+        >r
+        !                      // preserve sign
+        @b @b @b               // discard calculated e,h,l
+        r>
+       : fp7/sendx00
+        !
+        0 !                    // h
+        0 !                    // l
+      ;
+
+      : fp7/zero ( s - )
+        0 fp7/zeroinfo ;
+
+
+      : fp7/inf ( s - )
+        0xff fp7/zeroinfo ;
 
       : fp7/pass ( s - )
         !                      // final sign
 
         @b                     // e
-
         // finite overflow?
         //
         // e - 255 < 0 => e < 255
@@ -129,44 +163,20 @@ internal static class Node504Program
           drop
 
           // H=L=0
-
-          0 !                  // e
-          0 !                  // h
-          0 !                  // l
-          ;
+         0
+         fp7/sendx00
+         ;
         then
 
         // e >= 255 -> infinity
 
-        drop drop              // comparison, original e
         @b @b                  // discard calculated h,l
 
-        0xff !                 // e
-        0 !                    // h
-        0 !                    // l
+        0xff
+        fp7/sendx00
       ;
 
 
-      : fp7/zero ( s - )
-        !                      // preserve sign
-
-        @b @b @b               // discard calculated e,h,l
-
-        0 !                    // e
-        0 !                    // h
-        0 !                    // l
-      ;
-
-
-      : fp7/inf ( s - )
-        !                      // preserve sign
-
-        @b @b @b               // discard calculated e,h,l
-
-        0xff !                 // e
-        0 !                    // h
-        0 !                    // l
-      ;
 
 
       : fp7/qnan ( s - )
@@ -186,38 +196,74 @@ internal static class Node504Program
 
 
       : fp7/main
-        @b                     // k
-
+        @b
+        ( k )
         // k=4 = ADD/SUB with both operands infinity.
         // bit14 of sign resolves Inf versus qNaN.
 
         dup 4 xor
+        ( k k^4 )
+
         if
+          // k != 4
+          ( k k^4 )
+
           drop
-          >r                    // dispatch k
-          @b                    // s
+          ( k )
+
+          >r
+          ( / k )
+
+          @b
+          ( s / k )
+
         else
-          drop drop             // comparison, k
+          // k = 4
+          // zero test value is still on stack.
+          ( k 0 )
 
-          @b                    // packed sign
+          drop drop
+          ( )
 
-          dup 0x4000 and
+          @b
+          ( packed-s )
+
+          dup 0x4000 . and
+          ( packed-s sign-different )
+
           if
+            // effective signs differ:
+            // Inf + -Inf or effective Inf - Inf -> qNaN
+            ( packed-s sign-different )
+
             drop
-            3 >r                // opposite effective signs -> qNaN
+            ( packed-s )
+
+            3 >r
+            ( packed-s / 3 )
+
           else
+            // effective signs equal -> infinity
+            ( packed-s 0 )
+
             drop
-            2 >r                // same effective sign -> infinity
+            ( packed-s )
+
+            2 >r
+            ( packed-s / 2 )
+
           then
         then
 
-        0x8000 and             // remove temporary bit14
+        ( s / dispatch )
 
-        ex
+        0x8000 and
+        ( s / dispatch )       // only real IEEE sign remains
+
+        ex                     // dispatch fp7/pass/zero/inf/qnan
 
         fp7/main
       ;
-
 
       # 0 org
 

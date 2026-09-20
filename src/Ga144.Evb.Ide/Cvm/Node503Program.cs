@@ -46,6 +46,17 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <b>NOT YET added to <see cref="CvmNodeMesh"/> or <see cref="CvmBootStreamBuilder"/>, and NOT wired
 /// into the CVM instruction set</b> -- same reasoning as its siblings: this branch isn't complete without
 /// node 502 (imported here but not yet pasted).
+///
+/// <b>FLAGGED, 2026-09-20 -- NOT confirmed by Stefan, applied as pasted anyway.</b> A side-by-side
+/// comparison against what was on file found exactly one difference: <c>fp3b/main</c>'s opening line
+/// changed from <c>up b!</c> to <c>up a!</c>. The ORIGINAL <c>up b!</c> was this file's own only
+/// deliberate-looking override of a port register's declared default (<c># down /b</c>) -- the working
+/// theory being that <c># down /b</c> itself was a stale directive and <c>up b!</c> silently fixed it.
+/// <c>up a!</c> does not fix anything: A's own directive default is already <c># up /a</c>, so this new
+/// line is a pure no-op, and B is left at its declared <c>down</c> default for the five <c>@b</c> reads
+/// that follow -- the opposite of what the file arranged before. This looks more like an accidental slip
+/// (an easy one, given <c>up a!</c>/<c>up b!</c> differ by one character) than an intentional change, but
+/// Stefan has not confirmed either way, so it is reproduced exactly as pasted rather than reverted.
 /// </summary>
 internal static class Node503Program
 {
@@ -53,9 +64,9 @@ internal static class Node503Program
   public const int Coordinate = 503;
 
   /// <summary>
-  /// Node 503's full resident F18 source, verbatim from Stefan's 2026-09-16 paste. The <c>up b!</c>
-  /// override of the node's own <c># down /b</c> directive, noted in this class's own remarks above, is
-  /// reproduced exactly as pasted, not corrected.
+  /// Node 503's full resident F18 source, verbatim from Stefan's 2026-09-16 paste, updated 2026-09-20 with
+  /// the (unconfirmed, possibly accidental -- see this class's own remarks above) <c>up b!</c> -&gt;
+  /// <c>up a!</c> change in <c>fp3b/main</c>.
   /// </summary>
   public const string Source = """
       ( CVM2 node 503. VM 32 bit floatingpoint stage 3b node. implement add and multiply )
@@ -84,7 +95,7 @@ internal static class Node503Program
       : fp3b/swap A[ ; ]] lit ! ;
 
 
-      : fp3b/main up b!
+      : fp3b/main up a!
         @b dup ! >r // o
         @b !        // t1
         @b !        // t2

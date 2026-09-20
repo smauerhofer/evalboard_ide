@@ -160,6 +160,24 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointLn2Mnemonic</c>'s own remarks for the full
 /// derivation and <c>Ga144.Evb.Ide.Services.CvmAssemblyLanguage.NodeResolvedEmbeddedValueFieldLayoutByMnemonic</c>
 /// for the resolution wiring.
+///
+/// <b>CORRECTED AGAIN, 2026-09-20, per Stefan's own side-by-side comparison against this file and his
+/// direct confirmation of both changes below.</b> Two fixes to the 2026-09-17 source above, both
+/// confirmed as genuine bugfixes (not stylistic):
+/// <list type="bullet">
+/// <item>The BINARY branch's own inline operand extraction was missing the register-index doubling
+/// every other extraction in this file already applies (<c>fpr/begin</c>'s own <c>dup 7 and 2* a!</c>):
+/// <c>drop dup 7 and dup &gt;r a!</c> -&gt; <c>drop dup 7 and 2* dup &gt;r a!</c> for <c>fff</c>, and
+/// <c>2/ 2/ 2/ dup 7 and &gt;r</c> -&gt; <c>2/ 2/ 2/ dup 7 and 2* &gt;r</c> for <c>ggg</c>. Without the
+/// <c>2*</c>, <c>A</c> was set to the bare 3-bit register index instead of the correct WORD offset into
+/// the register file (each of the four registers is a 2-word low/high pair, so register <c>i</c> lives
+/// at word offset <c>2*i</c>) -- every binary op (<c>fadd</c>/<c>fsub</c>/<c>fmin</c>/<c>fmax</c>/
+/// <c>fmul</c>/<c>fdiv</c>) was addressing the wrong word for both its operands.</item>
+/// <item>The constant-lookup branch's trailing store reverts from <c>! !</c> back to <c>!+ !</c>: per
+/// Stefan directly, "node 306 '!+ !' was a bugfix" -- the 2026-09-17 remarks above, which described the
+/// change FROM <c>!+ !</c> TO <c>! !</c> as the correction, had it backwards. <c>!+ !</c> (store with
+/// increment, then store) is the correct sequence; <c>! !</c> was itself the bug.</item>
+/// </list>
 /// </summary>
 internal static class Node306Program
 {
@@ -217,6 +235,14 @@ internal static class Node306Program
   /// changed from <c>!+ !</c> (store-with-increment then store) to <c>! !</c> (two plain stores), and an
   /// inline stack comment <c>( h l / f )</c> was added. Reproduced exactly; not interpreted here.</item>
   /// </list>
+  ///
+  /// <b>CORRECTED AGAIN, 2026-09-20,</b> per Stefan's own confirmation of two bugfixes (see this class's
+  /// own remarks above for the full derivation): the binary branch's operand extraction now doubles
+  /// the masked register index (<c>2*</c>) before loading it into <c>A</c>, for BOTH <c>fff</c> and
+  /// <c>ggg</c> -- matching <c>fpr/begin</c>'s own already-correct <c>dup 7 and 2* a!</c> pattern, which
+  /// this inlined copy had been missing; and the constant branch's trailing store reverts from <c>! !</c>
+  /// back to <c>!+ !</c>, per Stefan directly ("node 306 '!+ !' was a bugfix") -- the 2026-09-17 change
+  /// away from it, described above, was itself the bug.
   /// </summary>
   public const string Source = """
       ( CVM2 node 306. VM 32 bit floatingpoint register node, 1101_11??_????_???? )
@@ -273,9 +299,9 @@ internal static class Node306Program
           left b!
           // binary
           ( x y )
-          drop dup 7 and dup >r a!
+          drop dup 7 and 2* dup >r a!
           ( x / f )
-          2/ 2/ 2/ dup 7 and >r
+          2/ 2/ 2/ dup 7 and 2* >r
           ( x / f g )
           2/ 2/ 2/ 7 and
           ( o / f g )
@@ -292,7 +318,7 @@ internal static class Node306Program
           fpr/begin a >r a!
           @+ @
           ( h l / f )
-          r> a! ! !
+          r> a! !+ !
           ;
         then // 1101_1100_????_????
         fpr/begin >r ;

@@ -1,80 +1,152 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// Node 304's resident F18 source, verbatim from Stefan's 2026-09-16 paste -- the second of 17 new nodes
-/// in this same batch (see <see cref="Node305Program"/>'s own remarks for the first). Per this source's
-/// own header: "CVM2 node 304. VM 32 bit floatingpoint stage 2 node. rearrange data stream and collect
-/// return value" -- stage 2 of the same multi-stage pipeline node 305 began (stage 1).
+/// Node 304's resident F18 source. Originally pasted 2026-09-16 as a pure rearrange/collect worker: node
+/// 305 sent each operand already classified (a 5-field <c>otsehl</c> record per float, type included), and
+/// this node's own <c>fp2/order</c> just reordered the two types (and everything else) into the grouped-
+/// by-field shape node 303 expects.
 ///
-/// <b>This header is the first place this project has an explicit statement of this pipeline's own mesh
-/// wiring</b> (previously only inferred): node 304 receives its main input from node 305
-/// (<c>in: otsehltsehl {from node 305}</c>, over port B -- <c># right /b</c> on this node's own side, so
-/// node 305 sits on node 304's own RIGHT), sends its main output onward to node 303
-/// (<c>out: ottsseehhll {to node 303}</c>, over port A -- <c># left /a</c>, so node 303 sits on node
-/// 304's own LEFT), and has a SEPARATE return path: it receives a return value from node 404
-/// (<c>return in: sehl {from node 404}</c>, over the same port A redirected to <c>up</c> inside
-/// <c>fp2/return</c> -- consistent with node 404 being node 304's vertical, same-column neighbor) and
-/// relays that return value onward to node 305 (<c>return out: sehl {to node 305}</c>, over port B,
-/// the same physical link used for the main input -- a single bidirectional connection to 305, not two
-/// separate ports). This confirms node 305's own previously-flagged <c>up a!</c> (see
-/// <see cref="Node305Program"/>'s own remarks) is very likely just the standard directional port word
-/// <c>up</c>, the vertical counterpart to the <c>left</c>/<c>right</c> words this mesh already uses --
-/// not an undefined variable -- though which of node 305's own two ports it corresponds to is still not
-/// stated by this pair of sources alone. Like node 305, this source has NO <c># import</c> directive and
-/// never calls <c>k/pop</c>/<c>k/push</c>/<c>k/leave</c> -- it is a pure port-protocol worker, not part
-/// of the existing CVM tag-dispatch tree.
+/// <b>REPLACED, 2026-09-20, with Stefan's own final version</b> -- rewritten in lockstep with
+/// <see cref="Node305Program"/>'s own same-day rewrite, which dropped its "type" classification entirely.
+/// This node now ABSORBS that responsibility instead:
+/// <list type="bullet">
+/// <item>Input protocol shrank to match: <c>in: otsehltsehl {from node 305}</c> (11 fields, type
+/// pre-included) became <c>in: osehlsehl {from node 305}</c> (9 fields, no type at all).</item>
+/// <item><c>fp2/order</c> is gone. In its place: <c>fp2/fold</c> and <c>fp2/or</c> -- word-for-word the
+/// same two words <see cref="Node305Program"/>'s OLD draft used to have as <c>fp1/fold</c>/<c>fp1/or</c> --
+/// plus a new <c>fp2/calct ( l h e - l h e t )</c>, a faithful port of the classification branch that used
+/// to live inside node 305's own <c>fp1/decompose</c> (same normal/NaN-with-qNaN-vs-sNaN/infinity/
+/// subnormal/zero cases, same type codes 0x00/0x04/0x0c/0x02/0x00/0x01), restructured to return
+/// <c>(l h e t)</c> on the stack instead of writing straight to memory. The new header's added
+/// "calculate type" table is the exact table that used to sit in node 305's own header and is gone from
+/// there now.</item>
+/// <item><c>fp2/main</c> rewritten to call <c>fp2/calct</c> itself (once per operand, on the raw
+/// <c>l h e</c> it just read) rather than relaying an already-computed type -- same final output shape
+/// (<c>ottsseehhll</c>, unchanged) built from raw fields instead of a passed-through classification.</item>
+/// <item>Port directive default changed, <c># left /a</c> -&gt; <c># up /a</c> -- cosmetic only: the body
+/// still explicitly does <c>left a!</c> at the top of <c>fp2/main</c> and <c>up a!</c> at the top of
+/// <c>fp2/return</c>, exactly as before, so this default is never actually relied on.</item>
+/// </list>
+/// <c>fp2/return</c>'s own missing closing <c>;</c> (falling through into <c>fp2/main</c>) is unchanged
+/// from the original draft -- still not explained, still reproduced as pasted.
 ///
-/// <c>fp2/order</c> reorders the two decomposed floats node 305 hands it -- grouped by field across both
-/// numbers instead of grouped by number (<c>otsehltsehl</c> in, <c>ottsseehhll</c> out: <c>o</c>, then
-/// both types, both signs, both exponents, both mantissa-highs, both mantissa-lows) -- matching this
-/// node's own header exactly.
-///
-/// <b>FLAGGED, not silently resolved: <c>fp2/return</c>'s own definition has no closing <c>;</c></b> --
-/// it flows directly into the next colon definition, <c>fp2/main</c>. Unlike node 306's/308's own
-/// <c>leap</c>/<c>then</c> fallthrough (an explicit, if unexplained, pair of words), this is simply a
-/// colon definition with nothing before the next <c>:</c> -- the same bare "missing semicolon" shape as
-/// node 305's own <c>fp1/fold</c> (see <see cref="Node305Program"/>'s own remarks), now seen a second
-/// time. Reproduced exactly as pasted, not corrected with an inferred <c>;</c>.
+/// This move (classification 305 -&gt; 304) is corroborated by the first real hardware trace of this
+/// pipeline (Stefan's "first hardware test with FP" Core Dump, 2026-09-19), which only ever pushed plain
+/// finite floats (1.0, -2.0, -3.0) -- consistent with node 305 no longer needing to classify anything.
 ///
 /// <b>NOT YET added to <see cref="CvmNodeMesh"/> or <see cref="CvmBootStreamBuilder"/>, and NOT wired
-/// into the CVM instruction set</b> -- same reasoning as <see cref="Node305Program"/>: this is a
-/// port-protocol worker with no dispatched opcode of its own, and its role only makes sense once the
-/// rest of this pipeline (the remaining nodes in Stefan's 17-node batch) is known.
+/// into the CVM instruction set</b> -- deferred pending Stefan's own go-ahead for this whole pipeline.
 /// </summary>
 internal static class Node304Program
 {
-  /// <summary>The node this program is always deployed to -- CVM2's new 32-bit floating-point pipeline, stage 2 (rearrange/collect), added 2026-09-16.</summary>
+  /// <summary>The node this program is always deployed to -- CVM2's 32-bit floating-point pipeline, stage 2 (rearrange/collect, now also classifies operand type), added 2026-09-16, rewritten 2026-09-20.</summary>
   public const int Coordinate = 304;
 
   /// <summary>
-  /// Node 304's full resident F18 source, verbatim from Stefan's 2026-09-16 paste. The missing
-  /// <c>;</c> on <c>fp2/return</c> noted in this class's own remarks above is reproduced exactly as
-  /// pasted, not corrected.
+  /// Node 304's full resident F18 source, verbatim from Stefan's 2026-09-20 paste (his final rewrite --
+  /// see this class's own remarks above for what changed from the original 2026-09-16 draft and why).
+  /// The missing <c>;</c> on <c>fp2/return</c> is reproduced exactly as pasted, not corrected.
   /// </summary>
   public const string Source = """
       ( CVM2 node 304. VM 32 bit floatingpoint stage 2 node. rearrange data stream and collect return value )
       (
-        in: otsehltsehl   {from node 305}
+        in: osehlsehl   {from node 305}
         out: ottsseehhll  {to node 303}
 
         return in:  sehl  {from node 404}
         return out: sehl  {to node 305}
+
+      calculate type:
+            t = 0x00   finite nonzero
+            t = 0x01   zero
+            t = 0x02   infinity
+            t = 0x04   qNaN
+            t = 0x0c   sNaN       // NAN bit + signaling bit
+
+
+
       )
 
       entry fp2/main
       # right /b
-      # left /a
+      # up /a
 
       # 0 org
 
 
-      : fp2/order ( o t1 - t1 t2 o )
-        @b                    // o t1 t2
+      : fp2/fold ( lh-lhf) over over 0x7f and
+      : fp2/or ( ab-c) >r inv r> inv and inv ;
 
-        >r over r>            // o t1 o t2
-        over >r >r drop r> r>
-                               // ... t1 t2 o
-      ;
+      : fp2/calct ( l h e - l h e t )
+        ( l h e )
+
+        if // exp != 0
+
+          dup 0xff xor
+          if // normal
+            dup xor                      // t = 0
+            ( l h e 0 )
+            ;
+          then
+
+          ( l h 0xff 0 )
+          drop drop
+          ( l h )
+
+          // NaN or infinity
+          fp2/fold
+          ( l h f )
+
+          if // NaN
+            drop
+            ( l h )
+
+            // h bit6 = quiet bit
+            //
+            // qNaN: h&40 = 40 -> 8 xor 0c = 04
+            // sNaN: h&40 = 00 -> 0 xor 0c = 0c
+
+            dup 0x40 and
+            2/ 2/ 2/
+            0x0c xor
+
+            >r 0xff r>
+            ( l h e t )
+            ;
+          then
+
+          // infinity
+          drop
+          0xff 0x02
+          ( l h e t )
+          ;
+        then
+
+        // exponent = 0
+
+        drop
+        fp2/fold
+        ( l h f )
+
+        if // subnormal
+          drop
+          ( l h )
+
+          dup dup xor                  // e = 0
+          dup                          // t = 0
+
+          ( l h 0 0 )
+          ;
+        then
+
+        // zero
+        //
+        // l=h=f=0, so f already serves as e=0
+
+        0x01
+        ( 0 0 0 1 )
+        ;
+
 
 
       : fp2/return
@@ -86,35 +158,53 @@ internal static class Node304Program
 
 
       : fp2/main
-        left a!
 
-        @b                    // o
-        @b                    // o t1
+        left a!
+        @b !                  // o
+
 
         @b >r                 // s1
         @b >r                 // e1
         @b >r                 // h1
-        @b >r                 // l1
+        @b                    // l1
 
-        ( o t1 )
+        ( l1 / s1 e1 h1 )
+        r> r>
+        ( l1 h1 e1 / s1 )
+        fp2/calct
+        !                     // t1
 
-        fp2/order
-        ( t1 t2 o )
-
-        !                     // o
-        >r ! r> !             // t1 t2
-
-        r> r> r> r> !         // s1
-        @b !                  // s2
-
+        @b >r                 // s2
+        @b >r                 // e2
+        @b >r                 // h2
+        @b                    // l2
+        ( l1 h1 e1 l2 / s1 s2 e2 h2 )
+        r> r>
+        ( l1 h1 e1 l2 h2 e2 / s1 s2 )
+        fp2/calct
+        !                     // t2
+        ( l1 h1 e1 l2 h2 e2 / s1 s2 )
+        r> r>
+        ( l1 h1 e1 l2 h2 e2 s2 s1 )
+        !                     // s1
+        !                     // s2
+        ( l1 h1 e1 l2 h2 e2 )
+        >r >r >r
+        ( l1 h1 e1 / e2 h2 l2 )
         !                     // e1
-        @b !                  // e2
-
+        ( l1 h1 e1 / e2 h2 l2 )
+        r> r> r>
+        !                     // e2
+        ( l1 h1 l2 h2 )
+        >r >r
+        ( l1 h1 / h2 l2 )
         !                     // h1
-        @b !                  // h2
-
-        !                     // l1
-        @b !                  // l2
+        r> r>
+        ( l1 l2 h2 )
+        !                     // h2
+        ( l1 l2 )
+        >r !                  // l1
+        r> !                  // l2
 
         fp2/return
       ;

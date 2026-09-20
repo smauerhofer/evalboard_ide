@@ -72,6 +72,14 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <b>NOT YET added to <see cref="CvmNodeMesh"/> or <see cref="CvmBootStreamBuilder"/>, and NOT wired into
 /// the CVM instruction set</b> -- same reasoning as its siblings, compounded by the open dispatch/relay
 /// question above and node 501 not yet being in hand.
+///
+/// <b>RESOLVED, 2026-09-20: the "which port carries the operation dispatch address FROM node 503" gap
+/// above is answered.</b> A side-by-side comparison against what was on file shows <c>fp4b/main</c> now
+/// bracketing <c>r---</c> with <c>left a!</c> before it and <c>up a!</c> after it: A is redirected to
+/// <c>left</c> just long enough for <c>r---</c> to receive whatever node 503 sends over that link, then
+/// restored to <c>up</c> (this node's own header default) so the final <c>!</c> still reaches node 602.
+/// This is a coherent, deliberate pair, not a stray edit, and closes the previously-open question rather
+/// than raising a new one.
 /// </summary>
 internal static class Node502Program
 {
@@ -79,9 +87,10 @@ internal static class Node502Program
   public const int Coordinate = 502;
 
   /// <summary>
-  /// Node 502's full resident F18 source, verbatim from Stefan's 2026-09-16 paste. The missing <c>;</c> in
-  /// <c>A[ fp5b/shr2 ]] lit !</c>, noted in this class's own remarks above, is reproduced exactly as
-  /// pasted, not corrected.
+  /// Node 502's full resident F18 source, verbatim from Stefan's 2026-09-16 paste, updated 2026-09-20 with
+  /// the <c>left a!</c>/<c>up a!</c> bracketing of <c>r---</c> in <c>fp4b/main</c> (see this class's own
+  /// remarks above). The missing <c>;</c> in <c>A[ fp5b/shr2 ]] lit !</c>, noted in this class's own
+  /// remarks above, is reproduced exactly as pasted, not corrected.
   /// </summary>
   public const string Source = """
       ( CVM2 node 502. VM 32 bit floatingpoint stage 4b node. exponent arithmetic )
@@ -161,9 +170,9 @@ internal static class Node502Program
         @b fp4b/eff               // E1: 0 -> 1
         @b fp4b/eff               // E2: 0 -> 1
         ( E1 E2 )
-
+        left a!
         r---
-
+        up a!
         ( E )
         !                         // one exponent to node 602
 

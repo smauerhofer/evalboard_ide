@@ -69,6 +69,14 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <b>NOT YET added to <see cref="CvmNodeMesh"/> or <see cref="CvmBootStreamBuilder"/>, and NOT wired into
 /// the CVM instruction set</b> -- same reasoning as its siblings, compounded now by the open up/right port
 /// question above; node 602 (imported here) and node 601 have not yet been pasted.
+///
+/// <b>RESOLVED, 2026-09-20: the up/right dispatch conflict flagged above is fixed.</b> A side-by-side
+/// comparison against what was on file shows <c>fp3c/main</c>'s <c>right a!</c> moved to immediately
+/// BEFORE <c>ex</c> (it used to run only after <c>ex</c> returned). Now, by the time <c>ex</c> dispatches
+/// into the jump table and each word sends its remote-control address via <c>A[ fp4c/word ; ]] lit !</c>,
+/// <c>A</c> is correctly bound to <c>right</c> -- matching the <c>ex</c> line's own comment ("sends final
+/// sign and controls 602") for the first time, and confirming <c>right</c> really is this node's link to
+/// node 602. This reads as a genuine fix, not a stylistic reshuffle.
 /// </summary>
 internal static class Node603Program
 {
@@ -76,8 +84,9 @@ internal static class Node603Program
   public const int Coordinate = 603;
 
   /// <summary>
-  /// Node 603's full resident F18 source, verbatim from Stefan's 2026-09-16 paste. The <c>up</c>/<c>right</c>
-  /// port ambiguity noted in this class's own remarks above is reproduced exactly as pasted, not corrected.
+  /// Node 603's full resident F18 source, verbatim from Stefan's 2026-09-16 paste, updated 2026-09-20 with
+  /// the <c>right a!</c>/<c>ex</c> reordering in <c>fp3c/main</c> that resolves the up/right port
+  /// ambiguity noted in this class's own remarks above.
   /// </summary>
   public const string Source = """
       ( CVM2 node 603. VM 32 bit floatingpoint stage 3c node. sign and normalization )
@@ -171,7 +180,8 @@ internal static class Node603Program
       // bit14 = effective s1 xor s2
 
       : fp3c/add
-        over xor 2/ xor !b
+        over xor 2/ xor
+        !b              // s
         A[ fp4c/add ; ]] lit !
       ;
 
@@ -213,10 +223,9 @@ internal static class Node603Program
         @ !b                  // t2
         @                     // s1
         @                     // s2
-
+        right a!
         ex                    // sends final sign and controls 602
 
-        right a!
 
         @                     // e
         @                     // h
