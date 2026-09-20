@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-19T13:20:43.0764890
-      utcDateTime: 2026-09-19T13:20:43.0764890Z
-      localDateTime: 2026-09-19T15:20:43.0764890+02:00
-      date: 2026-09-19T00:00:00.0000000
-      day: 19
-      dayOfWeek: Saturday
-      dayOfYear: 262
-      hour: 13
-      millisecond: 76
-      microsecond: 489
-      nanosecond: 0
-      minute: 20
+      dateTime: 2026-09-20T05:49:52.0381561
+      utcDateTime: 2026-09-20T05:49:52.0381561Z
+      localDateTime: 2026-09-20T07:49:52.0381561+02:00
+      date: 2026-09-20T00:00:00.0000000
+      day: 20
+      dayOfWeek: Sunday
+      dayOfYear: 263
+      hour: 5
+      millisecond: 38
+      microsecond: 156
+      nanosecond: 100
+      minute: 49
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 43
-      ticks: 639254208430764890
-      utcTicks: 639254208430764890
-      timeOfDay: 13:20:43.0764890
+      second: 52
+      ticks: 639254801920381561
+      utcTicks: 639254801920381561
+      timeOfDay: 05:49:52.0381561
       year: 2026
   portB: 
   portC:
@@ -24987,6 +24987,10 @@ projects:
           out: ee         {to node 402, pass exponent}
           out: hhll       {to node 301, pass mantissa}
           out: c          {to node 303, return compare result}
+
+          c: magnitude compare result
+            0x8000 : f1 >  f2
+            0      : f1 <= f2
         )
 
         entry fp4/main
@@ -25055,7 +25059,8 @@ projects:
       - 0x04A03
       - 0x00145
       - 0x0BF92
-      - 0x0B600
+      - 0x0BEB2
+      - 0x13400
       - 0x04A03
       - 0x00175
       - 0x0BF92
@@ -25064,12 +25069,11 @@ projects:
       - 0x00D2A
       - 0x13400
       - 0x2E8B2
-      - 0x1941A
+      - 0x1941B
       - 0x1140A
-      - 0x2731C
+      - 0x2731D
       - 0x1140A
       - 0x2770A
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -25124,6 +25128,10 @@ projects:
           out: eehhll       {to node 302}
           in: c             {from node 302}
           out: c            {to node 403}
+
+          c: magnitude compare result
+            0x8000 : f1 >  f2
+            0      : f1 <= f2
         )
 
         entry fp3/main
@@ -25157,18 +25165,18 @@ projects:
 
       ramWords:
       - 0x01A02
+      - 0x0BE02
       - 0x0BF2A
-      - 0x01A02
-      - 0x0BDAA
+      - 0x01A12
       - 0x001D5
+      - 0x2BF2A
       - 0x01A02
       - 0x0BF2A
       - 0x01A02
-      - 0x0BF2A
-      - 0x03DAA
+      - 0x0BE12
       - 0x00145
-      - 0x0B700
-      - 0x15555
+      - 0x2BAB2
+      - 0x11400
       - 0x15555
       - 0x15555
       - 0x15555
@@ -25231,7 +25239,7 @@ projects:
       color: '#E6D6F7'
     - coordinate: 304
       enabled: true
-      sourceCode: "( CVM2 node 304. VM 32 bit floatingpoint stage 2 node. rearrange data stream and collect return value )\n(\n  in: osehlsehl   {from node 305}\n  out: ottsseehhll  {to node 303}\n\n  return in:  sehl  {from node 404}\n  return out: sehl  {to node 305}\n\r\ncalculate type:\n      t = 0x00   finite nonzero\n      t = 0x01   zero\n      t = 0x02   infinity\n      t = 0x04   qNaN\n      t = 0x0c   sNaN       // NAN bit + signaling bit\n\r\n\r\n\r\n)\n\nentry fp2/main\n# right /b\n# up /a\n\n# 0 org\n\r\n: fp2/fold ( lh-lhf) over over 0x7f and \n: fp2/or ( ab-c) >r inv r> inv and inv ;\n\n: fp2/calct ( l h e - l h e t )\n  ( l h e )\n\n  if // exp != 0\n\n    dup 0xff xor\n    if // normal\n      dup xor                      // t = 0\n      ( l h e 0 )\n      ;\n    then\n\n    ( l h 0xff 0 )\n    drop drop\n    ( l h )\n\n    // NaN or infinity\n    fp2/fold\n    ( l h f )\n\n    if // NaN\n      drop\n      ( l h )\n\n      // h bit6 = quiet bit\n      //\n      // qNaN: h&40 = 40 -> 8 xor 0c = 04\n      // sNaN: h&40 = 00 -> 0 xor 0c = 0c\n\n      dup 0x40 and\n      2/ 2/ 2/\n      0x0c xor\n\n      >r 0xff r>\n      ( l h e t )\n      ;\n    then\n\n    // infinity\n    drop\n    0xff 0x02\n    ( l h e t )\n    ;\n  then\n\n  // exponent = 0\n\n  drop\n  fp2/fold\n  ( l h f )\n\n  if // subnormal\n    drop\n    ( l h )\n\n    dup dup xor                  // e = 0\n    dup                          // t = 0\n\n    ( l h 0 0 )\n    ;\n  then\n\n  // zero\n  //\n  // l=h=f=0, so f already serves as e=0\n\n  0x01\n  ( 0 0 0 1 )\n  ;\r\n\r\n\n\n: fp2/return\n  up a!\n  @ !b                  // s\n  @ !b                  // e\n  @ !b                  // h\n  @ !b                  // l\n\n\n: fp2/main\n\n  left a!\n  @b !                  // o\r\n  \n\n  @b >r                 // s1\n  @b >r                 // e1\n  @b >r                 // h1\n  @b                    // l1\n\n  ( l1 / s1 e1 h1 )\r\n  r> r>\r\n  ( l1 h1 e1 / s1 )\r\n  fp2/calct\n  !                     // t1\n\r\n  @b >r                 // s2\n  @b >r                 // e2\n  @b >r                 // h2\n  @b                    // l2\n\r\n  ( l1 h1 e1 l2 / s1 s2 e2 h2 )\r\n  r> r>\r\n  ( l1 h1 e1 l2 h2 e2 / s1 s2 )\r\n  fp2/calct\n  !                     // t2\n  ( l1 h1 e1 l2 h2 e2 / s1 s2 )\r\n  r> r>\r\n  ( l1 h1 e1 l2 h2 e2 s2 s1 )\r\n  !                     // s1\n  !                     // s2\n  ( l1 h1 e1 l2 h2 e2 )\r\n  >r >r >r\r\n  ( l1 h1 e1 / e2 h2 l2 )\r\n  !                     // e1\n  ( l1 h1 e1 / e2 h2 l2 )\r\n  r> r> r>\r\n  !                     // e2\n  ( l1 h1 l2 h2 )\r\n  >r >r\r\n  ( l1 h1 / h2 l2 )\r\n  !                     // h1\r\n  r> r>\n  ( l1 l2 h2 )\r\n  !                     // h2\r\n  ( l1 l2 )\r\n  >r !                  // l1\r\n  r> !                  // l2\r\n\n  fp2/return\n;"
+      sourceCode: "( CVM2 node 304. VM 32 bit floatingpoint stage 2 node. rearrange data stream and collect return value )\n(\n  in: osehlsehl   {from node 305}\n  out: ottsseehhll  {to node 303}\n\n  return in:  sehl  {from node 404}\n  return out: sehl  {to node 305}\n\r\ncalculate type:\n      t = 0x00   finite nonzero\n      t = 0x01   zero\n      t = 0x02   infinity\n      t = 0x04   qNaN\n      t = 0x0c   sNaN       // NAN bit + signaling bit\n\r\n\r\n\r\n)\n\nentry fp2/main\n# right /b\n# up /a\n\n# 0 org\n\r\n: fp2/fold ( lh-lhf) over over 0x7f and \n: fp2/or ( ab-c) >r inv r> inv and inv ;\n\n: fp2/calct ( l h e - l h e t )\n  ( l h e )\n\n  if // exp != 0\n\n    dup 0xff xor\n    if // normal\n      dup xor                      // t = 0\n      ( l h e 0 )\n      ;\n    then\n\n    ( l h 0xff 0 )\n    drop drop\n    ( l h )\n\n    // NaN or infinity\n    fp2/fold\n    ( l h f )\n\n    if // NaN\n      drop\n      ( l h )\n\n      // h bit6 = quiet bit\n      //\n      // qNaN: h&40 = 40 -> 8 xor 0c = 04\n      // sNaN: h&40 = 00 -> 0 xor 0c = 0c\n\n      dup 0x40 and\n      2/ 2/ 2/\n      0x0c xor\n\n      >r 0xff r>\n      ( l h e t )\n      ;\n    then\n\n    // infinity\n    drop\n    0xff 0x02\n    ( l h e t )\n    ;\n  then\n\n  // exponent = 0\n\n  drop\n  fp2/fold\n  ( l h f )\n\n  if // subnormal\n    drop\n    ( l h )\n\n    dup dup xor                  // e = 0\n    dup                          // t = 0\n\n    ( l h 0 0 )\n    ;\n  then\n\n  // zero\n  //\n  // l=h=f=0, so f already serves as e=0\n\n  0x01\n  ( 0 0 0 1 )\n  ;\r\n\r\n\n\n: fp2/return\n  up a!\n  @ !b                  // s\n  @ !b                  // e\n  @ !b                  // h\n  @ !b                  // l\n\n\n: fp2/main\n\n  left a!\n  @b !                  // o\r\n  \n\n  @b >r                 // s1\n  @b >r                 // e1\n  @b >r                 // h1\n  @b                    // l1\n\n  ( l1 / s1 e1 h1 )\r\n  r> r>\r\n  ( l1 h1 e1 / s1 )\r\n  fp2/calct\n  !                     // t1\n\r\n  @b >r                 // s2\n  @b >r                 // e2\n  @b >r                 // h2\n  @b                    // l2\r\n  ( l1 h1 e1 l2 / s1 s2 e2 h2 )\r\n  r> r>\r\n  ( l1 h1 e1 l2 h2 e2 / s1 s2 )\r\n  fp2/calct\n  !                     // t2\n  ( l1 h1 e1 l2 h2 e2 / s1 s2 )\r\n  r> r>\r\n  ( l1 h1 e1 l2 h2 e2 s2 s1 )\r\n  !                     // s1\n  !                     // s2\n  ( l1 h1 e1 l2 h2 e2 )\r\n  >r >r >r\r\n  ( l1 h1 e1 / e2 h2 l2 )\r\n  !                     // e1\n  ( l1 h1 e1 / e2 h2 l2 )\r\n  r> r> r>\r\n  !                     // e2\n  ( l1 h1 l2 h2 )\r\n  >r >r\r\n  ( l1 h1 / h2 l2 )\r\n  !                     // h1\r\n  r> r>\n  ( l1 l2 h2 )\r\n  !                     // h2\r\n  ( l1 l2 )\r\n  >r !                  // l1\r\n  r> !                  // l2\r\n\n  fp2/return\n;"
       ramWords:
       - 0x20F12
       - 0x0007F
@@ -25352,11 +25360,11 @@ projects:
 
 
 
-        : fp1/decompose
+        : fp1/decompose ( - )
           @b >r                   // h
           @b r>                   // l h
-          ( l h )
 
+          ( l h )
           // sign
 
           dup 0x8000 and
@@ -25430,9 +25438,7 @@ projects:
 
 
         : fp1/main
-          right a!
-
-          @b @ !                    // o
+          @b !                    // o
           fp1/decompose           // operand 1
           fp1/decompose           // operand 2
 
@@ -25468,11 +25474,11 @@ projects:
       - 0x03DFA
       - 0x0FFFF
       - 0x089B2
-      - 0x04A02
-      - 0x001D5
-      - 0x0B603
+      - 0x01AB2
+      - 0x13403
       - 0x13403
       - 0x11414
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -26087,9 +26093,8 @@ projects:
           3. send mantissa comparison to node 402
           4. wait for operation instruction
 
-          in: HHLL0      {comparison not required}
-          in: HHLLcdd    {comparison required}
-          out: HHLL
+          in: HHLL       {extended mantissa from node 301}
+          out: HHLL      {extended mantissa to node 501}
         )
 
 
@@ -26103,39 +26108,41 @@ projects:
         # 0 org
 
 
-        : fp5a/swap >r >r ! ! r> r> ! ! ;
+        : fp5a/swap
+          ( H1 H2 L1 L2 )
+          >r >r 
+          !         //  H2
+          !         //  H1
+          r> r>
+          !         // L2
+          !         // L1
+          ;
 
-        : fp5a/nop >r >r >r ! r> ! r> ! r> ! ;
+        : fp5a/add
 
+        : fp5a/sub
 
-        : fp5a/add  ;
+        : fp5a/mul
 
-        : fp5a/sub  ;
+        : fp5a/div
 
-        : fp5a/mul  ;
-
-        : fp5a/div  ;
+        : fp5a/nop
+          >r
+          >r
+          >r
+          !         // H1
+          r> !      // H2
+          r> !      // L1
+          r> !      // L2
+          ;
 
 
 
         : fp5a/main
-          @b @b @b @b
-          left a!
-
-          @b if                  // compare required
-            drop                  // discard c = 0x8000
-
-            @b if                 // high mantissa delta != 0
-              @b drop             // retain high delta, consume low delta
-            else
-              drop @b             // high equal: use low delta
-            then
-          then
-
-          ( H1 H2 L1 L2 comp )
-          !                       // send mantissa comparison to 402
-
-          down a!
+          @b 
+          @b 
+          @b 
+          @b
           ( H1 H2 L1 L2 )
           --l-
           fp5a/main ;
@@ -26149,21 +26156,21 @@ projects:
       - 0x0AC2A
       - 0x27A9A
       - 0x0B555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x01F02
-      - 0x01DAA
-      - 0x00175
-      - 0x01312
-      - 0x3BF61
-      - 0x00242
-      - 0x3BFB2
-      - 0x0BDAA
-      - 0x00115
+      - 0x009B2
       - 0x13575
-      - 0x1140B
+      - 0x11407
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -26207,7 +26214,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00B
+        entryPoint: 0x007
         p: 0x000
         a: 0x000
         b: 0x000
@@ -26243,15 +26250,7 @@ projects:
         # 0 org
 
 
-        : fp4a/gt ( d-c )
-          -if                    // d < 0
-            drop 0
-          else                   // d >= 0
-            if                   // d > 0
-              drop 0x8000
-            then                 // d = 0 leaves zero
-          then
-        ;
+        : fp4a/swapc A[ fp5a/swap ]] lit ! ;
 
 
         : fp4a/swap A[ fp5a/swap ; ]] lit ! ;
@@ -26270,46 +26269,47 @@ projects:
 
         : fp4a/main
           up b!
-          @b @b
+          @b
+          ( e1 )
+          @b
           ( e1 e2 )
-          left a! ..
 
           down b!
           ( e1 e2 )
 
           r---
-
-          !b !b
+          !b
+          !b
           fp4a/main ;
       ramWords:
-      - 0x1B403
-      - 0x3BD46
-      - 0x00000
-      - 0x19406
-      - 0x3BDB2
-      - 0x08000
-      - 0x15555
+      - 0x05A55
+      - 0x13400
       - 0x05A55
       - 0x11400
       - 0x05A85
       - 0x11403
       - 0x05A55
-      - 0x11407
+      - 0x11403
       - 0x05A55
-      - 0x11408
+      - 0x11403
       - 0x05A55
-      - 0x11409
+      - 0x11403
       - 0x05A55
-      - 0x1140A
+      - 0x11403
       - 0x04B02
       - 0x00145
-      - 0x01DAA
-      - 0x00175
-      - 0x04BB2
+      - 0x01DA2
       - 0x00115
       - 0x135D5
       - 0x09BB2
-      - 0x11413
+      - 0x1140E
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -26347,7 +26347,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x013
+        entryPoint: 0x00E
         p: 0x000
         a: 0x000
         b: 0x000
@@ -26369,6 +26369,10 @@ projects:
           For add/sub on output:
               |operand1| >= |operand2|
               s1,s2 are effective signs
+
+          c: magnitude compare result
+            0x8000 : f1 >  f2
+            0      : f1 <= f2
         )
 
 
@@ -26454,7 +26458,7 @@ projects:
           0x8000 xor       // 8000 => swap, 0 => keep order
           dup >r
           if
-            A[ fp4a/swap ]] lit !
+            A[ fp4a/swapc ]] lit !
           then
           drop
 
@@ -26517,7 +26521,7 @@ projects:
       - 0x3B712
       - 0x3B708
       - 0x05AB2
-      - 0x11407
+      - 0x11402
       - 0x04ABA
       - 0x00115
       - 0x2FA2A
@@ -26527,17 +26531,17 @@ projects:
       - 0x3869A
       - 0x3EFE5
       - 0x05AB2
-      - 0x11409
+      - 0x11404
       - 0x04ABA
       - 0x00115
       - 0x2E82A
       - 0x27A9A
       - 0x0AC2D
       - 0x05AB2
-      - 0x1140F
+      - 0x1140A
       - 0x11414
       - 0x05AB2
-      - 0x11411
+      - 0x1140C
       - 0x11414
       - 0x1340F
       - 0x19422
@@ -26553,14 +26557,14 @@ projects:
       - 0x08000
       - 0x2F32E
       - 0x05AB2
-      - 0x13407
+      - 0x13400
       - 0x3AF82
       - 0x39333
       - 0x3BD2A
-      - 0x1140D
+      - 0x11408
       - 0x11435
       - 0x3BD2A
-      - 0x1140B
+      - 0x11406
       - 0x27337
       - 0x3B70A
       - 0x3B714
@@ -26752,7 +26756,6 @@ projects:
           @b                     // e
           @b                     // H
           @b                     // L
-
           fp8/round
           fp8/fix
           fp8/reduce
@@ -27929,7 +27932,6 @@ projects:
         : fp5b/main
           @b @b @b @b
           ( H1 H2 L1 L2 )
-
           --l-
 
           up a!
@@ -28103,9 +28105,9 @@ projects:
           @b fp4b/eff               // E1: 0 -> 1
           @b fp4b/eff               // E2: 0 -> 1
           ( E1 E2 )
-
+          left a!
           r---
-
+          up a!
           ( E )
           !                         // one exponent to node 602
 
@@ -28141,12 +28143,12 @@ projects:
       - 0x0B555
       - 0x01600
       - 0x01600
+      - 0x04AB2
+      - 0x001D5
       - 0x135D5
-      - 0x0B71B
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x04A2A
+      - 0x00145
+      - 0x1141B
       - 0x15555
       - 0x15555
       - 0x15555
@@ -28375,12 +28377,29 @@ projects:
         ;
 
 
+        : fp7/zeroinfo ( s mask  - )
+          >r
+          !                      // preserve sign
+          @b @b @b               // discard calculated e,h,l
+          r>
+         : fp7/sendx00
+          !
+          0 !                    // h
+          0 !                    // l
+        ;
+
+
+        : fp7/zero ( s - )
+          0 fp7/zeroinfo ;
+
+
+        : fp7/inf ( s - )
+          0xff fp7/zeroinfo ;
 
         : fp7/pass ( s - )
           !                      // final sign
 
           @b                     // e
-
           // finite overflow?
           //
           // e - 255 < 0 => e < 255
@@ -28410,46 +28429,20 @@ projects:
             drop
 
             // H=L=0
-
-            0 !                  // e
-            0 !                  // h
-            0 !                  // l
-            ;
+           0
+           fp7/sendx00
+           ;
           then
 
           // e >= 255 -> infinity
 
-          drop drop              // comparison, original e
           @b @b                  // discard calculated h,l
 
-          0xff !                 // e
-          0 !                    // h
-          0 !                    // l
+          0xff
+          fp7/sendx00
         ;
 
 
-
-        : fp7/zero ( s - )
-          !                      // preserve sign
-
-          @b @b @b               // discard calculated e,h,l
-
-          0 !                    // e
-          0 !                    // h
-          0 !                    // l
-        ;
-
-
-
-        : fp7/inf ( s - )
-          !                      // preserve sign
-
-          @b @b @b               // discard calculated e,h,l
-
-          0xff !                 // e
-          0 !                    // h
-          0 !                    // l
-        ;
 
 
 
@@ -28471,38 +28464,74 @@ projects:
 
 
         : fp7/main
-          @b                     // k
-
+          @b
+          ( k )
           // k=4 = ADD/SUB with both operands infinity.
           // bit14 of sign resolves Inf versus qNaN.
 
           dup 4 xor
+          ( k k^4 )
+
           if
+            // k != 4
+            ( k k^4 )
+
             drop
-            >r                    // dispatch k
-            @b                    // s
+            ( k )
+
+            >r
+            ( / k )
+
+            @b
+            ( s / k )
+
           else
-            drop drop             // comparison, k
+            // k = 4
+            // zero test value is still on stack.
+            ( k 0 )
 
-            @b                    // packed sign
+            drop drop
+            ( )
 
-            dup 0x4000 and
+            @b
+            ( packed-s )
+
+            dup 0x4000 . and
+            ( packed-s sign-different )
+
             if
+              // effective signs differ:
+              // Inf + -Inf or effective Inf - Inf -> qNaN
+              ( packed-s sign-different )
+
               drop
-              3 >r                // opposite effective signs -> qNaN
+              ( packed-s )
+
+              3 >r
+              ( packed-s / 3 )
+
             else
+              // effective signs equal -> infinity
+              ( packed-s 0 )
+
               drop
-              2 >r                // same effective sign -> infinity
+              ( packed-s )
+
+              2 >r
+              ( packed-s / 2 )
+
             then
           then
 
-          0x8000 and             // remove temporary bit14
+          ( s / dispatch )
 
-          ex
+          0x8000 and
+          ( s / dispatch )       // only real IEEE sign remains
+
+          ex                     // dispatch fp7/pass/zero/inf/qnan
 
           fp7/main
         ;
-
 
 
         # 0 org
@@ -28516,46 +28545,39 @@ projects:
 
         fp7/qnan ;
       ramWords:
-      - 0x11407
-      - 0x1141C
-      - 0x11422
-      - 0x11428
+      - 0x11411
+      - 0x1140D
+      - 0x1140F
+      - 0x11421
       - 0x2E82A
       - 0x27A9A
       - 0x0B555
+      - 0x2FA02
+      - 0x01F9A
+      - 0x0BD2F
+      - 0x00000
+      - 0x00000
+      - 0x0B555
+      - 0x05707
+      - 0x00000
+      - 0x05707
+      - 0x000FF
       - 0x0BF97
       - 0x000FE
       - 0x329F2
-      - 0x1B416
+      - 0x1B41E
       - 0x3BF03
-      - 0x1940E
+      - 0x19418
       - 0x3B704
       - 0x3A9B2
-      - 0x21311
+      - 0x2131B
       - 0x3B704
-      - 0x3BD2F
+      - 0x3BDB2
       - 0x00000
-      - 0x00000
-      - 0x0BD2D
-      - 0x00000
-      - 0x3A202
-      - 0x01D2F
+      - 0x11409
+      - 0x01F12
       - 0x000FF
-      - 0x00000
-      - 0x0BD2D
-      - 0x00000
-      - 0x0BF02
-      - 0x01D2F
-      - 0x00000
-      - 0x00000
-      - 0x0BD2D
-      - 0x00000
-      - 0x0BF02
-      - 0x01D2F
-      - 0x000FF
-      - 0x00000
-      - 0x0BD2D
-      - 0x00000
+      - 0x11409
       - 0x3BF02
       - 0x01D2F
       - 0x00000
@@ -28566,22 +28588,29 @@ projects:
       - 0x0B555
       - 0x00D12
       - 0x00004
-      - 0x39335
+      - 0x3932E
       - 0x3A802
-      - 0x1143D
+      - 0x11437
       - 0x3A203
-      - 0x04063
+      - 0x049FA
       - 0x04000
+      - 0x19435
       - 0x3BDBA
       - 0x00003
-      - 0x1143D
+      - 0x11437
       - 0x3BDBA
       - 0x00002
       - 0x0405D
       - 0x08000
-      - 0x11430
+      - 0x11429
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x030
+        entryPoint: 0x029
         p: 0x000
         a: 0x000
         b: 0x000
@@ -29725,7 +29754,6 @@ projects:
 
         : fp5c/main
           @b @b @b @b
-
           // ADD/SUB: L H x x
           // MUL:     L H 0 x
           // DIV:     L2 L1 H2 H1
@@ -29958,7 +29986,6 @@ projects:
         : fp4c/main
           up a!
           @                        // E from 502
-
           left a!
 
           r--- // give control to node 603
@@ -30162,7 +30189,8 @@ projects:
 
 
         : fp3c/add
-          over xor 2/ xor !b
+          over xor 2/ xor
+          !b              // s
           A[ fp4c/add ; ]] lit !
         ;
 
@@ -30214,10 +30242,9 @@ projects:
           @ !b                  // t2
           @                     // s1
           @                     // s2
-
+          right a!
           ex                    // sends final sign and controls 602
 
-          right a!
 
           @                     // e
           @                     // h
@@ -30312,10 +30339,10 @@ projects:
       - 0x00145
       - 0x0880A
       - 0x09E22
-      - 0x03E5D
-      - 0x04A0A
+      - 0x03E12
       - 0x001D5
-      - 0x03EB2
+      - 0x2B455
+      - 0x03E0A
       - 0x1341A
       - 0x2E822
       - 0x27B9A
@@ -30529,9 +30556,7 @@ projects:
           @b >r                  // o
           @b                     // t1
           @b                     // t2
-
           ex                     // -> k
-
           !                      // k
           @b !                   // s
           @b !                   // e

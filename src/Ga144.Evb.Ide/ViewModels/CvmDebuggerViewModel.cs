@@ -498,10 +498,19 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// (his exact numbering):
   ///   1) send a focusing call (<see cref="KrakenLiveController.FocusAsync"/>) to this node, reached
   ///      through however many hops are ALREADY wired from earlier iterations (boot-framed or live).
-  ///   2) read the parameter stack (<see cref="KrakenLiveController.ReadParameterStackAsync"/>) --
-  ///      MUST happen immediately after focusing and before anything else touches this node: focus's
-  ///      own reply mechanism uses exactly 1 word of this node's parameter stack, so reading it now is
-  ///      what recovers its true, as-found top of stack before that happens.
+  ///      Its one mandatory reply word IS T (this node's own parameter-stack top), popped as part of
+  ///      the acknowledgment (a plain, unavoidable pop of whatever is genuinely on top -- see
+  ///      <see cref="Services.KrakenProtocol.BuildFocus"/>) -- Stefan's own point: this is T "for
+  ///      free," so it is captured from focus's own return value rather than read a second time.
+  ///   2) read the REMAINING 9 parameter-stack words (<see cref="KrakenLiveController.ReadParameterStackTailAsync"/>,
+  ///      NOT the full <see cref="KrakenLiveController.ReadParameterStackAsync"/>, which would pop an
+  ///      11th, misaligned word off the same 10-word ring since step 1 already popped the first one)
+  ///      -- MUST happen immediately after focusing and before anything else touches this node, to
+  ///      recover the rest of its true, as-found stack before anything else disturbs it.
+  ///      Focus no longer touches the return stack at all (it did, silently, via a push+pop the old
+  ///      "jump port" implementation needed and this project's own docs did not account for -- very
+  ///      likely the actual cause of the return-stack corruption Stefan found in earlier Core Dumps),
+  ///      so no equivalent "read immediately" requirement exists for <see cref="KrakenLiveController.ReadReturnStackAsync"/>.
   ///   3) read the rest of this node's state (A, IO, RAM, ROM, return stack) -- order among these no
   ///      longer matters, since each is independently expected to round-trip through T.
   ///   4) only THEN write B (<see cref="KrakenLiveController.WriteBAsync"/>) to extend the tentacle one
@@ -597,13 +606,20 @@ public sealed class CvmDebuggerViewModel : ObservableObject
               {
                 // 1) Focus this node -- reached through whatever hops earlier iterations already
                 // wired (boot-framed, for the first live node right after the prefix, or live).
+                // Focus's own mandatory reply word IS T (the parameter stack's own top), popped as
+                // part of its acknowledgment -- Stefan's own point: this comes for free, with no
+                // extra effort spent retrieving it, so it is captured here rather than discarded.
                 int incomingPort = KrakenTopology.PortAddress(route.Coordinate, route.PreviousCoordinate ?? KrakenTopology.HeadCoordinate);
-                await _krakenController.FocusAsync(route, incomingPort);
+                int topOfStack = await _krakenController.FocusAsync(route, incomingPort);
 
-                // 2) Parameter stack, immediately -- see this method's own remarks on why this must
-                // come right after focus and before anything else. Destructive (Stefan confirmed
-                // acceptable): 'readPStack' pops the stack off the live node as part of reading it.
-                parameterStack = await _krakenController.ReadParameterStackAsync(route);
+                // 2) The REMAINING 9 parameter-stack words, immediately -- see this method's own
+                // remarks on why this must come right after focus and before anything else.
+                // Destructive (Stefan confirmed acceptable): 'readPStack' pops the stack off the live
+                // node as part of reading it. Reading all 10 again here (instead of just these 9)
+                // would pop an 11th, misaligned word off the same 10-word ring, since focus's own
+                // reply already popped the first one -- see KrakenSession.ReadParameterStackTailAsync.
+                IReadOnlyList<int> parameterStackTail = await _krakenController.ReadParameterStackTailAsync(route);
+                parameterStack = [.. parameterStackTail, topOfStack];
               }
 
               // 3) Everything else -- order no longer matters among these.

@@ -22,6 +22,13 @@ namespace Ga144.Evb.Ide.Services;
 /// </summary>
 internal static class KrakenProtocol
 {
+  // F18A slot-0 control-transfer opcode for an unconditional jump (DB001 Figure 4/5):
+  // used directly (not through Pack/F18InstructionSet.Opcodes -- that dictionary holds
+  // only the slot-3-compatible ALU/stack opcodes, not the jump-class transfer opcodes,
+  // which F18InstructionSet.EncodeSlot0Control/TryEncodePackedControl handle separately)
+  // by BuildFocus below to embed a destination directly in the instruction word itself.
+  private const byte JumpOpcode = 0x02;
+
   // ---- leaf command builders ---------------------------------------------
   // Each of these is a self-contained, unwrapped ("tentacle(0)") sequence:
   // the exact code a node executes once its P is already focused on the
@@ -30,56 +37,84 @@ internal static class KrakenProtocol
   // host and the target.
 
   /// <summary>
-  /// 'focus = A[ @p dup >r ; ], port, A[ !p ]': jumps the currently focused
-  /// node's own P to the given address -- typically a compass port address,
-  /// which re-anchors the node to read/write through that port instead of
-  /// local RAM, but any 10-bit address works (see <see cref="KrakenSession"/>'s
-  /// use of this as the new Jump primitive) -- THEN sends the 1-word reply.
-  /// Order matters: '@p dup >r ;' fetches 'port', duplicates it, pushes ONE
-  /// copy to R and immediately returns, which is what actually performs the
-  /// jump (';' pops R into P) -- so P has already moved to the new address
-  /// by the time the separate, later 'A[ !p ]' word runs, and that reply
-  /// therefore goes out via the NEWLY focused port, not the old one. The
-  /// original single packed word 'A[ @p >r !p ; ]' packed '!p' into the SAME
-  /// word as the jump, so it ran before ';' had a chance to move P -- the
-  /// reply left via whatever P pointed at before focusing, one hop short of
-  /// where it needed to go.
-  /// The 'dup' is the second refinement: the OTHER copy of 'port' is left on
-  /// top of the data stack across the jump, so '!p' now sends back the SAME
-  /// value we sent as the focus payload, instead of whatever unrelated word
-  /// happened to be on top of the target's stack beforehand. This turns
-  /// focus's reply into a genuine acknowledgment -- the caller can compare
-  /// the echoed word against the port it sent and detect a corrupted/
-  /// mismatched delivery, not just a bare "some reply arrived" signal --
-  /// at the (unchanged, already-accepted) cost of destroying whatever was
-  /// really on the target's stack.
+  /// 'jump port': moves the currently focused node's own P directly to
+  /// <paramref name="port"/> -- typically a compass port address, which
+  /// re-anchors the node to read/write through that port instead of local
+  /// RAM, but any 10-bit address works -- via a genuine F18A slot-0
+  /// control-transfer instruction (<see cref="JumpOpcode"/>, packed by
+  /// <see cref="F18InstructionSet.EncodeSlot0Control"/> with the destination
+  /// embedded directly in that SAME instruction word), THEN sends the
+  /// mandatory 1-word reply. Order matters, same as the former
+  /// implementation: the bare 'A[ !p ]' below is its own, separate
+  /// instruction, executed only once the jump word has already moved P, so
+  /// the reply goes out via the NEWLY focused port, not the old one --
+  /// packing '!p' into the SAME word as the jump would run it first, before
+  /// P had moved.
+  ///
+  /// Replaces the former software-computed jump, 'A[ @p dup >r ; ], port,
+  /// A[ !p ]' (Stefan's own diagnosis, confirmed against Core Dump data):
+  /// that sequence cost a word of BOTH stacks, not just the parameter stack
+  /// the old remarks here claimed. '@p' fetched 'port' onto the data stack
+  /// (a push), 'dup' pushed a SECOND copy (a second push), and '>r'/';'
+  /// pushed then popped the return stack to perform the jump. Per DB001
+  /// 2.3.2, pushing a circular stack always REPLACES its bottom (deepest)
+  /// entry -- a later pop restores DEPTH, never the content the push already
+  /// overwrote -- so that sequence permanently destroyed the target's true,
+  /// as-found deepest RETURN-stack word (never compensated for anywhere:
+  /// CoreDumpAsync's own per-node sequence reads the return stack much
+  /// later, alongside A/IO/RAM/ROM, not "immediately") and a SECOND,
+  /// deeper parameter-stack word beyond the single one CoreDumpAsync's own
+  /// "read the parameter stack immediately after focus" comment already
+  /// accounts for. This is very likely the root cause of both of Stefan's
+  /// Core Dump anomalies.
+  ///
+  /// This version touches the return stack not at all, and the data stack
+  /// only through the one, already-documented, already-compensated-for word
+  /// below: the bare '!p' sends whatever is genuinely on the target's own
+  /// top of stack -- a plain pop, nothing duplicated or pre-fetched to
+  /// fabricate an echo -- which is the exact single word CoreDumpAsync's own
+  /// "read immediately after" already exists to recover past. The former
+  /// "echo the sent 'port' value back for verification" property is given
+  /// up (it was never actually used -- <see cref="KrakenSession.FocusAsync"/>
+  /// already discards its one reply word) in exchange for touching no more
+  /// of the target's real stack content than was always unavoidable.
   /// </summary>
-  public static int[] BuildFocus(int port) => [Pack("@p", "dup", ">r", ";"), Mask(port), Pack("!p")];
+  public static int[] BuildFocus(int port) => [F18InstructionSet.EncodeSlot0Control(JumpOpcode, port), Pack("!p")];
 
   /// <summary>
   /// 'jump = A[ @p dup >r ]], address, A[ !p ; ]]': moves the currently
   /// focused node's P to <paramref name="address"/> and sends the 1-word
   /// reply BEFORE the jump happens, over whatever port is CURRENTLY focused
-  /// -- the reverse order from <see cref="BuildFocus"/>. Confirmed against
-  /// real hardware: this is NOT interchangeable with 'focus'. 'focus' is
-  /// correct when the target is itself a compass port the node will keep
-  /// relaying/replying through afterward (erection) -- its reply
-  /// deliberately goes out via the NEWLY focused port so the relay chain
-  /// continues correctly. A Jump is different in kind: it is generally used
-  /// to hand a node its own resident RAM program (<see cref="KrakenSession.JumpAsync"/>
-  /// -- typically address 0x000), which removes the node from the tentacle
-  /// entirely. Once P has moved there, nothing is left able to answer a
-  /// later '!p' the way a port can, so reusing 'focus' here left the host
-  /// blocking forever on a reply that would never arrive (observed as a
-  /// timeout). 'jump' avoids that by never sending after the move: '@p dup
-  /// >r' fetches 'address', duplicates it, and pushes ONE copy to R -- but
-  /// does NOT return, so P has not moved yet. The single packed word
-  /// '!p ; ' then sends the OTHER copy of 'address' back over the port still
-  /// in effect, and only then does ';' pop R (the stashed address) into P,
-  /// so the jump happens strictly after the reply is already on the wire.
-  /// Like 'focus', the reply value is the literal address, not whatever was
-  /// genuinely on the target's data stack -- the same accepted
-  /// destroy-top-of-stack side effect 'focus' already has, unchanged.
+  /// -- the reverse order from <see cref="BuildFocus"/>'s own reply-after-jump
+  /// timing. Confirmed against real hardware: this is NOT interchangeable
+  /// with 'focus'. 'focus' targets a compass port the node will keep
+  /// relaying/replying through afterward (erection), so its reply can go out
+  /// via the NEWLY focused port and still reach the host through the relay
+  /// chain that port now continues. A Jump is different in kind: it is
+  /// generally used to hand a node its own resident RAM program (<see
+  /// cref="KrakenSession.JumpAsync"/> -- typically address 0x000), which
+  /// removes the node from the tentacle entirely. Once P has moved there,
+  /// nothing is left able to answer a later '!p' the way a port can, so
+  /// reusing 'focus' here left the host blocking forever on a reply that
+  /// would never arrive (observed as a timeout). 'jump' avoids that by never
+  /// sending after the move: '@p dup >r' fetches 'address', duplicates it,
+  /// and pushes ONE copy to R -- but does NOT return, so P has not moved
+  /// yet. The single packed word '!p ; ' then sends the OTHER copy of
+  /// 'address' back over the port still in effect, and only then does ';'
+  /// pop R (the stashed address) into P, so the jump happens strictly after
+  /// the reply is already on the wire. The reply value is the literal
+  /// address, not whatever was genuinely on the target's data stack -- an
+  /// accepted destroy-top-of-stack cost, unchanged here (unlike the newer
+  /// <see cref="BuildFocus"/>, this still needs 'address' delivered as
+  /// runtime data before the jump, precisely because its own reply must go
+  /// out BEFORE P moves -- there is no "send after" option to fall back on
+  /// the way 'focus' now has). This also still costs the return stack one
+  /// push+pop, same reasoning as 'focus' used to have; not changed here
+  /// since Stefan's request was scoped to 'focus' (the one Core Dump
+  /// actually calls) -- the same "jump port"-style, no-stack rework could
+  /// apply here too, sending the reply via a bare '!p' BEFORE the jump word
+  /// instead of via '@p dup >r'/';', if this primitive is ever put on a path
+  /// where its own stack cost matters.
   /// </summary>
   public static int[] BuildJump(int address) => [Pack("@p", "dup", ">r"), Mask(address), Pack("!p", ";")];
 
@@ -178,6 +213,21 @@ internal static class KrakenProtocol
   /// </summary>
   public static int[] BuildReadPStack() =>
       [Pack("@p", ">r"), Mask(9), Pack("!p", "unext")];
+
+  /// <summary>
+  /// Core-Dump-ONLY companion to <see cref="BuildFocus"/>: 'A[ @p >r ]], 8,
+  /// A[ !p unext ]]' -- pops and sends back the REMAINING 9 words of the
+  /// parameter stack (S through the deepest ring slot), one iteration
+  /// shorter than <see cref="BuildReadPStack"/> (loop count 8 -&gt; 9
+  /// iterations, same -1 convention). Used only when T itself has already
+  /// been popped and returned by a preceding <see cref="BuildFocus"/>
+  /// transaction -- reading the full 10 words again in that case would pop
+  /// an 11th time off the same 10-word ring, landing one position off (S
+  /// read back as if it were T, and so on down to a stale repeat of T at
+  /// the deepest slot) instead of the true S..[9] mapping.
+  /// </summary>
+  public static int[] BuildReadPStackTail() =>
+      [Pack("@p", ">r"), Mask(8), Pack("!p", "unext")];
 
   /// <summary>
   /// 'writeRStack': nine "A[ @p >r ]], rs(k)" pairs (rs(8) down to rs(0),

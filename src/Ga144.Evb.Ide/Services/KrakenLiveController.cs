@@ -338,13 +338,16 @@ public sealed class KrakenLiveController : IAsyncDisposable
 
   /// <summary>
   /// Core-Dump-ONLY: focuses <paramref name="route"/>'s node onto the given
-  /// port via a live transaction (<see cref="KrakenSession.FocusAsync"/>).
-  /// See that method's own remarks: its reply mechanism uses 1 word of the
-  /// node's parameter stack, so the caller must read the parameter stack
-  /// immediately afterward, before anything else touches this node.
+  /// port via a live transaction (<see cref="KrakenSession.FocusAsync"/>),
+  /// returning the one reply word that transaction always sends -- T, the
+  /// node's own parameter-stack top, popped as a side effect of the
+  /// mandatory acknowledgment. The caller combines this with
+  /// <see cref="ReadParameterStackTailAsync"/> (not the full
+  /// <see cref="ReadParameterStackAsync"/>) to recover the complete,
+  /// true pre-focus parameter stack; see that method's own remarks.
   /// </summary>
-  public Task FocusAsync(KrakenNodeRoute route, int port, CancellationToken cancellationToken = default) =>
-      RunForRouteAsync(route, session => session.FocusAsync(port, cancellationToken), cancellationToken);
+  public Task<int> FocusAsync(KrakenNodeRoute route, int port, CancellationToken cancellationToken = default) =>
+      RunForRouteValueAsync(route, session => session.FocusAsync(port, cancellationToken), cancellationToken);
 
   public Task<int> ReadAAsync(KrakenNodeRoute route, CancellationToken cancellationToken = default) =>
       RunForRouteValueAsync(route, session => session.ReadAAsync(cancellationToken), cancellationToken);
@@ -369,6 +372,14 @@ public sealed class KrakenLiveController : IAsyncDisposable
 
   public Task<IReadOnlyList<int>> ReadParameterStackAsync(KrakenNodeRoute route, CancellationToken cancellationToken = default) =>
       RunForRouteValueAsync(route, session => session.ReadParameterStackAsync(cancellationToken), cancellationToken);
+
+  /// <summary>
+  /// Core-Dump-ONLY companion to <see cref="FocusAsync"/>: reads the remaining 9 parameter-stack
+  /// words (S through the deepest slot) once T is already known from Focus's own reply -- see
+  /// <see cref="KrakenSession.ReadParameterStackTailAsync"/>.
+  /// </summary>
+  public Task<IReadOnlyList<int>> ReadParameterStackTailAsync(KrakenNodeRoute route, CancellationToken cancellationToken = default) =>
+      RunForRouteValueAsync(route, session => session.ReadParameterStackTailAsync(cancellationToken), cancellationToken);
 
   public Task WriteParameterStackAsync(KrakenNodeRoute route, IReadOnlyList<int> words, CancellationToken cancellationToken = default) =>
       RunForRouteAsync(route, session => session.WriteParameterStackAsync(words, cancellationToken), cancellationToken);

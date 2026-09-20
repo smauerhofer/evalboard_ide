@@ -399,13 +399,38 @@ internal sealed class KrakenSession : IAsyncDisposable
           Transact(_targetRoute, KrakenProtocol.BuildReadRom(), wordsToRead: 64, cancellationToken), cancellationToken);
 
   // 'readPStack' pops and sends back 10 words (see KrakenProtocol's remarks
-  // on the write/read count asymmetry given for the parameter stack).
+  // on the write/read count asymmetry given for the parameter stack). For a
+  // node reached via a live FocusAsync (Core Dump's per-node path), T has
+  // already been popped and returned by Focus's own reply -- use
+  // ReadParameterStackTailAsync below instead, so T is not read (and the
+  // ring not rotated past) a second time. This full 10-word version stays
+  // for every OTHER caller (e.g. KrakenNodeControlViewModel, operating on a
+  // node that was erected in bulk, not via a live per-node Focus) where T
+  // has not already been consumed.
   public Task<IReadOnlyList<int>> ReadParameterStackAsync(CancellationToken cancellationToken = default) =>
       RunExclusiveAsync<IReadOnlyList<int>>(() =>
       {
         int[] topToBottom = Transact(_targetRoute, KrakenProtocol.BuildReadPStack(), wordsToRead: 10, cancellationToken);
         var bottomToTop = topToBottom.AsEnumerable().Reverse().ToArray();
         return bottomToTop;
+      }, cancellationToken);
+
+  /// <summary>
+  /// Core-Dump-ONLY companion to <see cref="FocusAsync"/>: pops and sends back the REMAINING 9
+  /// parameter-stack words (S through the deepest ring slot), via <see cref="KrakenProtocol.BuildReadPStackTail"/>.
+  /// Stefan's own point: Focus's single mandatory reply word already IS a pop of T ("for free," no
+  /// extra effort spent retrieving it) -- reading the FULL 10 words again here would pop an 11th time
+  /// off a 10-word ring, wrapping around to a result rotated by one position (S where T belongs, and
+  /// so on down to a stale repeat of T where the deepest slot belongs) instead of the true mapping.
+  /// Same bottom-to-top convention as <see cref="ReadParameterStackAsync"/>'s own public result, minus
+  /// T itself -- the caller appends the value <see cref="FocusAsync"/> already returned.
+  /// </summary>
+  public Task<IReadOnlyList<int>> ReadParameterStackTailAsync(CancellationToken cancellationToken = default) =>
+      RunExclusiveAsync<IReadOnlyList<int>>(() =>
+      {
+        int[] sToDeepestTopToBottom = Transact(_targetRoute, KrakenProtocol.BuildReadPStackTail(), wordsToRead: 9, cancellationToken);
+        var deepestToS = sToDeepestTopToBottom.AsEnumerable().Reverse().ToArray();
+        return deepestToS;
       }, cancellationToken);
 
   // 'writePStack' pushes exactly 9 words (see KrakenProtocol's remarks).
@@ -907,23 +932,21 @@ internal sealed class KrakenSession : IAsyncDisposable
   }
 
   /// <summary>
-  /// Core-Dump-ONLY: 'focus = A[ @p dup >r ; ], port, A[ !p ]' (see
-  /// <see cref="KrakenProtocol.BuildFocus"/>) sent as a live transaction
-  /// through 'main's own 'w/r' head protocol, exactly like every other
-  /// per-node operation below. Confirmed (Stefan, real hardware/protocol
-  /// knowledge): this call's own reply mechanism uses exactly 1 word of the
-  /// just-focused node's parameter stack -- the caller MUST read the
-  /// parameter stack (<see cref="ReadParameterStackAsync"/>) immediately
-  /// after this, before any other operation on the same node, to capture its
-  /// true pre-focus top of stack; see CvmDebuggerViewModel.CoreDumpAsync's
-  /// own remarks for the full required ordering.
+  /// Core-Dump-ONLY: 'jump port' (see <see cref="KrakenProtocol.BuildFocus"/>) sent as a live
+  /// transaction through 'main's own 'w/r' head protocol, exactly like every other per-node operation
+  /// below. The jump itself touches neither stack; its one mandatory reply word is a bare '!p' -- a
+  /// plain pop of whatever is genuinely on top of the just-focused node's parameter stack, i.e. T,
+  /// returned here rather than discarded. Stefan's own point: this makes T free -- there is no need to
+  /// read it a second time. The caller MUST combine this return value with
+  /// <see cref="ReadParameterStackTailAsync"/> (NOT the full <see cref="ReadParameterStackAsync"/>,
+  /// which would pop an 11th, misaligned word off the same 10-word ring) to recover the complete,
+  /// true pre-focus parameter stack; see CvmDebuggerViewModel.CoreDumpAsync's own remarks for the full
+  /// required ordering.
   /// </summary>
-  public Task FocusAsync(int port, CancellationToken cancellationToken = default) =>
+  public Task<int> FocusAsync(int port, CancellationToken cancellationToken = default) =>
       RunExclusiveAsync(() =>
-      {
-        _ = Transact(_targetRoute, KrakenProtocol.BuildFocus(port), wordsToRead: 1, cancellationToken);
-        return 0;
-      }, cancellationToken);
+          Transact(_targetRoute, KrakenProtocol.BuildFocus(port), wordsToRead: 1, cancellationToken)[0],
+          cancellationToken);
 
   // ---- node-708 word transport --------------------------------------------
   // Every request/reply to/from node 708 travels as plain async-encoded words
