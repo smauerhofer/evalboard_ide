@@ -173,14 +173,19 @@ public sealed class PostMortemNodeDetailViewModel
     {
       bool hasCompiledWord = compiledByAddress.TryGetValue(word.Address, out int compiledWord);
       string? compiledHexText = hasCompiledWord ? compiledWord.ToString("X5") : null;
-      string? compiledDisassembly = hasCompiledWord ? F18Disassembler.Decode(word.Address, compiledWord).ToString() : null;
+      // .Format(labelsByAddress), not .ToString(): a control transfer's own embedded destination gets
+      // "(<label>)"/"(<port name>)" appended when recognized -- see F18DisassembledSlot.Format's own
+      // remarks. Same labelsByAddress for both columns: it describes what THIS node's own compiled
+      // source calls each address, which applies equally to decoding the on-chip image or the
+      // compiled-for-comparison one.
+      string? compiledDisassembly = hasCompiledWord ? F18Disassembler.Decode(word.Address, compiledWord).Format(labelsByAddress) : null;
       string? label = labelsByAddress.TryGetValue(word.Address, out string? labelName) ? labelName : null;
 
       rows.Add(new PostMortemWordRow(
           word.Address.ToString("X3"),
           label,
           word.RawWord.ToString("X5"),
-          word.ToString(),
+          word.Format(labelsByAddress),
           previousMayConsumeAsLiteral,
           mismatchedAddresses.Contains(word.Address),
           compiledHexText,
@@ -192,35 +197,8 @@ public sealed class PostMortemNodeDetailViewModel
     return rows;
   }
 
-  // A colon-definition entry point (F18ExportKind.Word) and a plain in-body label
-  // (F18ExportKind.Label) can both name an address; Word always wins when both land on the same
-  // address (added second, unconditionally overwriting), since it's the more meaningful name for
-  // that spot. F18ExportKind.Constant is skipped entirely -- its Value is a compile-time constant,
-  // not an address, so it never belongs in an address-keyed map.
-  private static Dictionary<int, string> BuildLabelMap(IReadOnlyDictionary<string, F18ExportedSymbol>? symbols)
-  {
-    var labelsByAddress = new Dictionary<int, string>();
-    if (symbols is null)
-    {
-      return labelsByAddress;
-    }
-
-    foreach (F18ExportedSymbol symbol in symbols.Values)
-    {
-      if (symbol.Kind == F18ExportKind.Label)
-      {
-        labelsByAddress.TryAdd(symbol.Value, symbol.Name);
-      }
-    }
-
-    foreach (F18ExportedSymbol symbol in symbols.Values)
-    {
-      if (symbol.Kind == F18ExportKind.Word)
-      {
-        labelsByAddress[symbol.Value] = symbol.Name;
-      }
-    }
-
-    return labelsByAddress;
-  }
+  // Shared with NodeEditorViewModel's own RAM/ROM display -- see F18Disassembler.BuildLabelsByAddress's
+  // own remarks for the "Word wins over Label" rule this now just delegates to.
+  private static Dictionary<int, string> BuildLabelMap(IReadOnlyDictionary<string, F18ExportedSymbol>? symbols) =>
+      F18Disassembler.BuildLabelsByAddress(symbols);
 }

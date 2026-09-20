@@ -306,7 +306,9 @@
               <Grid>
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="Auto" />
+                  <ColumnDefinition Width="Auto" />
                   <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="2*" />
                 </Grid.ColumnDefinitions>
                 <TextBox Grid.Column="0" Text="{Binding RamAddressGutterText, Mode=OneWay}"
                                        IsReadOnly="True" IsTabStop="False"
@@ -317,13 +319,33 @@
                                        VerticalScrollBarVisibility="Disabled"
                                        HorizontalScrollBarVisibility="Disabled"
                                        IsInactiveSelectionHighlightEnabled="True" />
-                <TextBox Grid.Column="1" Text="{Binding RamWordsText, UpdateSourceTrigger=PropertyChanged}"
+                <TextBox Grid.Column="1" Text="{Binding RamLabelGutterText, Mode=OneWay}"
+                                       IsReadOnly="True" IsTabStop="False"
+                                       AcceptsReturn="True" BorderThickness="0"
+                                       Background="#F4F4F4" Foreground="#666"
+                                       FontFamily="Consolas" FontSize="13"
+                                       Padding="2,0,8,0" TextWrapping="NoWrap" MinWidth="80"
+                                       VerticalScrollBarVisibility="Disabled"
+                                       HorizontalScrollBarVisibility="Disabled"
+                                       IsInactiveSelectionHighlightEnabled="True"
+                                       ToolTip="The name this node's own last successful RAM compile binds to that address, if any." />
+                <TextBox Grid.Column="2" Text="{Binding RamWordsText, UpdateSourceTrigger=PropertyChanged}"
                                        AcceptsReturn="True" MinWidth="120"
                                        BorderThickness="0" Padding="2,0,2,0"
                                        FontFamily="Consolas" FontSize="13"
                                        TextWrapping="NoWrap" SpellCheck.IsEnabled="False"
                                        VerticalScrollBarVisibility="Disabled"
                                        HorizontalScrollBarVisibility="Disabled" />
+                <TextBox Grid.Column="3" Text="{Binding RamDisassemblyGutterText, Mode=OneWay}"
+                                       IsReadOnly="True" IsTabStop="False"
+                                       AcceptsReturn="True" BorderThickness="0"
+                                       Background="#F4F4F4" Foreground="#666"
+                                       FontFamily="Consolas" FontSize="13"
+                                       Padding="8,0,2,0" TextWrapping="NoWrap" MinWidth="160"
+                                       VerticalScrollBarVisibility="Disabled"
+                                       HorizontalScrollBarVisibility="Disabled"
+                                       IsInactiveSelectionHighlightEnabled="True"
+                                       ToolTip="Decoded from whatever is currently in the Hex column, so it always matches even a hand edit made without recompiling." />
               </Grid>
             </ScrollViewer>
           </Grid>
@@ -378,7 +400,9 @@
             <Grid>
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="2*" />
               </Grid.ColumnDefinitions>
               <TextBox Grid.Column="0" Text="{Binding RomAddressGutterText, Mode=OneWay}"
                                      IsReadOnly="True" IsTabStop="False"
@@ -389,13 +413,33 @@
                                      VerticalScrollBarVisibility="Disabled"
                                      HorizontalScrollBarVisibility="Disabled"
                                      IsInactiveSelectionHighlightEnabled="True" />
-              <TextBox Grid.Column="1" Text="{Binding RomWordsText, UpdateSourceTrigger=PropertyChanged}"
+              <TextBox Grid.Column="1" Text="{Binding RomLabelGutterText, Mode=OneWay}"
+                                     IsReadOnly="True" IsTabStop="False"
+                                     AcceptsReturn="True" BorderThickness="0"
+                                     Background="#F4F4F4" Foreground="#666"
+                                     FontFamily="Consolas" FontSize="13"
+                                     Padding="2,0,8,0" TextWrapping="NoWrap" MinWidth="80"
+                                     VerticalScrollBarVisibility="Disabled"
+                                     HorizontalScrollBarVisibility="Disabled"
+                                     IsInactiveSelectionHighlightEnabled="True"
+                                     ToolTip="The name this node's own last successful ROM compile binds to that address, if any." />
+              <TextBox Grid.Column="2" Text="{Binding RomWordsText, UpdateSourceTrigger=PropertyChanged}"
                                      AcceptsReturn="True" MinWidth="120"
                                      BorderThickness="0" Padding="2,0,2,0"
                                      FontFamily="Consolas" FontSize="13"
                                      TextWrapping="NoWrap" SpellCheck.IsEnabled="False"
                                      VerticalScrollBarVisibility="Disabled"
                                      HorizontalScrollBarVisibility="Disabled" />
+              <TextBox Grid.Column="3" Text="{Binding RomDisassemblyGutterText, Mode=OneWay}"
+                                     IsReadOnly="True" IsTabStop="False"
+                                     AcceptsReturn="True" BorderThickness="0"
+                                     Background="#F4F4F4" Foreground="#666"
+                                     FontFamily="Consolas" FontSize="13"
+                                     Padding="8,0,2,0" TextWrapping="NoWrap" MinWidth="160"
+                                     VerticalScrollBarVisibility="Disabled"
+                                     HorizontalScrollBarVisibility="Disabled"
+                                     IsInactiveSelectionHighlightEnabled="True"
+                                     ToolTip="Decoded from whatever is currently in the Hex column, so it always matches even a hand edit made without recompiling." />
             </Grid>
           </ScrollViewer>
           <Border Grid.Row="2" Background="#EEF5EF" BorderBrush="#B9CCBD" BorderThickness="1"

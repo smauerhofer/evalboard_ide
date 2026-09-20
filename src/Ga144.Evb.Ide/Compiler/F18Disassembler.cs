@@ -1,3 +1,5 @@
+using Ga144.Evb.Ide.Models;
+
 namespace Ga144.Evb.Ide.Compiler;
 
 /// <summary>
@@ -11,8 +13,33 @@ namespace Ga144.Evb.Ide.Compiler;
 /// </summary>
 public sealed record F18DisassembledSlot(int SlotIndex, byte Opcode, string Mnemonic, bool IsControlTransfer, int? Destination)
 {
-  public override string ToString() =>
-      IsControlTransfer ? $"{Mnemonic} 0x{Destination:X3}" : Mnemonic;
+  public override string ToString() => Format(null);
+
+  /// <summary>
+  /// Same rendering as <see cref="ToString"/>, but for a control transfer's own embedded destination
+  /// address, appends " (&lt;name&gt;)" when that address is recognized -- either as one of this
+  /// project's own compiled labels (<paramref name="labelsByAddress"/>, from
+  /// <see cref="F18Disassembler.BuildLabelsByAddress"/>, e.g. a "jump"/"call" to another word in the
+  /// SAME compiled image) or as one of the 19 documented port/multiport addresses
+  /// (<see cref="PortAddressNames"/>, e.g. "right"/"r---" -- a "jump port" embedding a live-focus
+  /// target rather than a real code address, exactly what <see cref="Services.KrakenProtocol.BuildFocus"/>
+  /// compiles). The two never collide (every multiport address is 0x100 or above; every RAM/ROM
+  /// address a label can name is below that), so checking labels first is safe either way -- done
+  /// first here only because a project's own label is the more specific, useful name on the rare
+  /// occasion both happen to be supplied and somehow agree.
+  /// </summary>
+  public string Format(IReadOnlyDictionary<int, string>? labelsByAddress)
+  {
+    if (!IsControlTransfer)
+    {
+      return Mnemonic;
+    }
+
+    int destination = Destination!.Value;
+    string hex = $"0x{destination:X3}";
+    string? name = labelsByAddress?.GetValueOrDefault(destination) ?? PortAddressNames.TryGetName(destination);
+    return name is null ? $"{Mnemonic} {hex}" : $"{Mnemonic} {hex} ({name})";
+  }
 }
 
 /// <summary>
@@ -34,7 +61,12 @@ public sealed record F18DisassembledWord(int Address, int RawWord, IReadOnlyList
   /// </summary>
   public bool MayConsumeNextWordAsLiteral => Slots.Any(slot => slot.Opcode is 0x08 or 0x0C);
 
-  public override string ToString() => string.Join(" ", Slots);
+  public override string ToString() => Format(null);
+
+  /// <summary>Same as <see cref="ToString"/>, but with each control-transfer slot's own destination
+  /// annotated via <see cref="F18DisassembledSlot.Format"/> -- see that method's own remarks.</summary>
+  public string Format(IReadOnlyDictionary<int, string>? labelsByAddress) =>
+      string.Join(" ", Slots.Select(slot => slot.Format(labelsByAddress)));
 }
 
 /// <summary>
@@ -175,5 +207,45 @@ public static class F18Disassembler
     }
 
     return result;
+  }
+
+  /// <summary>
+  /// Maps each address that a compiled word (colon-definition entry point) or an explicit label
+  /// names to that symbol's own name -- the shared lookup a "Label" column/gutter uses next to a
+  /// disassembled/decoded word image. Originally private to <c>PostMortemNodeDetailViewModel</c>
+  /// (Core Dump's own RAM/ROM comparison view); pulled out here, unchanged, so
+  /// <see cref="ViewModels.NodeEditorViewModel"/>'s own RAM/ROM display can share exactly the same
+  /// "which name wins" rule rather than re-deriving it: a plain in-body <see cref="F18ExportKind.Label"/>
+  /// and a colon-definition's own <see cref="F18ExportKind.Word"/> entry point can both name the same
+  /// address, and <see cref="F18ExportKind.Word"/> always wins (added second, unconditionally
+  /// overwriting) as the more meaningful name for that spot. <see cref="F18ExportKind.Constant"/> is
+  /// skipped entirely -- its <see cref="F18ExportedSymbol.Value"/> is a compile-time constant, not an
+  /// address, so it never belongs in an address-keyed map.
+  /// </summary>
+  public static Dictionary<int, string> BuildLabelsByAddress(IReadOnlyDictionary<string, F18ExportedSymbol>? symbols)
+  {
+    var labelsByAddress = new Dictionary<int, string>();
+    if (symbols is null)
+    {
+      return labelsByAddress;
+    }
+
+    foreach (F18ExportedSymbol symbol in symbols.Values)
+    {
+      if (symbol.Kind == F18ExportKind.Label)
+      {
+        labelsByAddress.TryAdd(symbol.Value, symbol.Name);
+      }
+    }
+
+    foreach (F18ExportedSymbol symbol in symbols.Values)
+    {
+      if (symbol.Kind == F18ExportKind.Word)
+      {
+        labelsByAddress[symbol.Value] = symbol.Name;
+      }
+    }
+
+    return labelsByAddress;
   }
 }

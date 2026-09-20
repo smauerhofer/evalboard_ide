@@ -35,6 +35,14 @@ public sealed class NodeEditorViewModel : ObservableObject
   private string _expandedRamSource = "Compile to view RAM source after macro expansion.";
   private string _expandedRomSource = "Compile to view ROM source after macro expansion.";
 
+  // Last successful compile of each dictionary, kept ONLY for their Symbols (the Label gutters --
+  // see RamLabelGutterText/RomLabelGutterText) -- everything else this window shows already comes
+  // from RamWordsText/RomWordsText/the listing strings above, updated in place on every compile. Not
+  // cleared when source is edited afterward: same accepted "goes stale until the next successful
+  // compile" staleness the words text and every listing/diagnostics string here already has.
+  private F18CompileResult? _lastRamResult;
+  private F18CompileResult? _lastRomResult;
+
   public NodeEditorViewModel(
       Ga144NodeConfiguration node,
       Ga144ChipConfiguration chip,
@@ -124,12 +132,12 @@ public sealed class NodeEditorViewModel : ObservableObject
 
   public bool Enabled { get => _enabled; set => SetProperty(ref _enabled, value); }
 
-  /// <summary>The 16 fixed swatches the "Node color" picker offers -- the same set
+  /// <summary>The 24 fixed swatches the "Node color" picker offers -- the same set
   /// MainWindow's project "Default node color" picker offers, via the same NodeColorOption.Palette.</summary>
   public IReadOnlyList<NodeColorOption> ColorOptions => NodeColorOption.Palette;
 
   /// <summary>This node's own color override, or null to follow the project's default. Null
-  /// until "Node color…" is used to pick one of the 16 swatches, or forever if "Use project
+  /// until "Node color…" is used to pick one of the 24 swatches, or forever if "Use project
   /// default" is clicked afterward.</summary>
   public string? Color
   {
@@ -148,12 +156,12 @@ public sealed class NodeEditorViewModel : ObservableObject
   public bool UsesProjectDefaultColor => Color is null;
 
   /// <summary>Color if this node has its own, otherwise the project's default -- always one of
-  /// the 16 NodeColorPalette swatches either way.</summary>
+  /// the 24 NodeColorPalette swatches either way.</summary>
   public string EffectiveColorHex => Color ?? _projectDefaultNodeColor;
 
   public Brush EffectiveColorBrush => NodeColorOption.BrushFromHex(EffectiveColorHex);
 
-  /// <summary>Picks one of the 16 <see cref="ColorOptions"/> swatches as this node's own color
+  /// <summary>Picks one of the 24 <see cref="ColorOptions"/> swatches as this node's own color
   /// override. Bound to each swatch's click in NodeEditorWindow.xaml.cs.</summary>
   public void SetColor(string hex) => Color = hex;
 
@@ -212,8 +220,29 @@ public sealed class NodeEditorViewModel : ObservableObject
     return string.Join(Environment.NewLine, Enumerable.Range(1, lineCount));
   }
 
-  public string RamWordsText { get => _ramWordsText; set => SetProperty(ref _ramWordsText, value ?? string.Empty); }
-  public string RomWordsText { get => _romWordsText; set => SetProperty(ref _romWordsText, value ?? string.Empty); }
+  public string RamWordsText
+  {
+    get => _ramWordsText;
+    set
+    {
+      if (SetProperty(ref _ramWordsText, value ?? string.Empty))
+      {
+        OnPropertyChanged(nameof(RamDisassemblyGutterText));
+      }
+    }
+  }
+
+  public string RomWordsText
+  {
+    get => _romWordsText;
+    set
+    {
+      if (SetProperty(ref _romWordsText, value ?? string.Empty))
+      {
+        OnPropertyChanged(nameof(RomDisassemblyGutterText));
+      }
+    }
+  }
 
   // RAM has no Models.RomComparison-style shared constant of its own -- it has
   // always been word-addressed from 0x000 for 64 words (per this window's own
@@ -243,6 +272,89 @@ public sealed class NodeEditorViewModel : ObservableObject
       Environment.NewLine,
       Enumerable.Range(0, Models.RomComparison.RomWordCount)
           .Select(index => $"0x{Models.RomComparison.RomBaseAddress + index:X3}"));
+
+  /// <summary>
+  /// Read-only "Label" gutter for the RAM word column, one line per address (same fixed
+  /// <see cref="RamWordCount"/>-line shape as <see cref="RamAddressGutterText"/>): the name this
+  /// node's own last successful RAM compile's exported symbols bind to that address, or blank when
+  /// none does. Recomputed from <see cref="_lastRamResult"/> -- notified explicitly from
+  /// <see cref="Compile"/>, since (unlike <see cref="RamDisassemblyGutterText"/>) it depends on the
+  /// compiler's own symbol table, not on anything <see cref="RamWordsText"/>'s setter already covers.
+  /// </summary>
+  public string RamLabelGutterText => BuildLabelGutterText(_lastRamResult, RamBaseAddress, RamWordCount);
+
+  /// <summary>See <see cref="RamLabelGutterText"/>'s own remarks; the ROM counterpart, from
+  /// <see cref="_lastRomResult"/>, notified from both <see cref="Compile"/> and <see cref="CompileRom"/>.</summary>
+  public string RomLabelGutterText => BuildLabelGutterText(_lastRomResult, Models.RomComparison.RomBaseAddress, Models.RomComparison.RomWordCount);
+
+  /// <summary>
+  /// Read-only "Disassembly" gutter for the RAM word column, one line per address, decoded from
+  /// whatever is CURRENTLY in <see cref="RamWordsText"/> -- not from <see cref="_lastRamResult"/>'s
+  /// own words -- so it always matches the adjacent editable Hex text exactly, including a hand edit
+  /// made without recompiling. A line that is missing (fewer than <see cref="RamWordCount"/> words
+  /// typed so far) or is not valid hex decodes as blank/"?" rather than throwing.
+  /// </summary>
+  public string RamDisassemblyGutterText => BuildDisassemblyGutterText(RamWordsText, RamBaseAddress, RamWordCount, _lastRamResult);
+
+  /// <summary>See <see cref="RamDisassemblyGutterText"/>'s own remarks; the ROM counterpart, decoded
+  /// from <see cref="RomWordsText"/>.</summary>
+  public string RomDisassemblyGutterText => BuildDisassemblyGutterText(RomWordsText, Models.RomComparison.RomBaseAddress, Models.RomComparison.RomWordCount, _lastRomResult);
+
+  private static string BuildLabelGutterText(F18CompileResult? result, int baseAddress, int wordCount)
+  {
+    Dictionary<int, string> labelsByAddress = F18Disassembler.BuildLabelsByAddress(result?.Symbols);
+    var lines = new List<string>(wordCount);
+    for (int index = 0; index < wordCount; index++)
+    {
+      lines.Add(labelsByAddress.TryGetValue(baseAddress + index, out string? label) ? label : string.Empty);
+    }
+
+    return string.Join(Environment.NewLine, lines);
+  }
+
+  // labelsFrom's Symbols, when a compile has succeeded at least once this session, annotate a
+  // control-transfer word's own embedded destination with "(<label>)" (see
+  // F18DisassembledSlot.Format's own remarks) -- e.g. "call 0x00C (fp3a/add)" -- exactly like the
+  // Post-Mortem word view already does. A "jump"/"call" straight to one of the 19 documented
+  // port/multiport addresses (e.g. "jump 0x1D5 (r---)") is annotated the same way with no compile
+  // needed at all, since PortAddressNames.Format's own registry is global, not per-node.
+  private static string BuildDisassemblyGutterText(string wordsText, int baseAddress, int wordCount, F18CompileResult? labelsFrom)
+  {
+    Dictionary<int, string> labelsByAddress = F18Disassembler.BuildLabelsByAddress(labelsFrom?.Symbols);
+    List<string> tokens = Split(wordsText, wordCount);
+    var lines = new List<string>(wordCount);
+    for (int index = 0; index < wordCount; index++)
+    {
+      if (index >= tokens.Count)
+      {
+        lines.Add(string.Empty);
+        continue;
+      }
+
+      lines.Add(TryParseHexWord(tokens[index]) is int word
+          ? F18Disassembler.Decode(baseAddress + index, word).Format(labelsByAddress)
+          : "?");
+    }
+
+    return string.Join(Environment.NewLine, lines);
+  }
+
+  // Same "0x" prefix format Compile()/CompileRom() write into RamWordsText/RomWordsText, but tolerant
+  // of a blank or not-yet-valid line -- this feeds a live display gutter while the person may still be
+  // mid-edit, so it must never throw the way Convert.ToInt32 would on empty/partial text.
+  private static int? TryParseHexWord(string text)
+  {
+    string trimmed = text.Trim();
+    if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+    {
+      trimmed = trimmed[2..];
+    }
+
+    return int.TryParse(trimmed, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out int value)
+        ? value & F18InstructionSet.WordMask
+        : null;
+  }
+
   public string EntryPoint { get => _entryPoint; set => SetProperty(ref _entryPoint, value ?? string.Empty); }
   public string P { get => _p; set => SetProperty(ref _p, value ?? string.Empty); }
   public string A { get => _a; set => SetProperty(ref _a, value ?? string.Empty); }
@@ -287,6 +399,8 @@ public sealed class NodeEditorViewModel : ObservableObject
       RomWordsText = string.Join(
           Environment.NewLine,
           result.Rom.Words.Select(word => $"0x{word & F18InstructionSet.WordMask:X5}"));
+      _lastRomResult = result.Rom;
+      OnPropertyChanged(nameof(RomLabelGutterText));
     }
 
     if (!result.Success)
@@ -309,6 +423,8 @@ public sealed class NodeEditorViewModel : ObservableObject
     RamWordsText = string.Join(
         Environment.NewLine,
         result.Ram.Words.Select(word => $"0x{word & F18InstructionSet.WordMask:X5}"));
+    _lastRamResult = result.Ram;
+    OnPropertyChanged(nameof(RamLabelGutterText));
 
     if (result.Ram.EntryPoint is int entryPoint)
     {
@@ -343,6 +459,8 @@ public sealed class NodeEditorViewModel : ObservableObject
       RomWordsText = string.Join(
           Environment.NewLine,
           result.Rom.Words.Select(word => $"0x{word & F18InstructionSet.WordMask:X5}"));
+      _lastRomResult = result.Rom;
+      OnPropertyChanged(nameof(RomLabelGutterText));
       CompilationStatus = $"ROM compiled ({result.Rom.UsedWordCount} word(s)); {warnings} warning(s).";
       return;
     }

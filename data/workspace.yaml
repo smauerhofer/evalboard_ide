@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-20T13:06:58.6466623
-      utcDateTime: 2026-09-20T13:06:58.6466623Z
-      localDateTime: 2026-09-20T15:06:58.6466623+02:00
+      dateTime: 2026-09-20T14:02:38.3055776
+      utcDateTime: 2026-09-20T14:02:38.3055776Z
+      localDateTime: 2026-09-20T16:02:38.3055776+02:00
       date: 2026-09-20T00:00:00.0000000
       day: 20
       dayOfWeek: Sunday
       dayOfYear: 263
-      hour: 13
-      millisecond: 646
-      microsecond: 662
-      nanosecond: 300
-      minute: 6
+      hour: 14
+      millisecond: 305
+      microsecond: 577
+      nanosecond: 600
+      minute: 2
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 58
-      ticks: 639255064186466623
-      utcTicks: 639255064186466623
-      timeOfDay: 13:06:58.6466623
+      second: 38
+      ticks: 639255097583055776
+      utcTicks: 639255097583055776
+      timeOfDay: 14:02:38.3055776
       year: 2026
   portB: 
   portC:
@@ -20749,12 +20749,11 @@ projects:
           // E--
 
           >r >r
-        //  clc
-
-        0 dup . + drop       // force carry-out = 0
+          clc
+        // 0 dup . + drop       // force carry-out = 0
           0 inv . +              // E-1
 
-        @b // brakepoint
+        // @b // brakepoint
 
           r> r>                   // E' H L
 
@@ -20874,16 +20873,14 @@ projects:
           fp4c/main
         ;
       ramWords:
-      - 0x2E813
-      - 0x00000
-      - 0x2C1EF
+      - 0x2E817
+      - 0x002D3
       - 0x00000
       - 0x329F2
-      - 0x00C9F
+      - 0x26C13
       - 0x002D3
-      - 0x249F2
-      - 0x2EDB0
-      - 0x27555
+      - 0x2C1BB
+      - 0x2C19D
       - 0x2A812
       - 0x00001
       - 0x3CC12
@@ -20893,21 +20890,21 @@ projects:
       - 0x26E55
       - 0x21DCA
       - 0x001FF
-      - 0x3F316
-      - 0x3B60A
-      - 0x11411
+      - 0x3F314
+      - 0x3B608
+      - 0x1140F
       - 0x3AF12
       - 0x00100
-      - 0x3F31A
+      - 0x3F318
       - 0x3B555
       - 0x3A9B2
-      - 0x2131E
+      - 0x2131C
       - 0x3B600
-      - 0x11411
+      - 0x1140F
       - 0x3ADB2
-      - 0x19422
+      - 0x19420
       - 0x3B600
-      - 0x11411
+      - 0x1140F
       - 0x3B555
       - 0x05A55
       - 0x1161A
@@ -20919,10 +20916,12 @@ projects:
       - 0x2A9B2
       - 0x135D5
       - 0x03EB2
-      - 0x13411
+      - 0x1340F
       - 0x2E822
       - 0x27B9A
-      - 0x09727
+      - 0x09725
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -20939,7 +20938,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x027
+        entryPoint: 0x025
         p: 0x000
         a: 0x000
         b: 0x000

@@ -851,8 +851,20 @@ public sealed class F18Compiler
 
     foreach (F18ExportedSymbol symbol in resolution.Exports.Symbols.Values)
     {
-      // Cross-node names are addresses, never local calls. Treat words and labels alike as imported values.
-      if (!TryAddImportedValue(symbol.Name, symbol.Value, coordinate, F18ExportKind.Label, directive))
+      // BUG FIX: this used to force every imported symbol to F18ExportKind.Label regardless of the
+      // exporting node's own Kind, on the theory that "cross-node names are addresses, never local
+      // calls". That reasoning broke a real, intended case: EmitWordReference already handles both
+      // kinds correctly on its own (Word -> a genuine call/jump control transfer; anything else ->
+      // a plain literal), so collapsing every import to Label made CompileOrdinaryToken's EARLIER
+      // TryResolveValue check (which only treats non-Word kinds as a resolvable value) intercept
+      // an imported Word first and silently compile it as a literal push of its address -- e.g.
+      // importing a callable word like 'clc' from another node and then writing 'clc' in this
+      // node's own source pushed 0x2D3 as data instead of compiling an actual call/jump to it.
+      // Preserving the exporting node's real Kind here fixes that: an imported Word now compiles
+      // as a real call/jump again, exactly like a same-node reference to it would. This does NOT
+      // affect the separate "A[ word ; ]] lit !" remote-control idiom (CompileQuotedInstruction),
+      // which already reads a symbol's raw Value directly and has never looked at Kind at all.
+      if (!TryAddImportedValue(symbol.Name, symbol.Value, coordinate, symbol.Kind, directive))
       {
         return;
       }
@@ -868,20 +880,53 @@ public sealed class F18Compiler
   {
     if (NameExists(name))
     {
-      // One import may replace a name a PREVIOUS import bound (warning, last
-      // import wins) -- the same rule a local definition gets in
-      // TryShadowImportedName. A collision with anything locally defined stays an
-      // error, and deliberately so: unlike the shadowing case, letting the import
-      // win would retarget forward references that ResolveSymbolRelocations has
-      // not patched yet, silently redirecting already-compiled call sites to
-      // another node's address.
-      if (!IsImportedNameOnly(name))
+      // One import may replace a name a PREVIOUS import bound (warning, last import wins) -- but
+      // ONLY when that previous binding was ALSO a genuine import, from some OTHER node. A node
+      // cannot import itself (F18C038, checked in CompileImportCoordinate), so a genuine import's
+      // own F18ExportedSymbol.NodeCoordinate is always a DIFFERENT coordinate from _options.NodeCoordinate
+      // (this compiling node). That is exactly what distinguishes it from the other things that can
+      // land a name in _externalSymbols under THIS SAME node's own coordinate: this node's own
+      // PredefinedSymbols (its just-compiled ROM dictionary, "automatically in scope" while
+      // compiling RAM -- see F18NodeCompilationService.CompileRam's own PredefinedSymbols = rom.Symbols),
+      // or the NamedMultiportCalls/CallableRomWords built-ins Reset() seeds the same way.
+      bool isExternal = _externalSymbols.TryGetValue(name, out F18ExportedSymbol? existing);
+
+      if (!isExternal)
       {
-        AddError("F18C042", $"Import from node {sourceNode:000} conflicts with existing name '{name}'.", token.Location);
+        // The name isn't in _externalSymbols at all, so NameExists found it in _symbols (a real
+        // colon-definition/label compiled from THIS node's own source), _constants, a primitive
+        // opcode, or a reserved compiler word. Letting an import win here would silently retarget
+        // every reference already resolved against that genuinely local definition, so this stays
+        // a hard, import-aborting error exactly as before.
+        AddError(
+            "F18C042",
+            $"Import from node {sourceNode:000} conflicts with existing name '{name}', which this node's own source already defines.",
+            token.Location);
         return false;
       }
 
-      F18ExportedSymbol previous = _externalSymbols[name];
+      if (existing!.NodeCoordinate == _options.NodeCoordinate)
+      {
+        // BUG FIX (Stefan's report): every GA144 node's ROM dictionary is built from the same
+        // shared set of utility words ("almost identical code"), so importing another node's
+        // exports ALWAYS collides with several of THIS node's own ROM/RAM-seeded names (or its
+        // NamedMultiportCalls/CallableRomWords built-ins) -- that's routine, not an error. The
+        // previous fix treated this as an import-aborting F18C042 error, which broke a different,
+        // legitimate case: aborting on the FIRST colliding name (e.g. 'relay') meant later,
+        // unrelated symbols in the SAME import directive (e.g. 'fp5c/div', 'fp5c/pass') never
+        // made it into _externalSymbols at all, so referencing them afterwards inside
+        // 'A[ ... ]]' failed with F18C019 ("not a primitive F18A opcode"). Fix: keep this node's
+        // own binding untouched, silently skip just this ONE imported name (an Info-level note,
+        // not a warning or error -- this collision is expected, not noteworthy), and let
+        // CompileImportCoordinate's loop continue on to the rest of the import's symbols.
+        AddInfo(
+            "F18I013",
+            $"Import from node {sourceNode:000}: '{name}' is already bound to 0x{existing.Value:X3} by this node's own RAM/ROM dictionary or a built-in name; keeping the existing binding and skipping this import.",
+            token.Location);
+        return true;
+      }
+
+      F18ExportedSymbol previous = existing!;
       AddWarning(
           "F18C056",
           $"Import from node {sourceNode:000} replaces '{name}', already imported from node " +
