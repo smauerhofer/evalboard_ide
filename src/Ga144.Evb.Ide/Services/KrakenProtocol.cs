@@ -289,6 +289,22 @@ internal static class KrakenProtocol
   public static int[] BuildReadMemory() => [Pack("@", "!p")];
 
   /// <summary>
+  /// Core-Dump-ONLY carry-flag read, Stefan's own recipe (the middle of his three steps -- the other two
+  /// are a pair of ordinary <see cref="BuildFocus"/> jumps the caller sends before and after this, the
+  /// first with the target port's address bit 9 set to enter Extended Arithmetic Mode
+  /// (<see cref="F18InstructionSet.ExtendedArithmeticBit"/>), the second with it cleared again to restore
+  /// normal execution): '@p dup . +', literal 0, '!p'. '@p' fetches that trailing literal (0) and pushes
+  /// it, 'dup' pushes a second copy, the bare '.' token sits immediately before '+' exactly as in this
+  /// project's other confirmed carry-consuming sequences (see e.g. Node501Program's own 'fp5b/add'), and
+  /// '+' -- because Extended Arithmetic Mode is active on the node at this moment -- adds WITH the
+  /// hardware carry-in: '0 + 0 + carry' leaves exactly the carry bit (0 or 1) on the stack, which '!p'
+  /// then sends back as this leaf's one reply word. This is genuinely per-node, real F18A hardware state
+  /// -- nothing to do with the CVM layer or any resident node program (in particular, nothing to do with
+  /// node 405's own SOFTWARE carry emulation, a completely separate, CVM-only concept).
+  /// </summary>
+  public static int[] BuildReadCarry() => [Pack("@p", "dup", ".", "+"), Mask(0), Pack("!p")];
+
+  /// <summary>
   /// See <see cref="BuildReadMemory"/>. Same idea as the old
   /// 'WriteMemoryInstruction' (@p + !): stores at the address currently in
   /// A, non-incrementing -- but, per the same fix applied to 'focus' (see

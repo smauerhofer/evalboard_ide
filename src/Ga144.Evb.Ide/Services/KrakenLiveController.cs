@@ -349,6 +349,15 @@ public sealed class KrakenLiveController : IAsyncDisposable
   public Task<int> FocusAsync(KrakenNodeRoute route, int port, CancellationToken cancellationToken = default) =>
       RunForRouteValueAsync(route, session => session.FocusAsync(port, cancellationToken), cancellationToken);
 
+  /// <summary>
+  /// Core-Dump-ONLY: reads <paramref name="route"/>'s node's real F18A hardware carry flag via
+  /// <see cref="KrakenSession.ReadCarryAsync"/> -- <paramref name="incomingPort"/> is the same plain port
+  /// address the node is already focused/relaying through, unrelated to node 405's own CVM-level software
+  /// carry emulation. See that method's own remarks for the three-step recipe this performs.
+  /// </summary>
+  public Task<int> ReadCarryAsync(KrakenNodeRoute route, int incomingPort, CancellationToken cancellationToken = default) =>
+      RunForRouteValueAsync(route, session => session.ReadCarryAsync(incomingPort, cancellationToken), cancellationToken);
+
   public Task<int> ReadAAsync(KrakenNodeRoute route, CancellationToken cancellationToken = default) =>
       RunForRouteValueAsync(route, session => session.ReadAAsync(cancellationToken), cancellationToken);
 

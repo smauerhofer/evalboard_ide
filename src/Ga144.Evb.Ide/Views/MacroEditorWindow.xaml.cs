@@ -29,4 +29,16 @@ public partial class MacroEditorWindow : Window
       Close();
     }
   }
+
+  /// <summary>
+  /// Explicit Click handler, not "IsCancel=True": WPF's IsCancel mechanism closes the window via
+  /// DialogResult, which only works for a window shown with ShowDialog. This editor is opened
+  /// non-modally (see MainWindow.xaml.cs), so an IsCancel button silently does nothing when clicked --
+  /// that was the reported bug. Saved is left false, so MainWindow's Closed handler skips persisting
+  /// any edits, exactly like a real cancel.
+  /// </summary>
+  private void OnCancelClick(object sender, RoutedEventArgs e)
+  {
+    Close();
+  }
 }

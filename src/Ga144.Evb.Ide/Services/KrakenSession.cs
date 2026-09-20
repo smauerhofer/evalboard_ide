@@ -948,6 +948,33 @@ internal sealed class KrakenSession : IAsyncDisposable
           Transact(_targetRoute, KrakenProtocol.BuildFocus(port), wordsToRead: 1, cancellationToken)[0],
           cancellationToken);
 
+  /// <summary>
+  /// Core-Dump-ONLY: reads this node's real F18A hardware carry flag, per Stefan's own three-step recipe.
+  /// <paramref name="incomingPort"/> is the same plain port address the node is already focused/relaying
+  /// through (e.g. what an earlier <see cref="FocusAsync"/> call used, or what a boot-frame prefix node
+  /// was wired with) -- NOT a different port, just the same one with/without address bit 9:
+  /// 1) re-focus with that bit set (<see cref="F18InstructionSet.ExtendedArithmeticBit"/>), entering
+  ///    Extended Arithmetic Mode -- <see cref="KrakenProtocol.BuildFocus"/> again, so this costs its own
+  ///    mandatory reply word (another top-of-stack pop, discarded);
+  /// 2) run <see cref="KrakenProtocol.BuildReadCarry"/> ('@p dup . +', literal 0), which leaves the carry
+  ///    bit itself (0 or 1) on the stack and sends it back -- this is the one value returned;
+  /// 3) re-focus a third time, back to the plain port (bit 9 cleared), so every later Core Dump read of
+  ///    this node sees normal (non-extended) execution again -- another discarded reply word.
+  /// This is real per-node F18A hardware state, unrelated to node 405's own CVM-level software carry
+  /// emulation. Only ever called after the parameter stack has already been fully recovered (immediately
+  /// after the initial <see cref="FocusAsync"/>, or via the boot-frame prefix's own
+  /// <see cref="ReadParameterStackAsync"/>), so the two extra destructive pops here cost nothing not
+  /// already accepted.
+  /// </summary>
+  public Task<int> ReadCarryAsync(int incomingPort, CancellationToken cancellationToken = default) =>
+      RunExclusiveAsync(() =>
+      {
+        _ = Transact(_targetRoute, KrakenProtocol.BuildFocus(incomingPort | F18InstructionSet.ExtendedArithmeticBit), wordsToRead: 1, cancellationToken);
+        int carry = Transact(_targetRoute, KrakenProtocol.BuildReadCarry(), wordsToRead: 1, cancellationToken)[0];
+        _ = Transact(_targetRoute, KrakenProtocol.BuildFocus(incomingPort), wordsToRead: 1, cancellationToken);
+        return carry;
+      }, cancellationToken);
+
   // ---- node-708 word transport --------------------------------------------
   // Every request/reply to/from node 708 travels as plain async-encoded words
   // (3 bytes each, the same wire shape as a boot-frame field): host to node

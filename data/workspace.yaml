@@ -1,6 +1,6 @@
 schemaVersion: 7
 activeBoardId: d6e6f99b-8d7d-4604-9709-4d6a0b6820f7
-activeProjectId: 0b82b025-33c0-4c4b-b948-acc38bb23ca3
+activeProjectId: 6f706653-dd18-4880-8fa0-a69b52146b8c
 settings:
   autoDetect: false
   activeProbeNewFtdiPorts: true
@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-20T08:59:44.0133855
-      utcDateTime: 2026-09-20T08:59:44.0133855Z
-      localDateTime: 2026-09-20T10:59:44.0133855+02:00
+      dateTime: 2026-09-20T13:06:58.6466623
+      utcDateTime: 2026-09-20T13:06:58.6466623Z
+      localDateTime: 2026-09-20T15:06:58.6466623+02:00
       date: 2026-09-20T00:00:00.0000000
       day: 20
       dayOfWeek: Sunday
       dayOfYear: 263
-      hour: 8
-      millisecond: 13
-      microsecond: 385
-      nanosecond: 500
-      minute: 59
+      hour: 13
+      millisecond: 646
+      microsecond: 662
+      nanosecond: 300
+      minute: 6
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 44
-      ticks: 639254915840133855
-      utcTicks: 639254915840133855
-      timeOfDay: 08:59:44.0133855
+      second: 58
+      ticks: 639255064186466623
+      utcTicks: 639255064186466623
+      timeOfDay: 13:06:58.6466623
       year: 2026
   portB: 
   portC:
@@ -15629,7 +15629,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 302
       enabled: true
       sourceCode: >+
@@ -15640,6 +15640,10 @@ projects:
           out: ee         {to node 402, pass exponent}
           out: hhll       {to node 301, pass mantissa}
           out: c          {to node 303, return compare result}
+
+          c: magnitude compare result
+            0x8000 : f1 >  f2
+            0      : f1 <= f2
         )
 
         entry fp4/main
@@ -15708,7 +15712,8 @@ projects:
       - 0x04A03
       - 0x00145
       - 0x0BF92
-      - 0x0B600
+      - 0x0BEB2
+      - 0x13400
       - 0x04A03
       - 0x00175
       - 0x0BF92
@@ -15717,12 +15722,11 @@ projects:
       - 0x00D2A
       - 0x13400
       - 0x2E8B2
-      - 0x1941A
+      - 0x1941B
       - 0x1140A
-      - 0x2731C
+      - 0x2731D
       - 0x1140A
       - 0x2770A
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15765,7 +15769,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 303
       enabled: true
       sourceCode: >+
@@ -15777,6 +15781,10 @@ projects:
           out: eehhll       {to node 302}
           in: c             {from node 302}
           out: c            {to node 403}
+
+          c: magnitude compare result
+            0x8000 : f1 >  f2
+            0      : f1 <= f2
         )
 
         entry fp3/main
@@ -15810,18 +15818,18 @@ projects:
 
       ramWords:
       - 0x01A02
+      - 0x0BE02
       - 0x0BF2A
-      - 0x01A02
-      - 0x0BDAA
+      - 0x01A12
       - 0x001D5
+      - 0x2BF2A
       - 0x01A02
       - 0x0BF2A
       - 0x01A02
-      - 0x0BF2A
-      - 0x03DAA
+      - 0x0BE12
       - 0x00145
-      - 0x0B700
-      - 0x15555
+      - 0x2BAB2
+      - 0x11400
       - 0x15555
       - 0x15555
       - 0x15555
@@ -15881,88 +15889,40 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 304
       enabled: true
-      sourceCode: >-
-        ( CVM2 node 304. VM 32 bit floatingpoint stage 2 node. rearrange data stream and collect return value )
-
-        (
-          in: otsehltsehl   {from node 305}
-          out: ottsseehhll  {to node 303}
-
-          return in:  sehl  {from node 404}
-          return out: sehl  {to node 305}
-        )
-
-
-        entry fp2/main
-
-        # right /b
-
-        # left /a
-
-
-        # 0 org
-
-
-
-        : fp2/order ( o t1 - t1 t2 o )
-          @b                    // o t1 t2
-
-          >r over r>            // o t1 o t2
-          over >r >r drop r> r>
-                                 // ... t1 t2 o
-        ;
-
-
-
-        : fp2/return
-          up a!
-          @ !b                  // s
-          @ !b                  // e
-          @ !b                  // h
-          @ !b                  // l
-
-
-        : fp2/main
-          left a!
-
-          @b                    // o
-          @b                    // o t1
-
-          @b >r                 // s1
-          @b >r                 // e1
-          @b >r                 // h1
-          @b >r                 // l1
-
-          ( o t1 )
-
-          fp2/order
-          ( t1 t2 o )
-
-          !                     // o
-          >r ! r> !             // t1 t2
-
-          r> r> r> r> !         // s1
-          @b !                  // s2
-
-          !                     // e1
-          @b !                  // e2
-
-          !                     // h1
-          @b !                  // h2
-
-          !                     // l1
-          @b !                  // l2
-
-          fp2/return
-        ;
+      sourceCode: "( CVM2 node 304. VM 32 bit floatingpoint stage 2 node. rearrange data stream and collect return value )\n(\n  in: osehlsehl   {from node 305}\n  out: ottsseehhll  {to node 303}\n\n  return in:  sehl  {from node 404}\n  return out: sehl  {to node 305}\n\r\ncalculate type:\n      t = 0x00   finite nonzero\n      t = 0x01   zero\n      t = 0x02   infinity\n      t = 0x04   qNaN\n      t = 0x0c   sNaN       // NAN bit + signaling bit\n\r\n\r\n\r\n)\n\nentry fp2/main\n# right /b\n# up /a\n\n# 0 org\n\r\n: fp2/fold ( lh-lhf) over over 0x7f and \n: fp2/or ( ab-c) >r inv r> inv and inv ;\n\n: fp2/calct ( l h e - l h e t )\n  ( l h e )\n\n  if // exp != 0\n\n    dup 0xff xor\n    if // normal\n      dup xor                      // t = 0\n      ( l h e 0 )\n      ;\n    then\n\n    ( l h 0xff 0 )\n    drop drop\n    ( l h )\n\n    // NaN or infinity\n    fp2/fold\n    ( l h f )\n\n    if // NaN\n      drop\n      ( l h )\n\n      // h bit6 = quiet bit\n      //\n      // qNaN: h&40 = 40 -> 8 xor 0c = 04\n      // sNaN: h&40 = 00 -> 0 xor 0c = 0c\n\n      dup 0x40 and\n      2/ 2/ 2/\n      0x0c xor\n\n      >r 0xff r>\n      ( l h e t )\n      ;\n    then\n\n    // infinity\n    drop\n    0xff 0x02\n    ( l h e t )\n    ;\n  then\n\n  // exponent = 0\n\n  drop\n  fp2/fold\n  ( l h f )\n\n  if // subnormal\n    drop\n    ( l h )\n\n    dup dup xor                  // e = 0\n    dup                          // t = 0\n\n    ( l h 0 0 )\n    ;\n  then\n\n  // zero\n  //\n  // l=h=f=0, so f already serves as e=0\n\n  0x01\n  ( 0 0 0 1 )\n  ;\r\n\r\n\n\n: fp2/return\n  up a!\n  @ !b                  // s\n  @ !b                  // e\n  @ !b                  // h\n  @ !b                  // l\n\n\n: fp2/main\n\n  left a!\n  @b !                  // o\r\n  \n\n  @b >r                 // s1\n  @b >r                 // e1\n  @b >r                 // h1\n  @b                    // l1\n\n  ( l1 / s1 e1 h1 )\r\n  r> r>\r\n  ( l1 h1 e1 / s1 )\r\n  fp2/calct\n  !                     // t1\n\r\n  @b >r                 // s2\n  @b >r                 // e2\n  @b >r                 // h2\n  @b                    // l2\r\n  ( l1 h1 e1 l2 / s1 s2 e2 h2 )\r\n  r> r>\r\n  ( l1 h1 e1 l2 h2 e2 / s1 s2 )\r\n  fp2/calct\n  !                     // t2\n  ( l1 h1 e1 l2 h2 e2 / s1 s2 )\r\n  r> r>\r\n  ( l1 h1 e1 l2 h2 e2 s2 s1 )\r\n  !                     // s1\n  !                     // s2\n  ( l1 h1 e1 l2 h2 e2 )\r\n  >r >r >r\r\n  ( l1 h1 e1 / e2 h2 l2 )\r\n  !                     // e1\n  ( l1 h1 e1 / e2 h2 l2 )\r\n  r> r> r>\r\n  !                     // e2\n  ( l1 h1 l2 h2 )\r\n  >r >r\r\n  ( l1 h1 / h2 l2 )\r\n  !                     // h1\r\n  r> r>\n  ( l1 l2 h2 )\r\n  !                     // h2\r\n  ( l1 l2 )\r\n  >r !                  // l1\r\n  r> !                  // l2\r\n\n  fp2/return\n;"
       ramWords:
-      - 0x00882
-      - 0x26FBA
-      - 0x2E29A
-      - 0x27555
+      - 0x20F12
+      - 0x0007F
+      - 0x3E9B2
+      - 0x2E69A
+      - 0x320CD
+      - 0x19417
+      - 0x25DE2
+      - 0x000FF
+      - 0x1940A
+      - 0x24355
+      - 0x3A2B2
+      - 0x13400
+      - 0x19414
+      - 0x3AD12
+      - 0x00040
+      - 0x3E7C2
+      - 0x31DE2
+      - 0x0000C
+      - 0x2FD9D
+      - 0x000FF
+      - 0x3BD15
+      - 0x000FF
+      - 0x00002
+      - 0x3B600
+      - 0x1941B
+      - 0x3AD92
+      - 0x38D55
+      - 0x05555
+      - 0x00001
       - 0x04A0A
       - 0x00145
       - 0x09E22
@@ -15970,48 +15930,23 @@ projects:
       - 0x089B2
       - 0x04A02
       - 0x00175
-      - 0x01FBA
+      - 0x0BFBA
       - 0x00802
-      - 0x2FFBA
-      - 0x13400
-      - 0x0A82A
-      - 0x27A9A
+      - 0x2FF9A
+      - 0x27605
+      - 0x0BFBA
+      - 0x00802
+      - 0x2FF9A
+      - 0x27605
+      - 0x0AC9A
+      - 0x0BABA
+      - 0x2E82A
       - 0x26C9A
-      - 0x0BF2A
-      - 0x0BF2A
-      - 0x0BF2A
-      - 0x0BF2A
-      - 0x11404
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x0A8BA
+      - 0x0AC9A
+      - 0x0A82A
+      - 0x27AB2
+      - 0x1141D
       - 0x15555
       - 0x15555
       - 0x15555
@@ -16024,217 +15959,218 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x009
+        entryPoint: 0x022
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 305
       enabled: true
-      sourceCode: >+
+      sourceCode: >-
         ( CVM2 node 305. VM 32 bit floatingpoint stage 1 node. unpack and pack )
 
         (
+          receives 2 floatingpoint numbers and decomposes each into
 
-        receives 2 floatingpoint numbers and decomposes each into
+          1. sign:
+               0       => positive
+               0x8000  => negative
 
+          2. exponent:
+               IEEE-754 biased exponent, 0x00 .. 0xff
 
-        1. sign:
-              0       => positive
-              0x8000  => negative
+          3. mantissa high:
+               normal numbers have implicit leading 1 made explicit in bit 7
 
-        2. type:
-              t = 0x00   finite nonzero
-              t = 0x01   zero
-              t = 0x02   infinity
-              t = 0x04   qNaN
-              t = 0x0c   sNaN       // NAN bit + signaling bit
+          4. mantissa low
 
-        3. exponent:
-              IEEE-754 biased exponent, 0x00 .. 0xff
-
-        4. mantissa high:
-              normal numbers have implicit leading 1 made explicit in bit 7
-
-        5. mantissa low
-
-          in: ohlhl
-          out: otsehltsehl
-          reply: sehl
-
+          in:    ohlhl           {from node 306}
+          out:   osehlsehl       {to node 304}
+          in:    sehl            {from node 304}
+          out:   hl              {to node 306}
         )
+
 
         # 0 org
 
         entry fp1/main
 
-        # left /a
 
-        # right /b
+        # left /b
 
-
-        : fp1/fold ( lh-lhf) over over 0x7f and 
-
-        : fp1/or ( ab-c) >r inv r> inv and inv ;
+        # right /a
 
 
-        : fp1/decompose ( )
-          @b >r @b r> ( lh )
 
+        : fp1/final ( l h - )
+          0x7f and
+          !                       // h
+          !                       // l
+        ;
+
+
+
+        : fp1/decompose ( - )
+          @b >r                   // h
+          @b r>                   // l h
+
+          ( l h )
           // sign
-          dup 0x8000 and >r
-          ( lh )                          // R: s
+
+          dup 0x8000 and
+          !                       // s
+
 
           // exponent
-          dup 2/ 2/ 2/ 2/ 2/ 2/ 2/ 0xff and ..
-          ( lhe )
 
-          if // exp != 0
+          dup
+          2/ 2/ 2/ 2/ 2/ 2/ 2/
+          0xff and
 
-            dup 0xff xor if // normal
-              dup xor !                    // t = 0
-              r> !                         // s
-              !                            // e
-              0x7f and 0x80 xor ! ! ;     // h l
-            then
+          dup !                   // e
 
-            // NaN or infinity
-            drop
-            ( lhe )                        // e = ff
-            >r                             // R: s e
-            fp1/fold
 
-            if // NaN
+          // Add explicit hidden bit only for a normal number:
+          //
+          //   e = 0       zero/subnormal
+          //   e = ff      infinity/NaN
+          //   otherwise   normal
+
+          if                      // e != 0
+
+            0xff xor ..
+
+            if                    // e != ff
               drop
-              ( lh )
-              dup 0x40 and 2/ 2/ 2/ 0x0c xor
-              !                            // t
-              r> r> ! !                    // s e
+              ( l h )
 
-        : fp1/final ( lh-) 0x7f and ! ! ;
-
-            then // infinity
-            drop
-            2 !                            // t
-            r> r> ! !                     // s e
-            fp1/final ;
-
-          then // denormalized or zero
-
-          ( lhe )                          // e = 0
-          >r                               // R: s e
-          fp1/fold
-
-          if // denormalized number
-            drop
-            r> dup !                       // t = e = 0, retain e
-            r> !                           // s
-            !                              // e
-            fp1/final ;
+              0x7f and
+              0x80 xor            // explicit hidden bit
+              !                   // h
+              !                   // l
+              ;
+            then
           then
 
-          // zero
-          drop
-          1 !                              // t
-          r> r> ! !                       // s e
-          fp1/final ;
+          // exponent 0 or ff:
+          // no hidden bit
 
-        : fp1/compose // read stehl from up and convert it to a 32-bit IEEE-754 number
-          up a!
+          drop
+          fp1/final
+        ;
+
+
+
+        // read sehl from node 304 and compose binary32
+
+
+        : fp1/compose
+
           // sign
           @
+
           // exponent
-          @ 2* 2* 2* 2* 2* 2* 2* xor
+          @
+          2* 2* 2* 2* 2* 2* 2*
+          xor
+
           // mantissa high
-          @ 0x7f and xor !b
+          // remove explicit hidden bit
+          @
+          0x7f and
+          xor
+          !b
+
           // mantissa low
-          @ 0xffff and !b
-        : fp1/main left a!
-          @b ! // o
-          fp1/decompose
-          fp1/decompose
-          fp1/compose ;
+          @
+          0xffff and
+          !b
 
 
+        : fp1/main
+          @b !                    // o
+          fp1/decompose           // operand 1
+          fp1/decompose           // operand 2
 
-
+          fp1/compose
+        ;
       ramWords:
-      - 0x20F12
-      - 0x0007F
-      - 0x3E9B2
-      - 0x2E69A
-      - 0x320CD
-      - 0x00802
-      - 0x26D12
-      - 0x08000
-      - 0x3E892
-      - 0x307C2
-      - 0x307C2
-      - 0x31DFA
-      - 0x000FF
-      - 0x19428
-      - 0x25DE2
-      - 0x000FF
-      - 0x19417
-      - 0x2432A
-      - 0x27A2F
-      - 0x0007F
-      - 0x3FDE2
-      - 0x00080
-      - 0x0BA55
-      - 0x3A8B2
-      - 0x13400
-      - 0x19424
-      - 0x3AD12
-      - 0x00040
-      - 0x3E7C2
-      - 0x31DE2
-      - 0x0000C
-      - 0x0AC9A
-      - 0x0BAB2
       - 0x0402A
       - 0x0007F
       - 0x0B555
-      - 0x3BD2A
-      - 0x00002
-      - 0x26C2A
-      - 0x0B721
-      - 0x2F600
-      - 0x1942D
-      - 0x3AC92
-      - 0x0AC2A
-      - 0x0B721
-      - 0x3BD2A
-      - 0x00001
-      - 0x26C2A
-      - 0x0B721
-      - 0x04A0A
-      - 0x00145
-      - 0x024DA
-      - 0x364DA
-      - 0x364E2
-      - 0x03DFA
+      - 0x00802
+      - 0x26D12
+      - 0x08000
+      - 0x3FA92
+      - 0x307C2
+      - 0x307C2
+      - 0x31DFB
+      - 0x000FF
+      - 0x0B313
+      - 0x043B2
+      - 0x000FF
+      - 0x19413
+      - 0x3BDFF
       - 0x0007F
-      - 0x39B0F
+      - 0x00080
+      - 0x39A2D
+      - 0x3B700
+      - 0x03EDA
+      - 0x364DA
+      - 0x364DA
+      - 0x39E12
+      - 0x0007F
+      - 0x3E322
+      - 0x03DFA
       - 0x0FFFF
-      - 0x3FBB2
-      - 0x04A02
-      - 0x00175
-      - 0x0B605
-      - 0x13405
-      - 0x11431
+      - 0x089B2
+      - 0x01AB2
+      - 0x13403
+      - 0x13403
+      - 0x11414
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x03B
+        entryPoint: 0x01D
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 306
       enabled: true
       sourceCode: >+
@@ -16320,9 +16256,9 @@ projects:
             left b!
             // binary
             ( x y )
-            drop dup 7 and dup >r a!
+            drop dup 7 and 2* dup >r a!
             ( x / f )
-            2/ 2/ 2/ dup 7 and >r
+            2/ 2/ 2/ dup 7 and 2* >r
             ( x / f g )
             2/ 2/ 2/ 7 and
             ( o / f g )
@@ -16403,13 +16339,13 @@ projects:
       - 0x1B437
       - 0x04BEB
       - 0x00175
-      - 0x04092
+      - 0x040DB
       - 0x00007
       - 0x2EAC2
       - 0x30797
       - 0x00007
-      - 0x3E8C2
-      - 0x30712
+      - 0x3E4BA
+      - 0x307C7
       - 0x00007
       - 0x3FB1A
       - 0x03B22
@@ -16421,7 +16357,7 @@ projects:
       - 0x13418
       - 0x228AA
       - 0x07E9A
-      - 0x2BA2D
+      - 0x2B82D
       - 0x13418
       - 0x2F555
       - 0x15555
@@ -16434,7 +16370,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 307
       enabled: true
       sourceCode: "( CVM2 node 307. VM ternary main, 1101_????_????_???? )\r\n# 407 import\n# 0x10 org\nentry k/main\n# 0 /a\n# up /b\r\n: k/@ ( ab-) A[ @p @p ]] lit !b !b !b A[ n/@ ]] lit !b A[ n/r! ]] lit !b ;\r\n: k/! ( ab-) A[ n/r@ ]] lit !b A[ @p @p ]] lit !b !b !b A[ n/! ]] lit !b ;\n: k/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: k/r! ( w) A[ @p n/r! ]] lit !b !b ;\n: k/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;\n: k/push ( w) A[ @p n/push ]] lit !b !b ;\n// : k/next ( -w) A[ n/next ]] lit !b A[ !p ]] lit !b @b ;\n: k/leave A[ n/leave ; ]] lit !b\n: k/main # k/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b\n  -if // 1101_1???_????_????\n    2* -if // 1101_11??_????_????\n      r> r--- ;\n    then // 1101_10??_????_????\n    r> --l- ;\n  then // 1101_0???_????_????\n  2* -if // 1101_01??_????_????\n    r> -d-- ;\n  then // 1101_00??_????_????\r\n\n(\r\n  \r\n\r\n)\n"
@@ -16994,17 +16930,14 @@ projects:
     - coordinate: 401
       enabled: true
       sourceCode: >+
-        ( CVM2 node 401. VM 32 bit floatingpoint stage 5a node. mantissahandling )
+        ( CVM2 node 401. VM 32 bit floatingpoint stage 5a node. mantissa handling )
 
         (
-          1. read extended mantissas and comparison data from node 301
-          2. select high or low mantissa difference
-          3. send mantissa comparison to node 402
-          4. wait for operation instruction
+          1. read extended mantissas from node 301
+          2. wait for operation instruction
 
-          in: HHLL0      {comparison not required}
-          in: HHLLcdd    {comparison required}
-          out: HHLL
+          in: HHLL       {extended mantissa from node 301}
+          out: HHLL      {extended mantissa to node 501}
         )
 
 
@@ -17018,39 +16951,41 @@ projects:
         # 0 org
 
 
-        : fp5a/swap >r >r ! ! r> r> ! ! ;
+        : fp5a/swap
+          ( H1 H2 L1 L2 )
+          >r >r 
+          !         //  H2
+          !         //  H1
+          r> r>
+          !         // L2
+          !         // L1
+          ;
 
-        : fp5a/nop >r >r >r ! r> ! r> ! r> ! ;
+        : fp5a/add
 
+        : fp5a/sub
 
-        : fp5a/add  ;
+        : fp5a/mul
 
-        : fp5a/sub  ;
+        : fp5a/div
 
-        : fp5a/mul  ;
-
-        : fp5a/div  ;
+        : fp5a/nop
+          >r
+          >r
+          >r
+          !         // H1
+          r> !      // H2
+          r> !      // L1
+          r> !      // L2
+          ;
 
 
 
         : fp5a/main
-          @b @b @b @b
-          left a!
-
-          @b if                  // compare required
-            drop                  // discard c = 0x8000
-
-            @b if                 // high mantissa delta != 0
-              @b drop             // retain high delta, consume low delta
-            else
-              drop @b             // high equal: use low delta
-            then
-          then
-
-          ( H1 H2 L1 L2 comp )
-          !                       // send mantissa comparison to 402
-
-          down a!
+          @b 
+          @b 
+          @b 
+          @b
           ( H1 H2 L1 L2 )
           --l-
           fp5a/main ;
@@ -17064,21 +16999,21 @@ projects:
       - 0x0AC2A
       - 0x27A9A
       - 0x0B555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x01F02
-      - 0x01DAA
-      - 0x00175
-      - 0x01312
-      - 0x3BF61
-      - 0x00242
-      - 0x3BFB2
-      - 0x0BDAA
-      - 0x00115
+      - 0x009B2
       - 0x13575
-      - 0x1140B
+      - 0x11407
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -17122,14 +17057,14 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00B
+        entryPoint: 0x007
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 402
       enabled: true
       sourceCode: >
@@ -17137,12 +17072,11 @@ projects:
 
         (
 
-        1. read sign & types from node 302
+        1. read exponents from node 302
 
         2. wait for instructions on right
 
-          in: ee0     {from node 302}
-          in: eecd    {from node 302}
+          in: ee      {from node 302}
           out: ee     {to node 502}
         )
 
@@ -17159,20 +17093,12 @@ projects:
         # 0 org
 
 
-        : fp4a/gt ( d-c )
-          -if                    // d < 0
-            drop 0
-          else                   // d >= 0
-            if                   // d > 0
-              drop 0x8000
-            then                 // d = 0 leaves zero
-          then
-        ;
+        : fp4a/swapc A[ fp5a/swap ]] lit ! over ;
 
 
-        : fp4a/swap A[ fp5a/swap ; ]] lit ! ;
+        : fp4a/swap A[ fp5a/swap ; ]] lit ! over ;
 
-        : fp4a/nop A[ fp5a/nop ; ]] lit ! over ;
+        : fp4a/nop A[ fp5a/nop ; ]] lit ! ;
 
 
         : fp4a/add A[ fp5a/add ; ]] lit ! ;
@@ -17185,65 +17111,53 @@ projects:
 
 
         : fp4a/main
-          @b @b
-          left a! ..
-
-          @b if                  // compare required
-            drop                  // discard compare-request flag
-
-            @b                    // exponent delta
-
-            if                    // exponent delta != 0
-              @ drop              // discard mantissa comparison
-            else
-              drop @              // exponent equal: use mantissa comparison
-            then
-
-            fp4a/gt               // -> 0 or 0x8000
-          then
-
-          down a!
-          ( e1 e2 comp )
-
-          r---
+          up b!
+          @b
+          ( e1 )
+          @b
+          ( e1 e2 )
 
           down b!
-          !b !b
+          ( e1 e2 )
+
+          r---
+          >r !b	           // e1
+          r> !b           // e2
           fp4a/main ;
       ramWords:
-      - 0x1B403
-      - 0x3BD46
-      - 0x00000
-      - 0x19406
-      - 0x3BDB2
-      - 0x08000
-      - 0x15555
-      - 0x05A55
-      - 0x11400
       - 0x05A85
+      - 0x13400
+      - 0x05A85
+      - 0x11400
+      - 0x05A55
       - 0x11403
       - 0x05A55
-      - 0x11407
+      - 0x11403
       - 0x05A55
-      - 0x11408
+      - 0x11403
       - 0x05A55
-      - 0x11409
+      - 0x11403
       - 0x05A55
-      - 0x1140A
-      - 0x01F12
-      - 0x00175
-      - 0x2A9B2
-      - 0x0131B
-      - 0x3BF61
-      - 0x02242
-      - 0x3BEB2
-      - 0x13400
-      - 0x04AB2
+      - 0x11403
+      - 0x04B02
+      - 0x00145
+      - 0x01DA2
       - 0x00115
       - 0x135D5
-      - 0x04B22
-      - 0x00115
-      - 0x09713
+      - 0x2FB9A
+      - 0x0970E
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -17276,14 +17190,14 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x013
+        entryPoint: 0x00E
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 403
       enabled: true
       sourceCode: >+
@@ -17298,6 +17212,10 @@ projects:
           For add/sub on output:
               |operand1| >= |operand2|
               s1,s2 are effective signs
+
+          c: magnitude compare result
+            0x8000 : f1 >  f2
+            0      : f1 <= f2
         )
 
 
@@ -17383,7 +17301,7 @@ projects:
           0x8000 xor       // 8000 => swap, 0 => keep order
           dup >r
           if
-            A[ fp4a/swap ]] lit !
+            A[ fp4a/swapc ]] lit !
           then
           drop
 
@@ -17446,7 +17364,7 @@ projects:
       - 0x3B712
       - 0x3B708
       - 0x05AB2
-      - 0x11407
+      - 0x11402
       - 0x04ABA
       - 0x00115
       - 0x2FA2A
@@ -17456,17 +17374,17 @@ projects:
       - 0x3869A
       - 0x3EFE5
       - 0x05AB2
-      - 0x11409
+      - 0x11404
       - 0x04ABA
       - 0x00115
       - 0x2E82A
       - 0x27A9A
       - 0x0AC2D
       - 0x05AB2
-      - 0x1140F
+      - 0x1140A
       - 0x11414
       - 0x05AB2
-      - 0x11411
+      - 0x1140C
       - 0x11414
       - 0x1340F
       - 0x19422
@@ -17482,14 +17400,14 @@ projects:
       - 0x08000
       - 0x2F32E
       - 0x05AB2
-      - 0x13407
+      - 0x13400
       - 0x3AF82
       - 0x39333
       - 0x3BD2A
-      - 0x1140D
+      - 0x11408
       - 0x11435
       - 0x3BD2A
-      - 0x1140B
+      - 0x11406
       - 0x27337
       - 0x3B70A
       - 0x3B714
@@ -17509,7 +17427,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 404
       enabled: true
       sourceCode: >-
@@ -17681,7 +17599,6 @@ projects:
           @b                     // e
           @b                     // H
           @b                     // L
-
           fp8/round
           fp8/fix
           fp8/reduce
@@ -17770,7 +17687,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 405
       enabled: true
       sourceCode: >-
@@ -18408,8 +18325,60 @@ projects:
         parameterStack: []
       color: '#D6ECF7'
     - coordinate: 409
-      enabled: false
-      sourceCode: ''
+      enabled: true
+      sourceCode: >
+        ( CVM2 node 409. VM 32 bit floatingpoint final stage node )
+
+        (
+          receives 1 floatingpoints number and composes it into a IEEE-754 number.
+          1. sign: 0 => positive, 0x8000 => negative
+          2. type: ==0 => normal or denormalized, !=0 => NaN or infitinte
+          3. signed exponent -128 .. 127
+          4. mantissa high
+          5. mantissa low
+          normalize number
+          send number to node 509.
+        )
+
+
+        # 0 org
+
+        entry fpf/main
+
+        # left /b
+
+        # up /a
+
+
+        : fpf/inc 1 . + ;
+
+        : fpf/dec -1 . + ;
+
+
+        : fpf/normalize ( ehl/s-)
+
+
+        : fpf/main
+          @b >r
+          @b if // NaN or infinite
+            @b 0xff and 2* 2* 2* 2* 2* 2* 2*
+            @b 0x7f and xor r> xor !
+            @b 0xffff and ! fpf/main ;
+          then // normal number
+            // get exponent
+            @b 0xff and >r
+            @b // high mantissa
+            // check if zero
+            if // nonzero
+              @b // low mantissa
+            then
+            @b // low mantissa
+            // check if zero
+            if // nonzero
+              fpf/normalize ;
+            then // zero
+            >r !
+            dup xor ! ;
       ramWords:
       - 0x049F5
       - 0x00001
@@ -18483,7 +18452,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#FFF1C7'
     - coordinate: 410
       enabled: false
       sourceCode: ''
@@ -18647,6 +18616,9 @@ projects:
         ;
 
 
+        // : fp5b/sub ( H1 H2 L1 L2 - H1 L1 ) drop >r drop r> ;
+
+
         : fp5b/sub ( H1 H2 L1 L2 - H L )
 
           // force carry = 1
@@ -18657,7 +18629,6 @@ projects:
 
           // H = H1 - H2 - borrow
           inv . +
-
           r>
         ;
 
@@ -18806,7 +18777,6 @@ projects:
         : fp5b/main
           @b @b @b @b
           ( H1 H2 L1 L2 )
-
           --l-
 
           up a!
@@ -18887,7 +18857,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 502
       enabled: true
       sourceCode: >
@@ -18980,9 +18950,9 @@ projects:
           @b fp4b/eff               // E1: 0 -> 1
           @b fp4b/eff               // E2: 0 -> 1
           ( E1 E2 )
-
+          left a!
           r---
-
+          up a!
           ( E )
           !                         // one exponent to node 602
 
@@ -19018,12 +18988,12 @@ projects:
       - 0x0B555
       - 0x01600
       - 0x01600
+      - 0x04AB2
+      - 0x001D5
       - 0x135D5
-      - 0x0B71B
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x04A2A
+      - 0x00145
+      - 0x1141B
       - 0x15555
       - 0x15555
       - 0x15555
@@ -19061,7 +19031,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 503
       enabled: true
       sourceCode: >+
@@ -19088,9 +19058,20 @@ projects:
         # 8 org
 
 
-        : fp3b/add A[ fp4b/add ; ]] lit ! ;
+        : fp3b/add
 
-        : fp3b/sub A[ fp4b/sub ; ]] lit ! ;
+        : fp3b/sub
+          if
+            A[ fp4b/sub ; ]] lit !
+            ;
+          then
+          A[ fp4b/add ; ]] lit !
+        ;
+
+
+        // : fp3b/add A[ fp4b/add ; ]] lit ! ;
+
+        // : fp3b/sub A[ fp4b/sub ; ]] lit ! ;
 
         : fp3b/min A[ ; ]] lit ! ;
 
@@ -19106,12 +19087,16 @@ projects:
 
 
 
-        : fp3b/main up b!
+        : fp3b/main up a!
           @b dup ! >r // o
           @b !        // t1
           @b !        // t2
-          @b !        // s1
-          @b !        // s2
+        //  @b !        // s1
+
+        //  @b !        // s2
+          @b dup !                 // send s1, retain s1
+          @b dup !                 // send s2, retain s2
+          xor                       // effective-sign difference
           right a!    // control node 502
           ex   // call jump table
           fp3b/main ;
@@ -19137,45 +19122,45 @@ projects:
         fp3b/swap ;
 
       ramWords:
-      - 0x11408
-      - 0x1140A
+      - 0x1140D
+      - 0x1140F
+      - 0x11411
+      - 0x11413
+      - 0x11415
+      - 0x11417
+      - 0x11419
+      - 0x1141B
+      - 0x1940B
+      - 0x05A55
+      - 0x1140F
+      - 0x05A55
       - 0x1140C
-      - 0x1140E
-      - 0x11410
+      - 0x05A55
+      - 0x1140C
+      - 0x05A55
+      - 0x1140F
+      - 0x05A55
+      - 0x15555
+      - 0x05A55
+      - 0x15555
+      - 0x05A55
       - 0x11412
-      - 0x11414
-      - 0x11416
-      - 0x05A55
-      - 0x11400
-      - 0x05A55
-      - 0x11400
-      - 0x05A55
-      - 0x15555
-      - 0x05A55
-      - 0x15555
-      - 0x05A55
-      - 0x11400
       - 0x05A55
       - 0x15555
       - 0x05A55
       - 0x15555
       - 0x05A55
       - 0x15555
-      - 0x04B03
+      - 0x04A03
       - 0x00145
       - 0x0A802
       - 0x0BF2A
-      - 0x01A02
-      - 0x0BDAA
+      - 0x00D2A
+      - 0x00D2A
+      - 0x39DAA
       - 0x001D5
       - 0x17555
-      - 0x11418
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1141D
       - 0x15555
       - 0x15555
       - 0x15555
@@ -19202,14 +19187,14 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x018
+        entryPoint: 0x01D
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 504
       enabled: true
       sourceCode: >-
@@ -19252,12 +19237,29 @@ projects:
         ;
 
 
+        : fp7/zeroinfo ( s mask  - )
+          >r
+          !                      // preserve sign
+          @b @b @b               // discard calculated e,h,l
+          r>
+         : fp7/sendx00
+          !
+          0 !                    // h
+          0 !                    // l
+        ;
+
+
+        : fp7/zero ( s - )
+          0 fp7/zeroinfo ;
+
+
+        : fp7/inf ( s - )
+          0xff fp7/zeroinfo ;
 
         : fp7/pass ( s - )
           !                      // final sign
 
           @b                     // e
-
           // finite overflow?
           //
           // e - 255 < 0 => e < 255
@@ -19287,46 +19289,20 @@ projects:
             drop
 
             // H=L=0
-
-            0 !                  // e
-            0 !                  // h
-            0 !                  // l
-            ;
+           0
+           fp7/sendx00
+           ;
           then
 
           // e >= 255 -> infinity
 
-          drop drop              // comparison, original e
           @b @b                  // discard calculated h,l
 
-          0xff !                 // e
-          0 !                    // h
-          0 !                    // l
+          0xff
+          fp7/sendx00
         ;
 
 
-
-        : fp7/zero ( s - )
-          !                      // preserve sign
-
-          @b @b @b               // discard calculated e,h,l
-
-          0 !                    // e
-          0 !                    // h
-          0 !                    // l
-        ;
-
-
-
-        : fp7/inf ( s - )
-          !                      // preserve sign
-
-          @b @b @b               // discard calculated e,h,l
-
-          0xff !                 // e
-          0 !                    // h
-          0 !                    // l
-        ;
 
 
 
@@ -19348,38 +19324,74 @@ projects:
 
 
         : fp7/main
-          @b                     // k
-
+          @b
+          ( k )
           // k=4 = ADD/SUB with both operands infinity.
           // bit14 of sign resolves Inf versus qNaN.
 
           dup 4 xor
+          ( k k^4 )
+
           if
+            // k != 4
+            ( k k^4 )
+
             drop
-            >r                    // dispatch k
-            @b                    // s
+            ( k )
+
+            >r
+            ( / k )
+
+            @b
+            ( s / k )
+
           else
-            drop drop             // comparison, k
+            // k = 4
+            // zero test value is still on stack.
+            ( k 0 )
 
-            @b                    // packed sign
+            drop drop
+            ( )
 
-            dup 0x4000 and
+            @b
+            ( packed-s )
+
+            dup 0x4000 . and
+            ( packed-s sign-different )
+
             if
+              // effective signs differ:
+              // Inf + -Inf or effective Inf - Inf -> qNaN
+              ( packed-s sign-different )
+
               drop
-              3 >r                // opposite effective signs -> qNaN
+              ( packed-s )
+
+              3 >r
+              ( packed-s / 3 )
+
             else
+              // effective signs equal -> infinity
+              ( packed-s 0 )
+
               drop
-              2 >r                // same effective sign -> infinity
+              ( packed-s )
+
+              2 >r
+              ( packed-s / 2 )
+
             then
           then
 
-          0x8000 and             // remove temporary bit14
+          ( s / dispatch )
 
-          ex
+          0x8000 and
+          ( s / dispatch )       // only real IEEE sign remains
+
+          ex                     // dispatch fp7/pass/zero/inf/qnan
 
           fp7/main
         ;
-
 
 
         # 0 org
@@ -19393,46 +19405,39 @@ projects:
 
         fp7/qnan ;
       ramWords:
-      - 0x11407
-      - 0x1141C
-      - 0x11422
-      - 0x11428
+      - 0x11411
+      - 0x1140D
+      - 0x1140F
+      - 0x11421
       - 0x2E82A
       - 0x27A9A
       - 0x0B555
+      - 0x2FA02
+      - 0x01F9A
+      - 0x0BD2F
+      - 0x00000
+      - 0x00000
+      - 0x0B555
+      - 0x05707
+      - 0x00000
+      - 0x05707
+      - 0x000FF
       - 0x0BF97
       - 0x000FE
       - 0x329F2
-      - 0x1B416
+      - 0x1B41E
       - 0x3BF03
-      - 0x1940E
+      - 0x19418
       - 0x3B704
       - 0x3A9B2
-      - 0x21311
+      - 0x2131B
       - 0x3B704
-      - 0x3BD2F
+      - 0x3BDB2
       - 0x00000
-      - 0x00000
-      - 0x0BD2D
-      - 0x00000
-      - 0x3A202
-      - 0x01D2F
+      - 0x11409
+      - 0x01F12
       - 0x000FF
-      - 0x00000
-      - 0x0BD2D
-      - 0x00000
-      - 0x0BF02
-      - 0x01D2F
-      - 0x00000
-      - 0x00000
-      - 0x0BD2D
-      - 0x00000
-      - 0x0BF02
-      - 0x01D2F
-      - 0x000FF
-      - 0x00000
-      - 0x0BD2D
-      - 0x00000
+      - 0x11409
       - 0x3BF02
       - 0x01D2F
       - 0x00000
@@ -19443,29 +19448,36 @@ projects:
       - 0x0B555
       - 0x00D12
       - 0x00004
-      - 0x39335
+      - 0x3932E
       - 0x3A802
-      - 0x1143D
+      - 0x11437
       - 0x3A203
-      - 0x04063
+      - 0x049FA
       - 0x04000
+      - 0x19435
       - 0x3BDBA
       - 0x00003
-      - 0x1143D
+      - 0x11437
       - 0x3BDBA
       - 0x00002
       - 0x0405D
       - 0x08000
-      - 0x11430
+      - 0x11429
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x030
+        entryPoint: 0x029
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 505
       enabled: true
       sourceCode: >-
@@ -20602,7 +20614,6 @@ projects:
 
         : fp5c/main
           @b @b @b @b
-
           // ADD/SUB: L H x x
           // MUL:     L H 0 x
           // DIV:     L2 L1 H2 H1
@@ -20695,7 +20706,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 602
       enabled: true
       sourceCode: >-
@@ -20738,8 +20749,13 @@ projects:
           // E--
 
           >r >r
-          clc
+        //  clc
+
+        0 dup . + drop       // force carry-out = 0
           0 inv . +              // E-1
+
+        @b // brakepoint
+
           r> r>                   // E' H L
 
           // H:L <<= 1
@@ -20803,7 +20819,7 @@ projects:
           drop
 
           // H=0, but L != 0
-          dup
+          dup .
           if
             drop
             fp4c/shl
@@ -20835,7 +20851,6 @@ projects:
         : fp4c/main
           up a!
           @                        // E from 502
-
           left a!
 
           r--- // give control to node 603
@@ -20859,14 +20874,16 @@ projects:
           fp4c/main
         ;
       ramWords:
-      - 0x2E817
-      - 0x002D3
+      - 0x2E813
+      - 0x00000
+      - 0x2C1EF
       - 0x00000
       - 0x329F2
-      - 0x26C13
+      - 0x00C9F
       - 0x002D3
-      - 0x2C1BB
-      - 0x2C19D
+      - 0x249F2
+      - 0x2EDB0
+      - 0x27555
       - 0x2A812
       - 0x00001
       - 0x3CC12
@@ -20876,20 +20893,21 @@ projects:
       - 0x26E55
       - 0x21DCA
       - 0x001FF
-      - 0x3F314
-      - 0x3B608
-      - 0x1140F
+      - 0x3F316
+      - 0x3B60A
+      - 0x11411
       - 0x3AF12
       - 0x00100
-      - 0x3F318
+      - 0x3F31A
       - 0x3B555
       - 0x3A9B2
-      - 0x2131C
+      - 0x2131E
       - 0x3B600
-      - 0x1140F
-      - 0x3AD67
+      - 0x11411
+      - 0x3ADB2
+      - 0x19422
       - 0x3B600
-      - 0x1140F
+      - 0x11411
       - 0x3B555
       - 0x05A55
       - 0x1161A
@@ -20901,13 +20919,10 @@ projects:
       - 0x2A9B2
       - 0x135D5
       - 0x03EB2
-      - 0x1340F
+      - 0x13411
       - 0x2E822
       - 0x27B9A
-      - 0x09724
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x09727
       - 0x15555
       - 0x15555
       - 0x15555
@@ -20924,14 +20939,14 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x024
+        entryPoint: 0x027
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 603
       enabled: true
       sourceCode: >-
@@ -21039,7 +21054,8 @@ projects:
 
 
         : fp3c/add
-          over xor 2/ xor !b
+          over xor 2/ xor
+          !b              // s
           A[ fp4c/add ; ]] lit !
         ;
 
@@ -21091,10 +21107,9 @@ projects:
           @ !b                  // t2
           @                     // s1
           @                     // s2
-
+          right a!
           ex                    // sends final sign and controls 602
 
-          right a!
 
           @                     // e
           @                     // h
@@ -21189,10 +21204,10 @@ projects:
       - 0x00145
       - 0x0880A
       - 0x09E22
-      - 0x03E5D
-      - 0x04A0A
+      - 0x03E12
       - 0x001D5
-      - 0x03EB2
+      - 0x2B455
+      - 0x03E0A
       - 0x1341A
       - 0x2E822
       - 0x27B9A
@@ -21206,7 +21221,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 604
       enabled: true
       sourceCode: >-
@@ -21406,9 +21421,7 @@ projects:
           @b >r                  // o
           @b                     // t1
           @b                     // t2
-
           ex                     // -> k
-
           !                      // k
           @b !                   // s
           @b !                   // e
@@ -21511,7 +21524,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 605
       enabled: false
       sourceCode: ''
@@ -22210,21 +22223,21 @@ projects:
         parameterStack: []
       color: 
     debuggerAssemblyCode: >+
-      pushlit 0x3F80    ; hi(1.0)
+      pushlit 0x3FC0    ; hi(1.5)
 
-      pushlit 0x0000    ; lo(1.0)
+      pushlit 0x0000    ; lo(1.5)
 
       fpop 0            ; fr[0] = 1.0
 
-      pushlit 0x4000    ; hi(2.0)
+      pushlit 0xBF80    ; hi(-1.0)
 
-      pushlit 0x0000    ; lo(2.0)
+      pushlit 0x0000    ; lo(-1.0)
 
       fpop 1            ; fr[1] = 2.0
 
       fadd 0 1          ; fr[0] = 1.0 + 2.0
 
-      fpush 0           ; expect WRITE 4040, WRITE 0000  (3.0 = 0x40400000)
+      fpush 0
 
       nop
 
@@ -24111,7 +24124,7 @@ projects:
       color: 
     debuggerAssemblyCode: 
   userMacros: []
-  defaultNodeColor: '#E6D6F7'
+  defaultNodeColor: '#FFF1C7'
 - id: 0b82b025-33c0-4c4b-b948-acc38bb23ca3
   name: CVM2_test
   board: 

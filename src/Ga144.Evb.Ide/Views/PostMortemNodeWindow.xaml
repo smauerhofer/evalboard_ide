@@ -39,7 +39,7 @@
 
       <Button Grid.Column="1" Content="Copy registers &amp; stacks" Padding="10,4" VerticalAlignment="Center"
                       Click="OnCopyRegistersAndStacksClick"
-                      ToolTip="Copies this node's A/IO registers and both stacks (top first), exactly as shown below, as plain text." />
+                      ToolTip="Copies this node's A/IO/Carry registers and both stacks (top first), exactly as shown below, as plain text." />
     </Grid>
 
     <TextBlock Grid.Row="1"
@@ -61,6 +61,8 @@
           <TextBlock FontWeight="SemiBold" Text="Registers" />
           <TextBlock FontFamily="Consolas" Text="{Binding AText, StringFormat='A:  {0}'}" />
           <TextBlock FontFamily="Consolas" Text="{Binding IoText, StringFormat='IO: {0}'}" />
+          <TextBlock FontFamily="Consolas" Text="{Binding CarryText, StringFormat='Carry: {0}'}"
+                             ToolTip="This node's own real F18A hardware carry flag, read via a temporary Extended Arithmetic Mode re-focus. Not the CVM's node-405 software carry emulation." />
         </StackPanel>
 
         <StackPanel Grid.Column="1" Margin="0,0,24,0">

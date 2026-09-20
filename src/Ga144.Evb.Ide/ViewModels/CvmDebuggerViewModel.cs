@@ -511,8 +511,12 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   ///      "jump port" implementation needed and this project's own docs did not account for -- very
   ///      likely the actual cause of the return-stack corruption Stefan found in earlier Core Dumps),
   ///      so no equivalent "read immediately" requirement exists for <see cref="KrakenLiveController.ReadReturnStackAsync"/>.
-  ///   3) read the rest of this node's state (A, IO, RAM, ROM, return stack) -- order among these no
-  ///      longer matters, since each is independently expected to round-trip through T.
+  ///   3) read the rest of this node's state (A, IO, Carry, RAM, ROM, return stack) -- order among
+  ///      these no longer matters, since each is independently expected to round-trip through T. Carry
+  ///      (<see cref="KrakenLiveController.ReadCarryAsync"/>) is this node's own real F18A hardware
+  ///      carry flag, per Stefan's own recipe: a temporary re-focus with address bit 9 set (Extended
+  ///      Arithmetic Mode) to read it via '@p dup . +', then a third focus back to plain -- unrelated
+  ///      to the CVM's own node-405 software carry emulation, a separate, higher-level concept.
   ///   4) only THEN write B (<see cref="KrakenLiveController.WriteBAsync"/>) to extend the tentacle one
   ///      hop further, making the NEXT node reachable for the next iteration. Doing this any earlier
   ///      would let writeB's own reply mechanism disturb this node's stack before step 2 had read it.
@@ -592,6 +596,12 @@ public sealed class CvmDebuggerViewModel : ObservableObject
             string? nodeColor = _chip.GetNode(route.Coordinate).Color;
             try
             {
+              // Same physical port either way -- which compass port this node's boot-frame prefix
+              // wiring (or a live Focus) already has it relaying through. Needed below for the carry
+              // read regardless of which branch wired it, since re-focusing with/without address bit
+              // 9 only ever re-targets THIS SAME port -- see KrakenSession.ReadCarryAsync's remarks.
+              int incomingPort = KrakenTopology.PortAddress(route.Coordinate, route.PreviousCoordinate ?? KrakenTopology.HeadCoordinate);
+
               IReadOnlyList<int> parameterStack;
               if (isBootFramePrefixNode)
               {
@@ -609,7 +619,6 @@ public sealed class CvmDebuggerViewModel : ObservableObject
                 // Focus's own mandatory reply word IS T (the parameter stack's own top), popped as
                 // part of its acknowledgment -- Stefan's own point: this comes for free, with no
                 // extra effort spent retrieving it, so it is captured here rather than discarded.
-                int incomingPort = KrakenTopology.PortAddress(route.Coordinate, route.PreviousCoordinate ?? KrakenTopology.HeadCoordinate);
                 int topOfStack = await _krakenController.FocusAsync(route, incomingPort);
 
                 // 2) The REMAINING 9 parameter-stack words, immediately -- see this method's own
@@ -622,9 +631,13 @@ public sealed class CvmDebuggerViewModel : ObservableObject
                 parameterStack = [.. parameterStackTail, topOfStack];
               }
 
-              // 3) Everything else -- order no longer matters among these.
+              // 3) Everything else -- order no longer matters among these. Carry is read here too
+              // (real per-node F18A hardware state, via a temporary re-focus with address bit 9 set --
+              // see KrakenSession.ReadCarryAsync's remarks); the parameter stack is already fully
+              // recovered by this point, so its own extra destructive pops cost nothing new.
               int a = await _krakenController.ReadAAsync(route);
               int io = await _krakenController.ReadIoAsync(route);
+              int carry = await _krakenController.ReadCarryAsync(route, incomingPort);
               IReadOnlyList<int> ram = await _krakenController.ReadRamAsync(route);
               IReadOnlyList<int> rom = await _krakenController.ReadRomAsync(route);
               IReadOnlyList<int> returnStack = await _krakenController.ReadReturnStackAsync(route);
@@ -642,6 +655,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
                 Coordinate = route.Coordinate,
                 A = a,
                 Io = io,
+                Carry = carry,
                 Ram = [.. ram],
                 Rom = [.. rom],
                 ParameterStack = [.. parameterStack],

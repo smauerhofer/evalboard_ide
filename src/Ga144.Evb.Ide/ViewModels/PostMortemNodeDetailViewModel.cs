@@ -57,6 +57,7 @@ public sealed class PostMortemNodeDetailViewModel
 
     AText = PortAddressNames.Format(snapshot.A);
     IoText = snapshot.Io.ToString("X5");
+    CarryText = snapshot.Carry.ToString();
 
     ParameterStackRows = BuildStackRows(snapshot.ParameterStack, topLabels: ["T", "S"]);
     ReturnStackRows = BuildStackRows(snapshot.ReturnStack, topLabels: ["R"]);
@@ -72,6 +73,11 @@ public sealed class PostMortemNodeDetailViewModel
   public string CoordinateText => $"{Snapshot.Coordinate:000}";
   public string AText { get; }
   public string IoText { get; }
+
+  /// <summary>This node's real F18A hardware carry flag ("0" or "1") at capture time -- see
+  /// <see cref="Models.PostMortemNodeSnapshot.Carry"/>'s own remarks. Unrelated to the CVM's own
+  /// node-405 software carry emulation.</summary>
+  public string CarryText { get; }
   public bool HasError => Snapshot.Error is not null;
   public Visibility ErrorVisibility => HasError ? Visibility.Visible : Visibility.Collapsed;
   public bool HasCompiledComparison { get; }
@@ -97,6 +103,7 @@ public sealed class PostMortemNodeDetailViewModel
       $"Node {CoordinateText}",
       $"A:  {AText}",
       $"IO: {IoText}",
+      $"Carry: {CarryText}",
       string.Empty,
       "Parameter stack (top first):"
     };

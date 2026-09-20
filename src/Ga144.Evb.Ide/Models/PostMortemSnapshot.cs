@@ -63,6 +63,13 @@ public sealed class PostMortemNodeSnapshot
   public int Coordinate { get; set; }
   public int A { get; set; }
   public int Io { get; set; }
+
+  /// <summary>This node's own real F18A hardware carry flag (0 or 1) at capture time -- genuine per-node
+  /// ALU state, read via a temporary Extended Arithmetic Mode re-focus (see
+  /// <see cref="Services.KrakenSession.ReadCarryAsync"/>). Unrelated to the CVM's own node-405 software
+  /// carry emulation, which is a completely separate, higher-level concept.</summary>
+  public int Carry { get; set; }
+
   public List<int> Ram { get; set; } = [];
   public List<int> Rom { get; set; } = [];
 
