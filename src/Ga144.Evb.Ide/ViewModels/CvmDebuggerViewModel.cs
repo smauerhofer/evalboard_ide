@@ -16,14 +16,20 @@ namespace Ga144.Evb.Ide.ViewModels;
 /// at a time instead of the automatic test's all-at-once summary. The Assembly Code editor
 /// (<see cref="AssemblyCodeText"/>/<see cref="AssembleCommand"/>) lets that starting program be
 /// replaced by hand-written CVM asm at any time -- trying a new opcode against the connected chip no
-/// longer needs a code change and a rebuild, just an edit and a click. <see cref="SaveCommand"/>/
-/// <see cref="LoadCommand"/> persist that hand-written source onto this chip's own project data
-/// (<see cref="Ga144ChipConfiguration.DebuggerAssemblyCode"/>) so it survives closing the debugger,
-/// while <see cref="RestoreCommand"/> discards it in favor of the original built-in test program. The
-/// constructor itself re-opens where Stefan left off: if this chip has a Saved
-/// <see cref="Ga144ChipConfiguration.DebuggerAssemblyCode"/>, <see cref="AssemblyCodeText"/> starts
-/// from that instead of <see cref="DefaultAssemblyCode"/>, and either way the constructor immediately
-/// calls <see cref="Assemble"/> once so the window opens with its program already assembled into the
+/// longer needs a code change and a rebuild, just an edit and a click. Stefan can keep SEVERAL such
+/// programs on one chip (<see cref="Programs"/>, backed by <see cref="Ga144ChipConfiguration.DebuggerPrograms"/>
+/// -- added 2026-09-20, replacing an earlier single-scratch-buffer design): <see cref="SelectedProgram"/>
+/// is the program selector's own binding, <see cref="AddProgramCommand"/> ("Add") creates a new,
+/// empty, uniquely-named one, and <see cref="ProgramNameText"/> is a rename box that only actually
+/// takes effect when <see cref="SaveCommand"/> runs (which also persists the whole list onto this
+/// chip's own project data so it survives closing the debugger), while <see cref="LoadCommand"/>
+/// reverts every program back to what Save last persisted and <see cref="RestoreCommand"/> replaces
+/// just the CURRENTLY selected program's own text with the original built-in test program. The
+/// constructor itself re-opens where Stefan left off: <see cref="InitializePrograms"/> rebuilds
+/// <see cref="Programs"/> from this chip's own Saved list (migrating an older single-program save, or
+/// seeding a fresh "default" one, the first time -- see <see cref="Ga144ChipConfiguration.Normalize"/>'s
+/// own remarks) and selects the first entry, then the constructor immediately calls
+/// <see cref="Assemble"/> once so the window opens with its program already assembled into the
 /// standalone simulated SRAM -- not just sitting as unassembled text in the editor waiting for a
 /// manual click.
 ///
@@ -127,6 +133,16 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   private string? _selectedBreakpoint;
   private string _assemblyCodeText = DefaultAssemblyCode;
 
+  // The CVM Debugger's own named programs (Stefan's own request, 2026-09-20) -- see InitializePrograms's
+  // own remarks for how this is (re)built from Ga144ChipConfiguration.DebuggerPrograms, and
+  // Ga144DebuggerProgramConfiguration's own remarks for the "always >=1 entry, 'default' always first"
+  // contract the underlying model guarantees. This is a working COPY (fresh Ga144DebuggerProgramConfiguration
+  // instances, not the same object references _chip.DebuggerPrograms holds) so switching/editing/adding
+  // here never touches the project's own persisted data until SaveProgram writes the whole list back --
+  // same "nothing lands on disk before Save" contract the single-program editor always had.
+  private Ga144DebuggerProgramConfiguration? _selectedProgram;
+  private string _programNameText = string.Empty;
+
   // Debug stack-poison toggle -- see FillStacksWithDebugPoison's own remarks. Defaults to ON per
   // Stefan: he wants this visible by default and to opt OUT for the rare run where a clean (real
   // values only, no 0x1555x filler) stack matters instead.
@@ -159,21 +175,21 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     ClearBreakpointsCommand = new RelayCommand(ClearBreakpoints, () => IsSessionActive && Breakpoints.Count > 0);
     RefreshMemoryCommand = new RelayCommand(RefreshMemoryView);
     AssembleCommand = new RelayCommand(Assemble, () => !IsBusy);
-    SaveCommand = new RelayCommand(SaveAssemblyCode);
-    LoadCommand = new RelayCommand(LoadAssemblyCode, () => _chip.DebuggerAssemblyCode is not null);
+    AddProgramCommand = new RelayCommand(AddProgram, () => !IsBusy);
+    SaveCommand = new RelayCommand(SaveProgram);
+    LoadCommand = new RelayCommand(LoadPrograms);
     RestoreCommand = new RelayCommand(RestoreAssemblyCode);
     CoreDumpCommand = new AsyncRelayCommand(CoreDumpAsync, () => !IsBusy);
 
-    // Reopen where Stefan left off: if this chip has ever had assembly code Saved from a previous
-    // CVM Debugger session, start the editor from that instead of DefaultAssemblyCode -- otherwise
-    // opening the window after a Save silently reverted to the built-in test program every time.
-    if (_chip.DebuggerAssemblyCode is { } savedAssemblyCode)
-    {
-      _assemblyCodeText = savedAssemblyCode;
-    }
+    // Reopen where Stefan left off: rebuilds Programs from this chip's own Saved
+    // Ga144ChipConfiguration.DebuggerPrograms (migrating an older single-program save the first time,
+    // and seeding a brand-new chip with one "default" program, if either applies -- see
+    // Ga144ChipConfiguration.Normalize's own remarks), selects the first entry (always "default" for a
+    // chip that has never renamed it away), and loads its text/name into the editor.
+    InitializePrograms();
 
     // Assemble immediately on open (the no-session half of Assemble() -- see its own remarks; needs
-    // no connected chip) so whatever ends up in the editor (saved code above, or DefaultAssemblyCode)
+    // no connected chip) so whatever ends up in the editor (the selected program's saved text above)
     // is already assembled into the standalone simulated SRAM the moment the window appears, instead
     // of showing a program that LOOKS loaded in the editor but has not actually been assembled until
     // Stefan clicks Assemble by hand. This also calls RefreshMemoryView()/RefreshProgramCounter()
@@ -219,16 +235,70 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   public string NewBreakpointText { get => _newBreakpointText; set => SetProperty(ref _newBreakpointText, value ?? string.Empty); }
 
   /// <summary>
-  /// The CVM Debugger's own Assembly Code editor contents -- prefilled, by the constructor, from this
-  /// chip's Saved <see cref="Ga144ChipConfiguration.DebuggerAssemblyCode"/> if it has one, or otherwise
-  /// from <see cref="DefaultAssemblyCode"/> (<see cref="CvmDebuggerDefaultProgram.Source"/> itself,
-  /// so it assembles to byte-identical words as the program Start already loads, and clicking
-  /// Assemble unedited right after Start is a no-op).
+  /// The CVM Debugger's own Assembly Code editor contents -- prefilled, on open or whenever
+  /// <see cref="SelectedProgram"/> changes, from that program's own saved <see cref="Ga144DebuggerProgramConfiguration.Source"/>.
   /// Freely editable; <see cref="AssembleCommand"/> is what actually does anything with a subsequent
   /// edit, though the constructor already calls <see cref="Assemble"/> once up front so the window
-  /// never opens with unassembled text sitting in the editor.
+  /// never opens with unassembled text sitting in the editor. Not written back into
+  /// <see cref="SelectedProgram"/> on every keystroke -- only when it stops being the active program
+  /// (switching <see cref="SelectedProgram"/>) or <see cref="SaveCommand"/> runs, same "nothing
+  /// committed until you act on it" contract this editor always had.
   /// </summary>
   public string AssemblyCodeText { get => _assemblyCodeText; set => SetProperty(ref _assemblyCodeText, value ?? string.Empty); }
+
+  /// <summary>
+  /// This chip's own named CVM Debugger programs -- a working copy of
+  /// <see cref="Ga144ChipConfiguration.DebuggerPrograms"/> (see <see cref="InitializePrograms"/>), so
+  /// the program selector ComboBox has something to bind its <c>ItemsSource</c> to. Always has at
+  /// least one entry (the "default" program, first) once the constructor has run.
+  /// </summary>
+  public ObservableCollection<Ga144DebuggerProgramConfiguration> Programs { get; } = [];
+
+  /// <summary>
+  /// The program selector's own <c>SelectedItem</c>. Switching this first commits
+  /// <see cref="AssemblyCodeText"/>'s CURRENT contents back into the program being switched AWAY from
+  /// (so bouncing between programs before ever clicking Save does not silently discard edited source
+  /// text -- only a not-yet-saved RENAME of the program name box is discarded that way, per
+  /// <see cref="ProgramNameText"/>'s own remarks), then loads the newly selected program's own
+  /// Source/Name into <see cref="AssemblyCodeText"/>/<see cref="ProgramNameText"/> and immediately
+  /// re-assembles it (same reasoning as the constructor's own up-front <see cref="Assemble"/> call:
+  /// the editor should never show text that looks loaded but isn't actually assembled yet).
+  /// </summary>
+  public Ga144DebuggerProgramConfiguration? SelectedProgram
+  {
+    get => _selectedProgram;
+    set
+    {
+      if (ReferenceEquals(_selectedProgram, value))
+      {
+        return;
+      }
+
+      CommitEditorSourceIntoSelectedProgram();
+      _selectedProgram = value;
+      OnPropertyChanged();
+      if (value is not null)
+      {
+        _assemblyCodeText = value.Source;
+        OnPropertyChanged(nameof(AssemblyCodeText));
+        _programNameText = value.Name;
+        OnPropertyChanged(nameof(ProgramNameText));
+        Assemble();
+      }
+    }
+  }
+
+  /// <summary>
+  /// The program-name text box's own contents -- always shows <see cref="SelectedProgram"/>'s current
+  /// name (reset to match it every time <see cref="SelectedProgram"/> changes), but a typed EDIT here
+  /// only actually renames the program when <see cref="SaveCommand"/> runs (Stefan's own spec: "rename
+  /// when using save") -- switching to a different program first, without saving, discards a
+  /// not-yet-saved rename attempt, unlike an edited-but-unsaved <see cref="AssemblyCodeText"/> (which
+  /// IS carried over across a switch -- see <see cref="SelectedProgram"/>'s own remarks). This
+  /// asymmetry is deliberate: renaming is meant to visibly take effect (in the ComboBox list, and in
+  /// what Save persists) only at the moment Save is clicked, never silently while just switching around.
+  /// </summary>
+  public string ProgramNameText { get => _programNameText; set => SetProperty(ref _programNameText, value ?? string.Empty); }
 
   // Bound to the breakpoint ListBox's SelectedItem so RemoveBreakpointCommand knows which entry to
   // remove -- kept as a plain RelayCommand (no parameterized command type exists elsewhere in this
@@ -251,6 +321,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   public RelayCommand ClearBreakpointsCommand { get; }
   public RelayCommand RefreshMemoryCommand { get; }
   public RelayCommand AssembleCommand { get; }
+  public RelayCommand AddProgramCommand { get; }
   public RelayCommand SaveCommand { get; }
   public RelayCommand LoadCommand { get; }
   public RelayCommand RestoreCommand { get; }
@@ -925,33 +996,146 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   }
 
   /// <summary>
-  /// Saves <see cref="AssemblyCodeText"/> onto this chip's <see cref="Ga144ChipConfiguration.DebuggerAssemblyCode"/>
-  /// and notifies the owning project, which rides the IDE's normal debounced auto-save -- same
-  /// mechanism as every other edit in this app, so there is nothing further to do here to actually
-  /// land it on disk.
+  /// (Re)builds <see cref="Programs"/>/<see cref="SelectedProgram"/>/<see cref="AssemblyCodeText"/>/
+  /// <see cref="ProgramNameText"/> from this chip's own <see cref="Ga144ChipConfiguration.DebuggerPrograms"/>
+  /// -- called once by the constructor, and again by <see cref="LoadPrograms"/> to discard every
+  /// in-memory edit (unsaved source text, unsaved renames, unsaved newly-Added programs alike) and
+  /// revert to exactly what was last Saved. <see cref="Ga144ChipConfiguration.Normalize"/> is what
+  /// actually guarantees at least one ("default") entry exists (including migrating an older single-
+  /// program save the first time) -- this method just mirrors whatever it produces into fresh, working
+  /// copies (never the SAME <see cref="Ga144DebuggerProgramConfiguration"/> instances _chip holds) so
+  /// nothing typed here reaches the project's own data ahead of <see cref="SaveProgram"/>.
   /// </summary>
-  private void SaveAssemblyCode()
+  private void InitializePrograms()
   {
-    _chip.DebuggerAssemblyCode = AssemblyCodeText;
-    _notifyProjectChanged();
-    LoadCommand.NotifyCanExecuteChanged();
-    StatusText = "Saved the current Assembly Code to the project.";
+    _chip.Normalize();
+    Programs.Clear();
+    foreach (Ga144DebuggerProgramConfiguration saved in _chip.DebuggerPrograms)
+    {
+      Programs.Add(new Ga144DebuggerProgramConfiguration { Name = saved.Name, Source = saved.Source });
+    }
+
+    _selectedProgram = Programs[0];
+    OnPropertyChanged(nameof(SelectedProgram));
+    _assemblyCodeText = _selectedProgram.Source;
+    OnPropertyChanged(nameof(AssemblyCodeText));
+    _programNameText = _selectedProgram.Name;
+    OnPropertyChanged(nameof(ProgramNameText));
   }
 
-  /// <summary>Replaces <see cref="AssemblyCodeText"/> with whatever <see cref="SaveAssemblyCode"/> last saved for this chip. Disabled (see the constructor's <see cref="LoadCommand"/> wiring) until a save has happened at least once.</summary>
-  private void LoadAssemblyCode()
+  /// <summary>Writes <see cref="AssemblyCodeText"/>'s current contents back into <see cref="SelectedProgram"/>'s
+  /// own <see cref="Ga144DebuggerProgramConfiguration.Source"/> -- called before switching
+  /// <see cref="SelectedProgram"/> away (so the edit is not lost) and again at the top of
+  /// <see cref="SaveProgram"/> (so Save always persists whatever is actually on screen, even if the
+  /// selection was never switched away from in between). Deliberately does NOT also copy
+  /// <see cref="ProgramNameText"/> into <see cref="SelectedProgram"/>'s own Name -- see that property's
+  /// own remarks for why a rename is held back until Save specifically.</summary>
+  private void CommitEditorSourceIntoSelectedProgram()
   {
-    if (_chip.DebuggerAssemblyCode is not { } saved)
+    if (_selectedProgram is not null)
     {
-      StatusText = "No assembly code has been saved for this chip yet -- click Save first.";
+      _selectedProgram.Source = AssemblyCodeText;
+    }
+  }
+
+  /// <summary>
+  /// "Add": appends a new, empty, uniquely-named program (e.g. "New program", "New program 2", ...)
+  /// to <see cref="Programs"/> and selects it -- selecting it is what actually loads its (empty) text
+  /// into the editor and re-assembles (see <see cref="SelectedProgram"/>'s own remarks). Purely an
+  /// in-memory addition: like every other edit here, it is not persisted onto
+  /// <see cref="Ga144ChipConfiguration.DebuggerPrograms"/> until <see cref="SaveProgram"/> runs, so
+  /// closing the CVM Debugger without Saving afterward discards it.
+  /// </summary>
+  private void AddProgram()
+  {
+    // No explicit CommitEditorSourceIntoSelectedProgram() call needed here -- the SelectedProgram
+    // setter below already flushes the currently-selected program's edited text before switching.
+    string name = GenerateUniqueProgramName("New program");
+    var program = new Ga144DebuggerProgramConfiguration { Name = name, Source = string.Empty };
+    Programs.Add(program);
+    SelectedProgram = program;
+    StatusText = $"Added a new program \"{name}\". Edit its Assembly Code, then click Save to keep it in the project.";
+  }
+
+  private string GenerateUniqueProgramName(string baseName)
+  {
+    if (Programs.All(program => !string.Equals(program.Name, baseName, StringComparison.OrdinalIgnoreCase)))
+    {
+      return baseName;
+    }
+
+    int suffix = 2;
+    while (Programs.Any(program => string.Equals(program.Name, $"{baseName} {suffix}", StringComparison.OrdinalIgnoreCase)))
+    {
+      suffix++;
+    }
+
+    return $"{baseName} {suffix}";
+  }
+
+  /// <summary>
+  /// "Save": commits the editor's current Assembly Code into <see cref="SelectedProgram"/>'s own
+  /// Source, renames it to whatever <see cref="ProgramNameText"/> currently holds (Stefan's own spec:
+  /// "rename when using save" -- a no-op if it was not actually changed), then persists the WHOLE
+  /// <see cref="Programs"/> list -- every program, not just the selected one, so an edit made to
+  /// another program before switching away, or a brand-new one from <see cref="AddProgramCommand"/>,
+  /// is never silently lost -- onto <see cref="Ga144ChipConfiguration.DebuggerPrograms"/> and notifies
+  /// the owning project, same auto-save mechanism the single-program editor always rode. Refuses an
+  /// empty name or one that collides with a DIFFERENT program already in the list, leaving everything
+  /// else (including the source-text commit) exactly where it stood so a rename mistake never blocks
+  /// getting the assembly text itself saved -- Stefan can fix the name and click Save again.
+  /// </summary>
+  private void SaveProgram()
+  {
+    if (SelectedProgram is not { } selected)
+    {
       return;
     }
 
-    AssemblyCodeText = saved;
-    StatusText = "Loaded the last saved Assembly Code from the project.";
+    CommitEditorSourceIntoSelectedProgram();
+
+    string newName = ProgramNameText.Trim();
+    if (newName.Length == 0)
+    {
+      StatusText = "Cannot save: the program name cannot be empty.";
+      return;
+    }
+
+    if (Programs.Any(program => !ReferenceEquals(program, selected) && string.Equals(program.Name, newName, StringComparison.OrdinalIgnoreCase)))
+    {
+      StatusText = $"Cannot save: another program is already named \"{newName}\".";
+      return;
+    }
+
+    // BUG FIX (Stefan, 2026-09-20): renaming used to leave the program selector's dropdown showing the
+    // OLD name after Save. Ga144DebuggerProgramConfiguration.Name now raises INotifyPropertyChanged
+    // (see its own remarks), so this plain assignment is enough for the ComboBox's DisplayMemberPath
+    // binding to pick up the new text immediately -- no extra collection manipulation needed to force
+    // a visual refresh.
+    bool renamed = !string.Equals(selected.Name, newName, StringComparison.Ordinal);
+    selected.Name = newName;
+    ProgramNameText = newName;
+
+    _chip.DebuggerPrograms = [.. Programs.Select(program => new Ga144DebuggerProgramConfiguration { Name = program.Name, Source = program.Source })];
+    _notifyProjectChanged();
+    StatusText = renamed
+        ? $"Saved and renamed the program to \"{newName}\"."
+        : $"Saved \"{newName}\" to the project.";
   }
 
-  /// <summary>Replaces <see cref="AssemblyCodeText"/> with the original built-in test program (<see cref="DefaultAssemblyCode"/>), bypassing whatever was saved -- a clean way back to a known-good starting point.</summary>
+  /// <summary>"Load": reverts EVERY program back to what <see cref="SaveProgram"/> last persisted for
+  /// this chip, discarding every in-memory edit (unsaved source text, unsaved renames, and any
+  /// unsaved <see cref="AddProgramCommand"/> addition alike) -- the multi-program equivalent of the
+  /// single editor's old "revert to last save," done for the whole list at once rather than trying to
+  /// correlate one possibly-renamed, possibly brand-new program back to a specific saved entry by name.</summary>
+  private void LoadPrograms()
+  {
+    InitializePrograms();
+    Assemble();
+    StatusText = "Reloaded every program from the project (any unsaved edits were discarded).";
+  }
+
+  /// <summary>Replaces <see cref="AssemblyCodeText"/> with the original built-in test program (<see cref="DefaultAssemblyCode"/>), bypassing whatever <see cref="SelectedProgram"/> currently holds -- a clean way back to a known-good starting point for WHICHEVER program is selected. Only takes effect on that program once <see cref="SaveCommand"/> is clicked afterward, same as any other edit here.</summary>
   private void RestoreAssemblyCode()
   {
     AssemblyCodeText = DefaultAssemblyCode;
@@ -1228,6 +1412,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     ClearBreakpointsCommand.NotifyCanExecuteChanged();
     RefreshMemoryCommand.NotifyCanExecuteChanged();
     AssembleCommand.NotifyCanExecuteChanged();
+    AddProgramCommand.NotifyCanExecuteChanged();
     LoadCommand.NotifyCanExecuteChanged();
     CoreDumpCommand.NotifyCanExecuteChanged();
     OnPropertyChanged(nameof(IsContinuing));

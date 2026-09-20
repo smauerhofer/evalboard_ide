@@ -79,6 +79,17 @@
 
     <GroupBox Grid.Row="3" Header="Assembly Code (edit, then Assemble to load into the simulated SRAM)" Margin="0,10,0,0" Padding="8">
       <StackPanel>
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
+          <TextBlock Text="Program:" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <ComboBox ItemsSource="{Binding Programs}" SelectedItem="{Binding SelectedProgram}"
+                          DisplayMemberPath="Name" Width="200" Margin="0,0,8,0"
+                          ToolTip="Switch between this chip's own named CVM Debugger programs. The first one is always &quot;default&quot;. Switching commits this program's own edited text first, so it isn't lost, and re-assembles the one you switch to." />
+          <Button Content="Add" Command="{Binding AddProgramCommand}" Padding="10,4" Margin="0,0,16,0"
+                          ToolTip="Adds a new, empty, uniquely-named program to this chip and selects it. Not persisted until you click Save." />
+          <TextBlock Text="Name:" VerticalAlignment="Center" Margin="0,0,6,0" />
+          <TextBox Text="{Binding ProgramNameText, UpdateSourceTrigger=PropertyChanged}" Width="200" VerticalAlignment="Center"
+                          ToolTip="This program's name -- always shows the currently selected program. Edit it and click Save to rename." />
+        </StackPanel>
         <TextBox Text="{Binding AssemblyCodeText, UpdateSourceTrigger=PropertyChanged}"
                         AcceptsReturn="True" AcceptsTab="True"
                         FontFamily="Consolas" FontSize="12"
@@ -90,11 +101,11 @@
           <Button Content="Assemble" Command="{Binding AssembleCommand}" Padding="12,6" Margin="0,0,8,0"
                           ToolTip="Assembles this source against node 607's current compile and loads the result into a simulated SRAM's page 0, starting at address 0. With a chip connected, this is a live reprogram of whatever it's actually reading from. With none, it assembles into a standalone simulated SRAM instead -- so you can write and check a program before ever clicking Start; Start then applies it to the chip automatically." />
           <Button Content="Save" Command="{Binding SaveCommand}" Padding="12,6" Margin="0,0,8,0"
-                          ToolTip="Saves this text onto this chip's own project data, so it's still here next time you open the CVM Debugger. Rides the IDE's normal auto-save -- no separate file to manage." />
+                          ToolTip="Saves this program's text and name (renaming it if the Name box was changed) onto this chip's own project data, so it's still here next time you open the CVM Debugger. Also persists every OTHER program currently listed above. Rides the IDE's normal auto-save -- no separate file to manage." />
           <Button Content="Load" Command="{Binding LoadCommand}" Padding="12,6" Margin="0,0,8,0"
-                          ToolTip="Replaces this text with whatever Save last saved for this chip. Disabled until something has been saved." />
+                          ToolTip="Reverts every program back to what Save last saved for this chip, discarding any unsaved edits, renames, or newly-added programs." />
           <Button Content="Restore" Command="{Binding RestoreCommand}" Padding="12,6"
-                          ToolTip="Replaces this text with the original built-in test program -- the same source Start loads by default -- discarding whatever was saved." />
+                          ToolTip="Replaces this text with the original built-in test program -- the same source Start loads by default -- for whichever program is currently selected. Only takes effect on that program once you click Save." />
         </StackPanel>
         <Separator Margin="0,10,0,8" />
         <StackPanel Orientation="Horizontal">
