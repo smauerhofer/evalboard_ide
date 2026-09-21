@@ -187,7 +187,8 @@ public static class CvmAssembler
             break;
           }
 
-          // Node 306's six binary floating-point ops (EmbeddedUnsignedValuePair, 2026-09-16) are the
+          // Node 306/305's twelve unified floating-point ops (EmbeddedUnsignedValuePair, 2026-09-16,
+          // widened from six to twelve in the 2026-09-21 rework) are the
           // ONE mnemonic family here needing exactly TWO operands -- comma-separated, matching this
           // assembler's own established ".word 1, 2, 3" convention (e.g. "fadd 3, 2"), rather than
           // Stefan's own space-separated "fadd 3 2" example, which describes the CVM Debugger's
@@ -330,8 +331,10 @@ public static class CvmAssembler
           // the resolved base word once that's known (see CvmRelocation.EmbeddedValue's own remarks, and
           // CvmLinker's own remarks on its CvmOpcode case). 0 for every other mnemonic (their shapes carry
           // no ValueBitMask at all under this encoding, so this is simply never reached for them). Node
-          // 306's new fpop (2026-09-15, FloatingPointRegisterFieldBitMask, same 0-7 range) flows through
-          // this exact same generic path -- no mnemonic-specific code was needed to add it.
+          // 306's OLD 'fpop (2026-09-15) used to flow through this exact same generic path too -- see
+          // CvmInstructionSet.FloatingPointRegisterFieldBitMask's own remarks for why fpop (and the rest
+          // of node 306/305's floating-point family) moved to the self-describing
+          // EmbeddedUnsignedValuePair path instead, in the 2026-09-21 rework.
           int embeddedRegisterValue = 0;
           if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
           {
@@ -590,8 +593,9 @@ public static class CvmAssembler
   }
 
   /// <summary>
-  /// Emits one of node 306's six binary floating-point ops (<c>fadd</c>/<c>fsub</c>/<c>fmin</c>/
-  /// <c>fmax</c>/<c>fmul</c>/<c>fdiv</c>, 2026-09-16): <paramref name="shape"/>.Tag OR'd with TWO
+  /// Emits one of node 306/305's twelve unified floating-point ops (<c>fadd</c>/<c>fsub</c>/<c>fmin</c>/
+  /// <c>fmax</c>/<c>fmul</c>/<c>fdiv</c>/<c>fmove</c>/<c>fconst</c>/<c>fneg</c>/<c>fabs</c>/<c>fpop</c>/
+  /// <c>fpush</c>, 2026-09-16, widened from six to twelve in the 2026-09-21 rework): <paramref name="shape"/>.Tag OR'd with TWO
   /// independently-packed UNSIGNED register operands -- <paramref name="firstOperand"/> (register
   /// <c>fff</c>, the first operand and result register) into <paramref name="shape"/>.ValueBitMask, and
   /// <paramref name="secondOperand"/> (register <c>ggg</c>, the second operand, read-only) into

@@ -297,19 +297,28 @@ public static class CvmBootStreamBuilder
     });
     ThrowIfFailed(result308);
 
-    // CVM2 (2026-09-15): node 306, the new floating-point register node -- reached from node 307's own
-    // k/main dispatch via its RIGHT port (Node307Program's own "RIGHT/LEFT SWAPPED" remarks), a SIBLING
-    // of node 308 above (both are leaves hanging directly off 307's own dispatch, not a further link past
-    // each other). Imports 307 by name ('# 307 import', k/pop/k/push/k/leave), so must compile AFTER
-    // result307 above, same as result308. ADDED HERE 2026-09-15, the same day 'fpop was wired into
-    // CvmInstructionSet/CvmAssemblyLanguage (see FloatingPointPopMnemonic's own remarks) -- this harness's
-    // own "every node that has a live mnemonic depending on it gets compiled and checked, loudly" pattern
-    // now covers node 306 too. 'fpop's own resolution depends on this compile succeeding, and so (as of
-    // 2026-09-16) does 'fpush's -- the earlier naming collision against node 506's own "fpush" was
-    // resolved by Stefan renaming that one to "pushf", freeing "fpush" to name this node's own push word,
-    // per Stefan's direct override ("fpush must be wired. it is a valid opcode."). The binary/
-    // constant-lookup dispatch categories (fadd/fsub/fmin/fmax/fmul/fdiv/fln2/filn2/fpi2/f2pi) are fully
-    // self-describing and do not depend on this compile succeeding either way.
+    // CVM2 (2026-09-21): node 305, now the floating-point REGISTER FILE (see Node305Program's own remarks
+    // for the full derivation) -- moved here, ahead of result306 below, because node 306's own rework gave
+    // it a SECOND import, '# 305 import' (fr/binary/fr/move/fr/const/fr/neg/fr/abs/fr/pop/fr/push, plus
+    // the six f.add.."f.div" constants), which result306's own ImportResolver now resolves against this
+    // result. Node 305 itself has no imports of its own (no '# NNN import' in its new source), so, unlike
+    // every chained import step elsewhere in this method, it has no ordering constraint of its own beyond
+    // "before result306". This is a SECOND, UNRELATED role for coordinate 305 in this file -- it no longer
+    // has anything to do with the old 17-node floating-point pipeline's own stage 1 (see the "new 17-node
+    // pipeline" comment block further below, updated to flag that node 305 has been carved out of it).
+    F18CompileResult result305 = Compile(compiler, Node305Program.Source, F18CompilerOptions.ForRam(Node305Program.Coordinate));
+    ThrowIfFailed(result305);
+
+    // CVM2 (2026-09-15, REWORKED 2026-09-21): node 306, the floating-point INSTRUCTION DECODER -- reached
+    // from node 307's own k/main dispatch via its RIGHT port (Node307Program's own "RIGHT/LEFT SWAPPED"
+    // remarks), a SIBLING of node 308 above. Imports 307 by name ('# 307 import', k/pop/k/push/k/leave),
+    // so must compile AFTER result307 above, same as result308 -- and now ALSO imports 305 by name
+    // ('# 305 import', the register-file words listed on result305's own compile step just above), so
+    // must compile after result305 too. Every mnemonic node 306 provides (fadd/fsub/fmin/fmax/fmul/fdiv/
+    // fmove/fconst/fneg/fabs/fpop/fpush) is fully self-describing at the CVM-opcode level regardless
+    // (CvmOperandEncoding.EmbeddedUnsignedValuePair, see CvmInstructionSet.FloatingPointAddMnemonic's own
+    // remarks) and does not itself depend on this compile succeeding -- only BuildDescriptors' own "every
+    // node compiles cleanly" invariant does.
     F18CompileResult result306 = Compile(compiler, Node306Program.Source, new F18CompilerOptions
     {
       MemorySpace = F18MemorySpace.Ram,
@@ -317,9 +326,12 @@ public static class CvmBootStreamBuilder
       MemoryBaseAddress = 0x000,
       MemoryWordCount = 64,
       IncludeCommonRomWords = true,
-      ImportResolver = importedCoordinate => importedCoordinate == Node307Program.Coordinate
-          ? F18ImportResolution.FromExports(result307.Exports)
-          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+      ImportResolver = importedCoordinate => importedCoordinate switch
+      {
+        int coordinate when coordinate == Node307Program.Coordinate => F18ImportResolution.FromExports(result307.Exports),
+        int coordinate when coordinate == Node305Program.Coordinate => F18ImportResolution.FromExports(result305.Exports),
+        _ => F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+      },
     });
     ThrowIfFailed(result306);
 
@@ -427,27 +439,39 @@ public static class CvmBootStreamBuilder
     ThrowIfFailed(result511);
 
     // ----------------------------------------------------------------------------------------------
-    // The new 17-node, 32-bit floating-point pipeline (added 2026-09-16) -- an entirely separate mesh
-    // branch from the CVM instruction-dispatch tree above: none of these 17 nodes import, or are
-    // imported by, any node compiled above. See CvmNodeMesh's own remarks for the full pipeline shape
-    // (301-305 unpack/rearrange/split, fanning out at 303 into three control chains -- "3a"
-    // 403->402->401, "3b" 503->502->501, "3c" 603->602->601 -- converging back at 604/504/404) and the
-    // still-open question of exactly which node/port relays this branch's own entry point (node 305)
-    // into the rest of the mesh. Node 306 (see Node306Program's own remarks) is the obvious candidate --
-    // its own header lists the exact same 8 binary operations (add/sub/min/max/mul/div/-/-) this
-    // pipeline implements, and its coordinate (row 3, column 6) is numerically adjacent to node 305's
-    // (row 3, column 5) -- but neither source actually names the other, so these 17 are compiled here
-    // (for standalone tooling/disassembly) but deliberately left OUT of BuildLoadOrder below until
-    // Stefan confirms that link.
+    // What remains of the old 16-node (WAS 17, see below), 32-bit floating-point pipeline (added
+    // 2026-09-16) -- an entirely separate mesh branch from the CVM instruction-dispatch tree above:
+    // none of these nodes import, or are imported by, any node compiled above. See CvmNodeMesh's own
+    // remarks for the full pipeline shape (originally 301-305 unpack/rearrange/split, fanning out at
+    // 303 into three control chains -- "3a" 403->402->401, "3b" 503->502->501, "3c" 603->602->601 --
+    // converging back at 604/504/404).
+    //
+    // CORRECTED, 2026-09-21: the comment this replaces claimed these 17 nodes were "deliberately left
+    // OUT of BuildLoadOrder below until Stefan confirms that link" -- that is no longer true of
+    // BuildLoadOrder's actual content (see its own doc comment and steps further below: Stefan DID
+    // confirm the full leaf-first chain, "306->305->304->303->302->301" etc., on 2026-09-16, and it has
+    // been present there since). That claim was stale here even before today's edit; corrected now
+    // rather than repeated, since this block is being touched anyway.
+    //
+    // FLAGGED, 2026-09-21, NOT RESOLVED: node 305 -- this pipeline's own former stage 1 -- was reassigned
+    // to an unrelated floating-point-register-file role as part of Stefan's FP-engine rework (see
+    // result305's own compile step, now far above this one, and Node305Program's own remarks). Its
+    // compile step was REMOVED from this block for that reason (it still compiles, just earlier, for the
+    // unrelated reason of feeding node 306's import). BuildLoadOrder's own "(304, 305)"/"(305, 306)" load
+    // steps are a physical mesh-relay/deployment concern, not a data-flow one, and its own leaf-first
+    // topology (305 sits one hop further from the boot-injection point than 306, unchanged by either
+    // node's functional role) still holds regardless -- so those two steps were left as they are, not
+    // touched here. What is still genuinely open is FUNCTIONAL, not load-order: whether these remaining
+    // 16 nodes (301-304, 401-404, 501-504, 601-604) are now dead code, whether one of them takes over
+    // node 305's former stage-1 role, or whether the entire branch is meant to be retired. Not decided
+    // here either way -- these 16 are still compiled below (for standalone tooling/disassembly) exactly
+    // as before.
     //
     // Compile order: within each control chain, the IMPORTED node compiles first, exactly like every
     // "# N import" chain above (401 before 402 before 403, matching 403's own "# 402 import" and 402's
-    // own "# 401 import"; same pattern for 501/502/503 and 601/602/603). The row-300 nodes (301-305) and
+    // own "# 401 import"; same pattern for 501/502/503 and 601/602/603). The row-300 nodes (301-304) and
     // the no-import siblings (404, 504, 604) have no ordering constraint of their own.
     // ----------------------------------------------------------------------------------------------
-
-    F18CompileResult result305 = Compile(compiler, Node305Program.Source, F18CompilerOptions.ForRam(Node305Program.Coordinate));
-    ThrowIfFailed(result305);
 
     F18CompileResult result304 = Compile(compiler, Node304Program.Source, F18CompilerOptions.ForRam(Node304Program.Coordinate));
     ThrowIfFailed(result304);

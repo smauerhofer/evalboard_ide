@@ -302,7 +302,12 @@ public sealed class NodeEditorViewModel : ObservableObject
 
   private static string BuildLabelGutterText(F18CompileResult? result, int baseAddress, int wordCount)
   {
-    Dictionary<int, string> labelsByAddress = F18Disassembler.BuildLabelsByAddress(result?.Symbols, result?.ExternalSymbols);
+    // ownNodeCoordinate = result?.NodeCoordinate (Stefan's own request, 2026-09-21): this node's own
+    // RAM/ROM label gutter shows only labels that belong to THIS node -- this node's own
+    // colon-definitions/labels (Symbols) plus its own ROM dictionary/built-ins seeded into
+    // ExternalSymbols under this same coordinate -- never a name merely imported from another node.
+    // See BuildLabelsByAddress's own remarks for exactly what that test does and does not filter.
+    Dictionary<int, string> labelsByAddress = F18Disassembler.BuildLabelsByAddress(result?.Symbols, result?.ExternalSymbols, result?.NodeCoordinate);
     var lines = new List<string>(wordCount);
     for (int index = 0; index < wordCount; index++)
     {
@@ -320,7 +325,10 @@ public sealed class NodeEditorViewModel : ObservableObject
   // needed at all, since PortAddressNames.Format's own registry is global, not per-node.
   private static string BuildDisassemblyGutterText(string wordsText, int baseAddress, int wordCount, F18CompileResult? labelsFrom)
   {
-    Dictionary<int, string> labelsByAddress = F18Disassembler.BuildLabelsByAddress(labelsFrom?.Symbols, labelsFrom?.ExternalSymbols);
+    // Same "this node's own labels only" restriction as BuildLabelGutterText -- see its own remarks --
+    // so a "call x (<label>)" annotation below only ever names a label this node's own source defines
+    // or that its own ROM dictionary/built-ins provide, never one merely imported from another node.
+    Dictionary<int, string> labelsByAddress = F18Disassembler.BuildLabelsByAddress(labelsFrom?.Symbols, labelsFrom?.ExternalSymbols, labelsFrom?.NodeCoordinate);
     List<string> tokens = Split(wordsText, wordCount);
     var lines = new List<string>(wordCount);
     for (int index = 0; index < wordCount; index++)

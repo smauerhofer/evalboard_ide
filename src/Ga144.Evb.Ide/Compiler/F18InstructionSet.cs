@@ -12,6 +12,14 @@ public static class F18InstructionSet
   // whose labels carry it.
   public const int ExtendedArithmeticBit = 0x200;
 
+  // Bit 6 (0x40 = the 64-word segment size, DB001 Figure 2) selects which of the two
+  // mirrored copies of a node's 64-word RAM or ROM an address falls in: RAM x000-x03F
+  // is mirrored at x040-x07F, and ROM x080-x0BF at x0C0-x0FF (see F18Compiler's own
+  // ToPhysicalIndex remarks). It is not a distinct memory location -- both copies read
+  // and write the exact same 64 physical words -- so two addresses that differ only in
+  // this bit name the same word.
+  public const int MemoryMirrorBit = 0x40;
+
   public static IReadOnlyDictionary<string, byte> Opcodes { get; } =
       new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase)
       {

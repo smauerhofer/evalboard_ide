@@ -37,7 +37,21 @@ public sealed record F18DisassembledSlot(int SlotIndex, byte Opcode, string Mnem
 
     int destination = Destination!.Value;
     string hex = $"0x{destination:X3}";
-    string? name = labelsByAddress?.GetValueOrDefault(destination) ?? PortAddressNames.TryGetName(destination);
+
+    // Bit P9 (0x200, F18InstructionSet.ExtendedArithmeticBit) rides along in a compiled address
+    // without being part of memory decoding (see F18Compiler's own ToPhysicalIndex remarks) -- a
+    // slot-0 control transfer's destination field is wide enough (10 bits) to carry it whenever the
+    // call/jump was compiled under '+cy'. Bit 6 (0x40, F18InstructionSet.MemoryMirrorBit) is not
+    // part of decoding either -- it only picks which of the two mirrored copies of a node's 64-word
+    // RAM/ROM the address falls in (see that constant's own remarks); a transfer that targets the
+    // OTHER copy of the same word from where its label was recorded is still the same word. Both
+    // bits are masked out here the same way BuildLabelsByAddress already masks them out of its own
+    // keys, or a transfer compiled under Extended Arithmetic Mode, or one that (deliberately or not)
+    // names the mirrored address, would never match its own target's label. The raw, unmasked
+    // destination is still what is actually encoded and shown in 'hex' above -- only the LOOKUP
+    // ignores these two bits, never the displayed value.
+    int lookupAddress = destination & ~(F18InstructionSet.ExtendedArithmeticBit | F18InstructionSet.MemoryMirrorBit);
+    string? name = labelsByAddress?.GetValueOrDefault(lookupAddress) ?? PortAddressNames.TryGetName(destination);
     return name is null ? $"{Mnemonic} {hex}" : $"{Mnemonic} {hex} ({name})";
   }
 }
@@ -235,21 +249,58 @@ public static class F18Disassembler
   /// at the same address. <see cref="F18ExportKind.Constant"/> is skipped entirely -- its
   /// <see cref="F18ExportedSymbol.Value"/> is a compile-time constant, not an address, so it never
   /// belongs in an address-keyed map.
+  ///
+  /// <paramref name="ownNodeCoordinate"/> (Stefan's own request, 2026-09-21: the node editor's own
+  /// RAM/ROM label display should show only labels that belong to THIS node, never a name merely
+  /// imported from some OTHER node) restricts which <paramref name="externalSymbols"/> entries are
+  /// even considered: when supplied, only those whose own <see cref="F18ExportedSymbol.NodeCoordinate"/>
+  /// equals it are kept. This does NOT mean "only genuine imports are filtered and everything else
+  /// stays" as a side effect of some other test -- it is exactly that test: this SAME node's own
+  /// just-compiled ROM dictionary and the NamedMultiportCalls/CallableRomWords built-ins are all
+  /// seeded into <paramref name="externalSymbols"/> under THIS node's own coordinate (see
+  /// F18Compiler's own Reset), so "clc" and friends still show; only a name whose
+  /// <see cref="F18ExportedSymbol.NodeCoordinate"/> genuinely differs -- i.e. an actual
+  /// <c>NNN import</c> -- is dropped. Left null (every other caller, e.g. the Core Dump / Post-Mortem
+  /// comparison view), no filtering happens at all, preserving the earlier behavior of showing every
+  /// resolved name regardless of which node it came from.
+  ///
+  /// Every recorded address is also masked against <see cref="F18InstructionSet.ExtendedArithmeticBit"/>
+  /// (bit P9, 0x200) before being used as this map's key (Stefan's own request, 2026-09-21) -- P9 is
+  /// not part of memory decoding (see F18Compiler's own ToPhysicalIndex remarks) but rides along in
+  /// the location counter, so a label defined while Extended Arithmetic Mode was active (inside a
+  /// '+cy' section) would otherwise be recorded under an address 0x200 higher than the actual RAM/ROM
+  /// cell it names, and never match either that cell's own address or a control transfer's own
+  /// (equally P9-tainted) destination field -- see <see cref="F18DisassembledSlot.Format"/>'s matching
+  /// mask on the LOOKUP side.
+  ///
+  /// Also masked against <see cref="F18InstructionSet.MemoryMirrorBit"/> (bit 6, 0x40 -- Stefan's own
+  /// request, 2026-09-21): a node's RAM and ROM each mirror their 64 physical words once (RAM
+  /// x000-x03F at x040-x07F, ROM x080-x0BF at x0C0-x0FF -- see that constant's own remarks), so a
+  /// label whose own address happens to fall in the mirrored half, or a control transfer that
+  /// (deliberately, e.g. a wraparound tail call, or not) names the mirrored copy of the same word,
+  /// must still be recognized as the exact same word as its un-mirrored twin.
   /// </summary>
   public static Dictionary<int, string> BuildLabelsByAddress(
       IReadOnlyDictionary<string, F18ExportedSymbol>? symbols,
-      IReadOnlyDictionary<string, F18ExportedSymbol>? externalSymbols = null)
+      IReadOnlyDictionary<string, F18ExportedSymbol>? externalSymbols = null,
+      int? ownNodeCoordinate = null)
   {
     var labelsByAddress = new Dictionary<int, string>();
 
+    IReadOnlyDictionary<string, F18ExportedSymbol>? ownScopeExternalSymbols = ownNodeCoordinate is null
+        ? externalSymbols
+        : externalSymbols?.Values
+            .Where(symbol => symbol.NodeCoordinate == ownNodeCoordinate.Value)
+            .ToDictionary(symbol => symbol.Name, symbol => symbol, StringComparer.OrdinalIgnoreCase);
+
     // Label pass: TryAdd (first writer wins) -- externalSymbols first, symbols second, so a local
     // Label always outranks a same-address Label coming from an import/ROM-seeded name.
-    AddByKind(externalSymbols, F18ExportKind.Label, labelsByAddress, overwrite: false);
+    AddByKind(ownScopeExternalSymbols, F18ExportKind.Label, labelsByAddress, overwrite: false);
     AddByKind(symbols, F18ExportKind.Label, labelsByAddress, overwrite: false);
 
     // Word pass: plain assignment (last writer wins) -- same order, so a local Word has the final
     // say over both an external Word AND any Label already recorded above.
-    AddByKind(externalSymbols, F18ExportKind.Word, labelsByAddress, overwrite: true);
+    AddByKind(ownScopeExternalSymbols, F18ExportKind.Word, labelsByAddress, overwrite: true);
     AddByKind(symbols, F18ExportKind.Word, labelsByAddress, overwrite: true);
 
     return labelsByAddress;
@@ -273,13 +324,16 @@ public static class F18Disassembler
         continue;
       }
 
+      // Masked against P9 and the RAM/ROM mirror bit -- see this method's own caller,
+      // BuildLabelsByAddress, for why.
+      int address = symbol.Value & ~(F18InstructionSet.ExtendedArithmeticBit | F18InstructionSet.MemoryMirrorBit);
       if (overwrite)
       {
-        target[symbol.Value] = symbol.Name;
+        target[address] = symbol.Name;
       }
       else
       {
-        target.TryAdd(symbol.Value, symbol.Name);
+        target.TryAdd(address, symbol.Name);
       }
     }
   }
