@@ -1541,8 +1541,10 @@ internal static class CvmAssemblyLanguage
   {
     if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair)
     {
-      // Node 306/305's twelve unified floating-point ops (2026-09-16, widened from six to twelve in the
-      // 2026-09-21 rework): the ONLY two-operand shape in this file -- Stefan's own "mnemonic f g"
+      // Node 306/305's TEN two-operand floating-point ops (2026-09-16, widened from six to twelve in the
+      // 2026-09-21 rework, then narrowed back to ten the same day once Stefan corrected fpop/fpush to
+      // one-operand mnemonics -- see the EmbeddedUnsignedValue branch below, which those two now use
+      // instead): the ONLY two-operand shape in this file -- Stefan's own "mnemonic f g"
       // syntax, e.g. "fadd 3 2" means fr[3] = fr[3] + fr[2]. Mirrors
       // CvmAssembler.EmitEmbeddedUnsignedValuePair's own per-field validate/shift/OR pattern exactly
       // (kept as a small duplicate here per this method's own class-level remarks on why the two
@@ -1589,7 +1591,10 @@ internal static class CvmAssemblyLanguage
       // CvmInstructionSet.CvmInstructionShape.ValueBitShift's own remarks): unsigned
       // 0..(ValueBitMask >> ValueBitShift), never a negative half -- unlike the signed case just below,
       // so no min/max split is needed here. This mirrors CvmAssembler.EmitEmbeddedUnsignedValue exactly
-      // (kept as a small duplicate here per this method's own remarks).
+      // (kept as a small duplicate here per this method's own remarks). Node 306's fpop/fpush (CORRECTED
+      // 2026-09-21, per Stefan: "only 1 parameter") ALSO fall in here now -- a second operand, if the
+      // caller types one, is simply never looked at by this branch (see this method's own signature,
+      // which takes operand2 only for the Pair branch above).
       int unsignedMaxValue = shape.ValueBitMask >> shape.ValueBitShift;
       if (value < 0 || value > unsignedMaxValue)
       {
@@ -1612,8 +1617,9 @@ internal static class CvmAssemblyLanguage
   /// <summary>
   /// Parses CVM assembly source text into <see cref="CvmAsmInstruction"/>s ready for
   /// <see cref="Assemble"/>: one mnemonic per line, optionally followed by a "0x"-prefixed hex or
-  /// plain decimal operand OR a label name (see below), OR (2026-09-16, node 306's six binary
-  /// floating-point ops only) exactly TWO space-separated literal operands, e.g. "fadd 3 2" (Stefan's
+  /// plain decimal operand OR a label name (see below), OR (2026-09-16, node 306's floating-point ops;
+  /// TEN of the twelve as of the 2026-09-21 rework, fpop/fpush excepted -- see this method's own
+  /// three-token branch below) exactly TWO space-separated literal operands, e.g. "fadd 3 2" (Stefan's
   /// own "mnemonic f g" syntax) -- neither position accepts a label in that two-operand form; blank
   /// lines and ";" or "//" line comments are
   /// ignored. This is purely textual -- it does not know or care whether a mnemonic actually resolves
@@ -1686,11 +1692,14 @@ internal static class CvmAssemblyLanguage
 
       if (parts.Length == 3 && TryParseOperand(parts[1], out int firstOperand) && TryParseOperand(parts[2], out int secondOperand))
       {
-        // Node 306's six binary floating-point ops (2026-09-16) are the only two-operand mnemonics in
-        // this file -- Stefan's own "mnemonic f g" syntax, e.g. "fadd 3 2". Neither position supports a
-        // label operand (yet); whether THIS particular mnemonic actually takes two operands at all is
-        // Assemble's own concern (see CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair),
-        // not this purely-syntactic parse.
+        // Node 306's binary floating-point ops (2026-09-16; ten of the twelve as of the 2026-09-21
+        // rework -- fpop/fpush take only one operand, per Stefan's own same-day correction) are the only
+        // two-operand mnemonics in this file -- Stefan's own "mnemonic f g" syntax, e.g. "fadd 3 2".
+        // Neither position supports a label operand (yet); whether THIS particular mnemonic actually
+        // takes two operands at all is Assemble's own concern (see
+        // CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair), not this purely-syntactic
+        // parse -- so "fpop 3 5" still parses fine here (Operand=3, Operand2=5); EncodeSelfDescribingWord's
+        // own EmbeddedUnsignedValue branch is what silently ignores the stray second operand.
         instructions.Add(new CvmAsmInstruction(parts[0], firstOperand, label, Operand2: secondOperand));
         continue;
       }

@@ -6,11 +6,10 @@ namespace Ga144.Evb.Ide.Cvm;
 /// 2026-09-15/16/17/20 design (a self-contained floating-point register file with a three-way tag
 /// dispatch -- BINARY/CONSTANT-lookup/UNARY, see this class's OLD remarks, now superseded) with a new
 /// split: node 306 is now a pure INSTRUCTION DECODER, and the floating-point register file itself moves
-/// to node 305 (<see cref="Node305Program"/> -- not yet updated to its own new source as of this
-/// revision; node 306 above already imports it and calls its exported functions by name, per Stefan's
-/// own new source below, but node 305's own matching rewrite is still pending). This is the SECOND time
-/// this coordinate's role has flipped -- the first was the 2026-09-15 306/308 swap (see this class's own
-/// remarks on that event, still accurate history, just for the role BEFORE this one).
+/// to node 305 (<see cref="Node305Program"/>, now updated to its own new source too -- see its own
+/// remarks). This is the SECOND time this coordinate's role has flipped -- the first was the 2026-09-15
+/// 306/308 swap (see this class's own remarks on that event, still accurate history, just for the role
+/// BEFORE this one).
 ///
 /// <b>Unified opcode, replacing the old three separate tags.</b> Per Stefan's own new header comment and
 /// trailing opcode spec ("opcode 1101_11oo_oogg_gfff binary floatingpoint operation. first operand is
@@ -30,18 +29,31 @@ namespace Ga144.Evb.Ide.Cvm;
 /// generic operation -- those four named mnemonics have NO replacement; how a caller now selects WHICH
 /// constant is not spelled out in the new source and is not guessed at here.</item>
 /// <item>10 pop (<c>fpop</c>), 11 push (<c>fpush</c>) -- same names and same stack-transfer purpose as the
-/// old unary-tag <c>'fpop</c>/<c>'fpush</c>, but now uniformly encoded through the SAME "mnemonic f g"
-/// shape as every other operation here (dispatched via <c>fp/po</c>/<c>fp/pu</c>, which round-trip
-/// through node 307's own <c>k/pop</c>/<c>k/push</c>), rather than the old node-resolved,
-/// live-compiled-address scheme.</item>
+/// old unary-tag <c>'fpop</c>/<c>'fpush</c>, dispatched via <c>fp/po</c>/<c>fp/pu</c>, which round-trip
+/// through node 307's own <c>k/pop</c>/<c>k/push</c>, rather than the old node-resolved,
+/// live-compiled-address scheme. <b>CORRECTED, 2026-09-21, per Stefan directly ("fpush and fpop only have
+/// 1 parameter, the other opcodes have 2 parameter"): unlike the other ten, these two take only ONE
+/// assembler argument</b> ("fpop f"/"fpush f", not "fpop f g") -- <c>ggg</c> is simply never used for
+/// these two (Stefan's own header, added the same correction: "fpop a ; ggg is not used {only 1
+/// argument}"). Node 306's own F18 body below is unaffected by this -- <c>fp/main</c> still decodes a
+/// full <c>(f g)</c> pair out of every opcode word unconditionally, regardless of which operation it is,
+/// so <c>fp/po</c>/<c>fp/pu</c> still receive a <c>g</c> value (always 0 for these two, since the CVM
+/// encoder never writes anything into <c>ggg</c> for them); the one-argument restriction is purely a
+/// CVM-assembler-level fact, see
+/// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointPopMnemonic</c>/<c>FloatingPointPushMnemonic</c>'s
+/// own remarks for where it is actually enforced.</item>
 /// </list>
-/// Assembler syntax stays "mnemonic f g" for all twelve, per Stefan verbatim ("fadd 3 2" means
-/// <c>fr[3] = fr[3] + fr[2]</c>) -- confirmed uniform by the new source's own <c>( f g )</c> stack
-/// comment on every one of the twelve word definitions at the bottom, including <c>fp/pop</c>/
-/// <c>fp/push</c>/<c>fp/const</c>. See
+/// Assembler syntax is "mnemonic f g" for TEN of the twelve (all but <c>fpop</c>/<c>fpush</c>, see
+/// above), per Stefan verbatim ("fadd 3 2" means <c>fr[3] = fr[3] + fr[2]</c>) -- Stefan's own header now
+/// spells out all twelve as worked examples too (<c>fadd a b ; fr[a] = fr[a] + fr[b]</c> etc.), matching
+/// this file's own <c>( f g )</c> stack comments on every one of the twelve word definitions at the
+/// bottom (including <c>fp/pop</c>/<c>fp/push</c> themselves, which keep that comment even though the CVM
+/// mnemonic feeding them now supplies only one real argument -- the F18 body's own calling convention is
+/// unchanged, only the CVM assembler's argument count is). See
 /// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointAddMnemonic</c>'s own remarks for the full CVM
-/// mnemonic/tag wiring (now fully self-describing, <c>CvmOperandEncoding.EmbeddedUnsignedValuePair</c>,
-/// needing no live node compile to resolve any of the twelve any more -- unlike the old
+/// mnemonic/tag wiring (fully self-describing: <c>CvmOperandEncoding.EmbeddedUnsignedValuePair</c> for
+/// ten of the twelve, plain <c>CvmOperandEncoding.EmbeddedUnsignedValue</c> for <c>fpop</c>/<c>fpush</c>,
+/// needing no live node compile to resolve any of the twelve either way -- unlike the old
 /// <c>'fpop</c>/<c>'fpush</c>/constant-lookup family, which did).
 ///
 /// <b>Node 306 imports both node 307 (unchanged, the CVM relay) and node 305 (NEW import, the register
@@ -74,14 +86,17 @@ internal static class Node306Program
 
   /// <summary>
   /// Node 306's full resident F18 source. REPLACED WHOLESALE, 2026-09-21, per Stefan's own paste
-  /// introducing the FP engine rework (see this class's own remarks for the full derivation of the new
-  /// unified <c>1101_11oo_oogg_gfff</c> opcode and the register-file move to node 305). Reproduced
-  /// verbatim, including its own header comment block.
+  /// introducing the FP engine rework, then its header comment block REPLACED AGAIN the same day when
+  /// Stefan corrected fpop/fpush to one-argument mnemonics and added the full twelve-line worked-example
+  /// table (the F18 code below the header is byte-for-byte identical between the two pastes). See this
+  /// class's own remarks for the full derivation of the unified <c>1101_11oo_oogg_gfff</c> opcode and the
+  /// register-file move to node 305. Reproduced verbatim, including its own header comment block.
   /// </summary>
   public const string Source = """
-      ( CVM2 node 306. VM 32 bit floatingpoint instruction decoder node, 1101_11??_????_???? )
-      ( node 305 contains the floatingpoint register )
-      (
+      ( CVM2 node 306. VM 32 bit floatingpoint instruction decoder node, 1101_11??_????_????
+
+      node 305 contains the floatingpoint register
+
       binary operation ooo:
       index operation mnemonic
       0 add fadd
@@ -104,6 +119,19 @@ internal static class Node306Program
 
       opcode 1101_11oo_oogg_gfff binary floatingpoint operation. first operand is fff. second operant is ggg. result in fff. operation in oooo
 
+      fadd a b ; fr[a] = fr[a] + fr[b]
+      fsub a b ; fr[a] = fr[a] - fr[b]
+      fmin a b ; fr[a] = min{fr[a], fr[b]}
+      fmax a b ; fr[a] = max{fr[a], fr[b]}
+      fmul a b ; fr[a] = fr[a] * fr[b]
+      fdiv a b ; fr[a] = fr[a] / fr[b]
+      fmove a b ; fr[a] = fr[b]
+      fconst a b ; fr[a] = const[b]
+      fneg a b ; fr[a] = neg{fr[b]}
+      fabs a b ; fr[a] = abs{fr[b]}
+      fpop a ; ggg is not used {only 1 argument}
+      fpush a ; ggg is not used {only 1 argument}
+
       # 0 const f.add
       # 1 const f.sub
       # 2 const f.min
@@ -113,6 +141,7 @@ internal static class Node306Program
       const imported from node 305
 
       )
+
 
       # 307 import
       # 305 import

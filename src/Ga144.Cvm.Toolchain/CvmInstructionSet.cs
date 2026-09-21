@@ -1097,13 +1097,24 @@ public static class CvmInstructionSet
   /// <see cref="FloatingPointSecondOperandRegisterFieldBitMask"/>) is the second operand register,
   /// <c>fff</c> (bits 2-0, <see cref="FloatingPointRegisterFieldBitMask"/>) is the first operand register
   /// (also where the result is written). Assembler syntax, per Stefan verbatim: "mnemonic f g", e.g.
-  /// "fadd 3 2" means <c>fr[3] = fr[3] + fr[2]</c> -- uniform across all twelve mnemonics, including
-  /// <c>fpop</c>/<c>fpush</c>/<c>fconst</c> (node 306's own source declares each with the same
-  /// <c>( f g )</c> stack comment). Fully self-describing (<see cref="CvmOperandEncoding.EmbeddedUnsignedValuePair"/>,
-  /// no live node compile needed to assemble or disassemble): per-mnemonic tag =
-  /// <see cref="FloatingPointOperationTag"/> | (oooo &lt;&lt; <see cref="FloatingPointOperationFieldShift"/>):
-  /// add=0, sub=1, min=2, max=3, mul=4, div=5, move=6, const=7, neg=8, abs=9, pop=10, push=11 (12-15
-  /// unused, no mnemonic).
+  /// "fadd 3 2" means <c>fr[3] = fr[3] + fr[2]</c> -- uniform across TEN of the twelve mnemonics
+  /// (everything except <c>fpop</c>/<c>fpush</c>, see below), fully self-describing
+  /// (<see cref="CvmOperandEncoding.EmbeddedUnsignedValuePair"/>, no live node compile needed to assemble
+  /// or disassemble): per-mnemonic tag = <see cref="FloatingPointOperationTag"/> | (oooo &lt;&lt;
+  /// <see cref="FloatingPointOperationFieldShift"/>): add=0, sub=1, min=2, max=3, mul=4, div=5, move=6,
+  /// const=7, neg=8, abs=9, pop=10, push=11 (12-15 unused, no mnemonic).
+  ///
+  /// <b>CORRECTED, 2026-09-21, per Stefan directly ("fpush and fpop only have 1 parameter, the other
+  /// opcodes have 2 parameter"): <c>fpop</c>/<c>fpush</c> are assembler syntax "mnemonic f" -- ONE
+  /// argument, not two.</b> node 306's own source still decodes a full <c>(f g)</c> pair out of every
+  /// opcode word unconditionally (<c>fp/main</c> makes no distinction by operation before calling
+  /// <c>ex</c>), and <c>fr/pop</c>/<c>fr/push</c> on node 305 likewise still receive a <c>g</c> value on
+  /// their own stack and simply never use it -- but at the CVM-opcode level, where <c>ggg</c> is written
+  /// is these two mnemonics' own business, and Stefan's correction is that the assembler must not ask for
+  /// a second operand at all; the emitted word's <c>ggg</c> bits are just always zero. See
+  /// <see cref="FloatingPointPopTag"/>/<see cref="FloatingPointPushTag"/>'s own remarks and these two
+  /// mnemonics' own <see cref="CvmInstructionShape"/> rows (plain <see cref="CvmOperandEncoding.EmbeddedUnsignedValue"/>,
+  /// not the Pair encoding every other one of the twelve uses).
   /// </summary>
   public const string FloatingPointAddMnemonic = "fadd";
   public const string FloatingPointSubtractMnemonic = "fsub";
@@ -1138,9 +1149,9 @@ public static class CvmInstructionSet
   public const int FloatingPointNegateTag = FloatingPointOperationTag | (8 << FloatingPointOperationFieldShift);
   /// <summary>Per-mnemonic tag for <see cref="FloatingPointAbsoluteMnemonic"/> -- operation index 9.</summary>
   public const int FloatingPointAbsoluteTag = FloatingPointOperationTag | (9 << FloatingPointOperationFieldShift);
-  /// <summary>Per-mnemonic tag for <see cref="FloatingPointPopMnemonic"/> -- operation index 10. UNLIKE the old <c>'fpop</c>, no longer node-resolved -- see the removal note above <see cref="FloatingPointRegisterFieldBitMask"/>.</summary>
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointPopMnemonic"/> -- operation index 10. UNLIKE the old <c>'fpop</c>, no longer node-resolved -- see the removal note above <see cref="FloatingPointRegisterFieldBitMask"/>. CORRECTED 2026-09-21: assembler syntax is "fpop f" -- ONE argument, not two (see the class-level remarks above <see cref="FloatingPointAddMnemonic"/>) -- so this mnemonic's own <see cref="CvmInstructionShape"/> row uses plain <see cref="CvmOperandEncoding.EmbeddedUnsignedValue"/>, not the Pair encoding the other ten share.</summary>
   public const int FloatingPointPopTag = FloatingPointOperationTag | (10 << FloatingPointOperationFieldShift);
-  /// <summary>Per-mnemonic tag for <see cref="FloatingPointPushMnemonic"/> -- operation index 11. UNLIKE the old <c>'fpush</c>, no longer node-resolved -- see the removal note above <see cref="FloatingPointRegisterFieldBitMask"/>.</summary>
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointPushMnemonic"/> -- operation index 11. UNLIKE the old <c>'fpush</c>, no longer node-resolved -- see the removal note above <see cref="FloatingPointRegisterFieldBitMask"/>. CORRECTED 2026-09-21: assembler syntax is "fpush f" -- ONE argument, not two (see the class-level remarks above <see cref="FloatingPointAddMnemonic"/>) -- so this mnemonic's own <see cref="CvmInstructionShape"/> row uses plain <see cref="CvmOperandEncoding.EmbeddedUnsignedValue"/>, not the Pair encoding the other ten share.</summary>
   public const int FloatingPointPushTag = FloatingPointOperationTag | (11 << FloatingPointOperationFieldShift);
 
   // Node 405's nine "multiword arithmetic" (carry-flag) ops, added 2026-09-09 (same audit) -- BRAND NEW,
@@ -1932,12 +1943,15 @@ public static class CvmInstructionSet
 
     // Node 306/305's REWORKED, unified floating-point operation family (2026-09-21) -- see
     // FloatingPointAddMnemonic's own remarks for the full bit-layout derivation (straight from Stefan's
-    // own header comment/table on the new node 306). All twelve are genuinely self-describing
-    // (CvmOperandEncoding.EmbeddedUnsignedValuePair, first register in ValueBitMask/fff, second register
-    // in SecondValueBitMask/ggg) -- including fpop/fpush/fconst, which the OLD scheme instead resolved
-    // against a live compile of node 306's own then-current source; the new node 306 is a pure decoder
-    // with a fixed per-operation tag, so none of these twelve need a live node compile to assemble or
-    // disassemble any more.
+    // own header comment/table on the new node 306). All twelve are genuinely self-describing and none
+    // need a live node compile to assemble or disassemble any more (UNLIKE the OLD scheme, which resolved
+    // fpop/fpush/fconst against a live compile of node 306's own then-current source) -- but they are NOT
+    // all the same shape: TEN (fadd/fsub/fmin/fmax/fmul/fdiv/fmove/fconst/fneg/fabs) are
+    // CvmOperandEncoding.EmbeddedUnsignedValuePair (first register in ValueBitMask/fff, second in
+    // SecondValueBitMask/ggg), while fpop/fpush are plain CvmOperandEncoding.EmbeddedUnsignedValue (fff
+    // only) -- CORRECTED 2026-09-21, per Stefan directly ("fpush and fpop only have 1 parameter, the
+    // other opcodes have 2 parameter"; ggg is simply unused/always zero for these two, per his own node
+    // 306 header: "fpop a ; ggg is not used {only 1 argument}").
     new(Id: 160, FloatingPointAddMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointAddTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
     new(Id: 161, FloatingPointSubtractMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointSubtractTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
     new(Id: 162, FloatingPointMinimumMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMinimumTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
@@ -1948,8 +1962,13 @@ public static class CvmInstructionSet
     new(Id: 167, FloatingPointConstantMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointConstantTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
     new(Id: 168, FloatingPointNegateMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointNegateTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
     new(Id: 169, FloatingPointAbsoluteMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointAbsoluteTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
-    new(Id: 170, FloatingPointPopMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointPopTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
-    new(Id: 171, FloatingPointPushMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointPushTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    // fpop/fpush: ONE argument each ("fpop f"/"fpush f"), not the "f g" pair every other op above takes --
+    // CORRECTED 2026-09-21 per Stefan directly. Plain EmbeddedUnsignedValue (fff only, no
+    // SecondValueBitMask/SecondValueBitShift): the assembler now requires exactly one operand for these
+    // two, and the emitted word's ggg bits (5-3) are simply always zero, matching node 306's own header
+    // ("fpop a ; ggg is not used {only 1 argument}").
+    new(Id: 170, FloatingPointPopMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointPopTag, ValueBitMask: FloatingPointRegisterFieldBitMask),
+    new(Id: 171, FloatingPointPushMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointPushTag, ValueBitMask: FloatingPointRegisterFieldBitMask),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

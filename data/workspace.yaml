@@ -30,6 +30,39 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
+      dateTime: 2026-09-21T10:52:24.5486156
+      utcDateTime: 2026-09-21T10:52:24.5486156Z
+      localDateTime: 2026-09-21T12:52:24.5486156+02:00
+      date: 2026-09-21T00:00:00.0000000
+      day: 21
+      dayOfWeek: Monday
+      dayOfYear: 264
+      hour: 10
+      millisecond: 548
+      microsecond: 615
+      nanosecond: 600
+      minute: 52
+      month: 9
+      offset: 00:00:00
+      totalOffsetMinutes: 0
+      second: 24
+      ticks: 639255847445486156
+      utcTicks: 639255847445486156
+      timeOfDay: 10:52:24.5486156
+      year: 2026
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -50,19 +83,6 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -23188,19 +23208,46 @@ projects:
         ;
 
 
-        : fr/move ( g f ) over a!
+        : fr/const ( g f ) over # fr/cbase lit . + a! 
 
-        : fr/mov @+ @ >r >r a! r> !+ r> ! ;
+        : fr/mov ( g l h ) @+ @ >r >r a! r> !+ r> ! ;
 
-        : fr/const ( g f ) over # fr/cbase lit . + a! fr/mov ;
+        : fr/move ( g f ) over a! fr/mov ;
 
-        : fr/push ( g f ) a! @+ @ !b !b ;
 
-        : fr/abs ( g f ) a! @+ @ 0x7fff and ! ;
 
-        : fr/neg ( g f ) a! @+ @ 0x8000 xor ! ;
+        : fr/abs ( g f )
+          fr/move
+          @ 0x7fff and !
+        ;
+
+
+        : fr/neg ( g f )
+          fr/move
+          @ 0x8000 xor !
+        ;
+
+
+        : fr/push ( g f ) a! @+ !b @ !b ;
 
         : fr/pop ( g f ) a! @b !+ @b ! ;
+
+
+        // : fr/move ( g f ) over a!
+
+        // : fr/mov ( g l h )  @+ >r @ r> 
+
+        // : fr/st ( g l h ) >r >r a! r> r> !+ ! ;
+
+        // : fr/const ( g f ) over # fr/cbase lit . + a! fr/mov ;
+
+        // : fr/abs ( g f ) a! @+ @ 0x7fff and fr/st ;
+
+        // : fr/neg ( g f ) a! @+ @ 0x8000 xor fr/st ;
+
+        // : fr/push ( g f ) a! @+ !b @ !b ;
+
+        // : fr/pop ( g f ) a! @b !+ @b ! ;
       ramWords:
       - 0x15555
       - 0x15555
@@ -23247,25 +23294,25 @@ projects:
       - 0x0182F
       - 0x00175
       - 0x29555
-      - 0x20AB2
+      - 0x21DB0
+      - 0x00010
+      - 0x2A9B2
       - 0x07EBA
       - 0x2EA9A
       - 0x0EC2D
-      - 0x21DB0
-      - 0x00010
-      - 0x2B72E
-      - 0x2BC0A
-      - 0x09B55
-      - 0x2BC0F
+      - 0x20A40
+      - 0x13433
+      - 0x03DFA
       - 0x07FFF
-      - 0x3FA55
-      - 0x2BC0F
+      - 0x0B555
+      - 0x13433
+      - 0x03DE2
       - 0x08000
-      - 0x39A55
+      - 0x0B555
+      - 0x2BC22
+      - 0x03B55
       - 0x2BF3A
       - 0x01A55
-      - 0x15555
-      - 0x15555
       startup:
         entryPoint: 0x175
         p: 0x000
@@ -23324,6 +23371,31 @@ projects:
         opcode 1101_11oo_oogg_gfff binary floatingpoint operation. first operand is fff. second operant is ggg. result in fff. operation in oooo
 
 
+        fadd a b ; fr[a] = fr[a] + fr[b]
+
+        fsub a b ; fr[a] = fr[a] - fr[b]
+
+        fmin a b ; fr[a] = min{fr[a], fr[b]}
+
+        fmax a b ; fr[a] = max{fr[a], fr[b]}
+
+        fmul a b ; fr[a] = fr[a] * fr[b]
+
+        fdiv a b ; fr[a] = fr[a] / fr[b]
+
+        fmove a b ; fr[a] = fr[b]
+
+        fconst a b ; fr[a] = const[b]
+
+        fneg a b ; fr[a] = neg{fr[b]}
+
+        fabs a b ; fr[a] = abs{fr[b]}
+
+        fpop a ; ggg is not used {only 1 argument}
+
+        fpush a ; ggg is not used {only 1 argument}
+
+
         # 0 const f.add
 
         # 1 const f.sub
@@ -23348,9 +23420,6 @@ projects:
         # 305 import
 
 
-        # 0x18 org
-
-
         # left /a
 
         # right /b
@@ -23358,7 +23427,7 @@ projects:
         entry fp/main
 
 
-        : fp/2res ( - a b ) A[ !p !p ]] lit ! @ @ ;
+        # 0x1c org
 
 
         : fp/2pa ( a b - ) A[ @p @p ]] lit ! ! ! ;
@@ -23366,25 +23435,15 @@ projects:
         : fp/2par ( f g call ) >r fp/2pa r> ! ;
 
 
-        : fp/pop2 ( - l h )
-          leap then  
         : fp/@next ( - w ) A[ k/pop ]] lit !b A[ !p ]] lit !b @b ;
 
 
-        : fp/pu ( f g call - )
-          >r
-          fp/2par fp/2res
-        : fp/push2 ( h l - )
-           leap then
-        : fp/!next ( w - ) A[ @p k/push ]] lit !b !b ;
+        : fp/po ( f g call - ) A[ fr/pop ]] lit ! fp/@next ! fp/@next ! ;
 
 
 
-        : fp/po ( f g call - )
-          >r
-          fp/2pa fp/pop2 r> fp/2par ;
 
-        : fp/binary ( f g o - ) A[ fr/binary ]] lit !b !b !b
+        : fp/binary ( f g o - ) >r fp/2pa A[ fr/binary ]] lit !b r> !b
 
 
         : fp/leave A[ k/leave ; ]] lit !b
@@ -23431,57 +23490,57 @@ projects:
 
         : fp/abs ( f g ) A[ fr/abs ]] lit fp/2par ;
 
-        : fp/pop ( f g ) A[ fr/pop ]] lit fp/po ;
+        : fp/pop ( f g ) fp/2pa fp/po ;
 
-        : fp/push ( f g ) A[ fr/push ]] lit fp/pu ;
+        : fp/push ( f g ) 
+          fp/2pa A[ fr/push ]] lit ! @ @ 
+           leap then
+        : fp/!next ( w - ) A[ @p k/push ]] lit !b !b ;
 
       ramWords:
-      - 0x0572D
+      - 0x05729
       - 0x00000
-      - 0x0572D
+      - 0x05729
       - 0x00001
-      - 0x0572D
+      - 0x05729
       - 0x00002
-      - 0x0572D
+      - 0x05729
       - 0x00003
-      - 0x0572D
+      - 0x05729
       - 0x00004
-      - 0x0572D
+      - 0x05729
       - 0x00005
-      - 0x0571E
-      - 0x1342C
-      - 0x0571E
-      - 0x13430
-      - 0x0571E
+      - 0x0571F
+      - 0x1342D
+      - 0x0571F
+      - 0x13432
+      - 0x0571F
       - 0x13438
-      - 0x0571E
+      - 0x0571F
       - 0x13435
-      - 0x0572A
-      - 0x1343B
-      - 0x05725
-      - 0x13433
+      - 0x1341C
+      - 0x11425
+      - 0x1341F
       - 0x05A0A
-      - 0x0D9B2
-      - 0x03555
+      - 0x1343B
+      - 0x0361A
+      - 0x05B25
+      - 0x05626
       - 0x05A2A
       - 0x05DB2
       - 0x0B555
-      - 0x2F61B
+      - 0x2F61C
       - 0x27A55
-      - 0x13421
       - 0x05B12
       - 0x13422
       - 0x0C9B2
       - 0x09F55
-      - 0x2F61E
-      - 0x13418
-      - 0x13428
-      - 0x05B25
-      - 0x05626
-      - 0x2F61B
-      - 0x13420
-      - 0x2771E
-      - 0x05B22
+      - 0x05A49
+      - 0x1343D
+      - 0x0B621
+      - 0x0B555
+      - 0x2F61C
+      - 0x05B9A
       - 0x13420
       - 0x089B2
       - 0x05BB2
@@ -23499,9 +23558,12 @@ projects:
       - 0x3E4BA
       - 0x2E29A
       - 0x17555
-      - 0x11430
+      - 0x1142D
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x032
+        entryPoint: 0x02F
         p: 0x000
         a: 0x000
         b: 0x000
@@ -29420,7 +29482,397 @@ projects:
         leave             ; READ back the frame's saved old f -- expect value 0000, restoring f to its pre-enter value
 
         ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/cbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)
-    lastSelectedDebuggerProgramName: 
+    - name: FP regression test 1
+      source: >-
+        //
+
+        // Floating-point instruction decoder/register regression test
+
+        //
+
+        // Tests operations completely implemented by nodes 306/305:
+
+        //
+
+        //   fpop
+
+        //   fpush
+
+        //   fconst
+
+        //   fmove
+
+        //   fneg
+
+        //   fabs
+
+        //
+
+        // Binary arithmetic fadd..fdiv is not tested yet because
+
+        // fr/binary waits for the arithmetic cluster to return a result.
+
+        //
+
+
+
+        // ============================================================
+
+        // TEST 1
+
+        // FPOP / FPUSH
+
+        //
+
+        // Verify register addressing and 32-bit word order.
+
+        // ============================================================
+
+
+
+        // fr0 = 4123 4567
+
+
+        pushlit 0x4123
+
+        pushlit 0x4567
+
+        fpop 0
+
+
+        fpush 0                   ; expect 4123 4567
+
+
+
+        // fr7 = C321 ABCD
+
+
+        pushlit 0xC321
+
+        pushlit 0xABCD
+
+        fpop 7
+
+
+        fpush 7                   ; expect C321 ABCD
+
+
+
+
+        // ============================================================
+
+        // TEST 2
+
+        // FCONST
+
+        //
+
+        // Load all 8 constants into all 8 registers.
+
+        // ============================================================
+
+
+        fconst 0 0                ; fr0 = ln(2)
+
+        fconst 1 1                ; fr1 = 1/ln(2)
+
+        fconst 2 2                ; fr2 = pi/2
+
+        fconst 3 3                ; fr3 = 2/pi
+
+        fconst 4 4                ; fr4 = 1.0
+
+        fconst 5 5                ; fr5 = 0.5
+
+        fconst 6 6                ; fr6 = 2.0
+
+        fconst 7 7                ; fr7 = sqrt(2)
+
+
+        fpush 0                   ; expect 3F31 7218
+
+        fpush 1                   ; expect 3FB8 AA3B
+
+        fpush 2                   ; expect 3FC9 0FDB
+
+        fpush 3                   ; expect 3F22 F983
+
+        fpush 4                   ; expect 3F80 0000
+
+        fpush 5                   ; expect 3F00 0000
+
+        fpush 6                   ; expect 4000 0000
+
+        fpush 7                   ; expect 3FB5 04F3
+
+
+
+
+        // ============================================================
+
+        // TEST 3
+
+        // FMOVE
+
+        //
+
+        // fr[a] = fr[b]
+
+        //
+
+        // Verify source and destination are distinct.
+
+        // ============================================================
+
+
+
+        // fr0 = pi/2
+
+        // fr7 = fr0
+
+
+        fconst 0 2
+
+        fconst 7 5                ; first make fr7 = 0.5
+
+
+        fmove 7 0
+
+
+        fpush 0                   ; expect 3FC9 0FDB
+
+        fpush 7                   ; expect 3FC9 0FDB
+
+
+
+        // fr3 = 2.0
+
+        // fr1 = fr3
+
+
+        fconst 3 6
+
+        fconst 1 5                ; first make fr1 = 0.5
+
+
+        fmove 1 3
+
+
+        fpush 1                   ; expect 4000 0000
+
+        fpush 3                   ; expect 4000 0000
+
+
+
+
+        // ============================================================
+
+        // TEST 4
+
+        // FNEG
+
+        //
+
+        // fr[a] = neg{fr[b]}
+
+        //
+
+        // Source register must remain unchanged.
+
+        // ============================================================
+
+
+
+        // fr0 = +1
+
+        // fr1 = -fr0 = -1
+
+
+        fconst 0 4
+
+        fconst 1 5                ; initialize destination to something else
+
+
+        fneg 1 0
+
+
+        fpush 0                   ; expect 3F80 0000  +1
+
+        fpush 1                   ; expect BF80 0000  -1
+
+
+
+        // fr2 = -fr1 = +1
+
+        //
+
+        // This also tests negating a negative source.
+
+
+        fconst 2 5
+
+        fneg 2 1
+
+
+        fpush 1                   ; expect BF80 0000  -1
+
+        fpush 2                   ; expect 3F80 0000  +1
+
+
+
+        // fr4 = sqrt(2)
+
+        // fr6 = -sqrt(2)
+
+
+        fconst 4 7
+
+        fconst 6 4
+
+
+        fneg 6 4
+
+
+        fpush 4                   ; expect 3FB5 04F3
+
+        fpush 6                   ; expect BFB5 04F3
+
+
+
+
+        // ============================================================
+
+        // TEST 5
+
+        // FABS
+
+        //
+
+        // fr[a] = abs{fr[b]}
+
+        //
+
+        // Again verify that source remains unchanged.
+
+        // ============================================================
+
+
+
+        // fr0 = -1
+
+
+        fconst 3 4                ; fr3 = +1
+
+        fneg 0 3                  ; fr0 = -1
+
+
+
+        // fr5 = abs(fr0)
+
+
+        fconst 5 5
+
+        fabs 5 0
+
+
+        fpush 0                   ; expect BF80 0000  -1
+
+        fpush 5                   ; expect 3F80 0000  +1
+
+
+
+        // fr1 = -sqrt(2)
+
+
+        fconst 2 7                ; fr2 = +sqrt(2)
+
+        fneg 1 2                  ; fr1 = -sqrt(2)
+
+
+
+        // fr7 = abs(fr1)
+
+
+        fconst 7 5
+
+        fabs 7 1
+
+
+        fpush 1                   ; expect BFB5 04F3
+
+        fpush 7                   ; expect 3FB5 04F3
+
+
+
+        // fabs of already positive value
+
+
+        fconst 3 6                ; fr3 = +2
+
+        fabs 4 3                  ; fr4 = abs(fr3)
+
+
+        fpush 3                   ; expect 4000 0000
+
+        fpush 4                   ; expect 4000 0000
+
+
+
+
+        // ============================================================
+
+        // TEST 6
+
+        // Sign operations on zero
+
+        // ============================================================
+
+
+
+        // fr0 = +0 loaded through fpop
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+
+
+        // fr1 = neg(+0) = -0
+
+
+        fneg 1 0
+
+
+        fpush 0                   ; expect 0000 0000
+
+        fpush 1                   ; expect 8000 0000
+
+
+
+        // fr2 = abs(-0) = +0
+
+
+        fabs 2 1
+
+
+        fpush 1                   ; expect 8000 0000
+
+        fpush 2                   ; expect 0000 0000
+
+
+
+
+        nop
+
+        nop
+
+        nop
+
+        halt
+    lastSelectedDebuggerProgramName: FP regression test 1
   - role: Target
     name: Target GA144
     nodes:

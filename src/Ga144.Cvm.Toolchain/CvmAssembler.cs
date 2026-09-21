@@ -188,14 +188,16 @@ public static class CvmAssembler
           }
 
           // Node 306/305's twelve unified floating-point ops (EmbeddedUnsignedValuePair, 2026-09-16,
-          // widened from six to twelve in the 2026-09-21 rework) are the
-          // ONE mnemonic family here needing exactly TWO operands -- comma-separated, matching this
-          // assembler's own established ".word 1, 2, 3" convention (e.g. "fadd 3, 2"), rather than
-          // Stefan's own space-separated "fadd 3 2" example, which describes the CVM Debugger's
-          // separate, immediately-resolving assembler (Ga144.Evb.Ide.Services.CvmAssemblyLanguage,
-          // whose own tokenizer splits on whitespace, not commas) -- the two assemblers' syntax
-          // conventions genuinely differ here, so each keeps its own rather than forcing one into the
-          // other's mold.
+          // widened from six to twelve in the 2026-09-21 rework) are the mnemonic family here needing
+          // exactly TWO operands -- comma-separated, matching this assembler's own established
+          // ".word 1, 2, 3" convention (e.g. "fadd 3, 2"), rather than Stefan's own space-separated
+          // "fadd 3 2" example, which describes the CVM Debugger's separate, immediately-resolving
+          // assembler (Ga144.Evb.Ide.Services.CvmAssemblyLanguage, whose own tokenizer splits on
+          // whitespace, not commas) -- the two assemblers' syntax conventions genuinely differ here, so
+          // each keeps its own rather than forcing one into the other's mold. EXCEPT fpop/fpush
+          // (CORRECTED 2026-09-21, per Stefan directly: "only 1 parameter, the other opcodes have 2") --
+          // those two are plain EmbeddedUnsignedValue, not Pair, so they fall into the one-operand branch
+          // below like any other EmbeddedUnsignedValue mnemonic.
           int requiredArgCount = shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair ? 2 : shape.HasOperand ? 1 : 0;
           if (line.Args.Count != requiredArgCount)
           {
@@ -304,17 +306,22 @@ public static class CvmAssembler
           {
             // Node 606's eight ops: also no separate tag word -- shape.Tag OR'd with an UNSIGNED value
             // packed into shape.ValueBitMask's low bits (8 bits for all eight of them). Also fully
-            // self-describing, so also no placeholder/relocation/external symbol.
+            // self-describing, so also no placeholder/relocation/external symbol. Node 306's fpop/fpush
+            // ALSO route through here (CORRECTED 2026-09-21, per Stefan: they take only one argument,
+            // unlike the other ten floating-point ops below) -- shape.Tag OR'd with just the fff field,
+            // shape.ValueBitMask = FloatingPointRegisterFieldBitMask, no second operand at all.
             EmitEmbeddedUnsignedValue(codeSection, shape, line.Args[0], line.LineNumber, errors);
             break;
           }
 
           if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair)
           {
-            // Node 306's six binary floating-point ops: also no separate tag word -- shape.Tag OR'd
-            // with TWO independently-packed unsigned register operands (fff in shape.ValueBitMask,
-            // ggg in shape.SecondValueBitMask). Also fully self-describing, so also no
-            // placeholder/relocation/external symbol.
+            // Node 306's TEN two-argument floating-point ops (widened from six to twelve in the
+            // 2026-09-21 rework, then narrowed back to ten here once fpop/fpush turned out to be
+            // one-argument -- see the EmbeddedUnsignedValue branch above): also no separate tag word --
+            // shape.Tag OR'd with TWO independently-packed unsigned register operands (fff in
+            // shape.ValueBitMask, ggg in shape.SecondValueBitMask). Also fully self-describing, so also
+            // no placeholder/relocation/external symbol.
             EmitEmbeddedUnsignedValuePair(codeSection, shape, line.Args[0], line.Args[1], line.LineNumber, errors);
             break;
           }
@@ -333,8 +340,10 @@ public static class CvmAssembler
           // no ValueBitMask at all under this encoding, so this is simply never reached for them). Node
           // 306's OLD 'fpop (2026-09-15) used to flow through this exact same generic path too -- see
           // CvmInstructionSet.FloatingPointRegisterFieldBitMask's own remarks for why fpop (and the rest
-          // of node 306/305's floating-point family) moved to the self-describing
-          // EmbeddedUnsignedValuePair path instead, in the 2026-09-21 rework.
+          // of node 306/305's floating-point family) moved to a self-describing path instead, in the
+          // 2026-09-21 rework -- EmbeddedUnsignedValuePair for ten of the twelve, but plain
+          // EmbeddedUnsignedValue (the branch above, not this one) for fpop/fpush themselves, per
+          // Stefan's own same-day correction that those two take only one argument.
           int embeddedRegisterValue = 0;
           if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
           {
