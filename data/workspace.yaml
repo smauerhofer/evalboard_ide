@@ -23966,52 +23966,558 @@ projects:
       color: 
       postMortemEnabled: false
     - coordinate: 201
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >-
+        ( CVM2 node 201. VM 32 bit floatingpoint step 5.
+
+
+        mantissa preparation.
+
+
+        optional magnitude comparison
+
+          in:  h1 h2 l1 l2  {from node 202}
+          out: H1 H2 L1 L2  {to node 301}
+        optional:
+          out: c             {to node 202}
+
+          c: magnitude compare result
+            0x8000  : |f1| >  |f2|
+            0       : |f1| == |f2|
+            0x20000 : |f1| <  |f2|
+        )
+
+
+        # down /a
+
+        # left /b
+
+        entry f5/main
+
+
+        # 0 org
+
+
+        : f5/sub inv . +
+
+        : f5/inc 1 . + ;
+
+
+        : f5/gt ( diff - c )
+          -if
+            drop 0x20000 ;       // f1 < f2
+          then
+          if
+            drop 0x8000 ;        // f1 > f2
+          then
+          // diff = 0 -> equal, leave 0
+        ;
+
+
+        : f5/extend ( h l - H L)
+          dup 0x8000 and
+          if
+            drop
+            >r 2* 1 xor r> ..
+          else
+            drop
+            >r 2* r>
+          then
+          2* 2* 2*
+        ;
+
+
+
+        : f5/ignore // no compare calculation
+          ( l1 l2 h1 h2 )
+          ;
+
+        : f5/calc   // compare calculation
+          ( l1 l2 h1 h2 )
+          f5/sub
+          if f5/gt !b ; then
+          drop
+          f5/sub
+          f5/gt
+          !b
+        ;
+
+
+        : f5/main
+          @b               // h1
+          ( h1 )
+          @b               // h2
+          ( h1 h2 )
+
+          // save h2 h1 for optional magnitude comparison
+
+          dup >r over >r
+          ( h1 h2 / h2 h1 )
+
+          @b               // l1
+          ( h1 h2 l1 / h2 h1 )
+          @b               // l2
+          ( h1 h2 l1 l2 / h2 h1 )
+
+          // save l2 l1 for optional magnitude comparison
+
+          dup >r over >r
+          ( h1 h2 l1 l2 / h2 h1 l2 l1 )
+
+          // rearrange h1 h2 l1 l2 into the two
+          // h,l pairs required by f5/extend
+
+          >r
+          ( h1 h2 l1 / h2 h1 l2 l1 l2 )
+
+          a!
+          ( h1 h2 / h2 h1 l2 l1 l2 )
+
+          >r a
+          ( h1 l1 / h2 h1 l2 l1 l2 h2 )
+
+          f5/extend
+          ( H1 L1 / h2 h1 l2 l1 l2 h2 )
+
+          r> r>
+          ( H1 L1 h2 l2 / h2 h1 l2 l1 )
+
+          f5/extend
+          ( H1 L1 H2 L2 / h2 h1 l2 l1 )
+
+          down a!
+
+          >r >r >r !       // H1
+          r> r> !           // H2
+          !                 // L1
+          r> !              // L2
+
+          ( / h2 h1 l2 l1 )
+
+          // restore original mantissas for optional compare
+
+          r> r> r> r>
+          ( l1 l2 h1 h2 )
+
+          // focusing call: node 202 supplies f5/ignore
+          // or f5/calc
+
+          left a!
+          --l-
+
+          f5/main
+        ;
+      ramWords:
+      - 0x329F2
+      - 0x049F5
+      - 0x00001
+      - 0x1B406
+      - 0x3BD55
+      - 0x20000
+      - 0x19409
+      - 0x3BD55
+      - 0x08000
+      - 0x15555
+      - 0x25DFA
+      - 0x08000
+      - 0x19411
+      - 0x3A8DF
+      - 0x00001
+      - 0x38CB2
+      - 0x11413
+      - 0x3A8DA
+      - 0x269B2
+      - 0x364DD
+      - 0x15555
+      - 0x13400
+      - 0x19419
+      - 0x13403
+      - 0x09555
+      - 0x3B600
+      - 0x13403
+      - 0x09555
+      - 0x01F92
+      - 0x2EFBA
+      - 0x01F92
+      - 0x2EFBA
+      - 0x2EABA
+      - 0x2360A
+      - 0x26CB2
+      - 0x1340A
+      - 0x04ABA
+      - 0x00115
+      - 0x2E82A
+      - 0x26C2A
+      - 0x0AC2A
+      - 0x26C9A
+      - 0x27DAA
+      - 0x00175
+      - 0x13575
+      - 0x1141C
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x01C
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
-      postMortemEnabled: false
+      color: '#E6D6F7'
+      postMortemEnabled: true
     - coordinate: 202
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 202. VM 32 bit floatingpoint step 4.
+
+
+        separation of exponent and mantissa.
+
+
+        optional magnitude comparison
+
+          in: e1 e2 h1 h2 l1 l2    {from node 203}
+          out: e1 e2               {to node 302}
+          out: h1 h2 l1 l2         {to node 201}
+        optional:
+          in: c             {from node 201}
+          out: c            {to node 203}
+
+          c: magnitude compare result
+            0x8000  : |f1| >  |f2|
+            0       : |f1| == |f2|
+            0x20000 : |f1| <  |f2|
+        )
+
+
+        # 201 import
+
+
+        # down /a
+
+        # right /b
+
+        entry f4/main
+
+
+        # 0 org
+
+
+        : f4/sub inv . +
+
+        : f4/inc 1 . + ;
+
+
+        : f4/gt ( d-c )
+          -if
+            drop 0x20000 ;       // f1 < f2
+          then
+          if
+            drop 0x8000 ;        // f1 > f2
+          then
+          // d = 0 -> equal, leave 0
+        ;
+
+
+        : f4/ignore // no compare calculation
+          ( e1 e2 )
+          A[ f5/ignore ; ]] lit !
+        ;
+
+
+        : f4/calc   // compare calculation
+          ( e1 e2 )
+          f4/sub
+          if
+            f4/gt
+            !b
+            A[ f5/ignore ; ]] lit !
+            ;
+          then
+          A[ f5/calc ; ]] lit !
+          @
+          !b
+        ;
+
+
+        : f4/main
+          down a!
+          @b dup !         // e1
+          @b dup !         // e2
+          left a!
+          @b !             // h1
+          @b !             // h2
+          @b !             // l1
+          @b !             // l2
+          ( e1 e2 )
+          // focusing call to receive further instructions from node 203
+
+          ( e1 e2 )
+          r---
+
+          f4/main
+        ;
+      ramWords:
+      - 0x329F2
+      - 0x049F5
+      - 0x00001
+      - 0x1B406
+      - 0x3BD55
+      - 0x20000
+      - 0x19409
+      - 0x3BD55
+      - 0x08000
+      - 0x15555
+      - 0x05A55
+      - 0x11414
+      - 0x13400
+      - 0x19411
+      - 0x13403
+      - 0x09D2D
+      - 0x11414
+      - 0x05A0A
+      - 0x11415
+      - 0x09555
+      - 0x04A03
+      - 0x00115
+      - 0x0BF92
+      - 0x0BDAA
+      - 0x00175
+      - 0x01A02
+      - 0x0BF2A
+      - 0x01AB2
+      - 0x135D5
+      - 0x11414
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x014
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
-      postMortemEnabled: false
+      color: '#E6D6F7'
+      postMortemEnabled: true
     - coordinate: 203
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 203. VM 32 bit floatingpoint step 3.
+
+
+        opcode decoding and optional magnitude compare calculation
+
+          in: osseehhll     {from node 204}
+          out: ss           {to node 303}
+          out: eehhll       {to node 202}
+        optional:
+          in: c             {from node 202}
+          out: c            {to node 303}
+
+          c: magnitude compare result
+            0x8000  : |f1| >  |f2|
+            0       : |f1| == |f2|
+            0x20000 : |f1| <  |f2|
+        )
+
+        entry f3/main
+
+        # right /a
+
+        # left /b
+
+
+        # 6 org
+
+
+        : f3/sub
+          0x8000 xor // invert s2
+        : f3/add
+
+
+
+        : f3/min
+
+
+        : f3/max
+
+
+        : f3/mul
+
+
+        : f3/div
+
+
+
+        : f3/main
+          @b >r
+          ( / o )
+          @b @b
+          ( s1 s2 / o )
+          // pass e1 e2 h1 h2 l1 l2 to node 202
+          @b !           // e1
+          @b !           // e2
+          @b !           // h1
+          @b !           // h2
+          @b !           // l1
+          @b !           // l2
+          ( s1 s2 / o )
+          ex
+          f3/main
+        ;
+
+
+
+        # 0 org
+
+
+        // opcode jump table
+
+
+        f3/add ;
+
+        f3/sub ;
+
+        f3/min ;
+
+        f3/max ;
+
+        f3/mul ;
+
+        f3/div ;
+
+      ramWords:
+      - 0x11408
+      - 0x11406
+      - 0x11408
+      - 0x11408
+      - 0x11408
+      - 0x11408
+      - 0x043B2
+      - 0x08000
+      - 0x00802
+      - 0x01F2A
+      - 0x01A02
+      - 0x0BF2A
+      - 0x01A02
+      - 0x0B455
+      - 0x11408
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x008
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
-      postMortemEnabled: false
+      color: '#E6D6F7'
+      postMortemEnabled: true
     - coordinate: 204
       enabled: true
       sourceCode: >-
-        ( CVM2 node 204. VM 32 bit floatingpoint step 2. reorder and processing split
+        ( CVM2 node 204. VM 32 bit floatingpoint step 2.
 
+
+        reorder and processing split
 
 
         this node prepares the parameter for the pipeline or returns the result if a special processing must be used.
@@ -24020,13 +24526,13 @@ projects:
 
           if normal
 
-          out:   ottsseehhll          {to node 203}
+          out:   osseehhll            {to node 203}
 
           or if a special processing
 
-          out:   Tottsseehhll          {to node 104}
-          in:    sehl                  {from node 104}
-          out:   sehl                  {to node 304}
+          out:   Tottsseehhll         {to node 104}
+          in:    sehl                 {from node 104}
+          out:   sehl                 {to node 304}
 
           where T = t1 or T2
 
@@ -24100,9 +24606,8 @@ projects:
           then // normal processing
           drop
 
-          >r >r !                   // o
-          r> !                      // t1
-          r> !                      // t2
+          drop drop                 // remove t2 and t1
+          !                         // o
 
           r> !                      // s1
           @b !                      // s2
@@ -24145,15 +24650,15 @@ projects:
       - 0x27A12
       - 0x00175
       - 0x2B702
-      - 0x3A8BA
-      - 0x0AC2A
-      - 0x27A9A
-      - 0x0BF2A
-      - 0x27A02
+      - 0x3A2EA
       - 0x0AC2A
       - 0x01A9A
       - 0x0BF2A
+      - 0x27A02
+      - 0x0AC2A
+      - 0x01AB2
       - 0x11402
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -25270,12 +25775,11 @@ projects:
           0x0000 , 0x3F80 , // 4: 1.0
           0x0000 , 0x3F00 , // 5: 0.5
           0x0000 , 0x4000 , // 6: 2.0
-        //  0x04F3 , 0x3FB5 , // 7: sqrt(2)     = 1.41421356
-
+          0x04F3 , 0x3FB5 , // 7: sqrt(2)     = 1.41421356
         ]
 
 
-        # 0x1e org
+        # 0x20 org
 
 
         : fr/binary
@@ -25357,6 +25861,8 @@ projects:
       - 0x03F00
       - 0x00000
       - 0x04000
+      - 0x004F3
+      - 0x03FB5
       - 0x01F07
       - 0x00115
       - 0x28DAA
@@ -25367,7 +25873,6 @@ projects:
       - 0x09DA2
       - 0x001D5
       - 0x26A02
-      - 0x11428
       - 0x0183F
       - 0x00175
       - 0x29555
@@ -25377,13 +25882,12 @@ projects:
       - 0x07EBA
       - 0x2EA9A
       - 0x0EC2D
-      - 0x20AB2
-      - 0x1142F
-      - 0x13432
+      - 0x20A40
+      - 0x13433
       - 0x03DFA
       - 0x07FFF
       - 0x0B555
-      - 0x13432
+      - 0x13433
       - 0x03DE2
       - 0x08000
       - 0x0B555
