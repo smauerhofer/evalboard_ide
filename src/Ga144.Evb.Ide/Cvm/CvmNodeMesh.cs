@@ -147,6 +147,37 @@ namespace Ga144.Evb.Ide.Cvm;
 /// </summary>
 public static class CvmNodeMesh
 {
+  /// <summary>
+  /// <b>ADDED 2026-09-22, per Stefan directly: "CVM also includes nodes 201..205 and 102..105. I want
+  /// that these nodes are also included in the boot stream."</b> Unlike every other coordinate in this
+  /// list, these nine have no <c>NodeXxxProgram.cs</c> reference source anywhere in this repo -- there
+  /// is nothing here for <see cref="CvmBootStreamBuilder.BuildDescriptors"/> to compile for them, and no
+  /// entry for them in <see cref="CvmBootStreamBuilder.ReferenceSourceFor"/>. They rely entirely on
+  /// whatever is currently saved in each node's own live project Node Editor tab -- exactly the same
+  /// "live project source is the real source; a NodeXxxProgram.cs reference copy is only ever a
+  /// fallback" rule <see cref="CvmBootStreamBuilder.ReferenceSourceFor"/>'s own remarks already state,
+  /// just with no fallback at all here if a live source happens to be blank. This is intentional, not
+  /// an oversight: this addition was originally scoped to closing the BOOT-STREAM gap specifically by
+  /// getting these nine nodes into the boot roster this builder used at the time. Verified (by
+  /// simulating this exact fill against the resulting 43-coordinate roster) that adding these nine
+  /// changed none of the OTHER, already-verified via-edges: all nine attach as one single new leaf
+  /// cluster hanging off node 305 (one hop further out: 305 -&gt; 205, then 205 -&gt; 204 -&gt;
+  /// 203 -&gt; 202 -&gt; 201 on one branch and 205 -&gt; 105 -&gt; 104 -&gt; 103 -&gt; 102 on the other,
+  /// following the same physical-grid adjacency <see cref="CvmBootStreamBuilder.GetPhysicalNeighbors"/>
+  /// already uses everywhere else) -- none of them touch, or are touched by, any other branch of the
+  /// mesh. None of these nine nodes' own loads has been hardware-tested.
+  ///
+  /// <b>SUPERSEDED, same day, per Stefan directly: "stop this static madness ... no more static
+  /// lists."</b> This list is no longer what governs the CVM boot stream or post-mortem capture --
+  /// <see cref="CvmBootStreamBuilder.GetConfiguredCoordinates"/> computes that roster live from each
+  /// node's own project "configured" checkbox state instead, and does not consult
+  /// <see cref="StandaloneCoordinates"/> at all. This list remains here only for its own separate,
+  /// original purpose: the CVM Debugger's standalone/no-hardware Assemble-and-disassemble path
+  /// (<see cref="ViewModels.CvmDebuggerViewModel.CompileStandaloneCvmNodes"/>) and the build-time
+  /// <see cref="CvmPrimitiveTableExporter"/>. So these nine nodes being listed here no longer, on its
+  /// own, puts them in the boot stream -- they are included whenever they are independently "configured"
+  /// (enabled or given source) in the live project, exactly like every other node.
+  /// </summary>
   public static readonly IReadOnlyList<int> StandaloneCoordinates =
   [
     CvmMemoryProtocol.NopSourceNodeCoordinate, // 507, CVM2's entire CPU (corrected 2026-09-01 from 508).
@@ -185,5 +216,19 @@ public static class CvmNodeMesh
     Node602Program.Coordinate, // 602, stage 4c (normalize result, imports/controls 601).
     Node603Program.Coordinate, // 603, stage 3c (final sign/normalization control, imports/controls 602).
     Node604Program.Coordinate, // 604, stage 6 (classify operand types into a result class k).
+
+    // ADDED 2026-09-22, per Stefan directly ("CVM also includes nodes 201..205 and 102..105. I want
+    // that these nodes are also included in the boot stream.") -- see this class's own remarks above
+    // for why there is no NodeXxxProgram.cs reference source for any of these nine, and the verified
+    // shape they attach to the rest of the mesh in (one single new leaf cluster hanging off node 305).
+    201, // CVM's own live-project source for this coordinate -- no NodeXxxProgram.cs reference exists.
+    202, // ditto.
+    203, // ditto.
+    204, // ditto.
+    205, // ditto.
+    102, // ditto.
+    103, // ditto.
+    104, // ditto.
+    105, // ditto.
   ];
 }

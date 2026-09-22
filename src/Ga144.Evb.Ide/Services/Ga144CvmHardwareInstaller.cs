@@ -205,7 +205,15 @@ public sealed class Ga144CvmHardwareInstaller
     // project source of its own (see this method's own remarks above) -- and require every node to
     // succeed with a full 64-word RAM image before any reset/relay happens. Fail closed: a
     // half-compiled cluster must never reach the chip.
-    IReadOnlyList<CvmBootLoadStep> loadOrder = CvmBootStreamBuilder.BuildLoadOrder();
+    //
+    // REWORKED 2026-09-22, per Stefan directly: "stop this static madness. i want full dynamic
+    // bootstream and post-mortem analysis, based on all the nodes that have been configured by the
+    // checkbox, thus belong to the current project. no more static lists." BuildLoadOrder now takes
+    // this same chip and derives the roster live from each node's own Enabled/SourceCode ("configured")
+    // state (see CvmBootStreamBuilder.GetConfiguredCoordinates' own remarks) instead of a fixed,
+    // hand-maintained coordinate array -- so a node newly ticked or given source in the Node Editor is
+    // picked up here automatically, with no further code change needed in this class.
+    IReadOnlyList<CvmBootLoadStep> loadOrder = CvmBootStreamBuilder.BuildLoadOrder(chip);
     var descriptors = new Dictionary<int, CvmBootDescriptor>();
 
     // Every node's own compiled RAM result (symbol table included) is kept here too, alongside

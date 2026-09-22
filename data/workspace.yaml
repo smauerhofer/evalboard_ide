@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-21T10:52:24.5486156
-      utcDateTime: 2026-09-21T10:52:24.5486156Z
-      localDateTime: 2026-09-21T12:52:24.5486156+02:00
-      date: 2026-09-21T00:00:00.0000000
-      day: 21
-      dayOfWeek: Monday
-      dayOfYear: 264
-      hour: 10
-      millisecond: 548
-      microsecond: 615
-      nanosecond: 600
-      minute: 52
+      dateTime: 2026-09-22T12:08:19.3746241
+      utcDateTime: 2026-09-22T12:08:19.3746241Z
+      localDateTime: 2026-09-22T14:08:19.3746241+02:00
+      date: 2026-09-22T00:00:00.0000000
+      day: 22
+      dayOfWeek: Tuesday
+      dayOfYear: 265
+      hour: 12
+      millisecond: 374
+      microsecond: 624
+      nanosecond: 100
+      minute: 8
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 24
-      ticks: 639255847445486156
-      utcTicks: 639255847445486156
-      timeOfDay: 10:52:24.5486156
+      second: 19
+      ticks: 639256756993746241
+      utcTicks: 639256756993746241
+      timeOfDay: 12:08:19.3746241
       year: 2026
   portB: 
   portC:
@@ -22079,57 +22079,1110 @@ projects:
         parameterStack: []
       color: 
     - coordinate: 102
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >-
+        ( CVM2 node 102. VM 32 bit floatingpoint special step 4.
+          handle special cases for MUL/DIV
+
+        this is a slave node to node 104 via node 103.
+
+
+        input after remote call:
+
+          T t1 t2 s1 s2 e1 e2 h1 h2 l1 l2
+
+        output:
+
+          s e h l
+
+        register A is free to use.
+
+
+        type:
+          0 = finite nonzero
+          1 = zero
+          2 = infinity
+          4 = qNaN
+          c = sNaN
+
+        )
+
+
+        # right /b
+
+        # r--- /p
+
+
+
+        // Read T,t1,t2,s1,s2.
+
+        //
+
+        // result:
+
+        //   t1 t2 T
+
+        //
+
+        // A = s1 xor s2
+
+        //
+
+        // remaining input:
+
+        //   e1 e2 h1 h2 l1 l2
+
+
+        : fs4/head
+          @b >r
+          @b @b
+          @b @b xor a!
+          r>
+        ;
+
+
+
+        // discard e1 e2 h1 h2 l1 l2
+
+
+        : fs4/drop6
+          5 for @b drop unext
+        ;
+
+
+
+        // signed zero
+
+
+        : fs4/zero
+          fs4/drop6
+          a !b
+          a dup xor
+          dup !b dup !b !b
+        ;
+
+
+
+        // signed infinity
+
+
+        : fs4/inf
+          fs4/drop6
+          a !b
+          0xff !b
+          a dup xor
+          dup !b !b
+        ;
+
+
+
+        // canonical qNaN = qNaN sentinel S=1
+
+
+        : fs4/qnan
+          fs4/drop6
+          1 !b !b !b !b
+        ;
+
+
+
+        // ------------------------------------------------------------
+
+        // MUL
+
+        //
+
+        // NaN           -> qNaN
+
+        // zero * inf    -> qNaN
+
+        // infinity      -> signed infinity
+
+        // otherwise     -> signed zero
+
+        //
+
+        // With NaNs removed:
+
+        //
+
+        //   T = 1   zero involved
+
+        //   T = 2   infinity involved
+
+        //   T = 3   zero and infinity involved
+
+        // ------------------------------------------------------------
+
+
+        : fs4/mul
+          fs4/head
+          ( t1 t2 T )
+
+          dup 4 and
+          if
+            drop drop
+            fs4/qnan ;
+          then
+          drop
+
+          dup 3 xor
+          if
+            drop
+
+            2 and
+            if
+              drop
+              fs4/inf ;
+            then
+
+            drop
+            fs4/zero ;
+          then
+
+          drop drop
+          fs4/qnan
+        ;
+
+
+
+        // ------------------------------------------------------------
+
+        // DIV
+
+        //
+
+        // NaN       -> qNaN
+
+        // 0 / 0     -> qNaN
+
+        // inf / inf -> qNaN
+
+        //
+
+        // otherwise:
+
+        //
+
+        // result infinity iff:
+
+        //
+
+        //   numerator is infinity
+
+        //        OR
+
+        //   denominator is zero
+
+        //
+
+        // This is:
+
+        //
+
+        //   (t1 & 2) OR (t2 & 1)
+
+        //
+
+        // The two terms use different bits, therefore XOR can be used.
+
+        // ------------------------------------------------------------
+
+
+        : fs4/div
+          fs4/head
+          ( t1 t2 T )
+
+          dup 4 and
+          if
+            drop drop
+            fs4/qnan ;
+          then
+          drop drop
+          ( t1 t2 )
+
+          // Equal non-NaN special types can only be
+          // 0/0 or inf/inf.
+
+          over over xor
+          . if
+            drop
+
+            // infinity result =
+            // (t1 & 2) | (t2 & 1)
+
+            1 and >r
+            2 and
+            r> xor
+
+            if
+              drop
+              fs4/inf ;
+            then
+
+            drop
+            fs4/zero ;
+          then
+
+          drop
+          fs4/qnan
+        ;
+      ramWords:
+      - 0x00802
+      - 0x01F02
+      - 0x38A9D
+      - 0x048B2
+      - 0x00005
+      - 0x00275
+      - 0x13403
+      - 0x23B8B
+      - 0x38D23
+      - 0x09B55
+      - 0x13403
+      - 0x23B12
+      - 0x000FF
+      - 0x08E92
+      - 0x38D22
+      - 0x09555
+      - 0x13403
+      - 0x05B22
+      - 0x00001
+      - 0x09B55
+      - 0x13400
+      - 0x25DFA
+      - 0x00004
+      - 0x1941A
+      - 0x3A2B2
+      - 0x11410
+      - 0x3AD12
+      - 0x00003
+      - 0x39322
+      - 0x3BDFA
+      - 0x00002
+      - 0x19421
+      - 0x3B70A
+      - 0x3B706
+      - 0x3A2B2
+      - 0x11410
+      - 0x13400
+      - 0x25DFA
+      - 0x00004
+      - 0x1942A
+      - 0x3A2B2
+      - 0x11410
+      - 0x3A282
+      - 0x203B2
+      - 0x19434
+      - 0x3BDFA
+      - 0x00001
+      - 0x2FDFA
+      - 0x00002
+      - 0x26363
+      - 0x3B70A
+      - 0x3B706
+      - 0x3B710
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x1D5
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 103
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >-
+        ( CVM2 node 103. VM 32 bit floatingpoint special step 3.
+         handle special cases for ADD/SUB/MUL/DIV.
+         MUL/DIV are delegated to node 102.
+
+        this is a slave node to node 104.
+
+
+        input after remote call:
+
+          T t1 t2 s1 s2 e1 e2 h1 h2 l1 l2
+
+        output:
+
+          s e h l
+
+        register A is free to use.
+
+        register A is set to right for MUL/DIV
+
+
+        )
+
+
+        # 102 import
+
+        # left /b
+
+        # --l- /p
+
+
+
+        // Return operand 1.
+
+        // sign is on T.
+
+        // remaining input: e1 e2 h1 h2 l1 l2
+
+
+        : fs3/r1
+          !b
+          @b @b drop !b
+          @b @b drop !b
+          @b @b drop !b
+        ;
+
+
+
+        // Return operand 2.
+
+        // sign is on T.
+
+
+        : fs3/r2
+          !b
+          @b drop @b !b
+          @b drop @b !b
+          @b drop @b !b
+        ;
+
+
+
+        // canonical qNaN
+
+
+        : fs3/qnan
+          @b @b @b @b @b @b
+          1 // s == 1 means canonical qNaN
+          !b !b !b !b
+        ;
+
+
+
+        // ADD/SUB common.
+
+        //
+
+        // m = 0000 ADD
+
+        // m = 8000 SUB
+
+        //
+
+        // A = effective sign of operand 2
+
+
+        : fs3/add
+          dup xor
+
+        : fs3/as ( m )
+          a!
+
+          @b >r                    // T
+          @b @b                    // t1 t2
+          @b                       // s1
+          @b a xor a!              // effective s2
+          r>
+          ( t1 t2 s1 T )
+
+
+          // NaN
+
+          dup 4 and
+          if
+            fs3/qnan ;
+          then
+          drop
+
+
+          // Infinity
+
+          2 and
+          if
+            drop
+            >r
+            ( t1 t2 / s1 )
+
+            over 2 and
+            if                       // operand 1 infinity
+              drop
+
+              dup 2 and
+              if                     // both infinity
+                drop
+                r> dup a xor
+
+                if                   // opposite effective signs
+                  fs3/qnan ;
+                then
+
+                drop
+                fs3/r1 ;
+              then
+
+              drop
+              r>
+              fs3/r1 ;
+            then
+
+            drop
+            r> drop
+            a
+            fs3/r2 ;
+          then
+          drop
+
+
+          // Zero cases
+
+          >r
+          ( t1 t2 / s1 )
+
+          over
+          if                        // operand 1 zero
+            drop
+
+            dup
+            . if                      // both zero
+              drop
+              r> a and
+              fs3/r1 ;
+            then
+
+            drop                    // 0 +/- x
+            r> drop
+            a
+            fs3/r2 ;
+          then
+
+          drop                      // x +/- 0
+          r>
+          fs3/r1
+        ;
+
+
+
+        : fs3/sub
+          0x8000
+          fs3/as
+        ;
+
+
+
+        // pass complete packet unchanged to node 102
+
+
+        : fs3/pass
+          right a!
+          !
+          10 for @b ! unext
+
+          @ !b
+          @ !b
+          @ !b
+          @ !b
+        ;
+
+
+
+        : fs3/mul
+          A[ fs4/mul ]] lit
+          fs3/pass
+        ;
+
+
+
+        : fs3/div
+          A[ fs4/div ]] lit
+          fs3/pass
+        ;
+      ramWords:
+      - 0x09F02
+      - 0x3BB02
+      - 0x00222
+      - 0x01FEA
+      - 0x09555
+      - 0x09FEA
+      - 0x01B02
+      - 0x3BF22
+      - 0x00202
+      - 0x09555
+      - 0x01F02
+      - 0x01F07
+      - 0x00001
+      - 0x09B22
+      - 0x09555
+      - 0x243B2
+      - 0x2BFBA
+      - 0x01F02
+      - 0x00EE2
+      - 0x2AC97
+      - 0x00004
+      - 0x3F317
+      - 0x1140A
+      - 0x3BDFA
+      - 0x00002
+      - 0x19428
+      - 0x3A887
+      - 0x00002
+      - 0x3F326
+      - 0x3AD12
+      - 0x00002
+      - 0x3F324
+      - 0x3AC92
+      - 0x22363
+      - 0x1140A
+      - 0x3B700
+      - 0x3ACB2
+      - 0x11400
+      - 0x3ACEA
+      - 0x23705
+      - 0x3A882
+      - 0x19430
+      - 0x3ADB2
+      - 0x1942E
+      - 0x3AC8A
+      - 0x3F700
+      - 0x3ACEA
+      - 0x23705
+      - 0x3ACB2
+      - 0x11400
+      - 0x05710
+      - 0x08000
+      - 0x04A2F
+      - 0x001D5
+      - 0x0000A
+      - 0x2E9B2
+      - 0x01A72
+      - 0x03B0A
+      - 0x09E22
+      - 0x03B55
+      - 0x05734
+      - 0x13416
+      - 0x05734
+      - 0x13426
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x175
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 104
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 104. VM 32 bit floatingpoint special step 1. special operation dispatcher
+
+
+        MIN/MAX ar handled in node 105
+
+        ADD/SUB/MUL/DIV are handled in node 103
+
+          in:    Tottsseehhll          {from node 204}
+          out:   Tttsseehhll           {to node 103 or 105}
+          in:    Sehl                  {from node 103 or 105}
+          out:   sehl                  {to node 204}
+
+          S special sign:
+            0: positive
+            0x0001: qNaN
+            0x8000: negative
+
+        )
+
+
+        # 105 import
+
+        # 103 import
+
+        # 6 org
+
+        # up /b
+
+        # left /a
+
+        entry fs1/main
+
+
+        : fs1/pass ( T call ) ! ! 9 for @b ! unext
+          @ // S, might be a qNaN
+          dup 0x7fff and if // canonical qNaN
+            @ @ @ // fetch reimaining data
+            dup xor
+            dup >r
+            0xff
+            0x40
+            r> ;
+          then
+          drop
+          @
+          @
+          @
+        ;
+
+
+        : fs1/add ( T ) A[ fs3/add ]] lit fs1/pass ;
+
+        : fs1/sub ( T ) A[ fs3/sub ]] lit fs1/pass ;
+
+        : fs1/min ( T ) right a! A[ fs2/min ]] lit fs1/pass ;
+
+        : fs1/max ( T ) right a! A[ fs2/max ]] lit fs1/pass ;
+
+        : fs1/mul ( T ) A[ fs3/mul ]] lit fs1/pass ;
+
+        : fs1/div ( T ) A[ fs3/div ]] lit fs1/pass ;
+
+
+        : fs1/main
+          @b @b >r
+          ( T )
+          ex
+          ( s e h l )
+          left a!
+          >r >r >r !b r> !b r> !b r> !b  
+          fs1/main
+        ;
+
+
+        # 0 org
+
+
+        fs1/add ;
+
+        fs1/sub ;
+
+        fs1/min ;
+
+        fs1/max ;
+
+        fs1/mul ;
+
+        fs1/div ;
+
+      ramWords:
+      - 0x11414
+      - 0x11416
+      - 0x11418
+      - 0x1141C
+      - 0x11420
+      - 0x11422
+      - 0x0BA12
+      - 0x00009
+      - 0x2E9B2
+      - 0x01A72
+      - 0x02D12
+      - 0x07FFF
+      - 0x3F312
+      - 0x03E0B
+      - 0x38DBF
+      - 0x000FF
+      - 0x04C55
+      - 0x00040
+      - 0x3BE0A
+      - 0x03555
+      - 0x05706
+      - 0x1340F
+      - 0x05706
+      - 0x13432
+      - 0x04A12
+      - 0x001D5
+      - 0x13425
+      - 0x11406
+      - 0x04A12
+      - 0x001D5
+      - 0x1343D
+      - 0x11406
+      - 0x05706
+      - 0x1343C
+      - 0x05706
+      - 0x1343E
+      - 0x01FBA
+      - 0x17555
+      - 0x04ABA
+      - 0x00175
+      - 0x2E822
+      - 0x27B9A
+      - 0x08C22
+      - 0x11424
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x024
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 105
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >-
+        ( CVM2 node 105. VM 32 bit floatingpoint special step 2.
+          handle special cases for MIN/MAX
+
+        this is a slave node to node 104.
+
+
+        input after remote call:
+
+          T t1 t2 s1 s2 e1 e2 h1 h2 l1 l2
+
+        output:
+
+          s e h l
+
+        register A is free to use.
+
+
+        type:
+          0 = finite nonzero
+          1 = zero
+          2 = infinity
+          4 = qNaN
+          c = sNaN
+
+        )
+
+
+
+        # right /b
+
+        # r--- /p
+
+
+
+        // Return operand 1.
+
+        // On entry the remaining input is:
+
+        // e1 e2 h1 h2 l1 l2
+
+        // sign is on T.
+
+
+        : fs2/ehl1
+          @b @b drop
+          @b @b drop
+          @b @b drop
+
+        : fs2/ret
+          >r >r >r
+          !b r> !b r> !b r> !b
+        ;
+
+
+
+        // Return operand 2.
+
+
+        : fs2/ehl2
+          @b drop @b
+          @b drop @b
+          @b drop @b
+          fs2/ret
+        ;
+
+
+
+        // Select between operands of equal sign.
+
+        //
+
+        // mask = 1  -> zero is preferred
+
+        // mask = 2  -> infinity is preferred
+
+        //
+
+        // If the preferred special type is absent,
+
+        // the finite operand wins.  If both operands
+
+        // have the same special type, operand 1 wins.
+
+        //
+
+        // A contains the common sign.
+
+
+        : fs2/select ( t1 t2 mask )
+
+          >r
+
+          // operand 1 has preferred type?
+
+          over r> dup >r and
+          if
+            drop
+            r> drop
+            a
+            fs2/ehl1 ;
+          then
+          drop
+
+          // operand 2 has preferred type?
+
+          dup r> and
+          if
+            drop
+            a
+            fs2/ehl2 ;
+          then
+          drop
+
+          // Preferred type is absent.
+          // Select finite operand if there is one.
+
+          over
+          . if
+            drop
+
+            dup
+            . if
+              drop
+              a
+              fs2/ehl1 ;
+            then
+
+            drop
+            a
+            fs2/ehl2 ;
+          then
+
+          drop
+          a
+          fs2/ehl1
+        ;
+
+
+
+        // Any NaN -> qNaN sentinel S=1.
+
+        //
+
+        // T remains on the data stack and is used
+
+        // to manufacture zero.
+
+
+        : fs2/qnan
+
+          9 for @b drop unext
+
+          1 dup dup dup
+
+          fs2/ret
+        ;
+
+
+
+        // Common MIN/MAX processing.
+
+        //
+
+        // m = 0000 for MIN
+
+        // m = 8000 for MAX
+
+
+        : fs2/min
+          dup xor
+
+        : fs2/mm ( m )
+
+          >r
+
+          // T
+
+          @b dup 4 and
+
+          if                        // either operand is NaN
+            drop
+            r> drop
+            fs2/qnan ;
+          then
+
+          drop drop                 // test, T
+
+          // t1 t2 s1 s2
+
+          @b @b @b @b
+
+
+          // Different signs.
+          //
+          // MIN selects negative.
+          // MAX selects positive.
+          //
+          // s1 XOR m != 0 means operand 1 wins.
+
+          over over xor
+
+          if
+            drop
+
+            over r> xor
+            if
+              drop drop
+              fs2/ehl1 ;
+            then
+
+            drop
+            fs2/ehl2 ;
+          then
+
+
+          // Equal signs.
+
+          drop                      // sign difference
+          drop                      // s2; s1 == s2
+
+          // Keep common sign in A.
+          //
+          // p = sign XOR operation
+          //
+          // p=0:
+          //   +MIN or -MAX
+          //   zero is preferred
+          //
+          // p!=0:
+          //   -MIN or +MAX
+          //   infinity is preferred
+
+          dup r> xor
+
+          . if
+            drop
+            a!
+            2
+            fs2/select ;
+          then
+
+          drop
+          a!
+          1
+          fs2/select
+        ;
+
+
+
+        : fs2/max
+          0x8000
+          fs2/mm
+        ;
+      ramWords:
+      - 0x01FEA
+      - 0x01FEA
+      - 0x01FEA
+      - 0x2E8BA
+      - 0x08C22
+      - 0x27B9A
+      - 0x09555
+      - 0x00202
+      - 0x00202
+      - 0x00202
+      - 0x11403
+      - 0x2EF9B
+      - 0x2E067
+      - 0x3ACEA
+      - 0x23700
+      - 0x3AD9A
+      - 0x3F313
+      - 0x3AEB2
+      - 0x11407
+      - 0x3AFB2
+      - 0x1941B
+      - 0x3ADB2
+      - 0x19419
+      - 0x3AEB2
+      - 0x11400
+      - 0x3AEB2
+      - 0x11407
+      - 0x3AEB2
+      - 0x11400
+      - 0x048B2
+      - 0x00009
+      - 0x00277
+      - 0x00001
+      - 0x24D92
+      - 0x11403
+      - 0x243B2
+      - 0x2FF97
+      - 0x00004
+      - 0x3F329
+      - 0x3ACEA
+      - 0x1141D
+      - 0x3A202
+      - 0x01F02
+      - 0x20FE2
+      - 0x19432
+      - 0x3AF9A
+      - 0x39331
+      - 0x3A2B2
+      - 0x11400
+      - 0x3B707
+      - 0x3A292
+      - 0x263B2
+      - 0x19438
+      - 0x3AA12
+      - 0x00002
+      - 0x1140B
+      - 0x3AA12
+      - 0x00001
+      - 0x1140B
+      - 0x05724
+      - 0x08000
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x1D5
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#E6D6F7'
     - coordinate: 106
       enabled: false
       sourceCode: ''
@@ -22339,83 +23392,151 @@ projects:
         parameterStack: []
       color: 
     - coordinate: 204
-      enabled: false
-      sourceCode: >+
-        ( CVM2 node 204. VM 32 bit floatingpoint step 2. reorder
-
-          in:    otsehltsehl          {to node 204}
-          out:   ottsseehhll          {to node 204}
-        )
-
-
-
-      ramWords: []
-      startup:
-        entryPoint: 0x000
-        p: 0x000
-        a: 0x000
-        b: 0x000
-        io: 0x00000
-        returnStack: []
-        parameterStack: []
-      color: '#E6D6F7'
-    - coordinate: 205
       enabled: true
       sourceCode: >-
-        ( CVM2 node 205. VM 32 bit floatingpoint step 1. unpack & categorize
+        ( CVM2 node 204. VM 32 bit floatingpoint step 2. reorder and processing split
 
-          receives 2 floatingpoint numbers and decomposes each into
 
-          1. type:
-              t = 0x00   finite nonzero
-              t = 0x01   zero
-              t = 0x02   infinity
-              t = 0x04   qNaN
-              t = 0x0c   sNaN       // NAN bit + signaling bit
 
-          1. sign:
-               0       => positive
-               0x8000  => negative
+        this node prepares the parameter for the pipeline or returns the result if a special processing must be used.
 
-          2. exponent:
-               IEEE-754 biased exponent, 0x00 .. 0xff
+          in:    otsehltsehl          {from node 205}
 
-          3. mantissa high:
-               normal numbers have implicit leading 1 made explicit in bit 7
+          if normal
 
-          4. mantissa low
+          out:   ottsseehhll          {to node 203}
 
-          in:    ohlhl               {from node 305}
-          out:   otsehltsehl         {to node 204}
+          or if a special processing
+
+          out:   Tottsseehhll          {to node 104}
+          in:    sehl                  {from node 104}
+          out:   sehl                  {to node 304}
+
+          where T = t1 or T2
+
         )
 
 
         # 0 org
 
-        # down /b
+        # right /b
 
-        # right /a
+        # left /a
 
-        # -d-- /p
-
-
-        : f1/decompose 
-          @b @b
-          ( h l )
-        ;
+        entry f2/main
 
 
-        : f1/main
-          @b !                   // o
-          f1/decompose           // operand 1
-          f1/decompose           // operand 2
-          f1/main
+        : f2/or >r inv r> inv and inv ;
+
+
+        : f2/main
+
+          // Read:
+          //
+          // o t1 s1 e1 h1 l1
+
+          @b @b @b @b @b @b
+
+          // Put first packet on return stack.
+
+          >r >r >r >r
+
+          ( o t1 / l1 h1 e1 s1 )
+
+          // t2
+
+          @b
+
+          ( o t1 t2 / l1 h1 e1 s1 )
+
+          over over f2/or
+          if // special processing
+            up a!
+            !                       // T
+            >r >r !                 // o
+            r> !                    // t1
+            r> !                    // t2
+
+            r> !                    // s1
+            @b !                    // s2
+
+            r> !                    // e1
+            @b !                    // e2
+
+            r> !                    // h1
+            @b !                    // h2
+
+            r> !                    // l1
+            @b !                    // l2
+
+            @ @ @ @
+            ( s e h l )
+
+            down a!
+
+            >r >r >r !              // s    
+            r> !                    // e
+            r> !                    // h
+            r> !                    // l
+
+            left a!
+            f2/main ;
+          then // normal processing
+          drop
+
+          >r >r !                   // o
+          r> !                      // t1
+          r> !                      // t2
+
+          r> !                      // s1
+          @b !                      // s2
+
+          r> !                      // e1
+          @b !                      // e2
+
+          r> !                      // h1
+          @b !                      // h2
+
+          r> !                      // l1
+          @b !                      // l2
+
+          f2/main
         ;
       ramWords:
-      - 0x15555
-      - 0x15555
-      - 0x01A48
-      - 0x13400
+      - 0x2E69A
+      - 0x320CD
+      - 0x01F02
+      - 0x01F02
+      - 0x2E8BA
+      - 0x2FF82
+      - 0x21600
+      - 0x1941A
+      - 0x04A2A
+      - 0x00145
+      - 0x2E82A
+      - 0x27A9A
+      - 0x0AC2A
+      - 0x01A9A
+      - 0x0BF2A
+      - 0x27A02
+      - 0x0AC2A
+      - 0x01A0A
+      - 0x03E0F
+      - 0x00115
+      - 0x2A8BA
+      - 0x2FA9A
+      - 0x0AC2A
+      - 0x27A12
+      - 0x00175
+      - 0x2B702
+      - 0x3A8BA
+      - 0x0AC2A
+      - 0x27A9A
+      - 0x0BF2A
+      - 0x27A02
+      - 0x0AC2A
+      - 0x01A9A
+      - 0x0BF2A
       - 0x11402
       - 0x15555
       - 0x15555
@@ -22446,33 +23567,288 @@ projects:
       - 0x15555
       - 0x15555
       - 0x15555
+      startup:
+        entryPoint: 0x002
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#E6D6F7'
+    - coordinate: 205
+      enabled: true
+      sourceCode: >-
+        ( CVM2 node 205. VM 32 bit floatingpoint step 1. unpack & categorize
+
+          receives 2 floatingpoint numbers and decomposes each into
+
+          1. type:
+              t = 0x00   finite nonzero
+              t = 0x01   zero
+              t = 0x02   infinity
+              t = 0x04   qNaN
+              t = 0x0c   sNaN       // NAN bit + signaling bit
+
+          2. sign:
+               0       => positive
+               0x8000  => negative
+
+          3. exponent:
+               effective IEEE-754 biased exponent
+               normal      = raw exponent
+               subnormal   = 1
+               zero        = 0
+               inf/NaN     = 0xff
+
+          4. mantissa high:
+               normal numbers have implicit leading 1 made explicit in bit 7
+
+          5. mantissa low
+
+          in:    olhlh               {from node 305}
+          out:   otsehltsehl         {to node 204}
+        )
+
+
+        # 0 org
+
+        # down /b
+
+        # right /a
+
+        # -d-- /p
+
+
+
+        : f1/frac? ( l h - l h f )
+          dup 0x7f and
+          if
+            ;
+          then
+          drop
+          over
+        ;
+
+
+
+        // leaves l h intact and adds type
+
+
+        : f1/type ( l h - l h t )
+
+          dup
+          2/ 2/ 2/ 2/ 2/ 2/ 2/
+          0xff and
+
+          // exponent != 0
+
+          if
+            0xff xor ..
+
+            // exponent 1..254 -> finite nonzero
+
+            if
+              dup
+              xor
+              ;
+            then
+
+            // exponent == 0xff
+
+            drop
+            f1/frac?
+
+            // fraction != 0 -> NaN
+
+            if
+              drop
+
+              // fraction bit 22 is quiet bit
+
+              dup 0x40 and
+              if
+                drop
+                0x04
+                ;
+              then
+
+              drop
+              0x0c
+              ;
+            then
+
+            // exponent ff, fraction zero -> infinity
+
+            drop
+            0x02
+            ;
+          then
+
+          // exponent == 0
+
+          drop
+          f1/frac?
+
+          // nonzero fraction -> subnormal finite
+
+          if
+            dup
+            xor
+            ;
+          then
+
+          // exponent zero, fraction zero -> zero
+
+          drop
+          0x01
+        ;
+
+
+
+        : f1/decompose
+
+          @b
+          ( l h )
+
+          // type
+
+          f1/type
+          !
+
+          // sign
+
+          dup 0x8000 and
+          !
+
+          // raw exponent
+
+          dup
+          2/ 2/ 2/ 2/ 2/ 2/ 2/
+          0xff and
+
+          // Keep raw exponent for deciding whether the
+          // implicit mantissa bit must be inserted.
+
+          dup >r
+
+          // Output effective exponent:
+          //
+          // normal       raw exponent
+          // subnormal    1
+          // zero         0
+          // inf/nan      ff
+
+          if
+            !
+          else
+            drop
+            f1/frac?
+            if
+              drop 1
+            else
+              dup xor
+            then
+            !
+          then
+
+          // Use the original raw exponent here.
+          // Subnormals must NOT receive the implicit bit.
+
+          r>
+
+          if
+            0xff xor ..
+            if
+              drop
+              0x7f and
+              0x80 xor
+              !                    // h
+              !                    // l
+              ;
+            then
+          then
+
+          // zero, subnormal, infinity or NaN
+
+          drop
+          0x7f and
+          !                        // h
+          !                        // l
+        ;
+
+
+
+        : f1/main
+          @b !                     // o
+
+          @b f1/decompose             // l1 h1 -> t1 s1 e1 h1 l1
+          @b f1/decompose             // l2 h2 -> t2 s2 e2 h2 l2
+
+          f1/main
+        ;
+      ramWords:
+      - 0x25DFA
+      - 0x0007F
+      - 0x19404
       - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x3AF55
+      - 0x247C2
+      - 0x307C2
+      - 0x30712
+      - 0x000FF
+      - 0x3F319
+      - 0x043B2
+      - 0x000FF
+      - 0x1940E
+      - 0x24355
+      - 0x3B600
+      - 0x19417
+      - 0x3AD12
+      - 0x00040
+      - 0x3F315
+      - 0x3BD55
+      - 0x00004
+      - 0x3BD55
+      - 0x0000C
+      - 0x3BD55
+      - 0x00002
+      - 0x3B600
+      - 0x1941C
+      - 0x24355
+      - 0x3BD55
+      - 0x00001
+      - 0x01605
+      - 0x0AD12
+      - 0x08000
+      - 0x3FA92
+      - 0x307C2
+      - 0x307C2
+      - 0x31DFB
+      - 0x000FF
+      - 0x2F328
+      - 0x0B72E
+      - 0x3B600
+      - 0x1942C
+      - 0x3BD45
+      - 0x00001
+      - 0x243B2
+      - 0x0A9B2
+      - 0x27336
+      - 0x043B2
+      - 0x000FF
+      - 0x19436
+      - 0x3BDFF
+      - 0x0007F
+      - 0x00080
+      - 0x39A2D
+      - 0x3BDFA
+      - 0x0007F
+      - 0x0BA55
+      - 0x01A02
+      - 0x1341E
+      - 0x0161E
+      - 0x11439
       - 0x15555
       - 0x15555
       - 0x15555
@@ -23059,61 +24435,134 @@ projects:
       color: '#E6D6F7'
     - coordinate: 304
       enabled: true
-      sourceCode: "( CVM2 node 304. VM 32 bit floatingpoint stage 2 node. rearrange data stream and collect return value )\n(\n  in: osehlsehl   {from node 305}\n  out: ottsseehhll  {to node 303}\n\n  return in:  sehl  {from node 404}\n  return out: sehl  {to node 305}\n\r\ncalculate type:\n      t = 0x00   finite nonzero\n      t = 0x01   zero\n      t = 0x02   infinity\n      t = 0x04   qNaN\n      t = 0x0c   sNaN       // NAN bit + signaling bit\n\r\n\r\n\r\n)\n\nentry fp2/main\n# right /b\n# up /a\n\n# 0 org\n\r\n: fp2/fold ( lh-lhf) over over 0x7f and \n: fp2/or ( ab-c) >r inv r> inv and inv ;\n\n: fp2/calct ( l h e - l h e t )\n  ( l h e )\n\n  if // exp != 0\n\n    dup 0xff xor\n    if // normal\n      dup xor                      // t = 0\n      ( l h e 0 )\n      ;\n    then\n\n    ( l h 0xff 0 )\n    drop drop\n    ( l h )\n\n    // NaN or infinity\n    fp2/fold\n    ( l h f )\n\n    if // NaN\n      drop\n      ( l h )\n\n      // h bit6 = quiet bit\n      //\n      // qNaN: h&40 = 40 -> 8 xor 0c = 04\n      // sNaN: h&40 = 00 -> 0 xor 0c = 0c\n\n      dup 0x40 and\n      2/ 2/ 2/\n      0x0c xor\n\n      >r 0xff r>\n      ( l h e t )\n      ;\n    then\n\n    // infinity\n    drop\n    0xff 0x02\n    ( l h e t )\n    ;\n  then\n\n  // exponent = 0\n\n  drop\n  fp2/fold\n  ( l h f )\n\n  if // subnormal\n    drop\n    ( l h )\n\n    dup dup xor                  // e = 0\n    dup                          // t = 0\n\n    ( l h 0 0 )\n    ;\n  then\n\n  // zero\n  //\n  // l=h=f=0, so f already serves as e=0\n\n  0x01\n  ( 0 0 0 1 )\n  ;\r\n\r\n\n\n: fp2/return\n  up a!\n  @ !b                  // s\n  @ !b                  // e\n  @ !b                  // h\n  @ !b                  // l\n\n\n: fp2/main\n\n  left a!\n  @b !                  // o\r\n  \n\n  @b >r                 // s1\n  @b >r                 // e1\n  @b >r                 // h1\n  @b                    // l1\n\n  ( l1 / s1 e1 h1 )\r\n  r> r>\r\n  ( l1 h1 e1 / s1 )\r\n  fp2/calct\n  !                     // t1\n\r\n  @b >r                 // s2\n  @b >r                 // e2\n  @b >r                 // h2\n  @b                    // l2\r\n  ( l1 h1 e1 l2 / s1 s2 e2 h2 )\r\n  r> r>\r\n  ( l1 h1 e1 l2 h2 e2 / s1 s2 )\r\n  fp2/calct\n  !                     // t2\n  ( l1 h1 e1 l2 h2 e2 / s1 s2 )\r\n  r> r>\r\n  ( l1 h1 e1 l2 h2 e2 s2 s1 )\r\n  !                     // s1\n  !                     // s2\n  ( l1 h1 e1 l2 h2 e2 )\r\n  >r >r >r\r\n  ( l1 h1 e1 / e2 h2 l2 )\r\n  !                     // e1\n  ( l1 h1 e1 / e2 h2 l2 )\r\n  r> r> r>\r\n  !                     // e2\n  ( l1 h1 l2 h2 )\r\n  >r >r\r\n  ( l1 h1 / h2 l2 )\r\n  !                     // h1\r\n  r> r>\n  ( l1 l2 h2 )\r\n  !                     // h2\r\n  ( l1 l2 )\r\n  >r !                  // l1\r\n  r> !                  // l2\r\n\n  fp2/return\n;"
+      sourceCode: >-
+        ( CVM2 node 304. VM 32 bit floatingpoint step x node. pack data
+
+
+        this node reads sign exponent and mantissa and converts it into a 32-bit IEEE 754 number
+
+
+        the data can also come from node 204, this is a shortcut for special values
+
+
+        effective exponent:
+          normal      raw exponent
+          subnormal   1
+          zero        0
+          inf/nan     0xff
+
+          in:  sehl  {from node 404 or node 204}
+          out: hl    {to node 305}
+
+        )
+
+
+        entry fx/main
+
+        # -d-u /b
+
+        # right /a
+
+
+        # 0 org
+
+
+        : fx/main
+          @b >r                    // sign used at the end
+          @b
+          ( e / s )
+
+          dup 0xff xor .
+          if                       // finite
+            drop
+            @b
+            ( e h / s )
+
+            // no explicit hidden bit means zero/subnormal:
+            // packed exponent must be zero
+
+            dup 0x80 and
+            if                     // normal
+              drop
+            else                   // zero or subnormal
+              drop
+              >r dup xor r>
+            then
+
+          else                     // infinity or NaN
+            drop
+            @b
+            ( ff h / s )
+          then
+
+          ( e h / s )
+          // pack
+          >r
+          2* 2* 2* 2* 2* 2* 2*
+          r> 0x7f and
+          xor
+          ( h / s )
+
+          r> xor                   // add sign
+          ( h )
+          !                        // h
+          @b !                     // l
+          fx/main
+        ;
       ramWords:
-      - 0x20F12
+      - 0x00803
+      - 0x043B2
+      - 0x000FF
+      - 0x1940B
+      - 0x3BF97
+      - 0x00080
+      - 0x3F308
+      - 0x3B70A
+      - 0x3A892
+      - 0x38CB2
+      - 0x1140C
+      - 0x3BFB2
+      - 0x2E4DA
+      - 0x364DA
+      - 0x3649F
       - 0x0007F
-      - 0x3E9B2
-      - 0x2E69A
-      - 0x320CD
-      - 0x19417
-      - 0x25DE2
-      - 0x000FF
-      - 0x1940A
-      - 0x24355
-      - 0x3A2B2
-      - 0x13400
-      - 0x19414
-      - 0x3AD12
-      - 0x00040
-      - 0x3E7C2
-      - 0x31DE2
-      - 0x0000C
-      - 0x2FD9D
-      - 0x000FF
-      - 0x3BD15
-      - 0x000FF
-      - 0x00002
-      - 0x3B600
-      - 0x1941B
-      - 0x3AD92
-      - 0x38D55
-      - 0x05555
-      - 0x00001
-      - 0x04A0A
-      - 0x00145
-      - 0x09E22
-      - 0x03B0A
-      - 0x089B2
-      - 0x04A02
-      - 0x00175
-      - 0x0BFBA
-      - 0x00802
-      - 0x2FF9A
-      - 0x27605
-      - 0x0BFBA
-      - 0x00802
-      - 0x2FF9A
-      - 0x27605
-      - 0x0AC9A
-      - 0x0BABA
-      - 0x2E82A
-      - 0x26C9A
-      - 0x0A8BA
-      - 0x0AC9A
-      - 0x0A82A
-      - 0x27AB2
-      - 0x1141D
+      - 0x3E39A
+      - 0x39A02
+      - 0x0B700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -23126,7 +24575,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x022
+        entryPoint: 0x000
         p: 0x000
         a: 0x000
         b: 0x000
@@ -23136,7 +24585,7 @@ projects:
       color: '#E6D6F7'
     - coordinate: 305
       enabled: true
-      sourceCode: >
+      sourceCode: >+
         ( CVM2 node 305. VM 32 bit floatingpoint register node
 
 
@@ -23150,7 +24599,7 @@ projects:
 
 
         binary:
-          out:     ohlhl      { to node 205 }
+          out:     olhlh      { to node 205 }
           in:      hl         { from node 304 }
         )
 
@@ -23187,24 +24636,36 @@ projects:
           0x0000 , 0x3F80 , // 4: 1.0
           0x0000 , 0x3F00 , // 5: 0.5
           0x0000 , 0x4000 , // 6: 2.0
-          0x04F3 , 0x3FB5 , // 7: sqrt(2)     = 1.41421356
+        //  0x04F3 , 0x3FB5 , // 7: sqrt(2)     = 1.41421356
+
         ]
 
 
-        # 0x20 org
+        # 0x1e org
 
 
         : fr/binary
           // read input
-          @b @b @b down b!
-          // send 2 parameter
-          ( o g f ) dup a! >r >r !b
-          @+ @ !b !b
-          r> a! @+ @ !b !b
+          @b                         // o
+          @b                         // g
+          @b                         // f
+        : brk brk ;
+          down b!
+          // send op + 2 parameter
+          ( o g f )
+          dup a!                     // set f
+          >r >r !b                   // o
+          @+ !b @+ !b                 // lh
+          r> a!                      // set g
+          @+ !b @+ !b                 // lh
           // receive result
-          right b! r> a! @b @b !+ !
+          right b!
+          r> a!                      // set f
+          @b
+          @b
+          !+
+          !+                         // hl
           left b!
-
         ;
 
 
@@ -23232,22 +24693,6 @@ projects:
 
         : fr/pop ( g f ) a! @b !+ @b ! ;
 
-
-        // : fr/move ( g f ) over a!
-
-        // : fr/mov ( g l h )  @+ >r @ r> 
-
-        // : fr/st ( g l h ) >r >r a! r> r> !+ ! ;
-
-        // : fr/const ( g f ) over # fr/cbase lit . + a! fr/mov ;
-
-        // : fr/abs ( g f ) a! @+ @ 0x7fff and fr/st ;
-
-        // : fr/neg ( g f ) a! @+ @ 0x8000 xor fr/st ;
-
-        // : fr/push ( g f ) a! @+ !b @ !b ;
-
-        // : fr/pop ( g f ) a! @b !+ @b ! ;
       ramWords:
       - 0x15555
       - 0x15555
@@ -23279,33 +24724,33 @@ projects:
       - 0x03F00
       - 0x00000
       - 0x04000
-      - 0x004F3
-      - 0x03FB5
-      - 0x01F07
+      - 0x01F02
+      - 0x1141F
+      - 0x04B92
       - 0x00115
-      - 0x28DAA
-      - 0x2E822
-      - 0x07E22
-      - 0x08CAA
-      - 0x07E22
-      - 0x09DA2
+      - 0x2A8BA
+      - 0x09C22
+      - 0x07B9A
+      - 0x2BC22
+      - 0x07B12
       - 0x001D5
-      - 0x26A02
-      - 0x0182F
+      - 0x28CAA
+      - 0x01F3A
+      - 0x0FDA5
       - 0x00175
-      - 0x29555
       - 0x21DB0
       - 0x00010
       - 0x2A9B2
       - 0x07EBA
       - 0x2EA9A
       - 0x0EC2D
-      - 0x20A40
-      - 0x13433
+      - 0x20AB2
+      - 0x1142F
+      - 0x13432
       - 0x03DFA
       - 0x07FFF
       - 0x0B555
-      - 0x13433
+      - 0x13432
       - 0x03DE2
       - 0x08000
       - 0x0B555
@@ -23427,7 +24872,7 @@ projects:
         entry fp/main
 
 
-        # 0x1c org
+        # 0x1e org
 
 
         : fp/2pa ( a b - ) A[ @p @p ]] lit ! ! ! ;
@@ -23443,7 +24888,7 @@ projects:
 
 
 
-        : fp/binary ( f g o - ) >r fp/2pa A[ fr/binary ]] lit !b r> !b
+        : fp/binary ( f g o - ) A[ fr/binary ]] lit ! ! ! !
 
 
         : fp/leave A[ k/leave ; ]] lit !b
@@ -23492,57 +24937,60 @@ projects:
 
         : fp/pop ( f g ) fp/2pa fp/po ;
 
-        : fp/push ( f g ) 
-          fp/2pa A[ fr/push ]] lit ! @ @ 
-           leap then
+        : fp/push ( f g )
+          fp/2pa A[ fr/push ]] lit !
+          @ @ 
+          leap then
         : fp/!next ( w - ) A[ @p k/push ]] lit !b !b ;
 
       ramWords:
-      - 0x05729
+      - 0x0572C
       - 0x00000
-      - 0x05729
+      - 0x0572C
       - 0x00001
-      - 0x05729
+      - 0x0572C
       - 0x00002
-      - 0x05729
+      - 0x0572C
       - 0x00003
-      - 0x05729
+      - 0x0572C
       - 0x00004
-      - 0x05729
+      - 0x0572C
       - 0x00005
-      - 0x0571F
+      - 0x05721
+      - 0x13433
+      - 0x05721
       - 0x1342D
-      - 0x0571F
-      - 0x13432
-      - 0x0571F
+      - 0x05721
       - 0x13438
-      - 0x0571F
-      - 0x13435
-      - 0x1341C
-      - 0x11425
-      - 0x1341F
-      - 0x05A0A
-      - 0x1343B
-      - 0x0361A
+      - 0x05721
+      - 0x13434
+      - 0x1341E
+      - 0x11427
+      - 0x0561E
+      - 0x12345
+      - 0x05A12
+      - 0x1343C
+      - 0x23456
+      - 0x03E4C
       - 0x05B25
       - 0x05626
       - 0x05A2A
       - 0x05DB2
       - 0x0B555
-      - 0x2F61C
+      - 0x2F61E
       - 0x27A55
       - 0x05B12
       - 0x13422
       - 0x0C9B2
       - 0x09F55
-      - 0x05A49
-      - 0x1343D
-      - 0x0B621
+      - 0x05AB2
+      - 0x1343E
+      - 0x13423
+      - 0x0B623
       - 0x0B555
-      - 0x2F61C
-      - 0x05B9A
+      - 0x05A2A
       - 0x13420
-      - 0x089B2
+      - 0x0BAB2
       - 0x05BB2
       - 0x11428
       - 0x05B03
@@ -23558,12 +25006,10 @@ projects:
       - 0x3E4BA
       - 0x2E29A
       - 0x17555
-      - 0x1142D
-      - 0x15555
-      - 0x15555
+      - 0x1142F
       - 0x15555
       startup:
-        entryPoint: 0x02F
+        entryPoint: 0x031
         p: 0x000
         a: 0x000
         b: 0x000
@@ -29872,7 +31318,794 @@ projects:
         nop
 
         halt
-    lastSelectedDebuggerProgramName: FP regression test 1
+    - name: FP fmin/fmax regression test 1
+      source: >-
+        //
+
+        // FMIN / FMAX special-case regression test
+
+        //
+
+        // Tests only special floating-point values.
+
+        // Normal and subnormal values are deliberately not used.
+
+        //
+
+        // Registers:
+
+        //
+
+        //   fr0 = +0
+
+        //   fr1 = -0
+
+        //   fr2 = +inf
+
+        //   fr3 = -inf
+
+        //   fr4 = +qNaN with payload
+
+        //   fr5 = -sNaN with payload
+
+        //
+
+        //   fr7 = result scratch register
+
+        //
+
+        // NaN policy:
+
+        //
+
+        //   Any NaN operand -> canonical qNaN = 7FC0 0000
+
+        //
+
+        // Result order:
+
+        //
+
+        //   TEST 1: fmin, 36 results
+
+        //   TEST 2: fmax, 36 results
+
+        //
+
+
+
+        // ============================================================
+
+        // INITIALIZE SPECIAL VALUES
+
+        // ============================================================
+
+
+
+        // fr0 = +0 = 0000 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+
+
+        // fr1 = -0 = 8000 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+
+
+        // fr2 = +infinity = 7F80 0000
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 2
+
+
+
+        // fr3 = -infinity = FF80 0000
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 3
+
+
+
+        // fr4 = +qNaN = 7FC1 2345
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 4
+
+
+
+        // fr5 = -sNaN = FFA1 2345
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 5
+
+
+
+
+        // ============================================================
+
+        // TEST 1
+
+        // FMIN
+
+        //
+
+        // Rows are first operand.
+
+        // Columns are second operand:
+
+        //
+
+        //   +0  -0  +inf  -inf  qNaN  sNaN
+
+        // ============================================================
+
+
+
+        fmove 7 5
+
+        fmin 7 5
+
+        fpush 7                   ;  1 expect FFA1 2345
+
+
+        // ------------------------------------------------------------
+
+        // lhs = +0
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 0
+
+        fmin 7 0
+
+        fpush 7                   ;  1 expect 0000 0000
+
+
+        fmove 7 0
+
+        fmin 7 1
+
+        fpush 7                   ;  2 expect 8000 0000
+
+
+        fmove 7 0
+
+        fmin 7 2
+
+        fpush 7                   ;  3 expect 0000 0000
+
+
+        fmove 7 0
+
+        fmin 7 3
+
+        fpush 7                   ;  4 expect FF80 0000
+
+
+        fmove 7 0
+
+        fmin 7 4
+
+        fpush 7                   ;  5 expect 7FC0 0000
+
+
+        fmove 7 0
+
+        fmin 7 5
+
+        fpush 7                   ;  6 expect 7FC0 0000
+
+
+
+        // ------------------------------------------------------------
+
+        // lhs = -0
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 1
+
+        fmin 7 0
+
+        fpush 7                   ;  7 expect 8000 0000
+
+
+        fmove 7 1
+
+        fmin 7 1
+
+        fpush 7                   ;  8 expect 8000 0000
+
+
+        fmove 7 1
+
+        fmin 7 2
+
+        fpush 7                   ;  9 expect 8000 0000
+
+
+        fmove 7 1
+
+        fmin 7 3
+
+        fpush 7                   ; 10 expect FF80 0000
+
+
+        fmove 7 1
+
+        fmin 7 4
+
+        fpush 7                   ; 11 expect 7FC0 0000
+
+
+        fmove 7 1
+
+        fmin 7 5
+
+        fpush 7                   ; 12 expect 7FC0 0000
+
+
+
+        // ------------------------------------------------------------
+
+        // lhs = +infinity
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 2
+
+        fmin 7 0
+
+        fpush 7                   ; 13 expect 0000 0000
+
+
+        fmove 7 2
+
+        fmin 7 1
+
+        fpush 7                   ; 14 expect 8000 0000
+
+
+        fmove 7 2
+
+        fmin 7 2
+
+        fpush 7                   ; 15 expect 7F80 0000
+
+
+        fmove 7 2
+
+        fmin 7 3
+
+        fpush 7                   ; 16 expect FF80 0000
+
+
+        fmove 7 2
+
+        fmin 7 4
+
+        fpush 7                   ; 17 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmin 7 5
+
+        fpush 7                   ; 18 expect 7FC0 0000
+
+
+
+        // ------------------------------------------------------------
+
+        // lhs = -infinity
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 3
+
+        fmin 7 0
+
+        fpush 7                   ; 19 expect FF80 0000
+
+
+        fmove 7 3
+
+        fmin 7 1
+
+        fpush 7                   ; 20 expect FF80 0000
+
+
+        fmove 7 3
+
+        fmin 7 2
+
+        fpush 7                   ; 21 expect FF80 0000
+
+
+        fmove 7 3
+
+        fmin 7 3
+
+        fpush 7                   ; 22 expect FF80 0000
+
+
+        fmove 7 3
+
+        fmin 7 4
+
+        fpush 7                   ; 23 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmin 7 5
+
+        fpush 7                   ; 24 expect 7FC0 0000
+
+
+
+        // ------------------------------------------------------------
+
+        // lhs = qNaN
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 4
+
+        fmin 7 0
+
+        fpush 7                   ; 25 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmin 7 1
+
+        fpush 7                   ; 26 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmin 7 2
+
+        fpush 7                   ; 27 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmin 7 3
+
+        fpush 7                   ; 28 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmin 7 4
+
+        fpush 7                   ; 29 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmin 7 5
+
+        fpush 7                   ; 30 expect 7FC0 0000
+
+
+
+        // ------------------------------------------------------------
+
+        // lhs = sNaN
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 5
+
+        fmin 7 0
+
+        fpush 7                   ; 31 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 1
+
+        fpush 7                   ; 32 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 2
+
+        fpush 7                   ; 33 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 3
+
+        fpush 7                   ; 34 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 4
+
+        fpush 7                   ; 35 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 5
+
+        fpush 7                   ; 36 expect 7FC0 0000
+
+
+
+
+        // ============================================================
+
+        // TEST 2
+
+        // FMAX
+
+        //
+
+        // Rows are first operand.
+
+        // Columns are second operand:
+
+        //
+
+        //   +0  -0  +inf  -inf  qNaN  sNaN
+
+        // ============================================================
+
+
+
+        // ------------------------------------------------------------
+
+        // lhs = +0
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 0
+
+        fmax 7 0
+
+        fpush 7                   ; 37 expect 0000 0000
+
+
+        fmove 7 0
+
+        fmax 7 1
+
+        fpush 7                   ; 38 expect 0000 0000
+
+
+        fmove 7 0
+
+        fmax 7 2
+
+        fpush 7                   ; 39 expect 7F80 0000
+
+
+        fmove 7 0
+
+        fmax 7 3
+
+        fpush 7                   ; 40 expect 0000 0000
+
+
+        fmove 7 0
+
+        fmax 7 4
+
+        fpush 7                   ; 41 expect 7FC0 0000
+
+
+        fmove 7 0
+
+        fmax 7 5
+
+        fpush 7                   ; 42 expect 7FC0 0000
+
+
+
+        // ------------------------------------------------------------
+
+        // lhs = -0
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 1
+
+        fmax 7 0
+
+        fpush 7                   ; 43 expect 0000 0000
+
+
+        fmove 7 1
+
+        fmax 7 1
+
+        fpush 7                   ; 44 expect 8000 0000
+
+
+        fmove 7 1
+
+        fmax 7 2
+
+        fpush 7                   ; 45 expect 7F80 0000
+
+
+        fmove 7 1
+
+        fmax 7 3
+
+        fpush 7                   ; 46 expect 8000 0000
+
+
+        fmove 7 1
+
+        fmax 7 4
+
+        fpush 7                   ; 47 expect 7FC0 0000
+
+
+        fmove 7 1
+
+        fmax 7 5
+
+        fpush 7                   ; 48 expect 7FC0 0000
+
+
+
+        // ------------------------------------------------------------
+
+        // lhs = +infinity
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 2
+
+        fmax 7 0
+
+        fpush 7                   ; 49 expect 7F80 0000
+
+
+        fmove 7 2
+
+        fmax 7 1
+
+        fpush 7                   ; 50 expect 7F80 0000
+
+
+        fmove 7 2
+
+        fmax 7 2
+
+        fpush 7                   ; 51 expect 7F80 0000
+
+
+        fmove 7 2
+
+        fmax 7 3
+
+        fpush 7                   ; 52 expect 7F80 0000
+
+
+        fmove 7 2
+
+        fmax 7 4
+
+        fpush 7                   ; 53 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmax 7 5
+
+        fpush 7                   ; 54 expect 7FC0 0000
+
+
+
+        // ------------------------------------------------------------
+
+        // lhs = -infinity
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 3
+
+        fmax 7 0
+
+        fpush 7                   ; 55 expect 0000 0000
+
+
+        fmove 7 3
+
+        fmax 7 1
+
+        fpush 7                   ; 56 expect 8000 0000
+
+
+        fmove 7 3
+
+        fmax 7 2
+
+        fpush 7                   ; 57 expect 7F80 0000
+
+
+        fmove 7 3
+
+        fmax 7 3
+
+        fpush 7                   ; 58 expect FF80 0000
+
+
+        fmove 7 3
+
+        fmax 7 4
+
+        fpush 7                   ; 59 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmax 7 5
+
+        fpush 7                   ; 60 expect 7FC0 0000
+
+
+
+        // ------------------------------------------------------------
+
+        // lhs = qNaN
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 4
+
+        fmax 7 0
+
+        fpush 7                   ; 61 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 1
+
+        fpush 7                   ; 62 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 2
+
+        fpush 7                   ; 63 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 3
+
+        fpush 7                   ; 64 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 4
+
+        fpush 7                   ; 65 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 5
+
+        fpush 7                   ; 66 expect 7FC0 0000
+
+
+
+        // ------------------------------------------------------------
+
+        // lhs = sNaN
+
+        // ------------------------------------------------------------
+
+
+        fmove 7 5
+
+        fmax 7 0
+
+        fpush 7                   ; 67 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmax 7 1
+
+        fpush 7                   ; 68 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmax 7 2
+
+        fpush 7                   ; 69 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmax 7 3
+
+        fpush 7                   ; 70 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmax 7 4
+
+        fpush 7                   ; 71 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmax 7 5
+
+        fpush 7                   ; 72 expect 7FC0 0000
+
+
+
+
+        nop
+
+        nop
+
+        nop
+
+        halt
+    lastSelectedDebuggerProgramName: FP fmin/fmax regression test 1
   - role: Target
     name: Target GA144
     nodes:

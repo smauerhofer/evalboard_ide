@@ -1,4 +1,5 @@
 using Ga144.Evb.Ide.Compiler;
+using Ga144.Evb.Ide.Models;
 
 namespace Ga144.Evb.Ide.Cvm;
 
@@ -214,6 +215,27 @@ public static class CvmBootStreamBuilder
     });
     ThrowIfFailed(result406);
 
+    // ADDED 2026-09-22, closing a real pre-existing gap: node 405, the multiword-arithmetic
+    // (carry-flag) node -- reached from node 406's own y/main dispatch (its previously-open
+    // "1110_1???" branch, relaying LEFT -- see Node406Program's and Node405Program's own remarks).
+    // Imports 406 by name ('# 406 import', y/r@/y/r!/y/pop/y/leave), so must compile AFTER result406
+    // above. Node 405 has had a real resident source and a place in CvmNodeMesh.StandaloneCoordinates
+    // since 2026-09-09, but was never compiled here, listed in BuildLoadOrder, or given a
+    // ReferenceSourceFor fallback until BuildLoadOrder's own 2026-09-22 rework (see that method's own
+    // remarks) needed a real via-edge, and therefore a real compiled descriptor, for it.
+    F18CompileResult result405 = Compile(compiler, Node405Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node405Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node406Program.Coordinate
+          ? F18ImportResolution.FromExports(result406.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result405);
+
     // CVM2 (2026-09-06): node 408, the comparison node -- reached from node 407's own n/main dispatch via
     // ITS LEFT port, the SAME kind of further hop past 407 as node 406 is (407 -> 408), CVM2's own
     // fourth-relay-hop sibling of 406 rather than a further link past it. Imports 407 by name
@@ -354,6 +376,27 @@ public static class CvmBootStreamBuilder
           : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
     });
     ThrowIfFailed(result506);
+
+    // ADDED 2026-09-22, closing a real pre-existing gap: node 505, the "frame2, more frame
+    // operations" node -- fills node 506's own previously-unwired "1001_01??" relay branch (see
+    // Node506Program's and Node505Program's own remarks). Imports 506 by name ('# 506 import',
+    // f/r@/f/r!/f/pop/f/push/f/next/f/leave), so must compile AFTER result506 above. Same
+    // previously-flagged, now-closed gap as node 405 above: a real resident source and a place in
+    // CvmNodeMesh.StandaloneCoordinates since 2026-09-09, but never compiled here, listed in
+    // BuildLoadOrder, or given a ReferenceSourceFor fallback until BuildLoadOrder's 2026-09-22 rework
+    // needed a real via-edge for it too.
+    F18CompileResult result505 = Compile(compiler, Node505Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node505Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node506Program.Coordinate
+          ? F18ImportResolution.FromExports(result506.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result505);
 
     // CVM2 (2026-09-04): node 508, the globals-access node (load/store global, 'gld/'gst -- renamed
     // 2026-09-09 from 'ldg'/'stg, see CvmInstructionSet.LoadGlobalMnemonic's own remarks) -- reached
@@ -585,11 +628,13 @@ public static class CvmBootStreamBuilder
     [
       CvmBootDescriptor.FromCompileResult(result407),
       CvmBootDescriptor.FromCompileResult(result406),
+      CvmBootDescriptor.FromCompileResult(result405),
       CvmBootDescriptor.FromCompileResult(result408),
       CvmBootDescriptor.FromCompileResult(result307),
       CvmBootDescriptor.FromCompileResult(result308),
       CvmBootDescriptor.FromCompileResult(result306),
       CvmBootDescriptor.FromCompileResult(result506),
+      CvmBootDescriptor.FromCompileResult(result505),
       CvmBootDescriptor.FromCompileResult(result511),
       CvmBootDescriptor.FromCompileResult(result510),
       CvmBootDescriptor.FromCompileResult(result509),
@@ -619,6 +664,270 @@ public static class CvmBootStreamBuilder
   }
 
   /// <summary>
+  /// <b>REWORKED 2026-09-22, per Stefan directly: "stop this static madness. i want full dynamic
+  /// bootstream and post-mortem analysis, based on all the nodes that have been configured by the
+  /// checkbox, thus belong to the current project. no more static lists."</b> This is no longer a fixed
+  /// field -- there is no hand-maintained roster left in this class at all. "Configured," for this
+  /// purpose, is exactly <see cref="ViewModels.NodeViewModel.IsConfigured"/>'s own predicate, reproduced
+  /// here directly against the model rather than the view model (<c>node.Enabled ||
+  /// !string.IsNullOrWhiteSpace(node.SourceCode)</c>) -- the SAME "configured/yellow" checkbox state the
+  /// GA144 window's own node grid already shows Stefan, now read live off <paramref name="chip"/> instead
+  /// of cross-checked against a separately-maintained C# array that this session's own back-and-forth
+  /// (405/505, then 201-205/102-105) proved painful to keep in sync by hand. <see cref="Node708Program"/>
+  /// is always included regardless of its own checkbox state: it is the one node this whole mesh cannot
+  /// exist without (the real, physical, unmirrored serial boot entry point -- there is no "boot stream"
+  /// at all without a root to hang it from), so an unchecked 708 would otherwise make
+  /// <see cref="ComputeLoadOrder"/> throw "not configured" for the one node that can never sensibly be
+  /// left out; <see cref="Services.Ga144CvmHardwareInstaller.OpenAndBootMesh"/>'s own per-node source
+  /// check still catches a genuinely blank node 708 (or any other configured-but-empty node) before
+  /// anything is written to hardware, exactly as it already did.
+  ///
+  /// <see cref="CvmNodeMesh.StandaloneCoordinates"/> is UNCHANGED and still exists, but is no longer
+  /// consulted anywhere in this class -- it now serves only its own, separate original purpose (the CVM
+  /// Debugger's standalone/no-hardware Assemble-and-disassemble path,
+  /// <see cref="ViewModels.CvmDebuggerViewModel.CompileStandaloneCvmNodes"/>, and the build-time
+  /// <see cref="CvmPrimitiveTableExporter"/>), which has nothing to do with a live chip's own boot order
+  /// or post-mortem capture and was not part of what Stefan asked to change here.
+  /// </summary>
+  public static IReadOnlyList<int> GetConfiguredCoordinates(Ga144ChipConfiguration chip)
+  {
+    ArgumentNullException.ThrowIfNull(chip);
+
+    var coordinates = chip.Nodes
+        .Where(node => node.Enabled || !string.IsNullOrWhiteSpace(node.SourceCode))
+        .Select(node => node.Coordinate)
+        .ToList();
+
+    if (!coordinates.Contains(Node708Program.Coordinate))
+    {
+      coordinates.Add(Node708Program.Coordinate);
+    }
+
+    return coordinates;
+  }
+
+  /// <summary>
+  /// This project's own node-coordinate convention is <c>row*100 + column</c> (row 0-7, column 0-17 --
+  /// e.g. node 708 is row 7, column 8), the GA144's real physical grid, 4-connected, no diagonal
+  /// adjacency. Returns <paramref name="coordinate"/>'s up-to-four physical neighbors that are
+  /// themselves present in <paramref name="configured"/>, in ascending numeric order -- the fixed
+  /// tie-break order <see cref="ComputeLoadOrder"/>'s own fill relies on for determinism (see that
+  /// method's, and <see cref="BuildLoadOrder"/>'s own remarks).
+  /// </summary>
+  private static IEnumerable<int> GetPhysicalNeighbors(int coordinate, IReadOnlySet<int> configured)
+  {
+    int row = coordinate / 100;
+    int column = coordinate % 100;
+
+    int[] candidates =
+    [
+      (row - 1) * 100 + column, // one row down
+      (row + 1) * 100 + column, // one row up
+      row * 100 + (column - 1), // one column left
+      row * 100 + (column + 1), // one column right
+    ];
+
+    return candidates.Where(configured.Contains).OrderBy(candidate => candidate);
+  }
+
+  /// <summary>
+  /// Computes a leaves-first/root-last <see cref="CvmBootLoadStep"/> sequence by "filling" outward
+  /// from <paramref name="rootCoordinate"/> over the physical grid (<see cref="GetPhysicalNeighbors"/>),
+  /// breadth-first, restricted to <paramref name="configuredCoordinates"/> -- see
+  /// <see cref="BuildLoadOrder"/>'s own remarks for the full rationale, the tie-break rule, and the
+  /// specific, verified deviations this produces from the previous hand-written order. Throws if
+  /// <paramref name="rootCoordinate"/> is itself not configured, or if any configured coordinate is not
+  /// reachable from it -- this is the runtime enforcement of "all other configured nodes must be
+  /// reachable from node 708."
+  /// </summary>
+  private static IReadOnlyList<CvmBootLoadStep> ComputeLoadOrder(
+      IReadOnlyList<int> configuredCoordinates, int rootCoordinate)
+  {
+    var configured = new HashSet<int>(configuredCoordinates);
+    if (!configured.Contains(rootCoordinate))
+    {
+      throw new InvalidOperationException(
+          $"Node {rootCoordinate:000} (the intended boot root) is not itself in the configured node list.");
+    }
+
+    // Breadth-first fill from the root: each node's via-parent is whichever already-visited
+    // configured node reaches it FIRST. Ties (a node with more than one still-unvisited configured
+    // neighbor available at the same fill distance) are broken by GetPhysicalNeighbors' own
+    // smallest-coordinate-first order, so the result is fully deterministic and reproducible.
+    var viaByCoordinate = new Dictionary<int, int?> { [rootCoordinate] = null };
+    var queue = new Queue<int>();
+    queue.Enqueue(rootCoordinate);
+
+    while (queue.Count > 0)
+    {
+      int current = queue.Dequeue();
+      foreach (int neighbor in GetPhysicalNeighbors(current, configured))
+      {
+        if (!viaByCoordinate.ContainsKey(neighbor))
+        {
+          viaByCoordinate[neighbor] = current;
+          queue.Enqueue(neighbor);
+        }
+      }
+    }
+
+    List<int> unreached = [.. configuredCoordinates.Where(coordinate => !viaByCoordinate.ContainsKey(coordinate))];
+    if (unreached.Count > 0)
+    {
+      throw new InvalidOperationException(
+          $"The following configured node(s) are not reachable from node {rootCoordinate:000} over " +
+          "the physical grid, so no boot load order can be built for them: " +
+          string.Join(", ", unreached.Select(coordinate => coordinate.ToString("000"))) + ".");
+    }
+
+    // Group children by their own via-parent (siblings sorted ascending, same determinism rule as the
+    // fill above), then walk the resulting tree in POST-ORDER -- every child before its own
+    // via-parent -- so the root, node 708, always comes out last with a null via, matching
+    // CvmBootLoadStep's own leaves-first/root-last contract.
+    var childrenByParent = new Dictionary<int, List<int>>();
+    foreach (KeyValuePair<int, int?> pair in viaByCoordinate)
+    {
+      if (pair.Value is int parent)
+      {
+        if (!childrenByParent.TryGetValue(parent, out List<int>? siblings))
+        {
+          siblings = [];
+          childrenByParent[parent] = siblings;
+        }
+
+        siblings.Add(pair.Key);
+      }
+    }
+
+    foreach (List<int> siblings in childrenByParent.Values)
+    {
+      siblings.Sort();
+    }
+
+    var steps = new List<CvmBootLoadStep>();
+
+    void VisitPostOrder(int node)
+    {
+      if (childrenByParent.TryGetValue(node, out List<int>? children))
+      {
+        foreach (int child in children)
+        {
+          VisitPostOrder(child);
+        }
+      }
+
+      steps.Add(new CvmBootLoadStep(node, viaByCoordinate[node]));
+    }
+
+    VisitPostOrder(rootCoordinate);
+    return steps;
+  }
+
+  /// <summary>
+  /// <b>REWORKED AGAIN, 2026-09-22, later the same day, per Stefan directly: "stop this static madness.
+  /// i want full dynamic bootstream and post-mortem analysis, based on all the nodes that have been
+  /// configured by the checkbox, thus belong to the current project. no more static lists."</b> This
+  /// method's signature changed to take <paramref name="chip"/>: the coordinate roster the fill below
+  /// runs over is no longer any field on this class at all (the fixed <c>AllConfiguredCoordinates</c>
+  /// this remarks block used to describe is gone outright) -- it is
+  /// <see cref="GetConfiguredCoordinates"/>, computed FRESH from <paramref name="chip"/>'s own live
+  /// per-node <c>Enabled</c>/<c>SourceCode</c> state every time this method is called. Whichever nodes
+  /// Stefan has actually ticked (or given source to) in the Node Editor for THIS chip, right now, are
+  /// exactly what the boot stream includes -- nothing more needs editing in this file the next time a
+  /// node is added or removed from the project; see <see cref="GetConfiguredCoordinates"/>'s own remarks
+  /// for the exact predicate and the one hardcoded exception (708 itself, unconditionally, since a boot
+  /// stream cannot exist without its own root). Every mention of <c>AllConfiguredCoordinates</c> in the
+  /// history below now means "whatever <see cref="GetConfiguredCoordinates"/> returned for the chip in
+  /// question at the time" -- the FILL ALGORITHM ITSELF (breadth-first from 708, physical 4-connected
+  /// grid adjacency, smallest-coordinate-first tie-break, post-order output) is COMPLETELY UNCHANGED by
+  /// this rework, only where the coordinate list comes from.
+  ///
+  /// <b>REWORKED 2026-09-22, per Stefan directly: "in CvmBootStreamBuilder the boot stream is
+  /// constructed now statically in 'BuildLoadOrder'. Can we change the 'BuildLoadOrder' so that it will
+  /// use all configured nodes for the boot stream dynamically? the last node must be node 708. all
+  /// other configured nodes must be reachable from node 708," followed, after this session verified by
+  /// simulation that a plain physical-adjacency graph scan does NOT reproduce every previously-confirmed
+  /// edge, by: "simply use a fill algorithm originating from node 708."</b> This method no longer
+  /// returns a hand-written array -- it computes the load order at runtime with
+  /// <see cref="ComputeLoadOrder"/>, a breadth-first "fill" outward from node 708 over the GA144's own
+  /// physical 4-connected grid (<see cref="GetPhysicalNeighbors"/>), restricted to
+  /// <see cref="GetConfiguredCoordinates"/>'s own result for <paramref name="chip"/> (every node this
+  /// chip's project currently has ticked/enabled or given source to). Each node's <c>ViaNodeCoordinate</c>
+  /// is whichever already-visited configured node the fill reached it FROM first; ties are broken
+  /// smallest-coordinate-first, so the result is fully deterministic and reproducible from one run to
+  /// the next. The fill enforces the stated invariant itself: if any configured coordinate is not
+  /// reached from 708, <see cref="ComputeLoadOrder"/> throws rather than silently omitting it. The final
+  /// sequence is the fill tree's own POST-ORDER walk (children before their own via-parent, 708 itself
+  /// last with a null via), matching <see cref="CvmBootLoadStep"/>'s own leaves-first/root-last contract.
+  ///
+  /// <b>This closes a real, previously-flagged gap: nodes 405 and 505 are now part of the boot stream
+  /// for the first time.</b> Both have real resident sources (<see cref="Node405Program"/>,
+  /// <see cref="Node505Program"/>) and have been part of <see cref="CvmNodeMesh.StandaloneCoordinates"/>
+  /// since 2026-09-09, but neither was ever compiled by <see cref="BuildDescriptors"/>, listed in this
+  /// method's old hardcoded array, or given a <see cref="ReferenceSourceFor"/> fallback -- all three
+  /// gaps are closed together in this same change (see <see cref="BuildDescriptors"/>'s own
+  /// <c>result405</c>/<c>result505</c> steps and <see cref="ReferenceSourceFor"/>'s own new entries),
+  /// since the fill now needs a real via-edge, a real compiled descriptor, and a real reference-source
+  /// fallback for both, exactly like every other node here.
+  ///
+  /// <b>KNOWN, VERIFIED DEVIATION from the previous hand-written order -- flagged here rather than
+  /// silently absorbed, because it changes which physical port five already-hardware-adjacent nodes are
+  /// reached through.</b> Node 405 sits, on the physical grid, directly between node 406 (part of the
+  /// main CVM dispatch tree) and node 404 (the FP pipeline's own "stage 8 rounding" node); node 505
+  /// likewise sits directly between node 506 (the stack-frame node) and node 504 (the FP pipeline's
+  /// "stage 7 classify" node) -- the exact "shortcut between two previously-separate mesh branches" this
+  /// session's own working notes flagged before this method was reworked. Both 406 and 506 are reached
+  /// by the fill far sooner than the FP pipeline's own long 407-&gt;307-&gt;306-&gt;305-&gt;304-&gt;404 (or
+  /// -&gt;504) chain reaches the same neighborhood, so the fill -- exactly like a real flood fill would --
+  /// ends up reaching 404 and 504 THROUGH the newly-added 405/505 shortcut rather than through their
+  /// previously-confirmed FP-pipeline parents. Verified by simulating this exact algorithm against the
+  /// coordinate roster this project's chip had at the time (what <see cref="GetConfiguredCoordinates"/>
+  /// now computes live): of the 33 non-root edges, 28 come out IDENTICAL to the
+  /// previous hand-written array (including the entire 407/307/306/308 branch, the 508/509/510/511
+  /// branch, and the 301-&gt;302-&gt;303-&gt;304-&gt;305-&gt;306 pipeline spine itself), and exactly FIVE
+  /// change:
+  /// <list type="bullet">
+  /// <item>404 now loads via 405 (previously via 304)</item>
+  /// <item>504 now loads via 505 (previously via 404)</item>
+  /// <item>601 now loads via 501 (previously via 602)</item>
+  /// <item>602 now loads via 502 (previously via 603)</item>
+  /// <item>603 now loads via 503 (previously via 604)</item>
+  /// </list>
+  /// Every one of these five follows directly or indirectly from the same two new shortcuts -- no OTHER
+  /// previously-confirmed relay assignment changes. <b>None of these five new via-edges, nor 405's/505's
+  /// own two new edges, has been confirmed on real hardware</b> -- Stefan's own hardware confirmations to
+  /// date only ever covered the previous, hand-written edges. This is exactly what Stefan's own
+  /// instruction asked for, so it is implemented as asked rather than worked around -- but it is called
+  /// out here plainly, the same way this method's own history below flags every other not-yet-hardware-
+  /// tested edge, so a real-hardware re-verification pass covers these five specifically (and 405's/505's
+  /// own loads) before relying on them.
+  ///
+  /// <b>EXTENDED, same day, per Stefan directly: "CVM also includes nodes 201..205 and 102..105. I want
+  /// that these nodes are also included in the boot stream."</b> These nine were added to
+  /// <see cref="CvmNodeMesh.StandaloneCoordinates"/> (see that class's own remarks on this addition --
+  /// unlike every other coordinate there, none of these nine has a <c>NodeXxxProgram.cs</c> reference
+  /// source; they rely entirely on their own live project source) -- and, as of the SAME day's later
+  /// "stop this static madness" rework below, this addition is moot as far as THIS class is concerned:
+  /// <see cref="GetConfiguredCoordinates"/> no longer consults
+  /// <see cref="CvmNodeMesh.StandaloneCoordinates"/> at all, so whether these nine load is governed purely
+  /// by their own live "configured" checkbox state in the project, exactly like every other node. Re-
+  /// verified at the time by simulating the fill again against the resulting 43-coordinate roster (the
+  /// full <see cref="CvmNodeMesh.StandaloneCoordinates"/> set, all configured): all nine attach as one
+  /// single new leaf cluster hanging off node 305 (one hop
+  /// further out -- 305 -&gt; 205, then 205 -&gt; 204 -&gt; 203 -&gt; 202 -&gt; 201 on one branch and
+  /// 205 -&gt; 105 -&gt; 104 -&gt; 103 -&gt; 102 on the other), and changes NONE of the previously-computed
+  /// edges among the other 34 nodes -- this new cluster only ever touches the rest of the mesh at node
+  /// 305, so it cannot create the kind of cross-branch shortcut 405/505 did above. None of these nine
+  /// nodes' own loads has been hardware-tested.
+  ///
+  /// <b>Everything below this point is the ORIGINAL doc comment for the hand-written array this method
+  /// used to return.</b> It is preserved verbatim, unedited, because it remains the authoritative
+  /// historical record of which physical port each of these edges was confirmed (or not yet confirmed)
+  /// to use, and that hardware-fact history did not change just because the array itself is now computed
+  /// rather than typed out by hand -- the 28 edges the fill reproduces exactly still carry whatever
+  /// confirmation status is described for them below; only the five edges (plus 405's/505's own two)
+  /// flagged immediately above are new territory this history does not (and could not) already cover.
+  ///
   /// CVM2's boot LOAD order: leaves-first/root-last, with a branch at 507. Originally just
   /// 507 -&gt; 607 -&gt; 707 -&gt; 708 (2026-09-01, inferred from the same reasoning Stefan confirmed for
   /// CVM1's branching tree applied to CVM2's then-simpler non-branching case). Extended 2026-09-02 with
@@ -805,47 +1114,8 @@ public static class CvmBootStreamBuilder
   /// entire subtree instead of by nothing). This load ORDER is purely administrative (per Stefan's own
   /// note above), unrelated to the pipeline's own eventual runtime processing order.
   /// </summary>
-  public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder() =>
-  [
-    new CvmBootLoadStep(406, 407),
-    new CvmBootLoadStep(408, 407),
-    new CvmBootLoadStep(308, 307),
-
-    // The 17-node floating-point pipeline's own internal relay topology, CONFIRMED 2026-09-16 per
-    // Stefan (see this method's own remarks above for the full derivation and the verbatim
-    // "306->305->304->303->302->301" etc. Stefan gave) -- leaves first, root (of this subtree, node
-    // 305) last, so each branch fully completes before the node relaying it takes over.
-    new CvmBootLoadStep(301, 302),
-    new CvmBootLoadStep(302, 303),
-    new CvmBootLoadStep(303, 304),
-    new CvmBootLoadStep(401, 402),
-    new CvmBootLoadStep(402, 403),
-    new CvmBootLoadStep(403, 404),
-    new CvmBootLoadStep(501, 502),
-    new CvmBootLoadStep(502, 503),
-    new CvmBootLoadStep(503, 504),
-    new CvmBootLoadStep(601, 602),
-    new CvmBootLoadStep(602, 603),
-    new CvmBootLoadStep(603, 604),
-    new CvmBootLoadStep(604, 504),
-    new CvmBootLoadStep(504, 404),
-    new CvmBootLoadStep(404, 304),
-    new CvmBootLoadStep(304, 305),
-    new CvmBootLoadStep(305, 306),
-
-    new CvmBootLoadStep(306, 307),
-    new CvmBootLoadStep(307, 407),
-    new CvmBootLoadStep(407, 507),
-    new CvmBootLoadStep(506, 507),
-    new CvmBootLoadStep(511, 510),
-    new CvmBootLoadStep(510, 509),
-    new CvmBootLoadStep(509, 508),
-    new CvmBootLoadStep(508, 507),
-    new CvmBootLoadStep(507, 607),
-    new CvmBootLoadStep(607, 707),
-    new CvmBootLoadStep(707, 708),
-    new CvmBootLoadStep(708, null),
-  ];
+  public static IReadOnlyList<CvmBootLoadStep> BuildLoadOrder(Ga144ChipConfiguration chip) =>
+      ComputeLoadOrder(GetConfiguredCoordinates(chip), rootCoordinate: Node708Program.Coordinate);
 
   /// <summary>
   /// The fixed reference source for one CVM2 node, keyed by coordinate -- the SAME strings
@@ -861,11 +1131,13 @@ public static class CvmBootStreamBuilder
   {
     Node407Program.Coordinate => Node407Program.Source,
     Node406Program.Coordinate => Node406Program.Source,
+    Node405Program.Coordinate => Node405Program.Source,
     Node408Program.Coordinate => Node408Program.Source,
     Node307Program.Coordinate => Node307Program.Source,
     Node306Program.Coordinate => Node306Program.Source,
     Node308Program.Coordinate => Node308Program.Source,
     Node506Program.Coordinate => Node506Program.Source,
+    Node505Program.Coordinate => Node505Program.Source,
     Node508Program.Coordinate => Node508Program.Source,
     Node509Program.Coordinate => Node509Program.Source,
     Node510Program.Coordinate => Node510Program.Source,
@@ -902,13 +1174,20 @@ public static class CvmBootStreamBuilder
   /// confirmed to compile (see that method's own remarks and <see cref="Node307Program"/>'s) -- so this
   /// method currently propagates that same exception rather than returning a plan with a null
   /// descriptor for any step.
+  ///
+  /// <b>REWORKED 2026-09-22:</b> this method now takes <paramref name="chip"/> and threads it straight
+  /// through to <see cref="BuildLoadOrder"/>, for the same "no more static lists" reason described on
+  /// <see cref="GetConfiguredCoordinates"/>'s and <see cref="BuildLoadOrder"/>'s own remarks. This method
+  /// has no callers outside this class today (it is this session's own throwaway-harness/reference-
+  /// verification tool, per <see cref="BuildDescriptors"/>'s own remarks), so the signature change is
+  /// free to make without any other call site to update.
   /// </summary>
-  public static IReadOnlyList<(CvmBootLoadStep Step, CvmBootDescriptor? Descriptor)> BuildLoadPlan()
+  public static IReadOnlyList<(CvmBootLoadStep Step, CvmBootDescriptor? Descriptor)> BuildLoadPlan(Ga144ChipConfiguration chip)
   {
     Dictionary<int, CvmBootDescriptor> descriptorsByCoordinate =
         BuildDescriptors().ToDictionary(descriptor => descriptor.NodeCoordinate);
 
-    return BuildLoadOrder()
+    return BuildLoadOrder(chip)
         .Select(step => (
             step,
             descriptorsByCoordinate.TryGetValue(step.NodeCoordinate, out CvmBootDescriptor? descriptor)

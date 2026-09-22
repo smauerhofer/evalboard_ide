@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using Ga144.Evb.Ide.Compiler;
+using Ga144.Evb.Ide.Cvm;
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.Services;
 
@@ -13,6 +14,26 @@ namespace Ga144.Evb.Ide.ViewModels;
 /// project's CURRENT chip/ROM library (not part of the snapshot itself) -- used only to compile this
 /// project's present-day source for a RAM/ROM comparison; either may be null (nothing to compile
 /// against), in which case <see cref="BuildNodeDetail"/> simply omits the comparison.
+///
+/// <b>REWORKED 2026-09-22, per Stefan directly: "stop this static madness. i want full dynamic
+/// bootstream and post-mortem analysis, based on all the nodes that have been configured by the
+/// checkbox, thus belong to the current project. no more static lists."</b> Investigated and discussed
+/// with Stefan first: Kraken's own live wire protocol (<see cref="Services.KrakenSession"/>) has no
+/// mid-chain addressing at all -- Focus/WriteB ride whatever single, fixed, non-branching relay chain
+/// is already erected in silicon, with no depth/position parameter of their own -- so it can only walk
+/// the pre-erected, hardware-proven 3-tentacle topology (<see cref="Models.KrakenTopology"/>), covering
+/// literally all 143 non-head nodes regardless of which ones this project actually uses. Reworking the
+/// WIRE WALK itself to branch the same way the CVM mesh does would mean re-erecting fresh passthrough
+/// code onto each branch's own nodes before it could be read -- overwriting whatever crashed state was
+/// sitting there, defeating the entire point of a post-mortem capture -- so, per Stefan's own explicit
+/// choice, that wire walk in <see cref="ViewModels.CvmDebuggerViewModel.CoreDumpAsync"/> is UNCHANGED.
+/// What is now dynamic is what the capture is shown AS: <see cref="RebuildNodes"/> below marks each
+/// captured node with whether it is currently "configured" (enabled, or given source) in THIS project,
+/// computed live via <see cref="CvmBootStreamBuilder.GetConfiguredCoordinates"/> -- the exact same
+/// roster the boot stream itself now uses -- rather than any fixed list. A node captured but not
+/// configured (most of the grid, on a project that only uses a fraction of the mesh) renders in a
+/// neutral gray instead of its own snapshot color; see <see cref="PostMortemNodeViewModel"/>'s own
+/// remarks for the visual convention this borrows from the live GA144 grid.
 /// </summary>
 public sealed class PostMortemChipViewModel : ObservableObject
 {
@@ -130,8 +151,19 @@ public sealed class PostMortemChipViewModel : ObservableObject
   // of its own), and a partial/failed dump could be missing others too; the fixed 18x8 UniformGrid
   // fills purely by item order, so leaving a gap in this list would silently shift every following
   // node by one position instead of just showing an empty/placeholder cell where it belongs.
+  //
+  // REWORKED 2026-09-22 (see this class's own remarks): computes the live "configured" roster once,
+  // up front, via the same CvmBootStreamBuilder.GetConfiguredCoordinates(_liveChip) the boot stream
+  // itself now uses, and stamps every cell with whether its own coordinate is in it. Null (not a
+  // computed false) whenever _liveChip itself is null -- an imported/standalone snapshot with no live
+  // project to check against makes no configured/unconfigured claim at all, rather than showing every
+  // node as "not configured" just because there was nothing to compare it to.
   private void RebuildNodes()
   {
+    HashSet<int>? configuredCoordinates = _liveChip is null
+        ? null
+        : [.. CvmBootStreamBuilder.GetConfiguredCoordinates(_liveChip)];
+
     var nodes = new List<PostMortemNodeViewModel>(144);
     for (int row = 7; row >= 0; row--)
     {
@@ -139,7 +171,8 @@ public sealed class PostMortemChipViewModel : ObservableObject
       {
         int coordinate = row * 100 + column;
         _snapshot.Nodes.TryGetValue(coordinate, out PostMortemNodeSnapshot? nodeSnapshot);
-        nodes.Add(new PostMortemNodeViewModel(coordinate, nodeSnapshot, _snapshot.ProjectDefaultNodeColor));
+        bool? isConfigured = configuredCoordinates?.Contains(coordinate);
+        nodes.Add(new PostMortemNodeViewModel(coordinate, nodeSnapshot, _snapshot.ProjectDefaultNodeColor, isConfigured));
       }
     }
 
