@@ -38,6 +38,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     RunNode708EchoTestCommand = new AsyncRelayCommand(RunNode708EchoTestAsync, () => !_verifyBusy);
     RunNode708DispatchTestCommand = new AsyncRelayCommand(RunNode708DispatchTestAsync, () => !_verifyBusy);
     CopyAllNodesToProjectCommand = new RelayCommand(CopyAllNodesToProject);
+    IncludeAllInPostMortemCommand = new RelayCommand(() => SetAllPostMortemEnabled(true));
+    ExcludeAllFromPostMortemCommand = new RelayCommand(() => SetAllPostMortemEnabled(false));
     RebuildNodes();
   }
 
@@ -65,6 +67,16 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public AsyncRelayCommand RunNode708EchoTestCommand { get; }
   public AsyncRelayCommand RunNode708DispatchTestCommand { get; }
   public RelayCommand CopyAllNodesToProjectCommand { get; }
+
+  /// <summary>ADDED 2026-09-22, per Stefan directly: "i need a button to include all nodes for PM and
+  /// a button to exclude all nodes from PM." Sets every one of this chip's 144 nodes'
+  /// <see cref="Ga144NodeConfiguration.PostMortemEnabled"/> to true/false in one click -- a bulk version
+  /// of the per-node checkbox in the Node Editor, so turning post-mortem reading on or off for the
+  /// whole chip does not mean opening all 144 node editors by hand. See <see cref="SetAllPostMortemEnabled"/>.</summary>
+  public RelayCommand IncludeAllInPostMortemCommand { get; }
+
+  /// <summary>See <see cref="IncludeAllInPostMortemCommand"/>'s own remarks -- the "exclude all" twin.</summary>
+  public RelayCommand ExcludeAllFromPostMortemCommand { get; }
 
   public string VerifyStatus
   {
@@ -721,6 +733,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     {
       Ga144NodeConfiguration targetNode = targetChip.GetNode(sourceNode.Coordinate);
       targetNode.Enabled = sourceNode.Enabled;
+      targetNode.PostMortemEnabled = sourceNode.PostMortemEnabled;
       targetNode.SourceCode = sourceNode.SourceCode;
       // Bakes in the node's *resolved* color (its own override, or this project's default if it
       // has none) rather than copying the possibly-null Color field verbatim -- so the copy
@@ -744,6 +757,23 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
         "Copy all nodes to project",
         MessageBoxButton.OK,
         MessageBoxImage.Information);
+  }
+
+  // ADDED 2026-09-22 -- see IncludeAllInPostMortemCommand/ExcludeAllFromPostMortemCommand's own
+  // remarks. Touches every one of the 144 Ga144NodeConfiguration entries directly (not just the
+  // "configured" ones -- Stefan's own words were "all nodes"), marks the project dirty the same way
+  // OnNodeEditorSavedAsync does after a single node's own Apply(), and rebuilds the node presentation
+  // so every "PM" badge on the GA144 grid reflects the change immediately, with no per-node editor
+  // round-trip needed.
+  private void SetAllPostMortemEnabled(bool enabled)
+  {
+    foreach (Ga144NodeConfiguration node in Chip.Nodes)
+    {
+      node.PostMortemEnabled = enabled;
+    }
+
+    Project.NotifyProjectChanged();
+    RebuildNodes();
   }
 
   private void RebuildNodes()

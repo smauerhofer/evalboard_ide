@@ -620,6 +620,24 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// erection state and parks the COM handle, no chip reset) -- so once Core Dump finishes, the GA144
   /// window again shows no Kraken erected and <see cref="StartAsync"/>'s resident-Kraken guard no
   /// longer blocks a fresh debug session.
+  ///
+  /// <b>REWORKED 2026-09-22, per Stefan directly: "post-mortem is too slow now. i am not interested in
+  /// all nodes. in the node window make a checkbox that decides if the node should be read in
+  /// post-mortem analysis. ... when reading post-mortem data, read only the selected nodes and grey out
+  /// all other nodes. the tentacle mechanism for reading the nodes do not change."</b> Per node, this
+  /// method now checks <see cref="Models.Ga144NodeConfiguration.PostMortemEnabled"/> (the new Node
+  /// Editor checkbox) BEFORE doing any of steps 2/3 above. When it is false: a boot-framed prefix node
+  /// needs nothing at all (its B was already set, once, for the whole prefix); a live node still gets
+  /// step 1 (focus) and step 4 (writeB) -- it MUST, since those are what make the next node on the same
+  /// tentacle reachable at all, and Stefan's own instruction was explicit that the wire walk itself does
+  /// not change -- but skips steps 2 and 3 entirely: no stack tail, no A/IO/Carry, and critically no
+  /// 64-word RAM or 64-word ROM read, by far the most expensive part of reading any one node. The
+  /// resulting <see cref="Models.PostMortemNodeSnapshot"/> for a skipped node carries only
+  /// <see cref="Models.PostMortemNodeSnapshot.Coordinate"/>/<see cref="Models.PostMortemNodeSnapshot.Color"/>
+  /// and <see cref="Models.PostMortemNodeSnapshot.Included"/> set to false; the post-mortem window greys
+  /// it out on that recorded flag (see <see cref="ViewModels.PostMortemNodeViewModel"/>'s own remarks)
+  /// rather than re-querying the live project, so a snapshot keeps showing exactly what it actually
+  /// captured even after the project's own checkboxes are later changed.
   /// </summary>
   private async Task CoreDumpAsync()
   {
@@ -678,10 +696,16 @@ public sealed class CvmDebuggerViewModel : ObservableObject
           {
             KrakenNodeRoute route = orderedRoutes[index];
             bool isBootFramePrefixNode = route.TentacleNumber == 1 && route.Position < tentacle1BootFramePrefixNodeCount;
-            StatusText = isBootFramePrefixNode
-                ? $"Core Dump: reading boot-frame-wired node {route.Coordinate:000} ({index + 1} of {orderedRoutes.Count})…"
-                : $"Core Dump: wiring and reading node {route.Coordinate:000} ({index + 1} of {orderedRoutes.Count})…";
-            string? nodeColor = _chip.GetNode(route.Coordinate).Color;
+            Ga144NodeConfiguration nodeConfig = _chip.GetNode(route.Coordinate);
+            string? nodeColor = nodeConfig.Color;
+            // REWORKED 2026-09-22 -- see this method's own remarks: "not selected" skips this node's
+            // own data read entirely, but never the wire walk itself.
+            bool includeInDump = nodeConfig.PostMortemEnabled;
+            StatusText = !includeInDump
+                ? $"Core Dump: passing through node {route.Coordinate:000} (not selected for post-mortem, skipping its read) ({index + 1} of {orderedRoutes.Count})…"
+                : isBootFramePrefixNode
+                    ? $"Core Dump: reading boot-frame-wired node {route.Coordinate:000} ({index + 1} of {orderedRoutes.Count})…"
+                    : $"Core Dump: wiring and reading node {route.Coordinate:000} ({index + 1} of {orderedRoutes.Count})…";
             try
             {
               // Same physical port either way -- which compass port this node's boot-frame prefix
@@ -689,6 +713,32 @@ public sealed class CvmDebuggerViewModel : ObservableObject
               // read regardless of which branch wired it, since re-focusing with/without address bit
               // 9 only ever re-targets THIS SAME port -- see KrakenSession.ReadCarryAsync's remarks.
               int incomingPort = KrakenTopology.PortAddress(route.Coordinate, route.PreviousCoordinate ?? KrakenTopology.HeadCoordinate);
+
+              if (!includeInDump)
+              {
+                // Not ticked in the Node Editor's "Include this node in post-mortem analysis" checkbox.
+                // A boot-framed prefix node needs nothing further at all -- its B was already set, once,
+                // for the whole prefix, by the boot frame itself, independent of whether it is ever
+                // read. A live node still MUST be focused and have its B written, exactly as it would if
+                // selected: those two steps are what make the NEXT node on this same tentacle reachable
+                // at all, and Stefan's own instruction was explicit that the wire walk does not change --
+                // only steps 2 and 3 (stack tail, A/IO/Carry, and the 64+64-word RAM/ROM reads that
+                // dominate the cost of reading any one node) are skipped.
+                if (!isBootFramePrefixNode)
+                {
+                  await _krakenController.FocusAsync(route, incomingPort);
+                  int skippedNextPort = route.OutgoingBAddress ?? KrakenSession.IoAddress;
+                  await _krakenController.WriteBAsync(route, skippedNextPort);
+                }
+
+                nodeSnapshots[route.Coordinate] = new PostMortemNodeSnapshot
+                {
+                  Coordinate = route.Coordinate,
+                  Color = nodeColor,
+                  Included = false
+                };
+                continue;
+              }
 
               IReadOnlyList<int> parameterStack;
               if (isBootFramePrefixNode)
@@ -748,7 +798,8 @@ public sealed class CvmDebuggerViewModel : ObservableObject
                 Rom = [.. rom],
                 ParameterStack = [.. parameterStack],
                 ReturnStack = [.. returnStack],
-                Color = nodeColor
+                Color = nodeColor,
+                Included = true
               };
             }
             catch (Exception exception) when (exception is IOException or TimeoutException or InvalidOperationException)
@@ -758,7 +809,8 @@ public sealed class CvmDebuggerViewModel : ObservableObject
               {
                 Coordinate = route.Coordinate,
                 Error = exception.Message,
-                Color = nodeColor
+                Color = nodeColor,
+                Included = includeInDump
               };
               // One node's transport failure does not abort the rest of the dump -- same policy as
               // ChipViewModel.VerifyAllRomsAsync's own per-node scan. NOTE: for a LIVE node (beyond
@@ -785,9 +837,14 @@ public sealed class CvmDebuggerViewModel : ObservableObject
           Nodes = nodeSnapshots
         };
 
+        // REWORKED 2026-09-22: reports the read/skipped split explicitly now that a node can be
+        // deliberately excluded (Included = false) rather than only ever failed or successfully read.
+        int readCount = nodeSnapshots.Values.Count(node => node.Error is null && node.Included);
+        int skippedCount = nodeSnapshots.Values.Count(node => node.Error is null && !node.Included);
+        string skippedSuffix = skippedCount > 0 ? $", skipped {skippedCount} not selected for post-mortem" : string.Empty;
         StatusText = failedNodes.Count == 0
-            ? $"Core Dump complete: read {nodeSnapshots.Count} node(s). The Kraken used for the dump has been released."
-            : $"Core Dump complete with {failedNodes.Count} failed node(s): {string.Join(", ", failedNodes)}. The Kraken used for the dump has been released.";
+            ? $"Core Dump complete: read {readCount} node(s){skippedSuffix}. The Kraken used for the dump has been released."
+            : $"Core Dump complete with {failedNodes.Count} failed node(s): {string.Join(", ", failedNodes)}{skippedSuffix}. The Kraken used for the dump has been released.";
 
         CoreDumpCompleted?.Invoke(snapshot);
       }

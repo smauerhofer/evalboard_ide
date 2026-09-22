@@ -49,6 +49,21 @@ public partial class PostMortemChipWindow : Window
       return;
     }
 
+    // ADDED 2026-09-22: a node not ticked "Include this node in post-mortem analysis" at capture time
+    // was still transited by the tentacle wire walk, but its own data was never read -- opening a
+    // detail window for it would show nothing but zeros/empty stacks, which reads as real captured
+    // data rather than "not read." Same informational-dialog treatment as the head placeholder above.
+    if (!node.IsIncluded)
+    {
+      MessageBox.Show(
+          this,
+          $"Node {node.CoordinateText} was not selected for post-mortem analysis when this Core Dump ran (only the tentacle wire walk passed through it, its own data was not read). Tick \"Include this node in post-mortem analysis\" in the node editor and run Core Dump again to capture it.",
+          "Post-mortem node",
+          MessageBoxButton.OK,
+          MessageBoxImage.Information);
+      return;
+    }
+
     if (_openNodeWindows.TryGetValue(node.Coordinate, out PostMortemNodeWindow? existing))
     {
       existing.Activate();

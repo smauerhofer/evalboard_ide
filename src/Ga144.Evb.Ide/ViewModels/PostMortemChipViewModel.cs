@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using Ga144.Evb.Ide.Compiler;
-using Ga144.Evb.Ide.Cvm;
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.Services;
 
@@ -27,13 +26,24 @@ namespace Ga144.Evb.Ide.ViewModels;
 /// code onto each branch's own nodes before it could be read -- overwriting whatever crashed state was
 /// sitting there, defeating the entire point of a post-mortem capture -- so, per Stefan's own explicit
 /// choice, that wire walk in <see cref="ViewModels.CvmDebuggerViewModel.CoreDumpAsync"/> is UNCHANGED.
-/// What is now dynamic is what the capture is shown AS: <see cref="RebuildNodes"/> below marks each
-/// captured node with whether it is currently "configured" (enabled, or given source) in THIS project,
-/// computed live via <see cref="CvmBootStreamBuilder.GetConfiguredCoordinates"/> -- the exact same
-/// roster the boot stream itself now uses -- rather than any fixed list. A node captured but not
-/// configured (most of the grid, on a project that only uses a fraction of the mesh) renders in a
-/// neutral gray instead of its own snapshot color; see <see cref="PostMortemNodeViewModel"/>'s own
-/// remarks for the visual convention this borrows from the live GA144 grid.
+///
+/// <b>SUPERSEDED THE SAME DAY, per Stefan directly: "post-mortem is too slow now. i am not interested
+/// in all nodes ... when reading post-mortem data, read only the selected nodes and grey out all other
+/// nodes."</b> The above originally made <see cref="RebuildNodes"/> mark each captured node against the
+/// CVM boot roster (<see cref="Cvm.CvmBootStreamBuilder.GetConfiguredCoordinates"/>, checked live
+/// against <see cref="_liveChip"/>). That roster answers "is this node part of the CVM," a different
+/// question from "did Core Dump actually read this node this time" -- and, per Stefan's follow-up,
+/// reading was still slow because Core Dump kept reading every one of the 143 non-head nodes
+/// regardless. <see cref="ViewModels.CvmDebuggerViewModel.CoreDumpAsync"/> now has its own, separate
+/// per-node "include in post-mortem" checkbox (<see cref="Models.Ga144NodeConfiguration.PostMortemEnabled"/>)
+/// and skips a node's own (expensive) data read when it is unticked, recording that directly into
+/// <see cref="Models.PostMortemNodeSnapshot.Included"/>. <see cref="RebuildNodes"/> below no longer
+/// needs <see cref="_liveChip"/> at all for its own graying: it reads <c>Included</c> straight off each
+/// captured node, so a snapshot keeps showing exactly what it actually captured even after the
+/// project's checkboxes are later changed. A node with <c>Included == false</c> renders in a neutral
+/// gray instead of its own snapshot color; see <see cref="PostMortemNodeViewModel"/>'s own remarks for
+/// the visual convention this borrows from the live GA144 grid (there, for its own unrelated
+/// "configured for boot" distinction).
 /// </summary>
 public sealed class PostMortemChipViewModel : ObservableObject
 {
@@ -152,18 +162,11 @@ public sealed class PostMortemChipViewModel : ObservableObject
   // fills purely by item order, so leaving a gap in this list would silently shift every following
   // node by one position instead of just showing an empty/placeholder cell where it belongs.
   //
-  // REWORKED 2026-09-22 (see this class's own remarks): computes the live "configured" roster once,
-  // up front, via the same CvmBootStreamBuilder.GetConfiguredCoordinates(_liveChip) the boot stream
-  // itself now uses, and stamps every cell with whether its own coordinate is in it. Null (not a
-  // computed false) whenever _liveChip itself is null -- an imported/standalone snapshot with no live
-  // project to check against makes no configured/unconfigured claim at all, rather than showing every
-  // node as "not configured" just because there was nothing to compare it to.
+  // SUPERSEDED 2026-09-22 (see this class's own remarks): no longer needs _liveChip to decide graying
+  // -- PostMortemNodeViewModel now reads Included straight off each captured PostMortemNodeSnapshot,
+  // which CoreDumpAsync stamped at capture time from that node's own PostMortemEnabled checkbox.
   private void RebuildNodes()
   {
-    HashSet<int>? configuredCoordinates = _liveChip is null
-        ? null
-        : [.. CvmBootStreamBuilder.GetConfiguredCoordinates(_liveChip)];
-
     var nodes = new List<PostMortemNodeViewModel>(144);
     for (int row = 7; row >= 0; row--)
     {
@@ -171,8 +174,7 @@ public sealed class PostMortemChipViewModel : ObservableObject
       {
         int coordinate = row * 100 + column;
         _snapshot.Nodes.TryGetValue(coordinate, out PostMortemNodeSnapshot? nodeSnapshot);
-        bool? isConfigured = configuredCoordinates?.Contains(coordinate);
-        nodes.Add(new PostMortemNodeViewModel(coordinate, nodeSnapshot, _snapshot.ProjectDefaultNodeColor, isConfigured));
+        nodes.Add(new PostMortemNodeViewModel(coordinate, nodeSnapshot, _snapshot.ProjectDefaultNodeColor));
       }
     }
 

@@ -48,10 +48,21 @@ public sealed class NodeViewModel
   // even once the source was deleted and the boot checkbox unchecked.
   public bool IsConfigured => Model.Enabled || !string.IsNullOrWhiteSpace(Model.SourceCode);
 
+  /// <summary>ADDED 2026-09-22, per Stefan directly: "in the GA144 window, i need a hint or little
+  /// display to see which nodes are included in a post-mortem analysis." Drives the small "PM" badge
+  /// (top-right corner of the node cell, ChipWindow.xaml) -- independent of <see cref="IsConfigured"/>:
+  /// a node can be boot-configured, post-mortem-included, both, or neither. See
+  /// <see cref="Ga144NodeConfiguration.PostMortemEnabled"/>'s own remarks for what this actually
+  /// controls (Core Dump skips this node's own data read when false; the tentacle wire walk itself is
+  /// unaffected either way).</summary>
+  public bool PostMortemEnabled => Model.PostMortemEnabled;
+
+  public Visibility PostMortemHintVisibility => PostMortemEnabled ? Visibility.Visible : Visibility.Collapsed;
+
   /// <summary>
   /// This node's own color (Model.Color) if it has one, otherwise the owning project's
   /// DefaultNodeColor passed in at construction (ChipViewModel.RebuildNodes) -- always one of
-  /// the 16 NodeColorPalette swatches either way. Recomputed live from Model.Color on every
+  /// the 24 NodeColorPalette swatches either way. Recomputed live from Model.Color on every
   /// access, so picking "Use project default" in the node editor (which clears Model.Color to
   /// null) or changing the project's own default both show up the next time this chip's node
   /// grid is rebuilt.
@@ -147,7 +158,10 @@ public sealed class NodeViewModel
       string kraken = string.IsNullOrWhiteSpace(KrakenDescription)
           ? string.Empty
           : $"\n{KrakenDescription}";
-      return $"Node {CoordinateText}\nCOM ports: {PortList()}\n{IoDescription}{kraken}";
+      string postMortem = PostMortemEnabled
+          ? "\nIncluded in Core Dump post-mortem reads (PM badge)."
+          : "\nExcluded from Core Dump post-mortem reads -- still transited by the tentacle wire walk, just not read.";
+      return $"Node {CoordinateText}\nCOM ports: {PortList()}\n{IoDescription}{kraken}{postMortem}";
     }
   }
 

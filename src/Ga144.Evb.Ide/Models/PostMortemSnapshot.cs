@@ -92,6 +92,25 @@ public sealed class PostMortemNodeSnapshot
   /// state.</summary>
   public string? Error { get; set; }
 
+  /// <summary>
+  /// ADDED 2026-09-22, per Stefan directly: "post-mortem is too slow now. i am not interested in all
+  /// nodes ... when reading post-mortem data, read only the selected nodes and grey out all other
+  /// nodes." False means this node's own <see cref="Ga144NodeConfiguration.PostMortemEnabled"/>
+  /// checkbox was unticked at the moment <see cref="ViewModels.CvmDebuggerViewModel.CoreDumpAsync"/>
+  /// reached it, so every field above except <see cref="Coordinate"/> and <see cref="Color"/> is left
+  /// at its unread default -- this node was still transited by the tentacle wire walk (needed to reach
+  /// later nodes on the same tentacle; "the tentacle mechanism for reading the nodes do not change,"
+  /// Stefan's own words), just not read. Not the same thing as <see cref="Error"/> being set: a false
+  /// <see cref="Included"/> is a deliberate skip decided BEFORE the read was attempted, an
+  /// <see cref="Error"/> is a transport failure on a node that WAS meant to be read. Defaults to true
+  /// so a snapshot exported before this field existed (when every node was always read) still displays
+  /// with nothing greyed out. <see cref="ViewModels.PostMortemNodeViewModel"/> greys out any node where
+  /// this is false, using the snapshot's OWN recorded value rather than the live project's current
+  /// checkbox state, so an old snapshot keeps showing exactly what it actually captured even if the
+  /// project's own per-node selection has since changed.
+  /// </summary>
+  public bool Included { get; set; } = true;
+
   public void Normalize()
   {
     Ram ??= [];

@@ -15,6 +15,7 @@ public sealed class NodeEditorViewModel : ObservableObject
   private readonly string _originalRomWords;
   private readonly string _projectDefaultNodeColor;
   private bool _enabled;
+  private bool _postMortemEnabled;
   private string? _color;
   private string _sourceCode;
   private string _romSourceCode;
@@ -77,6 +78,7 @@ public sealed class NodeEditorViewModel : ObservableObject
     _romNode.Normalize();
 
     _enabled = node.Enabled;
+    _postMortemEnabled = node.PostMortemEnabled;
     _color = node.Color;
     _sourceCode = node.SourceCode;
     _romSourceCode = _romNode.SourceCode;
@@ -131,6 +133,11 @@ public sealed class NodeEditorViewModel : ObservableObject
   public int UserMacroCount => _userMacros.Count;
 
   public bool Enabled { get => _enabled; set => SetProperty(ref _enabled, value); }
+
+  /// <summary>ADDED 2026-09-22 -- see <see cref="Ga144NodeConfiguration.PostMortemEnabled"/>'s own
+  /// remarks. Independent of <see cref="Enabled"/>: this one only controls whether Core Dump reads
+  /// this node's own data, not whether it is part of the CVM boot stream.</summary>
+  public bool PostMortemEnabled { get => _postMortemEnabled; set => SetProperty(ref _postMortemEnabled, value); }
 
   /// <summary>The 24 fixed swatches the "Node color" picker offers -- the same set
   /// MainWindow's project "Default node color" picker offers, via the same NodeColorOption.Palette.</summary>
@@ -524,6 +531,7 @@ public sealed class NodeEditorViewModel : ObservableObject
   public bool Apply()
   {
     Node.Enabled = Enabled;
+    Node.PostMortemEnabled = PostMortemEnabled;
     Node.SourceCode = SourceCode;
     Node.Color = Color;
     Node.RamWords = Split(RamWordsText, RamWordCount);
@@ -568,6 +576,7 @@ public sealed class NodeEditorViewModel : ObservableObject
     Ga144NodeConfiguration targetNode = targetChip.GetNode(Node.Coordinate);
 
     targetNode.Enabled = Enabled;
+    targetNode.PostMortemEnabled = PostMortemEnabled;
     targetNode.SourceCode = SourceCode;
     // Bakes in this editor's *resolved* color (its own override, or the project's default if it
     // has none) rather than the possibly-null Color field verbatim -- so the copy looks the same

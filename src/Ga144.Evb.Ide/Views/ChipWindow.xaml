@@ -90,6 +90,16 @@
                           Padding="12,6"
                           Margin="0,0,8,0"
                           ToolTip="Copies every configured node in this chip (enabled, or with non-blank RAM source -- the same nodes highlighted yellow below) into the same node coordinates in another open project. ROM is shared across all projects and is not copied, same policy as the node editor's own 'Copy to project…'." />
+          <Button Content="Include all in PM"
+                          Command="{Binding IncludeAllInPostMortemCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Ticks &quot;Include this node in post-mortem analysis&quot; for all 144 nodes at once, so the next Core Dump reads every node's own data again." />
+          <Button Content="Exclude all from PM"
+                          Command="{Binding ExcludeAllFromPostMortemCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Unticks &quot;Include this node in post-mortem analysis&quot; for all 144 nodes at once. The next Core Dump still walks the whole tentacle wire (unchanged), but reads no node's own data until nodes are re-included, one by one or with 'Include all in PM'." />
           <Button Content="CVM Debugger"
                           Click="OnOpenCvmDebuggerClick"
                           IsEnabled="True"
@@ -201,6 +211,15 @@
                                             Visibility="{Binding ExternalIoVisibility}">
                     <TextBlock Text="I/O" FontSize="11" FontWeight="Bold" />
                   </Border>
+
+                  <!-- ADDED 2026-09-22: hint for whether Core Dump reads this node's own data,
+                       independent of the "configured for boot" color/border above. -->
+                  <Border Background="#D8E3F5" BorderBrush="#4C6FA8" BorderThickness="1" CornerRadius="3"
+                                            HorizontalAlignment="Right" VerticalAlignment="Top" Padding="3,1"
+                                            IsHitTestVisible="False"
+                                            Visibility="{Binding PostMortemHintVisibility}">
+                    <TextBlock Text="PM" FontSize="10" FontWeight="Bold" Foreground="#2A4570" />
+                  </Border>
                 </Grid>
               </Border>
             </Button>
@@ -213,7 +232,7 @@
     </Grid>
 
     <Border Grid.Row="2" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="8" Margin="0,8,0,0">
-      <TextBlock Text="Click a node to edit its F18 source, ROM, compiled RAM words, entry point, registers, and startup stacks. Configured nodes are highlighted using this project's default node color, or a node's own color if it was given one in the node editor. When a Kraken is installed, colored arrows show each tentacle's directed path from node 708. Check Kraken verifies RAM[0] outward from the three direct neighbors along all tentacles. Once hardware Kraken is erected, its COM endpoint remains exclusively reserved and all subsequent chip access goes through Kraken/Tentacles; the native handle is opened only for explicit operations and parked while idle. Reset, node-708 probe, port reassignment, and re-erection are disabled."
+      <TextBlock Text="Click a node to edit its F18 source, ROM, compiled RAM words, entry point, registers, and startup stacks. Configured nodes are highlighted using this project's default node color, or a node's own color if it was given one in the node editor. A blue &quot;PM&quot; badge in a node's top-right corner means Core Dump will read that node's own data during post-mortem capture; nodes without the badge are still transited by the tentacle wire walk (needed to reach later nodes) but their own registers/stacks/RAM/ROM are skipped, which is what actually saves time. &quot;Include all in PM&quot; and &quot;Exclude all from PM&quot; above set that checkbox for all 144 nodes at once instead of one node editor at a time. When a Kraken is installed, colored arrows show each tentacle's directed path from node 708. Check Kraken verifies RAM[0] outward from the three direct neighbors along all tentacles. Once hardware Kraken is erected, its COM endpoint remains exclusively reserved and all subsequent chip access goes through Kraken/Tentacles; the native handle is opened only for explicit operations and parked while idle. Reset, node-708 probe, port reassignment, and re-erection are disabled."
                        TextWrapping="Wrap" />
     </Border>
   </Grid>

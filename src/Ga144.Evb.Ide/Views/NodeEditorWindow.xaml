@@ -32,6 +32,9 @@
                         ToolTip="Open live RAM/ROM/register/stack/I/O control through the installed Kraken tentacle." />
         <CheckBox Content="Include this node in project boot/startup" IsChecked="{Binding Enabled}"
                           VerticalAlignment="Center" />
+        <CheckBox Content="Include this node in post-mortem analysis" IsChecked="{Binding PostMortemEnabled}"
+                          VerticalAlignment="Center" Margin="12,0,0,0"
+                          ToolTip="Whether Core Dump reads this node's own registers, both stacks, and RAM/ROM. Unchecking this only skips this node's own data -- the tentacle wire walk still passes through it to reach later nodes on the same tentacle, so it does not change what gets erected, only what gets read." />
       </StackPanel>
     </DockPanel>
 

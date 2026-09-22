@@ -90,7 +90,7 @@
 
     <Border Grid.Row="2" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="8" Margin="0,8,0,0">
       <TextBlock TextWrapping="Wrap"
-                       Text="Read-only snapshot of the chip's live state at capture time, colored using this project's node colors. Nodes shown in neutral gray are captured (the wire walk covers the whole chip) but are not currently configured -- enabled, or given source -- in this project, so they are not part of the CVM as it stands right now. Click a node to see its registers, both stacks (with symbolic port names for values that match a known port address), and a RAM/ROM disassembly with differences from this project's currently compiled source highlighted. Node 708 (the Kraken head) has no live-state read path of its own and is not included." />
+                       Text="Read-only snapshot of the chip's live state at capture time, colored using this project's node colors. Nodes shown in neutral gray were not selected for post-mortem analysis (the &quot;Include this node in post-mortem analysis&quot; checkbox in the node editor) when this Core Dump ran -- the tentacle wire walk still passed through them to reach later nodes, but their own registers/stacks/RAM/ROM were not read, which is what actually saves time. Click a node to see its registers, both stacks (with symbolic port names for values that match a known port address), and a RAM/ROM disassembly with differences from this project's currently compiled source highlighted. Node 708 (the Kraken head) has no live-state read path of its own and is not included." />
     </Border>
   </Grid>
 </Window>
