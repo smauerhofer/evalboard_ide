@@ -1,0 +1,162 @@
+<Window x:Class="Ga144.Evb.Ide.Views.SimulatorChipWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="GA144 simulator"
+        Width="2100"
+        Height="1150"
+        MinWidth="1400"
+        MinHeight="800"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        WindowStartupLocation="CenterOwner">
+  <Grid Margin="10">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <Grid Margin="0,0,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <TextBlock Grid.Column="0"
+                 Text="GA144 simulator"
+                 FontSize="20"
+                 FontWeight="SemiBold"
+                 VerticalAlignment="Center"
+                 Margin="0,0,16,0" />
+
+      <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+        <Button Content="Reset" Command="{Binding ResetCommand}" Padding="12,6" Margin="0,0,8,0"
+                ToolTip="Recompiles every node from this project's current source (and this node's real factory ROM), then initializes registers as if freshly reset and then loaded by the boot stream." />
+        <Button Content="Step 1" Command="{Binding Step1Command}" Padding="12,6" Margin="0,0,8,0"
+                ToolTip="Performs one tick/tock cycle (one F18A instruction slot per unblocked node) and refreshes the display." />
+        <Button Content="Step 10" Command="{Binding Step10Command}" Padding="12,6" Margin="0,0,8,0"
+                ToolTip="Performs 10 steps without refreshing the display in between, then refreshes once." />
+        <Button Content="Step 100" Command="{Binding Step100Command}" Padding="12,6" Margin="0,0,16,0"
+                ToolTip="Performs 100 steps without refreshing the display in between, then refreshes once." />
+        <Button Content="Go" Command="{Binding GoCommand}" Padding="12,6" Margin="0,0,8,0"
+                ToolTip="Starts (or continues) running, refreshing the display after each step, until Halt is clicked." />
+        <Button Content="Halt" Command="{Binding HaltCommand}" Padding="12,6" Margin="0,0,16,0"
+                ToolTip="Stops a running Go." />
+        <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center" FontStyle="Italic" Foreground="#555" />
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="1">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="3*" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="1*" MinWidth="360" />
+      </Grid.ColumnDefinitions>
+
+      <Border Grid.Column="0" Background="White" BorderBrush="#C6D5C9" BorderThickness="1">
+        <ItemsControl ItemsSource="{Binding Nodes}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Columns="18" Rows="8" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Button Click="OnNodeClick"
+                      Margin="3"
+                      Padding="0"
+                      HorizontalContentAlignment="Stretch"
+                      VerticalContentAlignment="Stretch"
+                      ToolTip="{Binding ToolTip}"
+                      Tag="{Binding}">
+                <Button.Style>
+                  <Style TargetType="Button">
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderThickness" Value="0" />
+                  </Style>
+                </Button.Style>
+                <Border BorderBrush="{Binding NodeBorderBrushColor}"
+                        BorderThickness="2"
+                        Background="{Binding NodeBackgroundBrush}"
+                        CornerRadius="3">
+                  <Grid>
+                    <Grid.RowDefinitions>
+                      <RowDefinition Height="Auto" />
+                      <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0"
+                               Text="{Binding CoordinateText}"
+                               FontFamily="Consolas"
+                               FontWeight="Bold"
+                               FontSize="12"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Grid.Row="1"
+                               Text="{Binding CurrentInstructionText}"
+                               FontFamily="Consolas"
+                               FontSize="9"
+                               HorizontalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Row="0" Text="&#8592;" FontWeight="Bold" Foreground="#1565C0"
+                               HorizontalAlignment="Left" Margin="1,0,0,0"
+                               ToolTip="Stalled on a port READ (inbound)"
+                               Visibility="{Binding InboundArrowVisibility}" />
+                    <TextBlock Grid.Row="0" Text="&#8594;" FontWeight="Bold" Foreground="#B33A3A"
+                               HorizontalAlignment="Right" Margin="0,0,1,0"
+                               ToolTip="Stalled on a port WRITE (outbound)"
+                               Visibility="{Binding OutboundArrowVisibility}" />
+                    <TextBlock Grid.Row="0" Text="!" FontWeight="Bold" Foreground="#B33A3A"
+                               HorizontalAlignment="Center" VerticalAlignment="Top"
+                               Visibility="{Binding ErrorVisibility}" />
+                  </Grid>
+                </Border>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </Border>
+
+      <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#DDD" />
+
+      <DockPanel Grid.Column="2" Margin="8,0,0,0">
+        <TextBlock DockPanel.Dock="Top" Text="I/O pins &amp; data ports" FontWeight="SemiBold" Margin="0,0,0,4" />
+        <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Foreground="#555" Margin="0,0,0,8"
+                   Text="Every real chip pin (an edge node's port direction with no GA144 neighbor), including the SRAM cluster's node 007/008/009 data ports. Display-only: no device is simulated behind these -- a write always completes and is shown as &quot;last written&quot;; a read completes with the override value below if set, otherwise stalls." />
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+          <ItemsControl ItemsSource="{Binding ExternalPins}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="0,6">
+                  <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock Text="{Binding Label}" FontFamily="Consolas" FontWeight="SemiBold" Width="90" />
+                      <TextBlock Text="{Binding RoleHint}" Foreground="#777" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                      <TextBlock Text="&#8592;" FontWeight="Bold" Foreground="#1565C0" Margin="0,0,4,0"
+                                 Visibility="{Binding PendingReadVisibility}" ToolTip="A node is currently trying to read this pin" />
+                      <TextBlock Text="&#8594;" FontWeight="Bold" Foreground="#B33A3A" Margin="0,0,4,0"
+                                 Visibility="{Binding PendingWriteVisibility}" ToolTip="A node is currently writing this pin" />
+                      <TextBlock Text="{Binding CurrentOverrideText, StringFormat='read value: {0}'}" Margin="0,0,12,0" />
+                      <TextBlock Text="{Binding LastWrittenText, StringFormat='last written: {0}'}" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                      <TextBox Width="90" Text="{Binding OverrideText, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas"
+                               ToolTip="Hex value this pin's next read completes with (e.g. 0x00001)." />
+                      <Button Content="Set" Command="{Binding SetOverrideCommand}" Padding="8,2" Margin="6,0,0,0" />
+                      <Button Content="Clear" Command="{Binding ClearOverrideCommand}" Padding="8,2" Margin="4,0,0,0" />
+                    </StackPanel>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+    </Grid>
+
+    <Border Grid.Row="2" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="8" Margin="0,8,0,0">
+      <TextBlock TextWrapping="Wrap"
+                 Text="Click a node to open its own simulator window (all registers, all ports, RAM, ROM, with the current position highlighted). &#8592; = stalled on a port read (inbound), &#8594; = stalled on a port write (outbound), ! = this node's own project source failed to compile at the last Reset." />
+    </Border>
+  </Grid>
+</Window>

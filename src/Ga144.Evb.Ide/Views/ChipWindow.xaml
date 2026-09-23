@@ -106,6 +106,12 @@
                           Padding="12,6"
                           Margin="0,0,8,0"
                           ToolTip="Opens the CVM Debugger window: same compile-boot-load-wake sequence as 'Install &amp; run CVM test', but interactive -- step one memory-interface transaction at a time, run to a breakpoint (paused by withholding a read's reply, exactly what the physical CVM is blocked on), and inspect the simulated SRAM. Blocked while a Kraken is erected (this resets the whole chip)." />
+          <Button Content="Simulator…"
+                          Click="OnOpenSimulatorClick"
+                          IsEnabled="True"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Opens the GA144 simulator: a software-only, tick/tock model of every one of this project's 144 nodes (registers, ports, RAM, ROM), stepped one F18A instruction slot at a time, with no chip or Kraken required." />
           <TextBlock Text="{Binding VerifyStatus, Mode=OneWay}"
                              VerticalAlignment="Center"
                              Margin="10,0,0,0"

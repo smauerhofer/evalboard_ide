@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-22T18:17:51.7502460
-      utcDateTime: 2026-09-22T18:17:51.7502460Z
-      localDateTime: 2026-09-22T20:17:51.7502460+02:00
-      date: 2026-09-22T00:00:00.0000000
-      day: 22
-      dayOfWeek: Tuesday
-      dayOfYear: 265
-      hour: 18
-      millisecond: 750
-      microsecond: 246
-      nanosecond: 0
-      minute: 17
+      dateTime: 2026-09-23T06:40:50.1780704
+      utcDateTime: 2026-09-23T06:40:50.1780704Z
+      localDateTime: 2026-09-23T08:40:50.1780704+02:00
+      date: 2026-09-23T00:00:00.0000000
+      day: 23
+      dayOfWeek: Wednesday
+      dayOfYear: 266
+      hour: 6
+      millisecond: 178
+      microsecond: 70
+      nanosecond: 400
+      minute: 40
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 51
-      ticks: 639256978717502460
-      utcTicks: 639256978717502460
-      timeOfDay: 18:17:51.7502460
+      second: 50
+      ticks: 639257424501780704
+      utcTicks: 639257424501780704
+      timeOfDay: 06:40:50.1780704
       year: 2026
   portB: 
   portC:
@@ -24184,7 +24184,7 @@ projects:
       postMortemEnabled: true
     - coordinate: 202
       enabled: true
-      sourceCode: >+
+      sourceCode: >
         ( CVM2 node 202. VM 32 bit floatingpoint step 4.
 
 

@@ -372,6 +372,47 @@ public partial class ChipWindow : Window
     _cvmDebuggerWindow = null;
   }
 
+  private SimulatorChipWindow? _simulatorChipWindow;
+
+  private void OnOpenSimulatorClick(object sender, RoutedEventArgs e)
+  {
+    // Same reusable, non-modal window pattern as SRAM Tentacle / SRAM Simulator / CVM Debugger.
+    if (_simulatorChipWindow is not null)
+    {
+      if (_simulatorChipWindow.WindowState == WindowState.Minimized)
+      {
+        _simulatorChipWindow.WindowState = WindowState.Normal;
+      }
+
+      _simulatorChipWindow.Activate();
+      return;
+    }
+
+    var viewModel = new SimulatorChipViewModel(
+        _viewModel.Chip,
+        _viewModel.RomLibrary,
+        _viewModel.Project.Model.UserMacros,
+        _viewModel.Project.Model.DefaultNodeColor);
+    var window = new SimulatorChipWindow(viewModel)
+    {
+      Owner = this
+    };
+
+    _simulatorChipWindow = window;
+    window.Closed += OnSimulatorChipWindowClosed;
+    window.Show();
+  }
+
+  private void OnSimulatorChipWindowClosed(object? sender, EventArgs e)
+  {
+    if (sender is SimulatorChipWindow window)
+    {
+      window.Closed -= OnSimulatorChipWindowClosed;
+    }
+
+    _simulatorChipWindow = null;
+  }
+
   private void OnKrakenCheckWindowClosed(object? sender, EventArgs e)
   {
     if (sender is KrakenCheckWindow window)
