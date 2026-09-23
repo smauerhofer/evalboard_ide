@@ -49,11 +49,11 @@ public sealed class F18NodeSimulationState
   public const int IoRegisterAddress = 0x15D; // F18InstructionSet.Constants["io"]
 
   /// <summary>DB001 2.1 "After Reset": "P is set to the address configured in the chip layout. For F18A,
-  /// this will always be either a multiport execute or will be ROM address x0aa." This simulator does not
-  /// model the silicon metal-mask "multiport execute" reset vector DB001 mentions for boot-stream-receiving
-  /// nodes specifically -- which physical nodes get that wiring is a fabrication detail this project has
-  /// no data for -- so every node resets to this cold entry instead: the documented fallback, and what a
-  /// node that never receives a boot stream actually keeps running.</summary>
+  /// this will always be either a multiport execute or will be ROM address x0aa." Only
+  /// <see cref="F18AwaitAddresses.BootNodeCoordinates"/>'s three dedicated boot nodes (705/708/300 --
+  /// DB001 5.5.4/5.5.5/5.5.6) reset to this cold entry (Stefan's own clarification, 2026-09-23): every
+  /// other node resets to its own <see cref="F18AwaitAddresses.ForNode"/> multiport address instead --
+  /// see <see cref="ResetRuntimeState"/>, which is where this actually gets applied.</summary>
   public const int ColdEntryAddress = 0x0AA; // F18InstructionSet.CallableRomWords["cold"]
 
   public F18NodeSimulationState(int coordinate)
@@ -162,24 +162,32 @@ public sealed class F18NodeSimulationState
 
   /// <summary>
   /// DB001 2.1 "After Reset", transcribed directly (quoted verbatim by Stefan, 2026-09-23): "P is set to
-  /// the address configured in the chip layout... io is set to the state it would have after a program
-  /// wrote x15555 into the register. B is set to the address of io. Stack pointers are set to the same
-  /// initial condition on every reset. Other registers, stack contents, and RAM are not directly affected
-  /// by reset." Concretely: <see cref="P"/> := <see cref="ColdEntryAddress"/>, <see cref="Io"/> := x15555,
-  /// <see cref="B"/> := <see cref="IoRegisterAddress"/>, both stacks cleared (this simulator's List-based
-  /// stacks have no separate "pointer" to reset -- clearing them is the closest equivalent: nothing below
-  /// an empty pointer is reachable either way). <see cref="A"/> is deliberately left untouched (DB001: "not
-  /// directly affected"), and RAM/ROM are the CALLER's own concern -- both <see cref="Ga144SimulatorEngine.Reset"/>
-  /// and <see cref="Ga144SimulatorEngine.Preset"/> start a freshly (re)initialized node from this same
-  /// baseline before they diverge (a bare Reset then leaves RAM alone entirely, per DB001 above; Preset
-  /// clears and recompiles it, "loading the project" being a distinct operation from the reset itself).
-  /// <see cref="Carry"/> is the one exception to "not directly affected": DB001 2.3.3 says it is genuinely
-  /// unpredictable, and this simulator picks a deterministic 0 instead purely as its own simplification
-  /// (see that property's own remarks) -- not something DB001 2.1 itself specifies.
+  /// the address configured in the chip layout. For F18A, this will always be either a multiport execute
+  /// or will be ROM address x0aa... io is set to the state it would have after a program wrote x15555 into
+  /// the register. B is set to the address of io. Stack pointers are set to the same initial condition on
+  /// every reset. Other registers, stack contents, and RAM are not directly affected by reset." Concretely:
+  /// <see cref="P"/> := <see cref="ColdEntryAddress"/> for <see cref="F18AwaitAddresses.BootNodeCoordinates"/>'s
+  /// three dedicated boot nodes (705/708/300 -- DB001 5.5.4/5.5.5/5.5.6, the ones that actively run their
+  /// own boot-detection ROM code), or <see cref="F18AwaitAddresses.ForNode"/>'s multiport address
+  /// for every other node instead (which then simply sits waiting to receive instructions on a port,
+  /// exactly as a real "never-programmed" node does -- Stefan's own clarification, 2026-09-23). <see cref="Io"/>
+  /// := x15555, <see cref="B"/> := <see cref="IoRegisterAddress"/>, both stacks cleared (this simulator's
+  /// List-based stacks have no separate "pointer" to reset -- clearing them is the closest equivalent:
+  /// nothing below an empty pointer is reachable either way). <see cref="A"/> is deliberately left untouched
+  /// (DB001: "not directly affected"), and RAM/ROM are the CALLER's own concern -- both
+  /// <see cref="Ga144SimulatorEngine.Reset"/> and <see cref="Ga144SimulatorEngine.Preset"/> start a freshly
+  /// (re)initialized node from this same baseline before they diverge (a bare Reset then leaves RAM alone
+  /// entirely, per DB001 above; Preset clears and recompiles it, "loading the project" being a distinct
+  /// operation from the reset itself). <see cref="Carry"/> is the one exception to "not directly affected":
+  /// DB001 2.3.3 says it is genuinely unpredictable, and this simulator picks a deterministic 0 instead
+  /// purely as its own simplification (see that property's own remarks) -- not something DB001 2.1 itself
+  /// specifies.
   /// </summary>
   public void ResetRuntimeState()
   {
-    P = ColdEntryAddress;
+    P = F18AwaitAddresses.BootNodeCoordinates.Contains(Coordinate)
+        ? ColdEntryAddress
+        : F18AwaitAddresses.ForNode(Coordinate);
     B = IoRegisterAddress;
     Io = 0x15555;
     Carry = 0;

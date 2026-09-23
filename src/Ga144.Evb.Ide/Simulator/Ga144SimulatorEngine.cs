@@ -128,8 +128,8 @@ public sealed partial class Ga144SimulatorEngine
 
   /// <summary>
   /// Performs a bare hardware reset of every one of the 144 nodes -- literally "resets the chip", Stefan's
-  /// own words (2026-09-23) drawing the line between this and <see cref="Preset"/>, refined twice the same
-  /// day as Stefan clarified exactly what DB001 2.1 ("After Reset") actually says should happen:
+  /// own words (2026-09-23) drawing the line between this and <see cref="Preset"/>, refined three times the
+  /// same day as Stefan clarified exactly what DB001 2.1 ("After Reset") actually says should happen:
   ///  1. "after simulator 'Reset' the ROM must be filled with the node's ROM code. the ROM code must
   ///     always be filled." -- real silicon always runs its factory ROM no matter whether RAM has ever
   ///     been loaded (see <see cref="F18NodeSimulationState.Rom"/>'s own remarks), so a bare reset is not
@@ -139,11 +139,18 @@ public sealed partial class Ga144SimulatorEngine
   ///     is set to the address of io. Stack pointers are set to the same initial condition on every reset.
   ///     Other registers, stack contents, and RAM are not directly affected by reset." -- so a bare reset
   ///     does NOT clear RAM (it is a real hardware reset, not a factory-fresh chip), and does NOT touch A.
+  ///  3. "after reset all nodes initialize P to their multiport address, except some special boot nodes" --
+  ///     resolving DB001 2.1's own "either a multiport execute or... x0aa" into a concrete per-node rule:
+  ///     <see cref="F18NodeSimulationState.ResetRuntimeState"/> gives <see cref="Compiler.F18AwaitAddresses.BootNodeCoordinates"/>'s
+  ///     three dedicated boot nodes (705/708/300) the ROM cold entry, and every other node its own
+  ///     <see cref="Compiler.F18AwaitAddresses.ForNode"/> multiport address -- so an ordinary node comes out
+  ///     of a bare Reset already sitting stalled awaiting instructions on a port, exactly as real silicon
+  ///     does, rather than running whatever its factory ROM happens to hold at cold entry.
   /// Concretely, per node:
   ///  1. Registers/stacks/pending-port-state go back to their
-  ///     <see cref="F18NodeSimulationState.ResetRuntimeState"/> defaults -- P/B/Io to their DB001-specified
-  ///     values, both stacks cleared, <see cref="F18NodeSimulationState.A"/> left exactly as it was (see
-  ///     that property's own remarks).
+  ///     <see cref="F18NodeSimulationState.ResetRuntimeState"/> defaults -- P to its boot-node-or-multiport
+  ///     address (see point 3 above), B/Io to their other DB001-specified values, both stacks cleared,
+  ///     <see cref="F18NodeSimulationState.A"/> left exactly as it was (see that property's own remarks).
   ///  2. RAM is left completely untouched -- this node's own project source is never even read by a bare
   ///     Reset (unlike <see cref="Preset"/>, which compiles and loads it), and whatever RAM held before
   ///     (from an earlier Preset, or Steps since) survives the reset exactly as DB001 says it should.
@@ -205,9 +212,10 @@ public sealed partial class Ga144SimulatorEngine
   ///     this app uses (Core Dump's comparison, Verify ROMs, the CVM installer), so the simulator can
   ///     never disagree with what a real deploy would compile.
   ///  2. Every node starts from <see cref="F18NodeSimulationState.ResetRuntimeState"/>'s own DB001 2.1
-  ///     "After Reset" baseline (P/B/Io to their documented values, both stacks cleared, A left untouched
-  ///     -- see that method's own remarks) -- exactly the same starting point a bare <see cref="Reset"/>
-  ///     uses. A node the project considers "configured" (same test as
+  ///     "After Reset" baseline (P to its boot-node-cold-entry-or-multiport address, B/Io to their other
+  ///     documented values, both stacks cleared, A left untouched -- see that method's own remarks) --
+  ///     exactly the same starting point a bare <see cref="Reset"/> uses. A node the project considers
+  ///     "configured" (same test as
   ///     <see cref="Cvm.CvmBootStreamBuilder.GetConfiguredCoordinates"/>/<see cref="ViewModels.NodeViewModel.IsConfigured"/>:
   ///     <c>Enabled || SourceCode not blank</c>) then has its RAM's own compiled boot-configuration
   ///     metadata applied ON TOP of that baseline -- P := <see cref="F18CompileResult.EntryPoint"/>

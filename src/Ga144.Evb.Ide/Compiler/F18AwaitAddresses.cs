@@ -73,6 +73,20 @@ public static class F18AwaitAddresses
   public static bool IsConfirmed(int coordinate) => true;
 
   /// <summary>
+  /// The three physical nodes DB001 5.5.4/5.5.5/5.5.6 documents as having a dedicated external boot pin
+  /// and their own factory-ROM boot-detection code: 705 (SPI flash boot), 708 (asynchronous serial boot),
+  /// 300 (synchronous boot) -- matching <see cref="ViewModels.Ga144PinCatalog"/>'s own "SPI boot"/
+  /// "Asynchronous boot"/"Synchronous boot" pin role hints for these same three coordinates. DB001 2.1's
+  /// "After Reset" note that P is set to "either a multiport execute or... ROM address x0aa" resolves to
+  /// x0aa (<see cref="Simulator.F18NodeSimulationState.ColdEntryAddress"/>) for exactly these three nodes
+  /// -- they are the ones that actively run boot-detection code at cold entry -- and to <see cref="ForNode"/>'s
+  /// multiport address for every other node, which instead sits waiting to receive instructions on a port
+  /// (Stefan's own clarification, 2026-09-23; see <see cref="Simulator.F18NodeSimulationState.ResetRuntimeState"/>,
+  /// which is where this is actually applied).
+  /// </summary>
+  public static readonly IReadOnlySet<int> BootNodeCoordinates = new HashSet<int> { 300, 705, 708 };
+
+  /// <summary>
   /// DB013 4.2.7.2 "Named Literals for Cardinal Directions": resolves a
   /// geographic direction (north/south/east/west) to the LOCAL F18InstructionSet
   /// Constants port name ("up"/"down"/"left"/"right") for the given node, using
