@@ -24331,7 +24331,7 @@ projects:
       postMortemEnabled: true
     - coordinate: 203
       enabled: true
-      sourceCode: >+
+      sourceCode: >-
         ( CVM2 node 203. VM 32 bit floatingpoint step 3.
 
 
@@ -24350,6 +24350,11 @@ projects:
             0x20000 : |f1| <  |f2|
         )
 
+        # 202 import
+
+        # 303 import
+
+
         entry f3/main
 
         # right /a
@@ -24360,24 +24365,63 @@ projects:
         # 6 org
 
 
-        : f3/sub
+        : f3/send303 ( w - )
+          down a!
+          !
+          right a!
+        ;
+
+
+        : f3/ignore ( - )
+          A[ f4/ignore ; ]] lit !
+        ;
+
+
+        : f3/calc ( - )
+          A[ f4/calc ; ]] lit !
+          // the result must be fetched later
+        ;
+
+
+
+        : f3/sign ( s1 s2 - )
+          // pass sign to node 303
+          >r f3/send303 r> f3/send303
+        ;
+
+
+        : f3/with ( s1 s2 call - )
+          f3/calc
+          >r f3/sign
+          r> f3/send303
+          @ f3/send303
+        ;
+
+
+        : f3/without ( s1 s2 call - )
+          >r f3/sign
+          r> f3/send303
+          f3/ignore
+        ;
+
+
+
+        : f3/sub ( s1 s2 )
           0x8000 xor // invert s2
-        : f3/add
+        : f3/add ( s1 s2 ) // always compare
+          A[ f3a/addc ]] lit f3/with ;
 
+        : f3/min ( s1 s2 ) // always compare
+          A[ f3a/min ]] lit f3/with ;
 
+        : f3/max ( s1 s2 ) // always compare
+          A[ f3a/max ]] lit f3/with ;
 
-        : f3/min
+        : f3/mul ( s1 s2 )
+          A[ f3a/mul ]] lit f3/without ;
 
-
-        : f3/max
-
-
-        : f3/mul
-
-
-        : f3/div
-
-
+        : f3/div ( s1 s2 )
+          A[ f3a/div ]] lit f3/without ;
 
         : f3/main
           @b >r
@@ -24415,62 +24459,61 @@ projects:
         f3/mul ;
 
         f3/div ;
-
       ramWords:
-      - 0x11408
-      - 0x11406
-      - 0x11408
-      - 0x11408
-      - 0x11408
-      - 0x11408
+      - 0x11419
+      - 0x11417
+      - 0x1141B
+      - 0x11423
+      - 0x1142B
+      - 0x1142D
+      - 0x04A2F
+      - 0x00115
+      - 0x001D5
+      - 0x2B555
+      - 0x05A55
+      - 0x1140A
+      - 0x05A55
+      - 0x1140C
+      - 0x2F606
+      - 0x27706
+      - 0x1340C
+      - 0x2F60E
+      - 0x27606
+      - 0x03706
+      - 0x2F60E
+      - 0x27606
+      - 0x1140A
       - 0x043B2
       - 0x08000
+      - 0x05710
+      - 0x13400
+      - 0x20FE2
+      - 0x19420
+      - 0x3BDB2
+      - 0x13401
+      - 0x11414
+      - 0x3BDB2
+      - 0x13401
+      - 0x11410
+      - 0x20FE2
+      - 0x19428
+      - 0x3BDB2
+      - 0x13402
+      - 0x11414
+      - 0x3BDB2
+      - 0x13402
+      - 0x11410
+      - 0x05714
+      - 0x13403
+      - 0x05714
+      - 0x13403
       - 0x00802
       - 0x01F2A
       - 0x01A02
       - 0x0BF2A
       - 0x01A02
       - 0x0B455
-      - 0x11408
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1142F
       - 0x15555
       - 0x15555
       - 0x15555
@@ -24482,7 +24525,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x008
+        entryPoint: 0x02F
         p: 0x000
         a: 0x000
         b: 0x000
@@ -25148,139 +25191,284 @@ projects:
     - coordinate: 301
       enabled: true
       sourceCode: >+
-        ( CVM2 node 301. VM 32 bit floatingpoint stage 5 node. prepare mantissa stream )
+        ( CVM2 node 301. VM 32 bit floatingpoint step 5a.
 
-        (
-          extend the mantissa from 24 bit to 27 bit
 
-          input mantissa:
-              h = 8 significant bits
-              l = 16 significant bits
+        this node is a slave of node 302.
 
-          output mantissa:
-              H = 9 significant bits
-              L = 18 significant bits
 
-          Three zero bits are appended for guard/round/sticky processing.
+        mantissa preparation, addition and multiplication.
 
-          in: hhll        {from node 302}
-          out: HHLL       {to node 401}
+          in: HHLL       {extended mantissa from node 201}
+
+          out: HHLL      {extended mantissa to node 401}
+        alternative
+          out: HL        {extended result mantissa to node 401}
+
         )
 
 
-        entry fp5/main
+        # down /b
 
         # up /a
 
-        # left /b
-
+        # left /p
 
         # 0 org
 
 
-        : fp5/extend ( h l-h' l')
-          dup 0x8000 and
-          if
+        : f5a/up ( - ) up a! ;
+
+
+
+        : f5a/shr2 ( H1 H2 L1 L2 - H1 H2' L1 L2' ) // used to align exponent for addition
+          a!                    // A = L2
+          >r                    // save L1
+          0 over                // H1 H2 0 H2
+          . +*                  // S=0, T:A = H2:L2 >> 1
+          >r drop drop          // save H2', remove 0 and old H2
+          r> r> a               // H1 H2' L1 L2'
+        ;
+
+
+        : f5a/m9 ( h l - H L ) // 18x18 multiplication
+          a! 17. >r
+          dup dup xor
+          begin . +* unext
+          >r drop r> a
+        ;
+
+
+
+        +cy
+
+
+        : f5a/add ( H1 H2 L1 L2 - H L ) // add mantissa
+          clc                 // carry = 0
+
+          . + >r              // L = L1+L2, carry-out retained
+                              // H1 H2 / L
+
+          . +                 // H = H1+H2+carry
+                              // H / L
+
+          r>                  // H L
+        ;
+
+
+        : f5a/sub ( H1 H2 L1 L2 - H L ) // subtract mantissa
+
+          // force carry = 1
+          dup dup xor inv dup . + drop
+
+          // L = L1 - L2
+          inv . + >r
+
+          // H = H1 - H2 - borrow
+          inv . +
+          r>
+        ;
+
+
+        -cy
+
+
+        : f5a/mul ( H1 H2 L1 L2 - ... 0 H L )
+
+          // ------------------------------------------------
+          // z0 = high18(L1*L2), unsigned 18x18
+          // ------------------------------------------------
+
+          over over                 // H1 H2 L1 L2 L1 L2
+
+          dup >r a!                 // save L2, A=L2
+          17. >r
+          dup dup xor               // L1 L1 0
+          begin . +* unext          // signed L1*unsigned L2
+
+          // If L1 has bit17 set, +* interpreted it as negative.
+          // unsigned product therefore needs +L2 in high word.
+
+          over -if
             drop
-            >r 2* 1 xor r> ..
+            r> . +
           else
             drop
-            >r 2* r>
+            r> drop
           then
-          2* 2* 2*
-        ;
+
+          >r drop r>                // H1 H2 L1 L2 z0
+          >r                        // / z0
 
 
-        : fp5/main
-          @b            // h1
-          @b            // h2
-          ( h1 h2 )
+          // ------------------------------------------------
+          // z2 = H1*H2
+          // ------------------------------------------------
+
+          >r >r                     // save L2,L1
+          over over f5a/m9          // H1 H2 0 z2
+          drop drop                 // A still contains z2
+          r> r>                     // restore L1,L2
+
+          a >r                      // / z2 z0
+
+
+          // ------------------------------------------------
+          // reorder
+          //
+          // H1 H2 L1 L2
+          // -> H1 L2 H2 L1
+          // ------------------------------------------------
+
+          a! >r a r>                // swap L1,L2
           >r
-          ( h1 / h2 )
-          @b            // h1 l1
-          ( h1 l1 / h2 )
-          fp5/extend
-          ( H1 L1 / h2 )
-          >r ! r>       // output H1
-          ( L1 / h2 )
-          r> @b
-          ( L1 h2 l2 )
-          fp5/extend
-          ( L1 H2 L2 )
-          >r ! // output H2
-          ( L1 / L2 )
-          ! // output L1
-          r> !  // output L2
-          fp5/main
+          a! >r a r>                // swap H2,L2
+          r>
+
+
+          // ------------------------------------------------
+          // cross products
+          //
+          // p2 = H2*L1
+          // p1 = H1*L2
+          // ------------------------------------------------
+
+          f5a/m9                    // H1 L2 p2H p2L
+          >r >r                     // save p2
+
+          f5a/m9                    // p1H p1L
+          r> r>                     // p1H p1L p2H p2L
+
+
+          // reorder for 36-bit fp5b/add:
+          //
+          // p1H p2H p1L p2L
+
+          >r
+          a! >r a r>
+          r>
+
+          f5a/add                   // crossH crossL
+
+
+          // ------------------------------------------------
+          // add:
+          //
+          //     z2 << 18
+          //   + z0
+          //
+          // R has: z2 z0
+          // ------------------------------------------------
+
+          r> r>                     // crossH crossL z2 z0
+
+          >r
+          a! >r a r>
+          r>                        // crossH z2 crossL z0
+
+          f5a/add                   // C_H C_L
+
+
+          // ------------------------------------------------
+          // result = C >> 8
+          // ------------------------------------------------
+
+          a!                        // A=C_L
+          7. >r
+          0 over                    // C_H 0 C_H
+          begin . +* unext          // shift T:A eight times
+
+          0x3ff and                // ... 0 H
+          a                        // ... 0 H L
         ;
+
+
+        : f5a/swap ( - H2 H1 L2 L1 ) // read swapped mantissa from 201
+          @b >r      // H1
+          @b r>      // H2
+          @b >r      // L1
+          @b r>      // L2
+        ;
+
+
+        : f5a/in ( - H1 H2 L1 L2 ) // read mantissa from node 201
+          @b         // H1
+          @b         // H2
+          @b         // L1
+          @b         // L2
+        ;
+
+
+
+
 
       ramWords:
-      - 0x25DFA
-      - 0x08000
-      - 0x19407
-      - 0x3A8DF
-      - 0x00001
-      - 0x38CB2
-      - 0x11409
-      - 0x3A8DA
-      - 0x269B2
-      - 0x364DD
-      - 0x01FBA
-      - 0x01600
-      - 0x2FA9A
-      - 0x27FB2
-      - 0x13400
-      - 0x2FA2A
-      - 0x27AB2
-      - 0x1140A
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x04A55
+      - 0x00145
+      - 0x2A812
+      - 0x00000
+      - 0x209D2
+      - 0x2E2EA
+      - 0x26C8D
+      - 0x2BDBB
+      - 0x00011
+      - 0x243B2
+      - 0x2C572
+      - 0x2E29A
+      - 0x23555
+      - 0x136D3
+      - 0x2C1BA
+      - 0x3CC55
+      - 0x24DE2
+      - 0x32DB0
+      - 0x3A6B0
+      - 0x2E6B0
+      - 0x27555
+      - 0x20F92
+      - 0x2EA12
+      - 0x00011
+      - 0x2ED92
+      - 0x389B2
+      - 0x2C572
+      - 0x2121E
+      - 0x3ACB0
+      - 0x1141F
+      - 0x3ACEA
+      - 0x2E29A
+      - 0x2E8BA
+      - 0x20FB2
+      - 0x13407
+      - 0x3A29A
+      - 0x26EBA
+      - 0x2A88A
+      - 0x268AA
+      - 0x2EE9A
+      - 0x27607
+      - 0x2E8B2
+      - 0x13407
+      - 0x26CBA
+      - 0x2A88A
+      - 0x26CB2
+      - 0x1360D
+      - 0x26CBA
+      - 0x2A88A
+      - 0x26CB2
+      - 0x1360D
+      - 0x2BDBF
+      - 0x00007
+      - 0x00000
+      - 0x209B2
+      - 0x2C577
+      - 0x003FF
+      - 0x3EE55
+      - 0x00802
+      - 0x27FBA
+      - 0x00C55
+      - 0x01F02
+      - 0x01555
       - 0x15555
       startup:
-        entryPoint: 0x00A
+        entryPoint: 0x175
         p: 0x000
         a: 0x000
         b: 0x000
@@ -25292,136 +25480,203 @@ projects:
     - coordinate: 302
       enabled: true
       sourceCode: >+
-        ( CVM2 node 302. VM 32 bit floatingpoint stage 4 node. split exponent/mantissa stream )
+        ( CVM2 node 302. VM 32 bit floatingpoint step 4a.
 
-        (
-          in: eehhll      {from node 303}
-          out: ee         {to node 402, pass exponent}
-          out: hhll       {to node 301, pass mantissa}
-          out: c          {to node 303, return compare result}
 
-          c: magnitude compare result
-            0x8000 : f1 >  f2
-            0      : f1 <= f2
+        this node is a slave of node 303.
+
+
+        mantissa preparation, addition and multiplication.
+
+          in: ee         {exponent from node 202}
+
+          out: e         {exponent to node 402}
+
         )
 
-        entry fp4/main
 
-        # right /b
+        # 301 import
+
+
+        # up /b
+
+        # down /a
+
+        entry f4a/main
 
 
         # 0 org
 
 
-        : fp4/sub inv . +
-
-        : fp4/inc 1 . + ;
-
-
-        : fp4/gt ( d-c )
-          -if
-            drop 0x20000 ;       // f1 < f2
-          then
-          if
-            drop 0x8000 ;        // f1 > f2
-          then
-          // d = 0 -> equal, leave 0
+        : f4a/swap ( e1 e2 - e2 e1 )
+          A[ f5a/swap ]] lit !b
+          over >r >r drop r> r>
         ;
 
 
-        : fp4/result
-          fp4/gt
+        : f4a/in ( e1 e2 - e1 e2 )
+          A[ f5a/in ]] lit !b
+        ;
+
+
+
+        : f4a/- ( a b - c ) inv . +
+
+        : f4a/inc ( a - b ) 1 . + ;
+
+
+        : f4a/align ( e1 e2 - e )
+          // e1 >= e2
+          // align exponent for addition or subtraction
+          over over xor
+          if // e1 > e2
+            drop 1 . +
+            A[ f5a/shr2 ]] lit !b
+            f4a/align ;
+          then
+          drop
+          drop
+          ;
+
+        : f4a/add ( e1 e2 - e )
+          f4a/align
+          A[ f5a/add ]] lit !b
+        : f4a/pass2
+          A[ f5a/up ]] lit !b
+          A[ ! ! ]] lit !b
+        ;
+
+
+        : f4a/sub ( e1 e2 - e )
+          f4a/align
+          A[ f5a/sub ]] lit !b
+          f4a/pass2
+        ;
+
+
+        : f4a/mul ( e1 e2 - e )
+          + // add exponents
+          A[ f5a/mul ]] lit !b
+          f4a/pass2
+        ;
+
+
+        : f4a/div ( e1 e2 - e )
+          f4a/- // subtract exponents
+          f4a/pass2
+          f4a/pass2
+        ;
+
+
+        : f4a/pass1 ( e1 e2 - e1 )
+          drop
+          A[ drop >r ]] lit !b
+          A[ drop r> ]] lit !b
+          f4a/pass2
+        ;
+
+
+        // combined entry points for node 303
+
+
+        : f4a/iadd  f4a/in   f4a/add ;
+
+        : f4a/sadd  f4a/swap f4a/add ;
+
+
+        : f4a/isub  f4a/in   f4a/sub ;
+
+        : f4a/ssub  f4a/swap f4a/sub ;
+
+
+        : f4a/first  f4a/in   f4a/pass1 ;
+
+        : f4a/second f4a/swap f4a/pass1 ;
+
+
+        : f4a/imul  f4a/in   f4a/mul ;
+
+        : f4a/idiv  f4a/in   f4a/div ;
+
+
+        : f4a/main
+          down b!
+          @b @b
+          ( e1 e2 )
+          left b!
+          r---           // become a slave
+          up b!
+          ( e )
           !b
-        : fp4/main
-
-          up a!
-          @b dup ! // e1
-          @b dup ! // e2
-          fp4/sub 
-          ( de ) // difference of exponenets
-
-          left a!
-          @b dup ! // h1
-          @b dup ! // h2
-          fp4/sub
-          ( de dh ) // difference of high
-          @b dup ! // l1
-          @b dup ! // l2
-          fp4/sub 
-          ( de dh dl ) // difference of low
-          // send back compare output
-          >r >r .. if fp4/result ; then
-          r> if fp4/result ; then
-          r> fp4/result ;
-
-
+          f4a/main
+        ;
       ramWords:
+      - 0x05B82
+      - 0x1343A
+      - 0x2E8EA
+      - 0x26C55
+      - 0x05B55
+      - 0x1343D
       - 0x329F2
       - 0x049F5
       - 0x00001
-      - 0x1B406
-      - 0x3BD55
-      - 0x20000
-      - 0x19409
-      - 0x3BD55
-      - 0x08000
-      - 0x15555
-      - 0x13403
-      - 0x089B2
-      - 0x04A03
-      - 0x00145
-      - 0x0BF92
-      - 0x0B600
-      - 0x04A03
-      - 0x00175
-      - 0x0BF92
-      - 0x0B600
-      - 0x00D2A
-      - 0x00D2A
+      - 0x20FE2
+      - 0x1940F
+      - 0x3BDB0
+      - 0x00001
+      - 0x05B41
+      - 0x13402
+      - 0x3A255
+      - 0x13409
+      - 0x05BB2
+      - 0x1360D
+      - 0x05B12
       - 0x13400
-      - 0x2E8B2
-      - 0x1941A
-      - 0x1140A
-      - 0x2731C
-      - 0x1140A
-      - 0x2770A
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x0BAB2
+      - 0x09555
+      - 0x13409
+      - 0x05BB2
+      - 0x13610
+      - 0x11413
+      - 0x3DD22
+      - 0x13415
+      - 0x11413
+      - 0x13406
+      - 0x13413
+      - 0x11413
+      - 0x3BD27
+      - 0x3A8B2
+      - 0x3ACB2
+      - 0x09713
+      - 0x13404
+      - 0x11410
+      - 0x13400
+      - 0x11410
+      - 0x13404
+      - 0x11417
+      - 0x13400
+      - 0x11417
+      - 0x13404
+      - 0x11421
+      - 0x13400
+      - 0x11421
+      - 0x13404
+      - 0x1141B
+      - 0x13404
+      - 0x1141E
+      - 0x04B02
+      - 0x00115
+      - 0x01DA2
+      - 0x00175
+      - 0x135D5
+      - 0x04B22
+      - 0x00145
+      - 0x11435
       - 0x15555
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00C
+        entryPoint: 0x035
         p: 0x000
         a: 0x000
         b: 0x000
@@ -25432,117 +25687,381 @@ projects:
       postMortemEnabled: false
     - coordinate: 303
       enabled: true
-      sourceCode: >+
-        ( CVM2 node 303. VM 32 bit floatingpoint stage 3 node. split data stream )
+      sourceCode: >-
+        ( CVM2 node 303. VM 32 bit floatingpoint step 3a.
 
-        (
-          in: ottsseehhll   {from node 304}
-          out: ottss        {to node 403}
-          out: eehhll       {to node 302}
-          in: c             {from node 302}
-          out: c            {to node 403}
+
+        this node is a master of node 302.
+
+
+        operation selection, operand ordering and sign processing.
+
+          in: ss            {from node 203}
+        optional:
+          in: c             {from node 203}
+
+          out: s            {to node 403}
 
           c: magnitude compare result
-            0x8000 : f1 >  f2
-            0      : f1 <= f2
+            0x8000  : |f1| >  |f2|
+            0       : |f1| == |f2|
+            0x20000 : |f1| <  |f2|
         )
 
-        entry fp3/main
 
-        # up /a
+        # 302 import
 
-        # left /b
+
+        # down /a
+
+        # right /b
+
+        entry f3a/main
 
 
         # 0 org
 
 
-        : fp3/main
-          @b ! // o operation
-          @b ! // t1
-          @b ! // t2
-          @b ! // s1
-          @b ! // s2
-          right a!
-          @b ! // e1
-          @b ! // e2
-          @b ! // h1
-          @b ! // h2
-          @b ! // l1
-          @b ! // l2
-          @ // read c
-          up a!
-          ! // c
-          fp3/main
-        ; 
 
+        // select and forward original operand 1
+
+
+        : f3a/first ( s1 s2 - s1 )
+          A[ f4a/first ; ]] lit !b
+          drop
+        ;
+
+
+
+        // select and forward original operand 2
+
+
+        : f3a/second ( s1 s2 - s2 )
+          A[ f4a/second ; ]] lit !b
+          >r drop r>
+        ;
+
+
+
+        // select operand 2 iff c == code,
+
+        // otherwise select operand 1.
+
+        //
+
+        // equality of magnitudes may therefore be assigned
+
+        // to operand 1 by choosing code 8000 or 20000.
+
+
+        : f3a/smaler @ 0x8000
+
+        : f3a/select ( s1 s2 c code - s )
+          xor
+          if
+            drop f3a/first ;
+          then
+          drop f3a/second
+        ;
+
+        : f3a/larger @ 0x20000 f3a/select ;
+
+
+
+
+
+        // ADD and SUB
+
+        //
+
+        // SUB has already been converted to ADD semantics by
+
+        // node 203 by flipping s2.
+
+        //
+
+        // same signs:
+
+        //   c=8000  -> iadd, sign s1
+
+        //   c=0000  -> iadd, sign s1
+
+        //   c=20000 -> sadd, sign s1 (=s2)
+
+        //
+
+        // different signs:
+
+        //   c=8000  -> isub, sign s1
+
+        //   c=0000  -> isub, sign +0
+
+        //   c=20000 -> ssub, sign s2
+
+
+        : f3a/add ( s1 s2 - s )
+          over over xor
+          if
+            // different signs
+            drop
+            @
+
+            // 20000 is negative as an 18-bit F18 value
+            -if
+              drop
+              A[ f4a/ssub ; ]] lit !b
+              >r drop r>
+              ;
+            then
+
+            // c is now either 8000 or 0.
+            // Both use original orientation.
+            >r
+            A[ f4a/isub ; ]] lit !b
+            drop
+            r>
+
+            // nonzero c -> operand 1 supplied the sign
+            if
+              drop ;
+            then
+
+            // exact cancellation
+            dup xor
+            ;
+          then
+
+          // same signs
+          drop
+          @
+
+          // only c=20000 requires swapped orientation
+          . -if
+            drop
+            A[ f4a/sadd ; ]] lit !b
+            drop
+            ;
+          then
+
+          drop
+          A[ f4a/iadd ; ]] lit !b
+          drop
+        ;
+
+
+
+        // MIN
+
+        //
+
+        // opposite signs:
+
+        //   negative operand wins; c is ignored.
+
+        //
+
+        // same positive signs:
+
+        //   smaller magnitude wins.
+
+        //   operand 2 only when c=8000.
+
+        //
+
+        // same negative signs:
+
+        //   larger magnitude wins.
+
+        //   operand 2 only when c=20000.
+
+
+        : f3a/min ( s1 s2 - s )
+          over over xor
+          if
+            // opposite signs
+            drop
+            @ drop
+
+            // s2 negative -> operand 2
+            if
+              f3a/second ;
+            then
+
+            // s2 positive -> operand 1
+            f3a/first ;
+          then
+
+          // same signs
+          drop
+          over
+
+          // both negative: larger magnitude
+          . if
+            drop
+            f3a/larger ;
+          then
+
+          // both positive: smaller magnitude
+          drop
+          f3a/smaler
+        ;
+
+
+
+        // MAX
+
+        //
+
+        // opposite signs:
+
+        //   positive operand wins; c is ignored.
+
+        //
+
+        // same positive signs:
+
+        //   larger magnitude wins.
+
+        //   operand 2 only when c=20000.
+
+        //
+
+        // same negative signs:
+
+        //   smaller magnitude wins.
+
+        //   operand 2 only when c=8000.
+
+
+        : f3a/max ( s1 s2 - s )
+          over over xor
+          if
+            // opposite signs
+            drop
+            @ drop
+
+            // s2 negative -> operand 1
+            if
+              f3a/first ;
+            then
+
+            // s2 positive -> operand 2
+            f3a/second ;
+          then
+
+          // same signs
+          drop
+          over
+
+          // both negative: smaller magnitude
+          if
+            drop
+            f3a/smaler ;
+          then
+
+          // both positive: larger magnitude
+          drop
+          f3a/larger
+        ;
+
+
+
+        // MUL and DIV don't receive c.
+
+        // Node 302 combined entries perform f4a/in themselves.
+
+
+        : f3a/mul ( s1 s2 - s )
+          A[ f4a/imul ; ]] lit !b
+          xor
+        ;
+
+
+        : f3a/div ( s1 s2 - s )
+          A[ f4a/idiv ; ]] lit !b
+          xor
+        ;
+
+
+
+        : f3a/main
+          down a!
+          @
+          @
+          ( s1 s2 )
+          --l-
+          ( s )
+          up a!
+          !
+          f3a/main
+        ;
       ramWords:
-      - 0x01A02
-      - 0x0BE02
-      - 0x0BF2A
-      - 0x01A12
-      - 0x001D5
-      - 0x2BF2A
-      - 0x01A02
-      - 0x0BF2A
-      - 0x01A02
-      - 0x0BE12
-      - 0x00145
-      - 0x2BAB2
+      - 0x05BED
+      - 0x1142D
+      - 0x05BBA
+      - 0x1142F
+      - 0x3AC55
+      - 0x03DB2
+      - 0x08000
+      - 0x39309
+      - 0x3B700
+      - 0x3B702
+      - 0x03DB2
+      - 0x20000
+      - 0x11407
+      - 0x20FE2
+      - 0x19418
+      - 0x3BE6B
+      - 0x3BD22
+      - 0x1142B
+      - 0x2E29D
+      - 0x2FD22
+      - 0x11429
+      - 0x3AC67
+      - 0x3B555
+      - 0x24355
+      - 0x3BEB2
+      - 0x1B41D
+      - 0x3BD22
+      - 0x11427
+      - 0x3B555
+      - 0x3BD22
+      - 0x11425
+      - 0x3B555
+      - 0x20FE2
+      - 0x19426
+      - 0x3BEEA
+      - 0x19425
+      - 0x11402
       - 0x11400
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x3AFB2
+      - 0x19429
+      - 0x3B70A
+      - 0x3B705
+      - 0x20FE2
+      - 0x19430
+      - 0x3BEEA
+      - 0x1942F
+      - 0x11400
+      - 0x11402
+      - 0x3AF62
+      - 0x3B705
+      - 0x3B70A
+      - 0x05BE5
+      - 0x11431
+      - 0x05BE5
+      - 0x11433
+      - 0x04A0A
+      - 0x00115
+      - 0x029B2
+      - 0x13575
+      - 0x04A2A
+      - 0x00145
+      - 0x11437
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x037
         p: 0x000
         a: 0x000
         b: 0x000
@@ -26514,131 +27033,276 @@ projects:
       postMortemEnabled: false
     - coordinate: 401
       enabled: true
-      sourceCode: >+
-        ( CVM2 node 401. VM 32 bit floatingpoint stage 5a node. mantissa handling )
+      sourceCode: >-
+        ( CVM2 node 401. VM 32 bit floatingpoint step 5b.
 
-        (
-          1. read extended mantissas from node 301
-          2. wait for operation instruction
 
-          in: HHLL       {extended mantissa from node 301}
-          out: HHLL      {extended mantissa to node 501}
+        this node is a slave of node 402.
+
+
+        node 402 sends one of the following instructions:
+         A[ f5b/div ; ]] for division
+         A[ f5b/pass ; ]] for all other operations
+
+        result passing and division.
+
+          in: H1 H2 L1 L2 {extended mantissas from node 301}
+        alternative
+          in: H L          {extended result mantissa from node 301}
+
+          out: H L         {extended result mantissa to node 402}
+
         )
 
 
-        entry fp5a/main
+        # up /b     // node 301
 
-        # down /a
-
-        # up /b
-
+        # left /a   // node 402
 
         # 0 org
 
+        entry f5b/main
 
-        : fp5a/swapc
-          ( H1 H2 L1 L2 )
-          over >r >r  drop
-          ( H1 H2 / L1 L2 )
-          over r> r>
-          ( H1 H2 H1 L2 L1 )
+
+
+        +cy
+
+
+        : f5b/sec ( x - x )
+          // force carry = 1
+          dup dup xor inv dup . + drop
         ;
 
 
-        : fp5a/swap
-          ( H1 H2 L1 L2 )
-          >r >r 
-          !         //  H2
-          !         //  H1
+
+        : f5b/dbl ( RL DH RH - RL' DH RH' )
+          // signed 36-bit R <<= 1
+          // preserve DH in the middle
+
+          >r >r
+          clc
+          dup . +
           r> r>
-          !         // L2
-          !         // L1
-          ;
+          dup . +
+        ;
 
-        : fp5a/add
 
-        : fp5a/sub
 
-        : fp5a/mul
+        : f5b/addd ( RL DH RH - RL' DH RH' )
+          // R += D
+          // DL is in A
 
-        : fp5a/div
+          >r >r
 
-        : fp5a/nop
+          clc
+          a . +
+
+          r> r>
+          over . +
+        ;
+
+
+
+        : f5b/subd ( RL DH RH - RL' DH RH' )
+          // R -= D
+          // DL is in A
+
+          >r >r
+
+          f5b/sec
+          a inv . +
+
+          r> r>
+          over inv . +
+        ;
+
+
+
+        : f5b/q0 ( QL QH - QL' QH' )
+          // Q <<= 1
+
           >r
+          clc
+          dup . +
+          r>
+          dup . +
+        ;
+
+
+
+        : f5b/q1 ( QL QH - QL' QH' )
+          // Q = (Q << 1) | 1
+
           >r
-          >r
-          !         // H1
-          r> !      // H2
-          r> !      // L1
-          r> !      // L2
-          ;
+          f5b/sec
+          dup . +
+          r>
+          dup . +
+        ;
 
 
 
-        : fp5a/main
-          @b 
-          @b 
-          @b 
-          @b
+        : f5b/div ( H1 H2 - H L )
+          @b @b
           ( H1 H2 L1 L2 )
+
+          // Arrange the input for the old division core.
+          //
+          // desired:
+          //
+          //   ... L1 H2 H1
+          //       RL DH RH
+          //
+          //   A = L2 = DL
+          //
+          // stale H1 H2 below the working values are harmless.
+
+          >r
+          a!
+          over >r
+          a
+          over
+          r> r>
+          a!
+
+          ( ... L1 H2 H1 )     // A=L2
+
+          // Initial non-restoring remainder:
+          //
+          // R = M1 - M2
+
+          f5b/subd
+          ( ... RL DH RH )
+
+          // quotient starts at zero
+
+          0 0
+          ( ... RL DH RH QL QH )
+
+          // integer bit + 26 fractional bits
+
+          26. >r
+          begin
+
+            >r >r
+            ( ... RL DH RH / QH QL )
+
+            // remember sign of R before doubling
+
+            dup >r
+
+            f5b/dbl
+
+            r> -if
+              drop
+
+              // old R was negative:
+              // doubled R += D
+              // quotient bit = 0
+
+              f5b/addd
+
+              r> r>
+              f5b/q0
+
+            else
+              drop
+
+              // old R was non-negative:
+              // doubled R -= D
+              // quotient bit = 1
+
+              f5b/subd
+
+              r> r>
+              f5b/q1
+
+            then
+
+          unext
+
+          // division core leaves:
+          //
+          //   ... QL QH
+          //
+          // f5b/pass expects H L.
+          // Since stale stack entries are allowed, over is
+          // the cheapest way to expose QH QL on top.
+
+          over
+        -cy
+
+
+        : f5b/pass ( H L - )
+          left a!
+          over ! !
+        ;
+
+
+
+
+        : f5b/main
+          @b
+          @b
+          ( H L )       // non-division
+          ( H1 H2 )     // division
           --l-
-          fp5a/main ;
-
-
+          f5b/main
+        ;
       ramWords:
-      - 0x208BA
-      - 0x3AF9A
-      - 0x27555
-      - 0x2E82A
-      - 0x0AC9A
+      - 0x24DE2
+      - 0x32DB0
+      - 0x3B555
+      - 0x2E8B2
+      - 0x136D3
+      - 0x249F2
+      - 0x26C92
+      - 0x3D555
+      - 0x2E8B2
+      - 0x136D3
+      - 0x229F2
+      - 0x26C82
+      - 0x3D555
+      - 0x2E8B2
+      - 0x13600
+      - 0x226B0
+      - 0x26C82
+      - 0x329F5
+      - 0x2F6D3
+      - 0x249F2
+      - 0x26DB0
+      - 0x15555
+      - 0x2F600
+      - 0x249F2
+      - 0x26DB0
+      - 0x15555
+      - 0x01FBA
+      - 0x2AFBA
+      - 0x22F9A
+      - 0x26AB2
+      - 0x1360D
+      - 0x05D12
+      - 0x00000
+      - 0x00000
+      - 0x0001A
+      - 0x2E9B2
+      - 0x2E892
+      - 0x2F603
+      - 0x2722B
+      - 0x3B608
+      - 0x26CB2
+      - 0x13612
+      - 0x1162E
+      - 0x3B60D
+      - 0x26CB2
+      - 0x13616
+      - 0x1CFB2
+      - 0x04A82
+      - 0x00175
       - 0x0BA55
-      - 0x2E8BA
-      - 0x0AC2A
-      - 0x27A9A
-      - 0x0B555
-      - 0x01F02
-      - 0x009B2
+      - 0x01FB2
       - 0x13575
-      - 0x1140A
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x11432
       - 0x15555
       - 0x15555
       - 0x15555
@@ -26651,7 +27315,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00A
+        entryPoint: 0x032
         p: 0x000
         a: 0x000
         b: 0x000
