@@ -62,54 +62,105 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate>
-              <Button Click="OnNodeClick"
-                      Margin="3"
-                      Padding="0"
-                      HorizontalContentAlignment="Stretch"
-                      VerticalContentAlignment="Stretch"
-                      ToolTip="{Binding ToolTip}"
-                      Tag="{Binding}">
-                <Button.Style>
-                  <Style TargetType="Button">
-                    <Setter Property="Background" Value="Transparent" />
-                    <Setter Property="BorderThickness" Value="0" />
-                  </Style>
-                </Button.Style>
-                <Border BorderBrush="{Binding NodeBorderBrushColor}"
-                        BorderThickness="2"
-                        Background="{Binding NodeBackgroundBrush}"
-                        CornerRadius="3">
-                  <Grid>
-                    <Grid.RowDefinitions>
-                      <RowDefinition Height="Auto" />
-                      <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0"
-                               Text="{Binding CoordinateText}"
-                               FontFamily="Consolas"
-                               FontWeight="Bold"
-                               FontSize="12"
-                               HorizontalAlignment="Center" />
-                    <TextBlock Grid.Row="1"
-                               Text="{Binding CurrentInstructionText}"
-                               FontFamily="Consolas"
-                               FontSize="9"
-                               HorizontalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Row="0" Text="&#8592;" FontWeight="Bold" Foreground="#1565C0"
-                               HorizontalAlignment="Left" Margin="1,0,0,0"
-                               ToolTip="Stalled on a port READ (inbound)"
-                               Visibility="{Binding InboundArrowVisibility}" />
-                    <TextBlock Grid.Row="0" Text="&#8594;" FontWeight="Bold" Foreground="#B33A3A"
-                               HorizontalAlignment="Right" Margin="0,0,1,0"
-                               ToolTip="Stalled on a port WRITE (outbound)"
-                               Visibility="{Binding OutboundArrowVisibility}" />
-                    <TextBlock Grid.Row="0" Text="!" FontWeight="Bold" Foreground="#B33A3A"
-                               HorizontalAlignment="Center" VerticalAlignment="Top"
-                               Visibility="{Binding ErrorVisibility}" />
-                  </Grid>
-                </Border>
-              </Button>
+              <!-- 3x3 outer grid: the node itself sits in the center cell, and the four Auto edge
+                   rows/columns are a reserved gutter for this node's own read/write arrows, since the
+                   DataTemplate itself carries no outer margin, so one node's gutter sits directly against
+                   its neighbor's; a stalled pair (e.g. this node writing Right while its neighbor
+                   reads Left) shows as two arrows meeting in the gap between them. -->
+              <Grid ToolTip="{Binding ToolTip}">
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="12" />
+                  <RowDefinition Height="*" />
+                  <RowDefinition Height="12" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="12" />
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="12" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Up gutter: read = data flowing down into this node, write = flowing up and away. -->
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="&#8595;" FontWeight="Bold" FontSize="9" Foreground="#1565C0"
+                           HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                           ToolTip="Reading via the Up port" Visibility="{Binding UpReadVisibility}" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="&#8593;" FontWeight="Bold" FontSize="9" Foreground="#B33A3A"
+                           HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                           ToolTip="Writing via the Up port" Visibility="{Binding UpWriteVisibility}" />
+
+                <!-- Down gutter: read = flowing up into this node, write = flowing down and away. -->
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="&#8593;" FontWeight="Bold" FontSize="9" Foreground="#1565C0"
+                           HorizontalAlignment="Center" VerticalAlignment="Top"
+                           ToolTip="Reading via the Down port" Visibility="{Binding DownReadVisibility}" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="&#8595;" FontWeight="Bold" FontSize="9" Foreground="#B33A3A"
+                           HorizontalAlignment="Center" VerticalAlignment="Top"
+                           ToolTip="Writing via the Down port" Visibility="{Binding DownWriteVisibility}" />
+
+                <!-- Left gutter: read = flowing right into this node, write = flowing left and away. -->
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="&#8594;" FontWeight="Bold" FontSize="9" Foreground="#1565C0"
+                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                           ToolTip="Reading via the Left port" Visibility="{Binding LeftReadVisibility}" />
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="&#8592;" FontWeight="Bold" FontSize="9" Foreground="#B33A3A"
+                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                           ToolTip="Writing via the Left port" Visibility="{Binding LeftWriteVisibility}" />
+
+                <!-- Right gutter: read = flowing left into this node, write = flowing right and away. -->
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="&#8592;" FontWeight="Bold" FontSize="9" Foreground="#1565C0"
+                           HorizontalAlignment="Left" VerticalAlignment="Center"
+                           ToolTip="Reading via the Right port" Visibility="{Binding RightReadVisibility}" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="&#8594;" FontWeight="Bold" FontSize="9" Foreground="#B33A3A"
+                           HorizontalAlignment="Left" VerticalAlignment="Center"
+                           ToolTip="Writing via the Right port" Visibility="{Binding RightWriteVisibility}" />
+
+                <Button Grid.Row="1" Grid.Column="1"
+                        Click="OnNodeClick"
+                        Margin="1"
+                        Padding="0"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch"
+                        Tag="{Binding}">
+                  <Button.Style>
+                    <Style TargetType="Button">
+                      <Setter Property="Background" Value="Transparent" />
+                      <Setter Property="BorderThickness" Value="0" />
+                    </Style>
+                  </Button.Style>
+                  <Border BorderBrush="{Binding NodeBorderBrushColor}"
+                          BorderThickness="2"
+                          Background="{Binding NodeBackgroundBrush}"
+                          CornerRadius="3">
+                    <Grid>
+                      <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                      </Grid.RowDefinitions>
+                      <TextBlock Grid.Row="0"
+                                 Text="{Binding CoordinateText}"
+                                 FontFamily="Consolas"
+                                 FontWeight="Bold"
+                                 FontSize="12"
+                                 HorizontalAlignment="Center" />
+                      <TextBlock Grid.Row="1"
+                                 Text="{Binding CurrentInstructionText}"
+                                 FontFamily="Consolas"
+                                 FontSize="9"
+                                 HorizontalAlignment="Center"
+                                 TextTrimming="CharacterEllipsis" />
+                      <StackPanel Grid.Row="2" HorizontalAlignment="Center">
+                        <TextBlock Text="RDLU" FontFamily="Consolas" FontSize="8" Foreground="#888"
+                                   HorizontalAlignment="Center"
+                                   ToolTip="Right / Down / Left / Up port status, below" />
+                        <TextBlock Text="{Binding PortStatusText}" FontFamily="Consolas" FontSize="8" FontWeight="Bold"
+                                   HorizontalAlignment="Center"
+                                   ToolTip="r = reading, W = writing, - = idle, one per RDLU column above" />
+                      </StackPanel>
+                      <TextBlock Grid.Row="0" Text="!" FontWeight="Bold" Foreground="#B33A3A"
+                                 HorizontalAlignment="Center" VerticalAlignment="Top"
+                                 Visibility="{Binding ErrorVisibility}" />
+                    </Grid>
+                  </Border>
+                </Button>
+              </Grid>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
@@ -118,45 +169,79 @@
       <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Center" VerticalAlignment="Stretch" Background="#DDD" />
 
       <DockPanel Grid.Column="2" Margin="8,0,0,0">
-        <TextBlock DockPanel.Dock="Top" Text="I/O pins &amp; data ports" FontWeight="SemiBold" Margin="0,0,0,4" />
+        <TextBlock DockPanel.Dock="Top" Text="I/O pins" FontWeight="SemiBold" Margin="0,0,0,4" />
         <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Foreground="#555" Margin="0,0,0,8"
-                   Text="Every real chip pin (an edge node's port direction with no GA144 neighbor), including the SRAM cluster's node 007/008/009 data ports. Display-only: no device is simulated behind these -- a write always completes and is shown as &quot;last written&quot;; a read completes with the override value below if set, otherwise stalls." />
+                   Text="Every real chip pin (an edge node's port direction with no GA144 neighbor), named the chip's own way (e.g. &quot;705.17&quot;, &quot;709.ai&quot;). Display-only: no device is simulated behind these." />
         <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <ItemsControl ItemsSource="{Binding ExternalPins}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate>
-                <Border BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="0,6">
-                  <StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                      <TextBlock Text="{Binding Label}" FontFamily="Consolas" FontWeight="SemiBold" Width="90" />
-                      <TextBlock Text="{Binding RoleHint}" Foreground="#777" />
+          <StackPanel>
+            <TextBlock Text="Digital pins" FontWeight="SemiBold" Margin="0,0,0,4" />
+            <TextBlock TextWrapping="Wrap" Foreground="#555" Margin="0,0,0,6"
+                       Text="in = high impedance (a read stalls, nothing supplied); hi/low = this side forces the pin; pull = weak pulldown, the chip's own reset default (reads as low here)." />
+            <ItemsControl ItemsSource="{Binding DigitalPins}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="0,6">
+                    <StackPanel>
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Label}" FontFamily="Consolas" FontWeight="SemiBold" Width="90" />
+                        <TextBlock Text="{Binding RoleHint}" Foreground="#777" TextWrapping="Wrap" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                        <TextBlock Text="&#8592;" FontWeight="Bold" Foreground="#1565C0" Margin="0,0,4,0"
+                                   Visibility="{Binding PendingReadVisibility}" ToolTip="A node is currently trying to read this pin" />
+                        <TextBlock Text="&#8594;" FontWeight="Bold" Foreground="#B33A3A" Margin="0,0,4,0"
+                                   Visibility="{Binding PendingWriteVisibility}" ToolTip="A node is currently writing this pin" />
+                        <RadioButton Content="in" IsChecked="{Binding IsIn}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <RadioButton Content="hi" IsChecked="{Binding IsHi}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <RadioButton Content="low" IsChecked="{Binding IsLow}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                        <RadioButton Content="pull" IsChecked="{Binding IsPull}" VerticalAlignment="Center"
+                                     ToolTip="Weak pulldown -- the chip's own reset default" />
+                      </StackPanel>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                      <TextBlock Text="&#8592;" FontWeight="Bold" Foreground="#1565C0" Margin="0,0,4,0"
-                                 Visibility="{Binding PendingReadVisibility}" ToolTip="A node is currently trying to read this pin" />
-                      <TextBlock Text="&#8594;" FontWeight="Bold" Foreground="#B33A3A" Margin="0,0,4,0"
-                                 Visibility="{Binding PendingWriteVisibility}" ToolTip="A node is currently writing this pin" />
-                      <TextBlock Text="{Binding CurrentOverrideText, StringFormat='read value: {0}'}" Margin="0,0,12,0" />
-                      <TextBlock Text="{Binding LastWrittenText, StringFormat='last written: {0}'}" />
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="Analog &amp; bus pins" FontWeight="SemiBold" Margin="0,12,0,4" />
+            <TextBlock TextWrapping="Wrap" Foreground="#555" Margin="0,0,0,6"
+                       Text="A whole-word value in the F18 range (e.g. 0x00001), not a single bit -- an analog node's own ai/ao pin, or the SRAM cluster's 18-bit data/address bus." />
+            <ItemsControl ItemsSource="{Binding TextFieldPins}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border BorderBrush="#DDD" BorderThickness="0,0,0,1" Padding="0,6">
+                    <StackPanel>
+                      <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Label}" FontFamily="Consolas" FontWeight="SemiBold" Width="90" />
+                        <TextBlock Text="{Binding RoleHint}" Foreground="#777" TextWrapping="Wrap" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                        <TextBlock Text="&#8592;" FontWeight="Bold" Foreground="#1565C0" Margin="0,0,4,0"
+                                   Visibility="{Binding PendingReadVisibility}" ToolTip="A node is currently trying to read this pin" />
+                        <TextBlock Text="&#8594;" FontWeight="Bold" Foreground="#B33A3A" Margin="0,0,4,0"
+                                   Visibility="{Binding PendingWriteVisibility}" ToolTip="A node is currently writing this pin" />
+                        <TextBlock Text="{Binding CurrentOverrideText, StringFormat='read value: {0}'}" Margin="0,0,12,0" />
+                        <TextBlock Text="{Binding LastWrittenText, StringFormat='last written: {0}'}" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <TextBox Width="90" Text="{Binding OverrideText, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas"
+                                 ToolTip="Hex value this pin's next read completes with (e.g. 0x00001)." />
+                        <Button Content="Set" Command="{Binding SetOverrideCommand}" Padding="8,2" Margin="6,0,0,0" />
+                        <Button Content="Clear" Command="{Binding ClearOverrideCommand}" Padding="8,2" Margin="4,0,0,0" />
+                      </StackPanel>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                      <TextBox Width="90" Text="{Binding OverrideText, UpdateSourceTrigger=PropertyChanged}" FontFamily="Consolas"
-                               ToolTip="Hex value this pin's next read completes with (e.g. 0x00001)." />
-                      <Button Content="Set" Command="{Binding SetOverrideCommand}" Padding="8,2" Margin="6,0,0,0" />
-                      <Button Content="Clear" Command="{Binding ClearOverrideCommand}" Padding="8,2" Margin="4,0,0,0" />
-                    </StackPanel>
-                  </StackPanel>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
         </ScrollViewer>
       </DockPanel>
     </Grid>
 
     <Border Grid.Row="2" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="8" Margin="0,8,0,0">
       <TextBlock TextWrapping="Wrap"
-                 Text="Click a node to open its own simulator window (all registers, all ports, RAM, ROM, with the current position highlighted). &#8592; = stalled on a port read (inbound), &#8594; = stalled on a port write (outbound), ! = this node's own project source failed to compile at the last Reset." />
+                 Text="Click a node to open its own simulator window (all registers, all ports, RAM, ROM, with the current position highlighted). Each node's own RDLU line shows its four ports' status (r = reading, W = writing, - = idle); a matching blue (read) or red (write) arrow appears in the gap towards the neighbor that port is stalled on. ! = this node's own project source failed to compile at the last Reset." />
     </Border>
   </Grid>
 </Window>
