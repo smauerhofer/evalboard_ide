@@ -43,6 +43,19 @@ public enum F18PendingPortKind
 /// </summary>
 public sealed class F18NodeSimulationState
 {
+  /// <summary>DB001 2.1 "After Reset": "B is set to the address of io." Also the fallback
+  /// <see cref="Ga144SimulatorEngine.Preset"/> uses for a compiled program that used no <c>/b</c>
+  /// directive of its own.</summary>
+  public const int IoRegisterAddress = 0x15D; // F18InstructionSet.Constants["io"]
+
+  /// <summary>DB001 2.1 "After Reset": "P is set to the address configured in the chip layout. For F18A,
+  /// this will always be either a multiport execute or will be ROM address x0aa." This simulator does not
+  /// model the silicon metal-mask "multiport execute" reset vector DB001 mentions for boot-stream-receiving
+  /// nodes specifically -- which physical nodes get that wiring is a fabrication detail this project has
+  /// no data for -- so every node resets to this cold entry instead: the documented fallback, and what a
+  /// node that never receives a boot stream actually keeps running.</summary>
+  public const int ColdEntryAddress = 0x0AA; // F18InstructionSet.CallableRomWords["cold"]
+
   public F18NodeSimulationState(int coordinate)
   {
     Coordinate = coordinate;
@@ -73,6 +86,11 @@ public sealed class F18NodeSimulationState
   /// it, per DB001 2.2 "P9 has no effect on memory decoding").</summary>
   public int P { get; set; }
 
+  /// <summary>DB001 2.1 "After Reset": "Other registers ... are not directly affected by reset" -- unlike
+  /// <see cref="P"/>/<see cref="B"/>/<see cref="Io"/>, <see cref="ResetRuntimeState"/> deliberately leaves
+  /// this untouched (whatever it held before a reset is what it still holds after). Only a compiled
+  /// program's own boot-configuration metadata (<see cref="Ga144SimulatorEngine.Preset"/>, for a
+  /// "configured" node) ever assigns this explicitly.</summary>
   public int A { get; set; }
   public int B { get; set; }
   public int Io { get; set; }
@@ -136,23 +154,34 @@ public sealed class F18NodeSimulationState
   /// data stack.</summary>
   public byte PendingOpcode { get; set; }
 
-  /// <summary>True once this node has been through a bare <see cref="Ga144SimulatorEngine.Reset"/>
-  /// (registers/RAM cleared, factory ROM still compiled and loaded) or a <see cref="Ga144SimulatorEngine.Preset"/>
-  /// (RAM compiled and loaded too) -- the grid and detail window show placeholder/neutral state only
-  /// before either has ever run once.</summary>
+  /// <summary>True once this node has been through a bare <see cref="Ga144SimulatorEngine.Reset"/> (DB001
+  /// 2.1's real hardware reset, factory ROM compiled and loaded, RAM left exactly as it was) or a
+  /// <see cref="Ga144SimulatorEngine.Preset"/> (RAM compiled and loaded too) -- the grid and detail window
+  /// show placeholder/neutral state only before either has ever run once.</summary>
   public bool IsInitialized { get; set; }
 
-  /// <summary>Resets every field to the state both <see cref="Ga144SimulatorEngine.Reset"/> and
-  /// <see cref="Ga144SimulatorEngine.Preset"/> start a freshly (re)initialized node from, before they
-  /// diverge (a bare RAM clear vs. also compiling and loading RAM) -- RAM/ROM themselves are repopulated
-  /// separately by the caller (RAM cleared to zero either way; ROM always freshly compiled from the ROM
-  /// library by both), since which words they hold is not this method's own concern.</summary>
+  /// <summary>
+  /// DB001 2.1 "After Reset", transcribed directly (quoted verbatim by Stefan, 2026-09-23): "P is set to
+  /// the address configured in the chip layout... io is set to the state it would have after a program
+  /// wrote x15555 into the register. B is set to the address of io. Stack pointers are set to the same
+  /// initial condition on every reset. Other registers, stack contents, and RAM are not directly affected
+  /// by reset." Concretely: <see cref="P"/> := <see cref="ColdEntryAddress"/>, <see cref="Io"/> := x15555,
+  /// <see cref="B"/> := <see cref="IoRegisterAddress"/>, both stacks cleared (this simulator's List-based
+  /// stacks have no separate "pointer" to reset -- clearing them is the closest equivalent: nothing below
+  /// an empty pointer is reachable either way). <see cref="A"/> is deliberately left untouched (DB001: "not
+  /// directly affected"), and RAM/ROM are the CALLER's own concern -- both <see cref="Ga144SimulatorEngine.Reset"/>
+  /// and <see cref="Ga144SimulatorEngine.Preset"/> start a freshly (re)initialized node from this same
+  /// baseline before they diverge (a bare Reset then leaves RAM alone entirely, per DB001 above; Preset
+  /// clears and recompiles it, "loading the project" being a distinct operation from the reset itself).
+  /// <see cref="Carry"/> is the one exception to "not directly affected": DB001 2.3.3 says it is genuinely
+  /// unpredictable, and this simulator picks a deterministic 0 instead purely as its own simplification
+  /// (see that property's own remarks) -- not something DB001 2.1 itself specifies.
+  /// </summary>
   public void ResetRuntimeState()
   {
-    P = 0;
-    A = 0;
-    B = 0;
-    Io = 0;
+    P = ColdEntryAddress;
+    B = IoRegisterAddress;
+    Io = 0x15555;
     Carry = 0;
     ParameterStack.Clear();
     ReturnStack.Clear();

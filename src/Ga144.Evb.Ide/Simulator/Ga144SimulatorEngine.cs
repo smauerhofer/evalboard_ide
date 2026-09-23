@@ -128,21 +128,26 @@ public sealed partial class Ga144SimulatorEngine
 
   /// <summary>
   /// Performs a bare hardware reset of every one of the 144 nodes -- literally "resets the chip", Stefan's
-  /// own words (2026-09-23) drawing the line between this and <see cref="Preset"/>: "the 'Reset' button
-  /// resets the chip. No RAM/ROM or register loaded. just reset each node." -- refined the same day once
-  /// Stefan clarified that the real factory ROM must ALWAYS be present regardless: "after simulator
-  /// 'Reset' the ROM must be filled with the node's ROM code. the ROM code must always be filled." Real
-  /// silicon always runs its factory ROM no matter whether RAM has ever been loaded (see
-  /// <see cref="F18NodeSimulationState.Rom"/>'s own remarks), so a bare reset is not "nothing loaded" after
-  /// all -- it is "nothing of THIS PROJECT'S OWN loaded". Concretely, per node:
-  ///  1. Registers/stacks/pending-port-state all go back to their
-  ///     <see cref="F18NodeSimulationState.ResetRuntimeState"/> defaults (P/A/B/Io/Carry := 0, both stacks
-  ///     empty -- this simulator's own "nothing has ever run here" baseline, distinct from DB001 2.1's
-  ///     documented power-up reset, which is what <see cref="Preset"/> models for an unconfigured node
-  ///     instead).
-  ///  2. RAM is cleared to all zero and left that way -- this node's own project source is never even
-  ///     read by a bare Reset (unlike <see cref="Preset"/>, which compiles and loads it).
-  ///  3. ROM is compiled from <see cref="Ga144RomLibrary"/> and loaded via
+  /// own words (2026-09-23) drawing the line between this and <see cref="Preset"/>, refined twice the same
+  /// day as Stefan clarified exactly what DB001 2.1 ("After Reset") actually says should happen:
+  ///  1. "after simulator 'Reset' the ROM must be filled with the node's ROM code. the ROM code must
+  ///     always be filled." -- real silicon always runs its factory ROM no matter whether RAM has ever
+  ///     been loaded (see <see cref="F18NodeSimulationState.Rom"/>'s own remarks), so a bare reset is not
+  ///     "nothing loaded" after all -- it is "nothing of THIS PROJECT'S OWN loaded".
+  ///  2. DB001 2.1 itself, quoted verbatim by Stefan: "P is set to the address configured in the chip
+  ///     layout... io is set to the state it would have after a program wrote x15555 into the register. B
+  ///     is set to the address of io. Stack pointers are set to the same initial condition on every reset.
+  ///     Other registers, stack contents, and RAM are not directly affected by reset." -- so a bare reset
+  ///     does NOT clear RAM (it is a real hardware reset, not a factory-fresh chip), and does NOT touch A.
+  /// Concretely, per node:
+  ///  1. Registers/stacks/pending-port-state go back to their
+  ///     <see cref="F18NodeSimulationState.ResetRuntimeState"/> defaults -- P/B/Io to their DB001-specified
+  ///     values, both stacks cleared, <see cref="F18NodeSimulationState.A"/> left exactly as it was (see
+  ///     that property's own remarks).
+  ///  2. RAM is left completely untouched -- this node's own project source is never even read by a bare
+  ///     Reset (unlike <see cref="Preset"/>, which compiles and loads it), and whatever RAM held before
+  ///     (from an earlier Preset, or Steps since) survives the reset exactly as DB001 says it should.
+  ///  3. ROM is (re)compiled from <see cref="Ga144RomLibrary"/> and loaded via
   ///     <see cref="F18NodeCompilationService.CompileRom"/> -- the same compilation <see cref="Preset"/>
   ///     itself uses for ROM, so the two can never disagree about what a node's factory ROM contains. A
   ///     node whose ROM source fails to compile keeps a blank (all-zero) ROM image and records why in
@@ -159,8 +164,10 @@ public sealed partial class Ga144SimulatorEngine
     foreach (F18NodeSimulationState state in _nodes.Values)
     {
       state.ResetRuntimeState();
-      Array.Clear(state.Ram);
       Array.Clear(state.Rom);
+      // RAM is deliberately left untouched here -- DB001 2.1: "RAM ... [is] not directly affected by
+      // reset." Whatever an earlier Preset/Step run left behind survives a bare Reset exactly as real
+      // silicon would leave it.
 
       try
       {
@@ -197,30 +204,25 @@ public sealed partial class Ga144SimulatorEngine
   ///     <see cref="F18NodeCompilationService"/> -- the exact same compilation pathway every other tool in
   ///     this app uses (Core Dump's comparison, Verify ROMs, the CVM installer), so the simulator can
   ///     never disagree with what a real deploy would compile.
-  ///  2. A node the project considers "configured" (same test as
+  ///  2. Every node starts from <see cref="F18NodeSimulationState.ResetRuntimeState"/>'s own DB001 2.1
+  ///     "After Reset" baseline (P/B/Io to their documented values, both stacks cleared, A left untouched
+  ///     -- see that method's own remarks) -- exactly the same starting point a bare <see cref="Reset"/>
+  ///     uses. A node the project considers "configured" (same test as
   ///     <see cref="Cvm.CvmBootStreamBuilder.GetConfiguredCoordinates"/>/<see cref="ViewModels.NodeViewModel.IsConfigured"/>:
-  ///     <c>Enabled || SourceCode not blank</c>) gets its RAM's own compiled boot-configuration metadata
-  ///     applied -- P := <see cref="F18CompileResult.EntryPoint"/> (defaults to the compile's own first
-  ///     word address when no <c>entry</c>/<c>/p</c> directive was used), A/B/Io from
-  ///     <see cref="F18CompileResult.InitialA"/>/<see cref="F18CompileResult.InitialB"/>/
-  ///     <see cref="F18CompileResult.InitialIo"/> (falling back to the real hardware reset defaults below
-  ///     when the source used no <c>/a</c>/<c>/b</c>/<c>/io</c> directive), and both stacks from
+  ///     <c>Enabled || SourceCode not blank</c>) then has its RAM's own compiled boot-configuration
+  ///     metadata applied ON TOP of that baseline -- P := <see cref="F18CompileResult.EntryPoint"/>
+  ///     (defaults to the compile's own first word address when no <c>entry</c>/<c>/p</c> directive was
+  ///     used), A/B/Io from <see cref="F18CompileResult.InitialA"/>/<see cref="F18CompileResult.InitialB"/>/
+  ///     <see cref="F18CompileResult.InitialIo"/> (falling back to the same DB001 defaults when the source
+  ///     used no <c>/a</c>/<c>/b</c>/<c>/io</c> directive), and both stacks from
   ///     <see cref="F18CompileResult.InitialStack"/>/<see cref="F18CompileResult.InitialReturnStack"/>.
   ///     This models what a real boot-stream load (multiport-executing the compiled program into RAM,
   ///     then handing control to it) leaves behind, without simulating the actual word-by-word multiport
   ///     transfer itself.
-  ///  3. An UNCONFIGURED node gets the genuine real-hardware "never programmed" reset state instead (DB001
-  ///     2.1): P at its ROM's cold entry (x0AA -- <see cref="F18InstructionSet.CallableRomWords"/>'s
-  ///     "cold"; this simulator does not model the silicon metal-mask "multiport execute" reset vector
-  ///     DB001 also mentions for boot-stream-receiving nodes specifically, since which physical nodes get
-  ///     that wiring is a fabrication detail this project has no data for -- every node resets to ROM cold
-  ///     here, which is the documented fallback and is what a node that never receives a boot stream
-  ///     actually keeps running), Io := x15555 (DB001: "as though the value x15555 had been written to
-  ///     it"), B := the io register's own address (x15D), A left at 0 (DB001: unspecified by reset), and
-  ///     both stacks empty.
-  ///  4. The carry latch is set to 0 for every node (DB001: unpredictable on real power-up; this simulator
-  ///     picks a deterministic value instead of true randomness -- flagged here as a simulator-only
-  ///     simplification, matching <see cref="F18NodeSimulationState.Carry"/>'s own remarks).
+  ///  3. An UNCONFIGURED node is simply left at that DB001 2.1 baseline -- the genuine real-hardware
+  ///     "never programmed" reset state, and (unlike a bare <see cref="Reset"/>) its RAM has already been
+  ///     cleared and recompiled as all-zero above, matching what a node that never receives a boot stream
+  ///     actually keeps running.
   /// A node whose own project source fails to compile is not skipped: it keeps a blank (all-zero) RAM
   /// image, its real factory ROM still loads normally, and <see cref="F18NodeSimulationState.Error"/>
   /// records why -- exactly the same "one node's failure does not abort the rest" policy this project
@@ -280,28 +282,19 @@ public sealed partial class Ga144SimulatorEngine
         }
       }
 
-      const int ioAddress = 0x15D; // F18InstructionSet.Constants["io"]
-      const int coldEntry = 0x0AA; // F18InstructionSet.CallableRomWords["cold"]
-
       if (isConfigured && compiled is { Ram.Success: true })
       {
         F18CompileResult ram = compiled.Ram;
         state.P = ram.EntryPoint ?? 0x000;
         state.A = ram.InitialA ?? 0;
-        state.B = ram.InitialB ?? ioAddress;
+        state.B = ram.InitialB ?? F18NodeSimulationState.IoRegisterAddress;
         state.Io = ram.InitialIo ?? 0x15555;
         state.ParameterStack.AddRange(ram.InitialStack);
         state.ReturnStack.AddRange(ram.InitialReturnStack);
       }
-      else
-      {
-        state.P = coldEntry;
-        state.A = 0;
-        state.B = ioAddress;
-        state.Io = 0x15555;
-      }
+      // else: ResetRuntimeState() above already left P/B/Io at the correct DB001 2.1 "after reset, never
+      // configured" baseline, and A untouched -- nothing more to do for an unconfigured node.
 
-      state.Carry = 0;
       FetchNextWord(state);
       state.IsInitialized = true;
     }

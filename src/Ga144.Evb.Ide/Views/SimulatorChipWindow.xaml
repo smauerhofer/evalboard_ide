@@ -31,7 +31,7 @@
 
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
         <Button Content="Reset" Command="{Binding ResetCommand}" Padding="12,6" Margin="0,0,8,0"
-                ToolTip="Resets the chip: registers and stacks back to power-up defaults, RAM cleared. Each node's real factory ROM is still compiled and loaded (real silicon always runs it) -- no project source, no boot stream." />
+                ToolTip="Resets the chip (DB001 2.1): P/io/B and both stacks back to their documented post-reset defaults. RAM and the A register are left exactly as they were -- not directly affected by reset. Each node's real factory ROM is still compiled and loaded (real silicon always runs it) -- no project source is read, no boot stream." />
         <Button Content="Preset" Command="{Binding PresetCommand}" Padding="12,6" Margin="0,0,8,0"
                 ToolTip="Resets the chip AND loads it: recompiles every node from this project's current source (and this node's real factory ROM), then initializes registers as if freshly reset and then loaded by the boot stream." />
         <Button Content="Step 1" Command="{Binding Step1Command}" Padding="12,6" Margin="0,0,8,0"

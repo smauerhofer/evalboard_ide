@@ -89,10 +89,11 @@ public sealed class SimulatorChipViewModel : ObservableObject
     private set => SetProperty(ref _statusText, value);
   }
 
-  /// <summary>Performs a bare hardware reset (<see cref="Ga144SimulatorEngine.Reset"/>) -- registers and
-  /// RAM cleared, nothing of this project's own loaded, but each node's real factory ROM is still compiled
-  /// and loaded (real silicon always runs it regardless of RAM state). Stefan's own split (2026-09-23) of
-  /// what used to be one "Reset" button into this and <see cref="PresetCommand"/>.</summary>
+  /// <summary>Performs a bare hardware reset (<see cref="Ga144SimulatorEngine.Reset"/>) -- P/B/Io and both
+  /// stacks go back to DB001 2.1's documented "after reset" defaults, but RAM and the A register are left
+  /// exactly as they were (DB001: "not directly affected by reset") and each node's real factory ROM is
+  /// still compiled and loaded (real silicon always runs it regardless of RAM state). Stefan's own split
+  /// (2026-09-23) of what used to be one "Reset" button into this and <see cref="PresetCommand"/>.</summary>
   public RelayCommand ResetCommand { get; }
 
   /// <summary>Resets AND loads this project (<see cref="Ga144SimulatorEngine.Preset"/>) -- what the
@@ -157,7 +158,7 @@ public sealed class SimulatorChipViewModel : ObservableObject
   private void Reset()
   {
     Engine.Reset();
-    StatusText = $"Reset. Registers/RAM cleared; factory ROM loaded. {Engine.Nodes.Values.Count(n => n.Error is not null)} node(s) failed to compile their ROM (see individual nodes).";
+    StatusText = $"Reset. Registers back to their post-reset defaults; RAM left untouched; factory ROM loaded. {Engine.Nodes.Values.Count(n => n.Error is not null)} node(s) failed to compile their ROM (see individual nodes).";
     RefreshAll();
     NotifyCommandsCanExecuteChanged();
   }
