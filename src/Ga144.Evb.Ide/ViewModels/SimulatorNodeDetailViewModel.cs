@@ -30,7 +30,7 @@ public sealed record SimulatorPortRow(
 /// (T/S/R/A/B/P/IO/Carry), all ports, RAM, and ROM, refreshed live as the engine steps -- Stefan's own
 /// five requirements for this window. Unlike <see cref="PostMortemNodeDetailViewModel"/> (a frozen
 /// snapshot), <see cref="Refresh"/> re-reads the engine's live <see cref="F18NodeSimulationState"/> every
-/// time it is called (after every Reset/Step/Go tick -- see <see cref="Views.SimulatorNodeWindow"/>'s own
+/// time it is called (after every Reset/Preset/Step/Go tick -- see <see cref="Views.SimulatorNodeWindow"/>'s own
 /// code-behind for when that is).
 /// </summary>
 public sealed class SimulatorNodeDetailViewModel(int coordinate, Ga144SimulatorEngine engine, IReadOnlyDictionary<int, string> labelsByAddress) : ObservableObject

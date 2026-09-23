@@ -5,7 +5,11 @@ namespace Ga144.Evb.Ide.Simulator;
 
 /// <summary>
 /// A behavioral, instruction-level simulator for an entire GA144 (144 F18A nodes), driven one
-/// "step" at a time by <see cref="Step"/> and (re)initialized by <see cref="Reset"/>. Built at Stefan's
+/// "step" at a time by <see cref="Step"/> and (re)initialized by <see cref="Reset"/> (a bare hardware
+/// reset -- only the real factory ROM is compiled/loaded, exactly as real silicon always runs it; RAM and
+/// registers are not) or <see cref="Preset"/> (a reset that also compiles and loads this project's own
+/// RAM as if the boot stream had run -- Stefan's own split, 2026-09-23, of what used to be one "Reset"
+/// button into "Reset"/"Preset"). Built at Stefan's
 /// request for a "GA144 simulator window" (2026-09-23) showing every node's current instruction,
 /// registers, ports, RAM, and ROM, steppable 1/10/100 at a time or freely ("Go"/"Halt").
 ///
@@ -86,11 +90,12 @@ public sealed partial class Ga144SimulatorEngine
   /// put a program on it).</summary>
   public IReadOnlyDictionary<int, F18NodeSimulationState> Nodes => _nodes;
 
-  /// <summary>Total completed <see cref="Step"/> calls since the last <see cref="Reset"/> -- shown in the
-  /// simulator window so Stefan can see how far a run has progressed.</summary>
+  /// <summary>Total completed <see cref="Step"/> calls since the last <see cref="Reset"/> or
+  /// <see cref="Preset"/> -- shown in the simulator window so Stefan can see how far a run has
+  /// progressed.</summary>
   public long StepCount { get; private set; }
 
-  /// <summary>True once <see cref="Reset"/> has run at least once.</summary>
+  /// <summary>True once <see cref="Reset"/> or <see cref="Preset"/> has run at least once.</summary>
   public bool IsInitialized { get; private set; }
 
   /// <summary>
@@ -122,8 +127,71 @@ public sealed partial class Ga144SimulatorEngine
       _externalPinLastWritten.TryGetValue((coordinate, direction), out int value) ? value : null;
 
   /// <summary>
+  /// Performs a bare hardware reset of every one of the 144 nodes -- literally "resets the chip", Stefan's
+  /// own words (2026-09-23) drawing the line between this and <see cref="Preset"/>: "the 'Reset' button
+  /// resets the chip. No RAM/ROM or register loaded. just reset each node." -- refined the same day once
+  /// Stefan clarified that the real factory ROM must ALWAYS be present regardless: "after simulator
+  /// 'Reset' the ROM must be filled with the node's ROM code. the ROM code must always be filled." Real
+  /// silicon always runs its factory ROM no matter whether RAM has ever been loaded (see
+  /// <see cref="F18NodeSimulationState.Rom"/>'s own remarks), so a bare reset is not "nothing loaded" after
+  /// all -- it is "nothing of THIS PROJECT'S OWN loaded". Concretely, per node:
+  ///  1. Registers/stacks/pending-port-state all go back to their
+  ///     <see cref="F18NodeSimulationState.ResetRuntimeState"/> defaults (P/A/B/Io/Carry := 0, both stacks
+  ///     empty -- this simulator's own "nothing has ever run here" baseline, distinct from DB001 2.1's
+  ///     documented power-up reset, which is what <see cref="Preset"/> models for an unconfigured node
+  ///     instead).
+  ///  2. RAM is cleared to all zero and left that way -- this node's own project source is never even
+  ///     read by a bare Reset (unlike <see cref="Preset"/>, which compiles and loads it).
+  ///  3. ROM is compiled from <see cref="Ga144RomLibrary"/> and loaded via
+  ///     <see cref="F18NodeCompilationService.CompileRom"/> -- the same compilation <see cref="Preset"/>
+  ///     itself uses for ROM, so the two can never disagree about what a node's factory ROM contains. A
+  ///     node whose ROM source fails to compile keeps a blank (all-zero) ROM image and records why in
+  ///     <see cref="F18NodeSimulationState.Error"/>, the same "one node's failure does not abort the rest"
+  ///     policy used everywhere else in this project.
+  /// <see cref="F18NodeSimulationState.CurrentWord"/> is left null (nothing has been fetched yet;
+  /// <see cref="Step"/> fetches lazily on the first step). Use <see cref="Preset"/> instead to also compile
+  /// and load this project's own RAM, as if the boot stream had run.
+  /// </summary>
+  public void Reset()
+  {
+    var compileService = new F18NodeCompilationService(_chip, _romLibrary, _userMacros);
+
+    foreach (F18NodeSimulationState state in _nodes.Values)
+    {
+      state.ResetRuntimeState();
+      Array.Clear(state.Ram);
+      Array.Clear(state.Rom);
+
+      try
+      {
+        F18CompileResult rom = compileService.CompileRom(state.Coordinate);
+        if (rom.Success)
+        {
+          CopyWords(rom.Words, state.Rom);
+        }
+        else
+        {
+          state.Error = DescribeFirstError(rom, "ROM");
+        }
+      }
+      catch (Exception exception)
+      {
+        state.Error = $"ROM compilation threw: {exception.Message}";
+      }
+
+      state.IsInitialized = true;
+    }
+
+    _externalPinLastWritten.Clear();
+    StepCount = 0;
+    IsInitialized = true;
+  }
+
+  /// <summary>
   /// (Re)initializes every one of the 144 nodes: "first performing a reset and second with loading the
-  /// node as if it was loaded by the boot stream" (Stefan's own words). Concretely, per node:
+  /// node as if it was loaded by the boot stream" (Stefan's own words) -- the "Preset" button, split off
+  /// from a bare <see cref="Reset"/> at Stefan's own request (2026-09-23) so "reset the chip" and "reset
+  /// AND load the project" are two separate, explicit actions rather than one. Concretely, per node:
   ///  1. Compile this node's ROM (its real factory ROM, <see cref="Ga144RomLibrary"/>) and RAM (this
   ///     project's own current source for the node, which may be blank) via
   ///     <see cref="F18NodeCompilationService"/> -- the exact same compilation pathway every other tool in
@@ -158,13 +226,19 @@ public sealed partial class Ga144SimulatorEngine
   /// records why -- exactly the same "one node's failure does not abort the rest" policy this project
   /// already uses for Verify ROMs and Core Dump.
   /// </summary>
-  public void Reset()
+  public void Preset()
   {
     _chip.Normalize();
     _romLibrary.Normalize();
     var compileService = new F18NodeCompilationService(_chip, _romLibrary, _userMacros);
 
-    foreach (Ga144NodeConfiguration node in _chip.Nodes)
+    // Snapshotted with ToList(): CompileNode below (via F18NodeCompilationService) calls
+    // _chip.GetNode(...), which always Normalize()s the chip first -- including an in-place
+    // Nodes.Sort() -- so enumerating _chip.Nodes directly here would have the compile step for
+    // one node invalidate the very enumerator walking this loop (.NET throws "Collection was
+    // modified; enumeration operation may not execute." the next time MoveNext() runs). A
+    // snapshot sidesteps that regardless of what GetNode does internally.
+    foreach (Ga144NodeConfiguration node in _chip.Nodes.ToList())
     {
       F18NodeSimulationState state = _nodes[node.Coordinate];
       state.ResetRuntimeState();
@@ -238,8 +312,8 @@ public sealed partial class Ga144SimulatorEngine
   }
 
   /// <summary>Performs exactly one tick/tock cycle -- see this class's own remarks for what that means
-  /// for a single node. No-op (but still counts toward <see cref="StepCount"/>) if <see cref="Reset"/> has
-  /// never been called.</summary>
+  /// for a single node. No-op (but still counts toward <see cref="StepCount"/>) if neither <see cref="Reset"/>
+  /// nor <see cref="Preset"/> has ever been called.</summary>
   public void Step()
   {
     if (!IsInitialized)

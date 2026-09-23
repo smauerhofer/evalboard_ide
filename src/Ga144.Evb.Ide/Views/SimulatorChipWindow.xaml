@@ -31,7 +31,9 @@
 
       <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
         <Button Content="Reset" Command="{Binding ResetCommand}" Padding="12,6" Margin="0,0,8,0"
-                ToolTip="Recompiles every node from this project's current source (and this node's real factory ROM), then initializes registers as if freshly reset and then loaded by the boot stream." />
+                ToolTip="Resets the chip: registers and stacks back to power-up defaults, RAM cleared. Each node's real factory ROM is still compiled and loaded (real silicon always runs it) -- no project source, no boot stream." />
+        <Button Content="Preset" Command="{Binding PresetCommand}" Padding="12,6" Margin="0,0,8,0"
+                ToolTip="Resets the chip AND loads it: recompiles every node from this project's current source (and this node's real factory ROM), then initializes registers as if freshly reset and then loaded by the boot stream." />
         <Button Content="Step 1" Command="{Binding Step1Command}" Padding="12,6" Margin="0,0,8,0"
                 ToolTip="Performs one tick/tock cycle (one F18A instruction slot per unblocked node) and refreshes the display." />
         <Button Content="Step 10" Command="{Binding Step10Command}" Padding="12,6" Margin="0,0,8,0"
@@ -241,7 +243,7 @@
 
     <Border Grid.Row="2" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="8" Margin="0,8,0,0">
       <TextBlock TextWrapping="Wrap"
-                 Text="Click a node to open its own simulator window (all registers, all ports, RAM, ROM, with the current position highlighted). Each node's own RDLU line shows its four ports' status (r = reading, W = writing, - = idle); a matching blue (read) or red (write) arrow appears in the gap towards the neighbor that port is stalled on. ! = this node's own project source failed to compile at the last Reset." />
+                 Text="Click a node to open its own simulator window (all registers, all ports, RAM, ROM, with the current position highlighted). Each node's own RDLU line shows its four ports' status (r = reading, W = writing, - = idle); a matching blue (read) or red (write) arrow appears in the gap towards the neighbor that port is stalled on. ! = this node's factory ROM (Reset or Preset) or its own project RAM source (Preset only) failed to compile last time." />
     </Border>
   </Grid>
 </Window>

@@ -57,6 +57,20 @@ public sealed class F18NodeCompilationService
     };
   }
 
+  /// <summary>
+  /// Compiles only this node's ROM dictionary (its real factory ROM, from <see cref="Ga144RomLibrary"/>)
+  /// -- never touches this node's own project RAM source at all (unlike <see cref="CompileNode"/>, which
+  /// compiles both). Used by <see cref="Simulator.Ga144SimulatorEngine.Reset"/> for a bare hardware reset:
+  /// real silicon always runs its factory ROM regardless of whether RAM has ever been loaded, so even a
+  /// bare reset needs this (Stefan's own clarification, 2026-09-23) without pulling in the project's own
+  /// RAM compilation the way a full <see cref="Simulator.Ga144SimulatorEngine.Preset"/> does.
+  /// </summary>
+  public F18CompileResult CompileRom(int coordinate, string? romSourceOverride = null)
+  {
+    var session = new CompilationSession(_chip, _romLibrary, _userMacros, coordinate, null, romSourceOverride);
+    return session.CompileRom(coordinate);
+  }
+
   private sealed class CompilationSession
   {
     private readonly Ga144ChipConfiguration _chip;

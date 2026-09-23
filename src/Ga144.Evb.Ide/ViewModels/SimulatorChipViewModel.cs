@@ -8,10 +8,11 @@ namespace Ga144.Evb.Ide.ViewModels;
 
 /// <summary>
 /// Drives the "GA144 simulator" window (<see cref="Views.SimulatorChipWindow"/>): an 18x8 grid of every
-/// node's live, steppable state (<see cref="Ga144SimulatorEngine"/>), the Reset/Step 1/Step 10/Step
-/// 100/Go/Halt controls, and the external I/O pin panel. Built at Stefan's own request, 2026-09-23 -- see
-/// <see cref="Ga144SimulatorEngine"/>'s own remarks for the full design (tick/tock stepping, opcode
-/// semantics, port I/O scope).
+/// node's live, steppable state (<see cref="Ga144SimulatorEngine"/>), the Reset/Preset/Step 1/Step 10/Step
+/// 100/Go/Halt controls, and the external I/O pin panel. Built at Stefan's own request, 2026-09-23 (Reset
+/// split into "Reset"/"Preset" the same day, per Stefan's own follow-up -- see <see cref="ResetCommand"/>/
+/// <see cref="PresetCommand"/>'s own remarks) -- see <see cref="Ga144SimulatorEngine"/>'s own remarks for
+/// the full design (tick/tock stepping, opcode semantics, port I/O scope).
 /// </summary>
 public sealed class SimulatorChipViewModel : ObservableObject
 {
@@ -55,6 +56,7 @@ public sealed class SimulatorChipViewModel : ObservableObject
     (DigitalPins, TextFieldPins) = BuildExternalPins();
 
     ResetCommand = new RelayCommand(Reset);
+    PresetCommand = new RelayCommand(Preset);
     Step1Command = new RelayCommand(() => StepAndRefresh(1), () => Engine.IsInitialized && !_running);
     Step10Command = new RelayCommand(() => StepAndRefresh(10), () => Engine.IsInitialized && !_running);
     Step100Command = new RelayCommand(() => StepAndRefresh(100), () => Engine.IsInitialized && !_running);
@@ -87,23 +89,33 @@ public sealed class SimulatorChipViewModel : ObservableObject
     private set => SetProperty(ref _statusText, value);
   }
 
+  /// <summary>Performs a bare hardware reset (<see cref="Ga144SimulatorEngine.Reset"/>) -- registers and
+  /// RAM cleared, nothing of this project's own loaded, but each node's real factory ROM is still compiled
+  /// and loaded (real silicon always runs it regardless of RAM state). Stefan's own split (2026-09-23) of
+  /// what used to be one "Reset" button into this and <see cref="PresetCommand"/>.</summary>
   public RelayCommand ResetCommand { get; }
+
+  /// <summary>Resets AND loads this project (<see cref="Ga144SimulatorEngine.Preset"/>) -- what the
+  /// "Reset" button used to do before Stefan's 2026-09-23 split: compile every node and initialize
+  /// registers as if freshly reset and then loaded by the boot stream.</summary>
+  public RelayCommand PresetCommand { get; }
+
   public RelayCommand Step1Command { get; }
   public RelayCommand Step10Command { get; }
   public RelayCommand Step100Command { get; }
   public AsyncRelayCommand GoCommand { get; }
   public RelayCommand HaltCommand { get; }
 
-  /// <summary>Raised after every Reset/Step/Go tick so the window can refresh anything it owns beyond the
-  /// grid cells themselves (currently: any open <see cref="Views.SimulatorNodeWindow"/>).</summary>
+  /// <summary>Raised after every Reset/Preset/Step/Go tick so the window can refresh anything it owns
+  /// beyond the grid cells themselves (currently: any open <see cref="Views.SimulatorNodeWindow"/>).</summary>
   public event EventHandler? Stepped;
 
   /// <summary>
   /// Builds the detail view model for one node's simulator window. The engine itself only keeps compiled
-  /// RAM/ROM WORDS (see <see cref="Ga144SimulatorEngine.Reset"/>) -- this recompiles that one node, same
+  /// RAM/ROM WORDS (see <see cref="Ga144SimulatorEngine.Preset"/>) -- this recompiles that one node, same
   /// as <see cref="PostMortemChipViewModel.BuildNodeDetail"/> already does for the post-mortem window,
   /// purely to recover its symbol table for the RAM/ROM disassembly's "Label" column. A node whose source
-  /// no longer compiles the same way it did at the last Reset just shows no labels rather than failing to
+  /// no longer compiles the same way it did at the last Preset just shows no labels rather than failing to
   /// open -- the live RAM/ROM words themselves (what actually matters for stepping) always come from the
   /// engine, never from this recompile.
   /// </summary>
@@ -145,7 +157,15 @@ public sealed class SimulatorChipViewModel : ObservableObject
   private void Reset()
   {
     Engine.Reset();
-    StatusText = $"Reset. {Engine.Nodes.Values.Count(n => n.Error is not null)} node(s) failed to compile (see individual nodes).";
+    StatusText = $"Reset. Registers/RAM cleared; factory ROM loaded. {Engine.Nodes.Values.Count(n => n.Error is not null)} node(s) failed to compile their ROM (see individual nodes).";
+    RefreshAll();
+    NotifyCommandsCanExecuteChanged();
+  }
+
+  private void Preset()
+  {
+    Engine.Preset();
+    StatusText = $"Preset. {Engine.Nodes.Values.Count(n => n.Error is not null)} node(s) failed to compile (see individual nodes).";
     RefreshAll();
     NotifyCommandsCanExecuteChanged();
   }

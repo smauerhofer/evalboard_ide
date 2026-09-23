@@ -57,9 +57,13 @@ public sealed class F18NodeSimulationState
   public int[] Ram { get; } = new int[64];
 
   /// <summary>Always exactly 64 words, address x080-x0BF (mirrored at x0C0-x0FF) -- this node's real
-  /// factory ROM, loaded by <see cref="Ga144SimulatorEngine.Reset"/> from <see cref="Models.Ga144RomLibrary"/>
-  /// regardless of whether the project has configured this node at all (real silicon always runs its
-  /// factory ROM; only RAM depends on whether a program was ever loaded).</summary>
+  /// factory ROM, compiled from <see cref="Models.Ga144RomLibrary"/> and loaded by BOTH
+  /// <see cref="Ga144SimulatorEngine.Reset"/> (a bare hardware reset) and <see cref="Ga144SimulatorEngine.Preset"/>
+  /// (which also compiles and loads this project's own RAM), regardless of whether the project has
+  /// configured this node at all: real silicon always runs its factory ROM even with nothing ever loaded
+  /// into RAM, so even a bare Reset fills this (Stefan's own clarification, 2026-09-23). <see cref="Ram"/>
+  /// is what actually differs between the two -- only <see cref="Ga144SimulatorEngine.Preset"/> compiles
+  /// and loads the project's own source into it.</summary>
   public int[] Rom { get; } = new int[64];
 
   /// <summary>Program counter. 10 bits: bits 0-7 address a RAM/ROM/port word (see
@@ -84,8 +88,9 @@ public sealed class F18NodeSimulationState
 
   /// <summary>The word currently being executed slot-by-slot, decoded via <see cref="F18Disassembler.Decode"/>
   /// (the SAME decode this project's own disassembly displays use -- see this class's own file remarks:
-  /// execution and disassembly can never disagree since they share one decoder). Null only before the
-  /// very first <c>Reset</c>.</summary>
+  /// execution and disassembly can never disagree since they share one decoder). Null before this node's
+  /// first fetch: a bare <c>Reset</c> leaves it null (nothing has been fetched -- <c>Step</c> fetches
+  /// lazily), while <c>Preset</c> fetches immediately so the grid shows something right away.</summary>
   public F18DisassembledWord? CurrentWord { get; set; }
 
   /// <summary>Which slot of <see cref="CurrentWord"/> executes on the NEXT step (0-3, or beyond the
@@ -103,8 +108,10 @@ public sealed class F18NodeSimulationState
   /// silently producing further nonsense, so a mistake is visible rather than free-running forever.</summary>
   public bool Halted { get; set; }
 
-  /// <summary>Non-null when this node's own project source failed to compile at the last <c>Reset</c> --
-  /// the node still shows its (uncompiled, all-zero RAM) state rather than being omitted from the grid.</summary>
+  /// <summary>Non-null when compilation failed at the last <c>Reset</c> or <c>Preset</c> -- the node still
+  /// shows its (uncompiled) state rather than being omitted from the grid. A bare <c>Reset</c> can only
+  /// report a ROM failure (it compiles the factory ROM but never reads this node's own project RAM
+  /// source); <c>Preset</c> can report either a ROM or a RAM failure.</summary>
   public string? Error { get; set; }
 
   /// <summary>
@@ -129,13 +136,17 @@ public sealed class F18NodeSimulationState
   /// data stack.</summary>
   public byte PendingOpcode { get; set; }
 
-  /// <summary>True once <see cref="Reset"/> has populated this node from a successful compile/ROM load --
-  /// the grid and detail window show placeholder/neutral state before this.</summary>
+  /// <summary>True once this node has been through a bare <see cref="Ga144SimulatorEngine.Reset"/>
+  /// (registers/RAM cleared, factory ROM still compiled and loaded) or a <see cref="Ga144SimulatorEngine.Preset"/>
+  /// (RAM compiled and loaded too) -- the grid and detail window show placeholder/neutral state only
+  /// before either has ever run once.</summary>
   public bool IsInitialized { get; set; }
 
-  /// <summary>Resets every field to the state <see cref="Ga144SimulatorEngine.Reset"/> establishes for a
-  /// freshly (re)initialized node -- RAM/ROM themselves are repopulated separately by the caller (a fresh
-  /// compile/ROM load), since which words they hold is not this method's own concern.</summary>
+  /// <summary>Resets every field to the state both <see cref="Ga144SimulatorEngine.Reset"/> and
+  /// <see cref="Ga144SimulatorEngine.Preset"/> start a freshly (re)initialized node from, before they
+  /// diverge (a bare RAM clear vs. also compiling and loading RAM) -- RAM/ROM themselves are repopulated
+  /// separately by the caller (RAM cleared to zero either way; ROM always freshly compiled from the ROM
+  /// library by both), since which words they hold is not this method's own concern.</summary>
   public void ResetRuntimeState()
   {
     P = 0;

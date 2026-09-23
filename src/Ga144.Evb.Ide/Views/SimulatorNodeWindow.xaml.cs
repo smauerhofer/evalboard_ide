@@ -10,7 +10,7 @@ namespace Ga144.Evb.Ide.Views;
 ///
 /// Unlike the post-mortem window (a frozen snapshot), this one is live: it subscribes to the chip view
 /// model's own <see cref="SimulatorChipViewModel.Stepped"/> event so it re-<see cref="SimulatorNodeDetailViewModel.Refresh"/>es
-/// itself after every Reset/Step/Go tick, and unsubscribes in its own <see cref="OnClosed"/> -- the exact
+/// itself after every Reset/Preset/Step/Go tick, and unsubscribes in its own <see cref="OnClosed"/> -- the exact
 /// leak that was caught and avoided in <see cref="SimulatorChipViewModel.BuildNodeDetail"/> (which
 /// deliberately does not subscribe on the view model's behalf, since it has no matching "window closed"
 /// signal of its own).
