@@ -25492,6 +25492,12 @@ projects:
 
           out: e         {exponent to node 402}
 
+        ADD/SUB/MUL/select:
+            node 302 sends normal e
+
+        DIV:
+            node 302 sends e with bit17 toggled
+
         )
 
 
@@ -25530,7 +25536,7 @@ projects:
           // align exponent for addition or subtraction
           over over xor
           if // e1 > e2
-            drop 1 . +
+            drop f4a/inc
             A[ f5a/shr2 ]] lit !b
             f4a/align ;
           then
@@ -25556,13 +25562,15 @@ projects:
 
         : f4a/mul ( e1 e2 - e )
           + // add exponents
+          -127 . + // exponent correction
           A[ f5a/mul ]] lit !b
           f4a/pass2
         ;
 
 
-        : f4a/div ( e1 e2 - e )
+        : f4a/div ( e1 e2 - ediv )
           f4a/- // subtract exponents
+          0x2007f . + // exponent correction + DIV tag
           f4a/pass2
           f4a/pass2
         ;
@@ -25621,9 +25629,8 @@ projects:
       - 0x049F5
       - 0x00001
       - 0x20FE2
-      - 0x1940F
-      - 0x3BDB0
-      - 0x00001
+      - 0x1940E
+      - 0x3B607
       - 0x05B41
       - 0x13402
       - 0x3A255
@@ -25637,33 +25644,37 @@ projects:
       - 0x13409
       - 0x05BB2
       - 0x13610
-      - 0x11413
-      - 0x3DD22
+      - 0x11412
+      - 0x3DDB0
+      - 0x3FF81
+      - 0x05BB2
       - 0x13415
-      - 0x11413
+      - 0x11412
       - 0x13406
-      - 0x13413
-      - 0x11413
+      - 0x049F2
+      - 0x2007F
+      - 0x13412
+      - 0x11412
       - 0x3BD27
       - 0x3A8B2
       - 0x3ACB2
-      - 0x09713
+      - 0x09712
       - 0x13404
-      - 0x11410
+      - 0x1140F
       - 0x13400
-      - 0x11410
+      - 0x1140F
       - 0x13404
-      - 0x11417
+      - 0x11416
       - 0x13400
-      - 0x11417
+      - 0x11416
       - 0x13404
-      - 0x11421
+      - 0x11424
       - 0x13400
-      - 0x11421
+      - 0x11424
       - 0x13404
-      - 0x1141B
+      - 0x1141A
       - 0x13404
-      - 0x1141E
+      - 0x1141F
       - 0x04B02
       - 0x00115
       - 0x01DA2
@@ -25671,12 +25682,9 @@ projects:
       - 0x135D5
       - 0x04B22
       - 0x00145
-      - 0x11435
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x11438
       startup:
-        entryPoint: 0x035
+        entryPoint: 0x038
         p: 0x000
         a: 0x000
         b: 0x000
