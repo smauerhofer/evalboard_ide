@@ -23275,10 +23275,10 @@ projects:
 
         ADD/SUB/MUL/DIV are handled in node 103
 
-          in:    Tottsseehhll          {from node 204}
-          out:   Tttsseehhll           {to node 103 or 105}
-          in:    Sehl                  {from node 103 or 105}
-          out:   sehl                  {to node 204}
+          in:    T o t1 t2 s1 s2 e1 e2 h1 h2 l1 l2  {from node 204}
+          out:   T t1 t2 s1 s2 e1 e2 h1 h2 l1 l2    {to node 103 or 105}
+          in:    S e h l               {from node 103 or 105}
+          out:   s e h l               {to node 204}
 
           S special sign:
             0: positive
@@ -24337,9 +24337,9 @@ projects:
 
         opcode decoding and optional magnitude compare calculation
 
-          in: osseehhll     {from node 204}
-          out: ss           {to node 303}
-          out: eehhll       {to node 202}
+          in: o s1 s2 e1 e2 h1 h2 l1 l2   {from node 204}
+          out: s1 s2                      {to node 303}
+          out: e1 e2 h1 h2 l1 l2          {to node 202}
         optional:
           in: c             {from node 202}
           out: c            {to node 303}
@@ -24549,13 +24549,13 @@ projects:
 
           if normal
 
-          out:   osseehhll            {to node 203}
+          out:   o s1 s2 e1 e2 h1 h2 l1 l2            {to node 203}
 
           or if a special processing
 
-          out:   Tottsseehhll         {to node 104}
-          in:    sehl                 {from node 104}
-          out:   sehl                 {to node 304}
+          out:   T o t1 t2 s1 s2 e1 e2 h1 h2 l1 l2    {to node 104}
+          in:    s e h l              {from node 104}
+          out:   s e h l              {to node 304}
 
           where T = t1 or T2
 
@@ -24751,8 +24751,8 @@ projects:
 
           5. mantissa low
 
-          in:    olhlh               {from node 305}
-          out:   otsehltsehl         {to node 204}
+          in:    o l1 h1 l2 h2                     {from node 305}
+          out:   o t1 s1 e1 h1 l1 t2 s2 e2 h2 l2   {to node 204}
         )
 
 
@@ -25199,11 +25199,11 @@ projects:
 
         mantissa preparation, addition and multiplication.
 
-          in: HHLL       {extended mantissa from node 201}
+          in: H1 H2 L1 L2       {extended mantissa from node 201}
 
-          out: HHLL      {extended mantissa to node 401}
+          out: H1 H2 L1 L2      {extended mantissa to node 401}
         alternative
-          out: HL        {extended result mantissa to node 401}
+          out: H L              {extended result mantissa to node 401}
 
         )
 
@@ -25479,7 +25479,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 302
       enabled: true
-      sourceCode: >+
+      sourceCode: >
         ( CVM2 node 302. VM 32 bit floatingpoint step 4a.
 
 
@@ -25488,7 +25488,7 @@ projects:
 
         mantissa preparation, addition and multiplication.
 
-          in: ee         {exponent from node 202}
+          in: e1 e2      {exponent from node 202}
 
           out: e         {exponent to node 402}
 
@@ -25704,7 +25704,7 @@ projects:
 
         operation selection, operand ordering and sign processing.
 
-          in: ss            {from node 203}
+          in: s1 s2         {from node 203}
         optional:
           in: c             {from node 203}
 
@@ -26096,8 +26096,8 @@ projects:
           zero        0
           inf/nan     0xff
 
-          in:  sehl  {from node 404 or node 204}
-          out: hl    {to node 305}
+          in:  s e h l  {from node 404 or node 204}
+          out: h l      {to node 305}
 
         )
 
@@ -26245,8 +26245,8 @@ projects:
 
 
         binary:
-          out:     olhlh      { to node 205 }
-          in:      hl         { from node 304 }
+          out:     o l1 h1 l2 h2      { to node 205 }
+          in:      h l                { from node 304 }
         )
 
 
@@ -27334,118 +27334,279 @@ projects:
       postMortemEnabled: false
     - coordinate: 402
       enabled: true
-      sourceCode: >
-        ( CVM2 node 402. VM 32 bit floatingpoint stage 4a node. exponent handling )
+      sourceCode: >+
+        ( CVM2 node 402. VM 32 bit floatingpoint step 4b.
 
-        (
 
-        1. read exponents from node 302
+        exponent finalization and division selection
 
-        2. wait for instructions on right
 
-          in: ee      {from node 302}
-          out: ee     {to node 502}
+        node 402 sends one of the following instructions:
+         A[ f5b/div ; ]] for division
+         A[ f5b/pass ; ]] for all other operations
+
+        result passing and division.
+
+          in: e            {exponent from node 302}
+        alternative
+          in: ediv         {flagged exponent from node 302}
+
+          in: H L          {mantissa from node 401}
+
+          out: e H L       {normalized result to node 403}
+
         )
+
 
         # 401 import
 
 
-        entry fp4a/main
+        # up /b           // node 302
 
-        # left /a
+        # left /a         // node 401
 
-        # up /b
+        entry f4b/main
 
 
         # 0 org
 
 
-        : fp4a/swapc A[ fp5a/swapc ]] lit ! over ;
+        +cy
 
 
-        : fp4a/swap A[ fp5a/swap ; ]] lit ! over ;
+        : f4b/shl ( e h l - e' h' l' )
+          // normalize one position to the left:
+          //
+          // H:L <<= 1
+          // e--
 
-        : fp4a/nop A[ fp5a/nop ; ]] lit ! ;
+          clc
+          dup . +             // L <<= 1
+          >r
+          dup . +             // H = H*2 + carry
+          >r
+
+          // H is below 0x100 whenever this word is called,
+          // therefore the high-word addition cannot generate
+          // a carry.  The exponent decrement is consequently
+          // safe in extended arithmetic mode.
+
+          -1 . +
+
+          r> r>
+        ;
 
 
-        : fp4a/add A[ fp5a/add ; ]] lit ! ;
-
-        : fp4a/sub A[ fp5a/sub ; ]] lit ! ;
-
-        : fp4a/mul A[ fp5a/mul ; ]] lit ! ;
-
-        : fp4a/div A[ fp5a/div ; ]] lit ! ;
+        -cy
 
 
-        : fp4a/main
+
+        : f4b/shr ( e h l - e' h' l' )
+          // normalize one position to the right:
+          //
+          // H:L >>= 1
+          // e++
+          //
+          // only needed for H bit 9 overflow.
+
+          >r                  // e h / L
+
+          // save H bit 0
+
+          dup 2/ 2* xor
+          >r                  // e h / L h0
+
+          // H >>= 1
+
+          2/
+          >r                  // e / L h0 H'
+
+          // e++
+
+          1 . +
+
+          r>                  // e' H'
+          r>                  // e' H' h0
+          r>                  // e' H' h0 L
+
+          // logical L >>= 1.
+          // 2/ is arithmetic, so clear its propagated sign bit.
+
+          2/
+          0x1ffff and
+          >r                  // e' H' h0 / L'
+
+          // old H bit 0 becomes new L bit 17
+
+          . if
+            drop
+            r> 0x20000 xor
+            ;
+          then
+
+          drop
+          r>
+        ;
+
+
+        : f4b/adjust ( e h l - )
+          // Normalize H:L so that H bit 8 is the hidden bit.
+          //
+          // Expected nonzero cases:
+          //
+          //   H & 200 != 0   shift right once, e++
+          //   H & 100 != 0   already normalized
+          //   otherwise      shift left, e--
+          //
+          // Zero is converted to exponent zero.
+
+          over
+          if
+            // H != 0
+
+            drop
+
+            // one-bit overflow?
+
+            over 0x200 and
+            if
+              drop
+              f4b/shr
+              ;
+            then
+            drop
+
+            // normalized?
+
+            over 0x100 and
+            if
+              drop
+              ;
+            then
+            drop
+
+            // H != 0 but hidden bit not reached yet
+
+            f4b/shl
+            f4b/norm
+            ;
+          then
+
+          // H == 0
+
+          drop
+
+          dup
+          . if
+            // L != 0: continue left normalization
+
+            drop
+            f4b/shl
+            f4b/norm
+            ;
+          then
+
+          // H:L == 0.
+          // Force exponent to zero.
+          //
+          // stale original e is harmless.
+
+          drop
+          >r >r
+          dup xor
+          r> r>
+        ;
+
+
+
+        : f4b/norm ( e h l - ) // normalize and send result
+          a >r        // save a
+          // adjust exponent
+          ( e h l )
+          f4b/adjust
+          ( e h l )
+          r> a!       // restore a
+          // send
+          >r >r !b    // e
+          r> !b       // h
+          r> !b       // l
+
+        : f4b/main
           up b!
-          @b
-          ( e1 )
-          @b
-          ( e1 e2 )
+          @b 
+          ( e )
+          dup 2* xor
+          . -if // exponent flagged for division
+            A[ f5b/div ; ]] lit ! // invoke division in node 401
+            drop
+            0x20000 xor // recover exponent
+          else // normal exponent
+            A[ f5b/pass ; ]] lit ! // invoke pass values in node 401
+            drop
+          then
+          ( e )
+          @ @          // read result from node 401
+          ( e h l )
+          right b!
+          // normalize
+          f4b/norm
+        ;
 
-          down b!
-          ( e1 e2 )
-
-          r---
-          >r !b	           // e1
-          r> !b           // e2
-          fp4a/main ;
       ramWords:
-      - 0x05A85
-      - 0x13400
-      - 0x05A85
-      - 0x11403
-      - 0x05A55
-      - 0x11406
-      - 0x05A55
-      - 0x11406
-      - 0x05A55
-      - 0x11406
-      - 0x05A55
-      - 0x11406
-      - 0x05A55
-      - 0x11406
-      - 0x04B02
-      - 0x00145
-      - 0x01DA2
-      - 0x00115
-      - 0x135D5
+      - 0x136D3
+      - 0x249F2
+      - 0x2EDB0
+      - 0x2FDB0
+      - 0x3FFFF
+      - 0x26C55
+      - 0x2EDC2
+      - 0x363BA
+      - 0x30812
+      - 0x00001
+      - 0x3CC9A
+      - 0x26712
+      - 0x1FFFF
+      - 0x3E8B2
+      - 0x19412
+      - 0x3AC12
+      - 0x20000
+      - 0x39555
+      - 0x3AC55
+      - 0x2131E
+      - 0x3AF12
+      - 0x00200
+      - 0x3F318
+      - 0x3B706
+      - 0x3AF12
+      - 0x00100
+      - 0x3F31C
+      - 0x3B555
+      - 0x3B600
+      - 0x11424
+      - 0x3ADB2
+      - 0x19422
+      - 0x3B600
+      - 0x11424
+      - 0x3A8BB
+      - 0x38C9D
+      - 0x228B2
+      - 0x13413
+      - 0x26ABA
       - 0x2FB9A
-      - 0x0970E
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x08C22
+      - 0x04B03
+      - 0x00145
+      - 0x363B2
+      - 0x1B431
+      - 0x05AEF
+      - 0x1161A
+      - 0x20000
+      - 0x39733
+      - 0x05AEA
+      - 0x1142F
+      - 0x03E12
+      - 0x001D5
+      - 0x29724
       - 0x15555
       - 0x15555
       - 0x15555
@@ -27457,7 +27618,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00E
+        entryPoint: 0x029
         p: 0x000
         a: 0x000
         b: 0x000
@@ -27468,232 +27629,235 @@ projects:
       postMortemEnabled: false
     - coordinate: 403
       enabled: true
-      sourceCode: >+
-        ( CVM2 node 403. VM 32 bit floatingpoint stage 3a node. sign & type handling )
+      sourceCode: >-
+        ( CVM2 node 403. VM 32 bit floatingpoint step 3b.
 
-        (
-          normalizes operand order, effective signs and controls node 402.
 
-          in:  ottssc
-          out: ottss
+        sign handling, exponent range checking and
 
-          For add/sub on output:
-              |operand1| >= |operand2|
-              s1,s2 are effective signs
+        subnormal preparation.
 
-          c: magnitude compare result
-            0x8000 : f1 >  f2
-            0      : f1 <= f2
+          in: s            {sign from node 303}
+          in: e H L        {normalized result from node 402}
+
+          out: s e H L     {range-adjusted result to node 404}
+
+        output format:
+
+
+        normal:
+          e = 1..254
+          H:L remains in 27-bit internal format
+
+        subnormal:
+          e = 0
+          H:L shifted right as required
+
+        overflow:
+          e = 255
+          H:L = 0
+
+        during processing:
+          stack: s e h
+          A:     l
+
         )
 
 
-        # 402 import
+        entry f3b/main
 
 
-        entry fp3a/main
-
-        # down /a
-
-        # up /b
+        # 0 org
 
 
-        # 8 org
 
+        : f3b/shr ( s e h - s e h' ) // A=l -> A=l'
+          // H:L >>= 1
+          //
+          // S=0, T=H, A=L
 
-        : fp3a/swap ( t1 t2 s1 s2 )
-          A[ fp4a/swap ; ]] lit !
-        : fp3a/xsend ( t1 t2 s1 s2 - )
-          down a!
-          >r >r
-          !           // t2
-          !           // t1
-          r> r> !     // s2
-          !           // s1
-        ;
+          0 over
+          . +*
 
-
-        : fp3a/minsel ( t1 t2 s1 s2 comp - t1 t2 s1 s2 sel )
-          2* 2/
           >r
-          over over xor inv
-          r> and
-          over xor
+          drop drop
+          r>
         ;
 
 
-        : fp3a/nop ( t1 t2 s1 s2 )
-          A[ fp4a/nop ; ]] lit !
-        : fp3a/send ( t1 t2 s1 s2 - )
-          down a!
-          >r >r >r
-          !           // t1
-          r> !        // t2
-          r> !        // s1
-          r> !        // s2
-        ;
 
+        : f3b/sub ( s e h - s 0 h' ) // A=l -> A=l'
+          // e <= 0
+          //
+          // shift mantissa by:
+          //
+          //   1 - e
+          //
+          // For unext the initial count is therefore -e.
 
-        : fp3a/mul ( t1 t2 s1 s2 )
-          A[ fp4a/mul ; ]] lit !
-          fp3a/send
-        ;
+          over inv 1 . + >r       // R = -e
 
+          // replace exponent by zero
 
-        : fp3a/div ( t1 t2 s1 s2 )
-          A[ fp4a/div ; ]] lit !
-          fp3a/send
-        ;
-
-
-        : fp3a/min ( t1 t2 s1 s2 comp )
-          fp3a/minsel
-        : fp3a/min1
-          if
-            drop fp3a/swap ;
-          then
-          drop fp3a/nop ;
-
-        : fp3a/max ( t1 t2 s1 s2 comp )
-          fp3a/minsel
-          0x8000 xor
-          fp3a/min1 ;
-
-
-        : fp3a/sub ( t1 t2 s1 s2 comp )
           >r
-          0x8000 xor       // invert effective s2
+          drop
+          0
           r>
 
-        : fp3a/add ( t1 t2 s1 s2 comp )
+          begin
+            f3b/shr
+          unext
+        ;
 
-          // normalize so |1| >= |2|
 
-          // normalize so |1| >= |2|
-          0x8000 xor
-          over over xor and
 
-          dup >r
-          if
-            A[ fp4a/swapc ]] lit !
+        : f3b/adjust ( s e h - s e' h' ) // A=l -> A=l'
+          // e < 0   -> subnormal
+          // e = 0   -> subnormal
+          // 1..254  -> unchanged
+          // e >=255 -> infinity
+
+          over
+
+          . -if
+            // e < 0
+
+            drop
+            f3b/sub
+            ;
           then
+
+          . if
+            // e > 0
+
+            drop
+
+            // Test e < 255.
+
+            over
+            -255 . +
+
+            . -if
+              // 1 <= e <= 254
+
+              drop
+              ;
+            then
+
+            // e >= 255
+
+            drop
+
+            // s e h -> s 255 0
+            // A      -> 0
+
+            drop drop
+            255
+            0 dup a!
+            ;
+          then
+
+          // e == 0
+
           drop
-
-          ( t1 t2 s1 s2 / swap )
-
-          // effective signs determine add/subtract
-          over over xor
-          if
-            drop
-            A[ fp4a/sub ; ]] lit !
-          else
-            drop
-            A[ fp4a/add ; ]] lit !
-          then
-
-          // metadata must follow the numerical operand order
-          r> if
-            drop fp3a/xsend ;
-          then
-          drop fp3a/send ;
-
-        : fp3a/main
-          @b dup ! >r // o
-          @b          // t1
-          @b          // t2
-          @b          // s1
-          @b          // s2
-          @b right a! // c
-          ( t1 t2 s1 s2 c )
-          ex   // call jump table
-          fp3a/main ;
+          f3b/sub
+        ;
 
 
-        # 0 org // jump table
 
+        : f3b/main
+          up b!                   // node 303
+          @b                      // s
+          ( s )
 
-        fp3a/add ; // add, requires compare
+          right b!                // node 402
+          @b @b @b
+          ( s e h l )
 
-        fp3a/sub ; // sub, requires compare
+          a!
+          ( s e h )               // A=l
 
-        fp3a/min ; // min, requires compare
+          f3b/adjust
 
-        fp3a/max ; // max, requires compare
+          // stack: s e h
+          // A:     l
 
-        drop fp3a/mul ;
+          left b!                 // node 404
 
-        drop fp3a/div ;
+          >r >r !b                // s
+          r> !b                   // e
+          r> !b                   // h
+          a !b                    // l
 
-        drop fp3a/nop ;
-
-        drop fp3a/swap ;
-
+          f3b/main
+        ;
       ramWords:
-      - 0x1142A
-      - 0x11427
-      - 0x11420
-      - 0x11424
-      - 0x3B71A
-      - 0x3B71D
-      - 0x3B713
-      - 0x3B708
-      - 0x05AB2
-      - 0x11402
-      - 0x04ABA
-      - 0x00115
-      - 0x2FA2A
-      - 0x26C2A
-      - 0x0B555
-      - 0x367BA
-      - 0x20FE2
-      - 0x32CFA
-      - 0x20355
-      - 0x05AB2
-      - 0x11404
-      - 0x04ABA
-      - 0x00115
-      - 0x2E82A
-      - 0x27A9A
-      - 0x0AC2D
-      - 0x05AB2
-      - 0x1140A
-      - 0x11415
-      - 0x05AB2
-      - 0x1140C
-      - 0x11415
-      - 0x1340F
-      - 0x19423
-      - 0x3B708
-      - 0x3B713
-      - 0x1340F
-      - 0x04341
-      - 0x08000
-      - 0x2FDE2
-      - 0x08000
-      - 0x269B2
-      - 0x04382
-      - 0x08000
-      - 0x203FB
-      - 0x2F330
-      - 0x05AB2
+      - 0x04FB1
+      - 0x00000
+      - 0x2E2EA
+      - 0x27555
+      - 0x20612
+      - 0x00001
+      - 0x3C8BA
+      - 0x3BD9A
+      - 0x00000
       - 0x13400
-      - 0x3AF82
-      - 0x39335
-      - 0x3BD2A
-      - 0x11408
-      - 0x11437
-      - 0x3BD2A
-      - 0x11406
-      - 0x27339
-      - 0x3B70A
-      - 0x3B715
-      - 0x00D2A
-      - 0x2FF02
-      - 0x01F07
+      - 0x1D555
+      - 0x2096D
+      - 0x3B704
+      - 0x2D316
+      - 0x3AF12
+      - 0x3FF01
+      - 0x3C96A
+      - 0x3B555
+      - 0x3A2EF
+      - 0x000FF
+      - 0x04DAD
+      - 0x00000
+      - 0x3B704
+      - 0x04B07
+      - 0x00145
       - 0x001D5
-      - 0x2B455
-      - 0x1143A
+      - 0x29F02
+      - 0x00AB2
+      - 0x1340B
+      - 0x04BBA
+      - 0x00175
+      - 0x2FB9A
+      - 0x08C22
+      - 0x23BB2
+      - 0x11417
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x03A
+        entryPoint: 0x017
         p: 0x000
         a: 0x000
         b: 0x000
@@ -27704,36 +27868,59 @@ projects:
       postMortemEnabled: false
     - coordinate: 404
       enabled: true
-      sourceCode: >-
-        ( CVM2 node 404. VM 32 bit floatingpoint stage 8 node. rounding )
+      sourceCode: >+
+        ( CVM2 node 404. VM 32 bit floatingpoint step 6.
 
-        (
-          performs final round-to-nearest-even and reduces
-          the extended 27-bit mantissa to binary32 precision.
 
-          in:  sehl       {from node 504}
-          out: sehl       {to node 304}
+        rounding and packing mantissa to 24 bit {8:16}.
 
-          input mantissa:
-            H = high 9+ bits
-            L = low 18 bits
+          in: s e H L      {result from node 403}
 
-            L bit3 = retained LSB
-            L bit2 = guard
-            L bit1 = round
-            L bit0 = sticky
+          out: s e h l     {result to node 304}
 
-          output mantissa:
-            h = high 8 bits, explicit hidden bit in bit7
-            l = low 16 bits
+        input format:
+
+
+        normal:
+          e = 1..254
+          H:L 27-bit internal format
+          hidden bit = H.8
+
+        subnormal:
+          e = 0
+          H:L shifted right as required by node 403
+
+        overflow:
+          e = 255
+          H:L = 0
+
+        output mantissa:
+
+          h = bits 23..16
+          l = bits 15..0
+
+        normal:
+          h.7 is the hidden bit
+
+        subnormal:
+          h.7 = 0
+
+        rounding:
+
+          round 27 bits to 24 bits by adding 4 before
+          discarding the lowest three bits.
+
+          no sticky bit is used.
+          exact halfway cases round upward in magnitude.
+
+        during processing:
+          stack: s e H
+          A:     L
+
         )
 
 
-        entry fp8/main
-
-        # up /a
-
-        # down /b
+        entry f6/main
 
 
         # 0 org
@@ -27743,31 +27930,16 @@ projects:
         +cy
 
 
-        : fp8/round ( E H L - E H' L' )
-          // round-to-nearest-even:
+        : f6/round ( s e H - s e H' ) // A=L -> A=L'
+          // Add half of one 24-bit mantissa ULP:
           //
-          // guard && (round || sticky || retained LSB)
+          //   rounded = (H:L + 4) >> 3
+          //
+          // Carry from L is propagated into H.
 
-          dup 4 and
-          if
-            drop
-
-            dup 0xb and
-            if
-              drop
-
-              // one final-precision ULP = 8 in extended format
-
-              clc
-              8 . + >r            // L += 8
-              0 . +               // propagate carry into H
-              r>
-              ;
-            then
-            drop
-            ;
-          then
-          drop
+          clc
+          a 4 . + a!
+          0 . +
         ;
 
 
@@ -27775,170 +27947,181 @@ projects:
 
 
 
-        : fp8/fix ( E H L - E' H' L' )
-
-          // ------------------------------------------------
-          // Rounding overflow:
+        : f6/fix ( s e h - s e' h' )
+          // Handle carry out of the 24-bit significand.
           //
-          //   1.111... -> 10.000...
+          // h=0x100 means:
           //
-          // H=0x200 means increment exponent and restore
-          // normalized extended mantissa 0x100:0.
-          // ------------------------------------------------
-
-          .. over 0x200 and
-          if
-            drop
-
-            drop drop             // discard H,L
-
-            1 . +                 // E++
-            0x100                 // normalized extended mantissa
-            0
-            ;
-          then
-          drop
-
-
-          // ------------------------------------------------
-          // Rounded subnormal -> minimum normal.
+          //   1.111... rounded to 10.000...
           //
-          // E=0 and rounding produced hidden bit 0x100.
-          // Change encoded exponent from 0 to 1.
-          // ------------------------------------------------
-
-          >r >r                  // E / L H
-
-          if                     // E != 0
-            r> r>
-            ;
-          then
-
-          r>                     // E H / L
+          // Renormalize to h=0x80 and increment exponent.
 
           dup 0x100 and
           if
             drop
+            drop
+            1 . +
 
-            >r                   // E / L H
-            1 . +                // 0 -> 1
-            r> r>
+            // e=255 after rounding means infinity.
+
+            dup 255 xor
+            if
+              drop
+              0x80
+              ;
+            then
+
+            drop
+            0                 // infinity: e=255, mantissa=0
             ;
           then
           drop
 
-          r>                     // E H L
+          // For a normal exponent there is nothing more to do.
+
+          over
+          if
+            drop
+            ;
+          then
+          drop
+
+          // e=0:
+          //
+          // Rounding the largest subnormal may generate
+          // h=0x80, which is the smallest normal value.
+
+          dup 0x80 and
+          if
+            drop
+            >r
+            1 . +             // e: 0 -> 1
+            r>
+            ;
+          then
+          drop
         ;
 
 
 
-        : fp8/reduce ( E H L - E h l )
-          // Convert:
-          //
-          //   27-bit H:L
-          //
-          // to:
-          //
-          //   24-bit h:l
-          //
-          // equivalent to (H:L) >> 3.
+        : f6/pack ( s e H - s e' h ) // A=L -> A=l
+          // Round before discarding the three guard bits.
 
-          a!                     // A=L
+          f6/round
+
+          // Save the upper eight bits of the rounded
+          // 24-bit significand:
+          //
+          //   h = H[8:1]
+          //
+          // A rounding carry may temporarily produce
+          // h=0x100; f6/fix handles that.
+
+          dup 2/ >r
+
+          // Shift the complete H:L value right three bits.
+          //
+          // S=0, T=H, A=L
+          //
+          // After the shifts, the low 16 bits of A are:
+          //
+          //   H[0] : L[17:3]
 
           0 over
-          . +*                   // one cross-word right shift
+          . +*
+          . +*
+          . +*
 
-          >r drop drop
-          r>                     // E h
+          // We no longer need original H, zero S,
+          // or shifted H.
 
-          // A now contains:
-          //
-          //   H0 in bit17
-          //   L>>1 below it
-          //
-          // another two shifts produce final low 16 bits.
-          // Arithmetic 2/ is harmless because bits17..16 are
-          // discarded by the mask.
+          drop drop drop
 
-          a 2/ 2/
-          0xffff and
+          r>                    // s e h
+
+          // Keep the low sixteen packed mantissa bits.
+
+          a 0xffff and a!
+
+          // Correct exponent if rounding crossed a
+          // normalization boundary.
+
+          f6/fix
         ;
 
 
 
-        : fp8/main
+        : f6/main
+          left b!               // node 403
+          @b @b @b @b
+          ( s e H L )
 
-          @b !                   // sign can be forwarded immediately
+          a!
+          ( s e H )             // A=L
 
-          @b                     // e
-          @b                     // H
-          @b                     // L
-          fp8/round
-          fp8/fix
-          fp8/reduce
+          f6/pack
+          ( s e h )             // A=l
 
-          // fp8/reduce used A, restore output port.
+          up b!                 // node 304
 
-          up a!
+          >r >r !b              // s
+          r> !b                 // e
+          r> !b                 // h
+          a !b                  // l
 
-          >r >r
-          !                      // e
-          r> !                   // h
-          r> !                   // l
-
-          fp8/main
+          f6/main
         ;
       ramWords:
-      - 0x25DFA
+      - 0x136D3
+      - 0x23DB0
       - 0x00004
-      - 0x1960D
-      - 0x3AD12
-      - 0x0000B
-      - 0x3F30C
-      - 0x3B6D3
-      - 0x049F2
-      - 0x00008
-      - 0x2FDB0
-      - 0x00000
-      - 0x27555
-      - 0x3B555
-      - 0x3B555
-      - 0x21DFA
-      - 0x00200
-      - 0x19417
-      - 0x3A2EF
-      - 0x00001
-      - 0x2C117
-      - 0x00100
+      - 0x2BDB0
       - 0x00000
       - 0x15555
-      - 0x3A8BA
-      - 0x1941A
-      - 0x26C55
-      - 0x26D12
+      - 0x25DFA
       - 0x00100
-      - 0x3F320
+      - 0x19412
+      - 0x3A212
+      - 0x00001
+      - 0x3CD12
+      - 0x000FF
+      - 0x39310
+      - 0x3BD55
+      - 0x00080
+      - 0x3BD55
+      - 0x00000
+      - 0x3AF64
+      - 0x3B555
+      - 0x3AD12
+      - 0x00080
+      - 0x3F31A
       - 0x3A812
       - 0x00001
-      - 0x3CC9D
-      - 0x3AC55
-      - 0x2BD82
-      - 0x00000
-      - 0x348EA
-      - 0x3AC8A
-      - 0x30712
-      - 0x0FFFF
-      - 0x3F555
-      - 0x01A02
-      - 0x01FB2
+      - 0x3CC55
+      - 0x3B555
       - 0x13600
-      - 0x1340E
-      - 0x13421
-      - 0x04ABA
+      - 0x247BF
+      - 0x00000
+      - 0x209D2
+      - 0x349D2
+      - 0x3A2EA
+      - 0x26E12
+      - 0x0FFFF
+      - 0x3EAB2
+      - 0x11406
+      - 0x04B02
+      - 0x00175
+      - 0x01F02
+      - 0x2B61B
+      - 0x04BBA
       - 0x00145
-      - 0x2FA9A
-      - 0x0AC2A
-      - 0x11428
+      - 0x2FB9A
+      - 0x08C22
+      - 0x23BB2
+      - 0x11425
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -27954,7 +28137,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x028
+        entryPoint: 0x025
         p: 0x000
         a: 0x000
         b: 0x000
@@ -28860,213 +29043,8 @@ projects:
       color: 
       postMortemEnabled: false
     - coordinate: 501
-      enabled: true
-      sourceCode: >-
-        ( CVM2 node 501. VM 32 bit floatingpoint stage 5b node. implement add and multiply )
-
-        (
-          calculates result for add and multiply.
-
-          in: HHLL      {from node 401}
-
-          always sends 4 words to node 601:
-
-            add:  L H x x
-            sub:  L H x x
-            mul:  L H 0 x
-            div:  L2 L1 H2 H1
-            pass: L2 L1 H2 H1
-        )
-
-
-        entry fp5b/main
-
-        # down /b
-
-        # up /a
-
-
-        # 0 org
-
-
-
-        +cy
-
-
-        : fp5b/add ( H1 H2 L1 L2 - H L )
-          clc                 // carry = 0
-
-          . + >r              // L = L1+L2, carry-out retained
-                              // H1 H2 / L
-
-          . +                 // H = H1+H2+carry
-                              // H / L
-
-          r>                  // H L
-        ;
-
-
-
-        : fp5b/sub ( H1 H2 L1 L2 - H L )
-
-          // force carry = 1
-          dup dup xor inv dup . + drop
-
-          // L = L1 - L2
-          inv . + >r
-
-          // H = H1 - H2 - borrow
-          inv . +
-          r>
-        ;
-
-
-        -cy
-
-
-
-        : fp5b/shr2 ( H1 H2 L1 L2 - H1 H2' L1 L2' )
-          a!                    // A = L2
-          >r                    // save L1
-          0 over                // H1 H2 0 H2
-          . +*                   // S=0, T:A = H2:L2 >> 1
-          >r drop drop           // save H2', remove 0 and old H2
-          r> r> a               // H1 H2' L1 L2'
-        ;
-
-
-
-        : fp5b/m9 ( h l - H L )
-          a! 17. >r
-          dup dup xor
-          begin . +* unext
-          >r drop r> a
-        ;
-
-
-
-        : fp5b/mul ( H1 H2 L1 L2 - ... 0 H L )
-
-          // ------------------------------------------------
-          // z0 = high18(L1*L2), unsigned 18x18
-          // ------------------------------------------------
-
-          over over                 // H1 H2 L1 L2 L1 L2
-
-          dup >r a!                 // save L2, A=L2
-          17. >r
-          dup dup xor               // L1 L1 0
-          begin . +* unext          // signed L1*unsigned L2
-
-          // If L1 has bit17 set, +* interpreted it as negative.
-          // unsigned product therefore needs +L2 in high word.
-
-          over -if
-            drop
-            r> . +
-          else
-            drop
-            r> drop
-          then
-
-          >r drop r>                // H1 H2 L1 L2 z0
-          >r                        // / z0
-
-
-          // ------------------------------------------------
-          // z2 = H1*H2
-          // ------------------------------------------------
-
-          >r >r                     // save L2,L1
-          over over fp5b/m9         // H1 H2 0 z2
-          drop drop                 // A still contains z2
-          r> r>                     // restore L1,L2
-
-          a >r                      // / z2 z0
-
-
-          // ------------------------------------------------
-          // reorder
-          //
-          // H1 H2 L1 L2
-          // -> H1 L2 H2 L1
-          // ------------------------------------------------
-
-          a! >r a r>                // swap L1,L2
-          >r
-          a! >r a r>                // swap H2,L2
-          r>
-
-
-          // ------------------------------------------------
-          // cross products
-          //
-          // p2 = H2*L1
-          // p1 = H1*L2
-          // ------------------------------------------------
-
-          fp5b/m9                   // H1 L2 p2H p2L
-          >r >r                     // save p2
-
-          fp5b/m9                   // p1H p1L
-          r> r>                     // p1H p1L p2H p2L
-
-
-          // reorder for 36-bit fp5b/add:
-          //
-          // p1H p2H p1L p2L
-
-          >r
-          a! >r a r>
-          r>
-
-          fp5b/add                  // crossH crossL
-
-
-          // ------------------------------------------------
-          // add:
-          //
-          //     z2 << 18
-          //   + z0
-          //
-          // R has: z2 z0
-          // ------------------------------------------------
-
-          r> r>                     // crossH crossL z2 z0
-
-          >r
-          a! >r a r>
-          r>                        // crossH z2 crossL z0
-
-          fp5b/add                  // C_H C_L
-
-
-          // ------------------------------------------------
-          // result = C >> 8
-          // ------------------------------------------------
-
-          a!                        // A=C_L
-          7. >r
-          0 over                    // C_H 0 C_H
-          begin . +* unext          // shift T:A eight times
-
-          0x3ff and                // ... 0 H
-          a                        // ... 0 H L
-        ;
-
-
-
-        : fp5b/main
-          @b @b @b @b
-          ( H1 H2 L1 L2 )
-
-          --l-
-
-          up a!
-          ! ! ! !                  // always send four words
-
-          fp5b/main
-        ;
+      enabled: false
+      sourceCode: ''
       ramWords:
       - 0x136D3
       - 0x2C1BA
@@ -29143,145 +29121,8 @@ projects:
       color: '#E6D6F7'
       postMortemEnabled: false
     - coordinate: 502
-      enabled: true
-      sourceCode: >-
-        ( CVM2 node 502. VM 32 bit floatingpoint stage 4b node. exponent arithmetic )
-
-        (
-          calculates result exponent.
-
-          in: EE        {from node 402}
-          out: E        {to node 602}
-
-          add/sub:
-            convert subnormal exponent 0 -> effective exponent 1
-            align exponent2 to exponent1
-
-          min/max/nop/swap:
-            pass raw exponent1 unchanged
-
-          mul:
-            use effective exponents
-            E1'+E2'-127
-
-          div:
-            use effective exponents
-            E1'-E2'+127
-        )
-
-
-        # 501 import
-
-
-        entry fp4b/main
-
-        # down /b
-
-        # up /a
-
-
-        # 0 org
-
-
-
-        : fp4b/eff ( e-e' )
-          if ; then
-          drop 1
-        ;
-
-
-
-        : fp4b/eff2 ( E1 E2 - E1' E2' )
-          >r
-          fp4b/eff
-          r>
-          fp4b/eff
-        ;
-
-
-
-        : fp4b/adjust ( E1 E2 - E )
-          // invariant: E1 >= E2
-
-          over over xor
-          if
-            drop
-
-            // divide mantissa2 by 2
-            A[ fp5b/shr2 ]] lit !
-
-            // compensate by raising exponent2
-            1 . +
-
-            fp4b/adjust ;
-          then
-
-          drop                     // compare result
-          drop                     // discard E2, leave E1
-        ;
-
-
-
-        : fp4b/pass ( E1 E2 - E1 )
-          drop
-          A[ ; ]] lit !            // 501 leaves operands unchanged
-        ;
-
-
-
-        : fp4b/add ( E1 E2 - E )
-          fp4b/eff2
-          fp4b/adjust
-
-          A[ fp5b/add ; ]] lit !
-        ;
-
-
-
-        : fp4b/sub ( E1 E2 - E )
-          fp4b/eff2
-          fp4b/adjust
-
-          A[ fp5b/sub ; ]] lit !
-        ;
-
-
-
-        : fp4b/mul ( E1 E2 - E )
-          fp4b/eff2
-
-          +
-          0x7e inv . +             // E1'+E2'-127
-
-          A[ fp5b/mul ; ]] lit !
-        ;
-
-
-
-        : fp4b/div ( E1 E2 - E )
-          fp4b/eff2
-
-          inv . +                  // E1'-E2'-1
-          0x80 . +                 // +128 => E1'-E2'+127
-
-          A[ ; ]] lit !            // 501 passes DIV operands through
-        ;
-
-
-
-        : fp4b/main
-          @b                       // raw E1
-          @b                       // raw E2
-          ( E1 E2 )
-
-          left a!
-          r---
-
-          up a!
-          !                        // one exponent to node 602
-
-          fp4b/main
-        ;
+      enabled: false
+      sourceCode: ''
       ramWords:
       - 0x19402
       - 0x15555
@@ -29358,108 +29199,8 @@ projects:
       color: '#E6D6F7'
       postMortemEnabled: false
     - coordinate: 503
-      enabled: true
-      sourceCode: >-
-        ( CVM2 node 503. VM 32 bit floatingpoint stage 3b node. operation control )
-
-        (
-          in: ottss      {from node 403}
-          out: ottss     {to node 603}
-
-          controls exponent/mantissa arithmetic through node 502.
-        )
-
-
-        # 502 import
-
-
-        entry fp3b/main
-
-        # down /b
-
-        # up /a
-
-
-        # 8 org
-
-
-
-        : fp3b/add
-
-        : fp3b/sub
-          if
-            A[ fp4b/sub ; ]] lit !
-            ;
-          then
-
-          A[ fp4b/add ; ]] lit !
-        ;
-
-
-
-        : fp3b/min
-
-        : fp3b/max
-
-        : fp3b/nop
-
-        : fp3b/swap
-          A[ fp4b/pass ; ]] lit !
-        ;
-
-
-
-        : fp3b/mul
-          A[ fp4b/mul ; ]] lit !
-        ;
-
-
-
-        : fp3b/div
-          A[ fp4b/div ; ]] lit !
-        ;
-
-
-
-        : fp3b/main
-          up a!
-
-          @b dup ! >r             // o
-          @b !                    // t1
-          @b !                    // t2
-
-          @b dup !                // send s1, retain s1
-          @b dup !                // send s2, retain s2
-
-          xor                     // effective-sign difference
-
-          right a!                // control node 502
-
-          ex
-
-          fp3b/main
-        ;
-
-
-
-        # 0 org // jump table
-
-
-        fp3b/add ;
-
-        fp3b/sub ;
-
-        fp3b/min ;
-
-        fp3b/max ;
-
-        fp3b/mul ;
-
-        fp3b/div ;
-
-        fp3b/nop ;
-
-        fp3b/swap ;
+      enabled: false
+      sourceCode: ''
       ramWords:
       - 0x11408
       - 0x11408
@@ -29536,214 +29277,8 @@ projects:
       color: '#E6D6F7'
       postMortemEnabled: false
     - coordinate: 504
-      enabled: true
-      sourceCode: >-
-        ( CVM2 node 504. VM 32 bit floatingpoint stage 7 node. final values )
-
-        (
-          in:  ksehl      {from node 604}
-          out: sehl       {to node 404}
-
-          output mantissa is still extended 27-bit format.
-
-          k:
-            0 calculated result
-            1 zero
-            2 infinity
-            3 qNaN
-            4 ADD/SUB both infinity
-
-          for k=4:
-            sign bit14 = effective s1 xor s2
-        )
-
-
-        entry fp7/main
-
-        # down /a
-
-        # up /b
-
-
-        # 4 org
-
-
-
-        : fp7/send ( E H L - )
-          >r >r
-          !                      // e
-          r> !                   // h
-          r> !                   // l
-        ;
-
-
-        : fp7/zeroinfo ( s mask  - )
-          >r
-          !                      // preserve sign
-          @b @b @b               // discard calculated e,h,l
-          r>
-
-        : fp7/sendx00
-          !
-          0 !                    // h
-          0 !                    // l
-        ;
-
-
-        : fp7/zero ( s - )
-          0 fp7/zeroinfo ;
-
-
-        : fp7/inf ( s - )
-          0xff fp7/zeroinfo ;
-
-
-        : fp7/pass ( s - )
-          !                      // final sign
-
-          @b                     // e
-
-          // finite overflow?
-          //
-          // e - 255 < 0 => e < 255
-
-          dup 0xfe inv . +
-          -if
-            drop                 // leave original e
-
-            @b                   // h
-            @b                   // l
-
-            // exact finite zero:
-            // force exponent to zero.
-
-            dup
-            if
-              drop
-              fp7/send ;
-            then
-            drop
-
-            over
-            if
-              drop
-              fp7/send ;
-            then
-            drop
-
-            // H=L=0
-
-            0
-            fp7/sendx00
-            ;
-          then
-
-          // e >= 255 -> infinity
-
-          @b @b                  // discard calculated h,l
-
-          0xff
-          fp7/sendx00
-        ;
-
-
-
-        : fp7/qnan ( s - )
-          drop
-
-          @b @b @b               // discard calculated e,h,l
-
-          0 !                    // s
-          0xff !                 // e
-
-          // qNaN bit in extended 27-bit representation.
-          // Node 404 reduces this to final h=0x40.
-
-          0x80 !                 // h
-          0 !                    // l
-        ;
-
-
-
-        : fp7/main
-          @b
-          ( k )
-
-          // k=4 = ADD/SUB with both operands infinity.
-          // bit14 of sign resolves Inf versus qNaN.
-
-          dup 4 xor
-          ( k k^4 )
-
-          if
-            // k != 4
-
-            drop
-            ( k )
-
-            >r
-            ( / k )
-
-            @b
-            ( s / k )
-
-          else
-            // k = 4
-            // zero test value is still on stack.
-
-            drop drop
-            ( )
-
-            @b
-            ( packed-s )
-
-            dup 0x4000 . and
-            ( packed-s sign-different )
-
-            if
-              // effective signs differ:
-              // Inf + -Inf or effective Inf - Inf -> qNaN
-
-              drop
-              ( packed-s )
-
-              3 >r
-              ( packed-s / 3 )
-
-            else
-              // effective signs equal -> infinity
-
-              drop
-              ( packed-s )
-
-              2 >r
-              ( packed-s / 2 )
-
-            then
-          then
-
-          ( s / dispatch )
-
-          0x8000 and
-          ( s / dispatch )       // only real IEEE sign remains
-
-          ex                     // dispatch fp7/pass/zero/inf/qnan
-
-          fp7/main
-        ;
-
-
-
-        # 0 org
-
-
-        fp7/pass ;
-
-        fp7/zero ;
-
-        fp7/inf ;
-
-        fp7/qnan ;
+      enabled: false
+      sourceCode: ''
       ramWords:
       - 0x11411
       - 0x1140D
@@ -30762,211 +30297,8 @@ projects:
       color: 
       postMortemEnabled: false
     - coordinate: 601
-      enabled: true
-      sourceCode: >-
-        ( CVM2 node 601. VM 32 bit floatingpoint stage 5c node. implement divide )
-
-        (
-          calculates result for divide.
-
-          always receives 4 words from node 501:
-
-            add:    L H x x
-            sub:    L H x x
-            mul:    L H 0 x
-            div:    L2 L1 H2 H1
-            select: L2 L1 H2 H1
-
-          out: HL      {to node 602}
-        )
-
-
-        entry fp5c/main
-
-        # up /b
-
-        # left /a
-
-
-        # 0 org
-
-
-
-        +cy
-
-
-        : fp5c/sec ( x-x )
-          // force carry = 1
-          dup dup xor inv dup . + drop
-        ;
-
-
-
-        : fp5c/dbl ( RL DH RH - RL' DH RH' )
-          // signed 36-bit R <<= 1
-          // preserve DH in the middle
-
-          >r >r
-          clc
-          dup . +             // RL <<= 1
-          r> r>
-          dup . +             // RH = RH*2 + carry
-        ;
-
-
-
-        : fp5c/addd ( RL DH RH - RL' DH RH' )
-          // R += D
-          // DL is held in A
-
-          >r >r               // RL / RH DH
-
-          clc
-          a . +               // RL += DL
-
-          r> r>               // RL' DH RH
-          over . +            // RH += DH + carry
-        ;
-
-
-
-        : fp5c/subd ( RL DH RH - RL' DH RH' )
-          // R -= D
-          // DL is held in A
-
-          >r >r               // RL / RH DH
-
-          fp5c/sec
-          a inv . +           // RL -= DL
-
-          r> r>               // RL' DH RH
-          over inv . +        // RH -= DH + borrow
-        ;
-
-
-
-        : fp5c/q0 ( QL QH - QL' QH' )
-          // Q = Q << 1
-
-          >r
-          clc
-          dup . +
-          r>
-          dup . +
-        ;
-
-
-
-        : fp5c/q1 ( QL QH - QL' QH' )
-          // Q = (Q << 1) | 1
-
-          >r
-          fp5c/sec
-          dup . +
-          r>
-          dup . +
-        ;
-
-
-
-        : fp5c/div ( L2 L1 H2 H1 - ... QL QH )
-
-          // Put divisor low word in A.
-          //
-          // input:
-          //     L2 L1 H2 H1
-
-          >r >r >r
-          a!                   // A = L2 = DL
-          r> r> r>             // L1 H2 H1
-
-          // Initial non-restoring remainder:
-          // R = M1 - M2
-
-          fp5c/subd            // RL DH RH
-
-          // quotient starts at zero
-
-          0 0                  // RL DH RH QL QH
-
-
-          // integer bit + 26 fractional bits
-
-          26. >r
-          begin
-
-            >r >r               // RL DH RH / QH QL
-
-            // Remember sign of R before doubling.
-
-            dup >r
-
-            fp5c/dbl
-
-            r> -if
-              drop
-
-              fp5c/addd
-
-              r> r>
-              fp5c/q0
-
-            else
-              drop
-
-              fp5c/subd
-
-              r> r>
-              fp5c/q1
-
-            then
-
-          unext
-
-          // ... RL DH RH QL QH
-        ;
-
-
-        -cy
-
-
-
-        : fp5c/pass
-          // ADD/SUB/MUL:
-          //
-          // L H x x -> L H
-
-          drop drop
-        ;
-
-
-
-        : fp5c/select
-          // MIN/MAX/NOP/SWAP:
-          //
-          // L2 L1 H2 H1
-          //
-          // selected operand is operand1.
-          // Leave top two words as L1 H1.
-
-          a! drop a
-        ;
-
-
-
-        : fp5c/main
-          @b @b @b @b
-
-          --l-
-
-          // handler leaves L H
-          // or DIV leaves ... QL QH
-
-          left a!
-          ! !                   // send H then L
-
-          fp5c/main
-        ;
+      enabled: false
+      sourceCode: ''
       ramWords:
       - 0x24DE2
       - 0x32DB0
@@ -31043,187 +30375,8 @@ projects:
       color: '#E6D6F7'
       postMortemEnabled: false
     - coordinate: 602
-      enabled: true
-      sourceCode: >-
-        ( CVM2 node 602. VM 32 bit floatingpoint stage 4c node. normalize )
-
-        (
-          receives exponent from node 502 and mantissa from node 601.
-
-          arithmetic:
-            normalize result
-
-          pass:
-            preserve selected operand.
-            For E=0 pre-shift mantissa left once because node 603
-            will perform one subnormal right shift.
-        )
-
-
-        # 601 import
-
-
-        entry fp4c/main
-
-        # up /a
-
-        # right /b
-
-
-        # 0 org
-
-
-
-        +cy
-
-
-        : fp4c/shl
-          >r >r
-
-          clc
-          0 inv . +              // E--
-
-          r> r>
-
-        : fp4c/shlm
-          // E H L -> E H' L'
-          // shift mantissa only
-
-          clc
-          dup . + >r
-          dup . +
-          r>
-        ;
-
-
-        -cy
-
-
-
-        : fp4c/shr
-          a! >r
-
-          1 . +                  // E++
-
-          r>
-
-          0 over
-          . +*
-
-          >r drop drop
-          r> a
-        ;
-
-
-
-        : fp4c/norm
-
-          // overflow bit set -> shift right
-
-          over 0x1ff inv and
-          if
-            drop
-            fp4c/shr
-            fp4c/norm ;
-          then
-          drop
-
-          // normalized hidden bit present
-
-          over 0x100 and
-          if
-            drop ;
-          then
-          drop
-
-          // nonzero high part -> shift left
-
-          .. over
-          if
-            drop
-            fp4c/shl
-            fp4c/norm ;
-          then
-          drop
-
-          // high is zero, low nonzero -> shift left
-
-          dup .
-          if
-            drop
-            fp4c/shl
-            fp4c/norm ;
-          then
-          drop
-        ;
-
-
-
-        : fp4c/send
-          >r >r
-          !b
-          r> !b
-          r> !b
-        ;
-
-
-
-        : fp4c/calc
-          @ @
-          fp4c/norm
-          fp4c/send
-        ;
-
-
-
-        : fp4c/add
-
-        : fp4c/sub
-
-        : fp4c/mul
-          A[ fp5c/pass ; ]] lit !
-          fp4c/calc
-        ;
-
-
-
-        : fp4c/pass
-          A[ fp5c/select ; ]] lit !
-
-          // E is already on the stack.
-          // IF does not consume it.
-
-          if
-            @ @
-            fp4c/send ;
-          then
-
-          // E=0: compensate for the shift that 603 will perform.
-
-          @ @
-          fp4c/shlm
-          fp4c/send
-        ;
-
-
-
-        : fp4c/div
-          A[ fp5c/div ; ]] lit !
-          fp4c/calc
-        ;
-
-
-
-        : fp4c/main
-          up a!
-          @                       // E
-
-          left a!
-
-          r---                    // operation from node 603
-
-          fp4c/main
-        ;
+      enabled: false
+      sourceCode: ''
       ramWords:
       - 0x2E8B2
       - 0x136D3
@@ -31300,206 +30453,8 @@ projects:
       color: '#E6D6F7'
       postMortemEnabled: false
     - coordinate: 603
-      enabled: true
-      sourceCode: >-
-        ( CVM2 node 603. VM 32 bit floatingpoint stage 3c node. sign and normalization )
-
-        (
-          calculates final result sign.
-          controls division path.
-          completes subnormal result normalization.
-
-          in:  ottss      {from node 503}
-          in:  ehl        {from node 602}
-          out: ottsehl    {to node 604}
-
-          ADD/SUB sign:
-            bit15 = final sign
-            bit14 = effective s1 xor s2
-        )
-
-
-        # 602 import
-
-
-        entry fp3c/main
-
-        # up /a
-
-        # left /b
-
-
-        # 8 org
-
-
-
-        : fp3c/shr ( E H L - E' H' L' )
-          // E++, H:L >>= 1
-
-          a!                    // A=L
-          >r                    // / H
-
-          1 . +                 // E++
-
-          r>                    // E' H
-          0 over
-          . +*                  // H:A >>= 1
-
-          >r drop drop
-          r> a                  // E' H' L'
-        ;
-
-
-
-        : fp3c/subnormal ( E H L - 0 H' L' )
-          // Called with E <= 0.
-          // Shift until E reaches 1, then encode E as 0.
-
-          fp3c/shr
-
-          >r >r                 // E / L H
-
-          -if                   // E < 0
-            r> r>
-            fp3c/subnormal ;
-          then
-
-          if                    // E > 0; must be E=1
-            drop
-            0
-            r> r>
-            ;
-          then
-
-          // E=0
-          r> r>
-          fp3c/subnormal ;
-        ;
-
-
-
-        : fp3c/norm ( E H L - E' H' L' )
-          >r >r                 // E / L H
-
-          -if                   // E < 0
-            r> r>
-            fp3c/subnormal ;
-          then
-
-          if                    // E > 0
-            r> r>
-            ;
-          then
-
-          // E=0
-          r> r>
-          fp3c/subnormal ;
-        ;
-
-
-
-        // ADD/SUB:
-
-        // bit15 = s1
-
-        // bit14 = effective s1 xor s2
-
-
-        : fp3c/add
-          over xor 2/ xor
-          !b              // s
-          A[ fp4c/add ; ]] lit !
-        ;
-
-
-        : fp3c/sub
-          over xor 2/ xor !b
-          A[ fp4c/sub ; ]] lit !
-        ;
-
-
-
-        // MIN/MAX/NOP/SWAP:
-
-        // 403 already selected/reordered the desired operand,
-
-        // so final sign is s1.
-
-
-        : fp3c/pass
-          drop !b
-          A[ fp4c/pass ; ]] lit !
-        ;
-
-
-
-        // MUL/DIV:
-
-        // final sign = s1 xor s2
-
-
-        : fp3c/mul
-          xor !b
-          A[ fp4c/mul ; ]] lit !
-        ;
-
-
-        : fp3c/div
-          xor !b
-          A[ fp4c/div ; ]] lit !
-        ;
-
-
-
-        : fp3c/main
-          up a!
-
-          @ dup !b >r           // o
-          @ !b                  // t1
-          @ !b                  // t2
-          @                     // s1
-          @                     // s2
-          right a!
-          ex                    // sends final sign and controls 602
-
-
-          @                     // e
-          @                     // h
-          @                     // l
-
-          fp3c/norm
-
-          // B still points to output node 604.
-          // fp3c/norm may have destroyed A, but that does not matter.
-
-          >r >r
-          !b                    // e
-          r> !b                 // h
-          r> !b                 // l
-
-          fp3c/main
-        ;
-
-
-
-        # 0 org
-
-
-        fp3c/add ;
-
-        fp3c/sub ;
-
-        fp3c/pass ;             // min
-
-        fp3c/pass ;             // max
-
-        fp3c/mul ;
-
-        fp3c/div ;
-
-        fp3c/pass ;             // nop
-
-        fp3c/pass ;             // swap
+      enabled: false
+      sourceCode: ''
       ramWords:
       - 0x11422
       - 0x11426
@@ -31576,236 +30531,8 @@ projects:
       color: '#E6D6F7'
       postMortemEnabled: false
     - coordinate: 604
-      enabled: true
-      sourceCode: >-
-        ( CVM2 node 604. VM 32 bit floatingpoint stage 6 node. classify )
-
-        (
-          in:  ottsehl    {from node 603}
-          out: ksehl      {to node 504}
-
-          k:
-            0 calculated result
-            1 zero
-            2 infinity
-            3 qNaN
-            4 ADD/SUB both infinity; 504 resolves using sign bit14
-        )
-
-
-        entry fp6/main
-
-        # up /a
-
-        # left /b
-
-
-        # 8 org
-
-
-        : fp6/2 2 ;
-
-        : fp6/3 3 ;
-
-        : fp6/4 4 ;
-
-
-        : fp6/or ( a b-c )
-          >r inv r> inv and inv
-        ;
-
-
-
-        // map type-like value to result class
-
-        //
-
-        // 0 -> 0 finite
-
-        // 1 -> 1 zero
-
-        // 2 -> 2 infinity
-
-        // anything with NaN bit -> 3
-
-
-        : fp6/type ( t-k )
-          dup 4 and
-          if
-            fp6/3 ;
-          then
-          drop
-          3 and
-        ;
-
-
-
-        // MIN/MAX/NOP/SWAP
-
-        //
-
-        // 403 already selected/reordered the operand.
-
-        // t1 is therefore the selected type.
-
-
-        : fp6/select ( t1 t2-k )
-          drop
-          fp6/type
-        ;
-
-
-
-        // MUL
-
-        //
-
-        // OR gives:
-
-        //
-
-        // 0 finite
-
-        // 1 zero
-
-        // 2 infinity
-
-        // 3 zero*infinity
-
-        //
-
-        // NaN bit is handled by fp6/type.
-
-
-        : fp6/mul ( t1 t2-k )
-          fp6/or
-          fp6/type
-        ;
-
-
-
-        // DIV
-
-        //
-
-        // swap denominator zero/infinity:
-
-        //
-
-        // 0 -> 0
-
-        // 1 -> 2
-
-        // 2 -> 1
-
-        //
-
-        // OR with numerator:
-
-        //
-
-        // 0 finite
-
-        // 1 zero
-
-        // 2 infinity
-
-        // 3 invalid
-
-        //
-
-        // NaN bit survives.
-
-
-        : fp6/div ( t1 t2-k )
-          if
-            3 xor
-          then
-          fp6/or
-          fp6/type
-        ;
-
-
-
-        // ADD/SUB
-
-        //
-
-        // any NaN  -> 3
-
-        // one Inf  -> 2
-
-        // both Inf -> 4
-
-        // otherwise 0
-
-
-        : fp6/add
-
-        : fp6/sub ( t1 t2-k )
-
-          over over fp6/or
-
-          // any NaN?
-          dup 4 and
-          if
-            fp6/3 ;
-          then
-          drop
-
-          // any infinity?
-          fp6/2 and
-          if
-            drop
-
-            // both infinity?
-            and fp6/2 and
-            if
-              fp6/4 ;
-            then
-
-            fp6/2 ;
-          then
-
-          dup xor
-        ;
-
-
-
-        : fp6/main
-          @b >r                  // o
-          @b                     // t1
-          @b                     // t2
-          ex                     // -> k
-          !                      // k
-          @b !                   // s
-          @b !                   // e
-          @b !                   // h
-          @b !                   // l
-
-          fp6/main
-        ;
-
-
-
-        # 0 org
-
-
-        fp6/add ;
-
-        fp6/sub ;
-
-        fp6/select ;             // min
-
-        fp6/select ;             // max
-
-        fp6/mul ;
-
-        fp6/div ;
-
-        fp6/select ;             // nop
-
-        fp6/select ;             // swap
+      enabled: false
+      sourceCode: ''
       ramWords:
       - 0x1141E
       - 0x1141E
