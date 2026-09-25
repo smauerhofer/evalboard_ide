@@ -59,10 +59,22 @@ public sealed class NodeViewModel
 
   public Visibility PostMortemHintVisibility => PostMortemEnabled ? Visibility.Visible : Visibility.Collapsed;
 
+  /// <summary>ADDED 2026-09-25, per Stefan directly: "in the GA144 window ... add the small node
+  /// color number in the top left of each node." The 2-digit hex <see cref="NodeColorOption.Number"/>
+  /// for <see cref="EffectiveColorHex"/>, shown as a small badge in the node's top-left corner
+  /// (ChipWindow.xaml) -- the same 2-digit number already stamped on every NodeColorPalette picker
+  /// swatch, so a node on the chip grid can be matched back to its picker entry at a glance.</summary>
+  public string NodeColorNumber => NodeColorOption.NumberFor(EffectiveColorHex);
+
+  /// <summary>Hidden until the node actually has a color to label -- mirrors the same
+  /// <see cref="IsConfigured"/> gate already used for NodeBackgroundBrush/NodeBorderBrushColor
+  /// above, so an unconfigured (neutral-background) node shows no color number either.</summary>
+  public Visibility NodeColorNumberVisibility => IsConfigured ? Visibility.Visible : Visibility.Collapsed;
+
   /// <summary>
   /// This node's own color (Model.Color) if it has one, otherwise the owning project's
   /// DefaultNodeColor passed in at construction (ChipViewModel.RebuildNodes) -- always one of
-  /// the 24 NodeColorPalette swatches either way. Recomputed live from Model.Color on every
+  /// the 48 NodeColorPalette swatches either way. Recomputed live from Model.Color on every
   /// access, so picking "Use project default" in the node editor (which clears Model.Color to
   /// null) or changing the project's own default both show up the next time this chip's node
   /// grid is rebuilt.

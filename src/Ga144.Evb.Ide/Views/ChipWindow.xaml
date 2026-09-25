@@ -200,6 +200,19 @@
                     <TextBlock Text="{Binding StateText}" FontSize="12" Foreground="#406A4B" HorizontalAlignment="Center" />
                   </StackPanel>
 
+                  <!-- ADDED 2026-09-25, per Stefan directly: "add the small node color number in
+                       the top left of each node." Mirrors the same 2-digit hex number already
+                       stamped on every NodeColorPalette picker swatch. Placed before the Kraken
+                       badge below (drawn on top of this one in z-order), so an active Kraken
+                       tentacle/head label still wins the corner on the rare node where both show
+                       at once. -->
+                  <Border Background="#B3FFFFFF" CornerRadius="2"
+                                            HorizontalAlignment="Left" VerticalAlignment="Top" Padding="3,1"
+                                            IsHitTestVisible="False"
+                                            Visibility="{Binding NodeColorNumberVisibility}">
+                    <TextBlock Text="{Binding NodeColorNumber}" FontSize="9" FontWeight="Bold" Foreground="#333333" />
+                  </Border>
+
                   <Border Background="{Binding KrakenBrush}"
                                             CornerRadius="3"
                                             HorizontalAlignment="Left"

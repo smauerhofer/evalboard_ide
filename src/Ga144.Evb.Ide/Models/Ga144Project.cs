@@ -13,7 +13,7 @@ public sealed class Ga144Project
   public List<F18MacroDefinition> UserMacros { get; set; } = [];
 
   /// <summary>
-  /// One of the 16 <see cref="NodeColorPalette"/> swatches (MainWindow's "Active project" panel
+  /// One of the 48 <see cref="NodeColorPalette"/> swatches (MainWindow's "Active project" panel
   /// picks it), applied to every configured node in this project's Host/Target chips that has no
   /// color of its own (<see cref="Ga144NodeConfiguration.Color"/> is null) -- see
   /// <see cref="ViewModels.NodeViewModel.EffectiveColorHex"/> for where the two are combined.

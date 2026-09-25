@@ -38,60 +38,62 @@
       </StackPanel>
     </DockPanel>
 
+    <!--
+        Stefan's own request, 2026-09-25: "remove the color selection grid and replace the
+        selected color[] with a color selection pulldown-menu and display the selected color as
+        the current element", replacing the old 4x12 swatch-grid picker below the label with a
+        single ComboBox. The "current color" swatch (Stefan's own "current node color button")
+        stays exactly where it was, right after the label, always showing the effective color as
+        its own small element; the ComboBox's own closed state does the same job for whichever
+        color is actually selected, since its ItemTemplate (a swatch + number + hex, same as
+        every entry in its dropdown list) is what renders in the closed box too.
+    -->
     <DockPanel Grid.Row="1" Margin="0,0,0,10" LastChildFill="False">
       <TextBlock DockPanel.Dock="Left" Text="Node color:" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" />
-      <Border DockPanel.Dock="Left" Width="24" Height="24" Margin="0,0,10,0" CornerRadius="4"
-                        Background="{Binding EffectiveColorBrush}" BorderBrush="#999999" BorderThickness="1"
-                        VerticalAlignment="Center" ToolTip="{Binding EffectiveColorHex}" />
-      <ItemsControl DockPanel.Dock="Left" ItemsSource="{Binding ColorOptions}" VerticalAlignment="Center">
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate>
-            <StackPanel Orientation="Horizontal" />
-          </ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
+      <!--
+          The "current color" swatch also carries its color's 2-digit hex Number, same
+          translucent-pill technique as the ComboBox's own per-item swatches below, via a Grid so
+          the badge can sit on top of the swatch itself.
+      -->
+      <Grid DockPanel.Dock="Left" Width="24" Height="24" Margin="0,0,10,0" VerticalAlignment="Center">
+        <Grid.ToolTip>
+          <MultiBinding StringFormat="{}{0}  {1}">
+            <Binding Path="EffectiveColorNumber" />
+            <Binding Path="EffectiveColorHex" />
+          </MultiBinding>
+        </Grid.ToolTip>
+        <Border CornerRadius="4"
+                          Background="{Binding EffectiveColorBrush}" BorderBrush="#999999" BorderThickness="1" />
+        <Border Background="#B3FFFFFF" CornerRadius="2" Padding="2,0"
+                                HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+          <TextBlock Text="{Binding EffectiveColorNumber}" FontSize="8" FontWeight="Bold" Foreground="#333333" />
+        </Border>
+      </Grid>
+      <!--
+          The pulldown menu itself: one entry per NodeColorPalette swatch (48 total), each shown
+          as its own small swatch + 2-digit hex Number + hex string, so nothing shown by the old
+          picker grid is lost, just laid out as a dropdown list instead of a fixed 4x12 grid.
+          SelectedItem is two-way bound to SelectedColorOption, which both reads back whichever
+          entry matches this node's current EffectiveColorHex (so the ComboBox opens already
+          pointed at the current element) and applies a newly picked entry via SetColor.
+      -->
+      <ComboBox DockPanel.Dock="Left" Width="200" VerticalAlignment="Center"
+                        ItemsSource="{Binding ColorOptions}"
+                        SelectedItem="{Binding SelectedColorOption}"
+                        ToolTip="Pick one of the 48 NodeColorPalette swatches as this node's own color override.">
+        <ComboBox.ItemTemplate>
           <DataTemplate>
-            <!--
-                Outer selection ring, same technique as MainWindow's "Default node color" picker:
-                a black rectangle drawn AROUND the swatch, transparent (invisible) except for
-                whichever one matches this node's current EffectiveColorHex. BorderThickness/
-                BorderBrush live ONLY as Style Setters, never as local attributes on the Border
-                itself: a local attribute value always wins over a Style trigger's Setter in
-                WPF's property value precedence, which is exactly why this never appeared when it
-                used to be a single Border with BorderBrush/BorderThickness set directly on it and
-                the trigger only ever fighting (and losing to) those local values.
-            -->
-            <Border Width="28" Height="28" Margin="0,0,4,0" Padding="2" CornerRadius="4">
-              <Border.Style>
-                <Style TargetType="Border">
-                  <Setter Property="BorderThickness" Value="2" />
-                  <Setter Property="BorderBrush" Value="Transparent" />
-                  <Style.Triggers>
-                    <DataTrigger Value="True">
-                      <DataTrigger.Binding>
-                        <MultiBinding Converter="{StaticResource ColorEqualsConverter}">
-                          <Binding Path="Hex" />
-                          <Binding Path="DataContext.EffectiveColorHex" RelativeSource="{RelativeSource AncestorType=Window}" />
-                        </MultiBinding>
-                      </DataTrigger.Binding>
-                      <Setter Property="BorderBrush" Value="Black" />
-                    </DataTrigger>
-                  </Style.Triggers>
-                </Style>
-              </Border.Style>
-              <!-- Exactly fills the 20x20 left inside the outer ring (28 outer, minus 2*2 for
-                   its BorderThickness, minus 2*2 for its Padding); a size mismatch here would
-                   let this swatch overflow past the ring and draw over it, hiding the border. -->
-              <Border Width="20" Height="20" CornerRadius="3"
-                                      Background="{Binding Brush}" BorderBrush="#999999" BorderThickness="1"
-                                      Cursor="Hand" Tag="{Binding Hex}" ToolTip="{Binding Hex}"
-                                      MouseLeftButtonDown="OnNodeColorSwatchClick" />
-            </Border>
+            <StackPanel Orientation="Horizontal">
+              <Border Width="16" Height="16" CornerRadius="3" Margin="0,0,6,0"
+                                      Background="{Binding Brush}" BorderBrush="#999999" BorderThickness="1" />
+              <TextBlock Text="{Binding Number}" FontFamily="Consolas" FontWeight="Bold" Margin="0,0,6,0" />
+              <TextBlock Text="{Binding Hex}" Foreground="#555555" />
+            </StackPanel>
           </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
       <Button DockPanel.Dock="Left" Content="Use project default" Click="OnUseProjectDefaultColorClick"
-                      Margin="10,0,0,0" Padding="8,3" MinHeight="24"
+                      Margin="10,0,0,0" Padding="8,3" MinHeight="24" VerticalAlignment="Center"
                       ToolTip="Clears this node's own color so it goes back to following the project's default node color (set in MainWindow's Active project panel)." />
     </DockPanel>
 

@@ -152,12 +152,12 @@ public sealed class NodeEditorViewModel : ObservableObject
   /// this node's own data, not whether it is part of the CVM boot stream.</summary>
   public bool PostMortemEnabled { get => _postMortemEnabled; set => SetProperty(ref _postMortemEnabled, value); }
 
-  /// <summary>The 24 fixed swatches the "Node color" picker offers -- the same set
+  /// <summary>The 48 fixed swatches the "Node color" picker offers -- the same set
   /// MainWindow's project "Default node color" picker offers, via the same NodeColorOption.Palette.</summary>
   public IReadOnlyList<NodeColorOption> ColorOptions => NodeColorOption.Palette;
 
   /// <summary>This node's own color override, or null to follow the project's default. Null
-  /// until "Node color…" is used to pick one of the 24 swatches, or forever if "Use project
+  /// until "Node color…" is used to pick one of the 48 swatches, or forever if "Use project
   /// default" is clicked afterward.</summary>
   public string? Color
   {
@@ -169,6 +169,8 @@ public sealed class NodeEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(UsesProjectDefaultColor));
         OnPropertyChanged(nameof(EffectiveColorHex));
         OnPropertyChanged(nameof(EffectiveColorBrush));
+        OnPropertyChanged(nameof(EffectiveColorNumber));
+        OnPropertyChanged(nameof(SelectedColorOption));
       }
     }
   }
@@ -176,13 +178,38 @@ public sealed class NodeEditorViewModel : ObservableObject
   public bool UsesProjectDefaultColor => Color is null;
 
   /// <summary>Color if this node has its own, otherwise the project's default -- always one of
-  /// the 24 NodeColorPalette swatches either way.</summary>
+  /// the 48 NodeColorPalette swatches either way.</summary>
   public string EffectiveColorHex => Color ?? _projectDefaultNodeColor;
 
   public Brush EffectiveColorBrush => NodeColorOption.BrushFromHex(EffectiveColorHex);
 
-  /// <summary>Picks one of the 24 <see cref="ColorOptions"/> swatches as this node's own color
-  /// override. Bound to each swatch's click in NodeEditorWindow.xaml.cs.</summary>
+  /// <summary>The 2-digit hex <see cref="NodeColorOption.Number"/> of <see cref="EffectiveColorHex"/>
+  /// -- labels NodeEditorWindow's own single "current color" swatch, next to the full picker
+  /// grid.</summary>
+  public string EffectiveColorNumber => NodeColorOption.NumberFor(EffectiveColorHex);
+
+  /// <summary>ADDED 2026-09-25, per Stefan directly: "remove the color selection grid and replace
+  /// the selected color[] with a color selection pulldown-menu and display the selected color as
+  /// the current element" -- replaces the old 4x12 swatch-grid picker. Backs the "Node color"
+  /// ComboBox's two-way SelectedItem binding (NodeEditorWindow.xaml): the getter finds the
+  /// <see cref="ColorOptions"/> entry matching <see cref="EffectiveColorHex"/> so the dropdown's
+  /// own closed-state display always shows the current color as its selected item (the "current
+  /// element" the ComboBox itself renders), and the setter calls <see cref="SetColor"/> exactly
+  /// like clicking a swatch used to.</summary>
+  public NodeColorOption? SelectedColorOption
+  {
+    get => ColorOptions.FirstOrDefault(option => string.Equals(option.Hex, EffectiveColorHex, StringComparison.OrdinalIgnoreCase));
+    set
+    {
+      if (value is not null && !string.Equals(value.Hex, EffectiveColorHex, StringComparison.OrdinalIgnoreCase))
+      {
+        SetColor(value.Hex);
+      }
+    }
+  }
+
+  /// <summary>Picks one of the 48 <see cref="ColorOptions"/> swatches as this node's own color
+  /// override. Called from the "Node color" ComboBox's SelectedColorOption binding above.</summary>
   public void SetColor(string hex) => Color = hex;
 
   /// <summary>Clears this node's own color override so it goes back to following the project's

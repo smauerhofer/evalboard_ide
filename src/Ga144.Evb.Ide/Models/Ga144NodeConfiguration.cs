@@ -9,7 +9,7 @@ public sealed class Ga144NodeConfiguration
   public StartupConfiguration Startup { get; set; } = new();
 
   /// <summary>
-  /// This node's own color override, one of the 24 <see cref="NodeColorPalette"/> swatches
+  /// This node's own color override, one of the 48 <see cref="NodeColorPalette"/> swatches
   /// (NodeEditorWindow's "Node color" picker), or null to follow the owning project's
   /// <see cref="Ga144Project.DefaultNodeColor"/> instead -- null is the ordinary state for
   /// every node that has never had its own color picked. Copying a node to another project

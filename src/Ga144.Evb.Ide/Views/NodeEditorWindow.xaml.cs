@@ -130,16 +130,6 @@ public partial class NodeEditorWindow : Window
     }
   }
 
-  // One of the 24 NodeColorPalette swatches in the "Node color" row was clicked -- gives this
-  // node its own color override.
-  private void OnNodeColorSwatchClick(object sender, MouseButtonEventArgs e)
-  {
-    if (sender is FrameworkElement { Tag: string hex })
-    {
-      _viewModel.SetColor(hex);
-    }
-  }
-
   // Clears this node's own color override so it goes back to following the project's default.
   private void OnUseProjectDefaultColorClick(object sender, RoutedEventArgs e)
   {
