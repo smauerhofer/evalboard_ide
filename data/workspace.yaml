@@ -22997,7 +22997,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#F7E0EA'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 103
       enabled: true
       sourceCode: >-
@@ -23281,7 +23281,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#F7E0EA'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 104
       enabled: true
       sourceCode: >+
@@ -23448,7 +23448,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#F7E0EA'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 105
       enabled: true
       sourceCode: >-
@@ -23779,7 +23779,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#F7E0EA'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 106
       enabled: false
       sourceCode: ''
@@ -24359,7 +24359,7 @@ projects:
         opcode decoding and optional magnitude compare calculation
 
           in: o s1 s2 e1 e2 h1 h2 l1 l2   {from node 204}
-          out: s1 s2                      {to node 303}
+          out: s1 s2                       {to node 303}
           out: e1 e2 h1 h2 l1 l2          {to node 202}
         optional:
           in: c             {from node 202}
@@ -24371,9 +24371,12 @@ projects:
             0x20000 : |f1| <  |f2|
         )
 
+
         # 202 import
 
         # 303 import
+
+        # 403 import
 
 
         entry f3/main
@@ -24388,29 +24391,81 @@ projects:
 
 
         : f3/sign ( s1 s2 - )
-          // pass sign to node 303
           >r !b r> !b
         ;
 
 
-        : f3/with ( s1 s2 call - )
-          # f4/calc lit !
-          >r f3/sign
-          r> !b
-          @ !b
+
+        // Make node 303 send a selector through A to node 403.
+
+        // Node 303 remains executing from its down port.
+
+
+        : f3/start ( selector - )
+          A[ @p ! ]] lit !b
+          !b
         ;
 
 
-        : f3/without ( s1 s2 call - )
-          >r f3/sign
+
+        // ADD/SUB/MIN/MAX:
+
+        //
+
+        // first start the vertical OTHER path,
+
+        // then ask node 202 to calculate c,
+
+        // then load s1 s2 c into node 303,
+
+        // call the selected resident operation,
+
+        // and finally send its resulting sign through A to node 403.
+
+
+        : f3/with ( s1 s2 call - )
+          # f3b/other lit f3/start
+
+          # f4/calc lit !
+
+          A[ @p @p @p ]] lit !b
+
+          >r
+          f3/sign
+          @ !b
           r> !b
+
+          A[ ! ]] lit !b
+        ;
+
+
+
+        // MUL/DIV:
+
+        //
+
+        // the caller has already selected the vertical path.
+
+        // No magnitude comparison is required.
+
+
+        : f3/without ( s1 s2 call - )
           # f4/ignore lit !
+
+          A[ @p @p ]] lit !b
+
+          >r
+          f3/sign
+          r> !b
+
+          A[ ! ]] lit !b
         ;
 
 
 
         : f3/sub ( s1 s2 )
           0x8000 xor
+
         : f3/add ( s1 s2 )
           A[ f3a/add ]] lit f3/with ;
 
@@ -24420,27 +24475,36 @@ projects:
         : f3/max ( s1 s2 )
           A[ f3a/max ]] lit f3/with ;
 
+
         : f3/mul ( s1 s2 )
+          # f3b/mul lit f3/start
           A[ f3a/mul ]] lit f3/without ;
 
         : f3/div ( s1 s2 )
+          # f3b/div lit f3/start
           A[ f3a/div ]] lit f3/without ;
+
 
         : f3/main
           left b!
           @b >r
           ( / o )
+
           @b @b
           ( s1 s2 / o )
+
           // pass e1 e2 h1 h2 l1 l2 to node 202
+
           @b !           // e1
           @b !           // e2
           @b !           // h1
           @b !           // h2
           @b !           // l1
           @b !           // l2
+
           down b!
           ( s1 s2 / o )
+
           ex
           f3/main
         ;
@@ -24465,34 +24529,49 @@ projects:
 
         f3/div ;
       ramWords:
-      - 0x11413
-      - 0x11411
-      - 0x11415
-      - 0x11417
-      - 0x11419
-      - 0x1141B
+      - 0x1141E
+      - 0x1141C
+      - 0x11420
+      - 0x11422
+      - 0x11424
+      - 0x11428
       - 0x2FB9A
       - 0x09555
-      - 0x05ABA
+      - 0x05B25
+      - 0x05AB2
+      - 0x05608
+      - 0x0000E
+      - 0x05A12
       - 0x0000C
+      - 0x05D12
+      - 0x088B2
       - 0x13406
-      - 0x27B0A
-      - 0x09555
-      - 0x2F606
-      - 0x27B12
+      - 0x03B9A
+      - 0x09D25
+      - 0x0A9B2
+      - 0x05A12
       - 0x0000A
-      - 0x0B555
+      - 0x05DB2
+      - 0x088B2
+      - 0x13406
+      - 0x27B12
+      - 0x0A9B2
+      - 0x09555
       - 0x043B2
       - 0x08000
-      - 0x05708
+      - 0x0570A
       - 0x1340D
-      - 0x05708
+      - 0x0570A
       - 0x13420
-      - 0x05708
+      - 0x0570A
       - 0x1342A
-      - 0x0570D
+      - 0x05608
+      - 0x00000
+      - 0x05714
       - 0x13433
-      - 0x0570D
+      - 0x05608
+      - 0x00007
+      - 0x05714
       - 0x13437
       - 0x04B02
       - 0x00175
@@ -24503,22 +24582,7 @@ projects:
       - 0x0BF2F
       - 0x00115
       - 0x29455
-      - 0x1141D
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1142C
       - 0x15555
       - 0x15555
       - 0x15555
@@ -24530,7 +24594,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x01D
+        entryPoint: 0x02C
         p: 0x000
         a: 0x000
         b: 0x000
@@ -25010,7 +25074,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 206
       enabled: false
       sourceCode: ''
@@ -25579,8 +25643,6 @@ projects:
 
         # 302 import
 
-        # 403 import
-
 
         # up /a
 
@@ -25624,7 +25686,7 @@ projects:
         // to operand 1 by choosing code 8000 or 20000.
 
 
-        : f3a/smaler @ 0x8000
+        : f3a/smaler 0x8000
 
         : f3a/select ( s1 s2 c code - s )
           xor
@@ -25634,7 +25696,7 @@ projects:
           drop f3a/second
         ;
 
-        : f3a/larger @ 0x20000 f3a/select ;
+        : f3a/larger 0x20000 f3a/select ;
 
 
 
@@ -25669,15 +25731,16 @@ projects:
         //   c=20000 -> ssub, sign s2
 
 
-        : f3a/add ( s1 s2 - s )
+        : f3a/add ( s1 s2 c - s )
+          >r
           over over xor
           if
             // different signs
             drop
-            @
+            r>
 
             // 20000 is negative as an 18-bit F18 value
-            -if
+            . -if
               drop
               # f4a/ssub lit !b
               >r drop r>
@@ -25703,7 +25766,7 @@ projects:
 
           // same signs
           drop
-          @
+          r>
 
           // only c=20000 requires swapped orientation
           . -if
@@ -25745,12 +25808,13 @@ projects:
         //   operand 2 only when c=20000.
 
 
-        : f3a/min ( s1 s2 - s )
+        : f3a/min ( s1 s2 c - s )
+          >r
           over over xor
           if
             // opposite signs
             drop
-            @ drop
+            r> drop
 
             // s2 negative -> operand 2
             if
@@ -25768,11 +25832,13 @@ projects:
           // both negative: larger magnitude
           . if
             drop
+            r>
             f3a/larger ;
           then
 
           // both positive: smaller magnitude
           drop
+          r>
           f3a/smaler
         ;
 
@@ -25803,12 +25869,13 @@ projects:
         //   operand 2 only when c=8000.
 
 
-        : f3a/max ( s1 s2 - s )
+        : f3a/max ( s1 s2 c - s )
+          >r
           over over xor
           if
             // opposite signs
             drop
-            @ drop
+            r> drop
 
             // s2 negative -> operand 1
             if
@@ -25826,28 +25893,27 @@ projects:
           // both negative: smaller magnitude
           if
             drop
+            r>
             f3a/smaler ;
           then
 
           // both positive: larger magnitude
           drop
+          r>
           f3a/larger
         ;
 
 
-        : f3a/mul ( s1 s2 - )
+
+        : f3a/mul ( s1 s2 - s )
           # f4a/imul lit !b
           xor
-          A[ @p f3b/mul ]] lit !
-          !
         ;
 
 
-        : f3a/div ( s1 s2 - )
+        : f3a/div ( s1 s2 - s )
           # f4a/idiv lit !b
           xor
-          A[ @p f3b/div ]] lit !
-          !
         ;
       ramWords:
       - 0x05BED
@@ -25855,17 +25921,17 @@ projects:
       - 0x05BBA
       - 0x0002B
       - 0x3AC55
-      - 0x03DB2
+      - 0x049B2
       - 0x08000
       - 0x39309
       - 0x3B700
       - 0x3B702
-      - 0x03DB2
+      - 0x05707
       - 0x20000
-      - 0x11407
-      - 0x20FE2
-      - 0x19418
-      - 0x3BE6B
+      - 0x2EF82
+      - 0x39318
+      - 0x3ACB2
+      - 0x1B413
       - 0x3BD22
       - 0x00027
       - 0x2E29D
@@ -25874,7 +25940,7 @@ projects:
       - 0x3AC67
       - 0x3B555
       - 0x24355
-      - 0x3BEB2
+      - 0x3ACB2
       - 0x1B41D
       - 0x3BD22
       - 0x00023
@@ -25882,33 +25948,33 @@ projects:
       - 0x3BD22
       - 0x00021
       - 0x3B555
-      - 0x20FE2
-      - 0x19426
-      - 0x3BEEA
+      - 0x2EF82
+      - 0x39326
+      - 0x3ACEA
       - 0x19425
       - 0x11402
       - 0x11400
       - 0x3AFB2
-      - 0x19429
-      - 0x3B70A
-      - 0x3B705
-      - 0x20FE2
-      - 0x19430
-      - 0x3BEEA
-      - 0x1942F
+      - 0x1942A
+      - 0x3ACB2
+      - 0x1140A
+      - 0x3ACB2
+      - 0x11405
+      - 0x2EF82
+      - 0x39332
+      - 0x3ACEA
+      - 0x19431
       - 0x11400
       - 0x11402
-      - 0x3AF62
-      - 0x3B705
-      - 0x3B70A
-      - 0x05BE7
+      - 0x3AF65
+      - 0x3ACB2
+      - 0x11405
+      - 0x3ACB2
+      - 0x1140A
+      - 0x05BE5
       - 0x0002D
-      - 0x05600
-      - 0x0BA55
-      - 0x05BE7
+      - 0x05BE5
       - 0x0002F
-      - 0x05604
-      - 0x0BA55
       - 0x15555
       - 0x15555
       - 0x15555
@@ -26257,7 +26323,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 306
       enabled: true
       sourceCode: >+
@@ -26508,7 +26574,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 307
       enabled: true
       sourceCode: "( CVM2 node 307. VM ternary main, 1101_????_????_???? )\r\n# 407 import\n# 0x10 org\nentry k/main\n# 0 /a\n# up /b\r\n: k/@ ( ab-) A[ @p @p ]] lit !b !b !b A[ n/@ ]] lit !b A[ n/r! ]] lit !b ;\r\n: k/! ( ab-) A[ n/r@ ]] lit !b A[ @p @p ]] lit !b !b !b A[ n/! ]] lit !b ;\n: k/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;\n: k/r! ( w) A[ @p n/r! ]] lit !b !b ;\n: k/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;\n: k/push ( w) A[ @p n/push ]] lit !b !b ;\n// : k/next ( -w) A[ n/next ]] lit !b A[ !p ]] lit !b @b ;\n: k/leave A[ n/leave ; ]] lit !b\n: k/main # k/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b\n  -if // 1101_1???_????_????\n    2* -if // 1101_11??_????_????\n      r> r--- ;\n    then // 1101_10??_????_????\n    r> --l- ;\n  then // 1101_0???_????_????\n  2* -if // 1101_01??_????_????\n    r> -d-- ;\n  then // 1101_00??_????_????\r\n\n(\r\n  \r\n\r\n)\n"
@@ -26907,9 +26973,9 @@ projects:
         )
 
 
-        # down /b
+        # up /b
 
-        # up /a
+        # down /a
 
         # left /p
 
@@ -27055,14 +27121,14 @@ projects:
           a
           ( ... 0 H L )
 
-          up a!
+          down a!
           ! !
         ;
 
 
 
         : f5b/pass ( - )
-          up a!
+          down a!
           @b !
           @b !
         ;
@@ -27070,7 +27136,7 @@ projects:
 
 
         : f5b/div ( - )
-          up a!
+          down a!
           @b !
           @b !
           @b !
@@ -27124,13 +27190,13 @@ projects:
       - 0x2C577
       - 0x003FF
       - 0x3EE12
-      - 0x00145
+      - 0x00115
       - 0x2BA2D
       - 0x04A02
-      - 0x00145
+      - 0x00115
       - 0x0BF2D
       - 0x04A02
-      - 0x00145
+      - 0x00115
       - 0x0BF2A
       - 0x01A02
       - 0x0B555
@@ -27195,7 +27261,7 @@ projects:
 
 
         : f4b/pass ( - )
-          right a!
+          left a!
           A[ f5b/pass ]] lit !
           @b
           f4b/out
@@ -27204,7 +27270,7 @@ projects:
 
 
         : f4b/mul ( - )
-          right a!
+          left a!
           A[ f5b/mul ]] lit !
 
           @b @b
@@ -27217,7 +27283,7 @@ projects:
 
 
         : f4b/div ( - )
-          right a!
+          left a!
           A[ f5b/div ]] lit !
 
           @b inv @b
@@ -27229,7 +27295,7 @@ projects:
 
 
         : f4b/main
-          left a! @ >r
+          right a! @ >r
           ex
           f4b/main
         ;
@@ -27237,18 +27303,18 @@ projects:
       - 0x04A2D
       - 0x00115
       - 0x04A12
-      - 0x001D5
+      - 0x00175
       - 0x13431
       - 0x0BF40
       - 0x04A12
-      - 0x001D5
+      - 0x00175
       - 0x13409
       - 0x0BF00
       - 0x049F2
       - 0x3FF81
       - 0x11400
       - 0x04A12
-      - 0x001D5
+      - 0x00175
       - 0x13434
       - 0x0BFCA
       - 0x009F7
@@ -27256,7 +27322,7 @@ projects:
       - 0x2C1B2
       - 0x11400
       - 0x04A0A
-      - 0x00175
+      - 0x001D5
       - 0x2F455
       - 0x11415
       - 0x15555
@@ -27320,14 +27386,12 @@ projects:
         multiply/divide control and sign relay.
 
 
-        operation selection is supplied independently
+        operation selection and sign are supplied independently.
 
-        from the sign value.
+          in: operation     {from node 303}
+          in: s             {from node 303}
 
-          in: operation      {from node 303}
-          in: s              {from node 303}
-
-          out: s             {to node 503}
+          out: s            {to node 503}
 
         )
 
@@ -27465,13 +27529,13 @@ projects:
       postMortemEnabled: true
     - coordinate: 404
       enabled: true
-      sourceCode: >
+      sourceCode: >-
         ( CVM2 node 404. VM 32 bit floatingpoint step 6.
 
 
         rounding and packing mantissa to 24 bit {8:16}.
 
-          in: s e H L      {result from node 403}
+          in: s e H L      {result from node 504}
 
           out: s e h l     {result to node 304}
 
@@ -27485,7 +27549,7 @@ projects:
 
         subnormal:
           e = 0
-          H:L shifted right as required by node 403
+          H:L shifted right as required by node 503
 
         overflow:
           e = 255
@@ -27504,11 +27568,13 @@ projects:
 
         rounding:
 
-          round 27 bits to 24 bits by adding 4 before
-          discarding the lowest three bits.
+          round 27 bits to 24 bits using round-to-nearest-even.
 
-          no sticky bit is used.
-          exact halfway cases round upward in magnitude.
+          bias = 3 + retained-LSB
+
+          values below halfway round down.
+          values above halfway round up.
+          exact halfway cases round to an even result.
 
         during processing:
           stack: s e H
@@ -27650,7 +27716,7 @@ projects:
 
 
         : f6/main
-          left b!               // node 403
+          down b!               // node 504
           @b @b @b @b
           ( s e H L )
 
@@ -27711,7 +27777,7 @@ projects:
       - 0x3EAB2
       - 0x11409
       - 0x04B02
-      - 0x00175
+      - 0x00115
       - 0x01F02
       - 0x2B61E
       - 0x04BBA
@@ -29503,7 +29569,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 505
       enabled: true
       sourceCode: >-
@@ -36451,14 +36517,14 @@ projects:
         halt
     - name: test
       source: >-
-        pushlit 0x4000
+        pushlit 0x3f80
 
         pushlit 0x0000
 
         fpop 0
 
 
-        pushlit 0x4040
+        pushlit 0x3f80
 
         pushlit 0x0000
 
@@ -36467,7 +36533,7 @@ projects:
 
         fmove 7 0
 
-        fmin 7 1
+        fmul 7 1
 
         fpush 7
 
@@ -53281,6 +53347,8 @@ projects:
         nop
 
         halt
+    - name: FP fdiv regression test 1
+      source: ''
     lastSelectedDebuggerProgramName: test
   - role: Target
     name: Target GA144
