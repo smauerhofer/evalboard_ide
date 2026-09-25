@@ -1,6 +1,7 @@
 using Ga144.Evb.Ide.Compiler;
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.Services;
+using System.Windows;
 using System.Windows.Media;
 
 namespace Ga144.Evb.Ide.ViewModels;
@@ -95,6 +96,10 @@ public sealed class NodeEditorViewModel : ObservableObject
     _originalRomWords = _romWordsText;
     CompileCommand = new RelayCommand(Compile);
     CompileRomCommand = new RelayCommand(CompileRom);
+    CopyRamMarkdownCommand = new RelayCommand(() => CopyImageMarkdown(
+        RamAddressGutterText, RamLabelGutterText, RamWordsText, RamDisassemblyGutterText, RamWordCount));
+    CopyRomMarkdownCommand = new RelayCommand(() => CopyImageMarkdown(
+        RomAddressGutterText, RomLabelGutterText, RomWordsText, RomDisassemblyGutterText, Models.RomComparison.RomWordCount));
   }
 
   /// <summary>
@@ -129,6 +134,14 @@ public sealed class NodeEditorViewModel : ObservableObject
   };
   public RelayCommand CompileCommand { get; }
   public RelayCommand CompileRomCommand { get; }
+
+  /// <summary>Copies the compiled RAM image (Address/Label/Hex/Disassembly, one row per word) to the
+  /// clipboard as a Markdown table -- Stefan's own request, 2026-09-25, for pasting the image into a
+  /// chat, issue, or doc without retyping it by hand. See <see cref="CopyImageMarkdown"/>'s own remarks.</summary>
+  public RelayCommand CopyRamMarkdownCommand { get; }
+
+  /// <summary>The System ROM image counterpart of <see cref="CopyRamMarkdownCommand"/>.</summary>
+  public RelayCommand CopyRomMarkdownCommand { get; }
   public int SystemMacroCount => _romLibrary.SystemMacros.Count;
   public int UserMacroCount => _userMacros.Count;
 
@@ -353,6 +366,61 @@ public sealed class NodeEditorViewModel : ObservableObject
 
     return string.Join(Environment.NewLine, lines);
   }
+
+  /// <summary>
+  /// Builds a Markdown table -- header "Address | Label | Hex | Disassembly", one row per word -- from
+  /// this window's own four "\n"-joined gutter/word column strings, splitting each in lockstep, and
+  /// copies it to the clipboard as plain text (Stefan's own request, 2026-09-25). Bound to each tab's
+  /// own "Copy MD" button; the RAM and ROM tabs both call this with their own four column strings and
+  /// word count (<see cref="RamWordCount"/> or <see cref="Models.RomComparison.RomWordCount"/> -- both
+  /// 64 today, but never assumed equal here).
+  /// </summary>
+  private static void CopyImageMarkdown(string addressGutter, string labelGutter, string wordsText, string disassemblyGutter, int wordCount)
+  {
+    string[] addresses = SplitMarkdownColumn(addressGutter, wordCount);
+    string[] labels = SplitMarkdownColumn(labelGutter, wordCount);
+    string[] words = SplitMarkdownColumn(wordsText, wordCount);
+    string[] disassembly = SplitMarkdownColumn(disassemblyGutter, wordCount);
+
+    var rows = new List<string>(wordCount + 2)
+    {
+      "| Address | Label | Hex | Disassembly |",
+      "| --- | --- | --- | --- |"
+    };
+
+    for (int index = 0; index < wordCount; index++)
+    {
+      rows.Add(
+          $"| {EscapeMarkdownCell(addresses[index])} | {EscapeMarkdownCell(labels[index])} | " +
+          $"{EscapeMarkdownCell(words[index])} | {EscapeMarkdownCell(disassembly[index])} |");
+    }
+
+    Clipboard.SetText(string.Join(Environment.NewLine, rows));
+  }
+
+  // Splits a "\n"-joined gutter/word column into exactly wordCount entries, padding with "" for a
+  // column that currently has fewer lines (e.g. a Hex column the person has not finished typing to its
+  // full length yet) rather than throwing or silently misaligning the table's rows.
+  private static string[] SplitMarkdownColumn(string text, int wordCount)
+  {
+    string[] lines = (text ?? string.Empty).Replace("\r\n", "\n").Split('\n');
+    if (lines.Length == wordCount)
+    {
+      return lines;
+    }
+
+    var padded = new string[wordCount];
+    for (int index = 0; index < wordCount; index++)
+    {
+      padded[index] = index < lines.Length ? lines[index] : string.Empty;
+    }
+
+    return padded;
+  }
+
+  // A Markdown table cell breaks on a literal "|" -- none of these four columns normally contains one,
+  // but a hand-typed label could -- escaped defensively so a malformed row never corrupts the table.
+  private static string EscapeMarkdownCell(string text) => (text ?? string.Empty).Replace("|", "\\|");
 
   // Same "0x" prefix format Compile()/CompileRom() write into RamWordsText/RomWordsText, but tolerant
   // of a blank or not-yet-valid line -- this feeds a live display gutter while the person may still be

@@ -304,6 +304,25 @@ public static class F18InstructionSet
   // DB001 Figure 2) still reaches -- e.g. a 'next' at 0x0FF looping back to 0x0EB
   // reconstructs to 0x1EB, which is the same physical cell. Slot 0 carries the full
   // 10-bit P address and always reaches within a node.
+  //
+  // DB001 2.3.1: "slot 1 and 2 jumps have no effect upon P9" -- a slot 1/2 field
+  // (8 or 3 bits) never overlaps bit 9, so such a transfer can only ever land with
+  // P9 equal to whatever P9 already is at 'nextP', never the destination's own P9.
+  // A destination whose P9 differs from nextP's is therefore NOT reachable from
+  // slot 1/2 at all, regardless of what the low-bit/wraparound arithmetic below
+  // would otherwise suggest: ExtendedArithmeticBit (0x200) is itself a whole
+  // multiple of a 64-word span, so without this explicit guard a '+cy' target
+  // reached from outside '+cy' (or vice versa) would slip through the wraparound
+  // exception as if it were an ordinary mirrored address -- physically the same
+  // word, but silently missing the Extended Arithmetic Mode the source asked for.
+  // This is precisely the node 402 'f4b/shl' bug Stefan measured on hardware
+  // (claude/cvm-node402-f4b-shl-p9-carry-bug.md): 'call f4b/shl' packed into slot 1
+  // reached the right word with P9 lost, so its '+' silently stopped latching
+  // carry. Rejecting the pack here sends the caller back to a force-aligned slot-0
+  // transfer instead (see F18Compiler.CompileExplicitControl's fallback to
+  // Builder.EmitControl, which flushes the current word's remaining slots with nop
+  // and emits the call at the start of a fresh word), so P9 is carried correctly
+  // without any change of meaning to the source.
   public static bool ControlFitsSlot(int slot, int nextP, int destination, int wordCount)
   {
     var width = AddressFieldWidth(slot);
@@ -315,6 +334,11 @@ public static class F18InstructionSet
     if (slot == 0)
     {
       return destination is >= 0 and <= 0x3FF;
+    }
+
+    if (((nextP ^ destination) & ExtendedArithmeticBit) != 0)
+    {
+      return false;
     }
 
     var mask = (1 << width) - 1;

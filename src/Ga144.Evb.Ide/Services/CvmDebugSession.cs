@@ -253,16 +253,19 @@ public sealed class CvmDebugSession : IDisposable
   /// is reached, <paramref name="cancellationToken"/> is cancelled (reported as
   /// <see cref="CvmDebugPauseReason.UserPaused"/>, not a fault), or a timeout/IO error occurs
   /// (reported as <see cref="CvmDebugPauseReason.Faulted"/>, and NOT rethrown -- whatever transactions
-  /// completed before the fault are still returned).
+  /// completed before the fault are still returned). <paramref name="transactionCap"/> is <c>null</c>
+  /// for the CVM Debugger window's "Run" command (Stefan's own request, 2026-09-25: "Run has no step
+  /// limit") -- the loop below then has no upper bound of its own at all, so the only ways out are a
+  /// breakpoint, cancellation (the window's existing Pause/Stop buttons, unchanged), or a fault.
   /// </summary>
-  public IReadOnlyList<CvmDebugTransaction> Continue(int transactionCap, CancellationToken cancellationToken = default)
+  public IReadOnlyList<CvmDebugTransaction> Continue(int? transactionCap, CancellationToken cancellationToken = default)
   {
     ThrowIfDisposed();
     var serviced = new List<CvmDebugTransaction>();
     FaultMessage = null;
     try
     {
-      for (int i = 0; i < transactionCap; i++)
+      for (int i = 0; transactionCap is null || i < transactionCap.Value; i++)
       {
         CvmDebugTransaction transaction = ServiceOneTransaction(honorBreakpoints: true, cancellationToken);
         serviced.Add(transaction);

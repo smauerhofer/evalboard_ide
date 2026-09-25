@@ -302,8 +302,13 @@
               <RowDefinition Height="Auto" />
               <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <TextBlock Text="Compiled RAM image (one 18-bit word per line, addresses 0x000 through 0x03F)"
-                                   FontWeight="SemiBold" />
+            <DockPanel LastChildFill="False">
+              <TextBlock DockPanel.Dock="Left" Text="Compiled RAM image (one 18-bit word per line, addresses 0x000 through 0x03F)"
+                                     FontWeight="SemiBold" VerticalAlignment="Center" />
+              <Button DockPanel.Dock="Right" Content="Copy MD" Command="{Binding CopyRamMarkdownCommand}"
+                                Padding="8,2"
+                                ToolTip="Copies this RAM image (Address/Label/Hex/Disassembly, one row per word) to the clipboard as a Markdown table." />
+            </DockPanel>
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                                     HorizontalScrollBarVisibility="Auto" Margin="0,5,0,0">
               <Grid>
@@ -396,8 +401,13 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
           </Grid.RowDefinitions>
-          <TextBlock Text="Compiled ROM image (one 18-bit word per line, addresses 0x080 through 0x0BF)"
-                               FontWeight="SemiBold" />
+          <DockPanel LastChildFill="False">
+            <TextBlock DockPanel.Dock="Left" Text="Compiled ROM image (one 18-bit word per line, addresses 0x080 through 0x0BF)"
+                                 FontWeight="SemiBold" VerticalAlignment="Center" />
+            <Button DockPanel.Dock="Right" Content="Copy MD" Command="{Binding CopyRomMarkdownCommand}"
+                              Padding="8,2"
+                              ToolTip="Copies this ROM image (Address/Label/Hex/Disassembly, one row per word) to the clipboard as a Markdown table." />
+          </DockPanel>
           <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Auto" Margin="0,5,0,0">
             <Grid>

@@ -181,6 +181,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     StartCommand = new AsyncRelayCommand(StartAsync, () => !IsBusy);
     StepCommand = new AsyncRelayCommand(StepAsync, () => !IsBusy && IsSessionActive);
     ContinueCommand = new AsyncRelayCommand(ContinueAsync, () => !IsBusy && IsSessionActive);
+    RunCommand = new AsyncRelayCommand(RunAsync, () => !IsBusy && IsSessionActive);
     PauseCommand = new RelayCommand(Pause, () => IsContinuing);
     StopCommand = new RelayCommand(Stop, () => IsSessionActive);
     AddBreakpointCommand = new RelayCommand(AddBreakpoint, () => IsSessionActive);
@@ -332,6 +333,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   public AsyncRelayCommand StartCommand { get; }
   public AsyncRelayCommand StepCommand { get; }
   public AsyncRelayCommand ContinueCommand { get; }
+  public AsyncRelayCommand RunCommand { get; }
   public RelayCommand PauseCommand { get; }
   public RelayCommand StopCommand { get; }
   public RelayCommand AddBreakpointCommand { get; }
@@ -481,7 +483,25 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     }
   }
 
-  private async Task ContinueAsync()
+  private Task ContinueAsync() => RunOrContinueAsync(ContinueTransactionCap, "Running…");
+
+  /// <summary>
+  /// "Run" -- Stefan's own request, 2026-09-25: a second button, right of "Continue", that does the
+  /// same thing but with no transaction cap at all (<see cref="CvmDebugSession.Continue"/>'s own
+  /// <c>transactionCap: null</c>). Everything else is identical to Continue, including how to stop
+  /// one early: the existing Pause/Stop buttons cancel <see cref="_continueCts"/> exactly the same way,
+  /// since <see cref="RunOrContinueAsync"/> is the one method both commands share.
+  /// </summary>
+  private Task RunAsync() => RunOrContinueAsync(null, "Running (no limit)…");
+
+  /// <summary>
+  /// Shared body of both Continue (<paramref name="transactionCap"/> = <see cref="ContinueTransactionCap"/>)
+  /// and Run (<paramref name="transactionCap"/> = <c>null</c>, i.e. unbounded). Only the cap and the
+  /// initial status text differ; pausing, stopping, and every pause-reason message below are identical
+  /// for both, since a session paused by a breakpoint/cancellation/fault doesn't know or care which
+  /// button started it.
+  /// </summary>
+  private async Task RunOrContinueAsync(int? transactionCap, string runningStatusText)
   {
     if (_session is null)
     {
@@ -489,17 +509,17 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     }
 
     IsBusy = true;
-    StatusText = "Running…";
+    StatusText = runningStatusText;
     _continueCts = new CancellationTokenSource();
     NotifyCommandStates();
     try
     {
       CancellationToken token = _continueCts.Token;
-      await Task.Run(() => _session.Continue(ContinueTransactionCap, token));
+      await Task.Run(() => _session.Continue(transactionCap, token));
       StatusText = _session.PauseReason switch
       {
         CvmDebugPauseReason.Breakpoint => "Paused at a breakpoint.",
-        CvmDebugPauseReason.TransactionCapReached => $"Stopped after {ContinueTransactionCap} transactions with no breakpoint hit -- raise the cap or check the breakpoint address if this is unexpected.",
+        CvmDebugPauseReason.TransactionCapReached => $"Stopped after {transactionCap} transactions with no breakpoint hit -- raise the cap or check the breakpoint address if this is unexpected.",
         CvmDebugPauseReason.UserPaused => "Paused by request.",
         CvmDebugPauseReason.Faulted => "Run stopped: " + (_session.FaultMessage ?? "unknown error."),
         _ => "Run stopped."
@@ -1531,6 +1551,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     StartCommand.NotifyCanExecuteChanged();
     StepCommand.NotifyCanExecuteChanged();
     ContinueCommand.NotifyCanExecuteChanged();
+    RunCommand.NotifyCanExecuteChanged();
     PauseCommand.NotifyCanExecuteChanged();
     StopCommand.NotifyCanExecuteChanged();
     AddBreakpointCommand.NotifyCanExecuteChanged();

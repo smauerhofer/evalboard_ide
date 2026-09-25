@@ -2646,6 +2646,23 @@ public sealed class F18Compiler
 
       if (!F18InstructionSet.ControlFitsSlot(slot, nextP, destination, _memory.Length))
       {
+        // A slot 1/2 field never overlaps P9 (DB001 2.3.1), so a mismatch there is
+        // reported on its own: it isn't a matter of the field being too narrow (it
+        // would happily encode these low bits), it's that this slot can never carry
+        // Extended Arithmetic Mode across the transfer at all. See
+        // claude/cvm-node402-f4b-shl-p9-carry-bug.md for the real bug this guards.
+        if (((nextP ^ destination) & F18InstructionSet.ExtendedArithmeticBit) != 0)
+        {
+          ReportError(
+              "F18M005",
+              $"Forward transfer at {_memoryName} address 0x{memoryAddress:X3} slot {slot} cannot reach " +
+              $"destination 0x{destination:X3}: the destination's Extended Arithmetic Mode ('+cy') state " +
+              "differs from the transfer's, and slot 1/2 transfers can never change P9. Align the source " +
+              "so this transfer lands in slot 0 (slot 0 always carries P9 correctly).",
+              token);
+          return;
+        }
+
         int width = F18InstructionSet.AddressFieldWidth(slot);
         ReportError(
             "F18M005",

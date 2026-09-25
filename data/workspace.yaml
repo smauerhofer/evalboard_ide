@@ -30,6 +30,39 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
+      dateTime: 2026-09-25T11:44:24.2731939
+      utcDateTime: 2026-09-25T11:44:24.2731939Z
+      localDateTime: 2026-09-25T13:44:24.2731939+02:00
+      date: 2026-09-25T00:00:00.0000000
+      day: 25
+      dayOfWeek: Friday
+      dayOfYear: 268
+      hour: 11
+      millisecond: 273
+      microsecond: 193
+      nanosecond: 900
+      minute: 44
+      month: 9
+      offset: 00:00:00
+      totalOffsetMinutes: 0
+      second: 24
+      ticks: 639259334642731939
+      utcTicks: 639259334642731939
+      timeOfDay: 11:44:24.2731939
+      year: 2026
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -50,19 +83,6 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -22976,8 +22996,8 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#E6D6F7'
-      postMortemEnabled: false
+      color: '#F7E0EA'
+      postMortemEnabled: true
     - coordinate: 103
       enabled: true
       sourceCode: >-
@@ -23012,32 +23032,29 @@ projects:
 
 
 
-        // Return operand 1.
-
-        // sign is on T.
-
-        // remaining input: e1 e2 h1 h2 l1 l2
-
-
-        : fs3/r1
+        : fs3/out ( e h l - )
+          >r >r
+          a !b
           !b
-          @b @b drop !b
-          @b @b drop !b
-          @b @b drop !b
+          r> !b
+          r> !b
         ;
 
 
+        : fs3/@3 @b drop @b @b drop @b @b drop ;
 
-        // Return operand 2.
 
-        // sign is on T.
+        : fs3/r1
+          a!                       // save sign
+          @b fs3/@3
+          fs3/out
+        ;
 
 
         : fs3/r2
-          !b
-          @b drop @b !b
-          @b drop @b !b
-          @b drop @b !b
+          a!                       // save sign
+          fs3/@3 @b
+          fs3/out
         ;
 
 
@@ -23191,16 +23208,16 @@ projects:
           fs3/pass
         ;
       ramWords:
-      - 0x09F02
-      - 0x3BB02
-      - 0x00222
-      - 0x01FEA
-      - 0x09555
-      - 0x09FEA
-      - 0x01B02
-      - 0x3BF22
+      - 0x2E88A
+      - 0x09B9A
+      - 0x08C25
       - 0x00202
-      - 0x09555
+      - 0x00202
+      - 0x00255
+      - 0x2BF4B
+      - 0x11400
+      - 0x2B603
+      - 0x01700
       - 0x01F02
       - 0x01F07
       - 0x00001
@@ -23226,21 +23243,21 @@ projects:
       - 0x3AC92
       - 0x22363
       - 0x1140A
-      - 0x3B700
+      - 0x3B706
       - 0x3ACB2
-      - 0x11400
+      - 0x11406
       - 0x3ACEA
-      - 0x23705
+      - 0x23708
       - 0x3A882
       - 0x19430
       - 0x3ADB2
       - 0x1942E
       - 0x3AC8A
-      - 0x3F700
+      - 0x3F706
       - 0x3ACEA
-      - 0x23705
+      - 0x23708
       - 0x3ACB2
-      - 0x11400
+      - 0x11406
       - 0x05710
       - 0x08000
       - 0x04A2F
@@ -23252,9 +23269,9 @@ projects:
       - 0x09E22
       - 0x03B55
       - 0x05734
-      - 0x13416
+      - 0x13414
       - 0x05734
-      - 0x13426
+      - 0x13424
       startup:
         entryPoint: 0x175
         p: 0x000
@@ -23263,8 +23280,8 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#E6D6F7'
-      postMortemEnabled: false
+      color: '#F7E0EA'
+      postMortemEnabled: true
     - coordinate: 104
       enabled: true
       sourceCode: >+
@@ -23430,8 +23447,8 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#E6D6F7'
-      postMortemEnabled: false
+      color: '#F7E0EA'
+      postMortemEnabled: true
     - coordinate: 105
       enabled: true
       sourceCode: >-
@@ -23761,8 +23778,8 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#E6D6F7'
-      postMortemEnabled: false
+      color: '#F7E0EA'
+      postMortemEnabled: true
     - coordinate: 106
       enabled: false
       sourceCode: ''
@@ -24009,61 +24026,78 @@ projects:
 
 
         : f5/ignore // no compare calculation
-          ( l1 l2 h1 h2 )
-          ;
+          ( h1 h2 l1 l2 )
+        ;
 
-        : f5/calc   // compare calculation
-          ( l1 l2 h1 h2 )
-          f5/sub
-          if f5/gt !b ; then
+
+
+        : f5/calc ( h1 h2 l1 l2 - h1 h2 l1 l2 )
+          // Compare high mantissa words first,
+          // while preserving all four input words.
+
+          >r >r
+          ( h1 h2 / l2 l1 )
+
+          over over f5/sub
+
+          if
+            f5/gt
+            !b
+            r> r>
+            ;
+          then
+
           drop
-          f5/sub
+
+          // High words equal: compare low words.
+
+          r> r>
+          ( h1 h2 l1 l2 )
+
+          over over f5/sub
           f5/gt
           !b
         ;
 
 
+
         : f5/main
           @b               // h1
-          ( h1 )
           @b               // h2
-          ( h1 h2 )
-
-          // save h2 h1 for optional magnitude comparison
-
-          dup >r over >r
-          ( h1 h2 / h2 h1 )
-
           @b               // l1
-          ( h1 h2 l1 / h2 h1 )
           @b               // l2
-          ( h1 h2 l1 l2 / h2 h1 )
+          ( h1 h2 l1 l2 )
 
-          // save l2 l1 for optional magnitude comparison
+          // First allow node 202 to request either
+          // f5/ignore or f5/calc.
+          //
+          // f5/calc preserves h1 h2 l1 l2.
 
-          dup >r over >r
-          ( h1 h2 l1 l2 / h2 h1 l2 l1 )
+          left a!
+          --l-
 
-          // rearrange h1 h2 l1 l2 into the two
-          // h,l pairs required by f5/extend
+          ( h1 h2 l1 l2 )
+
+          // Rearrange into the two h,l pairs
+          // required by f5/extend.
 
           >r
-          ( h1 h2 l1 / h2 h1 l2 l1 l2 )
+          ( h1 h2 l1 / l2 )
 
           a!
-          ( h1 h2 / h2 h1 l2 l1 l2 )
+          ( h1 h2 / l2 )
 
           >r a
-          ( h1 l1 / h2 h1 l2 l1 l2 h2 )
+          ( h1 l1 / l2 h2 )
 
           f5/extend
-          ( H1 L1 / h2 h1 l2 l1 l2 h2 )
+          ( H1 L1 / l2 h2 )
 
           r> r>
-          ( H1 L1 h2 l2 / h2 h1 l2 l1 )
+          ( H1 L1 h2 l2 )
 
           f5/extend
-          ( H1 L1 H2 L2 / h2 h1 l2 l1 )
+          ( H1 L1 H2 L2 )
 
           down a!
 
@@ -24071,19 +24105,6 @@ projects:
           r> r> !           // H2
           !                 // L1
           r> !              // L2
-
-          ( / h2 h1 l2 l1 )
-
-          // restore original mantissas for optional compare
-
-          r> r> r> r>
-          ( l1 l2 h1 h2 )
-
-          // focusing call: node 202 supplies f5/ignore
-          // or f5/calc
-
-          left a!
-          --l-
 
           f5/main
         ;
@@ -24109,17 +24130,20 @@ projects:
       - 0x269B2
       - 0x364DD
       - 0x15555
+      - 0x2E882
+      - 0x21600
+      - 0x1941A
+      - 0x13403
+      - 0x08C9D
+      - 0x3AC9A
+      - 0x20FB2
       - 0x13400
-      - 0x19419
       - 0x13403
       - 0x09555
-      - 0x3B600
-      - 0x13403
-      - 0x09555
-      - 0x01F92
-      - 0x2EFBA
-      - 0x01F92
-      - 0x2EFBA
+      - 0x01F02
+      - 0x01DAA
+      - 0x00175
+      - 0x13575
       - 0x2EABA
       - 0x2360A
       - 0x26CB2
@@ -24129,11 +24153,8 @@ projects:
       - 0x2E82A
       - 0x26C2A
       - 0x0AC2A
-      - 0x26C9A
-      - 0x27DAA
-      - 0x00175
-      - 0x13575
-      - 0x1141C
+      - 0x1141F
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -24153,7 +24174,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x01C
+        entryPoint: 0x01F
         p: 0x000
         a: 0x000
         b: 0x000
@@ -24407,21 +24428,21 @@ projects:
 
 
         : f3/sub ( s1 s2 )
-          0x8000 xor // invert s2
-        : f3/add ( s1 s2 ) // always compare
-          A[ f3a/addc ]] lit f3/with ;
+          0x8000 xor
+        : f3/add ( s1 s2 )
+          A[ f3a/add ; ]] lit f3/with ;
 
-        : f3/min ( s1 s2 ) // always compare
-          A[ f3a/min ]] lit f3/with ;
+        : f3/min ( s1 s2 )
+          A[ f3a/min ; ]] lit f3/with ;
 
-        : f3/max ( s1 s2 ) // always compare
-          A[ f3a/max ]] lit f3/with ;
+        : f3/max ( s1 s2 )
+          A[ f3a/max ; ]] lit f3/with ;
 
         : f3/mul ( s1 s2 )
-          A[ f3a/mul ]] lit f3/without ;
+          A[ f3a/mul ; ]] lit f3/without ;
 
         : f3/div ( s1 s2 )
-          A[ f3a/div ]] lit f3/without ;
+          A[ f3a/div ; ]] lit f3/without ;
 
         : f3/main
           @b >r
@@ -24463,9 +24484,9 @@ projects:
       - 0x11419
       - 0x11417
       - 0x1141B
-      - 0x11423
-      - 0x1142B
-      - 0x1142D
+      - 0x1141D
+      - 0x1141F
+      - 0x11421
       - 0x04A2F
       - 0x00115
       - 0x001D5
@@ -24486,34 +24507,34 @@ projects:
       - 0x043B2
       - 0x08000
       - 0x05710
-      - 0x13400
-      - 0x20FE2
-      - 0x19420
-      - 0x3BDB2
-      - 0x13401
-      - 0x11414
-      - 0x3BDB2
-      - 0x13401
-      - 0x11410
-      - 0x20FE2
-      - 0x19428
-      - 0x3BDB2
-      - 0x13402
-      - 0x11414
-      - 0x3BDB2
-      - 0x13402
-      - 0x11410
+      - 0x1140D
+      - 0x05710
+      - 0x11420
+      - 0x05710
+      - 0x1142A
       - 0x05714
-      - 0x13403
+      - 0x11433
       - 0x05714
-      - 0x13403
+      - 0x11435
       - 0x00802
       - 0x01F2A
       - 0x01A02
       - 0x0BF2A
       - 0x01A02
       - 0x0B455
-      - 0x1142F
+      - 0x11423
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -24525,7 +24546,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x02F
+        entryPoint: 0x023
         p: 0x000
         a: 0x000
         b: 0x000
@@ -24719,7 +24740,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#E6D6F7'
+      color: '#D6DFF7'
       postMortemEnabled: true
     - coordinate: 205
       enabled: true
@@ -25217,17 +25238,17 @@ projects:
         # 0 org
 
 
-        : f5a/up ( - ) up a! ;
 
-
-
-        : f5a/shr2 ( H1 H2 L1 L2 - H1 H2' L1 L2' ) // used to align exponent for addition
-          a!                    // A = L2
-          >r                    // save L1
-          0 over                // H1 H2 0 H2
-          . +*                  // S=0, T:A = H2:L2 >> 1
-          >r drop drop          // save H2', remove 0 and old H2
-          r> r> a               // H1 H2' L1 L2'
+        : f5a/shr2 ( H1 H2 L1 L2 - H1 H2' L1 L2' )
+          dup >r
+          a!
+          >r
+          0 over
+          . +*
+          >r drop drop
+          r> r> a
+          r> over 2* xor
+          over inv and xor
         ;
 
 
@@ -25403,13 +25424,14 @@ projects:
 
 
       ramWords:
-      - 0x04A55
-      - 0x00145
-      - 0x2A812
+      - 0x248AA
+      - 0x2FD82
       - 0x00000
-      - 0x209D2
-      - 0x2E2EA
-      - 0x26C8D
+      - 0x348EA
+      - 0x3AC9A
+      - 0x22C82
+      - 0x36382
+      - 0x320E5
       - 0x2BDBB
       - 0x00011
       - 0x243B2
@@ -25430,30 +25452,30 @@ projects:
       - 0x2ED92
       - 0x389B2
       - 0x2C572
-      - 0x2121E
+      - 0x2121F
       - 0x3ACB0
-      - 0x1141F
+      - 0x11420
       - 0x3ACEA
       - 0x2E29A
       - 0x2E8BA
       - 0x20FB2
-      - 0x13407
+      - 0x13408
       - 0x3A29A
       - 0x26EBA
       - 0x2A88A
       - 0x268AA
       - 0x2EE9A
-      - 0x27607
+      - 0x27608
       - 0x2E8B2
-      - 0x13407
+      - 0x13408
       - 0x26CBA
       - 0x2A88A
       - 0x26CB2
-      - 0x1360D
+      - 0x1360E
       - 0x26CBA
       - 0x2A88A
       - 0x26CB2
-      - 0x1360D
+      - 0x1360E
       - 0x2BDBF
       - 0x00007
       - 0x00000
@@ -25466,7 +25488,6 @@ projects:
       - 0x00C55
       - 0x01F02
       - 0x01555
-      - 0x15555
       startup:
         entryPoint: 0x175
         p: 0x000
@@ -25476,7 +25497,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 302
       enabled: true
       sourceCode: >
@@ -25516,7 +25537,7 @@ projects:
 
         : f4a/swap ( e1 e2 - e2 e1 )
           A[ f5a/swap ]] lit !b
-          over >r >r drop r> r>
+          >r a! r> a
         ;
 
 
@@ -25547,16 +25568,15 @@ projects:
         : f4a/add ( e1 e2 - e )
           f4a/align
           A[ f5a/add ]] lit !b
-        : f4a/pass2
-          A[ f5a/up ]] lit !b
-          A[ ! ! ]] lit !b
-        ;
-
+          ahead
 
         : f4a/sub ( e1 e2 - e )
           f4a/align
           A[ f5a/sub ]] lit !b
-          f4a/pass2
+        : f4a/pass2 then
+          A[ @p a! ! ]] lit !b
+          # up lit !b
+          A[ ! ]] lit !b
         ;
 
 
@@ -25619,62 +25639,61 @@ projects:
           f4a/main
         ;
       ramWords:
-      - 0x05B82
+      - 0x05BBA
       - 0x1343A
-      - 0x2E8EA
-      - 0x26C55
+      - 0x2AC8D
       - 0x05B55
       - 0x1343D
       - 0x329F2
       - 0x049F5
       - 0x00001
       - 0x20FE2
-      - 0x1940E
-      - 0x3B607
-      - 0x05B41
+      - 0x1940D
+      - 0x3B606
+      - 0x05B40
       - 0x13402
       - 0x3A255
-      - 0x13409
-      - 0x05BB2
+      - 0x13408
+      - 0x05B44
       - 0x1360D
-      - 0x05B12
-      - 0x13400
-      - 0x0BAB2
-      - 0x09555
-      - 0x13409
+      - 0x13408
       - 0x05BB2
       - 0x13610
-      - 0x11412
+      - 0x05B12
+      - 0x04A2A
+      - 0x00145
+      - 0x09D25
+      - 0x0A9B2
       - 0x3DDB0
       - 0x3FF81
       - 0x05BB2
       - 0x13415
-      - 0x11412
-      - 0x13406
+      - 0x11414
+      - 0x13405
       - 0x049F2
       - 0x2007F
-      - 0x13412
-      - 0x11412
+      - 0x13414
+      - 0x11414
       - 0x3BD27
       - 0x3A8B2
       - 0x3ACB2
-      - 0x09712
-      - 0x13404
-      - 0x1140F
+      - 0x09714
+      - 0x13403
+      - 0x1140E
       - 0x13400
-      - 0x1140F
-      - 0x13404
-      - 0x11416
+      - 0x1140E
+      - 0x13403
+      - 0x11411
       - 0x13400
-      - 0x11416
-      - 0x13404
-      - 0x11424
+      - 0x11411
+      - 0x13403
+      - 0x11423
       - 0x13400
-      - 0x11424
-      - 0x13404
-      - 0x1141A
-      - 0x13404
-      - 0x1141F
+      - 0x11423
+      - 0x13403
+      - 0x11419
+      - 0x13403
+      - 0x1141E
       - 0x04B02
       - 0x00115
       - 0x01DA2
@@ -25682,9 +25701,10 @@ projects:
       - 0x135D5
       - 0x04B22
       - 0x00145
-      - 0x11438
+      - 0x11437
+      - 0x15555
       startup:
-        entryPoint: 0x038
+        entryPoint: 0x037
         p: 0x000
         a: 0x000
         b: 0x000
@@ -25692,7 +25712,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 303
       enabled: true
       sourceCode: >-
@@ -25997,7 +26017,7 @@ projects:
           @
           @
           ( s1 s2 )
-          --l-
+          -d--
           ( s )
           up a!
           !
@@ -26005,9 +26025,9 @@ projects:
         ;
       ramWords:
       - 0x05BED
-      - 0x1142D
+      - 0x11430
       - 0x05BBA
-      - 0x1142F
+      - 0x11432
       - 0x3AC55
       - 0x03DB2
       - 0x08000
@@ -26021,20 +26041,20 @@ projects:
       - 0x19418
       - 0x3BE6B
       - 0x3BD22
-      - 0x1142B
+      - 0x1142E
       - 0x2E29D
       - 0x2FD22
-      - 0x11429
+      - 0x1142C
       - 0x3AC67
       - 0x3B555
       - 0x24355
       - 0x3BEB2
       - 0x1B41D
       - 0x3BD22
-      - 0x11427
+      - 0x1142A
       - 0x3B555
       - 0x3BD22
-      - 0x11425
+      - 0x11428
       - 0x3B555
       - 0x20FE2
       - 0x19426
@@ -26056,13 +26076,13 @@ projects:
       - 0x3B705
       - 0x3B70A
       - 0x05BE5
-      - 0x11431
+      - 0x11434
       - 0x05BE5
-      - 0x11433
+      - 0x11436
       - 0x04A0A
       - 0x00115
       - 0x029B2
-      - 0x13575
+      - 0x13515
       - 0x04A2A
       - 0x00145
       - 0x11437
@@ -26077,11 +26097,11 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 304
       enabled: true
       sourceCode: >-
-        ( CVM2 node 304. VM 32 bit floatingpoint step x node. pack data
+        ( CVM2 node 304. VM 32 bit floatingpoint step 7 node. pack data
 
 
         this node reads sign exponent and mantissa and converts it into a 32-bit IEEE 754 number
@@ -27041,7 +27061,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 401
       enabled: true
-      sourceCode: >-
+      sourceCode: >
         ( CVM2 node 401. VM 32 bit floatingpoint step 5b.
 
 
@@ -27150,92 +27170,38 @@ projects:
 
 
 
-        : f5b/div ( H1 H2 - H L )
+        : f5b/div ( L1 L2 - H L )
           @b @b
-          ( H1 H2 L1 L2 )
+          ( L1 L2 H2 H1 )
 
-          // Arrange the input for the old division core.
-          //
-          // desired:
-          //
-          //   ... L1 H2 H1
-          //       RL DH RH
-          //
-          //   A = L2 = DL
-          //
-          // stale H1 H2 below the working values are harmless.
-
-          >r
+          >r >r
           a!
-          over >r
-          a
-          over
           r> r>
-          a!
 
-          ( ... L1 H2 H1 )     // A=L2
-
-          // Initial non-restoring remainder:
-          //
-          // R = M1 - M2
+          ( L1 H2 H1 )     // A=L2
 
           f5b/subd
-          ( ... RL DH RH )
-
-          // quotient starts at zero
 
           0 0
-          ( ... RL DH RH QL QH )
-
-          // integer bit + 26 fractional bits
 
           26. >r
           begin
-
             >r >r
-            ( ... RL DH RH / QH QL )
-
-            // remember sign of R before doubling
-
             dup >r
-
             f5b/dbl
 
             r> -if
               drop
-
-              // old R was negative:
-              // doubled R += D
-              // quotient bit = 0
-
               f5b/addd
-
               r> r>
               f5b/q0
-
             else
               drop
-
-              // old R was non-negative:
-              // doubled R -= D
-              // quotient bit = 1
-
               f5b/subd
-
               r> r>
               f5b/q1
-
             then
-
           unext
-
-          // division core leaves:
-          //
-          //   ... QL QH
-          //
-          // f5b/pass expects H L.
-          // Since stale stack entries are allowed, over is
-          // the cheapest way to expose QH QL on top.
 
           over
         -cy
@@ -27247,13 +27213,11 @@ projects:
         ;
 
 
-
-
         : f5b/main
-          @b
-          @b
+          @b >r
+          @b r>
           ( H L )       // non-division
-          ( H1 H2 )     // division
+          ( L1 L2 )     // division
           --l-
           f5b/main
         ;
@@ -27285,10 +27249,8 @@ projects:
       - 0x26DB0
       - 0x15555
       - 0x01FBA
-      - 0x2AFBA
-      - 0x22F9A
-      - 0x26AB2
-      - 0x1360D
+      - 0x2EA9A
+      - 0x2760D
       - 0x05D12
       - 0x00000
       - 0x00000
@@ -27296,11 +27258,11 @@ projects:
       - 0x2E9B2
       - 0x2E892
       - 0x2F603
-      - 0x2722B
+      - 0x27229
       - 0x3B608
       - 0x26CB2
       - 0x13612
-      - 0x1162E
+      - 0x1162C
       - 0x3B60D
       - 0x26CB2
       - 0x13616
@@ -27308,9 +27270,11 @@ projects:
       - 0x04A82
       - 0x00175
       - 0x0BA55
-      - 0x01FB2
+      - 0x00802
+      - 0x269B2
       - 0x13575
-      - 0x11432
+      - 0x11430
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -27323,7 +27287,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x032
+        entryPoint: 0x030
         p: 0x000
         a: 0x000
         b: 0x000
@@ -27331,7 +27295,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 402
       enabled: true
       sourceCode: >+
@@ -27351,9 +27315,9 @@ projects:
         alternative
           in: ediv         {flagged exponent from node 302}
 
-          in: H L          {mantissa from node 401}
+          in: hl           {mantissa from node 401}
 
-          out: e H L       {normalized result to node 403}
+          out: e h l       {normalized result to node 403}
 
         )
 
@@ -27374,26 +27338,25 @@ projects:
         +cy
 
 
-        : f4b/shl ( e h l - e' h' l' )
+        : f4b/shl ( e h - e' h' ) // A=l -> A=l'
           // normalize one position to the left:
           //
           // H:L <<= 1
           // e--
 
           clc
-          dup . +             // L <<= 1
-          >r
-          dup . +             // H = H*2 + carry
-          >r
 
-          // H is below 0x100 whenever this word is called,
-          // therefore the high-word addition cannot generate
-          // a carry.  The exponent decrement is consequently
-          // safe in extended arithmetic mode.
+          a dup . + a!         // L <<= 1, retain carry
 
+          dup . +              // H = H*2 + carry
+
+          // f4b/shl is only called with H < 0x100.
+          // Therefore the H addition cannot carry out,
+          // so exponent decrement is safe in EAM.
+
+          >r
           -1 . +
-
-          r> r>
+          r>
         ;
 
 
@@ -27401,74 +27364,45 @@ projects:
 
 
 
-        : f4b/shr ( e h l - e' h' l' )
-          // normalize one position to the right:
-          //
+        : f4b/shr ( e h - e' h' ) // A=l -> A=l'
           // H:L >>= 1
           // e++
           //
-          // only needed for H bit 9 overflow.
+          // Same 36-bit shift mechanism as f5a/shr2.
+          // S=0, T=H, A=L.
+          //
+          // H is positive here, therefore the arithmetic
+          // right shift performed by +* is appropriate.
 
-          >r                  // e h / L
+          0 over
+          . +*                  // T:A = H:L >> 1
 
-          // save H bit 0
+          >r
+          drop drop             // remove 0 and old H
 
-          dup 2/ 2* xor
-          >r                  // e h / L h0
+          1 . +                 // e++
 
-          // H >>= 1
-
-          2/
-          >r                  // e / L h0 H'
-
-          // e++
-
-          1 . +
-
-          r>                  // e' H'
-          r>                  // e' H' h0
-          r>                  // e' H' h0 L
-
-          // logical L >>= 1.
-          // 2/ is arithmetic, so clear its propagated sign bit.
-
-          2/
-          0x1ffff and
-          >r                  // e' H' h0 / L'
-
-          // old H bit 0 becomes new L bit 17
-
-          . if
-            drop
-            r> 0x20000 xor
-            ;
-          then
-
-          drop
           r>
         ;
 
 
-        : f4b/adjust ( e h l - )
-          // Normalize H:L so that H bit 8 is the hidden bit.
-          //
-          // Expected nonzero cases:
-          //
-          //   H & 200 != 0   shift right once, e++
-          //   H & 100 != 0   already normalized
-          //   otherwise      shift left, e--
-          //
-          // Zero is converted to exponent zero.
 
-          over
+        : f4b/adjust ( e h - e' h' ) // A=l -> A=l'
+          // Normalize H:L so H bit 8 is the hidden bit.
+          //
+          //   H & 0x200 != 0   shift right once, e++
+          //   H & 0x100 != 0   normalized
+          //   otherwise        shift left, e--
+          //
+          // Zero produces e=0, H=0, L=0.
+
           if
             // H != 0
 
-            drop
+            // H bit 9:
+            // result is in [2,4)
 
-            // one-bit overflow?
-
-            over 0x200 and
+            dup 0x200 and
             if
               drop
               f4b/shr
@@ -27476,137 +27410,168 @@ projects:
             then
             drop
 
-            // normalized?
+            // H bit 8:
+            // result is in [1,2)
 
-            over 0x100 and
+            dup 0x100 and
             if
               drop
               ;
             then
             drop
 
-            // H != 0 but hidden bit not reached yet
+            // result is below 1
 
             f4b/shl
-            f4b/norm
+            f4b/adjust
             ;
           then
 
           // H == 0
+          // Test L directly from A.
 
-          drop
-
-          dup
-          . if
-            // L != 0: continue left normalization
-
+          a
+          if
             drop
             f4b/shl
-            f4b/norm
+            f4b/adjust
             ;
           then
 
           // H:L == 0.
-          // Force exponent to zero.
           //
-          // stale original e is harmless.
+          // stack here:
+          //   e 0 0
+          //
+          // Leave stale values underneath and make the
+          // top two values e'=0 h'=0.  A is already L'=0.
 
-          drop
-          >r >r
-          dup xor
-          r> r>
+          dup
         ;
 
 
 
         : f4b/norm ( e h l - ) // normalize and send result
-          a >r        // save a
-          // adjust exponent
-          ( e h l )
+
+          // Save A = node 401 port.
+          // Use A for L during normalization.
+
+          a >r
+          a!                    // e h, A=l
+
           f4b/adjust
-          ( e h l )
-          r> a!       // restore a
-          // send
-          >r >r !b    // e
-          r> !b       // h
-          r> !b       // l
+          ( e h )               // A=l
+
+          a                     // e h l
+          r> a!                 // restore node 401 port
+
+          // B already points to node 403.
+
+          >r >r !b              // e
+          r> !b                 // h
+          r> !b                 // l
+
+          // intentional fall-through into f4b/main
+
 
         : f4b/main
           up b!
-          @b 
+          @b
           ( e )
-          dup 2* xor
-          . -if // exponent flagged for division
-            A[ f5b/div ; ]] lit ! // invoke division in node 401
+
+          // DIV is tagged by toggling exponent bit 17.
+          //
+          // Normal exponents have bits 17 and 16 equal.
+          // For a tagged DIV exponent they differ.
+          //
+          // Preserve e underneath the test value:
+          //
+          //   e -> e e -> e e e -> e e 2e -> e test
+          //
+          // Sign of (e xor e<<1) is therefore the DIV flag.
+
+          dup dup 2* xor
+          . -if
+            // division
+
+            A[ f5b/div ; ]] lit !    // invoke division in node 401
+
             drop
-            0x20000 xor // recover exponent
-          else // normal exponent
-            A[ f5b/pass ; ]] lit ! // invoke pass values in node 401
+            0x20000 xor              // recover exponent
+
+          else
+            // all other operations
+
+            A[ f5b/pass ; ]] lit !   // pass result through node 401
+
             drop
           then
+
           ( e )
-          @ @          // read result from node 401
+
+          @ @                       // H L from node 401
           ( e h l )
-          right b!
-          // normalize
+
+          right b!                  // node 403
+
           f4b/norm
         ;
 
       ramWords:
       - 0x136D3
-      - 0x249F2
-      - 0x2EDB0
+      - 0x22DB0
+      - 0x2ADB0
       - 0x2FDB0
       - 0x3FFFF
-      - 0x26C55
-      - 0x2EDC2
-      - 0x363BA
-      - 0x30812
+      - 0x27555
+      - 0x04FB1
+      - 0x00000
+      - 0x2E2EF
       - 0x00001
-      - 0x3CC9A
-      - 0x26712
-      - 0x1FFFF
-      - 0x3E8B2
-      - 0x19412
-      - 0x3AC12
-      - 0x20000
-      - 0x39555
-      - 0x3AC55
-      - 0x2131E
-      - 0x3AF12
+      - 0x2C19D
+      - 0x19417
+      - 0x25DFA
       - 0x00200
-      - 0x3F318
+      - 0x19410
       - 0x3B706
-      - 0x3AF12
+      - 0x3AD12
       - 0x00100
-      - 0x3F31C
+      - 0x3F314
       - 0x3B555
-      - 0x3B600
-      - 0x11424
-      - 0x3ADB2
-      - 0x19422
-      - 0x3B600
-      - 0x11424
-      - 0x3A8BB
-      - 0x38C9D
-      - 0x228B2
-      - 0x13413
-      - 0x26ABA
-      - 0x2FB9A
-      - 0x08C22
+      - 0x3A9B2
+      - 0x13600
+      - 0x1140B
+      - 0x2331B
+      - 0x3A9B2
+      - 0x13600
+      - 0x1140B
+      - 0x25555
+      - 0x228AA
+      - 0x1340B
+      - 0x22CAA
+      - 0x2E822
+      - 0x27B9A
+      - 0x089B2
       - 0x04B03
       - 0x00145
-      - 0x363B2
-      - 0x1B431
+      - 0x244E2
+      - 0x1B42A
       - 0x05AEF
       - 0x1161A
       - 0x20000
-      - 0x39733
+      - 0x3972C
       - 0x05AEA
-      - 0x1142F
+      - 0x1142D
       - 0x03E12
       - 0x001D5
-      - 0x29724
+      - 0x2971C
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -27618,7 +27583,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x029
+        entryPoint: 0x022
         p: 0x000
         a: 0x000
         b: 0x000
@@ -27626,7 +27591,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 403
       enabled: true
       sourceCode: >-
@@ -27695,7 +27660,8 @@ projects:
           //
           // For unext the initial count is therefore -e.
 
-          over inv 1 . + >r       // R = -e
+          over inv 1 . +
+          >r       // R = -e
 
           // replace exponent by zero
 
@@ -27706,7 +27672,7 @@ projects:
 
           begin
             f3b/shr
-          unext
+          next
         ;
 
 
@@ -27775,6 +27741,7 @@ projects:
           ( s e h l )
 
           a!
+
           ( s e h )               // A=l
 
           f3b/adjust
@@ -27802,13 +27769,14 @@ projects:
       - 0x3BD9A
       - 0x00000
       - 0x13400
-      - 0x1D555
-      - 0x2096D
+      - 0x1F409
+      - 0x15555
+      - 0x2096E
       - 0x3B704
-      - 0x2D316
+      - 0x2D317
       - 0x3AF12
       - 0x3FF01
-      - 0x3C96A
+      - 0x3C96B
       - 0x3B555
       - 0x3A2EF
       - 0x000FF
@@ -27820,14 +27788,13 @@ projects:
       - 0x001D5
       - 0x29F02
       - 0x00AB2
-      - 0x1340B
+      - 0x1340C
       - 0x04BBA
       - 0x00175
       - 0x2FB9A
       - 0x08C22
       - 0x23BB2
-      - 0x11417
-      - 0x15555
+      - 0x11418
       - 0x15555
       - 0x15555
       - 0x15555
@@ -27857,7 +27824,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x017
+        entryPoint: 0x018
         p: 0x000
         a: 0x000
         b: 0x000
@@ -27865,10 +27832,10 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 404
       enabled: true
-      sourceCode: >+
+      sourceCode: >
         ( CVM2 node 404. VM 32 bit floatingpoint step 6.
 
 
@@ -27931,14 +27898,15 @@ projects:
 
 
         : f6/round ( s e H - s e H' ) // A=L -> A=L'
-          // Add half of one 24-bit mantissa ULP:
-          //
-          //   rounded = (H:L + 4) >> 3
-          //
-          // Carry from L is propagated into H.
-
           clc
-          a 4 . + a!
+
+          // bias = 3 + L.bit3
+          a 2/ 2/ 2/
+          dup 2/ 2* xor
+          3 . +
+
+          // add bias to H:L
+          a . + a!
           0 . +
         ;
 
@@ -28073,28 +28041,31 @@ projects:
         ;
       ramWords:
       - 0x136D3
-      - 0x23DB0
-      - 0x00004
+      - 0x227C2
+      - 0x30DC2
+      - 0x36312
+      - 0x00003
+      - 0x3CEB0
       - 0x2BDB0
       - 0x00000
       - 0x15555
       - 0x25DFA
       - 0x00100
-      - 0x19412
+      - 0x19415
       - 0x3A212
       - 0x00001
       - 0x3CD12
       - 0x000FF
-      - 0x39310
+      - 0x39313
       - 0x3BD55
       - 0x00080
       - 0x3BD55
       - 0x00000
-      - 0x3AF64
+      - 0x3AF67
       - 0x3B555
       - 0x3AD12
       - 0x00080
-      - 0x3F31A
+      - 0x3F31D
       - 0x3A812
       - 0x00001
       - 0x3CC55
@@ -28108,20 +28079,17 @@ projects:
       - 0x26E12
       - 0x0FFFF
       - 0x3EAB2
-      - 0x11406
+      - 0x11409
       - 0x04B02
       - 0x00175
       - 0x01F02
-      - 0x2B61B
+      - 0x2B61E
       - 0x04BBA
       - 0x00145
       - 0x2FB9A
       - 0x08C22
       - 0x23BB2
-      - 0x11425
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x11428
       - 0x15555
       - 0x15555
       - 0x15555
@@ -28137,7 +28105,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x025
+        entryPoint: 0x028
         p: 0x000
         a: 0x000
         b: 0x000
@@ -28145,7 +28113,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 405
       enabled: true
       sourceCode: >-
@@ -32706,7 +32674,11200 @@ projects:
         nop
 
         halt
-    lastSelectedDebuggerProgramName: FP fmin/fmax regression test 1
+    - name: FP fmin/fmax regression test 2
+      source: >
+        //
+
+        // FMIN / FMAX complete argument-class regression test
+
+        //
+
+        // Exhaustive ordered 12 x 12 class matrix for each operation.
+
+        // 144 FMIN results + 144 FMAX results = 288 results.
+
+        //
+
+        // Argument classes:
+
+        //
+
+        //   +0       0000 0000
+
+        //   -0       8000 0000
+
+        //   +sub     0000 0001    smallest positive subnormal
+
+        //   -sub     8000 0001    smallest negative subnormal
+
+        //   +normal  3FC0 0000    +1.5
+
+        //   -normal  BFC0 0000    -1.5
+
+        //   +inf     7F80 0000
+
+        //   -inf     FF80 0000
+
+        //   +qNaN    7FC1 2345
+
+        //   -qNaN    FFC1 2345
+
+        //   +sNaN    7FA1 2345
+
+        //   -sNaN    FFA1 2345
+
+        //
+
+        // fr0..fr5 hold the current six-value group.
+
+        // fr6 is used for an operand from the other group.
+
+        // fr7 is the result scratch register.
+
+        //
+
+        // NaN policy:
+
+        //   Any NaN operand -> canonical qNaN = 7FC0 0000
+
+        //
+
+        // Signed zero policy:
+
+        //   fmin(+0,-0) = -0
+
+        //   fmax(+0,-0) = +0
+
+        //
+
+        // Result order:
+
+        //   TEST 1: FMIN, results   1..144
+
+        //   TEST 2: FMAX, results 145..288
+
+        //
+
+
+        // ============================================================
+
+        // TEST 1 - FMIN
+
+        // ============================================================
+
+
+        // ------------------------------------------------------------
+
+        // BLOCK A x A
+
+        // rows/columns: +0 -0 +sub -sub +normal -normal
+
+        // ------------------------------------------------------------
+
+
+        // ============================================================
+
+        // INITIALIZE GROUP A IN fr0..fr5
+
+        // ============================================================
+
+
+        // fr0 = +0 = 0000 0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+
+        // fr1 = -0 = 8000 0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+
+        // fr2 = +sub = 0000 0001
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 2
+
+
+        // fr3 = -sub = 8000 0001
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 3
+
+
+        // fr4 = +normal = 3FC0 0000
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 4
+
+
+        // fr5 = -normal = BFC0 0000
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 5
+
+
+        // lhs = +0
+
+
+        fmove 7 0
+
+        fmin 7 0
+
+        fpush 7                   ;   1 expect 0000 0000
+
+
+        fmove 7 0
+
+        fmin 7 1
+
+        fpush 7                   ;   2 expect 8000 0000
+
+
+        fmove 7 0
+
+        fmin 7 2
+
+        fpush 7                   ;   3 expect 0000 0000
+
+
+        fmove 7 0
+
+        fmin 7 3
+
+        fpush 7                   ;   4 expect 8000 0001
+
+
+        fmove 7 0
+
+        fmin 7 4
+
+        fpush 7                   ;   5 expect 0000 0000
+
+
+        fmove 7 0
+
+        fmin 7 5
+
+        fpush 7                   ;   6 expect BFC0 0000
+
+
+        // lhs = -0
+
+
+        fmove 7 1
+
+        fmin 7 0
+
+        fpush 7                   ;   7 expect 8000 0000
+
+
+        fmove 7 1
+
+        fmin 7 1
+
+        fpush 7                   ;   8 expect 8000 0000
+
+
+        fmove 7 1
+
+        fmin 7 2
+
+        fpush 7                   ;   9 expect 8000 0000
+
+
+        fmove 7 1
+
+        fmin 7 3
+
+        fpush 7                   ;  10 expect 8000 0001
+
+
+        fmove 7 1
+
+        fmin 7 4
+
+        fpush 7                   ;  11 expect 8000 0000
+
+
+        fmove 7 1
+
+        fmin 7 5
+
+        fpush 7                   ;  12 expect BFC0 0000
+
+
+        // lhs = +sub
+
+
+        fmove 7 2
+
+        fmin 7 0
+
+        fpush 7                   ;  13 expect 0000 0000
+
+
+        fmove 7 2
+
+        fmin 7 1
+
+        fpush 7                   ;  14 expect 8000 0000
+
+
+        fmove 7 2
+
+        fmin 7 2
+
+        fpush 7                   ;  15 expect 0000 0001
+
+
+        fmove 7 2
+
+        fmin 7 3
+
+        fpush 7                   ;  16 expect 8000 0001
+
+
+        fmove 7 2
+
+        fmin 7 4
+
+        fpush 7                   ;  17 expect 0000 0001
+
+
+        fmove 7 2
+
+        fmin 7 5
+
+        fpush 7                   ;  18 expect BFC0 0000
+
+
+        // lhs = -sub
+
+
+        fmove 7 3
+
+        fmin 7 0
+
+        fpush 7                   ;  19 expect 8000 0001
+
+
+        fmove 7 3
+
+        fmin 7 1
+
+        fpush 7                   ;  20 expect 8000 0001
+
+
+        fmove 7 3
+
+        fmin 7 2
+
+        fpush 7                   ;  21 expect 8000 0001
+
+
+        fmove 7 3
+
+        fmin 7 3
+
+        fpush 7                   ;  22 expect 8000 0001
+
+
+        fmove 7 3
+
+        fmin 7 4
+
+        fpush 7                   ;  23 expect 8000 0001
+
+
+        fmove 7 3
+
+        fmin 7 5
+
+        fpush 7                   ;  24 expect BFC0 0000
+
+
+        // lhs = +normal
+
+
+        fmove 7 4
+
+        fmin 7 0
+
+        fpush 7                   ;  25 expect 0000 0000
+
+
+        fmove 7 4
+
+        fmin 7 1
+
+        fpush 7                   ;  26 expect 8000 0000
+
+
+        fmove 7 4
+
+        fmin 7 2
+
+        fpush 7                   ;  27 expect 0000 0001
+
+
+        fmove 7 4
+
+        fmin 7 3
+
+        fpush 7                   ;  28 expect 8000 0001
+
+
+        fmove 7 4
+
+        fmin 7 4
+
+        fpush 7                   ;  29 expect 3FC0 0000
+
+
+        fmove 7 4
+
+        fmin 7 5
+
+        fpush 7                   ;  30 expect BFC0 0000
+
+
+        // lhs = -normal
+
+
+        fmove 7 5
+
+        fmin 7 0
+
+        fpush 7                   ;  31 expect BFC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 1
+
+        fpush 7                   ;  32 expect BFC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 2
+
+        fpush 7                   ;  33 expect BFC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 3
+
+        fpush 7                   ;  34 expect BFC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 4
+
+        fpush 7                   ;  35 expect BFC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 5
+
+        fpush 7                   ;  36 expect BFC0 0000
+
+
+        // ------------------------------------------------------------
+
+        // BLOCK A x B
+
+        // rows: +0 -0 +sub -sub +normal -normal
+
+        // cols: +inf -inf +qNaN -qNaN +sNaN -sNaN
+
+        // Group A remains in fr0..fr5; rhs is loaded into fr6.
+
+        // ------------------------------------------------------------
+
+
+        // lhs = +0
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  37 expect 0000 0000
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  38 expect FF80 0000
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  39 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  40 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  41 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  42 expect 7FC0 0000
+
+
+        // lhs = -0
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  43 expect 8000 0000
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  44 expect FF80 0000
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  45 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  46 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  47 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  48 expect 7FC0 0000
+
+
+        // lhs = +sub
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  49 expect 0000 0001
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  50 expect FF80 0000
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  51 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  52 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  53 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  54 expect 7FC0 0000
+
+
+        // lhs = -sub
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  55 expect 8000 0001
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  56 expect FF80 0000
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  57 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  58 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  59 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  60 expect 7FC0 0000
+
+
+        // lhs = +normal
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ;  61 expect 3FC0 0000
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ;  62 expect FF80 0000
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ;  63 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ;  64 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ;  65 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ;  66 expect 7FC0 0000
+
+
+        // lhs = -normal
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ;  67 expect BFC0 0000
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ;  68 expect FF80 0000
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ;  69 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ;  70 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ;  71 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ;  72 expect 7FC0 0000
+
+
+        // ------------------------------------------------------------
+
+        // BLOCK B x A
+
+        // rows: +inf -inf +qNaN -qNaN +sNaN -sNaN
+
+        // cols: +0 -0 +sub -sub +normal -normal
+
+        // ------------------------------------------------------------
+
+
+        // ============================================================
+
+        // INITIALIZE GROUP B IN fr0..fr5
+
+        // ============================================================
+
+
+        // fr0 = +inf = 7F80 0000
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 0
+
+
+        // fr1 = -inf = FF80 0000
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 1
+
+
+        // fr2 = +qNaN = 7FC1 2345
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 2
+
+
+        // fr3 = -qNaN = FFC1 2345
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 3
+
+
+        // fr4 = +sNaN = 7FA1 2345
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 4
+
+
+        // fr5 = -sNaN = FFA1 2345
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 5
+
+
+        // lhs = +inf
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  73 expect 0000 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  74 expect 8000 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  75 expect 0000 0001
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  76 expect 8000 0001
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  77 expect 3FC0 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmin 7 6
+
+        fpush 7                   ;  78 expect BFC0 0000
+
+
+        // lhs = -inf
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  79 expect FF80 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  80 expect FF80 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  81 expect FF80 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  82 expect FF80 0000
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  83 expect FF80 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmin 7 6
+
+        fpush 7                   ;  84 expect FF80 0000
+
+
+        // lhs = +qNaN
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  85 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  86 expect 7FC0 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  87 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  88 expect 7FC0 0000
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  89 expect 7FC0 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmin 7 6
+
+        fpush 7                   ;  90 expect 7FC0 0000
+
+
+        // lhs = -qNaN
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  91 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  92 expect 7FC0 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  93 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  94 expect 7FC0 0000
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  95 expect 7FC0 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmin 7 6
+
+        fpush 7                   ;  96 expect 7FC0 0000
+
+
+        // lhs = +sNaN
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ;  97 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ;  98 expect 7FC0 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ;  99 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ; 100 expect 7FC0 0000
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ; 101 expect 7FC0 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmin 7 6
+
+        fpush 7                   ; 102 expect 7FC0 0000
+
+
+        // lhs = -sNaN
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ; 103 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ; 104 expect 7FC0 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ; 105 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ; 106 expect 7FC0 0000
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ; 107 expect 7FC0 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmin 7 6
+
+        fpush 7                   ; 108 expect 7FC0 0000
+
+
+        // ------------------------------------------------------------
+
+        // BLOCK B x B
+
+        // rows/columns: +inf -inf +qNaN -qNaN +sNaN -sNaN
+
+        // ------------------------------------------------------------
+
+
+        // lhs = +inf
+
+
+        fmove 7 0
+
+        fmin 7 0
+
+        fpush 7                   ; 109 expect 7F80 0000
+
+
+        fmove 7 0
+
+        fmin 7 1
+
+        fpush 7                   ; 110 expect FF80 0000
+
+
+        fmove 7 0
+
+        fmin 7 2
+
+        fpush 7                   ; 111 expect 7FC0 0000
+
+
+        fmove 7 0
+
+        fmin 7 3
+
+        fpush 7                   ; 112 expect 7FC0 0000
+
+
+        fmove 7 0
+
+        fmin 7 4
+
+        fpush 7                   ; 113 expect 7FC0 0000
+
+
+        fmove 7 0
+
+        fmin 7 5
+
+        fpush 7                   ; 114 expect 7FC0 0000
+
+
+        // lhs = -inf
+
+
+        fmove 7 1
+
+        fmin 7 0
+
+        fpush 7                   ; 115 expect FF80 0000
+
+
+        fmove 7 1
+
+        fmin 7 1
+
+        fpush 7                   ; 116 expect FF80 0000
+
+
+        fmove 7 1
+
+        fmin 7 2
+
+        fpush 7                   ; 117 expect 7FC0 0000
+
+
+        fmove 7 1
+
+        fmin 7 3
+
+        fpush 7                   ; 118 expect 7FC0 0000
+
+
+        fmove 7 1
+
+        fmin 7 4
+
+        fpush 7                   ; 119 expect 7FC0 0000
+
+
+        fmove 7 1
+
+        fmin 7 5
+
+        fpush 7                   ; 120 expect 7FC0 0000
+
+
+        // lhs = +qNaN
+
+
+        fmove 7 2
+
+        fmin 7 0
+
+        fpush 7                   ; 121 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmin 7 1
+
+        fpush 7                   ; 122 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmin 7 2
+
+        fpush 7                   ; 123 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmin 7 3
+
+        fpush 7                   ; 124 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmin 7 4
+
+        fpush 7                   ; 125 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmin 7 5
+
+        fpush 7                   ; 126 expect 7FC0 0000
+
+
+        // lhs = -qNaN
+
+
+        fmove 7 3
+
+        fmin 7 0
+
+        fpush 7                   ; 127 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmin 7 1
+
+        fpush 7                   ; 128 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmin 7 2
+
+        fpush 7                   ; 129 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmin 7 3
+
+        fpush 7                   ; 130 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmin 7 4
+
+        fpush 7                   ; 131 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmin 7 5
+
+        fpush 7                   ; 132 expect 7FC0 0000
+
+
+        // lhs = +sNaN
+
+
+        fmove 7 4
+
+        fmin 7 0
+
+        fpush 7                   ; 133 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmin 7 1
+
+        fpush 7                   ; 134 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmin 7 2
+
+        fpush 7                   ; 135 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmin 7 3
+
+        fpush 7                   ; 136 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmin 7 4
+
+        fpush 7                   ; 137 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmin 7 5
+
+        fpush 7                   ; 138 expect 7FC0 0000
+
+
+        // lhs = -sNaN
+
+
+        fmove 7 5
+
+        fmin 7 0
+
+        fpush 7                   ; 139 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 1
+
+        fpush 7                   ; 140 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 2
+
+        fpush 7                   ; 141 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 3
+
+        fpush 7                   ; 142 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 4
+
+        fpush 7                   ; 143 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmin 7 5
+
+        fpush 7                   ; 144 expect 7FC0 0000
+
+
+
+        // ============================================================
+
+        // TEST 2 - FMAX
+
+        // ============================================================
+
+
+        // ------------------------------------------------------------
+
+        // BLOCK A x A
+
+        // rows/columns: +0 -0 +sub -sub +normal -normal
+
+        // ------------------------------------------------------------
+
+
+        // ============================================================
+
+        // INITIALIZE GROUP A IN fr0..fr5
+
+        // ============================================================
+
+
+        // fr0 = +0 = 0000 0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+
+        // fr1 = -0 = 8000 0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+
+        // fr2 = +sub = 0000 0001
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 2
+
+
+        // fr3 = -sub = 8000 0001
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 3
+
+
+        // fr4 = +normal = 3FC0 0000
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 4
+
+
+        // fr5 = -normal = BFC0 0000
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 5
+
+
+        // lhs = +0
+
+
+        fmove 7 0
+
+        fmax 7 0
+
+        fpush 7                   ; 145 expect 0000 0000
+
+
+        fmove 7 0
+
+        fmax 7 1
+
+        fpush 7                   ; 146 expect 0000 0000
+
+
+        fmove 7 0
+
+        fmax 7 2
+
+        fpush 7                   ; 147 expect 0000 0001
+
+
+        fmove 7 0
+
+        fmax 7 3
+
+        fpush 7                   ; 148 expect 0000 0000
+
+
+        fmove 7 0
+
+        fmax 7 4
+
+        fpush 7                   ; 149 expect 3FC0 0000
+
+
+        fmove 7 0
+
+        fmax 7 5
+
+        fpush 7                   ; 150 expect 0000 0000
+
+
+        // lhs = -0
+
+
+        fmove 7 1
+
+        fmax 7 0
+
+        fpush 7                   ; 151 expect 0000 0000
+
+
+        fmove 7 1
+
+        fmax 7 1
+
+        fpush 7                   ; 152 expect 8000 0000
+
+
+        fmove 7 1
+
+        fmax 7 2
+
+        fpush 7                   ; 153 expect 0000 0001
+
+
+        fmove 7 1
+
+        fmax 7 3
+
+        fpush 7                   ; 154 expect 8000 0000
+
+
+        fmove 7 1
+
+        fmax 7 4
+
+        fpush 7                   ; 155 expect 3FC0 0000
+
+
+        fmove 7 1
+
+        fmax 7 5
+
+        fpush 7                   ; 156 expect 8000 0000
+
+
+        // lhs = +sub
+
+
+        fmove 7 2
+
+        fmax 7 0
+
+        fpush 7                   ; 157 expect 0000 0001
+
+
+        fmove 7 2
+
+        fmax 7 1
+
+        fpush 7                   ; 158 expect 0000 0001
+
+
+        fmove 7 2
+
+        fmax 7 2
+
+        fpush 7                   ; 159 expect 0000 0001
+
+
+        fmove 7 2
+
+        fmax 7 3
+
+        fpush 7                   ; 160 expect 0000 0001
+
+
+        fmove 7 2
+
+        fmax 7 4
+
+        fpush 7                   ; 161 expect 3FC0 0000
+
+
+        fmove 7 2
+
+        fmax 7 5
+
+        fpush 7                   ; 162 expect 0000 0001
+
+
+        // lhs = -sub
+
+
+        fmove 7 3
+
+        fmax 7 0
+
+        fpush 7                   ; 163 expect 0000 0000
+
+
+        fmove 7 3
+
+        fmax 7 1
+
+        fpush 7                   ; 164 expect 8000 0000
+
+
+        fmove 7 3
+
+        fmax 7 2
+
+        fpush 7                   ; 165 expect 0000 0001
+
+
+        fmove 7 3
+
+        fmax 7 3
+
+        fpush 7                   ; 166 expect 8000 0001
+
+
+        fmove 7 3
+
+        fmax 7 4
+
+        fpush 7                   ; 167 expect 3FC0 0000
+
+
+        fmove 7 3
+
+        fmax 7 5
+
+        fpush 7                   ; 168 expect 8000 0001
+
+
+        // lhs = +normal
+
+
+        fmove 7 4
+
+        fmax 7 0
+
+        fpush 7                   ; 169 expect 3FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 1
+
+        fpush 7                   ; 170 expect 3FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 2
+
+        fpush 7                   ; 171 expect 3FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 3
+
+        fpush 7                   ; 172 expect 3FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 4
+
+        fpush 7                   ; 173 expect 3FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 5
+
+        fpush 7                   ; 174 expect 3FC0 0000
+
+
+        // lhs = -normal
+
+
+        fmove 7 5
+
+        fmax 7 0
+
+        fpush 7                   ; 175 expect 0000 0000
+
+
+        fmove 7 5
+
+        fmax 7 1
+
+        fpush 7                   ; 176 expect 8000 0000
+
+
+        fmove 7 5
+
+        fmax 7 2
+
+        fpush 7                   ; 177 expect 0000 0001
+
+
+        fmove 7 5
+
+        fmax 7 3
+
+        fpush 7                   ; 178 expect 8000 0001
+
+
+        fmove 7 5
+
+        fmax 7 4
+
+        fpush 7                   ; 179 expect 3FC0 0000
+
+
+        fmove 7 5
+
+        fmax 7 5
+
+        fpush 7                   ; 180 expect BFC0 0000
+
+
+        // ------------------------------------------------------------
+
+        // BLOCK A x B
+
+        // rows: +0 -0 +sub -sub +normal -normal
+
+        // cols: +inf -inf +qNaN -qNaN +sNaN -sNaN
+
+        // Group A remains in fr0..fr5; rhs is loaded into fr6.
+
+        // ------------------------------------------------------------
+
+
+        // lhs = +0
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 181 expect 7F80 0000
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 182 expect 0000 0000
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 183 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 184 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 185 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 186 expect 7FC0 0000
+
+
+        // lhs = -0
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 187 expect 7F80 0000
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 188 expect 8000 0000
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 189 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 190 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 191 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 192 expect 7FC0 0000
+
+
+        // lhs = +sub
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 193 expect 7F80 0000
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 194 expect 0000 0001
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 195 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 196 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 197 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 198 expect 7FC0 0000
+
+
+        // lhs = -sub
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 199 expect 7F80 0000
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 200 expect 8000 0001
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 201 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 202 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 203 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 204 expect 7FC0 0000
+
+
+        // lhs = +normal
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 205 expect 7F80 0000
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 206 expect 3FC0 0000
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 207 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 208 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 209 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 210 expect 7FC0 0000
+
+
+        // lhs = -normal
+
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 211 expect 7F80 0000
+
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 212 expect BFC0 0000
+
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 213 expect 7FC0 0000
+
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 214 expect 7FC0 0000
+
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 215 expect 7FC0 0000
+
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 216 expect 7FC0 0000
+
+
+        // ------------------------------------------------------------
+
+        // BLOCK B x A
+
+        // rows: +inf -inf +qNaN -qNaN +sNaN -sNaN
+
+        // cols: +0 -0 +sub -sub +normal -normal
+
+        // ------------------------------------------------------------
+
+
+        // ============================================================
+
+        // INITIALIZE GROUP B IN fr0..fr5
+
+        // ============================================================
+
+
+        // fr0 = +inf = 7F80 0000
+
+        pushlit 0x7F80
+
+        pushlit 0x0000
+
+        fpop 0
+
+
+        // fr1 = -inf = FF80 0000
+
+        pushlit 0xFF80
+
+        pushlit 0x0000
+
+        fpop 1
+
+
+        // fr2 = +qNaN = 7FC1 2345
+
+        pushlit 0x7FC1
+
+        pushlit 0x2345
+
+        fpop 2
+
+
+        // fr3 = -qNaN = FFC1 2345
+
+        pushlit 0xFFC1
+
+        pushlit 0x2345
+
+        fpop 3
+
+
+        // fr4 = +sNaN = 7FA1 2345
+
+        pushlit 0x7FA1
+
+        pushlit 0x2345
+
+        fpop 4
+
+
+        // fr5 = -sNaN = FFA1 2345
+
+        pushlit 0xFFA1
+
+        pushlit 0x2345
+
+        fpop 5
+
+
+        // lhs = +inf
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 217 expect 7F80 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 218 expect 7F80 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 219 expect 7F80 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 220 expect 7F80 0000
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 221 expect 7F80 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 0
+
+        fmax 7 6
+
+        fpush 7                   ; 222 expect 7F80 0000
+
+
+        // lhs = -inf
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 223 expect 0000 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 224 expect 8000 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 225 expect 0000 0001
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 226 expect 8000 0001
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 227 expect 3FC0 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 1
+
+        fmax 7 6
+
+        fpush 7                   ; 228 expect BFC0 0000
+
+
+        // lhs = +qNaN
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 229 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 230 expect 7FC0 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 231 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 232 expect 7FC0 0000
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 233 expect 7FC0 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 2
+
+        fmax 7 6
+
+        fpush 7                   ; 234 expect 7FC0 0000
+
+
+        // lhs = -qNaN
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 235 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 236 expect 7FC0 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 237 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 238 expect 7FC0 0000
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 239 expect 7FC0 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 3
+
+        fmax 7 6
+
+        fpush 7                   ; 240 expect 7FC0 0000
+
+
+        // lhs = +sNaN
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 241 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 242 expect 7FC0 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 243 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 244 expect 7FC0 0000
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 245 expect 7FC0 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 4
+
+        fmax 7 6
+
+        fpush 7                   ; 246 expect 7FC0 0000
+
+
+        // lhs = -sNaN
+
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 247 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 248 expect 7FC0 0000
+
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 249 expect 7FC0 0000
+
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 250 expect 7FC0 0000
+
+
+        pushlit 0x3FC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 251 expect 7FC0 0000
+
+
+        pushlit 0xBFC0
+
+        pushlit 0x0000
+
+        fpop 6
+
+
+        fmove 7 5
+
+        fmax 7 6
+
+        fpush 7                   ; 252 expect 7FC0 0000
+
+
+        // ------------------------------------------------------------
+
+        // BLOCK B x B
+
+        // rows/columns: +inf -inf +qNaN -qNaN +sNaN -sNaN
+
+        // ------------------------------------------------------------
+
+
+        // lhs = +inf
+
+
+        fmove 7 0
+
+        fmax 7 0
+
+        fpush 7                   ; 253 expect 7F80 0000
+
+
+        fmove 7 0
+
+        fmax 7 1
+
+        fpush 7                   ; 254 expect 7F80 0000
+
+
+        fmove 7 0
+
+        fmax 7 2
+
+        fpush 7                   ; 255 expect 7FC0 0000
+
+
+        fmove 7 0
+
+        fmax 7 3
+
+        fpush 7                   ; 256 expect 7FC0 0000
+
+
+        fmove 7 0
+
+        fmax 7 4
+
+        fpush 7                   ; 257 expect 7FC0 0000
+
+
+        fmove 7 0
+
+        fmax 7 5
+
+        fpush 7                   ; 258 expect 7FC0 0000
+
+
+        // lhs = -inf
+
+
+        fmove 7 1
+
+        fmax 7 0
+
+        fpush 7                   ; 259 expect 7F80 0000
+
+
+        fmove 7 1
+
+        fmax 7 1
+
+        fpush 7                   ; 260 expect FF80 0000
+
+
+        fmove 7 1
+
+        fmax 7 2
+
+        fpush 7                   ; 261 expect 7FC0 0000
+
+
+        fmove 7 1
+
+        fmax 7 3
+
+        fpush 7                   ; 262 expect 7FC0 0000
+
+
+        fmove 7 1
+
+        fmax 7 4
+
+        fpush 7                   ; 263 expect 7FC0 0000
+
+
+        fmove 7 1
+
+        fmax 7 5
+
+        fpush 7                   ; 264 expect 7FC0 0000
+
+
+        // lhs = +qNaN
+
+
+        fmove 7 2
+
+        fmax 7 0
+
+        fpush 7                   ; 265 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmax 7 1
+
+        fpush 7                   ; 266 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmax 7 2
+
+        fpush 7                   ; 267 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmax 7 3
+
+        fpush 7                   ; 268 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmax 7 4
+
+        fpush 7                   ; 269 expect 7FC0 0000
+
+
+        fmove 7 2
+
+        fmax 7 5
+
+        fpush 7                   ; 270 expect 7FC0 0000
+
+
+        // lhs = -qNaN
+
+
+        fmove 7 3
+
+        fmax 7 0
+
+        fpush 7                   ; 271 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmax 7 1
+
+        fpush 7                   ; 272 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmax 7 2
+
+        fpush 7                   ; 273 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmax 7 3
+
+        fpush 7                   ; 274 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmax 7 4
+
+        fpush 7                   ; 275 expect 7FC0 0000
+
+
+        fmove 7 3
+
+        fmax 7 5
+
+        fpush 7                   ; 276 expect 7FC0 0000
+
+
+        // lhs = +sNaN
+
+
+        fmove 7 4
+
+        fmax 7 0
+
+        fpush 7                   ; 277 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 1
+
+        fpush 7                   ; 278 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 2
+
+        fpush 7                   ; 279 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 3
+
+        fpush 7                   ; 280 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 4
+
+        fpush 7                   ; 281 expect 7FC0 0000
+
+
+        fmove 7 4
+
+        fmax 7 5
+
+        fpush 7                   ; 282 expect 7FC0 0000
+
+
+        // lhs = -sNaN
+
+
+        fmove 7 5
+
+        fmax 7 0
+
+        fpush 7                   ; 283 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmax 7 1
+
+        fpush 7                   ; 284 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmax 7 2
+
+        fpush 7                   ; 285 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmax 7 3
+
+        fpush 7                   ; 286 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmax 7 4
+
+        fpush 7                   ; 287 expect 7FC0 0000
+
+
+        fmove 7 5
+
+        fmax 7 5
+
+        fpush 7                   ; 288 expect 7FC0 0000
+
+
+        nop
+
+        nop
+
+        nop
+
+        halt
+    - name: test
+      source: >-
+        pushlit 0x3f80
+
+        pushlit 0x0001
+
+        fpop 0
+
+
+        pushlit 0x3380
+
+        pushlit 0x0000
+
+        fpop 1
+
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        nop
+
+        nop
+
+        nop
+
+        halt
+    - name: FP fadd/fsub regression test 1
+      source: >
+        // CVM2 binary32 regression: fadd + fsub
+
+        // Assumes: fadd d s => F[d] = F[d] + F[s]
+
+        //          fsub d s => F[d] = F[d] - F[s]
+
+        // Each case loads A into F0 and B into F1, copies F0 to F7,
+
+        // performs the operation, then fpush 7 emits the result.
+
+        // Reference is IEEE-754 binary32 round-to-nearest-even.
+
+        // Any NaN result is expected as canonical 7FC0:0000.
+
+
+        // case 000: matrix +0 fadd +0
+
+        // A=0000:0000  B=0000:0000  expected=0000:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 001: matrix +0 fadd -0
+
+        // A=0000:0000  B=8000:0000  expected=0000:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 002: matrix +0 fadd +minsub
+
+        // A=0000:0000  B=0000:0001  expected=0000:0001
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 003: matrix +0 fadd -minsub
+
+        // A=0000:0000  B=8000:0001  expected=8000:0001
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 004: matrix +0 fadd +1.5
+
+        // A=0000:0000  B=3FC0:0000  expected=3FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 005: matrix +0 fadd -1.5
+
+        // A=0000:0000  B=BFC0:0000  expected=BFC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 006: matrix +0 fadd +inf
+
+        // A=0000:0000  B=7F80:0000  expected=7F80:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 007: matrix +0 fadd -inf
+
+        // A=0000:0000  B=FF80:0000  expected=FF80:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 008: matrix +0 fadd +qNaN
+
+        // A=0000:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 009: matrix +0 fadd -qNaN
+
+        // A=0000:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 010: matrix +0 fadd +sNaN
+
+        // A=0000:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 011: matrix +0 fadd -sNaN
+
+        // A=0000:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 012: matrix -0 fadd +0
+
+        // A=8000:0000  B=0000:0000  expected=0000:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 013: matrix -0 fadd -0
+
+        // A=8000:0000  B=8000:0000  expected=8000:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 014: matrix -0 fadd +minsub
+
+        // A=8000:0000  B=0000:0001  expected=0000:0001
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 015: matrix -0 fadd -minsub
+
+        // A=8000:0000  B=8000:0001  expected=8000:0001
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 016: matrix -0 fadd +1.5
+
+        // A=8000:0000  B=3FC0:0000  expected=3FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 017: matrix -0 fadd -1.5
+
+        // A=8000:0000  B=BFC0:0000  expected=BFC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 018: matrix -0 fadd +inf
+
+        // A=8000:0000  B=7F80:0000  expected=7F80:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 019: matrix -0 fadd -inf
+
+        // A=8000:0000  B=FF80:0000  expected=FF80:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 020: matrix -0 fadd +qNaN
+
+        // A=8000:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 021: matrix -0 fadd -qNaN
+
+        // A=8000:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 022: matrix -0 fadd +sNaN
+
+        // A=8000:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 023: matrix -0 fadd -sNaN
+
+        // A=8000:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 024: matrix +minsub fadd +0
+
+        // A=0000:0001  B=0000:0000  expected=0000:0001
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 025: matrix +minsub fadd -0
+
+        // A=0000:0001  B=8000:0000  expected=0000:0001
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 026: matrix +minsub fadd +minsub
+
+        // A=0000:0001  B=0000:0001  expected=0000:0002
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 027: matrix +minsub fadd -minsub
+
+        // A=0000:0001  B=8000:0001  expected=0000:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 028: matrix +minsub fadd +1.5
+
+        // A=0000:0001  B=3FC0:0000  expected=3FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 029: matrix +minsub fadd -1.5
+
+        // A=0000:0001  B=BFC0:0000  expected=BFC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 030: matrix +minsub fadd +inf
+
+        // A=0000:0001  B=7F80:0000  expected=7F80:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 031: matrix +minsub fadd -inf
+
+        // A=0000:0001  B=FF80:0000  expected=FF80:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 032: matrix +minsub fadd +qNaN
+
+        // A=0000:0001  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 033: matrix +minsub fadd -qNaN
+
+        // A=0000:0001  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 034: matrix +minsub fadd +sNaN
+
+        // A=0000:0001  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 035: matrix +minsub fadd -sNaN
+
+        // A=0000:0001  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 036: matrix -minsub fadd +0
+
+        // A=8000:0001  B=0000:0000  expected=8000:0001
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 037: matrix -minsub fadd -0
+
+        // A=8000:0001  B=8000:0000  expected=8000:0001
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 038: matrix -minsub fadd +minsub
+
+        // A=8000:0001  B=0000:0001  expected=0000:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 039: matrix -minsub fadd -minsub
+
+        // A=8000:0001  B=8000:0001  expected=8000:0002
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 040: matrix -minsub fadd +1.5
+
+        // A=8000:0001  B=3FC0:0000  expected=3FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 041: matrix -minsub fadd -1.5
+
+        // A=8000:0001  B=BFC0:0000  expected=BFC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 042: matrix -minsub fadd +inf
+
+        // A=8000:0001  B=7F80:0000  expected=7F80:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 043: matrix -minsub fadd -inf
+
+        // A=8000:0001  B=FF80:0000  expected=FF80:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 044: matrix -minsub fadd +qNaN
+
+        // A=8000:0001  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 045: matrix -minsub fadd -qNaN
+
+        // A=8000:0001  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 046: matrix -minsub fadd +sNaN
+
+        // A=8000:0001  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 047: matrix -minsub fadd -sNaN
+
+        // A=8000:0001  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 048: matrix +1.5 fadd +0
+
+        // A=3FC0:0000  B=0000:0000  expected=3FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 049: matrix +1.5 fadd -0
+
+        // A=3FC0:0000  B=8000:0000  expected=3FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 050: matrix +1.5 fadd +minsub
+
+        // A=3FC0:0000  B=0000:0001  expected=3FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 051: matrix +1.5 fadd -minsub
+
+        // A=3FC0:0000  B=8000:0001  expected=3FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 052: matrix +1.5 fadd +1.5
+
+        // A=3FC0:0000  B=3FC0:0000  expected=4040:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 053: matrix +1.5 fadd -1.5
+
+        // A=3FC0:0000  B=BFC0:0000  expected=0000:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 054: matrix +1.5 fadd +inf
+
+        // A=3FC0:0000  B=7F80:0000  expected=7F80:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 055: matrix +1.5 fadd -inf
+
+        // A=3FC0:0000  B=FF80:0000  expected=FF80:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 056: matrix +1.5 fadd +qNaN
+
+        // A=3FC0:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 057: matrix +1.5 fadd -qNaN
+
+        // A=3FC0:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 058: matrix +1.5 fadd +sNaN
+
+        // A=3FC0:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 059: matrix +1.5 fadd -sNaN
+
+        // A=3FC0:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 060: matrix -1.5 fadd +0
+
+        // A=BFC0:0000  B=0000:0000  expected=BFC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 061: matrix -1.5 fadd -0
+
+        // A=BFC0:0000  B=8000:0000  expected=BFC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 062: matrix -1.5 fadd +minsub
+
+        // A=BFC0:0000  B=0000:0001  expected=BFC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 063: matrix -1.5 fadd -minsub
+
+        // A=BFC0:0000  B=8000:0001  expected=BFC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 064: matrix -1.5 fadd +1.5
+
+        // A=BFC0:0000  B=3FC0:0000  expected=0000:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 065: matrix -1.5 fadd -1.5
+
+        // A=BFC0:0000  B=BFC0:0000  expected=C040:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 066: matrix -1.5 fadd +inf
+
+        // A=BFC0:0000  B=7F80:0000  expected=7F80:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 067: matrix -1.5 fadd -inf
+
+        // A=BFC0:0000  B=FF80:0000  expected=FF80:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 068: matrix -1.5 fadd +qNaN
+
+        // A=BFC0:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 069: matrix -1.5 fadd -qNaN
+
+        // A=BFC0:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 070: matrix -1.5 fadd +sNaN
+
+        // A=BFC0:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 071: matrix -1.5 fadd -sNaN
+
+        // A=BFC0:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 072: matrix +inf fadd +0
+
+        // A=7F80:0000  B=0000:0000  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 073: matrix +inf fadd -0
+
+        // A=7F80:0000  B=8000:0000  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 074: matrix +inf fadd +minsub
+
+        // A=7F80:0000  B=0000:0001  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 075: matrix +inf fadd -minsub
+
+        // A=7F80:0000  B=8000:0001  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 076: matrix +inf fadd +1.5
+
+        // A=7F80:0000  B=3FC0:0000  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 077: matrix +inf fadd -1.5
+
+        // A=7F80:0000  B=BFC0:0000  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 078: matrix +inf fadd +inf
+
+        // A=7F80:0000  B=7F80:0000  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 079: matrix +inf fadd -inf
+
+        // A=7F80:0000  B=FF80:0000  expected=7FC0:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 080: matrix +inf fadd +qNaN
+
+        // A=7F80:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 081: matrix +inf fadd -qNaN
+
+        // A=7F80:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 082: matrix +inf fadd +sNaN
+
+        // A=7F80:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 083: matrix +inf fadd -sNaN
+
+        // A=7F80:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 084: matrix -inf fadd +0
+
+        // A=FF80:0000  B=0000:0000  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 085: matrix -inf fadd -0
+
+        // A=FF80:0000  B=8000:0000  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 086: matrix -inf fadd +minsub
+
+        // A=FF80:0000  B=0000:0001  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 087: matrix -inf fadd -minsub
+
+        // A=FF80:0000  B=8000:0001  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 088: matrix -inf fadd +1.5
+
+        // A=FF80:0000  B=3FC0:0000  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 089: matrix -inf fadd -1.5
+
+        // A=FF80:0000  B=BFC0:0000  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 090: matrix -inf fadd +inf
+
+        // A=FF80:0000  B=7F80:0000  expected=7FC0:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 091: matrix -inf fadd -inf
+
+        // A=FF80:0000  B=FF80:0000  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 092: matrix -inf fadd +qNaN
+
+        // A=FF80:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 093: matrix -inf fadd -qNaN
+
+        // A=FF80:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 094: matrix -inf fadd +sNaN
+
+        // A=FF80:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 095: matrix -inf fadd -sNaN
+
+        // A=FF80:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 096: matrix +qNaN fadd +0
+
+        // A=7FC1:2345  B=0000:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 097: matrix +qNaN fadd -0
+
+        // A=7FC1:2345  B=8000:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 098: matrix +qNaN fadd +minsub
+
+        // A=7FC1:2345  B=0000:0001  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 099: matrix +qNaN fadd -minsub
+
+        // A=7FC1:2345  B=8000:0001  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 100: matrix +qNaN fadd +1.5
+
+        // A=7FC1:2345  B=3FC0:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 101: matrix +qNaN fadd -1.5
+
+        // A=7FC1:2345  B=BFC0:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 102: matrix +qNaN fadd +inf
+
+        // A=7FC1:2345  B=7F80:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 103: matrix +qNaN fadd -inf
+
+        // A=7FC1:2345  B=FF80:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 104: matrix +qNaN fadd +qNaN
+
+        // A=7FC1:2345  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 105: matrix +qNaN fadd -qNaN
+
+        // A=7FC1:2345  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 106: matrix +qNaN fadd +sNaN
+
+        // A=7FC1:2345  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 107: matrix +qNaN fadd -sNaN
+
+        // A=7FC1:2345  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 108: matrix -qNaN fadd +0
+
+        // A=FFC1:2345  B=0000:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 109: matrix -qNaN fadd -0
+
+        // A=FFC1:2345  B=8000:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 110: matrix -qNaN fadd +minsub
+
+        // A=FFC1:2345  B=0000:0001  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 111: matrix -qNaN fadd -minsub
+
+        // A=FFC1:2345  B=8000:0001  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 112: matrix -qNaN fadd +1.5
+
+        // A=FFC1:2345  B=3FC0:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 113: matrix -qNaN fadd -1.5
+
+        // A=FFC1:2345  B=BFC0:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 114: matrix -qNaN fadd +inf
+
+        // A=FFC1:2345  B=7F80:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 115: matrix -qNaN fadd -inf
+
+        // A=FFC1:2345  B=FF80:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 116: matrix -qNaN fadd +qNaN
+
+        // A=FFC1:2345  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 117: matrix -qNaN fadd -qNaN
+
+        // A=FFC1:2345  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 118: matrix -qNaN fadd +sNaN
+
+        // A=FFC1:2345  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 119: matrix -qNaN fadd -sNaN
+
+        // A=FFC1:2345  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 120: matrix +sNaN fadd +0
+
+        // A=7FA1:2345  B=0000:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 121: matrix +sNaN fadd -0
+
+        // A=7FA1:2345  B=8000:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 122: matrix +sNaN fadd +minsub
+
+        // A=7FA1:2345  B=0000:0001  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 123: matrix +sNaN fadd -minsub
+
+        // A=7FA1:2345  B=8000:0001  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 124: matrix +sNaN fadd +1.5
+
+        // A=7FA1:2345  B=3FC0:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 125: matrix +sNaN fadd -1.5
+
+        // A=7FA1:2345  B=BFC0:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 126: matrix +sNaN fadd +inf
+
+        // A=7FA1:2345  B=7F80:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 127: matrix +sNaN fadd -inf
+
+        // A=7FA1:2345  B=FF80:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 128: matrix +sNaN fadd +qNaN
+
+        // A=7FA1:2345  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 129: matrix +sNaN fadd -qNaN
+
+        // A=7FA1:2345  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 130: matrix +sNaN fadd +sNaN
+
+        // A=7FA1:2345  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 131: matrix +sNaN fadd -sNaN
+
+        // A=7FA1:2345  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 132: matrix -sNaN fadd +0
+
+        // A=FFA1:2345  B=0000:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 133: matrix -sNaN fadd -0
+
+        // A=FFA1:2345  B=8000:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 134: matrix -sNaN fadd +minsub
+
+        // A=FFA1:2345  B=0000:0001  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 135: matrix -sNaN fadd -minsub
+
+        // A=FFA1:2345  B=8000:0001  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 136: matrix -sNaN fadd +1.5
+
+        // A=FFA1:2345  B=3FC0:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 137: matrix -sNaN fadd -1.5
+
+        // A=FFA1:2345  B=BFC0:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 138: matrix -sNaN fadd +inf
+
+        // A=FFA1:2345  B=7F80:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 139: matrix -sNaN fadd -inf
+
+        // A=FFA1:2345  B=FF80:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 140: matrix -sNaN fadd +qNaN
+
+        // A=FFA1:2345  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 141: matrix -sNaN fadd -qNaN
+
+        // A=FFA1:2345  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 142: matrix -sNaN fadd +sNaN
+
+        // A=FFA1:2345  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 143: matrix -sNaN fadd -sNaN
+
+        // A=FFA1:2345  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 144: matrix +0 fsub +0
+
+        // A=0000:0000  B=0000:0000  expected=0000:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 145: matrix +0 fsub -0
+
+        // A=0000:0000  B=8000:0000  expected=0000:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 146: matrix +0 fsub +minsub
+
+        // A=0000:0000  B=0000:0001  expected=8000:0001
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 147: matrix +0 fsub -minsub
+
+        // A=0000:0000  B=8000:0001  expected=0000:0001
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 148: matrix +0 fsub +1.5
+
+        // A=0000:0000  B=3FC0:0000  expected=BFC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 149: matrix +0 fsub -1.5
+
+        // A=0000:0000  B=BFC0:0000  expected=3FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 150: matrix +0 fsub +inf
+
+        // A=0000:0000  B=7F80:0000  expected=FF80:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 151: matrix +0 fsub -inf
+
+        // A=0000:0000  B=FF80:0000  expected=7F80:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 152: matrix +0 fsub +qNaN
+
+        // A=0000:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 153: matrix +0 fsub -qNaN
+
+        // A=0000:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 154: matrix +0 fsub +sNaN
+
+        // A=0000:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 155: matrix +0 fsub -sNaN
+
+        // A=0000:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 156: matrix -0 fsub +0
+
+        // A=8000:0000  B=0000:0000  expected=8000:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 157: matrix -0 fsub -0
+
+        // A=8000:0000  B=8000:0000  expected=0000:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 158: matrix -0 fsub +minsub
+
+        // A=8000:0000  B=0000:0001  expected=8000:0001
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 159: matrix -0 fsub -minsub
+
+        // A=8000:0000  B=8000:0001  expected=0000:0001
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 160: matrix -0 fsub +1.5
+
+        // A=8000:0000  B=3FC0:0000  expected=BFC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 161: matrix -0 fsub -1.5
+
+        // A=8000:0000  B=BFC0:0000  expected=3FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 162: matrix -0 fsub +inf
+
+        // A=8000:0000  B=7F80:0000  expected=FF80:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 163: matrix -0 fsub -inf
+
+        // A=8000:0000  B=FF80:0000  expected=7F80:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 164: matrix -0 fsub +qNaN
+
+        // A=8000:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 165: matrix -0 fsub -qNaN
+
+        // A=8000:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 166: matrix -0 fsub +sNaN
+
+        // A=8000:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 167: matrix -0 fsub -sNaN
+
+        // A=8000:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 168: matrix +minsub fsub +0
+
+        // A=0000:0001  B=0000:0000  expected=0000:0001
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 169: matrix +minsub fsub -0
+
+        // A=0000:0001  B=8000:0000  expected=0000:0001
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 170: matrix +minsub fsub +minsub
+
+        // A=0000:0001  B=0000:0001  expected=0000:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 171: matrix +minsub fsub -minsub
+
+        // A=0000:0001  B=8000:0001  expected=0000:0002
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 172: matrix +minsub fsub +1.5
+
+        // A=0000:0001  B=3FC0:0000  expected=BFC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 173: matrix +minsub fsub -1.5
+
+        // A=0000:0001  B=BFC0:0000  expected=3FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 174: matrix +minsub fsub +inf
+
+        // A=0000:0001  B=7F80:0000  expected=FF80:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 175: matrix +minsub fsub -inf
+
+        // A=0000:0001  B=FF80:0000  expected=7F80:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 176: matrix +minsub fsub +qNaN
+
+        // A=0000:0001  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 177: matrix +minsub fsub -qNaN
+
+        // A=0000:0001  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 178: matrix +minsub fsub +sNaN
+
+        // A=0000:0001  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 179: matrix +minsub fsub -sNaN
+
+        // A=0000:0001  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 180: matrix -minsub fsub +0
+
+        // A=8000:0001  B=0000:0000  expected=8000:0001
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 181: matrix -minsub fsub -0
+
+        // A=8000:0001  B=8000:0000  expected=8000:0001
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 182: matrix -minsub fsub +minsub
+
+        // A=8000:0001  B=0000:0001  expected=8000:0002
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 183: matrix -minsub fsub -minsub
+
+        // A=8000:0001  B=8000:0001  expected=0000:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 184: matrix -minsub fsub +1.5
+
+        // A=8000:0001  B=3FC0:0000  expected=BFC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 185: matrix -minsub fsub -1.5
+
+        // A=8000:0001  B=BFC0:0000  expected=3FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 186: matrix -minsub fsub +inf
+
+        // A=8000:0001  B=7F80:0000  expected=FF80:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 187: matrix -minsub fsub -inf
+
+        // A=8000:0001  B=FF80:0000  expected=7F80:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 188: matrix -minsub fsub +qNaN
+
+        // A=8000:0001  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 189: matrix -minsub fsub -qNaN
+
+        // A=8000:0001  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 190: matrix -minsub fsub +sNaN
+
+        // A=8000:0001  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 191: matrix -minsub fsub -sNaN
+
+        // A=8000:0001  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 192: matrix +1.5 fsub +0
+
+        // A=3FC0:0000  B=0000:0000  expected=3FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 193: matrix +1.5 fsub -0
+
+        // A=3FC0:0000  B=8000:0000  expected=3FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 194: matrix +1.5 fsub +minsub
+
+        // A=3FC0:0000  B=0000:0001  expected=3FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 195: matrix +1.5 fsub -minsub
+
+        // A=3FC0:0000  B=8000:0001  expected=3FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 196: matrix +1.5 fsub +1.5
+
+        // A=3FC0:0000  B=3FC0:0000  expected=0000:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 197: matrix +1.5 fsub -1.5
+
+        // A=3FC0:0000  B=BFC0:0000  expected=4040:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 198: matrix +1.5 fsub +inf
+
+        // A=3FC0:0000  B=7F80:0000  expected=FF80:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 199: matrix +1.5 fsub -inf
+
+        // A=3FC0:0000  B=FF80:0000  expected=7F80:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 200: matrix +1.5 fsub +qNaN
+
+        // A=3FC0:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 201: matrix +1.5 fsub -qNaN
+
+        // A=3FC0:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 202: matrix +1.5 fsub +sNaN
+
+        // A=3FC0:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 203: matrix +1.5 fsub -sNaN
+
+        // A=3FC0:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 204: matrix -1.5 fsub +0
+
+        // A=BFC0:0000  B=0000:0000  expected=BFC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 205: matrix -1.5 fsub -0
+
+        // A=BFC0:0000  B=8000:0000  expected=BFC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 206: matrix -1.5 fsub +minsub
+
+        // A=BFC0:0000  B=0000:0001  expected=BFC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 207: matrix -1.5 fsub -minsub
+
+        // A=BFC0:0000  B=8000:0001  expected=BFC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 208: matrix -1.5 fsub +1.5
+
+        // A=BFC0:0000  B=3FC0:0000  expected=C040:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 209: matrix -1.5 fsub -1.5
+
+        // A=BFC0:0000  B=BFC0:0000  expected=0000:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 210: matrix -1.5 fsub +inf
+
+        // A=BFC0:0000  B=7F80:0000  expected=FF80:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 211: matrix -1.5 fsub -inf
+
+        // A=BFC0:0000  B=FF80:0000  expected=7F80:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 212: matrix -1.5 fsub +qNaN
+
+        // A=BFC0:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 213: matrix -1.5 fsub -qNaN
+
+        // A=BFC0:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 214: matrix -1.5 fsub +sNaN
+
+        // A=BFC0:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 215: matrix -1.5 fsub -sNaN
+
+        // A=BFC0:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 216: matrix +inf fsub +0
+
+        // A=7F80:0000  B=0000:0000  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 217: matrix +inf fsub -0
+
+        // A=7F80:0000  B=8000:0000  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 218: matrix +inf fsub +minsub
+
+        // A=7F80:0000  B=0000:0001  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 219: matrix +inf fsub -minsub
+
+        // A=7F80:0000  B=8000:0001  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 220: matrix +inf fsub +1.5
+
+        // A=7F80:0000  B=3FC0:0000  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 221: matrix +inf fsub -1.5
+
+        // A=7F80:0000  B=BFC0:0000  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 222: matrix +inf fsub +inf
+
+        // A=7F80:0000  B=7F80:0000  expected=7FC0:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 223: matrix +inf fsub -inf
+
+        // A=7F80:0000  B=FF80:0000  expected=7F80:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 224: matrix +inf fsub +qNaN
+
+        // A=7F80:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 225: matrix +inf fsub -qNaN
+
+        // A=7F80:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 226: matrix +inf fsub +sNaN
+
+        // A=7F80:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 227: matrix +inf fsub -sNaN
+
+        // A=7F80:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 228: matrix -inf fsub +0
+
+        // A=FF80:0000  B=0000:0000  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 229: matrix -inf fsub -0
+
+        // A=FF80:0000  B=8000:0000  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 230: matrix -inf fsub +minsub
+
+        // A=FF80:0000  B=0000:0001  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 231: matrix -inf fsub -minsub
+
+        // A=FF80:0000  B=8000:0001  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 232: matrix -inf fsub +1.5
+
+        // A=FF80:0000  B=3FC0:0000  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 233: matrix -inf fsub -1.5
+
+        // A=FF80:0000  B=BFC0:0000  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 234: matrix -inf fsub +inf
+
+        // A=FF80:0000  B=7F80:0000  expected=FF80:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 235: matrix -inf fsub -inf
+
+        // A=FF80:0000  B=FF80:0000  expected=7FC0:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 236: matrix -inf fsub +qNaN
+
+        // A=FF80:0000  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 237: matrix -inf fsub -qNaN
+
+        // A=FF80:0000  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 238: matrix -inf fsub +sNaN
+
+        // A=FF80:0000  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 239: matrix -inf fsub -sNaN
+
+        // A=FF80:0000  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 240: matrix +qNaN fsub +0
+
+        // A=7FC1:2345  B=0000:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 241: matrix +qNaN fsub -0
+
+        // A=7FC1:2345  B=8000:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 242: matrix +qNaN fsub +minsub
+
+        // A=7FC1:2345  B=0000:0001  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 243: matrix +qNaN fsub -minsub
+
+        // A=7FC1:2345  B=8000:0001  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 244: matrix +qNaN fsub +1.5
+
+        // A=7FC1:2345  B=3FC0:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 245: matrix +qNaN fsub -1.5
+
+        // A=7FC1:2345  B=BFC0:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 246: matrix +qNaN fsub +inf
+
+        // A=7FC1:2345  B=7F80:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 247: matrix +qNaN fsub -inf
+
+        // A=7FC1:2345  B=FF80:0000  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 248: matrix +qNaN fsub +qNaN
+
+        // A=7FC1:2345  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 249: matrix +qNaN fsub -qNaN
+
+        // A=7FC1:2345  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 250: matrix +qNaN fsub +sNaN
+
+        // A=7FC1:2345  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 251: matrix +qNaN fsub -sNaN
+
+        // A=7FC1:2345  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 252: matrix -qNaN fsub +0
+
+        // A=FFC1:2345  B=0000:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 253: matrix -qNaN fsub -0
+
+        // A=FFC1:2345  B=8000:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 254: matrix -qNaN fsub +minsub
+
+        // A=FFC1:2345  B=0000:0001  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 255: matrix -qNaN fsub -minsub
+
+        // A=FFC1:2345  B=8000:0001  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 256: matrix -qNaN fsub +1.5
+
+        // A=FFC1:2345  B=3FC0:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 257: matrix -qNaN fsub -1.5
+
+        // A=FFC1:2345  B=BFC0:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 258: matrix -qNaN fsub +inf
+
+        // A=FFC1:2345  B=7F80:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 259: matrix -qNaN fsub -inf
+
+        // A=FFC1:2345  B=FF80:0000  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 260: matrix -qNaN fsub +qNaN
+
+        // A=FFC1:2345  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 261: matrix -qNaN fsub -qNaN
+
+        // A=FFC1:2345  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 262: matrix -qNaN fsub +sNaN
+
+        // A=FFC1:2345  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 263: matrix -qNaN fsub -sNaN
+
+        // A=FFC1:2345  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 264: matrix +sNaN fsub +0
+
+        // A=7FA1:2345  B=0000:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 265: matrix +sNaN fsub -0
+
+        // A=7FA1:2345  B=8000:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 266: matrix +sNaN fsub +minsub
+
+        // A=7FA1:2345  B=0000:0001  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 267: matrix +sNaN fsub -minsub
+
+        // A=7FA1:2345  B=8000:0001  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 268: matrix +sNaN fsub +1.5
+
+        // A=7FA1:2345  B=3FC0:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 269: matrix +sNaN fsub -1.5
+
+        // A=7FA1:2345  B=BFC0:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 270: matrix +sNaN fsub +inf
+
+        // A=7FA1:2345  B=7F80:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 271: matrix +sNaN fsub -inf
+
+        // A=7FA1:2345  B=FF80:0000  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 272: matrix +sNaN fsub +qNaN
+
+        // A=7FA1:2345  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 273: matrix +sNaN fsub -qNaN
+
+        // A=7FA1:2345  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 274: matrix +sNaN fsub +sNaN
+
+        // A=7FA1:2345  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 275: matrix +sNaN fsub -sNaN
+
+        // A=7FA1:2345  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 276: matrix -sNaN fsub +0
+
+        // A=FFA1:2345  B=0000:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 277: matrix -sNaN fsub -0
+
+        // A=FFA1:2345  B=8000:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 278: matrix -sNaN fsub +minsub
+
+        // A=FFA1:2345  B=0000:0001  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 279: matrix -sNaN fsub -minsub
+
+        // A=FFA1:2345  B=8000:0001  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 280: matrix -sNaN fsub +1.5
+
+        // A=FFA1:2345  B=3FC0:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 281: matrix -sNaN fsub -1.5
+
+        // A=FFA1:2345  B=BFC0:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 282: matrix -sNaN fsub +inf
+
+        // A=FFA1:2345  B=7F80:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 283: matrix -sNaN fsub -inf
+
+        // A=FFA1:2345  B=FF80:0000  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xff80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 284: matrix -sNaN fsub +qNaN
+
+        // A=FFA1:2345  B=7FC1:2345  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 285: matrix -sNaN fsub -qNaN
+
+        // A=FFA1:2345  B=FFC1:2345  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffc1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 286: matrix -sNaN fsub +sNaN
+
+        // A=FFA1:2345  B=7FA1:2345  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0x7fa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 287: matrix -sNaN fsub -sNaN
+
+        // A=FFA1:2345  B=FFA1:2345  expected=7FC0:0000
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 0
+
+        pushlit 0xffa1
+
+        pushlit 0x2345
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 288: directed: 1 + 1 -> 2
+
+        // A=3F80:0000  B=3F80:0000  expected=4000:0000
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 289: directed: 1.5 + 1.5 -> 3
+
+        // A=3FC0:0000  B=3FC0:0000  expected=4040:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 290: directed: largest<2 + 1ulp -> 2
+
+        // A=3FFF:FFFF  B=3400:0000  expected=4000:0000
+
+        pushlit 0x3fff
+
+        pushlit 0xffff
+
+        fpop 0
+
+        pushlit 0x3400
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 291: directed: 1 + 1ulp
+
+        // A=3F80:0000  B=3400:0000  expected=3F80:0001
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3400
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 292: directed: 1 + below-half-ulp
+
+        // A=3F80:0000  B=337F:FFFF  expected=3F80:0000
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x337f
+
+        pushlit 0xffff
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 293: directed: 1 + half-ulp (RNE tie)
+
+        // A=3F80:0000  B=3380:0000  expected=3F80:0000
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3380
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 294: directed: 1 + above-half-ulp
+
+        // A=3F80:0000  B=3380:0001  expected=3F80:0001
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3380
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 295: directed: odd-LSB + half-ulp (RNE to even)
+
+        // A=3F80:0001  B=3380:0000  expected=3F80:0002
+
+        pushlit 0x3f80
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x3380
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 296: directed: maxfinite + maxfinite -> +inf
+
+        // A=7F7F:FFFF  B=7F7F:FFFF  expected=7F80:0000
+
+        pushlit 0x7f7f
+
+        pushlit 0xffff
+
+        fpop 0
+
+        pushlit 0x7f7f
+
+        pushlit 0xffff
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 297: directed: -maxfinite + -maxfinite -> -inf
+
+        // A=FF7F:FFFF  B=FF7F:FFFF  expected=FF80:0000
+
+        pushlit 0xff7f
+
+        pushlit 0xffff
+
+        fpop 0
+
+        pushlit 0xff7f
+
+        pushlit 0xffff
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 298: directed: maxsub + minsub -> minnormal
+
+        // A=007F:FFFF  B=0000:0001  expected=0080:0000
+
+        pushlit 0x007f
+
+        pushlit 0xffff
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 299: directed: -maxsub + -minsub -> -minnormal
+
+        // A=807F:FFFF  B=8000:0001  expected=8080:0000
+
+        pushlit 0x807f
+
+        pushlit 0xffff
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 300: directed: minnormal + -maxsub -> minsub
+
+        // A=0080:0000  B=807F:FFFF  expected=0000:0001
+
+        pushlit 0x0080
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x807f
+
+        pushlit 0xffff
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 301: directed: -minnormal + maxsub -> -minsub
+
+        // A=8080:0000  B=007F:FFFF  expected=8000:0001
+
+        pushlit 0x8080
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x007f
+
+        pushlit 0xffff
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 302: directed: minsub + minsub
+
+        // A=0000:0001  B=0000:0001  expected=0000:0002
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 303: directed: maxsub + maxsub
+
+        // A=007F:FFFF  B=007F:FFFF  expected=00FF:FFFE
+
+        pushlit 0x007f
+
+        pushlit 0xffff
+
+        fpop 0
+
+        pushlit 0x007f
+
+        pushlit 0xffff
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 304: directed: nextafter(1) + -1 -> 2^-23
+
+        // A=3F80:0001  B=BF80:0000  expected=3400:0000
+
+        pushlit 0x3f80
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xbf80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 305: directed: -nextafter(1) + 1 -> -2^-23
+
+        // A=BF80:0001  B=3F80:0000  expected=B400:0000
+
+        pushlit 0xbf80
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 306: directed: 1 + minsub (large exponent gap)
+
+        // A=3F80:0000  B=0000:0001  expected=3F80:0000
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 307: directed: -1 + -minsub (large exponent gap)
+
+        // A=BF80:0000  B=8000:0001  expected=BF80:0000
+
+        pushlit 0xbf80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fadd 7 1
+
+        fpush 7
+
+
+        // case 308: directed: 1 - 1 -> +0
+
+        // A=3F80:0000  B=3F80:0000  expected=0000:0000
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 309: directed: -1 - -1 -> +0
+
+        // A=BF80:0000  B=BF80:0000  expected=0000:0000
+
+        pushlit 0xbf80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbf80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 310: directed: nextafter(1) - 1 -> 2^-23
+
+        // A=3F80:0001  B=3F80:0000  expected=3400:0000
+
+        pushlit 0x3f80
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 311: directed: -nextafter(1) - -1 -> -2^-23
+
+        // A=BF80:0001  B=BF80:0000  expected=B400:0000
+
+        pushlit 0xbf80
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0xbf80
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 312: directed: 1.5 - -1.5 -> 3
+
+        // A=3FC0:0000  B=BFC0:0000  expected=4040:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 313: directed: -1.5 - 1.5 -> -3
+
+        // A=BFC0:0000  B=3FC0:0000  expected=C040:0000
+
+        pushlit 0xbfc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 314: directed: maxfinite - -maxfinite -> +inf
+
+        // A=7F7F:FFFF  B=FF7F:FFFF  expected=7F80:0000
+
+        pushlit 0x7f7f
+
+        pushlit 0xffff
+
+        fpop 0
+
+        pushlit 0xff7f
+
+        pushlit 0xffff
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 315: directed: -maxfinite - maxfinite -> -inf
+
+        // A=FF7F:FFFF  B=7F7F:FFFF  expected=FF80:0000
+
+        pushlit 0xff7f
+
+        pushlit 0xffff
+
+        fpop 0
+
+        pushlit 0x7f7f
+
+        pushlit 0xffff
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 316: directed: minnormal - minsub -> maxsub
+
+        // A=0080:0000  B=0000:0001  expected=007F:FFFF
+
+        pushlit 0x0080
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 317: directed: -minnormal - -minsub -> -maxsub
+
+        // A=8080:0000  B=8000:0001  expected=807F:FFFF
+
+        pushlit 0x8080
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 318: directed: minnormal - maxsub -> minsub
+
+        // A=0080:0000  B=007F:FFFF  expected=0000:0001
+
+        pushlit 0x0080
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x007f
+
+        pushlit 0xffff
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 319: directed: -minnormal - -maxsub -> -minsub
+
+        // A=8080:0000  B=807F:FFFF  expected=8000:0001
+
+        pushlit 0x8080
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x807f
+
+        pushlit 0xffff
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 320: directed: minsub - -minsub
+
+        // A=0000:0001  B=8000:0001  expected=0000:0002
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 321: directed: minsub - minsub -> +0
+
+        // A=0000:0001  B=0000:0001  expected=0000:0000
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 322: directed: -minsub - -minsub -> +0
+
+        // A=8000:0001  B=8000:0001  expected=0000:0000
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x8000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 323: directed: 1.5 - below-half-ulp
+
+        // A=3FC0:0000  B=337F:FFFF  expected=3FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x337f
+
+        pushlit 0xffff
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 324: directed: 1.5 - half-ulp (RNE tie)
+
+        // A=3FC0:0000  B=3380:0000  expected=3FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3380
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 325: directed: 1.5 - above-half-ulp
+
+        // A=3FC0:0000  B=3380:0001  expected=3FBF:FFFF
+
+        pushlit 0x3fc0
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x3380
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 326: directed: odd-LSB 1.5+ulp - half-ulp (RNE)
+
+        // A=3FC0:0001  B=3380:0000  expected=3FC0:0000
+
+        pushlit 0x3fc0
+
+        pushlit 0x0001
+
+        fpop 0
+
+        pushlit 0x3380
+
+        pushlit 0x0000
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        // case 327: directed: 1 - minsub (large exponent gap)
+
+        // A=3F80:0000  B=0000:0001  expected=3F80:0000
+
+        pushlit 0x3f80
+
+        pushlit 0x0000
+
+        fpop 0
+
+        pushlit 0x0000
+
+        pushlit 0x0001
+
+        fpop 1
+
+        fmove 7 0
+
+        fsub 7 1
+
+        fpush 7
+
+
+        nop
+
+        nop
+
+        nop
+
+        halt
+    - name: FP fmul regression test 1
+      source: ''
+    lastSelectedDebuggerProgramName: New program
   - role: Target
     name: Target GA144
     nodes:

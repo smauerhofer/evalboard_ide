@@ -35,6 +35,8 @@
                           ToolTip="Services exactly one memory-interface transaction (one read or one write), ignoring breakpoints -- always executes the next full instruction fetch or stack access." />
           <Button Content="Continue" Command="{Binding ContinueCommand}" Padding="12,6" Margin="0,0,8,0"
                           ToolTip="Services transactions back-to-back until an armed breakpoint's read reply is withheld, the transaction cap is reached, or you click Pause." />
+          <Button Content="Run" Command="{Binding RunCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Same as Continue, but with no transaction cap at all -- runs until an armed breakpoint's read reply is withheld or you click Pause." />
           <Button Content="Pause" Command="{Binding PauseCommand}" Padding="12,6" Margin="0,0,8,0"
                           ToolTip="Stops the current Continue after its transaction in progress finishes." />
           <Button Content="Stop" Command="{Binding StopCommand}" Padding="12,6" Margin="0,0,8,0"
