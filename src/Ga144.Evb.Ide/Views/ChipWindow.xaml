@@ -195,9 +195,35 @@
                                                Foreground="#365C42" HorizontalAlignment="Right" VerticalAlignment="Center"
                                                Margin="0,0,7,0" IsHitTestVisible="False" />
 
-                  <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <!--
+                        HorizontalAlignment changed from "Center" to "Stretch" (Stefan's own
+                        request, 2026-09-26: a RAM usage line below "configured" that is "scaled to
+                        the current width of the node") so this StackPanel now spans the node's own
+                        current width. The coordinate/state TextBlocks each keep their own explicit
+                        HorizontalAlignment="Center", so they still sit centered exactly as before;
+                        only the new Image below them actually uses the extra width.
+                  -->
+                  <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Center">
                     <TextBlock Text="{Binding CoordinateText}" FontFamily="Consolas" FontWeight="Bold" FontSize="20" HorizontalAlignment="Center" />
                     <TextBlock Text="{Binding StateText}" FontSize="12" Foreground="#406A4B" HorizontalAlignment="Center" />
+                    <!--
+                          ADDED 2026-09-26, per Stefan directly: "below 'configured' text a 2 pixel
+                          high line that represents the usage state of a node. used words are red,
+                          free words are green. left is address 0x00, right is address 0x3f. every
+                          word is 1 pixel wide. this line is then scaled to the current width of
+                          the node." NodeViewModel.RamUsageBitmap is a 64x1 image, one pixel per RAM
+                          word; NearestNeighbor scaling keeps each word's pixel a hard-edged band
+                          instead of a blurred gradient once Stretch="Fill" scales it up to the
+                          node's actual width. Hidden entirely (RamUsageVisibility) until the node
+                          has at least one used word, exactly as asked.
+                    -->
+                    <Image Source="{Binding RamUsageBitmap}"
+                                           Visibility="{Binding RamUsageVisibility}"
+                                           Height="2" Margin="0,3,0,0"
+                                           Stretch="Fill"
+                                           SnapsToDevicePixels="True"
+                                           RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                           IsHitTestVisible="False" />
                   </StackPanel>
 
                   <!-- ADDED 2026-09-25, per Stefan directly: "add the small node color number in

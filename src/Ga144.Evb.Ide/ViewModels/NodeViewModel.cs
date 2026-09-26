@@ -1,6 +1,8 @@
+using Ga144.Evb.Ide.Compiler;
 using Ga144.Evb.Ide.Models;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace Ga144.Evb.Ide.ViewModels;
 
@@ -8,6 +10,12 @@ public sealed class NodeViewModel
 {
   private static readonly Brush NeutralBackgroundBrush = NodeColorOption.BrushFromHex("#F7FBF8");
   private static readonly Brush NeutralBorderBrush = NodeColorOption.BrushFromHex("#54705C");
+
+  // Same word count as NodeEditorViewModel.RamWordCount -- Model.RamWords always holds exactly
+  // this many words once a node has been compiled at least once (F18Compiler.CreateImage always
+  // returns a full 64-word image; see IsConfigured's own remarks for why the list can also be
+  // completely empty rather than partially filled).
+  private const int RamWordCount = 64;
 
   private readonly string _projectDefaultColor;
 
@@ -58,6 +66,74 @@ public sealed class NodeViewModel
   public bool PostMortemEnabled => Model.PostMortemEnabled;
 
   public Visibility PostMortemHintVisibility => PostMortemEnabled ? Visibility.Visible : Visibility.Collapsed;
+
+  /// <summary>ADDED 2026-09-26, per Stefan directly: "below 'configured' text a 2 pixel high line
+  /// that represents the usage state of a node. used words are red, free words are green. left is
+  /// address 0x00, right is address 0x3f. every word is 1 pixel wide. this line is then scaled to
+  /// the current width of the node." A 64x1 bitmap, one pixel per RAM word (address 0x00 at the
+  /// left, 0x3F at the right) -- ChipWindow.xaml stretches it to the node's own current width with
+  /// nearest-neighbor scaling (RenderOptions.BitmapScalingMode), so it always renders as hard
+  /// 1-word-wide bands rather than blurred/interpolated ones no matter how wide the node cell is.
+  /// A word counts as "used" (red) when its compiled value is anything other than the F18A
+  /// empty-word value (<see cref="F18InstructionSet.EncodingXor"/>, 0x15555 -- see
+  /// F18Compiler.CreateImage's own remarks on why that specific value means "never written");
+  /// otherwise it's "free" (green). Null (no line drawn) until Model.RamWords actually holds a
+  /// full compiled image (<see cref="RamWordCount"/> words -- see <see cref="IsConfigured"/>'s own
+  /// remarks on why RamWords.Count alone isn't a safe "has this been compiled" check by itself)
+  /// AND at least one of those words is used, exactly as asked ("displayed for every node that
+  /// contains at least 1 used word").</summary>
+  public BitmapSource? RamUsageBitmap
+  {
+    get
+    {
+      IReadOnlyList<string> words = Model.RamWords;
+      if (words.Count != RamWordCount)
+      {
+        return null;
+      }
+
+      var pixels = new byte[RamWordCount * 4];
+      bool anyUsed = false;
+      for (int index = 0; index < RamWordCount; index++)
+      {
+        bool used = ParseWord(words[index]) is int value && value != F18InstructionSet.EncodingXor;
+        anyUsed |= used;
+
+        int offset = index * 4;
+        // Bgra32 byte order: B, G, R, A. Used = solid red; free = solid green.
+        pixels[offset + 0] = 0x00;
+        pixels[offset + 1] = (byte)(used ? 0x00 : 0xFF);
+        pixels[offset + 2] = (byte)(used ? 0xFF : 0x00);
+        pixels[offset + 3] = 0xFF;
+      }
+
+      if (!anyUsed)
+      {
+        return null;
+      }
+
+      var bitmap = BitmapSource.Create(RamWordCount, 1, 96, 96, PixelFormats.Bgra32, null, pixels, RamWordCount * 4);
+      bitmap.Freeze();
+      return bitmap;
+    }
+  }
+
+  public Visibility RamUsageVisibility => RamUsageBitmap is not null ? Visibility.Visible : Visibility.Collapsed;
+
+  // Same "0x" prefix, 18-bit-masked hex parsing as NodeEditorViewModel's own TryParseHexWord,
+  // tolerant of a blank/malformed word (treated as unused/free) rather than throwing.
+  private static int? ParseWord(string text)
+  {
+    string trimmed = (text ?? string.Empty).Trim();
+    if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+    {
+      trimmed = trimmed[2..];
+    }
+
+    return int.TryParse(trimmed, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out int value)
+        ? value & F18InstructionSet.WordMask
+        : null;
+  }
 
   /// <summary>ADDED 2026-09-25, per Stefan directly: "in the GA144 window ... add the small node
   /// color number in the top left of each node." The 2-digit hex <see cref="NodeColorOption.Number"/>
