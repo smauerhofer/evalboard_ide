@@ -1,7 +1,10 @@
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.ViewModels;
+using System.Collections.Specialized;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Microsoft.Win32;
 
 namespace Ga144.Evb.Ide.Views;
@@ -20,6 +23,7 @@ public partial class CvmDebuggerWindow : Window
     _viewModel = viewModel;
     DataContext = viewModel;
     _viewModel.CoreDumpCompleted += OnCoreDumpCompleted;
+    _viewModel.MemoryRows.CollectionChanged += OnMemoryRowsCollectionChanged;
     Closed += OnClosed;
   }
 
@@ -30,7 +34,33 @@ public partial class CvmDebuggerWindow : Window
   {
     Closed -= OnClosed;
     _viewModel.CoreDumpCompleted -= OnCoreDumpCompleted;
+    _viewModel.MemoryRows.CollectionChanged -= OnMemoryRowsCollectionChanged;
     _viewModel.Cancel();
+  }
+
+  // Keeps the current-PC row visible in the "Simulated SRAM" list while stepping, per Stefan: "when
+  // stepping through a program, keep the line where the PC is visible in the Simulated SRAM area."
+  // CvmDebuggerViewModel.RefreshMemoryView (see its own remarks) clears MemoryRows and re-adds every
+  // row from scratch on every Step/Continue/Run/Pause/breakpoint toggle, so this fires once per
+  // refresh for whichever single newly-added row is the current PC, and scrolls it into view. If the
+  // PC's own address falls outside the window MemoryBaseText/"Show from:" is currently showing, no row
+  // here has IsCurrentPc set, so there is nothing to scroll to -- this only keeps the PC's line
+  // visible within whatever page is already being shown, it does not change pages to follow the PC.
+  private void OnMemoryRowsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+  {
+    if (e.NewItems is null)
+    {
+      return;
+    }
+
+    foreach (object item in e.NewItems)
+    {
+      if (item is CvmMemoryRowViewModel { IsCurrentPc: true } row)
+      {
+        MemoryListView.ScrollIntoView(row);
+        break;
+      }
+    }
   }
 
   // The view model has no UI dependency of its own (same convention as LoadImageFile's own
@@ -76,18 +106,42 @@ public partial class CvmDebuggerWindow : Window
   private void OnLogTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) =>
       LogTextBox.ScrollToEnd();
 
-  // The simulated SRAM inspector's own gutter column (added 2026-09-26 -- see
-  // CvmDebuggerViewModel.MemoryRows's own remarks): a click anywhere in the gutter cell toggles a
-  // breakpoint at that row's own address, regardless of which glyph (if any) happened to be showing.
-  // The view model has no UI dependency of its own (same convention as every other click handler in
-  // this file), so this just reads the clicked element's own DataContext (the row) and forwards its
-  // FlatAddress.
-  private void OnMemoryGutterClick(object sender, MouseButtonEventArgs e)
+  // The simulated SRAM inspector's whole row (originally just the gutter column, added 2026-09-26;
+  // widened to the whole row and switched from a single click to a double-click by Stefan's own
+  // same-day follow-up: "a double-click in a Simulated SRAM row must toggle a breakpoint to this
+  // address. a single-click only selects the row"). A single click still only selects, same as any
+  // ordinary ListView, since no handler here runs on it. A double-click anywhere in the row toggles a
+  // breakpoint at that row's own address, regardless of which column (or glyph, if any) was actually
+  // under the pointer. The view model has no UI dependency of its own (same convention as every other
+  // click handler in this file); the only extra work here is confirming the double-click actually
+  // landed on a row and not empty space below the last one, which would otherwise still raise
+  // MouseDoubleClick on the ListView without having changed SelectedItem.
+  private void OnMemoryRowDoubleClick(object sender, MouseButtonEventArgs e)
   {
-    if (sender is FrameworkElement { DataContext: CvmMemoryRowViewModel row })
+    if (e.OriginalSource is DependencyObject source
+        && FindAncestor<ListViewItem>(source) is not null
+        && sender is ListView { SelectedItem: CvmMemoryRowViewModel row })
     {
       _viewModel.ToggleBreakpointAtAddress(row.FlatAddress);
     }
+  }
+
+  // Walks up the visual tree from a clicked element to find its nearest ancestor of type T, or null if
+  // none exists -- e.g. a double-click landed in the ListView's own empty space below the last row,
+  // where there is no ListViewItem to find.
+  private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+  {
+    while (current is not null)
+    {
+      if (current is T match)
+      {
+        return match;
+      }
+
+      current = VisualTreeHelper.GetParent(current);
+    }
+
+    return null;
   }
 
   // The dialog itself lives here, not in the view model -- same convention as every other file-picking

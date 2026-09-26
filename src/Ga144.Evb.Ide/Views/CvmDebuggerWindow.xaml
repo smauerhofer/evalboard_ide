@@ -65,8 +65,8 @@
     <!-- The old "Breakpoints (page:address...)" GroupBox (a typed address, Add/Remove selected/Clear
          all, and a plain ListBox of "p:aaaa" strings) was removed 2026-09-26 per Stefan: "remove the
          breakpoints dialog above the source area from C and CVM debugger. it is no longer needed."
-         Setting a breakpoint is now done directly in the "Simulated SRAM inspector" below, by clicking
-         a row's own gutter cell (see that ListView's own remarks), independent of whether a program
+         Setting a breakpoint is now done directly in the "Simulated SRAM inspector" below, by
+         double-clicking a row (see that ListView's own remarks), independent of whether a program
          is running, per Stefan's own request. -->
     <GroupBox Grid.Row="2" Header="Assembly Code (edit, then Assemble to load into the simulated SRAM)" Margin="0,10,0,0" Padding="8">
       <StackPanel>
@@ -125,33 +125,35 @@
         <RowDefinition Height="*" />
       </Grid.RowDefinitions>
       <TextBlock Text="{Binding MemoryStatusText}" Foreground="#A33333" FontWeight="SemiBold" Margin="0,0,0,4" TextWrapping="Wrap" />
-      <ListView Grid.Row="1" ItemsSource="{Binding MemoryRows}"
+      <ListView x:Name="MemoryListView" Grid.Row="1" ItemsSource="{Binding MemoryRows}"
                       FontFamily="Consolas" FontSize="11"
                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                      ScrollViewer.VerticalScrollBarVisibility="Auto">
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      ToolTip="Double-click a row to set or clear a breakpoint at its address -- works whether or not a debug session is running. A single click only selects the row."
+                      MouseDoubleClick="OnMemoryRowDoubleClick">
         <ListView.View>
           <GridView>
             <!-- The gutter column Stefan asked for directly: right after the address, showing the
                  current PC (a green arrow) and any armed breakpoint (a red circle, to the arrow's own
                  left, per Stefan, 2026-09-26: "the first column... displays a breakpoint with a red
-                 circle and the current program position... with a green arrow to the right"); clicking
-                 anywhere in this cell toggles a breakpoint at that row's own address, via
-                 CvmDebuggerViewModel.ToggleBreakpointAtAddress. Shared verbatim by the C Debugger's own
-                 memory inspector, per Stefan: "use the same column for the old CVM debugger". Works
-                 whether or not a debug session is currently running (see ToggleBreakpointAtAddress's
-                 own remarks); this is the ONLY way to set or clear a breakpoint, replacing the old
-                 "Breakpoints" GroupBox that used to sit above the source area (removed 2026-09-26, per
-                 Stefan: "it is no longer needed"). Two separate TextBlocks (rather than one string, as
-                 the former GutterText property used to be) are what let the circle and arrow carry
-                 different colors; both are wrapped in one StackPanel so the WHOLE cell, not just
-                 whichever glyph happens to be showing, stays the click target. -->
+                 circle and the current program position... with a green arrow to the right"). Per
+                 Stefan's own same-day follow-up, "a double-click in a Simulated SRAM row must toggle a
+                 breakpoint to this address. a single-click only selects the row", so this cell no
+                 longer carries its own click handler; OnMemoryRowDoubleClick, wired on the ListView
+                 itself below, is what actually toggles the breakpoint, via
+                 CvmDebuggerViewModel.ToggleBreakpointAtAddress, for whichever row got double-clicked
+                 (gutter or any other column, the whole row is the target). Shared verbatim by the C
+                 Debugger's own memory inspector, per Stefan: "use the same column for the old CVM
+                 debugger". Works whether or not a debug session is currently running (see
+                 ToggleBreakpointAtAddress's own remarks); this is the ONLY way to set or clear a
+                 breakpoint, replacing the old "Breakpoints" GroupBox that used to sit above the source
+                 area (removed 2026-09-26, per Stefan: "it is no longer needed"). Two separate
+                 TextBlocks (rather than one string, as the former GutterText property used to be) are
+                 what let the circle and arrow carry different colors. -->
             <GridViewColumn Header="" Width="40">
               <GridViewColumn.CellTemplate>
                 <DataTemplate>
-                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
-                                  Background="Transparent" Cursor="Hand"
-                                  ToolTip="Click to set or clear a breakpoint at this address -- works whether or not a debug session is running."
-                                  MouseLeftButtonDown="OnMemoryGutterClick">
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                     <TextBlock Text="●" FontWeight="Bold" Foreground="#B00020"
                                     Visibility="{Binding IsBreakpoint, Converter={StaticResource BoolToVis}}" />
                     <TextBlock Text="→" FontWeight="Bold" Foreground="#1B8A3B"
