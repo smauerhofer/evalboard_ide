@@ -1,120 +1,202 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// Node 503's resident F18 source, verbatim from Stefan's 2026-09-16 paste -- the eleventh of 17 new
-/// nodes in this batch. Per its own header: "CVM2 node 503. VM 32 bit floatingpoint stage 3b node.
-/// implement add and multiply."
+/// Node 503's resident F18 source -- CVM2's floating-point subprocessor, step 3c (sign handling,
+/// exponent range checking and subnormal preparation). Supplied by Stefan 2026-09-26 as part of the
+/// complete FP subprocessor rewrite (see <see cref="Node102Program"/>'s own remarks for the full context: Stefan supplied the complete, hardware-working FP subprocessor rewrite on 2026-09-26, spanning nodes 501-504, 401-404, 301-306, 201-205 and 102-105; nodes 601-604 are explicitly retired from this role).
 ///
-/// <b>Resolves node 403's own previously-open question about where its "down"-bound <c>ottss</c> output
-/// goes.</b> This node's own <c>in: ottss {from node 403}</c> confirms it: node 403's control decisions
-/// (the possibly-reordered <c>o t1 t2 s1 s2</c>) are relayed here, not back to node 303 -- see
-/// <see cref="Node403Program"/>'s own remarks, which had guessed exactly this. Node 303 (stage 3) thus
-/// splits into a "3a" control chain (403-&gt;402-&gt;401) that decides comparisons and operand order, AND
-/// this "3b" chain (503-&gt;502-&gt;...) that carries out the actual arithmetic, structurally parallel to
-/// how the numeric data itself flows down the separate 302-&gt;301 branch.
+/// <b>REPLACES an unrelated, obsolete design.</b> The previously stored <c>Source</c> for this coordinate
+/// was a completely different "stage 3b node. implement add and multiply" (<c>fp3b/*</c> words); it is
+/// replaced wholesale.
 ///
-/// <b>Structurally mirrors node 403's own shape closely</b> (opcode-driven jump table dispatched via
-/// <c>ex</c>, a "remote control" send of an imported word's own compiled address to the next node down
-/// the chain, <c># N import</c>), but simpler: node 503 doesn't itself compute any comparisons (403/402/
-/// 401 already resolved those), so its own <c>fp3b/main</c> just relays <c>o t1 t2 s1 s2</c> onward
-/// (to node 603, per its own <c>out: ottss</c>) AND separately tells node 502 which operation to run.
+/// A slave to node 403; imports node 502. <c>f3c/shr</c> is a sticky-preserving single-bit right shift;
+/// <c>f3c/sub</c> repeatedly shifts the mantissa right by <c>1 - e</c> to prepare a subnormal result and
+/// zeroes the exponent. <c>f3c/adjust</c> classifies the incoming exponent: <c>e &lt;= 0</c> -&gt;
+/// subnormal (via <c>f3c/sub</c>); <c>1..254</c> -&gt; unchanged; <c>e &gt;= 255</c> -&gt; infinity
+/// (exponent forced to 255, mantissa to zero). <c>f3c/div</c>/<c>f3c/other</c> select which of node 502's
+/// operations runs before falling through into the shared <c>f3c/result</c> tail, which also receives and
+/// forwards the sign from node 403 and sends <c>s e h l</c> on to node 504.
 ///
-/// <b>Only <c>add</c>, <c>sub</c>, and <c>mul</c> have real targets</b> (<c>A[ fp4b/add ; ]]</c>,
-/// <c>A[ fp4b/sub ; ]]</c>, <c>A[ fp4b/mul ; ]]</c>, all imported from node 502) -- <c>min</c>/<c>max</c>/
-/// <c>div</c>/<c>nop</c>/<c>swap</c> all use an EMPTY <c>A[ ; ]]</c> (the address of a bare <c>;</c>,
-/// i.e. an inert do-nothing target). Given this node's header claims to "implement add and multiply"
-/// (not sub), and floating-point subtraction is already implemented as add-with-a-flipped-sign everywhere
-/// else in this pipeline (see node 403's own <c>fp3a/sub</c>/<c>fp3a/add</c>), <c>fp4b/sub</c> is most
-/// likely itself just a thin alias for <c>fp4b/add</c> on node 502's own side, not a third real
-/// implementation -- consistent with the header's own "add and multiply" framing, though not confirmed
-/// until node 502 is pasted. Why <c>div</c> specifically has no real target (rather than being deferred to
-/// yet another node down the chain, the way <c>min</c>/<c>max</c>/<c>nop</c>/<c>swap</c> plausibly are,
-/// since this branch doesn't need to reorder or compare anything) is not stated and is not guessed at
-/// here -- possibly simply not implemented yet.
-///
-/// <b>FLAGGED: the first explicit runtime override of a port register's OWN directive default anywhere
-/// in this batch.</b> This node's header declares <c># down /b</c>, but <c>fp3b/main</c>'s very first
-/// action is <c>up b!</c> -- immediately overriding it, before <c>b</c> is ever read. Every other node so
-/// far has only ever reassigned <c>a</c> at runtime, relying on <c>b</c>'s own directive default
-/// unchanged. The most likely reading is that the <c># down /b</c> directive itself is stale/incorrect
-/// (perhaps copied from a similar sibling node where <c>b</c> really was <c>down</c>) and the explicit
-/// <c>up b!</c> is Stefan's own working code silently overriding it -- offered as a plausible reading,
-/// not a confirmed one; reproduced exactly as pasted either way. Once reassigned, <c>b</c> stays
-/// <c>up</c> for the rest of the loop body -- its own <c>down</c> default is never actually used for
-/// anything shown here.
-///
-/// <b>NOT YET added to <see cref="CvmNodeMesh"/> or <see cref="CvmBootStreamBuilder"/>, and NOT wired
-/// into the CVM instruction set</b> -- same reasoning as its siblings: this branch isn't complete without
-/// node 502 (imported here but not yet pasted).
-///
-/// <b>FLAGGED, 2026-09-20 -- NOT confirmed by Stefan, applied as pasted anyway.</b> A side-by-side
-/// comparison against what was on file found exactly one difference: <c>fp3b/main</c>'s opening line
-/// changed from <c>up b!</c> to <c>up a!</c>. The ORIGINAL <c>up b!</c> was this file's own only
-/// deliberate-looking override of a port register's declared default (<c># down /b</c>) -- the working
-/// theory being that <c># down /b</c> itself was a stale directive and <c>up b!</c> silently fixed it.
-/// <c>up a!</c> does not fix anything: A's own directive default is already <c># up /a</c>, so this new
-/// line is a pure no-op, and B is left at its declared <c>down</c> default for the five <c>@b</c> reads
-/// that follow -- the opposite of what the file arranged before. This looks more like an accidental slip
-/// (an easy one, given <c>up a!</c>/<c>up b!</c> differ by one character) than an intentional change, but
-/// Stefan has not confirmed either way, so it is reproduced exactly as pasted rather than reverted.
+/// Added 2026-09-26; earlier revisions of this coordinate predate the current FP subprocessor design.
 /// </summary>
 internal static class Node503Program
 {
-  /// <summary>The node this program is always deployed to -- CVM2's new 32-bit floating-point pipeline, stage 3b (implements add/multiply, controls node 502), added 2026-09-16.</summary>
+  /// <summary>The node this program is always deployed to -- CVM2's floating-point subprocessor, step 3c (sign handling, exponent range checking, subnormal preparation), a slave to node 403. Replaced 2026-09-26.</summary>
   public const int Coordinate = 503;
 
   /// <summary>
-  /// Node 503's full resident F18 source, verbatim from Stefan's 2026-09-16 paste, updated 2026-09-20 with
-  /// the (unconfirmed, possibly accidental -- see this class's own remarks above) <c>up b!</c> -&gt;
-  /// <c>up a!</c> change in <c>fp3b/main</c>.
+  /// Node 503's full resident F18 source, verbatim from Stefan's 2026-09-26 paste. Replaces the obsolete "stage 3b, implement add and multiply" design previously stored here.
   /// </summary>
   public const string Source = """
-      ( CVM2 node 503. VM 32 bit floatingpoint stage 3b node. implement add and multiply )
-      (
-        calculates result for add and multiply.
+      ( CVM2 node 503. VM 32 bit floatingpoint step 3c.
 
-        in: ottss      {from node 403}
-        out: ottss     {to node 603}
+      node 503 is a slave to node 403.
+
+      sign handling, exponent range checking and
+      subnormal preparation.
+
+        in: s            {sign from node 403}
+        in: e H L        {normalized result from node 502}
+
+        out: s e H L     {range-adjusted result to node 504}
+
+      output format:
+
+      normal:
+        e = 1..254
+        H:L remains in 27-bit internal format
+
+      subnormal:
+        e = 0
+        H:L shifted right as required
+
+      overflow:
+        e = 255
+        H:L = 0
+
+      during processing:
+        stack: s e h
+        A:     l
+
       )
+
       # 502 import
 
+      entry down
 
-      entry fp3b/main
-      # down /b
-      # up /a
-
-      # 8 org
-
-      : fp3b/add A[ fp4b/add ; ]] lit ! ;
-      : fp3b/sub A[ fp4b/sub ; ]] lit ! ;
-      : fp3b/min A[ ; ]] lit ! ;
-      : fp3b/max A[ ; ]] lit ! ;
-      : fp3b/mul A[ fp4b/mul ; ]] lit ! ;
-      : fp3b/div A[ ; ]] lit ! ;
-      : fp3b/nop A[ ; ]] lit ! ;
-      : fp3b/swap A[ ; ]] lit ! ;
+      # 0 org
 
 
-      : fp3b/main up a!
-        @b dup ! >r // o
-        @b !        // t1
-        @b !        // t2
-        @b !        // s1
-        @b !        // s2
-        right a!    // control node 502
-        ex   // call jump table
-        fp3b/main ;
+      : f3c/shr ( s e h - s e h' ) // A=l -> A=l'
+        // Preserve the bit shifted out of L as sticky.
+
+        a 1 and >r
+
+        // H:L >>= 1
+        //
+        // S=0, T=H, A=L
+
+        0 over
+        . +*
+
+        >r
+        drop drop
+        r>
+
+        // sticky = new L0 OR discarded old L0
+
+        r> inv
+        a inv
+        and inv
+        a!
+      ;
+
+      : f3c/sub ( s e h - s 0 h' ) // A=l -> A=l'
+        // e <= 0
+        //
+        // shift mantissa by:
+        //
+        //   1 - e
+        //
+        // For next the initial count is therefore -e.
+
+        over inv 1 . +
+        >r       // R = -e
+
+        // replace exponent by zero
+
+        >r
+        drop
+        0
+        r>
+
+        begin
+          f3c/shr
+        next
+      ;
 
 
-      # 0 org // jump table
+      : f3c/adjust ( s e h - s e' h' ) // A=l -> A=l'
+        // e < 0   -> subnormal
+        // e = 0   -> subnormal
+        // 1..254  -> unchanged
+        // e >=255 -> infinity
 
-      fp3b/add ;
-      fp3b/sub ;
-      fp3b/min ;
-      fp3b/max ;
-      fp3b/mul ;
-      fp3b/div ;
-      fp3b/nop ;
-      fp3b/swap ;
+        over
+
+        . -if
+          // e < 0
+
+          drop
+          f3c/sub
+          ;
+        then
+
+        . if
+          // e > 0
+
+          drop
+
+          // Test e < 255.
+
+          over
+          -255 . +
+
+          . -if
+            // 1 <= e <= 254
+
+            drop
+            ;
+          then
+
+          // e >= 255
+
+          drop
+
+          // s e h -> s 255 0
+          // A      -> 0
+
+          drop drop
+          255
+          0 dup a!
+          ;
+        then
+
+        // e == 0
+
+        drop
+        f3c/sub
+      ;
+
+
+      : f3c/div ( s )
+        A[ f4c/div ]] lit
+        ahead
+
+      : f3c/other ( s )
+        A[ f4c/other ]] lit
+
+      : f3c/result then
+        right a!
+        !                       // invoke selected operation in node 502
+
+        @ @ @                   // e h l from node 502
+        ( s e h l )
+
+        a!
+        ( s e h )               // A=l
+
+        f3c/adjust
+
+        // stack: s e h
+        // A:     l
+
+        left b!                 // node 504
+
+        >r >r !b                // s
+        r> !b                   // e
+        r> !b                   // h
+        a !b                    // l
+      ;
       """;
 }

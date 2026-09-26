@@ -107,6 +107,16 @@ namespace Ga144.Evb.Ide.Cvm;
 /// <see cref="CvmBootStreamBuilder"/>'s own remarks: its <c>BuildDescriptors()</c> compiles node 307 and
 /// is still expected to fail on this branch until it is completed.</item>
 /// </list>
+///
+/// <b>RE-CONFIRMED 2026-09-26, as part of the complete FP subprocessor bundle -- see
+/// <see cref="Node102Program"/>'s own remarks for the full context.</b> Stefan re-pasted this exact source
+/// while stating "Node 407 is complete" (node 407 is only referenced here for context, per Stefan's own
+/// note; no change was requested to it). <b>FLAGGED, not silently resolved:</b> the freshly pasted source's
+/// <c># 0x0 org</c> differs from the <c># 0x10 org</c> this class had stored since the 2026-09-11 revision
+/// above -- every other byte of the source, including the still-unterminated final branch, is unchanged.
+/// <see cref="Source"/> below now reflects the freshest paste (<c># 0x0 org</c>), on the standing
+/// "most recent input wins, but say so" practice used throughout this project; whether the org-address
+/// change is deliberate or an artifact of re-pasting is for Stefan to confirm.
 /// </summary>
 internal static class Node307Program
 {
@@ -146,11 +156,16 @@ internal static class Node307Program
   /// <c>r&gt; r--- ;</c>, and <c>1101_10??_????_????</c>'s own <c>r&gt; r--- ;</c> became
   /// <c>r&gt; --l- ;</c>. Everything else (the prelude, the "1101_0???" branch, the still-unterminated
   /// final branch) is byte-for-byte unchanged.
+  ///
+  /// <b>RE-PASTED 2026-09-26 as part of the complete FP subprocessor bundle -- see this class's own
+  /// "RE-CONFIRMED 2026-09-26" remarks above.</b> <c># 0x10 org</c> is now <c># 0x0 org</c>; this is the
+  /// ONLY change from the 2026-09-15 revision above -- FLAGGED, not silently resolved. Everything else,
+  /// including the still-unterminated final branch, is byte-for-byte unchanged.
   /// </summary>
   public const string Source = """
       ( CVM2 node 307. VM ternary main, 1101_????_????_???? )
       # 407 import
-      # 0x10 org
+      # 0x0 org
       entry k/main
       # 0 /a
       # up /b

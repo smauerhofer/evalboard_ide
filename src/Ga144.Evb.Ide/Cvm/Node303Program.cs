@@ -1,89 +1,269 @@
 namespace Ga144.Evb.Ide.Cvm;
 
 /// <summary>
-/// Node 303's resident F18 source, verbatim from Stefan's 2026-09-16 paste -- the third of 17 new nodes
-/// in this batch (see <see cref="Node305Program"/>/<see cref="Node304Program"/> for the first two). Per
-/// its own header: "CVM2 node 303. VM 32 bit floatingpoint stage 3 node. split data stream" -- stage 3 of
-/// the same pipeline, and the first node in it whose header describes MORE than a single in/out pair:
-/// it takes the 11-field stream node 304 hands it (<c>ottsseehhll</c>) and splits it in two, sending the
-/// opcode/type/sign fields (<c>ottss</c>, 5 fields) to node 403 and the exponent/mantissa fields
-/// (<c>eehhll</c>, 6 fields) to node 302 -- plus a third, single-word channel (<c>c</c>) exchanged with
-/// both neighbors (read from node 302, forwarded on to node 403). Body confirms this exactly: all 11
-/// <c>@b</c> reads (5 then 6) match <c>ottsseehhll</c>'s own 11 letters one-for-one, the first 5 writes
-/// (through <c>a</c>, initially bound <c>up</c> per this node's own <c># up /a</c> directive) match
-/// <c>ottss</c>, and the last 6 (through <c>a</c>, reassigned <c>right a!</c> mid-body) match
-/// <c>eehhll</c>.
+/// Node 303's resident F18 source -- CVM2's floating-point subprocessor, step 3a (operation selection,
+/// operand ordering and sign processing). Supplied by Stefan 2026-09-26 as part of the complete FP
+/// subprocessor rewrite (see <see cref="Node102Program"/>'s own remarks for the full context: Stefan supplied the complete, hardware-working FP subprocessor rewrite on 2026-09-26, spanning nodes 501-504, 401-404, 301-306, 201-205 and 102-105; nodes 601-604 are explicitly retired from this role).
 ///
-/// <b>FLAGGED, not silently resolved: two apparent direction inconsistencies with
-/// <see cref="Node304Program"/>'s own header, reproduced as-is.</b>
-/// <list type="bullet">
-/// <item>This node's own <c># left /b</c> directive names its (sole) link to node 304 as its own LEFT
-/// port. But node 304's own header names that exact same link as ITS OWN left port too (node 304 reads
-/// its main input from node 305 over the port it calls "right", and sends output to node 303 over the
-/// port it calls "left" -- see <see cref="Node304Program"/>'s own remarks). Every prior pair of linked
-/// nodes in this project had opposite left/right labels for a shared link (A calls it left, B calls the
-/// same wire right); here BOTH sides call it "left." Not resolved or explained here.</item>
-/// <item>Within this node, <c>right a!</c> is confirmed (via the header's own "from/to node 302" labels)
-/// to reach node 302 -- the LOWER-numbered column neighbor. But node 304's own "right" reached node 305,
-/// the HIGHER-numbered column neighbor. So "right" points toward a lower column here but a higher column
-/// there, for two nodes in the very same row. Possibly a real, non-uniform hardware wiring quirk of this
-/// mesh (this project has already seen relay directions and tag ranges vary node-by-node in ways not
-/// otherwise explained); possibly something else. Not guessed at here -- reproduced exactly as pasted.
-/// </item>
-/// </list>
+/// <b>REPLACES an unrelated, obsolete design.</b> The previously stored <c>Source</c> for this coordinate
+/// was a completely different "stage 3 node. split data stream" (<c>fp3/main</c>); it is replaced
+/// wholesale.
 ///
-/// Like <see cref="Node305Program"/> and <see cref="Node304Program"/>, this source has no
-/// <c># import</c> directive and never calls <c>k/pop</c>/<c>k/push</c>/<c>k/leave</c> -- a pure
-/// port-protocol worker, not part of the existing CVM tag-dispatch tree. Unlike its two siblings so far,
-/// <c>fp3/main</c> tail-calls itself as its own last action before its closing <c>;</c> -- an explicit,
-/// self-contained infinite service loop, rather than a single pass left for something else to re-invoke.
-/// Whether stages 1/2 are meant to loop the same way (their own sources simply end after one pass) is not
-/// stated and is not guessed at here.
+/// A slave to node 203; imports node 302. <c>f3a/first</c>/<c>f3a/second</c> select and forward one
+/// original operand's sign while arming node 302's matching <c>first</c>/<c>second</c> exponent path.
+/// <c>f3a/select</c>/<c>f3a/smaler</c>/<c>f3a/larger</c> use the magnitude-compare code relayed from node
+/// 202 (via node 203) to pick the smaller or larger-magnitude operand. <c>f3a/add</c> implements the "SUB
+/// is ADD with operand 2's sign flipped" convention used throughout this subprocessor (see nodes 203/403):
+/// same signs pick the iadd/sadd exponent path by the compare code, opposite signs pick isub/ssub and
+/// resolve the sign (with exact cancellation forced to positive zero). <c>f3a/min</c>/<c>f3a/max</c>
+/// implement the IEEE tie-breaking rules by sign and magnitude. <c>f3a/mul</c>/<c>f3a/div</c> select node
+/// 302's <c>imul</c>/<c>idiv</c> exponent path and combine the two signs with <c>xor</c>.
 ///
-/// <b>NOT YET added to <see cref="CvmNodeMesh"/> or <see cref="CvmBootStreamBuilder"/>, and NOT wired
-/// into the CVM instruction set</b> -- same reasoning as its two siblings: no dispatched opcode of its
-/// own, and this pipeline's full shape is still being pasted.
+/// Added 2026-09-26; earlier revisions of this coordinate predate the current FP subprocessor design.
 /// </summary>
 internal static class Node303Program
 {
-  /// <summary>The node this program is always deployed to -- CVM2's new 32-bit floating-point pipeline, stage 3 (split), added 2026-09-16.</summary>
+  /// <summary>The node this program is always deployed to -- CVM2's floating-point subprocessor, step 3a (operation selection, operand ordering and sign processing), a slave to node 203. Replaced 2026-09-26.</summary>
   public const int Coordinate = 303;
 
   /// <summary>
-  /// Node 303's full resident F18 source, verbatim from Stefan's 2026-09-16 paste.
+  /// Node 303's full resident F18 source, verbatim from Stefan's 2026-09-26 paste. Replaces the obsolete "stage 3, split data stream" design previously stored here.
   /// </summary>
   public const string Source = """
-      ( CVM2 node 303. VM 32 bit floatingpoint stage 3 node. split data stream )
-      (
-        in: ottsseehhll   {from node 304}
-        out: ottss        {to node 403}
-        out: eehhll       {to node 302}
-        in: c             {from node 302}
-        out: c            {to node 403}
+      ( CVM2 node 303. VM 32 bit floatingpoint step 3a.
+
+      this node is a slave of node 203.
+
+      operation selection, operand ordering and sign processing.
+
+      node 203 supplies the operation-specific control stream.
+
+        in: s1 s2         {from node 203}
+      optional:
+        in: c             {from node 203}
+
+        out: s            {to node 403}
+
+        c: magnitude compare result
+          0x8000  : |f1| >  |f2|
+          0       : |f1| == |f2|
+          0x20000 : |f1| <  |f2|
       )
-      entry fp3/main
+
+      # 302 import
+
       # up /a
-      # left /b
+      # right /b
+      entry down
 
       # 0 org
 
-      : fp3/main
-        @b ! // o operation
-        @b ! // t1
-        @b ! // t2
-        @b ! // s1
-        @b ! // s2
-        right a!
-        @b ! // e1
-        @b ! // e2
-        @b ! // h1
-        @b ! // h2
-        @b ! // l1
-        @b ! // l2
-        @ // read c
-        up a!
-        ! // c
-        fp3/main
+
+      // select and forward original operand 1
+
+      : f3a/first ( s1 s2 - s1 )
+        # f4a/first lit !b
+        drop
+      ;
+
+
+      // select and forward original operand 2
+
+      : f3a/second ( s1 s2 - s2 )
+        # f4a/second lit !b
+        >r drop r>
+      ;
+
+
+      // select operand 2 iff c == code,
+      // otherwise select operand 1.
+      //
+      // equality of magnitudes may therefore be assigned
+      // to operand 1 by choosing code 8000 or 20000.
+
+      : f3a/smaler 0x8000
+      : f3a/select ( s1 s2 c code - s )
+        xor
+        if
+          drop f3a/first ;
+        then
+        drop f3a/second
+      ;
+      : f3a/larger 0x20000 f3a/select ;
+
+
+
+
+      // ADD and SUB
+      //
+      // SUB has already been converted to ADD semantics by
+      // node 203 by flipping s2.
+      //
+      // same signs:
+      //   c=8000  -> iadd, sign s1
+      //   c=0000  -> iadd, sign s1
+      //   c=20000 -> sadd, sign s1 (=s2)
+      //
+      // different signs:
+      //   c=8000  -> isub, sign s1
+      //   c=0000  -> isub, sign +0
+      //   c=20000 -> ssub, sign s2
+
+      : f3a/add ( s1 s2 c - s )
+        >r
+        over over xor
+        if
+          // different signs
+          drop
+          r>
+
+          // 20000 is negative as an 18-bit F18 value
+          . -if
+            drop
+            # f4a/ssub lit !b
+            >r drop r>
+            ;
+          then
+
+          // c is now either 8000 or 0.
+          // Both use original orientation.
+          >r
+          # f4a/isub lit !b
+          drop
+          r>
+
+          // nonzero c -> operand 1 supplied the sign
+          if
+            drop ;
+          then
+
+          // exact cancellation
+          dup xor
+          ;
+        then
+
+        // same signs
+        drop
+        r>
+
+        // only c=20000 requires swapped orientation
+        . -if
+          drop
+          # f4a/sadd lit !b
+          drop
+          ;
+        then
+
+        drop
+        # f4a/iadd lit !b
+        drop
+      ;
+
+
+      // MIN
+      //
+      // opposite signs:
+      //   negative operand wins; c is ignored.
+      //
+      // same positive signs:
+      //   smaller magnitude wins.
+      //   operand 2 only when c=8000.
+      //
+      // same negative signs:
+      //   larger magnitude wins.
+      //   operand 2 only when c=20000.
+
+      : f3a/min ( s1 s2 c - s )
+        >r
+        over over xor
+        if
+          // opposite signs
+          drop
+          r> drop
+
+          // s2 negative -> operand 2
+          if
+            f3a/second ;
+          then
+
+          // s2 positive -> operand 1
+          f3a/first ;
+        then
+
+        // same signs
+        drop
+        over
+
+        // both negative: larger magnitude
+        . if
+          drop
+          r>
+          f3a/larger ;
+        then
+
+        // both positive: smaller magnitude
+        drop
+        r>
+        f3a/smaler
+      ;
+
+
+      // MAX
+      //
+      // opposite signs:
+      //   positive operand wins; c is ignored.
+      //
+      // same positive signs:
+      //   larger magnitude wins.
+      //   operand 2 only when c=20000.
+      //
+      // same negative signs:
+      //   smaller magnitude wins.
+      //   operand 2 only when c=8000.
+
+      : f3a/max ( s1 s2 c - s )
+        >r
+        over over xor
+        if
+          // opposite signs
+          drop
+          r> drop
+
+          // s2 negative -> operand 1
+          if
+            f3a/first ;
+          then
+
+          // s2 positive -> operand 2
+          f3a/second ;
+        then
+
+        // same signs
+        drop
+        over
+
+        // both negative: smaller magnitude
+        if
+          drop
+          r>
+          f3a/smaler ;
+        then
+
+        // both positive: larger magnitude
+        drop
+        r>
+        f3a/larger
+      ;
+
+
+      : f3a/mul ( s1 s2 - s )
+        # f4a/imul lit !b
+        xor
+      ;
+
+      : f3a/div ( s1 s2 - s )
+        # f4a/idiv lit !b
+        xor
       ;
       """;
 }
