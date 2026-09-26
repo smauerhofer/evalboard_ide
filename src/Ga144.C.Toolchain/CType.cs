@@ -8,6 +8,7 @@ public enum CTypeKind
   Char,
   UnsignedChar,
   Float,
+  Long,
   Pointer,
   Array,
   Function,
@@ -55,6 +56,34 @@ public sealed class CType : IEquatable<CType>
   /// revisit when full <c>float</c> support (a float-library, conversions, comparisons) is added.
   /// </summary>
   public static readonly CType Float = new() { Kind = CTypeKind.Float };
+
+  /// <summary>
+  /// Added 2026-09-26, per Stefan verbatim: "support 'long'. a 'long' is represented as a 2 word little
+  /// endian unit. do not generate code for handling 'long' yet, because that has to be defined first in
+  /// the CVM." Like <see cref="Float"/>, this is a TWO-word type (see <see cref="SizeInWords"/>) --
+  /// low word at the lower address, high word at the higher one, the exact same little-endian convention
+  /// Stefan already dictated for <c>float</c> (see <see cref="Float"/>'s own remarks) -- but UNLIKE
+  /// <c>float</c>, which got a complete dedicated codegen path (its own lvalue kind, load/store, register
+  /// save/restore), <c>long</c> deliberately gets NONE yet, per Stefan's own instruction above: this is a
+  /// real ISA gap (the CVM itself has no defined <c>long</c> instructions), not a compiler scope choice
+  /// the way e.g. <c>float</c> comparisons/int-float conversion are.
+  ///
+  /// What DOES work today, because none of it needs an actual `long` VALUE operation, only the correct
+  /// word count: declaring a <c>long</c> local/global/static/struct-member variable (correctly sized and
+  /// laid out via <see cref="SizeInWords"/>, and zero-filled if a global/static has no initializer),
+  /// taking its address (<c>&amp;</c>), forming <c>long *</c>/<c>long[]</c>, and pointer arithmetic/
+  /// indexing on either (pure address math, already generic over element size -- see <see
+  /// cref="CCodeGenerator"/>'s own doc comment). What is explicitly REJECTED with a clear diagnostic,
+  /// exactly the way <c>struct</c>'s own "whole value" restriction already is (see <see
+  /// cref="StructOf"/>'s own remarks) rather than silently mishandled: reading a <c>long</c> value from
+  /// anywhere (a bare variable, a dereferenced <c>long *</c>, an array element, a struct member),
+  /// assigning/compound-assigning to one, <c>++</c>/<c>--</c> on one, casting to or from one, passing or
+  /// returning one BY VALUE in a function signature (parser-level, mirroring <c>struct</c>'s own
+  /// by-value restriction), and initializing a global/static <c>long</c> with anything other than leaving
+  /// it zero-filled (a general integer constant would need correct sign-extension into the high word,
+  /// which is exactly the kind of "long instruction" this compiler isn't implementing yet).
+  /// </summary>
+  public static readonly CType Long = new() { Kind = CTypeKind.Long };
 
   public required CTypeKind Kind { get; init; }
 
@@ -140,8 +169,17 @@ public sealed class CType : IEquatable<CType>
   public bool IsArray => Kind == CTypeKind.Array;
   public bool IsFunction => Kind == CTypeKind.Function;
   public bool IsStruct => Kind == CTypeKind.Struct;
-  public bool IsIntegral => Kind is CTypeKind.Int or CTypeKind.UnsignedInt or CTypeKind.Char or CTypeKind.UnsignedChar;
+  public bool IsIntegral => Kind is CTypeKind.Int or CTypeKind.UnsignedInt or CTypeKind.Char or CTypeKind.UnsignedChar or CTypeKind.Long;
   public bool IsFloat => Kind == CTypeKind.Float;
+
+  /// <summary>Added 2026-09-26 alongside <see cref="Long"/>'s own remarks -- true for the 2-word integer
+  /// type this compiler's general one-word codegen cannot yet actually read/write/compute with as a
+  /// value. Named separately from <see cref="IsStruct"/> (the other type sharing that same "no whole-
+  /// value codegen yet" restriction -- see <see cref="CCodeGenerator"/>'s own <c>IsUnsupportedWholeValueType</c>
+  /// for where both are checked together) purely so each call site can give its own precise diagnostic.
+  /// </summary>
+  public bool IsLong => Kind == CTypeKind.Long;
+
   public bool IsScalar => IsIntegral || IsPointer || IsFloat;
 
   /// <summary>Whether arithmetic on this type is unsigned -- used to pick between signed and unsigned
@@ -152,11 +190,15 @@ public sealed class CType : IEquatable<CType>
 
   /// <summary>Size in CVM words. See the type's own doc comment for why every scalar/pointer is 1 --
   /// except <see cref="CTypeKind.Float"/> (added 2026-09-26), which is 2 (see <see cref="Float"/>'s own
-  /// remarks).</summary>
+  /// remarks), and <see cref="CTypeKind.Long"/> (added 2026-09-26), which is likewise 2 (see <see
+  /// cref="Long"/>'s own remarks) despite <see cref="CCodeGenerator"/> not yet implementing any actual
+  /// value-level codegen for it -- the word count itself is exactly what makes declaring/sizing/
+  /// addressing a <c>long</c> already correct today, independent of whether its VALUE can be used
+  /// yet.</summary>
   public int SizeInWords => Kind switch
   {
     CTypeKind.Void or CTypeKind.Function => 0,
-    CTypeKind.Float => 2,
+    CTypeKind.Float or CTypeKind.Long => 2,
     CTypeKind.Array => Math.Max(ArrayLength, 0) * (ElementType?.SizeInWords ?? 1),
     CTypeKind.Struct => Members?.Sum(m => Math.Max(m.Type.SizeInWords, 1)) ?? 0,
     _ => 1,
@@ -208,6 +250,7 @@ public sealed class CType : IEquatable<CType>
     CTypeKind.Char => "char",
     CTypeKind.UnsignedChar => "unsigned char",
     CTypeKind.Float => "float",
+    CTypeKind.Long => "long",
     CTypeKind.Pointer => $"{ElementType} *",
     CTypeKind.Array => ArrayLength >= 0 ? $"{ElementType}[{ArrayLength}]" : $"{ElementType}[]",
     CTypeKind.Function => $"{ReturnType} ({string.Join(", ", ParameterTypes)})",

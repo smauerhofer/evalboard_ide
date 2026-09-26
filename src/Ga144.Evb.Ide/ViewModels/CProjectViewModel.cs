@@ -443,6 +443,29 @@ public sealed class CProjectViewModel : ObservableObject
 
     assemblySources.AddRange(Model.GetAssemblyFiles());
 
+    // Added 2026-09-26, per Stefan's own real "libc" build failure: a compiler-generated assembly file
+    // (from a "src/*.c") and a hand-written one (from "asm/*.asm") are both named purely after their own
+    // file name, with no directory qualifier -- see CProject.GetObjectFilePath's own remarks -- so two
+    // files with the same base name but in different source directories (e.g. "src/heap.c" and
+    // "asm/heap.asm") silently produce the identical object file path ("obj/heap.gaobj") and then the
+    // identical archive MEMBER name, which CvmLibrary.Save correctly refuses rather than writing a
+    // genuinely ambiguous archive -- but its own diagnostic ("member 'heap.gaobj' appears more than once
+    // in this archive") never says WHICH two source files caused it, leaving the person to guess. Caught
+    // here instead, before assembling or archiving anything, so the message names the exact colliding
+    // files by their own project-relative paths. This does not change how object/archive-member names are
+    // computed (still just the source file's own base name, unqualified by directory) -- per Stefan's own
+    // choice, the fix is a clearer diagnostic pointing at the two files to rename, not automatic
+    // disambiguation.
+    foreach (IGrouping<string, string> duplicateGroup in assemblySources
+        .GroupBy(path => Path.GetFileNameWithoutExtension(path), StringComparer.OrdinalIgnoreCase)
+        .Where(group => group.Count() > 1))
+    {
+      success = false;
+      string collidingObjectFileName = duplicateGroup.Key + ".gaobj";
+      string collidingFiles = string.Join(" and ", duplicateGroup.Select(path => Path.GetRelativePath(Model.RootPath, path)));
+      messages.Add($"{collidingFiles} would all produce the same object file (\"{collidingObjectFileName}\") -- rename one of them. A project's assembly file names, counting \"{CProject.SourceDirectoryName}\" (compiled) and \"{CProject.AssemblyDirectoryName}\" (hand-written) together, must be unique regardless of extension.");
+    }
+
     var objectMembers = new List<CvmLibraryMember>();
     foreach (string assemblySource in assemblySources)
     {

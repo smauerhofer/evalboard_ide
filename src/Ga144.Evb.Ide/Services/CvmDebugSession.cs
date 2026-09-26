@@ -115,27 +115,41 @@ public sealed class CvmDebugSession : IDisposable
   public IReadOnlyList<int> Program => _program;
 
   /// <summary>
+  /// Every label name -&gt; address <see cref="AssembleAndLoadProgram"/>'s own most recent successful
+  /// call defined (CvmAssemblyLanguage's "Labels (2026-09-02, per Stefan)" feature, e.g. "loop: nop"),
+  /// for <see cref="ViewModels.CvmDebuggerViewModel"/>'s own memory inspector "Label" column -- added
+  /// 2026-09-26, per Stefan: "put in there the name of a label for that address". Empty until the first
+  /// successful <see cref="AssembleAndLoadProgram"/> call, and left exactly as it was by a FAILED one
+  /// (same "neither the simulated SRAM nor Program is touched at all" contract that method's own
+  /// remarks already describe for its other outputs) or by <see cref="LoadImage"/> (a linked image's own
+  /// symbol table is a completely separate mechanism, owned by the ViewModel, not this class).
+  /// </summary>
+  public IReadOnlyDictionary<string, int> ProgramLabels { get; private set; } = new Dictionary<string, int>();
+
+  /// <summary>
   /// Assembles <paramref name="sourceText"/> (<see cref="CvmAssemblyLanguage.ParseSource"/> then
   /// <see cref="CvmAssemblyLanguage.Assemble"/>, resolved against THIS run's own node 607 compile)
   /// and, on success, overwrites the simulated SRAM's page 0 with the result starting at address 0,
   /// zero-filling any leftover tail from a previous, longer <see cref="Program"/> so no stale opcode
-  /// lingers past the new program's end, then replaces <see cref="Program"/> with it. This is a live
-  /// reprogram, not a reset: the simulated SRAM is what a connected real CVM chip is actually reading
-  /// its next instruction fetch from (see <see cref="CvmSimulatedSram"/>'s own remarks), so the chip's
-  /// own P register, breakpoints, and transaction log are all left exactly as they were -- only the
-  /// content the chip's NEXT fetch will see has changed. Returns an error message (never throws) on a
-  /// parse/assemble failure, in which case neither the simulated SRAM nor <see cref="Program"/> is
-  /// touched at all.
+  /// lingers past the new program's end, then replaces <see cref="Program"/> (and <see cref="ProgramLabels"/>)
+  /// with it. This is a live reprogram, not a reset: the simulated SRAM is what a connected real CVM chip
+  /// is actually reading its next instruction fetch from (see <see cref="CvmSimulatedSram"/>'s own
+  /// remarks), so the chip's own P register, breakpoints, and transaction log are all left exactly as
+  /// they were -- only the content the chip's NEXT fetch will see has changed. Returns an error message
+  /// (never throws) on a parse/assemble failure, in which case neither the simulated SRAM nor
+  /// <see cref="Program"/>/<see cref="ProgramLabels"/> is touched at all.
   /// </summary>
   public (bool Success, string? Error) AssembleAndLoadProgram(string sourceText)
   {
-    (List<int>? words, string? error) = CvmAssemblyLanguage.AssembleAndLoadProgram(sourceText, _sram, _program, _compiledRam);
+    (List<int>? words, IReadOnlyDictionary<string, int>? labels, string? error) =
+        CvmAssemblyLanguage.AssembleAndLoadProgram(sourceText, _sram, _program, _compiledRam);
     if (words is null)
     {
       return (false, error);
     }
 
     _program = words;
+    ProgramLabels = labels ?? new Dictionary<string, int>();
     return (true, null);
   }
 
@@ -160,6 +174,10 @@ public sealed class CvmDebugSession : IDisposable
     }
 
     _program = image.Words;
+    // A linked image's own symbols are a completely separate mechanism (CvmImage.Symbols, tracked by
+    // the ViewModel, not this class) -- whatever AssembleAndLoadProgram last put in ProgramLabels no
+    // longer describes what's actually loaded, so it's cleared here rather than left stale.
+    ProgramLabels = new Dictionary<string, int>();
   }
 
   public int TransactionCount { get; private set; }

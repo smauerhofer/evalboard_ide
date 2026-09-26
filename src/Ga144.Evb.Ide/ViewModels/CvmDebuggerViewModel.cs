@@ -112,6 +112,17 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // shows a linked program's own symbol names next to words that no longer belong to it.
   private IReadOnlyList<CvmImageSymbol> _loadedImageSymbols = [];
 
+  // Added 2026-09-26 for the "Label" column (per Stefan: "put in there the name of a label for that
+  // address"): the OTHER label source, alongside _loadedImageSymbols above -- a label the hand-typed
+  // Assembly Code editor's own text defines (name -> address, CvmAssemblyLanguage's "Labels
+  // (2026-09-02, per Stefan)" feature, e.g. "loop: nop"), captured from CvmDebugSession.ProgramLabels
+  // (a live session) or AssembleStandalone's own return value (no session yet) every time Assemble()
+  // succeeds. Cleared the moment LoadImage/LoadImageFile overwrites what Assemble put in the SRAM,
+  // exactly mirroring how _loadedImageSymbols is itself cleared the moment Assemble overwrites what
+  // LoadImage put there -- the two are mutually exclusive label sources for the same reason the SRAM
+  // content they describe is mutually exclusive.
+  private IReadOnlyDictionary<string, int> _assembledLabelAddresses = new Dictionary<string, int>();
+
   // The full image LoadImageFile most recently loaded, kept around (not just its symbols) so a
   // subsequent Start / Reinstall re-applies THIS to the freshly booted chip instead of falling back to
   // AssemblyCodeText -- without this, a program loaded via the "Debug" button (a Program project's own
@@ -154,9 +165,26 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   private string _memoryStatusText = string.Empty;
   private string _memoryBaseText = "0:0000";
   private string _programCounterText = "-";
-  private string _newBreakpointText = "0:0005";
-  private string? _selectedBreakpoint;
   private string _assemblyCodeText = DefaultAssemblyCode;
+
+  // Added 2026-09-26, replacing the old "Breakpoints" GroupBox (a typed address, Add/Remove
+  // selected/Clear all, and a plain ListBox of "p:aaaa" strings) per Stefan: "i want to place
+  // breakpoints independent whether a program is running or not... by clicking on a line in
+  // simulated SRAM, i toggle a breakpoint... breakpoints are activated, when running a program."
+  // This is now the SINGLE source of truth for which addresses are armed -- unlike the old design,
+  // where a breakpoint only ever existed inside a live CvmDebugSession (see that class's own
+  // Breakpoints/AddBreakpoint/RemoveBreakpoint) and so was unavoidably gone the moment Stop ran or
+  // before Start ever had. This set lives for the whole life of the view model instead: it survives
+  // Stop and is there waiting the next time Start creates a fresh session (see StartAsync's own
+  // "arm every persisted breakpoint against the freshly booted session" step) or before the very
+  // first Start (RefreshMemoryView reads straight from this set when there is no session yet).
+  // ToggleBreakpointAtAddress -- the gutter cell's own click handler -- is the only way this set is
+  // ever mutated, and it also mirrors the change onto _session (when one exists) so a currently
+  // running/paused chip picks up the toggle immediately, without waiting for a fresh Start; this is
+  // what "breakpoints are activated when running" actually means here -- the address is armed the
+  // instant it's clicked, but only actually PAUSES anything the next time the chip's own memory
+  // interface traffic reaches it while a Step/Continue/Run is in progress.
+  private readonly HashSet<int> _breakpoints = [];
 
   // The CVM Debugger's own named programs (Stefan's own request, 2026-09-20) -- see InitializePrograms's
   // own remarks for how this is (re)built from Ga144ChipConfiguration.DebuggerPrograms, and
@@ -196,9 +224,6 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     RunCommand = new AsyncRelayCommand(RunAsync, () => !IsBusy && IsSessionActive);
     PauseCommand = new RelayCommand(Pause, () => IsContinuing);
     StopCommand = new RelayCommand(Stop, () => IsSessionActive);
-    AddBreakpointCommand = new RelayCommand(AddBreakpoint, () => IsSessionActive);
-    RemoveBreakpointCommand = new RelayCommand(RemoveSelectedBreakpoint, () => IsSessionActive && SelectedBreakpoint is not null);
-    ClearBreakpointsCommand = new RelayCommand(ClearBreakpoints, () => IsSessionActive && Breakpoints.Count > 0);
     RefreshMemoryCommand = new RelayCommand(RefreshMemoryView);
     AssembleCommand = new RelayCommand(Assemble, () => !IsBusy);
     AddProgramCommand = new RelayCommand(AddProgram, () => !IsBusy);
@@ -260,8 +285,9 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// every time it runs, same "recomputed on every call, not diffed" contract that method's own remarks
   /// already documented for its former string-building version. A real per-row object (rather than one
   /// long formatted string) is what makes a dedicated, CLICKABLE gutter column possible at all -- see
-  /// <see cref="CvmMemoryRowViewModel.GutterText"/>'s own remarks, and <see cref="ToggleBreakpointAtAddress"/>,
-  /// which the view's own gutter-cell click handler calls. Per Stefan's own instruction ("use the same
+  /// <see cref="CvmMemoryRowViewModel.IsBreakpoint"/>/<see cref="CvmMemoryRowViewModel.IsCurrentPc"/>'s
+  /// own remarks, and <see cref="ToggleBreakpointAtAddress"/>, which the view's own gutter-cell click
+  /// handler calls. Per Stefan's own instruction ("use the same
   /// column for the old CVM debugger"), this same row shape/gutter convention is shared verbatim with the
   /// new C Debugger (<c>Ga144.Evb.Ide.ViewModels.CDebuggerViewModel</c> wraps an instance of THIS view
   /// model for its own run/breakpoint/memory-inspector machinery rather than reimplementing it) -- the
@@ -282,8 +308,6 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   public string MemoryBaseText { get => _memoryBaseText; set => SetProperty(ref _memoryBaseText, value ?? string.Empty); }
 
   public string ProgramCounterText { get => _programCounterText; private set => SetProperty(ref _programCounterText, value); }
-
-  public string NewBreakpointText { get => _newBreakpointText; set => SetProperty(ref _newBreakpointText, value ?? string.Empty); }
 
   /// <summary>
   /// The CVM Debugger's own Assembly Code editor contents -- prefilled, on open or whenever
@@ -354,26 +378,12 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// </summary>
   public string ProgramNameText { get => _programNameText; set => SetProperty(ref _programNameText, value ?? string.Empty); }
 
-  // Bound to the breakpoint ListBox's SelectedItem so RemoveBreakpointCommand knows which entry to
-  // remove -- kept as a plain RelayCommand (no parameterized command type exists elsewhere in this
-  // codebase) rather than introducing a new generic command class for this one use.
-  public string? SelectedBreakpoint
-  {
-    get => _selectedBreakpoint;
-    set { if (SetProperty(ref _selectedBreakpoint, value)) RemoveBreakpointCommand.NotifyCanExecuteChanged(); }
-  }
-
-  public ObservableCollection<string> Breakpoints { get; } = [];
-
   public AsyncRelayCommand StartCommand { get; }
   public AsyncRelayCommand StepCommand { get; }
   public AsyncRelayCommand ContinueCommand { get; }
   public AsyncRelayCommand RunCommand { get; }
   public RelayCommand PauseCommand { get; }
   public RelayCommand StopCommand { get; }
-  public RelayCommand AddBreakpointCommand { get; }
-  public RelayCommand RemoveBreakpointCommand { get; }
-  public RelayCommand ClearBreakpointsCommand { get; }
   public RelayCommand RefreshMemoryCommand { get; }
   public RelayCommand AssembleCommand { get; }
   public RelayCommand AddProgramCommand { get; }
@@ -426,14 +436,24 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     try
     {
       // Starting again resets the whole chip -- release whatever session (and port) is currently
-      // open first, same as re-running "Install & run CVM test" would.
+      // open first, same as re-running "Install & run CVM test" would. NOTE: _breakpoints itself is
+      // deliberately left untouched here -- per Stefan, breakpoints are independent of whether a
+      // program is running, so they must survive a fresh Start exactly as they survived the Stop (or
+      // never-yet-Started state) before it.
       _session?.Dispose();
       _session = null;
-      Breakpoints.Clear();
 
       var compileService = new F18NodeCompilationService(_chip, _romLibrary, _userMacros);
       var installer = new Ga144CvmHardwareInstaller();
       _session = await installer.StartDebugSessionAsync(endpoint.PortName, _chip, compileService, fillStacksWithDebugPoison: FillStacksWithDebugPoison);
+
+      // Arm every breakpoint set (via the gutter, whether before this Start or across an earlier
+      // Stop) against the freshly booted session -- it starts out with none of its own, and without
+      // this a breakpoint that was clicked while stopped would silently never fire once Run started.
+      foreach (int flatAddress in _breakpoints)
+      {
+        _session.AddBreakpoint(flatAddress);
+      }
 
       InstallSummaryText = $"Install: {_session.Install.Steps.Count} boot frame(s) sent, fire-and-forget. Loaded a {_session.Program.Count}-word test program " +
           "(43 of the CVM's 73 opcodes, each with a log-checkable expected value -- see CvmDebuggerDefaultProgram's own remarks) into the simulated SRAM and woke node 708's 'start.";
@@ -452,13 +472,18 @@ public sealed class CvmDebuggerViewModel : ObservableObject
         InstallSummaryText += $" Reapplied the last loaded linked image ({loadedImage.Words.Count} word(s), entry " +
             $"{DescribeFlatAddress(loadedImage.EntryAddress)}) instead of the install's own default program -- " +
             "exactly what \"Load linked image (.gaimg)...\" (or a Program project's own \"Debug\" button) most recently loaded.";
-        // _loadedImageSymbols already describes this exact image -- leave it alone.
+        // _loadedImageSymbols/_assembledLabelAddresses already describe this exact image -- leave them alone.
       }
       else
       {
         _loadedImageSymbols = [];
+        _assembledLabelAddresses = new Dictionary<string, int>();
         (bool assembleSuccess, string? assembleError) = _session.AssembleAndLoadProgram(AssemblyCodeText);
-        if (!assembleSuccess)
+        if (assembleSuccess)
+        {
+          _assembledLabelAddresses = _session.ProgramLabels;
+        }
+        else
         {
           InstallSummaryText += $" Could not apply the Assembly Code editor's current contents ({assembleError}) -- the install's own default program above is still what's loaded.";
         }
@@ -594,7 +619,9 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     }
 
     CloseSession();
-    Breakpoints.Clear();
+    // _breakpoints is deliberately NOT cleared here -- see its own remarks: it outlives the session,
+    // so RefreshMemoryView (called just below) keeps showing every armed breakpoint's red circle in
+    // the gutter even with nothing connected, and the next Start re-arms them all automatically.
     StatusText = "Stopped -- communication with the chip closed. Click Start / Reinstall to reconnect.";
     InstallSummaryText = string.Empty;
     RefreshMemoryView();
@@ -925,45 +952,6 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     }
   }
 
-  private void AddBreakpoint()
-  {
-    if (_session is null)
-    {
-      return;
-    }
-
-    if (!TryParseAddress(NewBreakpointText, out int flatAddress))
-    {
-      StatusText = $"'{NewBreakpointText}' is not a valid breakpoint address. Use \"p:aaaa\" (page hex digit, colon, 4-digit address-in-page) or a flat hex address.";
-      return;
-    }
-
-    _session.AddBreakpoint(flatAddress);
-    RefreshBreakpointList();
-    RefreshMemoryView();
-    StatusText = $"Breakpoint set at {DescribeFlatAddress(flatAddress)}.";
-  }
-
-  private void RemoveSelectedBreakpoint()
-  {
-    if (_session is null || SelectedBreakpoint is null || !TryParseAddress(SelectedBreakpoint, out int flatAddress))
-    {
-      return;
-    }
-
-    _session.RemoveBreakpoint(flatAddress);
-    SelectedBreakpoint = null;
-    RefreshBreakpointList();
-    RefreshMemoryView();
-  }
-
-  private void ClearBreakpoints()
-  {
-    _session?.ClearBreakpoints();
-    RefreshBreakpointList();
-    RefreshMemoryView();
-  }
-
   /// <summary>
   /// Assembles <see cref="AssemblyCodeText"/> against node 607's current source and loads the result
   /// into a simulated SRAM -- WHICH one depends only on whether a chip happens to be connected right
@@ -1001,9 +989,11 @@ public sealed class CvmDebuggerViewModel : ObservableObject
         if (success)
         {
           // this program just replaced whatever LoadImageFile last loaded, if anything -- Assemble
-          // and LoadImageFile are mutually exclusive, so both its symbols and the image itself go.
+          // and LoadImageFile are mutually exclusive, so both its symbols and the image itself go
+          // (and _assembledLabelAddresses -- the OTHER label source, see its own remarks -- takes over).
           _loadedImageSymbols = [];
           _loadedImage = null;
+          _assembledLabelAddresses = _session.ProgramLabels;
           MirrorSessionProgramIntoStandaloneSram(_session.Program);
         }
 
@@ -1012,7 +1002,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
         return;
       }
 
-      (bool standaloneSuccess, string? standaloneError, int wordCount) = AssembleStandalone();
+      (bool standaloneSuccess, string? standaloneError, int wordCount, IReadOnlyDictionary<string, int> standaloneLabels) = AssembleStandalone();
       StatusText = standaloneSuccess
           ? $"Assembled {wordCount} word(s) into a standalone simulated SRAM -- no chip connected yet. Click Start; this program loads automatically."
           : $"Assemble failed: {standaloneError}";
@@ -1020,6 +1010,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       if (standaloneSuccess)
       {
         _loadedImageSymbols = [];
+        _assembledLabelAddresses = standaloneLabels;
         _loadedImage = null;
       }
 
@@ -1037,24 +1028,27 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// source locally (<see cref="CompileStandaloneCvmNodes"/> -- a pure software compile, no port or
   /// connected chip needed) and, on success, assembles <see cref="AssemblyCodeText"/> against it
   /// straight into <see cref="_standaloneSram"/>/<see cref="_standaloneProgram"/> via the same
-  /// <see cref="CvmAssemblyLanguage.AssembleAndLoadProgram"/> a live session uses.
+  /// <see cref="CvmAssemblyLanguage.AssembleAndLoadProgram"/> a live session uses. <c>Labels</c> (added
+  /// 2026-09-26, for the memory inspector's own "Label" column) is that same call's own label name ->
+  /// address map, empty rather than null on any failure so a caller never has to null-check it.
   /// </summary>
-  private (bool Success, string? Error, int WordCount) AssembleStandalone()
+  private (bool Success, string? Error, int WordCount, IReadOnlyDictionary<string, int> Labels) AssembleStandalone()
   {
     (bool compileSuccess, IReadOnlyDictionary<int, F18CompileResult> compiledRam, string? compileError) = CompileStandaloneCvmNodes();
     if (!compileSuccess)
     {
-      return (false, compileError, 0);
+      return (false, compileError, 0, new Dictionary<string, int>());
     }
 
-    (List<int>? words, string? error) = CvmAssemblyLanguage.AssembleAndLoadProgram(AssemblyCodeText, _standaloneSram, _standaloneProgram, compiledRam);
+    (List<int>? words, IReadOnlyDictionary<string, int>? labels, string? error) =
+        CvmAssemblyLanguage.AssembleAndLoadProgram(AssemblyCodeText, _standaloneSram, _standaloneProgram, compiledRam);
     if (words is null)
     {
-      return (false, error, 0);
+      return (false, error, 0, new Dictionary<string, int>());
     }
 
     _standaloneProgram = words;
-    return (true, null, words.Count);
+    return (true, null, words.Count, labels ?? new Dictionary<string, int>());
   }
 
   // Moved 2026-09-08 to Ga144.Evb.Ide.Cvm.CvmNodeMesh.StandaloneCoordinates -- now the one shared list
@@ -1387,6 +1381,10 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     MirrorSessionProgramIntoStandaloneSram(image.Words);
     _loadedImageSymbols = image.Symbols;
     _loadedImage = image;
+    // The OTHER label source (_assembledLabelAddresses, hand-typed Assembly Code editor labels) is
+    // mutually exclusive with a loaded image's own symbols -- see that field's own remarks -- so it's
+    // cleared here exactly like Assemble() clears _loadedImageSymbols/_loadedImage on its own success.
+    _assembledLabelAddresses = new Dictionary<string, int>();
     _sourceCommentsByAddress = sourceComments ?? new Dictionary<int, string>();
 
     StatusText = $"{description}: {image.Words.Count} word(s), entry address " +
@@ -1397,32 +1395,35 @@ public sealed class CvmDebuggerViewModel : ObservableObject
 
   /// <summary>
   /// The gutter column's own click handler (see <see cref="MemoryRows"/>'s own remarks) -- adds a
-  /// breakpoint at <paramref name="flatAddress"/> if none is armed there yet, removes it otherwise,
-  /// exactly like <see cref="AddBreakpointCommand"/>/<see cref="RemoveBreakpointCommand"/> but keyed
-  /// directly off the row that was clicked rather than a typed address. Same "needs a live session"
-  /// constraint those two commands already have (a breakpoint is armed against <see cref="_session"/>'s
-  /// own transaction-level pause mechanism, which has nothing to attach to without a connected chip) --
-  /// a click with no session active is a silent no-op, mirroring how <see cref="AddBreakpointCommand"/>
-  /// itself is simply disabled (<c>() => IsSessionActive</c>) rather than showing an error for the same
-  /// reason.
+  /// breakpoint at <paramref name="flatAddress"/> to <see cref="_breakpoints"/> if none is armed there
+  /// yet, removes it otherwise. This is now the ONLY way to set or clear a breakpoint (the old typed
+  /// address box and Add/Remove/Clear buttons above the source area are gone, per Stefan: "remove the
+  /// breakpoints dialog... it is no longer needed") -- and, per Stefan's own "independent whether a
+  /// program is running or not", it no longer requires <see cref="_session"/> to be non-null: clicking
+  /// the gutter before the very first Start, while stopped, or while a session is live and even
+  /// mid-Run all work identically, since <see cref="_breakpoints"/> (not <see cref="_session"/>'s own
+  /// breakpoint set) is what <see cref="RefreshMemoryView"/> actually reads to decide each row's
+  /// <see cref="CvmMemoryRowViewModel.IsBreakpoint"/>, the red-circle glyph the view's own gutter cell
+  /// template shows. When a session DOES exist, the change is also mirrored onto it immediately (<see cref="CvmDebugSession.AddBreakpoint"/>/
+  /// <see cref="CvmDebugSession.RemoveBreakpoint"/> are documented as safe to call from the UI thread
+  /// even while a Continue/Run is executing on a background thread) so a currently running chip is
+  /// affected right away -- this is what actually "activates" a breakpoint: it only ever pauses
+  /// anything once the chip's own memory-interface traffic reaches that address during a
+  /// Step/Continue/Run, never merely by being clicked.
   /// </summary>
   public void ToggleBreakpointAtAddress(int flatAddress)
   {
-    if (_session is null)
+    if (_breakpoints.Contains(flatAddress))
     {
-      return;
-    }
-
-    if (_session.Breakpoints.Contains(flatAddress))
-    {
-      _session.RemoveBreakpoint(flatAddress);
+      _breakpoints.Remove(flatAddress);
+      _session?.RemoveBreakpoint(flatAddress);
     }
     else
     {
-      _session.AddBreakpoint(flatAddress);
+      _breakpoints.Add(flatAddress);
+      _session?.AddBreakpoint(flatAddress);
     }
 
-    RefreshBreakpointList();
     RefreshMemoryView();
   }
 
@@ -1474,7 +1475,6 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     }
 
     IReadOnlyList<int> words;
-    HashSet<int> breakpoints;
     int? programCounter;
 
     // The disassembly is only meaningful on page 0 (the only page that is ever code) and it MUST
@@ -1482,10 +1482,14 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     // DATA, not another opcode, because of the stateful scan that walked over its opcode word first.
     IReadOnlyDictionary<int, string> disassembly;
 
+    // Breakpoints themselves are read from _breakpoints regardless of session state (see its own
+    // remarks) -- per Stefan, they're settable/visible independent of whether a program is running,
+    // so unlike words/programCounter/disassembly below, this one line is NOT branched on _session.
+    HashSet<int> breakpoints = _breakpoints;
+
     if (_session is not null)
     {
       words = _session.ReadMemory(baseAddress, count);
-      breakpoints = [.. _session.Breakpoints];
       programCounter = _session.LastFetchAddress;
       disassembly = baseAddress < CvmMemoryProtocol.Page0WordCount
           ? _session.DisassemblePage0(Math.Min(baseAddress + count, CvmMemoryProtocol.Page0WordCount))
@@ -1495,10 +1499,9 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     {
       // No chip connected (or Stop was clicked) -- the standalone SRAM is always there to inspect,
       // whether or not anything has been assembled into it yet (untouched, it just reads back as
-      // all-zero words). There is no "last fetch" or breakpoints without a live chip actually
-      // reading from it, so those stay empty/null here.
+      // all-zero words). There is no "last fetch" without a live chip actually reading from it, so
+      // that stays null here -- but breakpoints (above) are shown exactly as if a chip were connected.
       words = _standaloneSram.ReadRange(baseAddress, count);
-      breakpoints = [];
       programCounter = null;
       (_, IReadOnlyDictionary<int, F18CompileResult> compiledRam, _) = CompileStandaloneCvmNodes();
       disassembly = baseAddress < CvmMemoryProtocol.Page0WordCount
@@ -1514,14 +1517,24 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     // introduction): CvmLinker now also includes every LOCAL symbol in a linked image (loop/branch
     // labels, the C compiler's own per-statement "__srcline_N" source-comment labels, string-literal and
     // "static"-local mangled names -- see CCodeGenerator's own label-naming remarks), which this
-    // pre-existing "<name>" annotation was never designed to show -- unfiltered, a real program's memory
-    // view would suddenly be dominated by compiler-internal noise instead of the handful of real
+    // pre-existing "Label" column annotation was never designed to show -- unfiltered, a real program's
+    // memory view would suddenly be dominated by compiler-internal noise instead of the handful of real
     // function/global names it used to list. The C Debugger has its own separate, DefiningObjectName-
     // filtered lookup for its own Local source-comment labels (see CDebuggerViewModel.CompileAndLoad) and
     // does not go through this field at all.
     ILookup<int, string> loadedImageSymbolsByAddress = _loadedImageSymbols
         .Where(symbol => symbol.IsExported)
         .ToLookup(symbol => symbol.Address, symbol => symbol.Name);
+
+    // The OTHER label source (added 2026-09-26, alongside the "Label" column itself, per Stefan: "put
+    // in there the name of a label for that address"): a label the hand-typed Assembly Code editor's own
+    // text defines (CvmAssemblyLanguage's "Labels (2026-09-02, per Stefan)" feature, e.g. "loop: nop"),
+    // captured into _assembledLabelAddresses (name -> address) whenever Assemble()/AssembleAndLoadProgram
+    // last succeeded -- see that field's own remarks. In practice at most ONE of this and
+    // loadedImageSymbolsByAddress above is ever non-empty at a time (Assemble and LoadImage/LoadImageFile
+    // each clear the other's source), but both are looked up unconditionally below rather than picking
+    // one, so nothing here depends on that staying true.
+    ILookup<int, string> assembledLabelsByAddress = _assembledLabelAddresses.ToLookup(pair => pair.Value, pair => pair.Key);
 
     MemoryStatusText = string.Empty;
     MemoryRows.Clear();
@@ -1531,16 +1544,11 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       bool isCurrentPc = programCounter == flatAddress;
       bool isBreakpoint = breakpoints.Contains(flatAddress);
 
-      var notes = new List<string>();
-      foreach (string symbolName in loadedImageSymbolsByAddress[flatAddress])
-      {
-        notes.Add($"<{symbolName}>");
-      }
+      var labelNames = new List<string>();
+      labelNames.AddRange(loadedImageSymbolsByAddress[flatAddress]);
+      labelNames.AddRange(assembledLabelsByAddress[flatAddress]);
 
-      if (disassembly.TryGetValue(flatAddress, out string? note))
-      {
-        notes.Add(note);
-      }
+      disassembly.TryGetValue(flatAddress, out string? disassemblyNote);
 
       _sourceCommentsByAddress.TryGetValue(flatAddress, out string? sourceComment);
 
@@ -1553,29 +1561,12 @@ public sealed class CvmDebuggerViewModel : ObservableObject
         ValueText = $"{words[index]:X4}",
         IsCurrentPc = isCurrentPc,
         IsBreakpoint = isBreakpoint,
-        GutterText = FormatGutter(isCurrentPc, isBreakpoint),
-        DisassemblyText = string.Join(' ', notes),
+        LabelText = string.Join(", ", labelNames),
+        DisassemblyText = disassemblyNote ?? string.Empty,
         SourceCommentText = sourceComment is null ? string.Empty : $"; {sourceComment}"
       });
     }
   }
-
-  /// <summary>
-  /// The gutter column's own text -- a right-pointing arrow for the current PC, a filled circle for an
-  /// armed breakpoint, both together when a breakpoint happens to sit exactly on the current PC. Kept as
-  /// its own small helper (rather than inlined into the row-construction loop above) only because
-  /// <see cref="ToggleBreakpointAtAddress"/>'s own caller (the view's gutter-cell click handler) has no
-  /// other reason to duplicate this exact formatting -- <see cref="RefreshMemoryView"/> is the only
-  /// caller today, but a second one (e.g. an eventual C Debugger-specific row decoration) would want the
-  /// identical convention, not a subtly different one.
-  /// </summary>
-  private static string FormatGutter(bool isCurrentPc, bool isBreakpoint) => (isCurrentPc, isBreakpoint) switch
-  {
-    (true, true) => "●→",
-    (true, false) => "→",
-    (false, true) => "●",
-    (false, false) => string.Empty,
-  };
 
   private void RefreshProgramCounter()
   {
@@ -1604,22 +1595,6 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     }
 
     LogText = string.Join(Environment.NewLine, _session.TransactionLog);
-  }
-
-  private void RefreshBreakpointList()
-  {
-    Breakpoints.Clear();
-    if (_session is null)
-    {
-      return;
-    }
-
-    foreach (int flatAddress in _session.Breakpoints.OrderBy(address => address))
-    {
-      Breakpoints.Add(DescribeFlatAddress(flatAddress));
-    }
-
-    NotifyCommandStates();
   }
 
   // Accepts either the "p:aaaa" page/address-in-page shorthand every transaction log line and the
@@ -1675,9 +1650,6 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     RunCommand.NotifyCanExecuteChanged();
     PauseCommand.NotifyCanExecuteChanged();
     StopCommand.NotifyCanExecuteChanged();
-    AddBreakpointCommand.NotifyCanExecuteChanged();
-    RemoveBreakpointCommand.NotifyCanExecuteChanged();
-    ClearBreakpointsCommand.NotifyCanExecuteChanged();
     RefreshMemoryCommand.NotifyCanExecuteChanged();
     AssembleCommand.NotifyCanExecuteChanged();
     AddProgramCommand.NotifyCanExecuteChanged();
@@ -1695,13 +1667,17 @@ public sealed class CvmDebuggerViewModel : ObservableObject
 /// it runs, so no row is ever mutated after construction, and there is nothing here for a binding to
 /// listen for a change on.
 ///
-/// <see cref="GutterText"/> is the column Stefan asked for directly ("there is a separate column after
-/// the address for the current program counter position and in the same column, breakpoints can be set
-/// and cleared... use the same column for the old CVM debugger"): a right-pointing arrow marks the
-/// current PC, a filled circle marks an armed breakpoint (both together when they coincide), and the
-/// view's own gutter cell is what's actually clickable -- a click calls
+/// <see cref="IsBreakpoint"/>/<see cref="IsCurrentPc"/> are the column Stefan asked for directly
+/// ("there is a separate column after the address for the current program counter position and in the
+/// same column, breakpoints can be set and cleared... use the same column for the old CVM debugger"):
+/// the view's own gutter cell template shows a red circle for an armed breakpoint and, to its right, a
+/// green arrow for the current PC (both together when they coincide -- see each window's own XAML for
+/// exactly how; there used to be a single combined <c>GutterText</c> string here, replaced 2026-09-26
+/// per Stefan, "the first column... displays a breakpoint with a red circle and the current program
+/// position... with a green arrow to the right", since one string couldn't carry two different glyph
+/// colors). The whole gutter cell is what's actually clickable -- a click calls
 /// <see cref="CvmDebuggerViewModel.ToggleBreakpointAtAddress"/> with this row's own <see cref="FlatAddress"/>,
-/// independently of whatever glyph happened to be showing at the moment of the click.
+/// independently of whatever glyph(s) happened to be showing at the moment of the click.
 /// </summary>
 public sealed class CvmMemoryRowViewModel
 {
@@ -1710,7 +1686,16 @@ public sealed class CvmMemoryRowViewModel
   public required string ValueText { get; init; }
   public required bool IsCurrentPc { get; init; }
   public required bool IsBreakpoint { get; init; }
-  public required string GutterText { get; init; }
+
+  /// <summary>The label name(s) defined at this exact address, joined with ", " if more than one
+  /// coincides here -- empty when none is known. Added 2026-09-26 per Stefan, "add a column 'Label'
+  /// between 'Value' and 'Disassembly' and put in there the name of a label for that address": see
+  /// <see cref="CvmDebuggerViewModel.RefreshMemoryView"/>'s own remarks for where a label can come
+  /// from (a hand-typed Assembly Code editor label, or a loaded image's own exported symbol) --
+  /// previously folded into <see cref="DisassemblyText"/> as a bracketed "&lt;name&gt;" note for the
+  /// image-symbol case only; now its own column, and covering both sources.</summary>
+  public required string LabelText { get; init; }
+
   public required string DisassemblyText { get; init; }
 
   /// <summary>The C statement that produced this address, formatted as a trailing assembly-style

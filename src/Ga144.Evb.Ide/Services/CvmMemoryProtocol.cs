@@ -167,7 +167,12 @@ internal static class CvmMemoryProtocol
       return (null, parseError);
     }
 
-    return CvmAssemblyLanguage.Assemble(instructions, compiledRam);
+    // Labels aren't needed here -- this program's own words are re-assembled again moments later by
+    // CvmDebuggerViewModel.StartAsync (via the Assembly Code editor, which defaults to this exact same
+    // source text), and THAT call site is the one that actually captures labels for the memory
+    // inspector's "Label" column -- so the label map from this one, install-time assemble is discarded.
+    (List<int>? words, IReadOnlyDictionary<string, int>? _, string? error) = CvmAssemblyLanguage.Assemble(instructions, compiledRam);
+    return (words, error);
   }
 
   public static string DescribeRequiredSymbols() =>

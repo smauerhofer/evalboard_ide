@@ -137,10 +137,10 @@ this compile's own object is registered under with `CvmLinker.Link`), then looki
 label some linked library object also happens to define, since the filter is keyed on the *defining
 object*, not the label text alone.
 
-### Fixing a side effect: the CVM Debugger's own "&lt;name&gt;" annotation
+### Fixing a side effect: the CVM Debugger's own name annotation
 
 Including every Local symbol in `CvmImage.Symbols` has a side effect that was caught and fixed before
-this work was considered done: the pre-existing CVM Debugger's own memory-view "&lt;name&gt;" annotation
+this work was considered done: the pre-existing CVM Debugger's own memory-view name annotation
 (`RefreshMemoryView`, built from `_loadedImageSymbols`) would otherwise start showing every
 compiler-internal local label -- loop/branch labels, string-literal labels, "static"-local mangled
 names, and now `__srcline_N` labels too -- for an *ordinary* `.gaimg` loaded via "Load linked image
@@ -149,10 +149,11 @@ designed to show.
 
 Fixed by the `IsExported` field above: `RefreshMemoryView`'s symbol-lookup is now filtered to
 `symbol.IsExported` before building the address->name lookup, so only Global symbols and primitive-table
-mnemonics ever appear in the "&lt;name&gt;" annotation -- exactly the pre-existing behavior, since
-before this round's change to `CvmLinker`, Local symbols were never in `CvmImage.Symbols` at all. The C
-Debugger's own `DefiningObjectName`-filtered lookup (above) is unaffected -- it doesn't go through
-`IsExported` at all, since it specifically wants its own Local source-comment labels.
+mnemonics ever appear in that annotation (now the dedicated "Label" column -- see the 2026-09-26
+follow-up section below) -- exactly the pre-existing behavior, since before this round's change to
+`CvmLinker`, Local symbols were never in `CvmImage.Symbols` at all. The C Debugger's own
+`DefiningObjectName`-filtered lookup (above) is unaffected -- it doesn't go through `IsExported` at all,
+since it specifically wants its own Local source-comment labels.
 
 ## The shared PC/breakpoint gutter column
 
@@ -176,25 +177,26 @@ public sealed class CvmMemoryRowViewModel
   public required string ValueText { get; init; }
   public required bool IsCurrentPc { get; init; }
   public required bool IsBreakpoint { get; init; }
-  public required string GutterText { get; init; }       // "●→" / "→" / "●" / ""
+  public required string LabelText { get; init; }
   public required string DisassemblyText { get; init; }
   public required string SourceCommentText { get; init; } // populated only when a C Debugger compile
                                                             // supplied source comments for this address
 }
 ```
 
-`FormatGutter(isCurrentPc, isBreakpoint)` combines a filled circle (`●`, breakpoint) and an arrow
-(`→`, current PC) as needed. A new public `ToggleBreakpointAtAddress(int flatAddress)` method is
-the gutter's own click target -- both `CvmDebuggerWindow.xaml.cs` and `CDebuggerWindow.xaml.cs` wire an
-identical `MouseLeftButtonDown` handler on the gutter cell's `TextBlock` (no parameterized command type
-exists in this codebase, so a plain code-behind event handler reading the clicked row's own
-`DataContext` was used, the same convention already established elsewhere in this IDE for a
-click-driven action with no other UI dependency).
+(`LabelText` was added in the 2026-09-26 follow-up below; originally this row also carried a single
+combined `GutterText` string, replaced in that same follow-up -- see there for why.)
+
+A public `ToggleBreakpointAtAddress(int flatAddress)` method is the gutter's own click target -- both
+`CvmDebuggerWindow.xaml.cs` and `CDebuggerWindow.xaml.cs` wire an identical `MouseLeftButtonDown`
+handler on the gutter cell (no parameterized command type exists in this codebase, so a plain
+code-behind event handler reading the clicked row's own `DataContext` was used, the same convention
+already established elsewhere in this IDE for a click-driven action with no other UI dependency).
 
 Both `CvmDebuggerWindow.xaml` and `CDebuggerWindow.xaml` use the identical `GridView` column layout:
-a narrow gutter column right after the address, then Address, Value, Disassembly, and (new) a "C
-source" column -- empty for the ordinary CVM Debugger's own hand-typed/loaded programs, populated only
-when the C Debugger's own compile pipeline loaded what's showing.
+a narrow gutter column right after the address, then Address, Value, Label, Disassembly, and a "C
+source" column -- the last one empty for the ordinary CVM Debugger's own hand-typed/loaded programs,
+populated only when the C Debugger's own compile pipeline loaded what's showing.
 
 `LoadImageFile(string path)` (loading a `.gaimg` from disk) is now a thin wrapper around a new public
 method:
@@ -205,7 +207,172 @@ public void LoadImage(CvmImage image, string description, IReadOnlyDictionary<in
 
 which lets the C Debugger hand over an in-memory `CvmImage` from its own compile pipeline without a
 `.gaimg` file round-trip, and carries the optional per-address source-comment overlay into the memory
-view's new "C source" column.
+view's "C source" column.
+
+## Breakpoints independent of run state, and removing the old dialog (2026-09-26 follow-up)
+
+Stefan's request, verbatim: "in the C and CVM Debugger i want to place brakepoints independent whether
+a program is running or not. by clicking on a line in simulated SRAM, i toggle a breakpoint. breakpoint
+are displayed with red circles in the first column. breakpoints are activated, when running a program.
+also remove the breakpoints dialog above the source area from C and CVM debugger. it is no longer
+needed."
+
+Two things changed, both in `CvmDebuggerViewModel` (shared, as above, by the C Debugger's own wrapped
+`Debugger` instance -- one fix covers both windows):
+
+**1. The old "Breakpoints" `GroupBox`, removed.** Both `CvmDebuggerWindow.xaml` and `CDebuggerWindow.xaml`
+had a `GroupBox` sitting directly above the source/Assembly editor: a typed "page:address" `TextBox`,
+Add/Remove selected/Clear all buttons, and a plain `ListBox` of the armed addresses as strings
+(`NewBreakpointText`, `SelectedBreakpoint`, `Breakpoints` (an `ObservableCollection<string>`),
+`AddBreakpointCommand`/`RemoveBreakpointCommand`/`ClearBreakpointsCommand`). All of it is now gone, from
+both the XAML and the view model -- the gutter click (below) is the only way to set or clear a
+breakpoint. Removing the `GroupBox` row from each window's `Grid` also meant renumbering every
+subsequent `Grid.Row` (and dropping the now-unused `RowDefinition`) in both `.xaml` files.
+
+**2. Breakpoints are now independent of `_session`.** Before this change, a breakpoint only ever
+existed inside `CvmDebugSession.Breakpoints` (a plain `HashSet<int>` owned by the live session object) --
+`ToggleBreakpointAtAddress` was a silent no-op with no session (`_session is null`), which is exactly
+the state the debugger is in before the very first Start and after Stop. So a breakpoint could
+previously only be set while a chip was actually connected, and every one of them was lost the instant
+Stop ran (`Stop()`/`StartAsync()` both used to call `Breakpoints.Clear()` on the now-removed
+`ObservableCollection<string>`).
+
+`CvmDebuggerViewModel` now keeps its own `private readonly HashSet<int> _breakpoints`, independent of
+`_session`'s lifetime, as the single source of truth:
+
+```csharp
+public void ToggleBreakpointAtAddress(int flatAddress)
+{
+  if (_breakpoints.Contains(flatAddress))
+  {
+    _breakpoints.Remove(flatAddress);
+    _session?.RemoveBreakpoint(flatAddress);
+  }
+  else
+  {
+    _breakpoints.Add(flatAddress);
+    _session?.AddBreakpoint(flatAddress);
+  }
+
+  RefreshMemoryView();
+}
+```
+
+This no longer checks `_session` at all before recording the toggle, so a gutter click works identically
+before the first Start, while stopped, or while a session is live (including mid-`Continue`/`Run` --
+`CvmDebugSession.AddBreakpoint`/`RemoveBreakpoint` are already documented as safe to call from the UI
+thread while a background thread is servicing transactions). When a session *does* exist, the change is
+mirrored onto it immediately, so a currently running chip picks up a newly-armed address right away --
+this is what "breakpoints are activated when running" means in practice: the address is armed the
+instant it's clicked, but it only ever actually pauses anything once the chip's own memory-interface
+traffic reaches it during a Step/Continue/Run.
+
+`RefreshMemoryView` reads breakpoints for the gutter's `IsBreakpoint` red-circle glyph from
+`_breakpoints` unconditionally, instead of branching on `_session.Breakpoints` vs. an empty set:
+
+```csharp
+HashSet<int> breakpoints = _breakpoints;
+```
+
+**Design choice, flagged for Stefan's confirmation**: `_breakpoints` deliberately survives both `Stop()`
+and a fresh `StartAsync()` (neither clears it any more) -- `StartAsync` instead re-arms every persisted
+address against the freshly booted session right after it's created:
+
+```csharp
+foreach (int flatAddress in _breakpoints)
+{
+  _session.AddBreakpoint(flatAddress);
+}
+```
+
+This was read as the more natural interpretation of "independent whether a program is running or not" --
+breakpoints behave like an ordinary IDE's (set once, they stay set across Stop/Start cycles) rather than
+needing to be re-clicked every time Start runs, which would have been the effect of clearing them. If
+Stefan actually wants them cleared on Stop or on a fresh Start, that is a one-line change (clear
+`_breakpoints` at the top of `Stop()`/`StartAsync()` instead of leaving it alone) -- flagged rather than
+silently assumed.
+
+## Two-color gutter glyph, and a "Label" column (2026-09-26 follow-up)
+
+Stefan's request, verbatim: "the first column (which is empty now) displays a breakpoint with a red
+circle and the current program position to the right with a green arrow. add a column 'Label' between
+'Value' and 'Disassembly' and put in there the name of a label for that address."
+
+### The gutter: two colored glyphs, not one string
+
+The single combined `GutterText` string (`"●→"` / `"→"` / `"●"` / `""`, one `Foreground` for the whole
+cell) could not show the breakpoint circle and the PC arrow in two different colors, so it's gone,
+along with its `FormatGutter` helper. `CvmMemoryRowViewModel` now exposes only the two booleans it
+always had, `IsCurrentPc`/`IsBreakpoint`, and each window's own gutter `DataTemplate` renders them as
+two separate `TextBlock`s inside one `StackPanel`:
+
+```xml
+<StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                Background="Transparent" Cursor="Hand"
+                ToolTip="..." MouseLeftButtonDown="OnMemoryGutterClick">
+  <TextBlock Text="●" FontWeight="Bold" Foreground="#B00020"
+                  Visibility="{Binding IsBreakpoint, Converter={StaticResource BoolToVis}}" />
+  <TextBlock Text="→" FontWeight="Bold" Foreground="#1B8A3B"
+                  Visibility="{Binding IsCurrentPc, Converter={StaticResource BoolToVis}}" />
+</StackPanel>
+```
+
+The red circle sits first (left) and the green arrow second (right), matching "the current program
+position to the right with a green arrow" -- when both are true they show side by side rather than
+overlapping. Each `TextBlock`'s own `Visibility` is bound through a `BooleanToVisibilityConverter`
+(`x:Key="BoolToVis"`, added to each window's own `Window.Resources` -- the same converter/key already
+used elsewhere in this IDE, e.g. `CProjectWindow.xaml`), so an inactive glyph collapses rather than
+leaving blank space. The whole `StackPanel`, not either individual glyph, carries the click handler and
+the cell's hit-testable background, so the entire cell stays clickable exactly as it was before,
+regardless of which glyph(s) happen to be showing.
+
+### The "Label" column: two label sources, merged
+
+"The name of a label for that address" can come from either of two, normally mutually-exclusive
+sources depending on how the currently-loaded program got there, and the new "Label" column shows
+whichever one is actually populated:
+
+1. **A loaded image's own exported symbol** (`_loadedImageSymbols`, from `LoadImage`/`LoadImageFile` --
+   e.g. a Program project's linked `.gaimg`, or the C Debugger's own compile). This is the exact same
+   `IsExported`-filtered lookup `RefreshMemoryView` already built for the pre-existing name annotation
+   (see "Fixing a side effect" above) -- previously rendered as a bracketed `"<name>"` note folded into
+   `DisassemblyText`; now it populates `LabelText` on its own instead.
+2. **A hand-typed Assembly Code editor label** (new: `_assembledLabelAddresses`, a
+   `Dictionary<string,int>` name -> address). CVM assembly already supports labels ("Labels
+   (2026-09-02, per Stefan)" in `CvmAssemblyLanguage.Assemble`, e.g. `"loop: nop"`, resolved internally
+   by `CollectLabelAddresses` to resolve label OPERANDS) but that name/address map was never returned to
+   any caller -- it was computed and thrown away once assembly finished. To surface it:
+   - `CvmAssemblyLanguage.Assemble`'s return type gained a `Labels` member:
+     `(List<int>? Words, IReadOnlyDictionary<string,int>? Labels, string? Error)` -- simply the
+     already-computed `labelAddresses` handed back on success (null on any failure, exactly like
+     `Words`). Every early-return inside `Assemble` needed updating to the new 3-tuple shape.
+   - `CvmAssemblyLanguage.AssembleAndLoadProgram` (the shared static helper both a live session and the
+     standalone path use) passes this straight through unchanged.
+   - `CvmDebugSession` gained a new `IReadOnlyDictionary<string, int> ProgramLabels` property, set by
+     its own `AssembleAndLoadProgram(string)` on success (left alone on failure, and reset to empty by
+     `LoadImage`, since a linked image's symbols are a completely different mechanism).
+   - `CvmDebuggerViewModel._assembledLabelAddresses` is populated from `_session.ProgramLabels` (a live
+     session) or from a new `Labels` output on `AssembleStandalone()`'s own return tuple (no session
+     yet) every time `Assemble()` succeeds, and cleared by `LoadImage` -- mirroring exactly how
+     `_loadedImageSymbols`/`_loadedImage` are themselves cleared by a successful `Assemble()`, since the
+     two label sources describe mutually exclusive SRAM contents.
+   - One incidental call-site fix: `CvmMemoryProtocol.TryBuildDebuggerTestProgram` used to `return
+     CvmAssemblyLanguage.Assemble(instructions, compiledRam)` directly (its own return shape matched
+     `Assemble`'s old 2-tuple); it now discards the `Labels` output, since that install-time assemble is
+     immediately superseded by `StartAsync`'s own re-application of the Assembly Code editor's text
+     moments later, which IS where labels get captured for display.
+
+`RefreshMemoryView` builds an `ILookup<int,string>` from each source (inverting `_assembledLabelAddresses`'s
+name -> address shape) and simply concatenates both lookups' results for a given address into
+`LabelText` (comma-joined, for the rare case two labels coincide on one address, e.g. two consecutive
+bare `"name:"` lines before the same instruction). In practice at most one source is ever non-empty at
+a time, but nothing enforces that, so both are always consulted rather than picking one.
+
+The red-circle rendering itself needed no further change beyond the two-`TextBlock` gutter above --
+`"●"`/`Foreground="#B00020"` for breakpoint already matched "displays a breakpoint with a red circle";
+only the PC arrow's own color (previously the same red as the breakpoint circle, since both shared one
+`Foreground`) needed to become green (`"#1B8A3B"`) to match "the current program position... with a
+green arrow".
 
 ## Launching the C Debugger
 
@@ -232,3 +399,6 @@ button handler can hand it to a new `CDebuggerViewModel`.
 - **`tjmp` is still not used for C's own `switch`/`case`** (unrelated pre-existing gap, unaffected by
   this work) -- `switch` still compiles to an equality-comparison chain, per this project's own
   standing "never guess an unconfirmed hardware calling convention" discipline.
+- **Whether breakpoints should survive Stop/Start** (see the follow-up section above) -- implemented as
+  "yes, they persist", flagged as a judgment call rather than something Stefan specified explicitly.
+</content>

@@ -1158,8 +1158,14 @@ internal static class CvmAssemblyLanguage
   /// (see <see cref="ResolveOperandLabel"/>'s own remarks); node 606's eight
   /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/> ops don't accept a label
   /// operand at all, since their value is a frame-relative slot index/count, never an address.
+  ///
+  /// <c>Labels</c> (added 2026-09-26, for the CVM Debugger's own memory inspector "Label" column) is
+  /// exactly the name -&gt; address map <see cref="CollectLabelAddresses"/>'s own pass 1 already computed
+  /// to resolve label OPERANDS above -- simply handed back to the caller too on success, non-null (though
+  /// possibly empty, for a source with no labels at all) whenever <c>Words</c> itself is non-null, and
+  /// null on any failure exactly like <c>Words</c>.
   /// </summary>
-  public static (List<int>? Words, string? Error) Assemble(
+  public static (List<int>? Words, IReadOnlyDictionary<string, int>? Labels, string? Error) Assemble(
       IReadOnlyList<CvmAsmInstruction> instructions,
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
@@ -1168,7 +1174,7 @@ internal static class CvmAssemblyLanguage
     (IReadOnlyDictionary<string, int>? labelAddresses, string? labelError) = CollectLabelAddresses(instructions, encodeTable);
     if (labelAddresses is null)
     {
-      return (null, labelError);
+      return (null, null, labelError);
     }
 
     var words = new List<int>();
@@ -1185,7 +1191,7 @@ internal static class CvmAssemblyLanguage
         (int? resolvedOperand, string? resolveError) = ResolveOperandLabel(instruction, words.Count, labelAddresses, line + 1);
         if (resolveError is not null)
         {
-          return (null, resolveError);
+          return (null, null, resolveError);
         }
 
         instruction = instruction with { Operand = resolvedOperand };
@@ -1197,7 +1203,7 @@ internal static class CvmAssemblyLanguage
         (int? word, string? selfDescribingError) = EncodeSelfDescribingWord(selfDescribingShape, instruction.Operand, instruction.Operand2, line + 1);
         if (word is null)
         {
-          return (null, selfDescribingError);
+          return (null, null, selfDescribingError);
         }
 
         words.Add(word.Value);
@@ -1215,7 +1221,7 @@ internal static class CvmAssemblyLanguage
         string? wiredDiagnosis = DiagnoseUnresolvedWiredMnemonic(instruction.Mnemonic, compiledRam);
         if (wiredDiagnosis is not null)
         {
-          return (null, $"line {line + 1}: \"{instruction.Mnemonic}\" {wiredDiagnosis}");
+          return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" {wiredDiagnosis}");
         }
 
         if (selfDescribingShape is not null)
@@ -1225,7 +1231,7 @@ internal static class CvmAssemblyLanguage
           // than failing the whole assemble. See this method's own remarks.
           if (!encodeTable.TryGetValue(NopMnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask) nopEntry))
           {
-            return (null, $"line {line + 1}: \"{instruction.Mnemonic}\" has no defined opcode yet, and could not be " +
+            return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" has no defined opcode yet, and could not be " +
                 $"substituted with \"{NopMnemonic}\" because node 507's current compile doesn't define \"'nop\" either.");
           }
 
@@ -1235,17 +1241,17 @@ internal static class CvmAssemblyLanguage
 
         // A mnemonic that isn't a recognized CVM opcode at all -- a typo, not "not implemented yet" --
         // still fails outright rather than silently becoming a nop.
-        return (null, $"line {line + 1}: \"{instruction.Mnemonic}\" is not a known CVM asm mnemonic.");
+        return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" is not a known CVM asm mnemonic.");
       }
 
       if (entry.HasOperand && instruction.Operand is null)
       {
-        return (null, $"line {line + 1}: \"{instruction.Mnemonic}\" requires an operand, e.g. \"{instruction.Mnemonic} 0x1234\".");
+        return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" requires an operand, e.g. \"{instruction.Mnemonic} 0x1234\".");
       }
 
       if (!entry.HasOperand && instruction.Operand is not null)
       {
-        return (null, $"line {line + 1}: \"{instruction.Mnemonic}\" does not take an operand.");
+        return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" does not take an operand.");
       }
 
       if (entry.OperandIsEmbedded)
@@ -1254,7 +1260,7 @@ internal static class CvmAssemblyLanguage
         // packed directly into entry.Opcode's own low bits, never a separate trailing word.
         if (instruction.Operand!.Value < 0 || instruction.Operand!.Value > entry.EmbeddedValueMask)
         {
-          return (null, $"line {line + 1}: {instruction.Operand!.Value} does not fit in \"{instruction.Mnemonic}\"'s embedded register operand (0..{entry.EmbeddedValueMask}).");
+          return (null, null, $"line {line + 1}: {instruction.Operand!.Value} does not fit in \"{instruction.Mnemonic}\"'s embedded register operand (0..{entry.EmbeddedValueMask}).");
         }
 
         words.Add(entry.Opcode | (instruction.Operand!.Value & entry.EmbeddedValueMask));
@@ -1268,7 +1274,7 @@ internal static class CvmAssemblyLanguage
       }
     }
 
-    return (words, null);
+    return (words, labelAddresses, null);
   }
 
   /// <summary>
@@ -1405,9 +1411,10 @@ internal static class CvmAssemblyLanguage
   /// zero-filling any leftover tail from <paramref name="previousProgram"/> if it was longer, so no
   /// stale opcode lingers past the new program's end. Returns the new word list (the caller's own job
   /// to remember as its "currently loaded program") and never touches <paramref name="sram"/> at all on
-  /// a parse/assemble failure.
+  /// a parse/assemble failure. <c>Labels</c> is simply <see cref="Assemble"/>'s own <c>Labels</c> output
+  /// passed straight through (added 2026-09-26, for the memory inspector's "Label" column).
   /// </summary>
-  public static (List<int>? Words, string? Error) AssembleAndLoadProgram(
+  public static (List<int>? Words, IReadOnlyDictionary<string, int>? Labels, string? Error) AssembleAndLoadProgram(
       string sourceText,
       CvmSimulatedSram sram,
       IReadOnlyList<int> previousProgram,
@@ -1416,13 +1423,13 @@ internal static class CvmAssemblyLanguage
     (List<CvmAsmInstruction>? instructions, string? parseError) = ParseSource(sourceText);
     if (instructions is null)
     {
-      return (null, parseError);
+      return (null, null, parseError);
     }
 
-    (List<int>? words, string? assembleError) = Assemble(instructions, compiledRam);
+    (List<int>? words, IReadOnlyDictionary<string, int>? labels, string? assembleError) = Assemble(instructions, compiledRam);
     if (words is null)
     {
-      return (null, assembleError);
+      return (null, null, assembleError);
     }
 
     int previousLength = previousProgram.Count;
@@ -1432,7 +1439,7 @@ internal static class CvmAssemblyLanguage
       sram.LoadProgram(new int[previousLength - words.Count], words.Count);
     }
 
-    return (words, null);
+    return (words, labels, null);
   }
 
   /// <summary>

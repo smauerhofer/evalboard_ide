@@ -7,9 +7,11 @@
         MinWidth="820"
         MinHeight="760"
         WindowStartupLocation="CenterOwner">
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVis" />
+  </Window.Resources>
   <Grid Margin="12">
     <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
@@ -60,26 +62,13 @@
       </StackPanel>
     </Border>
 
-    <GroupBox Grid.Row="2" Header="Breakpoints (page:address, e.g. 1:FFFE -- or a flat hex address)" Margin="0,10,0,0" Padding="8">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="140" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="Auto" />
-          <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="180" />
-        </Grid.ColumnDefinitions>
-        <TextBox Text="{Binding NewBreakpointText, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,8,0" />
-        <Button Grid.Column="1" Content="Add" Command="{Binding AddBreakpointCommand}" Padding="10,4" Margin="0,0,8,0" />
-        <Button Grid.Column="2" Content="Remove selected" Command="{Binding RemoveBreakpointCommand}" Padding="10,4" Margin="0,0,8,0" />
-        <Button Grid.Column="3" Content="Clear all" Command="{Binding ClearBreakpointsCommand}" Padding="10,4" Margin="0,0,8,0" />
-        <ListBox Grid.Column="5" ItemsSource="{Binding Breakpoints}" SelectedItem="{Binding SelectedBreakpoint}"
-                         Height="60" FontFamily="Consolas" />
-      </Grid>
-    </GroupBox>
-
-    <GroupBox Grid.Row="3" Header="Assembly Code (edit, then Assemble to load into the simulated SRAM)" Margin="0,10,0,0" Padding="8">
+    <!-- The old "Breakpoints (page:address...)" GroupBox (a typed address, Add/Remove selected/Clear
+         all, and a plain ListBox of "p:aaaa" strings) was removed 2026-09-26 per Stefan: "remove the
+         breakpoints dialog above the source area from C and CVM debugger. it is no longer needed."
+         Setting a breakpoint is now done directly in the "Simulated SRAM inspector" below, by clicking
+         a row's own gutter cell (see that ListView's own remarks), independent of whether a program
+         is running, per Stefan's own request. -->
+    <GroupBox Grid.Row="2" Header="Assembly Code (edit, then Assemble to load into the simulated SRAM)" Margin="0,10,0,0" Padding="8">
       <StackPanel>
         <StackPanel Orientation="Horizontal" Margin="0,0,0,7">
           <TextBlock Text="Program:" VerticalAlignment="Center" Margin="0,0,6,0" />
@@ -116,7 +105,7 @@
       </StackPanel>
     </GroupBox>
 
-    <GroupBox Grid.Row="4" Header="Simulated SRAM inspector" Margin="0,10,0,0" Padding="8">
+    <GroupBox Grid.Row="3" Header="Simulated SRAM inspector" Margin="0,10,0,0" Padding="8">
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="Auto" />
@@ -129,8 +118,8 @@
       </Grid>
     </GroupBox>
 
-    <TextBlock Grid.Row="5" Margin="0,10,0,4" FontWeight="SemiBold" Text="Simulated SRAM (read-only)" />
-    <Grid Grid.Row="6">
+    <TextBlock Grid.Row="4" Margin="0,10,0,4" FontWeight="SemiBold" Text="Simulated SRAM (read-only)" />
+    <Grid Grid.Row="5">
       <Grid.RowDefinitions>
         <RowDefinition Height="Auto" />
         <RowDefinition Height="*" />
@@ -143,22 +132,40 @@
         <ListView.View>
           <GridView>
             <!-- The gutter column Stefan asked for directly: right after the address, showing the
-                 current PC (an arrow) and any armed breakpoint (a filled circle); clicking anywhere
-                 in this cell toggles a breakpoint at that row's own address, via
+                 current PC (a green arrow) and any armed breakpoint (a red circle, to the arrow's own
+                 left, per Stefan, 2026-09-26: "the first column... displays a breakpoint with a red
+                 circle and the current program position... with a green arrow to the right"); clicking
+                 anywhere in this cell toggles a breakpoint at that row's own address, via
                  CvmDebuggerViewModel.ToggleBreakpointAtAddress. Shared verbatim by the C Debugger's own
-                 memory inspector, per Stefan: "use the same column for the old CVM debugger". -->
-            <GridViewColumn Header="" Width="34">
+                 memory inspector, per Stefan: "use the same column for the old CVM debugger". Works
+                 whether or not a debug session is currently running (see ToggleBreakpointAtAddress's
+                 own remarks); this is the ONLY way to set or clear a breakpoint, replacing the old
+                 "Breakpoints" GroupBox that used to sit above the source area (removed 2026-09-26, per
+                 Stefan: "it is no longer needed"). Two separate TextBlocks (rather than one string, as
+                 the former GutterText property used to be) are what let the circle and arrow carry
+                 different colors; both are wrapped in one StackPanel so the WHOLE cell, not just
+                 whichever glyph happens to be showing, stays the click target. -->
+            <GridViewColumn Header="" Width="40">
               <GridViewColumn.CellTemplate>
                 <DataTemplate>
-                  <TextBlock Text="{Binding GutterText}" HorizontalAlignment="Center" FontWeight="Bold"
-                                  Foreground="#B00020" Cursor="Hand" Background="Transparent"
-                                  ToolTip="Click to set or clear a breakpoint at this address."
-                                  MouseLeftButtonDown="OnMemoryGutterClick" />
+                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                                  Background="Transparent" Cursor="Hand"
+                                  ToolTip="Click to set or clear a breakpoint at this address -- works whether or not a debug session is running."
+                                  MouseLeftButtonDown="OnMemoryGutterClick">
+                    <TextBlock Text="●" FontWeight="Bold" Foreground="#B00020"
+                                    Visibility="{Binding IsBreakpoint, Converter={StaticResource BoolToVis}}" />
+                    <TextBlock Text="→" FontWeight="Bold" Foreground="#1B8A3B"
+                                    Visibility="{Binding IsCurrentPc, Converter={StaticResource BoolToVis}}" />
+                  </StackPanel>
                 </DataTemplate>
               </GridViewColumn.CellTemplate>
             </GridViewColumn>
             <GridViewColumn Header="Address" Width="80" DisplayMemberBinding="{Binding AddressText}" />
             <GridViewColumn Header="Value" Width="60" DisplayMemberBinding="{Binding ValueText}" />
+            <!-- Added 2026-09-26 per Stefan: "add a column 'Label' between 'Value' and 'Disassembly'
+                 and put in there the name of a label for that address"; see
+                 CvmDebuggerViewModel.RefreshMemoryView's own remarks for where a label can come from. -->
+            <GridViewColumn Header="Label" Width="120" DisplayMemberBinding="{Binding LabelText}" />
             <GridViewColumn Header="Disassembly" Width="260" DisplayMemberBinding="{Binding DisassemblyText}" />
             <!-- Empty for the ordinary CVM Debugger's own hand-typed/loaded programs; only ever
                  populated when the C Debugger's own compile pipeline loaded what's showing here. -->
@@ -168,7 +175,7 @@
       </ListView>
     </Grid>
 
-    <Grid Grid.Row="7" Margin="0,10,0,4">
+    <Grid Grid.Row="6" Margin="0,10,0,4">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
@@ -177,7 +184,7 @@
       <Button Grid.Column="1" Content="Copy log" Padding="10,2" Click="OnCopyLogClick"
                       ToolTip="Copies the full transaction log to the clipboard." />
     </Grid>
-    <TextBox x:Name="LogTextBox" Grid.Row="8" Text="{Binding LogText, Mode=OneWay}"
+    <TextBox x:Name="LogTextBox" Grid.Row="7" Text="{Binding LogText, Mode=OneWay}"
                   IsReadOnly="True" IsReadOnlyCaretVisible="True"
                   FontFamily="Consolas" FontSize="11"
                   TextWrapping="Wrap"

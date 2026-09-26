@@ -355,6 +355,38 @@ namespace Ga144.C.Toolchain;
 /// frame), only a LOCAL array/struct/float variable's own multi-word internal layout.
 /// </description></item>
 /// </list>
+///
+/// <b><c>short</c>/<c>long</c> (added 2026-09-26, the same day, per Stefan verbatim: "support 'short'.
+/// make 'short' equal to 'int'. support 'long'. a 'long' is represented as a 2 word little endian unit.
+/// do not generate code for handling 'long' yet, because that has to be defined first in the CVM.")</b>
+/// <c>short</c> needed NO changes at all here: it is a pure <see cref="CParser"/>-level synonym for
+/// <c>int</c>/<c>unsigned int</c> (see <see cref="CParser"/>'s own remarks) -- by the time an expression's
+/// type reaches this class, it already IS plain <c>int</c>. <c>long</c> is the interesting one: see <see
+/// cref="CType.Long"/>'s own remarks for the full scope, and <see cref="IsUnsupportedWholeValueType"/>'s
+/// own remarks for the shared mechanism. In short (no pun intended): declaring/sizing/addressing a
+/// <c>long</c>, and pointer arithmetic/indexing on <c>long *</c>/<c>long[]</c>, all already worked with NO
+/// changes needed here either (pure address math, already generic over <see cref="CType.SizeInWords"/>
+/// since the multi-word pointer-arithmetic work above) -- what needed guarding was every place that would
+/// otherwise have tried to actually MOVE a <c>long</c> VALUE using this class's uniform "exactly one CVM
+/// word" <see cref="EmitLoad"/>/<see cref="EmitStore"/> machinery (which does not hold for a 2-word type,
+/// per Stefan's own explicit "do not generate code for handling long yet"): <see cref="EmitName"/>, <see
+/// cref="EmitExpr"/>'s dereference/index/member-access cases, <see cref="EmitAssign"/>/<see
+/// cref="EmitAssignForEffect"/>, <see cref="EmitCompoundAssign"/>/<see cref="EmitCompoundAssignForEffect"/>,
+/// <see cref="EmitIncrementOrDecrement"/>/<see cref="EmitIncrementOrDecrementForEffect"/>, a cast TO
+/// <c>long</c> in <see cref="EmitExpr"/>'s <see cref="CCastExpr"/> case, and a global/static <c>long</c>'s
+/// initializer in <see cref="ComputeGlobalInitialWords"/> (an uninitialized one is still correctly zero-
+/// filled -- no sign-extension needed for zero). Auditing <see cref="EmitName"/> and <see
+/// cref="EmitExpr"/>'s dereference case for this ALSO surfaced two genuine PRE-EXISTING gaps in the
+/// already-shipped <c>struct</c> support (neither had a whole-struct-value guard at all, unlike the
+/// CIndexExpr/CMemberAccessExpr cases, which already rejected this) -- both closed the same way, in the
+/// same commit, since they are exactly the same bug class <see cref="IsUnsupportedWholeValueType"/> now
+/// guards against for both types at once. <see cref="CSizeOfExprExpr"/>'s codegen was also changed to
+/// prefer <see cref="TryGetStaticType"/> over actually evaluating its operand where possible -- needed so
+/// <c>sizeof</c> of a <c>long</c>/struct/<c>float</c> variable keeps working (it never needed the
+/// operand's VALUE, only its type), and as a side effect this also fixes a real pre-existing bug where
+/// <c>sizeof</c> of a plain <c>float</c> variable incorrectly reported an error and returned the wrong
+/// size (1 instead of 2), since it always evaluated the operand through the exact same general path
+/// <c>float</c>'s own "cannot be used outside a floating-point expression" guard rejects.
 /// </summary>
 public sealed class CCodeGenerator
 {
@@ -1120,6 +1152,21 @@ public sealed class CCodeGenerator
 
     if (initializer is null)
     {
+      return Enumerable.Repeat("0", size).ToList();
+    }
+
+    if (type.IsLong)
+    {
+      // Added 2026-09-26 alongside 'long' support: a real initializer here would need to fold a full
+      // 32-bit constant into two CORRECTLY sign-extended words (low word at the lower address, matching
+      // this compiler's established float convention -- see CType.Long's own remarks) -- e.g.
+      // "long x = -1;" needs BOTH words to be all-ones, not "-1" then a zero-padded high word, which is
+      // what the generic string/constant folding below would otherwise silently produce for anything
+      // outside a small non-negative low word. Rather than get that sign-extension arithmetic right with
+      // no way to test it against real CVM 'long' instructions (which don't exist yet -- see this type's
+      // own remarks), this is rejected outright; the branch just above already handles the one case that
+      // needs no sign-extension at all -- no initializer, so it's simply zero-filled.
+      Error(location, "initializing a 'long' global/static variable is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet (declare it without an initializer; it will be zero-filled)");
       return Enumerable.Repeat("0", size).ToList();
     }
 
@@ -2242,6 +2289,60 @@ public sealed class CCodeGenerator
     return _globals.TryGetValue(name.Name, out CGlobalSymbol? global) && global.Type.IsFloat;
   }
 
+  /// <summary>Whether <paramref name="type"/> is one this class's general, one-CVM-word <see
+  /// cref="EmitLoad"/>/<see cref="EmitStore"/> machinery cannot correctly read or write as a whole value:
+  /// <c>struct</c> (added 2026-09-26 -- see <see cref="CType.StructOf"/>'s own remarks: reading/assigning
+  /// an ENTIRE struct value was explicitly left unsupported, member-at-a-time access only) or <c>long</c>
+  /// (added 2026-09-26 -- see <see cref="CType.Long"/>'s own remarks: the CVM itself has no <c>long</c>
+  /// instructions defined yet, a real ISA gap, not a compiler scope choice). <c>float</c> is deliberately
+  /// excluded here even though it is ALSO multi-word: <c>float</c> has its own complete, dedicated lvalue/
+  /// load/store machinery (this class's own "Float ABI" section), so nothing calling this needs to
+  /// special-case it too.</summary>
+  private static bool IsUnsupportedWholeValueType(CType type) => type.IsStruct || type.IsLong;
+
+  /// <summary>Reports that reading <paramref name="subject"/> here is not yet supported (see <see
+  /// cref="IsUnsupportedWholeValueType"/>'s own remarks for which types and why), then emits a single
+  /// placeholder word so the surrounding expression tree still has *a* value to keep compiling with --
+  /// matching this class's own error-recovery convention elsewhere (report once, keep compiling to surface
+  /// further diagnostics, never crash mid-codegen).</summary>
+  private CType ReportUnsupportedValueRead(CSourceLocation location, CType type, string subject)
+  {
+    string reason = type.IsLong
+        ? "the CVM has no 'long' instructions defined yet (declaring a 'long', taking its address, forming a pointer/array of it, and pointer arithmetic on it all work; reading its actual value does not, yet)"
+        : "reading or assigning a whole struct value is not yet supported by this compiler (access one of its own members instead)";
+    Error(location, $"{subject} has type \"{type}\" -- {reason}");
+    EmitCode("pushlit 0");
+    return CType.Int;
+  }
+
+  /// <summary>Mirrors <see cref="IsFloatNamedVariable"/> exactly, for <see
+  /// cref="IsUnsupportedWholeValueType"/> instead of <c>float</c> -- added 2026-09-26 alongside <c>long</c>
+  /// support, closing a gap this same audit found in <see cref="EmitName"/>'s own pre-existing struct
+  /// handling (see this class's own doc comment): a bare struct-typed variable name used as a value (a
+  /// lone "s;" statement, or either side of "s1 = s2;" reached via <see cref="EmitAssign"/>'s general
+  /// path) had NO guard at all here before today, unlike the equivalent CIndexExpr/CMemberAccessExpr cases
+  /// in <see cref="EmitExpr"/>, which already reject a whole struct VALUE -- so it would have silently
+  /// read only the struct's FIRST word. <c>long</c> needs the identical guard for the new reason given on
+  /// <see cref="IsUnsupportedWholeValueType"/>.</summary>
+  private bool IsUnsupportedValueNamedVariable(CNameExpr name, out CType type)
+  {
+    CVarSymbol? symbol = LookupVariable(name.Name);
+    if (symbol is not null)
+    {
+      type = symbol.Type;
+      return IsUnsupportedWholeValueType(type);
+    }
+
+    if (_globals.TryGetValue(name.Name, out CGlobalSymbol? global))
+    {
+      type = global.Type;
+      return IsUnsupportedWholeValueType(type);
+    }
+
+    type = CType.Int;
+    return false;
+  }
+
   /// <summary>Saves <c>fr[from..from+count-1]</c> onto the ordinary data stack, ascending -- the first
   /// half of the caller-save/restore discipline this class's own doc comment describes. Paired with
   /// <see cref="EmitFloatRegisterRestoreRange"/>.</summary>
@@ -2455,8 +2556,13 @@ public sealed class CCodeGenerator
             // makes the actual MEMORY address order come out low-then-high, matching every other float
             // storage location), so the address a 'float *' must hold (the LOW word's own address) is
             // this local's own slot number PLUS one, not the slot number itself (which is the HIGH
-            // word's address).
-            int offset = symbol.Type.IsFloat ? symbol.Index + 1 : symbol.Index;
+            // word's address). 'long' (added 2026-09-26 -- see CType.Long's own remarks) gets the exact
+            // same treatment for the exact same reason, EVEN THOUGH no 'long' load/store exists yet to
+            // actually honor it (every value-level 'long' operation is rejected elsewhere in this class):
+            // establishing the correct low-word-at-lower-address convention here now means whoever
+            // eventually implements real 'long' load/store only needs to match this, rather than
+            // discovering and silently correcting a wrong existing address convention later.
+            int offset = symbol.Type.IsFloat || symbol.Type.IsLong ? symbol.Index + 1 : symbol.Index;
             EmitLocalOrParameterAddress(offset, isParameter: false);
             return CType.PointerTo(symbol.Type);
           }
@@ -2629,6 +2735,16 @@ public sealed class CCodeGenerator
       // separate early return.
       Error(assign.Location, "assigning a whole struct value is not yet supported by this compiler (assign through its own members instead)");
     }
+    else if (target.Type.IsLong || rhsType.IsLong)
+    {
+      // Added 2026-09-26 alongside 'long' support -- see CType.Long's own remarks: the CVM has no 'long'
+      // instructions defined yet, so a 'long' assignment (of any kind: a plain variable, through a
+      // dereferenced 'long *', an array element, a struct member -- ResolveLvalue's own CNameExpr/
+      // CUnaryExpr{Dereference}/CIndexExpr/CMemberAccessExpr cases all funnel into this same target.Type
+      // check regardless of which one produced it) is rejected here, same "report but still fall through"
+      // convention as the struct branch just above.
+      Error(assign.Location, "assigning a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet");
+    }
 
     EmitDup();
     EmitStore(target);
@@ -2664,6 +2780,11 @@ public sealed class CCodeGenerator
     else if (target.Type.IsStruct || rhsType.IsStruct)
     {
       Error(assign.Location, "assigning a whole struct value is not yet supported by this compiler (assign through its own members instead)");
+    }
+    else if (target.Type.IsLong || rhsType.IsLong)
+    {
+      // See EmitAssign's own remarks on the equivalent check.
+      Error(assign.Location, "assigning a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet");
     }
 
     EmitStore(target);
@@ -2703,6 +2824,15 @@ public sealed class CCodeGenerator
     }
 
     CLvalue intTarget = ResolveLvalue(expr.Target);
+    if (IsUnsupportedWholeValueType(intTarget.Type))
+    {
+      // Added 2026-09-26 alongside 'long' support -- see IsUnsupportedWholeValueType's own remarks. Same
+      // "report but still fall through" convention as EmitAssign's equivalent check.
+      Error(expr.Location, intTarget.Type.IsLong
+          ? "compound assignment on a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet"
+          : "compound assignment on a whole struct value is not yet supported by this compiler");
+    }
+
     EmitLoad(intTarget);
     CType rhsType = EmitExpr(expr.Value);
     // EmitBinaryOperation itself performs the single "pop" the ABI's binary-op pattern needs (it
@@ -2735,6 +2865,14 @@ public sealed class CCodeGenerator
     }
 
     CLvalue intTarget = ResolveLvalue(expr.Target);
+    if (IsUnsupportedWholeValueType(intTarget.Type))
+    {
+      // See EmitCompoundAssign's own remarks on the equivalent check.
+      Error(expr.Location, intTarget.Type.IsLong
+          ? "compound assignment on a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet"
+          : "compound assignment on a whole struct value is not yet supported by this compiler");
+    }
+
     EmitLoad(intTarget);
     CType rhsType = EmitExpr(expr.Value);
     EmitBinaryOperation(expr.Op, intTarget.Type, rhsType, expr.Location);
@@ -2759,6 +2897,14 @@ public sealed class CCodeGenerator
     CBinaryOp op = isIncrement ? CBinaryOp.Add : CBinaryOp.Subtract;
 
     CLvalue target = ResolveLvalue(expr.Operand);
+    if (IsUnsupportedWholeValueType(target.Type))
+    {
+      // Added 2026-09-26 alongside 'long' support -- see IsUnsupportedWholeValueType's own remarks. Same
+      // "report but still fall through" convention as EmitAssign's equivalent check.
+      Error(expr.Location, target.Type.IsLong
+          ? "'++'/'--' on a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet"
+          : "'++'/'--' on a whole struct value is not yet supported by this compiler");
+    }
 
     // EmitBinaryOperation performs its own single "pop" (both operands are already on the stack by the
     // time it runs, lhs then rhs) -- neither branch below pops again first.
@@ -2798,6 +2944,14 @@ public sealed class CCodeGenerator
     CBinaryOp op = isIncrement ? CBinaryOp.Add : CBinaryOp.Subtract;
 
     CLvalue target = ResolveLvalue(expr.Operand);
+    if (IsUnsupportedWholeValueType(target.Type))
+    {
+      // See EmitIncrementOrDecrement's own remarks on the equivalent check.
+      Error(expr.Location, target.Type.IsLong
+          ? "'++'/'--' on a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet"
+          : "'++'/'--' on a whole struct value is not yet supported by this compiler");
+    }
+
     EmitLoad(target);          // stack: [old]
     EmitCode("pushlit 1");     // stack: [old, 1]
     EmitBinaryOperation(op, target.Type, CType.Int, expr.Location); // stack: [new]
@@ -3543,6 +3697,15 @@ public sealed class CCodeGenerator
           }
 
           CLvalue lvalue = ResolveLvalue(unary);
+          if (IsUnsupportedWholeValueType(lvalue.Type))
+          {
+            // Added 2026-09-26 alongside 'long' support -- closes a gap this same audit found for
+            // 'struct' too: dereferencing a whole struct pointer as a VALUE ("*p;", or the read side of
+            // "*p = x;") had no guard here at all, unlike the CIndexExpr/CMemberAccessExpr cases just
+            // below, which already reject this. See IsUnsupportedWholeValueType's own remarks.
+            return ReportUnsupportedValueRead(unary.Location, lvalue.Type, "dereferencing this pointer");
+          }
+
           EmitLoad(lvalue);
           return lvalue.Type;
         }
@@ -3595,6 +3758,12 @@ public sealed class CCodeGenerator
             return CType.Int;
           }
 
+          if (lvalue.Type.IsLong)
+          {
+            // Added 2026-09-26 alongside 'long' support -- see IsUnsupportedWholeValueType's own remarks.
+            return ReportUnsupportedValueRead(index.Location, lvalue.Type, "indexing here");
+          }
+
           EmitLoad(lvalue);
           return lvalue.Type;
         }
@@ -3619,6 +3788,14 @@ public sealed class CCodeGenerator
             // "expression kind not supported" default case just below).
             EmitCode("pushlit 0");
             return CType.Int;
+          }
+
+          if (lvalue.Type.IsLong)
+          {
+            // Added 2026-09-26 alongside 'long' support -- ResolveLvalue's own CMemberAccessExpr case
+            // doesn't know about 'long' specifically (only 'struct'), so the diagnostic is reported here
+            // instead. See IsUnsupportedWholeValueType's own remarks.
+            return ReportUnsupportedValueRead(member.Location, lvalue.Type, $"\"{member.Member}\"");
           }
 
           EmitLoad(lvalue);
@@ -3653,6 +3830,18 @@ public sealed class CCodeGenerator
             return cast.TargetType;
           }
 
+          // Added 2026-09-26 alongside 'long' support: a cast TO 'long' would need an actual int->long
+          // widening conversion (sign-extend into a second word) that, like every other 'long' value
+          // operation, this compiler does not implement yet -- see CType.Long's own remarks. (A cast FROM
+          // a 'long' operand is already caught upstream, the moment EmitExpr(cast.Operand) below tries to
+          // read that operand's value through one of IsUnsupportedWholeValueType's own guarded paths.)
+          if (cast.TargetType.IsLong)
+          {
+            Error(cast.Location, "casting to 'long' is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet");
+            EmitCode("pushlit 0");
+            return CType.Long;
+          }
+
           // Every other supported type is one word, so a cast is a pure reinterpretation: emit the
           // operand and relabel its type, no runtime conversion needed.
           EmitExpr(cast.Operand);
@@ -3665,9 +3854,27 @@ public sealed class CCodeGenerator
 
       case CSizeOfExprExpr sizeOfExpr:
         {
+          // Prefer static type resolution (added 2026-09-26 alongside 'long' support). Real C's
+          // "sizeof expr" is compile-time-only and never actually evaluates its operand at all -- resolving
+          // the type via TryGetStaticType, when it can (see that method's own remarks for what it covers),
+          // is both MORE correct than the "evaluate at runtime and discard" fallback just below (no side
+          // effects: "sizeof(x++)" no longer actually increments x) and now NECESSARY: that fallback calls
+          // EmitExpr on the operand, which for a bare 'float' name was ALREADY, before today, wrongly
+          // reported as a compile error and sized as 1 instead of 2 (a real pre-existing bug this
+          // incidentally fixes -- EmitName's "float can only be used in a floating-point expression" guard
+          // fired even here, where no float VALUE was ever actually needed), and would now do the same for
+          // 'long'/'struct' too via IsUnsupportedWholeValueType's own new guards, for the identical reason:
+          // none of these three ever needed the operand's VALUE here, only its TYPE.
+          if (TryGetStaticType(sizeOfExpr.Operand, out CType staticType))
+          {
+            EmitCode($"pushlit {Math.Max(staticType.SizeInWords, 1)}");
+            return CType.UnsignedInt;
+          }
+
           // Deviation from strict C semantics, documented in the design doc: the operand is evaluated at
           // runtime and discarded rather than being purely a compile-time type inspection. Safe as long
-          // as the operand has no side effects.
+          // as the operand has no side effects. Only reached now when TryGetStaticType can't resolve the
+          // operand's type at all (e.g. a function call's return type isn't tracked there).
           CType operandType = EmitExpr(sizeOfExpr.Operand);
           if (operandType.IsVoid)
           {
@@ -3718,6 +3925,11 @@ public sealed class CCodeGenerator
       Error(name.Location, $"\"{name.Name}\" is a 'float' and can only be used in a floating-point expression");
       EmitCode("pushlit 0");
       return CType.Int;
+    }
+
+    if (IsUnsupportedValueNamedVariable(name, out CType unsupportedType))
+    {
+      return ReportUnsupportedValueRead(name.Location, unsupportedType, $"\"{name.Name}\"");
     }
 
     if (symbol is { Kind: CVarKind.Local })

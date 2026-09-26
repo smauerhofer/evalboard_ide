@@ -5,10 +5,31 @@ namespace Ga144.C.Toolchain;
 /// full scope list). Input is an already-preprocessed token stream (macros expanded, directives gone)
 /// -- NewLine tokens carry no meaning in C's grammar and are stripped before parsing starts.
 ///
-/// Not supported, with a clear diagnostic rather than silent misbehavior: union/enum,
-/// double/long/short, multi-dimensional arrays, function pointers, bit-fields, and variadic
-/// functions. "goto"/labels, "switch"/"case"/"default", and every operator standard C defines over
-/// this compiler's supported types ARE supported.
+/// Not supported, with a clear diagnostic rather than silent misbehavior: union/enum/double,
+/// multi-dimensional arrays, function pointers, bit-fields, and variadic functions. "goto"/labels,
+/// "switch"/"case"/"default", and every operator standard C defines over this compiler's supported types
+/// ARE supported.
+///
+/// <b><c>short</c> -- added 2026-09-26, per Stefan verbatim: "support 'short'. make 'short' equal to
+/// 'int'."</b> A pure parser-level synonym: "short", "short int", "unsigned short", and "unsigned short
+/// int" all resolve to the exact same <see cref="CType"/> instance <c>int</c>/<c>unsigned int</c> already
+/// would without the word "short" -- there is no separate <see cref="CTypeKind"/> for it and
+/// <see cref="CCodeGenerator"/> needs no changes at all, since by the time codegen ever sees the type,
+/// it already IS plain <c>int</c>. (<c>signed long</c>/<c>unsigned long</c> are not specifically
+/// recognized -- see <see cref="ParseDeclarationSpecifiers"/>'s own remarks on <c>long</c> below for why
+/// that combination is simply not something this first pass handles.)
+///
+/// <b><c>long</c> -- added 2026-09-26, the same day, per Stefan verbatim: "support 'long'. a 'long' is
+/// represented as a 2 word little endian unit. do not generate code for handling 'long' yet, because that
+/// has to be defined first in the CVM."</b> See <see cref="CType.Long"/>'s own remarks for the full scope:
+/// a <c>long</c> variable (local/global/static/struct-member) is fully declarable, correctly sized (2
+/// words) and addressable, and <c>long *</c>/<c>long[]</c>/pointer arithmetic on either all work (pure
+/// address math, already generic over element size). What is rejected: a <c>long</c> passed or returned
+/// BY VALUE in a function signature (checked here, at the parser level, exactly the way <c>struct</c>'s
+/// own by-value restriction already is -- see just below); every actual VALUE-level operation (a read, an
+/// assignment, <c>++</c>/<c>--</c>, a cast, arithmetic, an initializer other than "none, so it's zero-
+/// filled") is instead rejected in <see cref="CCodeGenerator"/>, since those need codegen context this
+/// purely-syntactic class doesn't have.
 ///
 /// <b><c>float</c> -- added 2026-09-26, per Stefan's own float-ABI dictation.</b> See
 /// <see cref="CType.Float"/>'s own remarks and <see cref="CCodeGenerator"/>'s own doc comment for the
@@ -76,7 +97,12 @@ public sealed class CParser
   // still a reserved word, still explicitly listed in LooksLikeTypeStart/LooksLikeTypeAt so removing it
   // from this set alone doesn't stop either method recognizing it as a type-starting keyword. "union" and
   // "enum" stay rejected here -- struct support does not extend to either.
-  private static readonly HashSet<string> UnsupportedTypeKeywords = ["union", "enum", "double", "long", "short"];
+  //
+  // "short" and "long" REMOVED 2026-09-26, per Stefan's own "support 'short'... support 'long'..."
+  // instruction (see this class's own remarks above) -- both are now real, supported base-type keywords
+  // (see ParseDeclarationSpecifiers' own "short"/"long" handling below), handled the same way "float" and
+  // "struct" were: still reserved words, still explicitly listed in LooksLikeTypeStart/LooksLikeTypeAt.
+  private static readonly HashSet<string> UnsupportedTypeKeywords = ["union", "enum", "double"];
 
   /// <summary>
   /// Every typedef name seen so far in this translation unit, mapped to the already-resolved
@@ -259,7 +285,24 @@ public sealed class CParser
       {
         if (braceDepth == 0)
         {
-          if (!atTopLevel)
+          // A "}" at depth 0 here is unmatched by any "{" seen during this recovery scan, so it must be
+          // either a stray brace at file scope, or (when !atTopLevel) the enclosing block's own closing
+          // brace that ParseCompoundStatement's loop condition / trailing Expect("}") is waiting to see.
+          //
+          // At top level there is no such enclosing consumer waiting for it -- Parse()'s own
+          // "while (!AtEnd)" loop just calls ParseExternalDeclaration() again, which would immediately
+          // fail again on the very same "}" token (nothing starts a declaration with "}"), land back in
+          // this same recovery routine, and find the exact same unmatched "}" again. Left unconsumed,
+          // that is an infinite loop -- confirmed 2026-09-26 from Stefan's own report of a hang at this
+          // file's "expected a type" throw after Build on a real library with a stray/mismatched top-level
+          // brace. So at top level we must advance past it ourselves to guarantee forward progress.
+          //
+          // Nested (atTopLevel: false), we deliberately do NOT advance: this "}" is the block's own
+          // closing brace, and ParseCompoundStatement (the only caller that passes atTopLevel: false) both
+          // tests for it in its "while (!CheckWord("}") && !AtEnd)" loop condition and consumes it itself
+          // via the trailing Expect("}", "to close a block") -- advancing past it here would make that
+          // loop think the block hadn't ended yet and try to parse further statements past its real end.
+          if (atTopLevel)
           {
             Advance();
           }
@@ -286,6 +329,7 @@ public sealed class CParser
 
   private bool LooksLikeTypeStart() =>
       CheckWord("void") || CheckWord("char") || CheckWord("int") || CheckWord("float") || CheckWord("unsigned") || CheckWord("signed") ||
+      CheckWord("short") || CheckWord("long") ||
       CheckWord("static") || CheckWord("extern") || CheckWord("const") || CheckWord("volatile") ||
       CheckWord("__fastcall") || CheckWord("__lower") || CheckWord("typedef") || CheckWord("struct") ||
       (Current.IsIdentifier && _typedefs.ContainsKey(Current.Text)) ||
@@ -370,6 +414,10 @@ public sealed class CParser
         return CType.Char;
       }
 
+      // "short" is a pure synonym for plain int width here (see this class's own remarks above) --
+      // "signed short"/"signed short int" both just fall through to the same "return CType.Int" plain
+      // "signed"/"signed int" already would.
+      Match("short");
       Match("int");
       return CType.Int;
     }
@@ -381,8 +429,17 @@ public sealed class CParser
         return CType.UnsignedChar;
       }
 
+      // "unsigned short"/"unsigned short int" -- see the "signed" branch just above.
+      Match("short");
       Match("int");
       return CType.UnsignedInt;
+    }
+
+    if (Match("short"))
+    {
+      // Bare "short" or "short int" -- see this class's own remarks above: short is simply int here.
+      Match("int");
+      return CType.Int;
     }
 
     if (Match("char"))
@@ -393,6 +450,18 @@ public sealed class CParser
     if (Match("int"))
     {
       return CType.Int;
+    }
+
+    if (Match("long"))
+    {
+      // Bare "long" or "long int" -- see this class's own remarks above and CType.Long's own remarks for
+      // the full scope. "signed long"/"unsigned long" are deliberately not recognized as a combination
+      // (neither was asked for, and this compiler does not implement any long ARITHMETIC yet regardless
+      // of signedness) -- either falls through with "long" left unconsumed by the signed/unsigned
+      // branches above, producing a plain (if generic) "expected an identifier" parse error rather than a
+      // silent misparse.
+      Match("int");
+      return CType.Long;
     }
 
     if (Match("float"))
@@ -771,6 +840,15 @@ public sealed class CParser
         throw Error(location, $"\"{name}\" cannot return \"{type}\" by value -- return a pointer (\"{type} *\") instead");
       }
 
+      // Added 2026-09-26 alongside 'long' support -- see CType.Long's own remarks: this compiler has no
+      // calling convention for returning a 2-word value by value yet (the CVM has no 'long' instructions
+      // defined yet), so this is rejected the same way struct-by-value already is, for the same "pure
+      // syntax-level restriction" reason given in the comment just above.
+      if (type.IsLong)
+      {
+        throw Error(location, $"\"{name}\" cannot return \"{type}\" by value yet -- the CVM has no 'long' instructions defined yet (return a pointer, \"{type} *\", instead)");
+      }
+
       // "__fastcall implies also __lower, so __fastcall includes __lower" (Stefan, 2026-09-07) -- a
       // __fastcall function is ALWAYS required to be placed in the lower half of memory too, whether or
       // not "__lower" was itself also written on the declaration. See CFunctionDecl's own remarks: a
@@ -903,6 +981,13 @@ public sealed class CParser
       if (type.IsStruct)
       {
         throw Error(nameLocation, $"\"{name}\" cannot be passed as \"{type}\" by value -- use a pointer (\"{type} *\") instead");
+      }
+
+      // Added 2026-09-26 alongside 'long' support -- see this method's own return-type rejection just
+      // above (in ParseExternalDeclaration) for why this is a parser-level restriction, not a CCodeGenerator one.
+      if (type.IsLong)
+      {
+        throw Error(nameLocation, $"\"{name}\" cannot be passed as \"{type}\" by value yet -- the CVM has no 'long' instructions defined yet (use a pointer, \"{type} *\", instead)");
       }
 
       parameters.Add(new CParameter(name, type.Decay()));
@@ -1297,7 +1382,7 @@ public sealed class CParser
   private bool LooksLikeTypeAt(int index)
   {
     CToken token = _tokens[index];
-    return token.IsIdentifier && (token.Text is "void" or "char" or "int" or "float" or "unsigned" or "signed" or "const" or "volatile" or "struct"
+    return token.IsIdentifier && (token.Text is "void" or "char" or "int" or "float" or "unsigned" or "signed" or "short" or "long" or "const" or "volatile" or "struct"
         || UnsupportedTypeKeywords.Contains(token.Text) || _typedefs.ContainsKey(token.Text));
   }
 
