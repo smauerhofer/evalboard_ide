@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Microsoft.Win32;
 
 namespace Ga144.Evb.Ide.Views;
@@ -42,10 +43,23 @@ public partial class CvmDebuggerWindow : Window
   // stepping through a program, keep the line where the PC is visible in the Simulated SRAM area."
   // CvmDebuggerViewModel.RefreshMemoryView (see its own remarks) clears MemoryRows and re-adds every
   // row from scratch on every Step/Continue/Run/Pause/breakpoint toggle, so this fires once per
-  // refresh for whichever single newly-added row is the current PC, and scrolls it into view. If the
-  // PC's own address falls outside the window MemoryBaseText/"Show from:" is currently showing, no row
-  // here has IsCurrentPc set, so there is nothing to scroll to -- this only keeps the PC's line
-  // visible within whatever page is already being shown, it does not change pages to follow the PC.
+  // refresh for whichever single newly-added row is the current PC. If the PC's own address falls
+  // outside the window MemoryBaseText/"Show from:" is currently showing, no row here has IsCurrentPc
+  // set, so there is nothing to scroll to -- this only keeps the PC's line visible within whatever
+  // page is already being shown, it does not change pages to follow the PC.
+  //
+  // The actual ScrollIntoView call is deferred to a queued Dispatcher callback rather than called
+  // synchronously here, because this handler itself runs synchronously INSIDE the Add() call that
+  // raised it -- RefreshMemoryView's own Clear()/Add() loop is still mid-way through adding the
+  // remaining rows when the PC's own row goes in. ScrollIntoView triggers an immediate layout pass
+  // (ListBox.ScrollIntoView -> OnBringItemIntoView -> UpdateLayout), which reenters the
+  // ItemContainerGenerator while its own bookkeeping of "how many adds/removes have I seen since the
+  // last Reset" is still short of MemoryRows' actual, still-growing count -- observed in practice as
+  // "An ItemsControl is inconsistent with its items source" / "Accumulated count 4 is different from
+  // actual count 5". Posting at Background priority (lower than the Normal/Render/Loaded priorities
+  // WPF itself uses for pending layout work) guarantees this runs only once the current call stack has
+  // fully unwound -- i.e. RefreshMemoryView's loop has finished adding every row and the generator has
+  // caught up -- rather than mid-mutation.
   private void OnMemoryRowsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
   {
     if (e.NewItems is null)
@@ -57,7 +71,7 @@ public partial class CvmDebuggerWindow : Window
     {
       if (item is CvmMemoryRowViewModel { IsCurrentPc: true } row)
       {
-        MemoryListView.ScrollIntoView(row);
+        Dispatcher.BeginInvoke(() => MemoryListView.ScrollIntoView(row), DispatcherPriority.Background);
         break;
       }
     }

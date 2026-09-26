@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-26T20:48:37.3141927
-      utcDateTime: 2026-09-26T20:48:37.3141927Z
-      localDateTime: 2026-09-26T22:48:37.3141927+02:00
+      dateTime: 2026-09-26T20:52:22.0836347
+      utcDateTime: 2026-09-26T20:52:22.0836347Z
+      localDateTime: 2026-09-26T22:52:22.0836347+02:00
       date: 2026-09-26T00:00:00.0000000
       day: 26
       dayOfWeek: Saturday
       dayOfYear: 269
       hour: 20
-      millisecond: 314
-      microsecond: 192
+      millisecond: 83
+      microsecond: 634
       nanosecond: 700
-      minute: 48
+      minute: 52
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 37
-      ticks: 639260525173141927
-      utcTicks: 639260525173141927
-      timeOfDay: 20:48:37.3141927
+      second: 22
+      ticks: 639260527420836347
+      utcTicks: 639260527420836347
+      timeOfDay: 20:52:22.0836347
       year: 2026
   portB: 
   portC:

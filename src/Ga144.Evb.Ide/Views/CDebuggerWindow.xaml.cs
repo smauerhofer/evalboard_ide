@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace Ga144.Evb.Ide.Views;
 
@@ -47,8 +48,11 @@ public partial class CDebuggerWindow : Window
   }
 
   // Same PC auto-scroll convention as CvmDebuggerWindow.xaml.cs's own OnMemoryRowsCollectionChanged --
-  // see its own remarks. Subscribed to Debugger.MemoryRows directly, since Debugger (above) is a
-  // genuine CvmDebuggerViewModel instance, not a lookalike.
+  // see its own remarks, including why the actual ScrollIntoView is deferred to a queued Dispatcher
+  // callback at Background priority rather than called synchronously here (calling it synchronously,
+  // mid-Add, threw "An ItemsControl is inconsistent with its items source" against this exact window).
+  // Subscribed to Debugger.MemoryRows directly, since Debugger (above) is a genuine
+  // CvmDebuggerViewModel instance, not a lookalike.
   private void OnMemoryRowsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
   {
     if (e.NewItems is null)
@@ -60,7 +64,7 @@ public partial class CDebuggerWindow : Window
     {
       if (item is CvmMemoryRowViewModel { IsCurrentPc: true } row)
       {
-        MemoryListView.ScrollIntoView(row);
+        Dispatcher.BeginInvoke(() => MemoryListView.ScrollIntoView(row), DispatcherPriority.Background);
         break;
       }
     }
