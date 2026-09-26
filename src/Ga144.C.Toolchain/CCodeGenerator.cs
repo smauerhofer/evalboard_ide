@@ -186,6 +186,113 @@ namespace Ga144.C.Toolchain;
 /// into a compiler-allocated temporary local). This is flagged here as a future optimization pending
 /// Stefan supplying <c>tjmp</c>'s real calling convention -- see <see cref="EmitStatement"/>'s
 /// <see cref="CSwitchStmt"/> case.</description></item>
+/// <item><description>
+/// <b>Float ABI (added 2026-09-26) -- basic <c>float</c> support, per Stefan's own dictation
+/// (<c>claude/cvm-abi.md</c> section 2.3).</b> Everything above this bullet assumes every value is
+/// exactly one CVM word; <c>float</c> (see <see cref="CType.Float"/>) is the first exception, and it does
+/// NOT go through the ordinary one-word data-stack machinery at all -- it is evaluated entirely in node
+/// 305's own 8-register floating-point file (<c>fr[0..7]</c>) via <c>fadd</c>/<c>fsub</c>/<c>fmul</c>/
+/// <c>fdiv</c>/<c>fneg</c>/<c>fabs</c>/<c>fmin</c>/<c>fmax</c>/<c>fmove</c>/<c>fpop</c>/<c>fpush</c>, and
+/// only ever touches the ordinary stack/memory to load/store a <c>float</c> variable's two words or to
+/// marshal a stack-passed <c>float</c> argument.
+/// <list type="bullet">
+/// <item><description><b>Scope (a deliberate SCOPE decision for this first pass, not a hardware
+/// hypothesis):</b> a plain <c>float</c> scalar only -- local, parameter, global, literal, <c>+</c> <c>-</c>
+/// <c>*</c> <c>/</c> unary <c>+</c>/<c>-</c>, assignment (<c>=</c> <c>+=</c> <c>-=</c> <c>*=</c> <c>/=</c>),
+/// <c>return</c>, and calls (as an argument or return value). NOT supported, rejected with a diagnostic:
+/// <c>float *</c>/<c>float[]</c> (see <see cref="CType.Float"/>'s own remarks -- rejected in
+/// <see cref="CParser"/>), comparisons (<c>==</c> <c>!=</c> <c>&lt;</c> <c>&gt;</c> <c>&lt;=</c>
+/// <c>&gt;=</c>), <c>++</c>/<c>--</c>, any int/<c>float</c> conversion (implicit or an explicit cast), and
+/// a <c>float</c> literal used directly where an <c>int</c> is expected or vice versa -- Stefan: "only add
+/// functions that are directly supported by the FP subprocessor... later we will add more functions in a
+/// float-library." Three built-ins expose the three hardware ops with no C operator of their own --
+/// <c>fabsf</c>/<c>fminf</c>/<c>fmaxf</c> compile directly to <c>fabs</c>/<c>fmin</c>/<c>fmax</c>, never a
+/// real call (see <see cref="TryGetFloatBuiltin"/>).</description></item>
+/// <item><description><b>Codegen model: a depth-counter register allocator, not a stack machine.</b>
+/// <see cref="EmitFloatExprInto"/> evaluates a <c>float</c> expression into a chosen destination register
+/// <c>fr[destReg]</c>, recursively: a binary op evaluates its left operand into <c>fr[destReg]</c> and its
+/// right operand into <c>fr[destReg+1]</c> (never lower than <c>destReg</c>, so an already-computed OUTER
+/// operand sitting in a lower-numbered register is never disturbed), then combines them in place
+/// (<c>fadd destReg destReg+1</c>, etc., per node 305/306's own <c>fr[f] := fr[f] OP fr[g]</c> semantics --
+/// see <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointAddMnemonic"/>'s own remarks). Every
+/// register below the CURRENT <c>destReg</c> is, by construction, still needed by an enclosing operation --
+/// this is exactly what <see cref="_liveFloatRegisterCount"/> tracks, and it is what
+/// <see cref="EmitCall"/> consults to decide how many registers a call needs to protect. Nesting deeper
+/// than <see cref="FloatRegisterCount"/> (8) registers is a compiler error ("expression too complex"),
+/// not silently wrong code.</description></item>
+/// <item><description><b>Loading/storing a <c>float</c> variable's two words -- word order, DERIVED
+/// from node 305's own F18 source (<c>fr/push</c>/<c>fr/pop</c>), not yet independently confirmed on real
+/// hardware.</b> <c>fr/push (g f)</c> is <c>a! @+ !b @ !b</c> -- it sends the LOW word first, then the
+/// HIGH word second; <c>fr/pop (g f)</c> is <c>a! @b !+ @b !</c> -- the FIRST word it reads is stored into
+/// the LOW slot, the SECOND into the HIGH slot. Combined with Stefan's own general rule ("low word at
+/// memory[adr], high word at memory[adr+1]"), this compiler always composes/decomposes a register the
+/// same way: to LOAD <c>fr[d]</c> from two known words, push the LOW word then the HIGH word (in that
+/// order) then <c>fpop d</c>; to STORE <c>fr[d]</c> out, <c>fpush d</c> then pop twice -- the first pop is
+/// the HIGH word, the second is the LOW word. See <see cref="EmitFloatLoad"/>/<see cref="EmitFloatStore"/>/
+/// <see cref="EmitFloatLiteralInto"/>. A bare <c>fpush f</c> ... (nothing else touching the stack)
+/// ... <c>fpop f</c> pair (used ONLY for caller-save/restore, see below) is trusted to round-trip
+/// <c>fr[f]</c>'s exact value -- this is the more likely intended reading of "the caller must save the
+/// register... and restore them," but note it is NOT mechanically re-derivable from the same F18 trace
+/// above without also assuming something about how <c>@b</c>/<c>!b</c> interact with whatever real stack
+/// backs them; flagged for Stefan's confirmation.</description></item>
+/// <item><description><b>A <c>float</c> LOCAL's two frame slots are HIGH-then-LOW, the opposite order
+/// from a <c>float</c> PARAMETER or a <c>float</c> GLOBAL's two words.</b> A local's own address is
+/// <c>f - offset</c> (see this class's own <c>pushf</c>/<c>lal</c>/<c>lap</c> remarks above) -- ADDRESS
+/// DECREASES as the frame-slot offset increases -- so honoring "low word at the lower address" means the
+/// LOW word must live at the HIGHER slot number (<c>baseSlot+1</c>) and the HIGH word at the base slot
+/// itself. A PARAMETER's address is <c>f + offset</c> (increases with offset) and a GLOBAL's second word
+/// is a second, immediately-following data-section label (see below) -- both the natural, unsurprising
+/// order (LOW at the base, HIGH at base+1). See <see cref="EmitFloatLoad"/>/<see
+/// cref="EmitFloatStore"/>.</description></item>
+/// <item><description><b>A <c>float</c> GLOBAL is two contiguous data words under two labels, not one.</b>
+/// <c>gld</c>/<c>gst</c> (see this class's own "global-scalar access" bullet above) take a single label
+/// with no address arithmetic, so a <c>float</c> global's high word gets its OWN label,
+/// <c>&lt;label&gt;__hi</c>, emitted immediately after the low word's own <c>.word</c> line with nothing
+/// else emitted in between (see <see cref="EmitFloatGlobalStorage"/>) -- this compiler controls DATA-
+/// section layout entirely, so the two words ARE genuinely contiguous (<c>label__hi</c>'s address really
+/// is <c>label</c>'s address + 1), exactly matching Stefan's memory-layout rule; only the SYMBOLIC name
+/// for the second word is a compiler-internal convention (a hand-written <c>.casm</c> routine expecting
+/// to reach it via "<c>label+1</c>" address arithmetic -- which this assembler does not support for any
+/// operand, not just this one -- would not find a symbol for it under that name). A future
+/// pointer-to-float/float-array feature will need to revisit this.</description></item>
+/// <item><description><b>Return-value convention -- HYPOTHESIS, not stated by Stefan and NOT yet
+/// confirmed.</b> This compiler places a <c>float</c>-returning function's return value in <c>fr[0]</c>
+/// unconditionally, regardless of calling convention, right before branching to the epilogue -- the
+/// simplest, most standard choice for a single dedicated "the" float register, mirroring how a plain
+/// (non-<c>__fastcall</c>) int/pointer return already uses one fixed, implicit slot (the stack top). See
+/// <see cref="EmitStatement"/>'s <c>CReturnStmt</c> case and <see cref="EmitCall"/>'s own return-value
+/// retrieval.</description></item>
+/// <item><description><b>Parameter passing, per Stefan verbatim:</b> "for fastcall functions the
+/// parameter are passed by register fr[0] for the first float parameter, fr[1] for the second parameter,
+/// ... for normal functions float parameter are put on the stack as a 32-bit value little endian word."
+/// <see cref="ComputeParameterFloatRegisterSlots"/> assigns fr-registers to a <c>__fastcall</c>
+/// function's <c>float</c> parameters, counting ONLY among its own <c>float</c> parameters (a completely
+/// separate, independent count from the pointer/ar-register assignment above -- node 305's register file
+/// has nothing to do with node 306's). A register-assigned <c>float</c> parameter is spilled into an
+/// ordinary local slot pair immediately in the prologue, exactly like a register-assigned pointer
+/// parameter already is (see this class's own ABI v2 remarks) -- fr registers are never trusted to
+/// survive past that one moment. A stack-passed <c>float</c> parameter's word OFFSET is generalized from
+/// the pre-existing per-PARAMETER count to a per-WORD count (<see cref="CType.SizeInWords"/>), since it is
+/// no longer true that every stack-passed parameter is exactly one word.</description></item>
+/// <item><description><b>Caller-save/restore, per Stefan verbatim:</b> "within a function all fr register
+/// can be used freely, that means, calling a function may use some fr register. so calling a function
+/// that use fr register, the caller must save the fr register in use to the stack and restore them after
+/// the call. for functions that do not use fr register, there is no need to save/restore any fr-register.
+/// so the compiler must know if a function directly or indirectly uses any fr-register."
+/// <see cref="ComputeFunctionUsesFloatRegisters"/> computes exactly that (a whole-translation-unit,
+/// fixed-point call-graph analysis -- DIRECT use is any <c>float</c> parameter/return/local/literal
+/// anywhere in a function's own body; INDIRECT use is calling, however deeply, a function that does; a
+/// call to a function whose body isn't visible in this file -- only declared, or in another translation
+/// unit -- is conservatively treated as "may use fr registers," since nothing here can see its actual
+/// body). <see cref="EmitCall"/> consults it for EVERY call (not just one inside a <c>float</c>
+/// expression): whenever <see cref="_liveFloatRegisterCount"/> is nonzero and the callee may use fr
+/// registers, it wraps the call with <c>fpush 0..fpush (n-1)</c> before and <c>fpop (n-1)..fpop 0</c>
+/// after (ascending save, descending restore -- ordinary LIFO stack discipline), retrieving a
+/// <c>float</c> return value out of <c>fr[0]</c> into its own destination register BEFORE the restore
+/// pops run (since <c>fr[0]</c> is always among the registers being restored whenever the destination is
+/// anything other than <c>fr[0]</c> itself).</description></item>
+/// </list>
+/// </description></item>
 /// </list>
 /// </summary>
 public sealed class CCodeGenerator
@@ -210,6 +317,17 @@ public sealed class CCodeGenerator
     /// every other parameter (which keeps ABI v1's stack convention). See
     /// <see cref="ComputeParameterRegisterSlots"/> and this class's own ABI doc comment.</summary>
     public required IReadOnlyList<int?> ParameterRegisterSlots { get; init; }
+
+    /// <summary>Float ABI (added 2026-09-26): one entry per parameter, parallel to
+    /// <see cref="ParameterTypes"/> -- the fr-register index (0-7) a <c>float</c> parameter of a
+    /// <c>__fastcall</c> function is passed in, or null for every other parameter (a non-<c>float</c>
+    /// parameter, or a <c>float</c> parameter of a NON-<c>__fastcall</c> function, which is always
+    /// stack-passed instead -- Stefan verbatim: "for normal functions float parameter are put on the
+    /// stack"). A SEPARATE, independent count from <see cref="ParameterRegisterSlots"/>'s own pointer
+    /// count -- node 305's floating-point register file is a completely separate 8-register file from
+    /// node 306's address registers. See <see cref="ComputeParameterFloatRegisterSlots"/> and this
+    /// class's own doc comment.</summary>
+    public required IReadOnlyList<int?> ParameterFloatRegisterSlots { get; init; }
 
     public bool IsDefined { get; set; }
   }
@@ -284,6 +402,24 @@ public sealed class CCodeGenerator
   private bool _hasError;
   private CFunctionContext? _currentFunction;
   private Dictionary<CStmt, string>? _switchLabelsByNode;
+
+  /// <summary>Float ABI (added 2026-09-26): node 305's own fr-register count -- see this class's own doc
+  /// comment's "Float ABI" section.</summary>
+  private const int FloatRegisterCount = 8;
+
+  /// <summary>Float ABI: DirectlyOrIndirectlyUsesFloatRegisters per DEFINED function name, computed once
+  /// by <see cref="ComputeFunctionUsesFloatRegisters"/> right after <see cref="CollectSignatures"/> runs.
+  /// Consulted by <see cref="EmitCall"/> via <see cref="CalleeUsesFloatRegisters"/> (which treats a name
+  /// missing here -- an external/only-declared function -- as "true," conservatively, since its body is
+  /// not visible to this translation unit).</summary>
+  private readonly Dictionary<string, bool> _functionUsesFr = new(StringComparer.Ordinal);
+
+  /// <summary>Float ABI: how many of node 305's fr registers (0.._liveFloatRegisterCount-1) currently
+  /// hold a value some ENCLOSING, still-in-progress evaluation needs to survive -- see
+  /// <see cref="EmitFloatExprInto"/>'s own remarks. Zero outside of any <c>float</c>-expression
+  /// evaluation or <c>float</c>-argument marshalling. <see cref="EmitCall"/> reads this to decide how
+  /// many registers a call needs to save/restore around itself.</summary>
+  private int _liveFloatRegisterCount;
 
   /// <summary>Optimizer step 2 of 2, added 2026-09-10 -- see <see cref="CvmPeepholeOptimizer"/>'s own
   /// remarks. Off by default: unlike <see cref="CConstantFolder"/> (pure AST arithmetic, the same
@@ -433,6 +569,7 @@ public sealed class CCodeGenerator
         ReturnType = function.ReturnType,
         ParameterTypes = parameterTypes,
         ParameterRegisterSlots = ComputeParameterRegisterSlots(parameterTypes),
+        ParameterFloatRegisterSlots = ComputeParameterFloatRegisterSlots(parameterTypes, function.IsFastcall),
         IsDefined = function.Body is not null,
       };
     }
@@ -447,6 +584,15 @@ public sealed class CCodeGenerator
 
       _globals[global.Name] = new CGlobalSymbol { Type = global.Type, Label = global.Name, IsStatic = global.IsStatic };
     }
+
+    // Float ABI (added 2026-09-26): a whole-translation-unit fixed-point pass over every DEFINED
+    // function's own body, computing which functions use node 305's fr registers -- directly (a float
+    // parameter/return/local/literal/expression of their own) or indirectly (calling, however deeply
+    // nested, a function that does). See ComputeFunctionUsesFloatRegisters' own remarks; this MUST run
+    // after every function's CFunctionSignature above is populated (a call site needs ParameterTypes to
+    // even recognize a float argument) but before any function body is compiled (EmitCall consults the
+    // result for every call it emits, including a call to a function defined LATER in this file).
+    ComputeFunctionUsesFloatRegisters(unit);
   }
 
   /// <summary>How many of a function's own pointer-typed parameters get an address register (ABI v2) --
@@ -484,26 +630,324 @@ public sealed class CCodeGenerator
     return slots;
   }
 
+  /// <summary>
+  /// Float ABI (added 2026-09-26): among <paramref name="parameterTypes"/>, in order, assigns EVERY
+  /// <c>float</c>-typed one an fr-register index (0, 1, 2, ... in the order its own <c>float</c>
+  /// parameter is encountered) -- but ONLY when <paramref name="isFastcall"/> is true. Per Stefan
+  /// verbatim: "for fastcall functions the parameter are passed by register fr[0] for the first float
+  /// parameter, fr[1] for the second parameter, ... for normal functions float parameter are put on the
+  /// stack" -- so a NON-<c>__fastcall</c> function gets an all-null result here regardless of how many
+  /// <c>float</c> parameters it declares (every one of them is stack-passed, two words each, see
+  /// <see cref="EmitFunction"/>'s own stack-parameter-offset accounting). <see cref="CParser"/> already
+  /// rejects, at parse time, a <c>__fastcall</c> function declaring more than
+  /// <c>MaxFastcallFloatParameters</c> (8, node 305's own register count) <c>float</c> parameters, so this
+  /// method never needs to reject an overflow itself.</summary>
+  private static IReadOnlyList<int?> ComputeParameterFloatRegisterSlots(IReadOnlyList<CType> parameterTypes, bool isFastcall)
+  {
+    var slots = new int?[parameterTypes.Count];
+    if (!isFastcall)
+    {
+      return slots;
+    }
+
+    int floatCount = 0;
+    for (int i = 0; i < parameterTypes.Count; i++)
+    {
+      if (parameterTypes[i].IsFloat)
+      {
+        slots[i] = floatCount;
+        floatCount++;
+      }
+    }
+
+    return slots;
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Float ABI: whole-translation-unit "does this function use fr registers, directly or indirectly"
+  // analysis -- see this class's own doc comment's "Float ABI" section, "Caller-save/restore" bullet.
+  // ---------------------------------------------------------------------------------------------
+
+  private void ComputeFunctionUsesFloatRegisters(CTranslationUnit unit)
+  {
+    List<CFunctionDecl> defined = unit.Functions.Where(f => f.Body is not null).ToList();
+
+    foreach (CFunctionDecl function in defined)
+    {
+      _functionUsesFr[function.Name] = function.ReturnType.IsFloat
+          || function.Parameters.Any(p => p.Type.IsFloat)
+          || StatementUsesFloatDirectly(function.Body!);
+    }
+
+    // Fixed-point iteration over the (possibly recursive/mutually-recursive) call graph: a function
+    // becomes "uses fr registers" as soon as ANY call it makes (at any nesting depth) is to a function
+    // that does -- including a function not defined in this file at all, treated conservatively as "may
+    // use fr registers" since its body isn't visible here. Bounded: at most defined.Count passes can
+    // ever flip a false to true.
+    bool changed = true;
+    while (changed)
+    {
+      changed = false;
+      foreach (CFunctionDecl function in defined)
+      {
+        if (_functionUsesFr[function.Name])
+        {
+          continue;
+        }
+
+        if (StatementCallsFloatUsingFunction(function.Body!))
+        {
+          _functionUsesFr[function.Name] = true;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  /// <summary>Float ABI: consulted by <see cref="EmitCall"/> for every call site -- a callee not defined
+  /// in this translation unit (only declared, or genuinely external) is conservatively assumed to
+  /// possibly use fr registers, since this compiler cannot see its body.</summary>
+  private bool CalleeUsesFloatRegisters(string calleeName) => !_functionUsesFr.TryGetValue(calleeName, out bool uses) || uses;
+
+  /// <summary>Float ABI: true if <paramref name="stmt"/> (a function's own body, not descending into a
+  /// nested function -- there are none in C) declares a <c>float</c> local anywhere, or contains a
+  /// <see cref="CFloatLiteralExpr"/> anywhere in any expression. Deliberately does NOT need full symbol
+  /// resolution (see this class's own doc comment) -- referencing an already-<c>float</c>-typed global
+  /// or parameter always flows through a <c>float</c> local, literal, or (already separately checked by
+  /// the caller) this function's own parameter/return type, for every program this "basic" <c>float</c>
+  /// support can compile at all (no implicit conversions, no pointer/array of <c>float</c>).</summary>
+  private static bool StatementUsesFloatDirectly(CStmt stmt)
+  {
+    switch (stmt)
+    {
+      case CCompoundStmt compound:
+        return compound.Statements.Any(StatementUsesFloatDirectly);
+      case CLocalVarDecl localDecl:
+        return localDecl.Type.IsFloat || (localDecl.Initializer is not null && ExprUsesFloatDirectly(localDecl.Initializer));
+      case CExprStmt exprStmt:
+        return ExprUsesFloatDirectly(exprStmt.Expression);
+      case CIfStmt ifStmt:
+        return ExprUsesFloatDirectly(ifStmt.Condition) || StatementUsesFloatDirectly(ifStmt.Then) || (ifStmt.Else is not null && StatementUsesFloatDirectly(ifStmt.Else));
+      case CWhileStmt whileStmt:
+        return ExprUsesFloatDirectly(whileStmt.Condition) || StatementUsesFloatDirectly(whileStmt.Body);
+      case CDoWhileStmt doWhileStmt:
+        return StatementUsesFloatDirectly(doWhileStmt.Body) || ExprUsesFloatDirectly(doWhileStmt.Condition);
+      case CForStmt forStmt:
+        return (forStmt.Init is not null && StatementUsesFloatDirectly(forStmt.Init))
+            || (forStmt.Condition is not null && ExprUsesFloatDirectly(forStmt.Condition))
+            || (forStmt.Update is not null && ExprUsesFloatDirectly(forStmt.Update))
+            || StatementUsesFloatDirectly(forStmt.Body);
+      case CReturnStmt { Value: { } value }:
+        return ExprUsesFloatDirectly(value);
+      case CLabelStmt labelStmt:
+        return StatementUsesFloatDirectly(labelStmt.Inner);
+      case CCaseLabelStmt caseLabelStmt:
+        return ExprUsesFloatDirectly(caseLabelStmt.Value) || StatementUsesFloatDirectly(caseLabelStmt.Inner);
+      case CDefaultLabelStmt defaultLabelStmt:
+        return StatementUsesFloatDirectly(defaultLabelStmt.Inner);
+      case CSwitchStmt switchStmt:
+        return ExprUsesFloatDirectly(switchStmt.Selector) || StatementUsesFloatDirectly(switchStmt.Body);
+      default:
+        return false;
+    }
+  }
+
+  private static bool ExprUsesFloatDirectly(CExpr expr)
+  {
+    switch (expr)
+    {
+      case CFloatLiteralExpr:
+        return true;
+      case CUnaryExpr unary:
+        return ExprUsesFloatDirectly(unary.Operand);
+      case CBinaryExpr binary:
+        return ExprUsesFloatDirectly(binary.Left) || ExprUsesFloatDirectly(binary.Right);
+      case CAssignExpr assign:
+        return ExprUsesFloatDirectly(assign.Target) || ExprUsesFloatDirectly(assign.Value);
+      case CCompoundAssignExpr compoundAssign:
+        return ExprUsesFloatDirectly(compoundAssign.Target) || ExprUsesFloatDirectly(compoundAssign.Value);
+      case CConditionalExpr conditional:
+        return ExprUsesFloatDirectly(conditional.Condition) || ExprUsesFloatDirectly(conditional.WhenTrue) || ExprUsesFloatDirectly(conditional.WhenFalse);
+      case CCallExpr call:
+        return call.Arguments.Any(ExprUsesFloatDirectly);
+      case CIndexExpr index:
+        return ExprUsesFloatDirectly(index.Base) || ExprUsesFloatDirectly(index.Index);
+      case CCastExpr cast:
+        return cast.TargetType.IsFloat || ExprUsesFloatDirectly(cast.Operand);
+      case CSizeOfExprExpr sizeOfExpr:
+        return ExprUsesFloatDirectly(sizeOfExpr.Operand);
+      case CCommaExpr comma:
+        return ExprUsesFloatDirectly(comma.Left) || ExprUsesFloatDirectly(comma.Right);
+      default:
+        return false;
+    }
+  }
+
+  /// <summary>Float ABI: true if <paramref name="stmt"/> contains a call (at any nesting depth, including
+  /// inside another call's own arguments) to a function this compiler already knows uses fr registers
+  /// (per <see cref="_functionUsesFr"/> so far) or cannot see the body of at all. Walks the same shape as
+  /// <see cref="StatementUsesFloatDirectly"/>/<see cref="ExprUsesFloatDirectly"/> but collects
+  /// <see cref="CCallExpr"/> nodes instead.</summary>
+  private bool StatementCallsFloatUsingFunction(CStmt stmt) => EnumerateCalls(stmt).Any(call => CalleeUsesFloatRegisters(call.FunctionName));
+
+  private static IEnumerable<CCallExpr> EnumerateCalls(CStmt stmt)
+  {
+    switch (stmt)
+    {
+      case CCompoundStmt compound:
+        return compound.Statements.SelectMany(EnumerateCalls);
+      case CLocalVarDecl { Initializer: { } init }:
+        return EnumerateCalls(init);
+      case CExprStmt exprStmt:
+        return EnumerateCalls(exprStmt.Expression);
+      case CIfStmt ifStmt:
+        return EnumerateCalls(ifStmt.Condition).Concat(EnumerateCalls(ifStmt.Then)).Concat(ifStmt.Else is not null ? EnumerateCalls(ifStmt.Else) : []);
+      case CWhileStmt whileStmt:
+        return EnumerateCalls(whileStmt.Condition).Concat(EnumerateCalls(whileStmt.Body));
+      case CDoWhileStmt doWhileStmt:
+        return EnumerateCalls(doWhileStmt.Body).Concat(EnumerateCalls(doWhileStmt.Condition));
+      case CForStmt forStmt:
+        return (forStmt.Init is not null ? EnumerateCalls(forStmt.Init) : [])
+            .Concat(forStmt.Condition is not null ? EnumerateCalls(forStmt.Condition) : [])
+            .Concat(forStmt.Update is not null ? EnumerateCalls(forStmt.Update) : [])
+            .Concat(EnumerateCalls(forStmt.Body));
+      case CReturnStmt { Value: { } value }:
+        return EnumerateCalls(value);
+      case CLabelStmt labelStmt:
+        return EnumerateCalls(labelStmt.Inner);
+      case CCaseLabelStmt caseLabelStmt:
+        return EnumerateCalls(caseLabelStmt.Value).Concat(EnumerateCalls(caseLabelStmt.Inner));
+      case CDefaultLabelStmt defaultLabelStmt:
+        return EnumerateCalls(defaultLabelStmt.Inner);
+      case CSwitchStmt switchStmt:
+        return EnumerateCalls(switchStmt.Selector).Concat(EnumerateCalls(switchStmt.Body));
+      default:
+        return [];
+    }
+  }
+
+  private static IEnumerable<CCallExpr> EnumerateCalls(CExpr expr)
+  {
+    switch (expr)
+    {
+      case CCallExpr call:
+        return call.Arguments.SelectMany(EnumerateCalls).Append(call);
+      case CUnaryExpr unary:
+        return EnumerateCalls(unary.Operand);
+      case CBinaryExpr binary:
+        return EnumerateCalls(binary.Left).Concat(EnumerateCalls(binary.Right));
+      case CAssignExpr assign:
+        return EnumerateCalls(assign.Target).Concat(EnumerateCalls(assign.Value));
+      case CCompoundAssignExpr compoundAssign:
+        return EnumerateCalls(compoundAssign.Target).Concat(EnumerateCalls(compoundAssign.Value));
+      case CConditionalExpr conditional:
+        return EnumerateCalls(conditional.Condition).Concat(EnumerateCalls(conditional.WhenTrue)).Concat(EnumerateCalls(conditional.WhenFalse));
+      case CIndexExpr index:
+        return EnumerateCalls(index.Base).Concat(EnumerateCalls(index.Index));
+      case CCastExpr cast:
+        return EnumerateCalls(cast.Operand);
+      case CSizeOfExprExpr sizeOfExpr:
+        return EnumerateCalls(sizeOfExpr.Operand);
+      case CCommaExpr comma:
+        return EnumerateCalls(comma.Left).Concat(EnumerateCalls(comma.Right));
+      default:
+        return [];
+    }
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Globals and the string-literal pool.
   // ---------------------------------------------------------------------------------------------
 
   private void EmitGlobal(CGlobalVarDecl global)
   {
+    string label = MangleExternalSymbol(global.Name);
+
     if (global.IsExtern)
     {
       // Declared here, defined elsewhere -- no storage, just a reference the linker resolves.
-      _imports.Add(MangleExternalSymbol(global.Name));
+      _imports.Add(label);
+      if (global.Type.IsFloat)
+      {
+        // Float ABI: a float global is TWO words under two labels -- see EmitFloatGlobalStorage's own
+        // remarks and this class's own doc comment. Both need importing.
+        _imports.Add(label + "__hi");
+      }
+
       return;
     }
 
     if (!global.IsStatic)
     {
-      _dataLines.Add($".export {MangleExternalSymbol(global.Name)}");
+      _dataLines.Add($".export {label}");
+      if (global.Type.IsFloat)
+      {
+        _dataLines.Add($".export {label}__hi");
+      }
+    }
+
+    if (global.Type.IsFloat)
+    {
+      EmitFloatGlobalStorage(label, global.Initializer, global.Location);
+      return;
     }
 
     List<string> words = ComputeGlobalInitialWords(global.Type, global.Initializer, global.Location);
-    _dataLines.Add($"{MangleExternalSymbol(global.Name)}: .word {string.Join(", ", words)}");
+    _dataLines.Add($"{label}: .word {string.Join(", ", words)}");
+  }
+
+  /// <summary>Float ABI: emits a <c>float</c> global's (or static local's) two-word storage as TWO
+  /// separate, immediately-adjacent <c>.word</c> lines under two labels (<paramref name="label"/> for the
+  /// low word, <c>&lt;label&gt;__hi</c> for the high word) -- see this class's own doc comment's "A
+  /// <c>float</c> GLOBAL is two contiguous data words" remarks for why (in short: <c>gld</c>/<c>gst</c>
+  /// take a single label with no address arithmetic, so the high word needs its own label; nothing else
+  /// is emitted between these two lines, so the two words ARE genuinely contiguous in the final
+  /// binary).</summary>
+  private void EmitFloatGlobalStorage(string label, CExpr? initializer, CSourceLocation location)
+  {
+    (string lowWord, string highWord) = ComputeFloatInitialWords(initializer, location);
+    _dataLines.Add($"{label}: .word {lowWord}");
+    _dataLines.Add($"{label}__hi: .word {highWord}");
+  }
+
+  /// <summary>Float ABI: computes a <c>float</c> global/static-local's initial (low, high) words --
+  /// see <see cref="EmitFloatLiteralInto"/>'s own remarks for the identical bit-splitting logic used for
+  /// a <c>float</c> literal appearing inside a function body.</summary>
+  private (string Low, string High) ComputeFloatInitialWords(CExpr? initializer, CSourceLocation location)
+  {
+    float value = 0f;
+    if (initializer is not null && !TryEvaluateConstantFloat(initializer, out value))
+    {
+      Error(location, "a 'float' global/static variable's initializer must be a compile-time constant floating-point literal");
+    }
+
+    int bits = BitConverter.SingleToInt32Bits(value);
+    return ((bits & 0xFFFF).ToString(), ((bits >> 16) & 0xFFFF).ToString());
+  }
+
+  /// <summary>Float ABI: folds a <c>float</c> global initializer to a compile-time constant value --
+  /// mirrors <see cref="TryEvaluateConstantGlobalInitializer"/>'s own small scope (a literal, optionally
+  /// negated) for the non-<c>float</c> case.</summary>
+  private static bool TryEvaluateConstantFloat(CExpr expr, out float value)
+  {
+    switch (expr)
+    {
+      case CFloatLiteralExpr literal:
+        value = literal.Value;
+        return true;
+
+      case CUnaryExpr { Op: CUnaryOp.Minus } unary when TryEvaluateConstantFloat(unary.Operand, out float v):
+        value = -v;
+        return true;
+
+      case CUnaryExpr { Op: CUnaryOp.Plus } unary when TryEvaluateConstantFloat(unary.Operand, out float v):
+        value = v;
+        return true;
+
+      default:
+        value = 0f;
+        return false;
+    }
   }
 
   /// <summary>Computes the DATA-section words for a global (or static-local) variable's initial value:
@@ -688,10 +1132,15 @@ public sealed class CCodeGenerator
     CFunctionSignature signature = _functions[function.Name];
     int stackParameterIndex = 0;
     var registerParameters = new List<(int RegisterIndex, int LocalSlot)>();
+    // Float ABI: parallel to registerParameters above, but for fr-register-assigned float parameters,
+    // which need TWO local slots each (spilled via EmitFloatStoreLocal, not a single "stl") -- see this
+    // class's own doc comment's "Parameter passing" bullet.
+    var floatRegisterParameters = new List<(int RegisterIndex, int LocalBaseSlot)>();
     for (int i = 0; i < function.Parameters.Count; i++)
     {
       CParameter parameter = function.Parameters[i];
       int? registerIndex = i < signature.ParameterRegisterSlots.Count ? signature.ParameterRegisterSlots[i] : null;
+      int? floatRegisterIndex = i < signature.ParameterFloatRegisterSlots.Count ? signature.ParameterFloatRegisterSlots[i] : null;
       if (registerIndex is int assignedRegister)
       {
         // Register-eligible: this parameter never arrives via the stack at all, so it gets an ordinary
@@ -700,13 +1149,25 @@ public sealed class CCodeGenerator
         context.Scopes[0][parameter.Name] = new CVarSymbol(CVarKind.Local, localSlot, parameter.Type);
         registerParameters.Add((assignedRegister, localSlot));
       }
+      else if (floatRegisterIndex is int assignedFrRegister)
+      {
+        // Float ABI: a fastcall float parameter arrives in fr[assignedFrRegister], never the stack --
+        // gets a 2-word LOCAL slot pair instead of a Parameter-kind frame offset, exactly like a
+        // register-eligible pointer parameter above.
+        int localBaseSlot = context.NextLocalSlot;
+        context.NextLocalSlot += 2;
+        context.Scopes[0][parameter.Name] = new CVarSymbol(CVarKind.Local, localBaseSlot, parameter.Type);
+        floatRegisterParameters.Add((assignedFrRegister, localBaseSlot));
+      }
       else
       {
         // Stack-passed, same as ABI v1 -- but renumbered to count only the parameters that are ACTUALLY
         // pushed, since any register-eligible ones earlier in the declaration are simply absent from the
-        // caller's own push sequence.
+        // caller's own push sequence. Float ABI (2026-09-26): generalized from a per-PARAMETER count to a
+        // per-WORD count, since a stack-passed 'float' parameter now occupies 2 words, not 1 -- see this
+        // class's own doc comment.
         context.Scopes[0][parameter.Name] = new CVarSymbol(CVarKind.Parameter, stackParameterIndex, parameter.Type);
-        stackParameterIndex++;
+        stackParameterIndex += Math.Max(parameter.Type.SizeInWords, 1);
       }
     }
 
@@ -738,6 +1199,14 @@ public sealed class CCodeGenerator
       EmitCode($"arst {registerIndex}"); // r := this register's address word; stack: [..., page]
       EmitCode($"stl {localSlot}");     // localSlot := r (the address); stack unchanged
       EmitCode("pop");                  // r := the leftover page word, discarded; stack: [...]
+    }
+
+    // Float ABI (2026-09-26): spill every fr-register-assigned float parameter into its own 2-word local
+    // slot pair immediately, same timing and same "never trusted to survive past this one moment"
+    // discipline as the address-register spill above -- see this class's own doc comment.
+    foreach ((int registerIndex, int localBaseSlot) in floatRegisterParameters)
+    {
+      EmitFloatStoreLocal(localBaseSlot, registerIndex);
     }
 
     _currentFunction = context;
@@ -785,8 +1254,19 @@ public sealed class CCodeGenerator
     if (decl.IsStatic)
     {
       string label = $"__static_{_currentFunction!.Name}_{decl.Name}_{_staticLocalCounter++}";
-      List<string> words = ComputeGlobalInitialWords(decl.Type, decl.Initializer, decl.Location);
-      _dataLines.Add($"{label}: .word {string.Join(", ", words)}");
+      if (decl.Type.IsFloat)
+      {
+        // Float ABI: see EmitFloatGlobalStorage's own remarks -- a static local float needs the same
+        // two-label, two-word storage a plain float global does (it is addressed the same way, via
+        // CVarKind.Global + GlobalLabel, by ResolveFloatLvalue).
+        EmitFloatGlobalStorage(label, decl.Initializer, decl.Location);
+      }
+      else
+      {
+        List<string> words = ComputeGlobalInitialWords(decl.Type, decl.Initializer, decl.Location);
+        _dataLines.Add($"{label}: .word {string.Join(", ", words)}");
+      }
+
       _currentFunction.Scopes[^1][decl.Name] = new CVarSymbol(CVarKind.Global, 0, decl.Type, label);
       return;
     }
@@ -1115,6 +1595,399 @@ public sealed class CCodeGenerator
     EmitCode("push");
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // Float ABI (added 2026-09-26): 'float' expressions, lvalues, and register save/restore. See this
+  // class's own doc comment's "Float ABI" section for the full model -- everything below operates on
+  // node 305's fr registers, not the ordinary one-word data stack.
+  // ---------------------------------------------------------------------------------------------
+
+  private enum CFloatLvalueKind
+  {
+    Local,
+    Parameter,
+    Global,
+  }
+
+  /// <summary>The resolved location of an assignable <c>float</c> value -- always a plain named
+  /// variable (see this class's own doc comment: pointer-to-float/array-of-float are rejected by
+  /// <see cref="CParser"/>, so there is no "Indirect" float lvalue kind to parallel <see
+  /// cref="CLvalueKind.Indirect"/>). <see cref="Index"/> is the base LOCAL slot or PARAMETER word offset
+  /// (the second word lives at <see cref="Index"/>+1, or -1 for Local -- see
+  /// <see cref="EmitFloatLoad"/>/<see cref="EmitFloatStore"/>'s own remarks on the direction flip); for
+  /// Global, <see cref="Label"/> is the low word's own label (the high word is
+  /// <c>{Label}__hi</c>).</summary>
+  private sealed record CFloatLvalue(CFloatLvalueKind Kind, int Index, string? Label = null);
+
+  /// <summary>Resolves a <c>float</c>-context lvalue -- ONLY a plain named variable is accepted (a
+  /// dereference or array index would need pointer-to-float/array-of-float, both rejected by
+  /// <see cref="CParser"/> already, so reaching one here means a deeper bug or an expression this
+  /// compiler's own "basic" float scope was never meant to reach); anything else is a clear
+  /// diagnostic.</summary>
+  private CFloatLvalue ResolveFloatLvalue(CExpr expr)
+  {
+    if (expr is not CNameExpr name)
+    {
+      Error(expr.Location, "only a plain 'float' variable is supported here (pointers/arrays of 'float' are not yet supported by this compiler)");
+      return new CFloatLvalue(CFloatLvalueKind.Local, 0);
+    }
+
+    CVarSymbol? symbol = LookupVariable(name.Name);
+    if (symbol is { Kind: CVarKind.Local })
+    {
+      return new CFloatLvalue(CFloatLvalueKind.Local, symbol.Index);
+    }
+
+    if (symbol is { Kind: CVarKind.Parameter })
+    {
+      return new CFloatLvalue(CFloatLvalueKind.Parameter, symbol.Index);
+    }
+
+    string label = symbol?.GlobalLabel ?? MangleExternalSymbol(name.Name);
+    if (symbol is not { Kind: CVarKind.Global })
+    {
+      if (_globals.ContainsKey(name.Name))
+      {
+        // A real global defined in this file -- EmitGlobal already declared its storage.
+      }
+      else if (_functions.ContainsKey(name.Name))
+      {
+        Error(expr.Location, $"\"{name.Name}\" is a function and cannot be assigned to");
+      }
+      else
+      {
+        // Not defined in this file -- assume an external 'float' global the linker will resolve. Both
+        // labels need importing -- see EmitGlobal's own remarks.
+        _imports.Add(label);
+        _imports.Add(label + "__hi");
+      }
+    }
+
+    return new CFloatLvalue(CFloatLvalueKind.Global, 0, label);
+  }
+
+  /// <summary>Loads a <c>float</c> lvalue's two words into <c>fr[destReg]</c> -- pushes LOW then HIGH (in
+  /// that order, per this class's own doc comment's word-order remarks), then <c>fpop destReg</c>.</summary>
+  private void EmitFloatLoad(CFloatLvalue lvalue, int destReg)
+  {
+    switch (lvalue.Kind)
+    {
+      case CFloatLvalueKind.Local:
+        EmitFloatLoadLocal(lvalue.Index, destReg);
+        break;
+      case CFloatLvalueKind.Parameter:
+        EmitCode($"ldp {lvalue.Index}");     // low
+        EmitCode("push");
+        EmitCode($"ldp {lvalue.Index + 1}"); // high
+        EmitCode("push");
+        EmitCode($"fpop {destReg}");
+        break;
+      default:
+        EmitGlobalFetch(lvalue.Label!);          // low
+        EmitCode("push");
+        EmitGlobalFetch(lvalue.Label + "__hi");  // high
+        EmitCode("push");
+        EmitCode($"fpop {destReg}");
+        break;
+    }
+  }
+
+  /// <summary>Stores <c>fr[srcReg]</c> into a <c>float</c> lvalue's two words -- <c>fpush srcReg</c>
+  /// leaves [low, high(top)] on the stack (per this class's own doc comment's word-order remarks), so the
+  /// FIRST word popped back off is the HIGH word, the SECOND is the LOW word.</summary>
+  private void EmitFloatStore(CFloatLvalue lvalue, int srcReg)
+  {
+    switch (lvalue.Kind)
+    {
+      case CFloatLvalueKind.Local:
+        EmitFloatStoreLocal(lvalue.Index, srcReg);
+        break;
+      case CFloatLvalueKind.Parameter:
+        EmitCode($"fpush {srcReg}");
+        EmitCode("pop"); EmitCode($"stp {lvalue.Index + 1}"); // high -> offset+1
+        EmitCode("pop"); EmitCode($"stp {lvalue.Index}");     // low -> offset
+        break;
+      default:
+        EmitCode($"fpush {srcReg}");
+        EmitCode("pop"); EmitGlobalAssign(lvalue.Label + "__hi"); // high
+        EmitCode("pop"); EmitGlobalAssign(lvalue.Label!);          // low
+        break;
+    }
+  }
+
+  /// <summary>Float ABI: a LOCAL float's two frame slots are HIGH-then-LOW (<paramref name="baseSlot"/>
+  /// holds HIGH, <paramref name="baseSlot"/>+1 holds LOW) -- the opposite of a parameter/global -- because
+  /// a local's own address is <c>f - offset</c> (DECREASES as the slot number increases), so the LOW word
+  /// (which must sit at the LOWER address, per Stefan's own memory-layout rule) has to live at the HIGHER
+  /// slot number. See this class's own doc comment for the full derivation. Used both by
+  /// <see cref="EmitFloatLoad"/>/<see cref="EmitFloatStore"/> (a named local variable) and by
+  /// <see cref="EmitFunction"/>'s own float-register-parameter prologue spill (a fastcall float parameter,
+  /// which is ALSO just an ordinary local slot pair once spilled).</summary>
+  private void EmitFloatLoadLocal(int baseSlot, int destReg)
+  {
+    EmitCode($"ldl {baseSlot + 1}"); // low
+    EmitCode("push");
+    EmitCode($"ldl {baseSlot}");     // high
+    EmitCode("push");
+    EmitCode($"fpop {destReg}");
+  }
+
+  private void EmitFloatStoreLocal(int baseSlot, int srcReg)
+  {
+    EmitCode($"fpush {srcReg}");
+    EmitCode("pop"); EmitCode($"stl {baseSlot}");     // high -> baseSlot
+    EmitCode("pop"); EmitCode($"stl {baseSlot + 1}"); // low -> baseSlot+1
+  }
+
+  /// <summary>Materializes an arbitrary compile-time <c>float</c> constant into <c>fr[destReg]</c>: splits
+  /// its IEEE-754 bit pattern into two 16-bit words and pushes LOW then HIGH (matching
+  /// <see cref="EmitFloatLoad"/>'s own convention) before <c>fpop destReg</c>. There is no hardware
+  /// "load an arbitrary float immediate into a register" primitive -- only <c>fconst</c>'s 8 fixed ROM
+  /// constants (see <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointConstantMnemonic"/>'s
+  /// own remarks) -- so every literal goes through the ordinary stack, exactly like loading a variable's
+  /// value does.</summary>
+  private void EmitFloatLiteralInto(float value, int destReg)
+  {
+    int bits = BitConverter.SingleToInt32Bits(value);
+    int low = bits & 0xFFFF;
+    int high = (bits >> 16) & 0xFFFF;
+    EmitCode($"pushlit {low}");
+    EmitCode($"pushlit {high}");
+    EmitCode($"fpop {destReg}");
+  }
+
+  private static string FloatBinaryMnemonic(CBinaryOp op) => op switch
+  {
+    CBinaryOp.Add => "fadd",
+    CBinaryOp.Subtract => "fsub",
+    CBinaryOp.Multiply => "fmul",
+    CBinaryOp.Divide => "fdiv",
+    _ => throw new InvalidOperationException($"'{op}' has no floating-point hardware opcode"),
+  };
+
+  /// <summary>The three directly-hardware-backed <c>float</c> built-ins this compiler exposes, per
+  /// Stefan's own scope instruction ("only add functions that are directly supported by the FP
+  /// subprocessor should be used by the compiler") -- C has no operator for min/max/absolute-value, so
+  /// these are recognized here purely by name (like a real compiler's <c>__builtin_*</c> intrinsics),
+  /// never emitted as an actual <c>call</c>. Named after the standard C library's own <c>&lt;math.h&gt;</c>
+  /// float-suffixed convention (<c>fabsf</c>/<c>fminf</c>/<c>fmaxf</c>) rather than the raw CVM mnemonics,
+  /// so a future float-library can define real (non-built-in) versions under the SAME names for other
+  /// toolchains/targets without a collision here.</summary>
+  private static readonly Dictionary<string, (string Mnemonic, int Arity)> FloatBuiltins = new(StringComparer.Ordinal)
+  {
+    ["fabsf"] = ("fabs", 1),
+    ["fminf"] = ("fmin", 2),
+    ["fmaxf"] = ("fmax", 2),
+  };
+
+  private bool TryGetFloatBuiltin(CCallExpr call, out string mnemonic, out int arity)
+  {
+    if (FloatBuiltins.TryGetValue(call.FunctionName, out (string Mnemonic, int Arity) entry))
+    {
+      if (call.Arguments.Count != entry.Arity)
+      {
+        Error(call.Location, $"\"{call.FunctionName}\" expects {entry.Arity} argument(s), but {call.Arguments.Count} were given");
+      }
+
+      mnemonic = entry.Mnemonic;
+      arity = entry.Arity;
+      return true;
+    }
+
+    mnemonic = string.Empty;
+    arity = 0;
+    return false;
+  }
+
+  /// <summary>Float ABI: a best-effort, code-free STATIC check of whether <paramref name="expr"/> would,
+  /// if evaluated, produce a <c>float</c> value -- used only to disambiguate a handful of contexts that
+  /// need to know BEFORE emitting any code (a cast's operand, an assignment's target). Deliberately not a
+  /// full type-checker (this compiler has none -- see this class's own doc comment); every <c>float</c>
+  /// sub-expression this "basic" support actually needs to recognize eventually bottoms out in a literal,
+  /// a name, a supported operator over those, a call, or a cast, all covered below.</summary>
+  private bool LooksLikeFloatExpr(CExpr expr) => expr switch
+  {
+    CFloatLiteralExpr => true,
+    CNameExpr name => IsFloatNamedVariable(name),
+    CUnaryExpr { Op: CUnaryOp.Plus or CUnaryOp.Minus } unary => LooksLikeFloatExpr(unary.Operand),
+    CBinaryExpr { Op: CBinaryOp.Add or CBinaryOp.Subtract or CBinaryOp.Multiply or CBinaryOp.Divide } binary =>
+        LooksLikeFloatExpr(binary.Left) || LooksLikeFloatExpr(binary.Right),
+    CCallExpr call => (FloatBuiltins.ContainsKey(call.FunctionName)) || (_functions.TryGetValue(call.FunctionName, out CFunctionSignature? sig) && sig.ReturnType.IsFloat),
+    CCastExpr cast => cast.TargetType.IsFloat,
+    CAssignExpr assign => LooksLikeFloatExpr(assign.Target),
+    CCompoundAssignExpr compoundAssign => LooksLikeFloatExpr(compoundAssign.Target),
+    _ => false,
+  };
+
+  private bool IsFloatNamedVariable(CNameExpr name)
+  {
+    CVarSymbol? symbol = LookupVariable(name.Name);
+    if (symbol is not null)
+    {
+      return symbol.Type.IsFloat;
+    }
+
+    return _globals.TryGetValue(name.Name, out CGlobalSymbol? global) && global.Type.IsFloat;
+  }
+
+  /// <summary>Saves <c>fr[from..from+count-1]</c> onto the ordinary data stack, ascending -- the first
+  /// half of the caller-save/restore discipline this class's own doc comment describes. Paired with
+  /// <see cref="EmitFloatRegisterRestoreRange"/>.</summary>
+  private void EmitFloatRegisterSaveRange(int from, int count)
+  {
+    for (int r = from; r < from + count; r++)
+    {
+      EmitCode($"fpush {r}");
+    }
+  }
+
+  /// <summary>Restores <c>fr[from..from+count-1]</c> from the ordinary data stack, DESCENDING (LIFO order
+  /// matching <see cref="EmitFloatRegisterSaveRange"/>'s own ascending save order).</summary>
+  private void EmitFloatRegisterRestoreRange(int from, int count)
+  {
+    for (int r = from + count - 1; r >= from; r--)
+    {
+      EmitCode($"fpop {r}");
+    }
+  }
+
+  /// <summary>
+  /// The float-expression evaluator's public entry point -- evaluates <paramref name="expr"/> into
+  /// <c>fr[destReg]</c>. Sets <see cref="_liveFloatRegisterCount"/> to <paramref name="destReg"/> for the
+  /// duration (see this class's own doc comment: every register below the CURRENT destReg is, by
+  /// construction, still needed by an enclosing operation, and <see cref="EmitCall"/> reads this field to
+  /// decide how many registers a call needs to protect), restoring the previous value afterward so a
+  /// caller further up the recursion (or a sibling call/argument evaluation) sees its own correct value
+  /// again.
+  /// </summary>
+  private void EmitFloatExprInto(CExpr expr, int destReg)
+  {
+    if (destReg >= FloatRegisterCount)
+    {
+      Error(expr.Location, $"this expression is too complex: it needs more than {FloatRegisterCount} 'float' registers (fr[0..{FloatRegisterCount - 1}]) to evaluate");
+      EmitFloatLiteralInto(0f, FloatRegisterCount - 1);
+      return;
+    }
+
+    int outerLiveCount = _liveFloatRegisterCount;
+    _liveFloatRegisterCount = destReg;
+    EmitFloatExprIntoCore(expr, destReg);
+    _liveFloatRegisterCount = outerLiveCount;
+  }
+
+  private void EmitFloatExprIntoCore(CExpr expr, int destReg)
+  {
+    switch (expr)
+    {
+      case CFloatLiteralExpr literal:
+        EmitFloatLiteralInto(literal.Value, destReg);
+        return;
+
+      case CIntLiteralExpr:
+        // No implicit int->float conversion in this first pass -- see this class's own doc comment.
+        Error(expr.Location, "an integer literal cannot be used directly where a 'float' is expected (implicit int-to-float conversion is not yet supported)");
+        EmitFloatLiteralInto(0f, destReg);
+        return;
+
+      case CNameExpr name:
+        if (!IsFloatNamedVariable(name))
+        {
+          Error(expr.Location, $"\"{name.Name}\" is not a 'float' value");
+          EmitFloatLiteralInto(0f, destReg);
+          return;
+        }
+
+        EmitFloatLoad(ResolveFloatLvalue(name), destReg);
+        return;
+
+      case CUnaryExpr { Op: CUnaryOp.Plus } unary:
+        EmitFloatExprInto(unary.Operand, destReg);
+        return;
+
+      case CUnaryExpr { Op: CUnaryOp.Minus } unary:
+        EmitFloatExprInto(unary.Operand, destReg);
+        EmitCode($"fneg {destReg} {destReg}");
+        return;
+
+      case CUnaryExpr:
+        Error(expr.Location, "this operator is not yet supported for 'float' (only unary +/- are)");
+        EmitFloatLiteralInto(0f, destReg);
+        return;
+
+      case CBinaryExpr { Op: CBinaryOp.Add or CBinaryOp.Subtract or CBinaryOp.Multiply or CBinaryOp.Divide } binary:
+        {
+          int rightReg = destReg + 1;
+          EmitFloatExprInto(binary.Left, destReg);
+          EmitFloatExprInto(binary.Right, rightReg);
+          EmitCode($"{FloatBinaryMnemonic(binary.Op)} {destReg} {rightReg}");
+          return;
+        }
+
+      case CBinaryExpr:
+        Error(expr.Location, "this operator is not yet supported for 'float' (comparisons, bitwise, shift and modulo are not) -- only +, -, *, / are");
+        EmitFloatLiteralInto(0f, destReg);
+        return;
+
+      case CAssignExpr assign:
+        {
+          CFloatLvalue target = ResolveFloatLvalue(assign.Target);
+          EmitFloatExprInto(assign.Value, destReg);
+          EmitFloatStore(target, destReg);
+          return;
+        }
+
+      case CCallExpr call:
+        {
+          if (TryGetFloatBuiltin(call, out string builtinMnemonic, out int builtinArity))
+          {
+            // Arity mismatches were already reported by TryGetFloatBuiltin above -- a missing argument
+            // here (wrong-arity call) falls back to a harmless 0.0 literal rather than crashing or
+            // re-recursing into this same call node.
+            CExpr placeholder = new CFloatLiteralExpr(call.Location, 0f);
+            if (builtinArity == 1)
+            {
+              EmitFloatExprInto(call.Arguments.Count > 0 ? call.Arguments[0] : placeholder, destReg);
+              EmitCode($"{builtinMnemonic} {destReg} {destReg}");
+            }
+            else
+            {
+              int rightReg = destReg + 1;
+              EmitFloatExprInto(call.Arguments.Count > 0 ? call.Arguments[0] : placeholder, destReg);
+              EmitFloatExprInto(call.Arguments.Count > 1 ? call.Arguments[1] : placeholder, rightReg);
+              EmitCode($"{builtinMnemonic} {destReg} {rightReg}");
+            }
+
+            return;
+          }
+
+          CType returnType = EmitCall(call, floatResultDestRegister: destReg);
+          if (!returnType.IsFloat)
+          {
+            Error(call.Location, $"\"{call.FunctionName}\" does not return a value of type 'float'");
+          }
+
+          return;
+        }
+
+      case CCastExpr cast when cast.TargetType.IsFloat:
+        if (LooksLikeFloatExpr(cast.Operand))
+        {
+          EmitFloatExprInto(cast.Operand, destReg);
+        }
+        else
+        {
+          Error(cast.Location, "casting a non-'float' value to 'float' is not yet supported by this compiler");
+          EmitFloatLiteralInto(0f, destReg);
+        }
+
+        return;
+
+      default:
+        Error(expr.Location, $"this expression is not yet supported in a 'float' context (\"{expr.GetType().Name}\")");
+        EmitFloatLiteralInto(0f, destReg);
+        return;
+    }
+  }
+
   /// <summary>Pushes the address of a local (or, since 2026-09-09, a parameter) at frame-relative
   /// <paramref name="offset"/> -- replaces the retired <c>lal</c>/<c>lap</c> mnemonics ("'lal' &amp;
   /// 'lap' are removed. use ''f' or 'fpush' from node 506 and add the offset to calculate the address of
@@ -1150,6 +2023,14 @@ public sealed class CCodeGenerator
     {
       case CNameExpr name:
         {
+          if (IsFloatNamedVariable(name))
+          {
+            // Float ABI: a pointer to 'float' is not yet supported -- see CType.Float's own remarks.
+            Error(expr.Location, "a pointer to 'float' is not yet supported by this compiler");
+            EmitCode("pushlit 0");
+            return CType.PointerTo(CType.Int);
+          }
+
           CVarSymbol? symbol = LookupVariable(name.Name);
           if (symbol is { Kind: CVarKind.Local })
           {
@@ -1229,8 +2110,24 @@ public sealed class CCodeGenerator
 
   private CType EmitAssign(CAssignExpr assign)
   {
+    if (LooksLikeFloatExpr(assign.Target))
+    {
+      // Float ABI: reached only from the general (int/pointer) expression path, when a 'float'
+      // assignment's OWN result value is needed by an enclosing expression (e.g. chained assignment) --
+      // see this class's own doc comment. destReg 0: a top-level, freshly-entered float context.
+      CFloatLvalue floatTarget = ResolveFloatLvalue(assign.Target);
+      EmitFloatExprInto(assign.Value, 0);
+      EmitFloatStore(floatTarget, 0);
+      return CType.Float;
+    }
+
     CLvalue target = ResolveLvalue(assign.Target);
-    EmitExpr(assign.Value);
+    CType rhsType = EmitExpr(assign.Value);
+    if (rhsType.IsFloat)
+    {
+      Error(assign.Location, $"cannot assign a 'float' value to a target of type \"{target.Type}\"");
+    }
+
     EmitDup();
     EmitStore(target);
     return target.Type;
@@ -1248,21 +2145,65 @@ public sealed class CCodeGenerator
   /// the expression-context version that keeps the residual value.</summary>
   private void EmitAssignForEffect(CAssignExpr assign)
   {
+    if (LooksLikeFloatExpr(assign.Target))
+    {
+      CFloatLvalue floatTarget = ResolveFloatLvalue(assign.Target);
+      EmitFloatExprInto(assign.Value, 0);
+      EmitFloatStore(floatTarget, 0);
+      return;
+    }
+
     CLvalue target = ResolveLvalue(assign.Target);
-    EmitExpr(assign.Value);
+    CType rhsType = EmitExpr(assign.Value);
+    if (rhsType.IsFloat)
+    {
+      Error(assign.Location, $"cannot assign a 'float' value to a target of type \"{target.Type}\"");
+    }
+
     EmitStore(target);
+  }
+
+  /// <summary>Float ABI: only <c>+=</c>/<c>-=</c>/<c>*=</c>/<c>/=</c> are supported for a 'float' target
+  /// (every one of these has a direct hardware opcode -- see this class's own doc comment); every other
+  /// compound-assignment operator is rejected with a clear diagnostic.</summary>
+  private static bool TryGetFloatCompoundOp(CBinaryOp op, out string mnemonic)
+  {
+    if (op is CBinaryOp.Add or CBinaryOp.Subtract or CBinaryOp.Multiply or CBinaryOp.Divide)
+    {
+      mnemonic = FloatBinaryMnemonic(op);
+      return true;
+    }
+
+    mnemonic = string.Empty;
+    return false;
   }
 
   private CType EmitCompoundAssign(CCompoundAssignExpr expr)
   {
-    CLvalue target = ResolveLvalue(expr.Target);
-    EmitLoad(target);
+    if (LooksLikeFloatExpr(expr.Target))
+    {
+      if (!TryGetFloatCompoundOp(expr.Op, out string mnemonic))
+      {
+        Error(expr.Location, $"'{expr.Op}=' is not supported for 'float' (only +=, -=, *=, /= are)");
+        return CType.Float;
+      }
+
+      CFloatLvalue target = ResolveFloatLvalue(expr.Target);
+      EmitFloatLoad(target, 0);
+      EmitFloatExprInto(expr.Value, 1);
+      EmitCode($"{mnemonic} 0 1");
+      EmitFloatStore(target, 0);
+      return CType.Float;
+    }
+
+    CLvalue intTarget = ResolveLvalue(expr.Target);
+    EmitLoad(intTarget);
     CType rhsType = EmitExpr(expr.Value);
     // EmitBinaryOperation itself performs the single "pop" the ABI's binary-op pattern needs (it
     // expects both operands already sitting on the stack, lhs then rhs) -- do not pop again here.
-    CType resultType = EmitBinaryOperation(expr.Op, target.Type, rhsType, expr.Location);
+    CType resultType = EmitBinaryOperation(expr.Op, intTarget.Type, rhsType, expr.Location);
     EmitDup();
-    EmitStore(target);
+    EmitStore(intTarget);
     return resultType;
   }
 
@@ -1271,11 +2212,27 @@ public sealed class CCodeGenerator
   /// needs the expression's own result (a bare <c>a += expr;</c> statement).</summary>
   private void EmitCompoundAssignForEffect(CCompoundAssignExpr expr)
   {
-    CLvalue target = ResolveLvalue(expr.Target);
-    EmitLoad(target);
+    if (LooksLikeFloatExpr(expr.Target))
+    {
+      if (!TryGetFloatCompoundOp(expr.Op, out string mnemonic))
+      {
+        Error(expr.Location, $"'{expr.Op}=' is not supported for 'float' (only +=, -=, *=, /= are)");
+        return;
+      }
+
+      CFloatLvalue target = ResolveFloatLvalue(expr.Target);
+      EmitFloatLoad(target, 0);
+      EmitFloatExprInto(expr.Value, 1);
+      EmitCode($"{mnemonic} 0 1");
+      EmitFloatStore(target, 0);
+      return;
+    }
+
+    CLvalue intTarget = ResolveLvalue(expr.Target);
+    EmitLoad(intTarget);
     CType rhsType = EmitExpr(expr.Value);
-    EmitBinaryOperation(expr.Op, target.Type, rhsType, expr.Location);
-    EmitStore(target);
+    EmitBinaryOperation(expr.Op, intTarget.Type, rhsType, expr.Location);
+    EmitStore(intTarget);
   }
 
   /// <summary>Pre/post increment and decrement, both built on the same lvalue primitives. Pre- dups the
@@ -1285,6 +2242,12 @@ public sealed class CCodeGenerator
   /// this class's own uniform codegen invariant.</summary>
   private CType EmitIncrementOrDecrement(CUnaryExpr expr)
   {
+    if (LooksLikeFloatExpr(expr.Operand))
+    {
+      Error(expr.Location, "'++'/'--' on 'float' is not yet supported by this compiler");
+      return CType.Float;
+    }
+
     bool isIncrement = expr.Op is CUnaryOp.PreIncrement or CUnaryOp.PostIncrement;
     bool isPre = expr.Op is CUnaryOp.PreIncrement or CUnaryOp.PreDecrement;
     CBinaryOp op = isIncrement ? CBinaryOp.Add : CBinaryOp.Subtract;
@@ -1319,6 +2282,12 @@ public sealed class CCodeGenerator
   /// <see cref="EmitAssignForEffect"/>'s own remarks for why skipping the dup is safe here.</summary>
   private void EmitIncrementOrDecrementForEffect(CUnaryExpr expr)
   {
+    if (LooksLikeFloatExpr(expr.Operand))
+    {
+      Error(expr.Location, "'++'/'--' on 'float' is not yet supported by this compiler");
+      return;
+    }
+
     bool isIncrement = expr.Op is CUnaryOp.PreIncrement or CUnaryOp.PostIncrement;
     CBinaryOp op = isIncrement ? CBinaryOp.Add : CBinaryOp.Subtract;
 
@@ -1530,7 +2499,9 @@ public sealed class CCodeGenerator
           default:
             {
               CType type = EmitExpr(exprStmt.Expression);
-              if (!type.IsVoid)
+              // Float ABI: a 'float' result never left anything on the ordinary stack -- nothing to
+              // discard (e.g. a bare "someFloatFunction();" statement). See this class's own doc comment.
+              if (!type.IsVoid && !type.IsFloat)
               {
                 EmitCode("pop");
               }
@@ -1645,7 +2616,7 @@ public sealed class CCodeGenerator
           if (forStmt.Update is not null)
           {
             CType updateType = EmitExpr(forStmt.Update);
-            if (!updateType.IsVoid)
+            if (!updateType.IsVoid && !updateType.IsFloat)
             {
               EmitCode("pop");
             }
@@ -1668,7 +2639,20 @@ public sealed class CCodeGenerator
               Error(returnStmt.Location, $"function \"{_currentFunction.Name}\" returns void and cannot return a value");
             }
 
-            EmitExpr(returnStmt.Value);
+            if (_currentFunction.ReturnType.IsFloat)
+            {
+              // Float ABI HYPOTHESIS (see this class's own doc comment): the return value always goes in
+              // fr[0], regardless of calling convention.
+              EmitFloatExprInto(returnStmt.Value, 0);
+            }
+            else
+            {
+              CType valueType = EmitExpr(returnStmt.Value);
+              if (valueType.IsFloat)
+              {
+                Error(returnStmt.Location, $"function \"{_currentFunction.Name}\" does not return 'float'");
+              }
+            }
           }
           else if (!_currentFunction!.ReturnType.IsVoid)
           {
@@ -1898,6 +2882,14 @@ public sealed class CCodeGenerator
         EmitCode($"pushlit {literal.Value}");
         return literal.IsUnsigned ? CType.UnsignedInt : CType.Int;
 
+      case CFloatLiteralExpr floatLiteral:
+        // Float ABI: reached via the general (int/pointer) path -- e.g. a bare "3.5;" statement, or a
+        // float literal used where an int was expected. Evaluate it at fr[0] anyway (so downstream code
+        // is well-formed) and report its real type upward -- this class's own uniform "leave one stack
+        // word" invariant does not hold for it, so nothing further should try to treat it as an int.
+        EmitFloatExprInto(floatLiteral, 0);
+        return CType.Float;
+
       case CStringLiteralExpr stringLiteral:
         EmitCode($"pushlit {InternStringLiteral(stringLiteral.Value)}");
         return CType.PointerTo(CType.Char);
@@ -1984,10 +2976,38 @@ public sealed class CCodeGenerator
         }
 
       case CCastExpr cast:
-        // Every supported type is one word, so a cast is a pure reinterpretation: emit the operand and
-        // relabel its type, no runtime conversion needed.
-        EmitExpr(cast.Operand);
-        return cast.TargetType;
+        {
+          // Float ABI: 'float' breaks the "every supported type is one word" premise the plain
+          // reinterpreting cast below relies on, and this compiler does not implement the actual
+          // IEEE-754 conversion an int<->float cast would need (out of scope for this first pass -- see
+          // this class's own doc comment) -- so a cast involving 'float' is either a no-op (float-to-
+          // float, reached here e.g. as a bare statement) or a clear diagnostic, never a silent
+          // reinterpretation of an int's bits as a float or vice versa.
+          if (cast.TargetType.IsFloat)
+          {
+            if (!LooksLikeFloatExpr(cast.Operand))
+            {
+              Error(cast.Location, "casting a non-'float' value to 'float' is not yet supported by this compiler");
+              EmitCode("pushlit 0");
+              return CType.Float;
+            }
+
+            EmitFloatExprInto(cast.Operand, 0);
+            return CType.Float;
+          }
+
+          if (LooksLikeFloatExpr(cast.Operand))
+          {
+            Error(cast.Location, "casting a 'float' value to a non-'float' type is not yet supported by this compiler");
+            EmitCode("pushlit 0");
+            return cast.TargetType;
+          }
+
+          // Every other supported type is one word, so a cast is a pure reinterpretation: emit the
+          // operand and relabel its type, no runtime conversion needed.
+          EmitExpr(cast.Operand);
+          return cast.TargetType;
+        }
 
       case CSizeOfTypeExpr sizeOfType:
         EmitCode($"pushlit {sizeOfType.Type.SizeInWords}");
@@ -2005,8 +3025,10 @@ public sealed class CCodeGenerator
             // popping whatever value happens to be sitting under a stack slot that was never pushed.
             Error(sizeOfExpr.Location, "\"sizeof\" cannot be applied to a value of type \"void\"");
           }
-          else
+          else if (!operandType.IsFloat)
           {
+            // Float ABI: a 'float' operand never left anything on the ordinary stack (see this class's
+            // own doc comment) -- nothing to discard here.
             EmitCode("pop");
           }
 
@@ -2017,7 +3039,7 @@ public sealed class CCodeGenerator
       case CCommaExpr comma:
         {
           CType leftType = EmitExpr(comma.Left);
-          if (!leftType.IsVoid)
+          if (!leftType.IsVoid && !leftType.IsFloat)
           {
             EmitCode("pop");
           }
@@ -2035,6 +3057,18 @@ public sealed class CCodeGenerator
   private CType EmitName(CNameExpr name)
   {
     CVarSymbol? symbol = LookupVariable(name.Name);
+
+    if (IsFloatNamedVariable(name))
+    {
+      // Float ABI: a 'float' name reached the general (int/pointer) expression path -- this compiler's
+      // own uniform "leave exactly one word" stack invariant does not hold for a 2-word 'float', so this
+      // is always a genuine usage error (comparisons, bitwise/shift ops, an unconverted mix with an
+      // int-context expression) rather than something to silently mis-emit. See this class's own doc
+      // comment.
+      Error(name.Location, $"\"{name.Name}\" is a 'float' and can only be used in a floating-point expression");
+      EmitCode("pushlit 0");
+      return CType.Int;
+    }
 
     if (symbol is { Kind: CVarKind.Local })
     {
@@ -2123,9 +3157,33 @@ public sealed class CCodeGenerator
     return trueType.IsPointer ? trueType : falseType.IsPointer ? falseType : ComputeCommonType(trueType, falseType);
   }
 
-  private CType EmitCall(CCallExpr call)
+  /// <summary>
+  /// Emits a call. <paramref name="floatResultDestRegister"/> is Float ABI plumbing (added 2026-09-26,
+  /// see this class's own doc comment): when the callee returns <c>float</c> and this is non-null, the
+  /// return value (always in <c>fr[0]</c> -- see this class's own return-value HYPOTHESIS) is moved into
+  /// that register before any save/restore pops run. Left null for a call reached from the general
+  /// (int/pointer) expression path, which has no register of its own to receive a <c>float</c> result
+  /// into -- see <see cref="EmitFloatExprInto"/>'s own <c>CCallExpr</c> case for the only call site that
+  /// passes a real value.
+  ///
+  /// Float ABI: EVERY call, regardless of the callee's own return type, may need to protect currently-live
+  /// fr registers (<see cref="_liveFloatRegisterCount"/>) from being clobbered by the callee -- see this
+  /// class's own doc comment's "Caller-save/restore" bullet. That wrap covers the ENTIRE call, including
+  /// argument marshalling (not just the bare "call" instruction), because marshalling a <c>float</c>
+  /// argument itself writes into fr[0..], which could clobber an enclosing evaluation's still-live
+  /// registers before the callee ever runs.
+  /// </summary>
+  private CType EmitCall(CCallExpr call, int? floatResultDestRegister = null)
   {
     string mangledName = MangleExternalSymbol(call.FunctionName);
+    bool calleeMayUseFr = CalleeUsesFloatRegisters(call.FunctionName);
+    int savedLiveFloatCount = _liveFloatRegisterCount;
+    bool needsFloatSaveRestore = calleeMayUseFr && savedLiveFloatCount > 0;
+
+    if (needsFloatSaveRestore)
+    {
+      EmitFloatRegisterSaveRange(0, savedLiveFloatCount);
+    }
 
     if (!_functions.TryGetValue(call.FunctionName, out CFunctionSignature? signature))
     {
@@ -2134,10 +3192,18 @@ public sealed class CCodeGenerator
       foreach (CExpr argument in call.Arguments)
       {
         // Arguments stay on the stack for the callee, exactly like a normal call -- do not pop them.
+        // (An undeclared function's parameter types are unknown, so a 'float' argument here would be
+        // mishandled by the plain EmitExpr path below -- already an error case; not worth special-casing
+        // further.)
         EmitExpr(argument);
       }
 
       EmitCode($"call {mangledName}");
+      if (needsFloatSaveRestore)
+      {
+        EmitFloatRegisterRestoreRange(0, savedLiveFloatCount);
+      }
+
       return CType.Int;
     }
 
@@ -2164,8 +3230,37 @@ public sealed class CCodeGenerator
     // describes. Stefan confirmed directly: "arld loads an address into an address register. lda loads r
     // using the address of an address register." -- i.e. arld is exactly the SET direction this call
     // site needs. Fixed to "arld <register>".
+    //
+    // Float ABI (2026-09-26): a 'float' argument is marshalled entirely separately from the plain
+    // EmitExpr path (it needs 2 words and node 305's fr registers, not the ordinary 1-word stack) -- see
+    // this class's own doc comment's "Parameter passing" bullet. argFloatFloor tracks how many low fr
+    // registers are already "spoken for" by an EARLIER fastcall float argument of THIS SAME call (a
+    // register-assigned argument's value must stay put in its register until the call runs; a
+    // stack-passed one is pushed and its scratch register freed immediately, so it never needs to hold
+    // argFloatFloor up).
+    int argFloatFloor = 0;
     for (int i = 0; i < call.Arguments.Count; i++)
     {
+      CType paramType = i < signature.ParameterTypes.Count ? signature.ParameterTypes[i] : CType.Int;
+      if (paramType.IsFloat)
+      {
+        int? floatRegisterIndex = i < signature.ParameterFloatRegisterSlots.Count ? signature.ParameterFloatRegisterSlots[i] : null;
+        if (floatRegisterIndex is int assignedFrRegister)
+        {
+          EmitFloatExprInto(call.Arguments[i], assignedFrRegister);
+          argFloatFloor = Math.Max(argFloatFloor, assignedFrRegister + 1);
+        }
+        else
+        {
+          int scratch = argFloatFloor;
+          EmitFloatExprInto(call.Arguments[i], scratch);
+          EmitCode($"fpush {scratch}"); // stack-passed: push its two words (low, high) for the callee's ldp/stp -- the register is free again immediately.
+        }
+
+        continue;
+      }
+
+      _liveFloatRegisterCount = argFloatFloor; // protect any float argument already placed above while this (non-float) argument evaluates.
       EmitExpr(call.Arguments[i]);
 
       int? registerIndex = i < signature.ParameterRegisterSlots.Count ? signature.ParameterRegisterSlots[i] : null;
@@ -2177,12 +3272,28 @@ public sealed class CCodeGenerator
       }
     }
 
+    _liveFloatRegisterCount = savedLiveFloatCount;
+
     if (!signature.IsDefined)
     {
       _imports.Add(mangledName);
     }
 
     EmitCode($"call {mangledName}");
-    return signature.ReturnType;
+
+    CType returnType = signature.ReturnType;
+    if (returnType.IsFloat && floatResultDestRegister is int destReg && destReg != 0)
+    {
+      // Retrieve the return value out of fr[0] BEFORE the restore pops below run -- fr[0] is always among
+      // the registers being restored whenever destReg != 0 (0..savedLiveFloatCount-1 always includes 0).
+      EmitCode($"fmove {destReg} 0");
+    }
+
+    if (needsFloatSaveRestore)
+    {
+      EmitFloatRegisterRestoreRange(0, savedLiveFloatCount);
+    }
+
+    return returnType;
   }
 }

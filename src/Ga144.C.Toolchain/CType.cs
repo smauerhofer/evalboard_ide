@@ -7,6 +7,7 @@ public enum CTypeKind
   UnsignedInt,
   Char,
   UnsignedChar,
+  Float,
   Pointer,
   Array,
   Function,
@@ -28,6 +29,25 @@ public sealed class CType : IEquatable<CType>
   public static readonly CType UnsignedInt = new() { Kind = CTypeKind.UnsignedInt };
   public static readonly CType Char = new() { Kind = CTypeKind.Char };
   public static readonly CType UnsignedChar = new() { Kind = CTypeKind.UnsignedChar };
+
+  /// <summary>
+  /// Added 2026-09-26, per Stefan's own float-ABI dictation (<c>claude/cvm-abi.md</c> section 2.3) --
+  /// the CVM's 32-bit IEEE-754 <c>float</c>, backed by node 305/306's 8-register floating-point file and
+  /// its <c>fadd</c>/<c>fsub</c>/<c>fmul</c>/<c>fdiv</c>/<c>fneg</c>/<c>fabs</c>/<c>fmin</c>/<c>fmax</c>/
+  /// <c>fmove</c>/<c>fconst</c>/<c>fpop</c>/<c>fpush</c> opcodes. UNLIKE every other type this class
+  /// documents above, <c>float</c> is <b>two</b> CVM words (see <see cref="SizeInWords"/>) -- the first
+  /// type in this compiler's history that isn't exactly one. Per Stefan verbatim: "for normal functions
+  /// float parameter are put on the stack as a 32-bit value little endian word. so the lower value is on
+  /// the lower address. this is also valid for float in memory. low word at memory[adr], high word at
+  /// memory[adr+1]." <see cref="CCodeGenerator"/> restricts <c>float</c>, for now, to a plain scalar:
+  /// <c>float *</c> (a pointer to it) and <c>float[]</c> (an array of it) are both rejected with a clear
+  /// diagnostic at parse time (see <see cref="CParser"/>'s own remarks) rather than silently mishandled,
+  /// since neither pointer arithmetic/scaling nor array-element addressing has been generalized for a
+  /// multi-word element type yet -- a deliberate SCOPE decision for this first pass ("for now just add
+  /// basic float support to the C compiler"), not a hardware hypothesis, and one of the first things to
+  /// revisit when full <c>float</c> support (a float-library, conversions, comparisons) is added.
+  /// </summary>
+  public static readonly CType Float = new() { Kind = CTypeKind.Float };
 
   public required CTypeKind Kind { get; init; }
 
@@ -55,7 +75,8 @@ public sealed class CType : IEquatable<CType>
   public bool IsArray => Kind == CTypeKind.Array;
   public bool IsFunction => Kind == CTypeKind.Function;
   public bool IsIntegral => Kind is CTypeKind.Int or CTypeKind.UnsignedInt or CTypeKind.Char or CTypeKind.UnsignedChar;
-  public bool IsScalar => IsIntegral || IsPointer;
+  public bool IsFloat => Kind == CTypeKind.Float;
+  public bool IsScalar => IsIntegral || IsPointer || IsFloat;
 
   /// <summary>Whether arithmetic on this type is unsigned -- used to pick between signed and unsigned
   /// comparison/shift/divide operations. A pointer is treated as unsigned for this purpose (address
@@ -63,11 +84,13 @@ public sealed class CType : IEquatable<CType>
   /// </summary>
   public bool IsUnsigned => Kind is CTypeKind.UnsignedInt or CTypeKind.UnsignedChar or CTypeKind.Pointer;
 
-  /// <summary>Size in CVM words. See the type's own doc comment for why every scalar/pointer is 1.
-  /// </summary>
+  /// <summary>Size in CVM words. See the type's own doc comment for why every scalar/pointer is 1 --
+  /// except <see cref="CTypeKind.Float"/> (added 2026-09-26), which is 2 (see <see cref="Float"/>'s own
+  /// remarks).</summary>
   public int SizeInWords => Kind switch
   {
     CTypeKind.Void or CTypeKind.Function => 0,
+    CTypeKind.Float => 2,
     CTypeKind.Array => Math.Max(ArrayLength, 0) * (ElementType?.SizeInWords ?? 1),
     _ => 1,
   };
@@ -114,6 +137,7 @@ public sealed class CType : IEquatable<CType>
     CTypeKind.UnsignedInt => "unsigned int",
     CTypeKind.Char => "char",
     CTypeKind.UnsignedChar => "unsigned char",
+    CTypeKind.Float => "float",
     CTypeKind.Pointer => $"{ElementType} *",
     CTypeKind.Array => ArrayLength >= 0 ? $"{ElementType}[{ArrayLength}]" : $"{ElementType}[]",
     CTypeKind.Function => $"{ReturnType} ({string.Join(", ", ParameterTypes)})",

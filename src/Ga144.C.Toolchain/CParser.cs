@@ -6,10 +6,15 @@ namespace Ga144.C.Toolchain;
 /// -- NewLine tokens carry no meaning in C's grammar and are stripped before parsing starts.
 ///
 /// Not supported, with a clear diagnostic rather than silent misbehavior: struct/union/enum,
-/// float/double/long/short, multi-dimensional arrays, function pointers, bit-fields, variadic
+/// double/long/short, multi-dimensional arrays, function pointers, bit-fields, variadic
 /// functions, and the "." / "->" member-access operators (all of which need structs). "goto"/labels,
 /// "switch"/"case"/"default", and every operator standard C defines over this compiler's supported
 /// types ARE supported.
+///
+/// <b><c>float</c> -- added 2026-09-26, per Stefan's own float-ABI dictation.</b> Supported as a plain
+/// scalar only -- see <see cref="CType.Float"/>'s own remarks for the full scope (no pointer-to-float, no
+/// array-of-float, no comparisons, no int/float conversions in this first pass) and
+/// <see cref="CCodeGenerator"/>'s own doc comment for the codegen model.
 ///
 /// <b><c>typedef</c> -- added 2026-09-11, per Stefan's own build failure trying to compile a `libc`
 /// `heap.c` against `stddef.h`/`stdlib.h` (both need `size_t`).</b> Supported for a scalar/pointer/array
@@ -40,7 +45,13 @@ public sealed class CParser
   // check below iterates this set); it is still a reserved word (ReservedWords above, unchanged) but is
   // now a real, supported specifier -- see this class's own remarks above and ParseDeclarationSpecifiers'
   // own isTypedef handling.
-  private static readonly HashSet<string> UnsupportedTypeKeywords = ["struct", "union", "enum", "float", "double", "long", "short"];
+  //
+  // "float" REMOVED 2026-09-26, per Stefan's own float-ABI dictation (see CType.Float's own remarks) --
+  // it is now a real, supported base type (see ParseDeclarationSpecifiers' own "float" handling below).
+  // Still a reserved word (ReservedWords above, unchanged); still explicitly listed in LooksLikeTypeStart/
+  // LooksLikeTypeAt (which used to recognize it only via this set) since removing it from THIS set alone
+  // would otherwise silently stop those two methods from recognizing "float" as a type-starting keyword.
+  private static readonly HashSet<string> UnsupportedTypeKeywords = ["struct", "union", "enum", "double", "long", "short"];
 
   /// <summary>
   /// Every typedef name seen so far in this translation unit, mapped to the already-resolved
@@ -86,6 +97,14 @@ public sealed class CParser
   /// occupies two consecutive registers" rule and stays correct if a wider non-pointer type is ever
   /// added.</summary>
   private const int MaxFastcallRegisterWords = 32;
+
+  /// <summary>A `__fastcall` function's <c>float</c> parameters are passed in node 305's own 8-register
+  /// floating-point file, fr[0] for the first, fr[1] for the second, etc. -- see
+  /// <c>claude/cvm-abi.md</c> section 2.3 and this class's own remarks above
+  /// <see cref="MaxFastcallRegisterWords"/>. Added 2026-09-26, per Stefan verbatim: "we have 8 float
+  /// register. so for fastcall functions the parameter are passed by register fr[0] for the first float
+  /// parameter, fr[1] for the second parameter, ...".</summary>
+  private const int MaxFastcallFloatParameters = 8;
 
   private readonly List<CToken> _tokens;
   private readonly List<string> _diagnostics = [];
@@ -225,7 +244,7 @@ public sealed class CParser
   // ---- Types --------------------------------------------------------------------------------------
 
   private bool LooksLikeTypeStart() =>
-      CheckWord("void") || CheckWord("char") || CheckWord("int") || CheckWord("unsigned") || CheckWord("signed") ||
+      CheckWord("void") || CheckWord("char") || CheckWord("int") || CheckWord("float") || CheckWord("unsigned") || CheckWord("signed") ||
       CheckWord("static") || CheckWord("extern") || CheckWord("const") || CheckWord("volatile") ||
       CheckWord("__fastcall") || CheckWord("__lower") || CheckWord("typedef") ||
       (Current.IsIdentifier && _typedefs.ContainsKey(Current.Text)) ||
@@ -335,6 +354,11 @@ public sealed class CParser
       return CType.Int;
     }
 
+    if (Match("float"))
+    {
+      return CType.Float;
+    }
+
     // A previously-declared typedef name, used here as this declaration's own base type -- see
     // _typedefs' own remarks. Checked last, after every built-in keyword, so a typedef can never shadow
     // one of them (not that a real program would try: ExpectIdentifier already refuses to declare a
@@ -365,6 +389,36 @@ public sealed class CParser
     }
   }
 
+  /// <summary>Rejects a pointer-to-<c>float</c> before it can ever be constructed -- added 2026-09-26
+  /// alongside basic <c>float</c> support (see <see cref="CType.Float"/>'s own remarks for why: pointer
+  /// arithmetic/scaling has not been generalized for a multi-word element type, a deliberate SCOPE
+  /// decision for this first pass, not a hardware hypothesis). Every <see cref="CType.PointerTo"/> call
+  /// site in this class goes through this helper instead, so "float *" is rejected wherever it could
+  /// otherwise arise (a declarator's own "*" run, an abstract type for <c>sizeof</c>/a cast, a global's
+  /// declarator list).</summary>
+  private CType PointerToChecked(CType element, CSourceLocation location)
+  {
+    if (element.IsFloat)
+    {
+      throw Error(location, "a pointer to 'float' is not yet supported by this compiler");
+    }
+
+    return CType.PointerTo(element);
+  }
+
+  /// <summary>Rejects an array-of-<c>float</c> before it can ever be constructed -- see
+  /// <see cref="PointerToChecked"/>'s own remarks for why (the same multi-word-element-type scope limit
+  /// applies to array-element addressing too).</summary>
+  private CType ArrayOfChecked(CType element, int length, CSourceLocation location)
+  {
+    if (element.IsFloat)
+    {
+      throw Error(location, "an array of 'float' is not yet supported by this compiler");
+    }
+
+    return CType.ArrayOf(element, length);
+  }
+
   /// <summary>Parses "*... name (\"[\" length \"]\")?" given the already-parsed base type -- a plain
   /// (non-function, non-abstract) declarator. Rejects a second array dimension explicitly rather than
   /// silently misinterpreting one (see the design doc's "no multi-dimensional arrays" scope note).
@@ -374,7 +428,7 @@ public sealed class CParser
     CType type = baseType;
     while (Match("*"))
     {
-      type = CType.PointerTo(type);
+      type = PointerToChecked(type, Current.Location);
     }
 
     nameLocation = Current.Location;
@@ -382,6 +436,7 @@ public sealed class CParser
 
     if (Match("["))
     {
+      CSourceLocation bracketLocation = Current.Location;
       int length = -1;
       if (!CheckWord("]"))
       {
@@ -395,7 +450,7 @@ public sealed class CParser
         throw Error(Current.Location, "multi-dimensional arrays are not yet supported");
       }
 
-      type = CType.ArrayOf(type, length);
+      type = ArrayOfChecked(type, length, bracketLocation);
     }
 
     return type;
@@ -416,7 +471,7 @@ public sealed class CParser
 
     while (Match("*"))
     {
-      type = CType.PointerTo(type);
+      type = PointerToChecked(type, Current.Location);
     }
 
     return type;
@@ -507,6 +562,11 @@ public sealed class CParser
 
     if (Current.Kind == CTokenKind.Number)
     {
+      if (IsFloatLiteralText(Current.Text))
+      {
+        throw Error(Current.Location, "a floating-point literal cannot be used in a constant integer expression (array bounds, 'case' labels, etc.)");
+      }
+
       return ParseNumberLiteralValue(Advance());
     }
 
@@ -543,7 +603,7 @@ public sealed class CParser
     CType type = baseType;
     while (Match("*"))
     {
-      type = CType.PointerTo(type);
+      type = PointerToChecked(type, Current.Location);
     }
 
     string name = ExpectIdentifier("in a top-level declaration");
@@ -586,6 +646,18 @@ public sealed class CParser
         {
           throw Error(location, $"\"{name}\" is '__fastcall' but its non-pointer parameters need {registerWordCount} node-511 registers -- a '__fastcall' function may use at most {MaxFastcallRegisterWords} (reg[0..{MaxFastcallRegisterWords - 1}])");
         }
+
+        // Added 2026-09-26, per Stefan's own float-ABI dictation: "for fastcall functions the parameter
+        // are passed by register fr[0] for the first float parameter, fr[1] for the second parameter,
+        // ..." -- a separate, independent counter from both the pointer/ar-register check above and the
+        // (not yet implemented -- see registerWordCount's own remarks) node-511 int-register count, since
+        // node 305's floating-point register file is its own, separate 8-register file. See
+        // CCodeGenerator's own ComputeParameterFloatRegisterSlots for the matching codegen-side count.
+        int floatParameterCount = parameters.Count(p => p.Type.IsFloat);
+        if (floatParameterCount > MaxFastcallFloatParameters)
+        {
+          throw Error(location, $"\"{name}\" is '__fastcall' but declares {floatParameterCount} 'float' parameters -- a '__fastcall' function may have at most {MaxFastcallFloatParameters} (node 305's fr[0..{MaxFastcallFloatParameters - 1}])");
+        }
       }
 
       CCompoundStmt? body = null;
@@ -605,6 +677,7 @@ public sealed class CParser
     {
       if (Match("["))
       {
+        CSourceLocation bracketLocation = Current.Location;
         int length = -1;
         if (!CheckWord("]"))
         {
@@ -612,7 +685,7 @@ public sealed class CParser
         }
 
         Expect("]", "to close the array declarator");
-        type = CType.ArrayOf(type, length);
+        type = ArrayOfChecked(type, length, bracketLocation);
       }
 
       CExpr? initializer = null;
@@ -631,7 +704,7 @@ public sealed class CParser
       type = baseType;
       while (Match("*"))
       {
-        type = CType.PointerTo(type);
+        type = PointerToChecked(type, Current.Location);
       }
 
       location = Current.Location;
@@ -1046,7 +1119,7 @@ public sealed class CParser
   private bool LooksLikeTypeAt(int index)
   {
     CToken token = _tokens[index];
-    return token.IsIdentifier && (token.Text is "void" or "char" or "int" or "unsigned" or "signed" or "const" or "volatile"
+    return token.IsIdentifier && (token.Text is "void" or "char" or "int" or "float" or "unsigned" or "signed" or "const" or "volatile"
         || UnsupportedTypeKeywords.Contains(token.Text) || _typedefs.ContainsKey(token.Text));
   }
 
@@ -1176,6 +1249,11 @@ public sealed class CParser
     if (token.Kind == CTokenKind.Number)
     {
       Advance();
+      if (IsFloatLiteralText(token.Text))
+      {
+        return new CFloatLiteralExpr(token.Location, ParseFloatLiteralValue(token));
+      }
+
       return new CIntLiteralExpr(token.Location, ParseNumberLiteralValue(token), IsUnsignedSuffix(token.Text));
     }
 
@@ -1210,6 +1288,67 @@ public sealed class CParser
   // ---- Literal decoding ---------------------------------------------------------------------------
 
   private static bool IsUnsignedSuffix(string numberText) => numberText.Any(c => c is 'u' or 'U');
+
+  /// <summary>
+  /// Disambiguates a lexer "pp-number" token (<see cref="CTokenKind.Number"/> -- the lexer itself does
+  /// not distinguish "123" from "3.14" from "1e-3", see <see cref="CLexer"/>'s own remarks) as a
+  /// <c>float</c> literal rather than an integer one -- added 2026-09-26 alongside basic <c>float</c>
+  /// support. Standard C's own pp-number-to-literal rule: it is a floating literal if it contains a '.',
+  /// or an exponent ('e'/'E' followed by an optional sign and digits -- '0x'-prefixed hex-float
+  /// exponents use 'p'/'P' instead, but hexadecimal floating-point literals are not supported by this
+  /// compiler at all, so 'p'/'P' is deliberately not checked here), or ends in a floating-point suffix
+  /// ('f'/'F'/'l'/'L' -- 'l'/'L' alone is ambiguous with an integer's own "long" suffix in general C, but
+  /// since this compiler already rejects "long" as a type, a trailing 'l'/'L' on a literal that also has
+  /// a '.' or exponent is still unambiguously a float; a bare integer literal like "5L" is NOT floating,
+  /// and is caught by the "contains '.' or exponent" checks below already excluding it -- so 'l'/'L' is
+  /// only checked when 'f'/'F' would otherwise be needed, not standalone).
+  /// </summary>
+  private static bool IsFloatLiteralText(string text)
+  {
+    if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase) || text.StartsWith("0b", StringComparison.OrdinalIgnoreCase))
+    {
+      return false; // hex/binary integer literals -- never floating, and 'e'/'f' inside them are hex digits, not markers.
+    }
+
+    if (text.Contains('.'))
+    {
+      return true;
+    }
+
+    for (int i = 0; i < text.Length; i++)
+    {
+      if (text[i] is 'e' or 'E' && i > 0)
+      {
+        return true;
+      }
+    }
+
+    char last = text[^1];
+    return last is 'f' or 'F';
+  }
+
+  /// <summary>Parses a <c>float</c> literal's text into its C# (32-bit IEEE-754, exactly matching the
+  /// CVM's own <c>float</c>) value, stripping a trailing 'f'/'F'/'l'/'L' suffix first (this compiler
+  /// treats <c>float</c> and <c>double</c> literal suffixes identically, since <c>double</c> itself is
+  /// not supported -- see <see cref="CType.Float"/>'s own remarks).</summary>
+  private float ParseFloatLiteralValue(CToken token)
+  {
+    string text = token.Text;
+    int end = text.Length;
+    while (end > 0 && "fFlL".IndexOf(text[end - 1]) >= 0)
+    {
+      end--;
+    }
+
+    string digits = text[..end];
+    if (!float.TryParse(digits, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float value))
+    {
+      Error(token.Location, $"\"{token.Text}\" is not a valid floating-point literal");
+      return 0f;
+    }
+
+    return value;
+  }
 
   private static long ParseNumberLiteralValue(CToken token)
   {

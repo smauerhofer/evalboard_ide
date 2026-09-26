@@ -8,6 +8,13 @@ public abstract record CExpr(CSourceLocation Location);
 
 public sealed record CIntLiteralExpr(CSourceLocation Location, long Value, bool IsUnsigned) : CExpr(Location);
 
+/// <summary>A <c>float</c> literal ("3.14", "1.5f", "1e-3") -- added 2026-09-26 alongside basic
+/// <c>float</c> support (see <see cref="CType.Float"/>'s own remarks). <see cref="Value"/> is stored as a
+/// C# <c>float</c> (32-bit IEEE-754), matching the CVM's own <c>float</c> exactly, so
+/// <see cref="CCodeGenerator"/> can take its bit pattern directly via
+/// <c>System.BitConverter.SingleToInt32Bits</c> with no further rounding.</summary>
+public sealed record CFloatLiteralExpr(CSourceLocation Location, float Value) : CExpr(Location);
+
 /// <summary>A string literal. Codegen allocates it as an anonymous global <c>char[]</c> (NUL-terminated)
 /// the first time it's seen and reuses the same label for an identical literal seen again.</summary>
 public sealed record CStringLiteralExpr(CSourceLocation Location, string Value) : CExpr(Location);
