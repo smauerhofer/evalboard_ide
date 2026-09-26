@@ -144,30 +144,41 @@ namespace Ga144.Evb.Ide.Cvm;
 /// node's own header, once phrased here as "fanning out at 303 into three parallel control chains") was a
 /// claim about PROCESSING order, a genuinely different fact from this BOOT topology -- it is neither
 /// confirmed nor refuted by the arrows above, and is not restated here to avoid re-conflating the two.
+///
+/// <b>The 301-304/401-404/501-504 SOFTWARE was REPLACED WHOLESALE 2026-09-26, and nodes 601-604 were
+/// RETIRED, per Stefan directly: "my floatingpoint subprocessor is working. it involves nodes 501..504,
+/// 401..404, 301..306, 201..205, 102..105. node 601..604 are no longer used."</b> This is the answer to
+/// the still-speculative "stage 1..8 processing order" question the paragraph above deliberately left
+/// open -- see <see cref="Node102Program"/>'s own remarks for the full context (the complete,
+/// hardware-working 24-node design supplied the same day) and <see cref="CvmBootStreamBuilder.BuildDescriptors"/>'s
+/// own remarks for the corrected compile-order wiring. This is a change to each of those coordinates' own
+/// <c>Source</c> content, NOT to this list (the coordinates 301-306/401-404/501-504 were already listed
+/// below; 601-604 are removed below) or to the BOOT topology confirmed above (which describes physical
+/// port adjacency, unaffected by what software runs over it).
 /// </summary>
 public static class CvmNodeMesh
 {
   /// <summary>
   /// <b>ADDED 2026-09-22, per Stefan directly: "CVM also includes nodes 201..205 and 102..105. I want
-  /// that these nodes are also included in the boot stream."</b> Unlike every other coordinate in this
-  /// list, these nine have no <c>NodeXxxProgram.cs</c> reference source anywhere in this repo -- there
-  /// is nothing here for <see cref="CvmBootStreamBuilder.BuildDescriptors"/> to compile for them, and no
-  /// entry for them in <see cref="CvmBootStreamBuilder.ReferenceSourceFor"/>. They rely entirely on
-  /// whatever is currently saved in each node's own live project Node Editor tab -- exactly the same
-  /// "live project source is the real source; a NodeXxxProgram.cs reference copy is only ever a
-  /// fallback" rule <see cref="CvmBootStreamBuilder.ReferenceSourceFor"/>'s own remarks already state,
-  /// just with no fallback at all here if a live source happens to be blank. This is intentional, not
-  /// an oversight: this addition was originally scoped to closing the BOOT-STREAM gap specifically by
-  /// getting these nine nodes into the boot roster this builder used at the time. Verified (by
-  /// simulating this exact fill against the resulting 43-coordinate roster) that adding these nine
-  /// changed none of the OTHER, already-verified via-edges: all nine attach as one single new leaf
-  /// cluster hanging off node 305 (one hop further out: 305 -&gt; 205, then 205 -&gt; 204 -&gt;
-  /// 203 -&gt; 202 -&gt; 201 on one branch and 205 -&gt; 105 -&gt; 104 -&gt; 103 -&gt; 102 on the other,
-  /// following the same physical-grid adjacency <see cref="CvmBootStreamBuilder.GetPhysicalNeighbors"/>
-  /// already uses everywhere else) -- none of them touch, or are touched by, any other branch of the
-  /// mesh. None of these nine nodes' own loads has been hardware-tested.
+  /// that these nodes are also included in the boot stream."</b> At the time, these nine had no
+  /// <c>NodeXxxProgram.cs</c> reference source anywhere in this repo and relied entirely on whatever was
+  /// currently saved in each node's own live project Node Editor tab.
   ///
-  /// <b>SUPERSEDED, same day, per Stefan directly: "stop this static madness ... no more static
+  /// <b>UPDATED 2026-09-26: all nine now HAVE a real <c>NodeXxxProgram.cs</c> reference source</b> (see
+  /// <see cref="Node102Program"/>'s own remarks for the full context -- Stefan's complete, hardware-working
+  /// FP subprocessor rewrite), compiled by <see cref="CvmBootStreamBuilder.BuildDescriptors"/> and covered
+  /// by <see cref="CvmBootStreamBuilder.ReferenceSourceFor"/> for the first time, same as every other
+  /// coordinate in this list -- the "no reference source, live-project-only" caveat above no longer
+  /// applies to these nine. Verified (by simulating this exact fill against the resulting 43-coordinate
+  /// roster) that adding these nine changed none of the OTHER, already-verified via-edges: all nine attach
+  /// as one single new leaf cluster hanging off node 305 (one hop further out: 305 -&gt; 205, then 205 -&gt;
+  /// 204 -&gt; 203 -&gt; 202 -&gt; 201 on one branch and 205 -&gt; 105 -&gt; 104 -&gt; 103 -&gt; 102 on the
+  /// other, following the same physical-grid adjacency
+  /// <see cref="CvmBootStreamBuilder.GetPhysicalNeighbors"/> already uses everywhere else) -- none of them
+  /// touch, or are touched by, any other branch of the mesh. None of these nine nodes' own loads has been
+  /// hardware-tested.
+  ///
+  /// <b>SUPERSEDED, 2026-09-22, per Stefan directly: "stop this static madness ... no more static
   /// lists."</b> This list is no longer what governs the CVM boot stream or post-mortem capture --
   /// <see cref="CvmBootStreamBuilder.GetConfiguredCoordinates"/> computes that roster live from each
   /// node's own project "configured" checkbox state instead, and does not consult
@@ -195,40 +206,44 @@ public static class CvmNodeMesh
     Node308Program.Coordinate, // 308, CVM2's address-register node (added 2026-09-09 as "306"; RENUMBERED 2026-09-15 -- see Node308Program's own remarks).
     Node306Program.Coordinate, // 306, CVM2's floatingpoint register node (added 2026-09-15, RENUMBERED from the unrelated "VM 32 arithmetic" node this coordinate held 2026-09-09 through 2026-09-15 -- see Node306Program's own remarks). 'fpop, plus (2026-09-16) fadd/fsub/fmin/fmax/fmul/fdiv/fln2/filn2/fpi2/f2pi, are wired into the CVM instruction set; 'fpush is ALSO wired (2026-09-16, per Stefan's direct override: "fpush must be wired. it is a valid opcode."), once the naming collision with node 506's own 'fpush was resolved by Stefan renaming that one to 'pushf.
 
-    // The new 17-node, 32-bit floating-point pipeline (added 2026-09-16) -- see this class's own remarks
-    // above for the full shape and the still-open "how does this branch attach to the rest of the mesh"
-    // question. Order below: imported node before its importer within each control chain, matching this
-    // list's own established convention.
-    Node305Program.Coordinate, // 305, stage 1 (unpack/pack).
-    Node304Program.Coordinate, // 304, stage 2 (rearrange/collect).
-    Node303Program.Coordinate, // 303, stage 3 (split into the 3a/3b/3c control chains).
-    Node302Program.Coordinate, // 302, stage 4 (split exponent/mantissa).
-    Node301Program.Coordinate, // 301, stage 5 (extend mantissa).
-    Node401Program.Coordinate, // 401, stage 5a (mantissa handling, end of the "3a" control chain).
-    Node402Program.Coordinate, // 402, stage 4a (exponent handling, imports/controls 401).
-    Node403Program.Coordinate, // 403, stage 3a (sign & type handling, imports/controls 402).
-    Node404Program.Coordinate, // 404, stage 8 (rounding, reduce to binary32).
-    Node501Program.Coordinate, // 501, stage 5b (36-bit add/sub/multiply, end of the "3b" chain).
-    Node502Program.Coordinate, // 502, stage 4b (exponent arithmetic, imports/controls 501).
-    Node503Program.Coordinate, // 503, stage 3b (implements add/multiply, imports/controls 502).
-    Node504Program.Coordinate, // 504, stage 7 (classify/finalize: pass-through/zero/infinity/qNaN).
-    Node601Program.Coordinate, // 601, stage 5c (non-restoring binary division, end of the "3c" chain).
-    Node602Program.Coordinate, // 602, stage 4c (normalize result, imports/controls 601).
-    Node603Program.Coordinate, // 603, stage 3c (final sign/normalization control, imports/controls 602).
-    Node604Program.Coordinate, // 604, stage 6 (classify operand types into a result class k).
+    // The 32-bit floating-point subprocessor (added 2026-09-16; SOFTWARE REPLACED WHOLESALE 2026-09-26 --
+    // see this class's own remarks above and Node102Program's own remarks for the full context). Order
+    // below: imported node before its importer within each control chain, matching this list's own
+    // established convention -- see CvmBootStreamBuilder.BuildDescriptors' own remarks for the exact
+    // compile-dependency graph (three of these import from more than one chain at once: 403, 303's own
+    // importer, and the 201-205 cluster's own 203).
+    Node305Program.Coordinate, // 305, the floating-point register file (unrelated second role for this coordinate -- see line above/BuildDescriptors' own remarks; NOT part of this pipeline's own data flow).
+    Node304Program.Coordinate, // 304, step 7 (pack sign/exponent/mantissa into IEEE-754 words).
+    Node303Program.Coordinate, // 303, step 3a (operation selection, operand ordering, sign processing).
+    Node302Program.Coordinate, // 302, step 4a (mantissa preparation, addition/subtraction).
+    Node301Program.Coordinate, // 301, step 5a (mantissa preparation, addition/subtraction; a slave of 302).
+    Node401Program.Coordinate, // 401, step 5b (mantissa multiplication and pass-through; a slave of 402).
+    Node402Program.Coordinate, // 402, step 4b (selects node 401's operation, computes the exponent).
+    Node403Program.Coordinate, // 403, step 3b (multiply/divide control and sign relay; imports BOTH 402 and 503).
+    Node404Program.Coordinate, // 404, step 6 (round-to-nearest-even, pack to 24-bit significand).
+    Node501Program.Coordinate, // 501, step 5c (non-restoring division and result pass-through; a slave of 502).
+    Node502Program.Coordinate, // 502, step 4c (exponent finalization, division dispatch).
+    Node503Program.Coordinate, // 503, step 3c (sign handling, exponent range check, subnormal prep).
+    Node504Program.Coordinate, // 504, a pure relay (node 503 to node 404).
+    // Node601Program.Coordinate/Node602Program.Coordinate/Node603Program.Coordinate/Node604Program.Coordinate
+    // REMOVED 2026-09-26 -- retired per Stefan directly ("node 601..604 are no longer used"). Their own
+    // NodeXxxProgram.cs files are left in the repo (orphaned, like CVM1's own retired nodes above), just
+    // no longer listed here or compiled by CvmBootStreamBuilder.
 
     // ADDED 2026-09-22, per Stefan directly ("CVM also includes nodes 201..205 and 102..105. I want
-    // that these nodes are also included in the boot stream.") -- see this class's own remarks above
-    // for why there is no NodeXxxProgram.cs reference source for any of these nine, and the verified
-    // shape they attach to the rest of the mesh in (one single new leaf cluster hanging off node 305).
-    201, // CVM's own live-project source for this coordinate -- no NodeXxxProgram.cs reference exists.
-    202, // ditto.
-    203, // ditto.
-    204, // ditto.
-    205, // ditto.
-    102, // ditto.
-    103, // ditto.
-    104, // ditto.
-    105, // ditto.
+    // that these nodes are also included in the boot stream.") -- see this class's own remarks above for
+    // the verified shape they attach to the rest of the mesh in (one single new leaf cluster hanging off
+    // node 305). UPDATED 2026-09-26: all nine now have a real NodeXxxProgram.cs reference source (see
+    // this class's own remarks above), so these are now Coordinate references like every other entry in
+    // this list rather than bare int literals.
+    Node201Program.Coordinate, // 201, step 5 (mantissa preparation, optional magnitude comparison).
+    Node202Program.Coordinate, // 202, step 4 (separation of exponent and mantissa, optional magnitude comparison).
+    Node203Program.Coordinate, // 203, step 3 (opcode decoding, optional magnitude compare calculation).
+    Node204Program.Coordinate, // 204, step 2 (reorder and processing split).
+    Node205Program.Coordinate, // 205, step 1 (unpack and categorize).
+    Node102Program.Coordinate, // 102, special step 4 (MUL/DIV special-case resolution).
+    Node103Program.Coordinate, // 103, special step 3 (ADD/SUB special-case handling; MUL/DIV delegated to 102).
+    Node104Program.Coordinate, // 104, special step 1 (special operation dispatcher).
+    Node105Program.Coordinate, // 105, special step 2 (MIN/MAX special-case handling).
   ];
 }

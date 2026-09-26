@@ -482,51 +482,55 @@ public static class CvmBootStreamBuilder
     ThrowIfFailed(result511);
 
     // ----------------------------------------------------------------------------------------------
-    // What remains of the old 16-node (WAS 17, see below), 32-bit floating-point pipeline (added
-    // 2026-09-16) -- an entirely separate mesh branch from the CVM instruction-dispatch tree above:
-    // none of these nodes import, or are imported by, any node compiled above. See CvmNodeMesh's own
-    // remarks for the full pipeline shape (originally 301-305 unpack/rearrange/split, fanning out at
-    // 303 into three control chains -- "3a" 403->402->401, "3b" 503->502->501, "3c" 603->602->601 --
-    // converging back at 604/504/404).
+    // The floating-point subprocessor -- an entirely separate mesh branch from the CVM instruction-
+    // dispatch tree above: none of these nodes import, or are imported by, any node compiled above
+    // (node 306's own reach into 305/307 for the CVM-opcode-decoder role, compiled earlier, is the one
+    // exception, and is unaffected by anything below).
     //
-    // CORRECTED, 2026-09-21: the comment this replaces claimed these 17 nodes were "deliberately left
-    // OUT of BuildLoadOrder below until Stefan confirms that link" -- that is no longer true of
-    // BuildLoadOrder's actual content (see its own doc comment and steps further below: Stefan DID
-    // confirm the full leaf-first chain, "306->305->304->303->302->301" etc., on 2026-09-16, and it has
-    // been present there since). That claim was stale here even before today's edit; corrected now
-    // rather than repeated, since this block is being touched anyway.
+    // REPLACED WHOLESALE 2026-09-26, per Stefan directly: "my floatingpoint subprocessor is working. it
+    // involves nodes 501..504, 401..404, 301..306, 201..205, 102..105. node 601..604 are no longer
+    // used. i will give you the source code of all nodes in the FP subprocessor" -- followed by the
+    // complete, hardware-working source for every one of those 24 nodes, then "add it to the
+    // NodeXXXProgram.cs list, because it is part of the CVM" (see Node102Program's own remarks for the
+    // full context). This RESOLVES the "FLAGGED, NOT RESOLVED" open question the 2026-09-21 comment this
+    // block replaces used to ask -- whether the old 16 nodes below were dead code, superseded, or
+    // awaiting a new stage-1 role: they were superseded outright, by a design that shares no words and
+    // no calling convention with the old "stage 1..8" one (301-306, 401-404, 501-504 below are all new
+    // Source, not new nodes).
     //
-    // FLAGGED, 2026-09-21, NOT RESOLVED: node 305 -- this pipeline's own former stage 1 -- was reassigned
-    // to an unrelated floating-point-register-file role as part of Stefan's FP-engine rework (see
-    // result305's own compile step, now far above this one, and Node305Program's own remarks). Its
-    // compile step was REMOVED from this block for that reason (it still compiles, just earlier, for the
-    // unrelated reason of feeding node 306's import). BuildLoadOrder's own "(304, 305)"/"(305, 306)" load
-    // steps are a physical mesh-relay/deployment concern, not a data-flow one, and its own leaf-first
-    // topology (305 sits one hop further from the boot-injection point than 306, unchanged by either
-    // node's functional role) still holds regardless -- so those two steps were left as they are, not
-    // touched here. What is still genuinely open is FUNCTIONAL, not load-order: whether these remaining
-    // 16 nodes (301-304, 401-404, 501-504, 601-604) are now dead code, whether one of them takes over
-    // node 305's former stage-1 role, or whether the entire branch is meant to be retired. Not decided
-    // here either way -- these 16 are still compiled below (for standalone tooling/disassembly) exactly
-    // as before.
+    // Nodes 601-604 are RETIRED -- no longer compiled or loaded here, and no longer in
+    // ReferenceSourceFor below. Their own NodeXxxProgram.cs files are left in the repo unchanged
+    // (orphaned, like CVM1's own retired nodes -- see CvmNodeMesh's own class-level remarks), since
+    // Stefan asked only that the new nodes be added, not that the old files be deleted.
     //
-    // Compile order: within each control chain, the IMPORTED node compiles first, exactly like every
-    // "# N import" chain above (401 before 402 before 403, matching 403's own "# 402 import" and 402's
-    // own "# 401 import"; same pattern for 501/502/503 and 601/602/603). The row-300 nodes (301-304) and
-    // the no-import siblings (404, 504, 604) have no ordering constraint of their own.
+    // Nodes 102-105 and 201-205 are NEW to this builder -- until now they had no NodeXxxProgram.cs
+    // reference source at all (see CvmNodeMesh.StandaloneCoordinates' own 2026-09-22 remarks) and were
+    // never compiled here. They are compiled below alongside the rest of the subprocessor and now also
+    // have a ReferenceSourceFor fallback.
+    //
+    // Compile order: within each control chain, the IMPORTED node compiles first, matching each node's
+    // own "# N import" directive, exactly like every chain above. 301, 401, 501, 102 and 201 have no
+    // import of their own and compile standalone; so do 304, 404, 504, 204 and 205. Three nodes import
+    // from more than one chain at once and so must wait for all of them: 403 ("# 402 import", "# 503
+    // import"), 203 ("# 202 import", "# 303 import", "# 403 import"), and 104 ("# 105 import", "# 103
+    // import").
     // ----------------------------------------------------------------------------------------------
-
-    F18CompileResult result304 = Compile(compiler, Node304Program.Source, F18CompilerOptions.ForRam(Node304Program.Coordinate));
-    ThrowIfFailed(result304);
-
-    F18CompileResult result303 = Compile(compiler, Node303Program.Source, F18CompilerOptions.ForRam(Node303Program.Coordinate));
-    ThrowIfFailed(result303);
-
-    F18CompileResult result302 = Compile(compiler, Node302Program.Source, F18CompilerOptions.ForRam(Node302Program.Coordinate));
-    ThrowIfFailed(result302);
 
     F18CompileResult result301 = Compile(compiler, Node301Program.Source, F18CompilerOptions.ForRam(Node301Program.Coordinate));
     ThrowIfFailed(result301);
+
+    F18CompileResult result302 = Compile(compiler, Node302Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node302Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node301Program.Coordinate
+          ? F18ImportResolution.FromExports(result301.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result302);
 
     F18CompileResult result401 = Compile(compiler, Node401Program.Source, F18CompilerOptions.ForRam(Node401Program.Coordinate));
     ThrowIfFailed(result401);
@@ -543,22 +547,6 @@ public static class CvmBootStreamBuilder
           : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
     });
     ThrowIfFailed(result402);
-
-    F18CompileResult result403 = Compile(compiler, Node403Program.Source, new F18CompilerOptions
-    {
-      MemorySpace = F18MemorySpace.Ram,
-      NodeCoordinate = Node403Program.Coordinate,
-      MemoryBaseAddress = 0x000,
-      MemoryWordCount = 64,
-      IncludeCommonRomWords = true,
-      ImportResolver = importedCoordinate => importedCoordinate == Node402Program.Coordinate
-          ? F18ImportResolution.FromExports(result402.Exports)
-          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
-    });
-    ThrowIfFailed(result403);
-
-    F18CompileResult result404 = Compile(compiler, Node404Program.Source, F18CompilerOptions.ForRam(Node404Program.Coordinate));
-    ThrowIfFailed(result404);
 
     F18CompileResult result501 = Compile(compiler, Node501Program.Source, F18CompilerOptions.ForRam(Node501Program.Coordinate));
     ThrowIfFailed(result501);
@@ -589,40 +577,124 @@ public static class CvmBootStreamBuilder
     });
     ThrowIfFailed(result503);
 
+    // Node 403 imports BOTH node 402 (the "3b" chain) and node 503 (the "3c" chain) -- the one
+    // cross-chain compile dependency in this pipeline, per its own "# 402 import" / "# 503 import"
+    // directives.
+    F18CompileResult result403 = Compile(compiler, Node403Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node403Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate switch
+      {
+        int coordinate when coordinate == Node402Program.Coordinate => F18ImportResolution.FromExports(result402.Exports),
+        int coordinate when coordinate == Node503Program.Coordinate => F18ImportResolution.FromExports(result503.Exports),
+        _ => F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+      },
+    });
+    ThrowIfFailed(result403);
+
+    F18CompileResult result303 = Compile(compiler, Node303Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node303Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node302Program.Coordinate
+          ? F18ImportResolution.FromExports(result302.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result303);
+
+    F18CompileResult result304 = Compile(compiler, Node304Program.Source, F18CompilerOptions.ForRam(Node304Program.Coordinate));
+    ThrowIfFailed(result304);
+
+    F18CompileResult result404 = Compile(compiler, Node404Program.Source, F18CompilerOptions.ForRam(Node404Program.Coordinate));
+    ThrowIfFailed(result404);
+
     F18CompileResult result504 = Compile(compiler, Node504Program.Source, F18CompilerOptions.ForRam(Node504Program.Coordinate));
     ThrowIfFailed(result504);
 
-    F18CompileResult result601 = Compile(compiler, Node601Program.Source, F18CompilerOptions.ForRam(Node601Program.Coordinate));
-    ThrowIfFailed(result601);
+    F18CompileResult result201 = Compile(compiler, Node201Program.Source, F18CompilerOptions.ForRam(Node201Program.Coordinate));
+    ThrowIfFailed(result201);
 
-    F18CompileResult result602 = Compile(compiler, Node602Program.Source, new F18CompilerOptions
+    F18CompileResult result202 = Compile(compiler, Node202Program.Source, new F18CompilerOptions
     {
       MemorySpace = F18MemorySpace.Ram,
-      NodeCoordinate = Node602Program.Coordinate,
+      NodeCoordinate = Node202Program.Coordinate,
       MemoryBaseAddress = 0x000,
       MemoryWordCount = 64,
       IncludeCommonRomWords = true,
-      ImportResolver = importedCoordinate => importedCoordinate == Node601Program.Coordinate
-          ? F18ImportResolution.FromExports(result601.Exports)
+      ImportResolver = importedCoordinate => importedCoordinate == Node201Program.Coordinate
+          ? F18ImportResolution.FromExports(result201.Exports)
           : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
     });
-    ThrowIfFailed(result602);
+    ThrowIfFailed(result202);
 
-    F18CompileResult result603 = Compile(compiler, Node603Program.Source, new F18CompilerOptions
+    // Node 203 imports node 202, node 303 and node 403 -- three different branches of this pipeline,
+    // per its own "# 202 import" / "# 303 import" / "# 403 import" directives.
+    F18CompileResult result203 = Compile(compiler, Node203Program.Source, new F18CompilerOptions
     {
       MemorySpace = F18MemorySpace.Ram,
-      NodeCoordinate = Node603Program.Coordinate,
+      NodeCoordinate = Node203Program.Coordinate,
       MemoryBaseAddress = 0x000,
       MemoryWordCount = 64,
       IncludeCommonRomWords = true,
-      ImportResolver = importedCoordinate => importedCoordinate == Node602Program.Coordinate
-          ? F18ImportResolution.FromExports(result602.Exports)
+      ImportResolver = importedCoordinate => importedCoordinate switch
+      {
+        int coordinate when coordinate == Node202Program.Coordinate => F18ImportResolution.FromExports(result202.Exports),
+        int coordinate when coordinate == Node303Program.Coordinate => F18ImportResolution.FromExports(result303.Exports),
+        int coordinate when coordinate == Node403Program.Coordinate => F18ImportResolution.FromExports(result403.Exports),
+        _ => F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+      },
+    });
+    ThrowIfFailed(result203);
+
+    F18CompileResult result204 = Compile(compiler, Node204Program.Source, F18CompilerOptions.ForRam(Node204Program.Coordinate));
+    ThrowIfFailed(result204);
+
+    F18CompileResult result205 = Compile(compiler, Node205Program.Source, F18CompilerOptions.ForRam(Node205Program.Coordinate));
+    ThrowIfFailed(result205);
+
+    F18CompileResult result102 = Compile(compiler, Node102Program.Source, F18CompilerOptions.ForRam(Node102Program.Coordinate));
+    ThrowIfFailed(result102);
+
+    F18CompileResult result103 = Compile(compiler, Node103Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node103Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node102Program.Coordinate
+          ? F18ImportResolution.FromExports(result102.Exports)
           : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
     });
-    ThrowIfFailed(result603);
+    ThrowIfFailed(result103);
 
-    F18CompileResult result604 = Compile(compiler, Node604Program.Source, F18CompilerOptions.ForRam(Node604Program.Coordinate));
-    ThrowIfFailed(result604);
+    F18CompileResult result105 = Compile(compiler, Node105Program.Source, F18CompilerOptions.ForRam(Node105Program.Coordinate));
+    ThrowIfFailed(result105);
+
+    // Node 104 imports BOTH node 105 and node 103, per its own "# 105 import" / "# 103 import"
+    // directives.
+    F18CompileResult result104 = Compile(compiler, Node104Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node104Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate switch
+      {
+        int coordinate when coordinate == Node105Program.Coordinate => F18ImportResolution.FromExports(result105.Exports),
+        int coordinate when coordinate == Node103Program.Coordinate => F18ImportResolution.FromExports(result103.Exports),
+        _ => F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+      },
+    });
+    ThrowIfFailed(result104);
 
     return
     [
@@ -656,10 +728,15 @@ public static class CvmBootStreamBuilder
       CvmBootDescriptor.FromCompileResult(result502),
       CvmBootDescriptor.FromCompileResult(result503),
       CvmBootDescriptor.FromCompileResult(result504),
-      CvmBootDescriptor.FromCompileResult(result601),
-      CvmBootDescriptor.FromCompileResult(result602),
-      CvmBootDescriptor.FromCompileResult(result603),
-      CvmBootDescriptor.FromCompileResult(result604),
+      CvmBootDescriptor.FromCompileResult(result201),
+      CvmBootDescriptor.FromCompileResult(result202),
+      CvmBootDescriptor.FromCompileResult(result203),
+      CvmBootDescriptor.FromCompileResult(result204),
+      CvmBootDescriptor.FromCompileResult(result205),
+      CvmBootDescriptor.FromCompileResult(result102),
+      CvmBootDescriptor.FromCompileResult(result103),
+      CvmBootDescriptor.FromCompileResult(result104),
+      CvmBootDescriptor.FromCompileResult(result105),
     ];
   }
 
@@ -1126,6 +1203,14 @@ public static class CvmBootStreamBuilder
   /// only be used if no code in the project is defined" -- so a caller must always try
   /// <c>chip.GetNode(coordinate).SourceCode</c> first and reach for this only when that is blank.
   /// Returns null for any coordinate with no CVM2 reference source of its own.
+  ///
+  /// <b>UPDATED 2026-09-26, alongside the FP subprocessor rewrite (see <see cref="BuildDescriptors"/>'s
+  /// own remarks on the same change).</b> Nodes 102-105 and 201-205 now have a real
+  /// <c>NodeXxxProgram.cs</c> reference source for the first time (previously they had none -- see
+  /// <see cref="CvmNodeMesh.StandaloneCoordinates"/>'s own 2026-09-22 remarks) and are added below.
+  /// Nodes 601-604 are RETIRED and REMOVED from this switch -- a chip whose live project still has one
+  /// of them configured with blank source will now get <c>null</c> here, the same as any other
+  /// unrecognized coordinate, rather than the old "stage 5c/4c/3c/6" fallback source.
   /// </summary>
   public static string? ReferenceSourceFor(int coordinate) => coordinate switch
   {
@@ -1159,10 +1244,19 @@ public static class CvmBootStreamBuilder
     Node502Program.Coordinate => Node502Program.Source,
     Node503Program.Coordinate => Node503Program.Source,
     Node504Program.Coordinate => Node504Program.Source,
-    Node601Program.Coordinate => Node601Program.Source,
-    Node602Program.Coordinate => Node602Program.Source,
-    Node603Program.Coordinate => Node603Program.Source,
-    Node604Program.Coordinate => Node604Program.Source,
+    Node201Program.Coordinate => Node201Program.Source,
+    Node202Program.Coordinate => Node202Program.Source,
+    Node203Program.Coordinate => Node203Program.Source,
+    Node204Program.Coordinate => Node204Program.Source,
+    Node205Program.Coordinate => Node205Program.Source,
+    Node102Program.Coordinate => Node102Program.Source,
+    Node103Program.Coordinate => Node103Program.Source,
+    Node104Program.Coordinate => Node104Program.Source,
+    Node105Program.Coordinate => Node105Program.Source,
+    // Node601Program.Coordinate/Node602Program.Coordinate/Node603Program.Coordinate/
+    // Node604Program.Coordinate REMOVED 2026-09-26 -- retired, no longer part of the FP subprocessor
+    // (see BuildDescriptors' own remarks on the same change). Their NodeXxxProgram.cs files are left in
+    // the repo, just no longer reachable from here.
     _ => null,
   };
 
