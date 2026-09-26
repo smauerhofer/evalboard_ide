@@ -5,16 +5,26 @@ namespace Ga144.C.Toolchain;
 /// full scope list). Input is an already-preprocessed token stream (macros expanded, directives gone)
 /// -- NewLine tokens carry no meaning in C's grammar and are stripped before parsing starts.
 ///
-/// Not supported, with a clear diagnostic rather than silent misbehavior: struct/union/enum,
-/// double/long/short, multi-dimensional arrays, function pointers, bit-fields, variadic
-/// functions, and the "." / "->" member-access operators (all of which need structs). "goto"/labels,
-/// "switch"/"case"/"default", and every operator standard C defines over this compiler's supported
-/// types ARE supported.
+/// Not supported, with a clear diagnostic rather than silent misbehavior: union/enum,
+/// double/long/short, multi-dimensional arrays, function pointers, bit-fields, and variadic
+/// functions. "goto"/labels, "switch"/"case"/"default", and every operator standard C defines over
+/// this compiler's supported types ARE supported.
 ///
 /// <b><c>float</c> -- added 2026-09-26, per Stefan's own float-ABI dictation.</b> Supported as a plain
 /// scalar only -- see <see cref="CType.Float"/>'s own remarks for the full scope (no pointer-to-float, no
 /// array-of-float, no comparisons, no int/float conversions in this first pass) and
 /// <see cref="CCodeGenerator"/>'s own doc comment for the codegen model.
+///
+/// <b><c>struct</c> -- added 2026-09-26, per Stefan's own "add 'struct' to the C language" instruction
+/// (prompted by a real `libc` `heap.c` build failure -- a free-list heap allocator needing a
+/// self-referential struct).</b> See <see cref="CType.StructOf"/>'s own remarks for the full scope: a
+/// tagged struct definition/reference, scalar/pointer/nested-struct-by-value members (never `float`,
+/// never an array), self-reference via a pointer member, local/parameter*/global/static struct
+/// variables (*only "struct Tag *", never a struct itself, as a parameter or return type), and "."/"->"
+/// member access including chained access and `&amp;`. NOT supported, rejected with a clear diagnostic
+/// rather than silently mishandled: `union`/`enum` (still), a struct passed/returned BY VALUE in a
+/// function signature, an array of struct, pointer arithmetic/indexing on a struct pointer (`p+1`,
+/// `p[i]`, `p++`/`p--`), and reading or assigning an entire struct value in one expression (`s1 = s2;`).
 ///
 /// <b><c>typedef</c> -- added 2026-09-11, per Stefan's own build failure trying to compile a `libc`
 /// `heap.c` against `stddef.h`/`stdlib.h` (both need `size_t`).</b> Supported for a scalar/pointer/array
@@ -51,7 +61,13 @@ public sealed class CParser
   // Still a reserved word (ReservedWords above, unchanged); still explicitly listed in LooksLikeTypeStart/
   // LooksLikeTypeAt (which used to recognize it only via this set) since removing it from THIS set alone
   // would otherwise silently stop those two methods from recognizing "float" as a type-starting keyword.
-  private static readonly HashSet<string> UnsupportedTypeKeywords = ["struct", "union", "enum", "double", "long", "short"];
+  //
+  // "struct" REMOVED 2026-09-26, per Stefan's own "add 'struct' to the C language" instruction -- it is
+  // now a real, supported specifier (see ParseStructSpecifier below), handled the same way "float" is:
+  // still a reserved word, still explicitly listed in LooksLikeTypeStart/LooksLikeTypeAt so removing it
+  // from this set alone doesn't stop either method recognizing it as a type-starting keyword. "union" and
+  // "enum" stay rejected here -- struct support does not extend to either.
+  private static readonly HashSet<string> UnsupportedTypeKeywords = ["union", "enum", "double", "long", "short"];
 
   /// <summary>
   /// Every typedef name seen so far in this translation unit, mapped to the already-resolved
@@ -75,6 +91,22 @@ public sealed class CParser
   /// BLOCK scoping within a single file is simplified away.
   /// </summary>
   private readonly Dictionary<string, CType> _typedefs = new();
+
+  /// <summary>
+  /// Every struct tag seen so far in this translation unit, mapped to its own <see cref="CType"/> --
+  /// added 2026-09-26 alongside basic <c>struct</c> support (see this class's own remarks and <see
+  /// cref="CType.StructOf"/>'s own remarks). Mirrors <see cref="_typedefs"/>'s own "one flat, unscoped
+  /// table for the whole file" simplification exactly, for the same reason (harmless for every program
+  /// this compiler is actually meant to compile), and exists for the same core purpose: "struct Tag"
+  /// used a second time (as a further member's type, a variable's type, a parameter, a cast, a
+  /// <c>sizeof</c>) must resolve to the exact SAME <see cref="CType"/> instance the tag's own
+  /// definition created, not a new, unrelated one -- this is also what makes a self-referential struct
+  /// possible at all (see <see cref="CType.Members"/>'s own remarks): the tag is registered in this
+  /// table the moment "struct Tag" is first seen, before its body (if any) is parsed, so a member
+  /// declared as "struct Tag *next" inside that very body resolves back to the same, still-filling-in
+  /// instance.
+  /// </summary>
+  private readonly Dictionary<string, CType> _structTags = new();
 
   /// <summary>A `__fastcall` function's pointer parameters are passed in the address-register node's four
   /// registers, `ar[0]` through `ar[3]` -- node 308 as of 2026-09-15's renumbering, previously called
@@ -246,7 +278,7 @@ public sealed class CParser
   private bool LooksLikeTypeStart() =>
       CheckWord("void") || CheckWord("char") || CheckWord("int") || CheckWord("float") || CheckWord("unsigned") || CheckWord("signed") ||
       CheckWord("static") || CheckWord("extern") || CheckWord("const") || CheckWord("volatile") ||
-      CheckWord("__fastcall") || CheckWord("__lower") || CheckWord("typedef") ||
+      CheckWord("__fastcall") || CheckWord("__lower") || CheckWord("typedef") || CheckWord("struct") ||
       (Current.IsIdentifier && _typedefs.ContainsKey(Current.Text)) ||
       UnsupportedTypeKeywords.Any(CheckWord);
 
@@ -359,6 +391,11 @@ public sealed class CParser
       return CType.Float;
     }
 
+    if (Match("struct"))
+    {
+      return ParseStructSpecifier();
+    }
+
     // A previously-declared typedef name, used here as this declaration's own base type -- see
     // _typedefs' own remarks. Checked last, after every built-in keyword, so a typedef can never shadow
     // one of them (not that a real program would try: ExpectIdentifier already refuses to declare a
@@ -406,9 +443,11 @@ public sealed class CParser
     return CType.PointerTo(element);
   }
 
-  /// <summary>Rejects an array-of-<c>float</c> before it can ever be constructed -- see
-  /// <see cref="PointerToChecked"/>'s own remarks for why (the same multi-word-element-type scope limit
-  /// applies to array-element addressing too).</summary>
+  /// <summary>Rejects an array-of-<c>float</c> or an array-of-<c>struct</c> before either can ever be
+  /// constructed -- see <see cref="PointerToChecked"/>'s own remarks for why the <c>float</c> half of
+  /// this applies; a <c>struct</c> element hits the exact same multi-word-element-type scope limit (see
+  /// <see cref="CType.StructOf"/>'s own remarks), since this compiler's array indexing has no scaling
+  /// multiplication for anything wider than one word.</summary>
   private CType ArrayOfChecked(CType element, int length, CSourceLocation location)
   {
     if (element.IsFloat)
@@ -416,7 +455,109 @@ public sealed class CParser
       throw Error(location, "an array of 'float' is not yet supported by this compiler");
     }
 
+    if (element.IsStruct)
+    {
+      throw Error(location, "an array of 'struct' is not yet supported by this compiler");
+    }
+
     return CType.ArrayOf(element, length);
+  }
+
+  /// <summary>
+  /// Parses "struct Tag" (a reference to a previously-declared or forward-declared tag, or the implicit
+  /// forward declaration of a brand-new one) optionally followed by "{ member-declaration... }" (the
+  /// tag's own definition) -- added 2026-09-26, per Stefan's own "add 'struct' to the C language"
+  /// instruction. Called with "struct" itself already consumed by <see cref="ParseDeclarationSpecifiers"/>.
+  ///
+  /// Anonymous structs ("struct { ... }", no tag) are not supported -- this compiler requires a tag on
+  /// every struct, a deliberate small scope limit (real C programs overwhelmingly tag every struct they
+  /// define anyway) that keeps <see cref="_structTags"/> a simple flat name table with nothing else to
+  /// key an anonymous definition by.
+  ///
+  /// <b>Self-reference, and why it just works here.</b> The tag is registered in <see
+  /// cref="_structTags"/> (with an EMPTY, mutable <see cref="CType.Members"/> list -- see <see
+  /// cref="CType.StructOf"/>'s own remarks) before its body (if any) is parsed at all, so a member
+  /// declared inside that very body as "struct Tag *next" resolves "struct Tag" back to this same,
+  /// still-filling-in <see cref="CType"/> instance -- a pointer's own size never depends on whether its
+  /// pointee's member list has finished filling in yet. A BY-VALUE self-reference ("struct Tag next;",
+  /// with no "*") is the one case that genuinely cannot work (its own size would depend on itself), and
+  /// is rejected explicitly below, the same way any other member whose type is still an INCOMPLETE
+  /// struct (an empty member list) is rejected -- see the member-parsing loop's own comment.
+  /// </summary>
+  private CType ParseStructSpecifier()
+  {
+    CSourceLocation tagLocation = Current.Location;
+    string tag = ExpectIdentifier("after 'struct'");
+
+    if (!_structTags.TryGetValue(tag, out CType? structType))
+    {
+      structType = CType.StructOf(tag);
+      _structTags[tag] = structType;
+    }
+
+    if (!Match("{"))
+    {
+      // A bare reference/forward declaration ("struct Tag" used as a type, or "struct Tag;" on its
+      // own) -- return the tag's own type, complete or not; a BY-VALUE use of an incomplete one is
+      // caught wherever that value would actually need a known size (a member, a variable, sizeof).
+      return structType;
+    }
+
+    if (structType.Members!.Count > 0)
+    {
+      throw Error(tagLocation, $"\"struct {tag}\" is already defined");
+    }
+
+    while (!CheckWord("}") && !AtEnd)
+    {
+      CSourceLocation memberSpecifierLocation = Current.Location;
+      CType memberBaseType = ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLower, out bool isTypedef);
+      RejectCallingConventionKeywords(isFastcall, isLower, memberSpecifierLocation, "a struct member declaration");
+      if (isStatic || isExtern || isTypedef)
+      {
+        throw Error(memberSpecifierLocation, "'static'/'extern'/'typedef' cannot be used on a struct member");
+      }
+
+      do
+      {
+        CType memberType = ParseDeclaratorType(memberBaseType, "in a struct member declaration", out string memberName, out CSourceLocation memberNameLocation);
+
+        // See CType.StructOf's own remarks: float and array members aren't supported yet, the exact
+        // same multi-word/scaling scope limits that already reject "float *"/"float[]" and "struct[]".
+        if (memberType.IsFloat)
+        {
+          throw Error(memberNameLocation, "a 'float' struct member is not yet supported by this compiler");
+        }
+
+        if (memberType.IsArray)
+        {
+          throw Error(memberNameLocation, "an array struct member is not yet supported by this compiler");
+        }
+
+        // A member whose own type is a struct BY VALUE (not a pointer) must already be a COMPLETE type
+        // -- an empty Members list here means either a genuinely-incomplete other tag (declared but
+        // never defined) or, most commonly, this exact tag being defined right now (a by-value
+        // self-reference) -- both are the same "incomplete type used by value" error, caught generically
+        // rather than special-cased for self-reference specifically.
+        if (memberType.IsStruct && memberType.Members!.Count == 0)
+        {
+          throw Error(memberNameLocation, $"field \"{memberName}\" has incomplete type \"{memberType}\" (a struct member cannot have an incomplete struct type by value -- did you mean a pointer, \"{memberType} *\"?)");
+        }
+
+        if (structType.Members!.Any(m => m.Name == memberName))
+        {
+          throw Error(memberNameLocation, $"\"{memberName}\" is already declared in \"struct {tag}\"");
+        }
+
+        int offset = structType.Members.Sum(m => Math.Max(m.Type.SizeInWords, 1));
+        structType.Members.Add(new CStructMember(memberName, memberType, offset));
+      } while (Match(","));
+
+      Expect(";", "after a struct member declaration");
+    }
+
+    Expect("}", "to close a struct definition");
+    return structType;
   }
 
   /// <summary>Parses "*... name (\"[\" length \"]\")?" given the already-parsed base type -- a plain
@@ -597,6 +738,20 @@ public sealed class CParser
       return;
     }
 
+    // A bare "struct Tag { ... };" (or "struct Tag;") with no variable declared -- added 2026-09-26
+    // alongside struct support. This is how a struct is USUALLY defined in real C, and without this
+    // check ExpectIdentifier below would fail on the ";" with a confusing "expected an identifier"
+    // error instead of simply accepting the tag's own definition.
+    if (Match(";"))
+    {
+      if (!baseType.IsStruct)
+      {
+        throw Error(location, "expected a declarator after this declaration's type");
+      }
+
+      return;
+    }
+
     // The base type carries no pointer stars of its own -- in "int *a, b;", only "a" is a pointer, not
     // "b", so each declarator (the first one included) consumes its own stars starting fresh from
     // baseType, never from a previous declarator's own type.
@@ -612,6 +767,15 @@ public sealed class CParser
     {
       List<CParameter> parameters = ParseParameterList();
       Expect(")", "to close the parameter list");
+
+      // Added 2026-09-26 alongside struct support: a struct can never be returned BY VALUE (only
+      // "struct Tag *" is supported -- see CType.StructOf's own remarks). Checked here, once, rather
+      // than in CCodeGenerator, since the return type is already fully resolved at this point and this
+      // is a pure syntax-level restriction, not something that needs codegen context.
+      if (type.IsStruct)
+      {
+        throw Error(location, $"\"{name}\" cannot return \"{type}\" by value -- return a pointer (\"{type} *\") instead");
+      }
 
       // "__fastcall implies also __lower, so __fastcall includes __lower" (Stefan, 2026-09-07) -- a
       // __fastcall function is ALWAYS required to be placed in the lower half of memory too, whether or
@@ -738,7 +902,15 @@ public sealed class CParser
         throw Error(specifierLocation, "'typedef' cannot be used in a parameter declaration");
       }
 
-      CType type = ParseDeclaratorType(baseType, "in a parameter declaration", out string name, out _);
+      CType type = ParseDeclaratorType(baseType, "in a parameter declaration", out string name, out CSourceLocation nameLocation);
+
+      // Added 2026-09-26 alongside struct support -- see CType.StructOf's own remarks: only a pointer
+      // to a struct is supported as a parameter, never the struct itself by value.
+      if (type.IsStruct)
+      {
+        throw Error(nameLocation, $"\"{name}\" cannot be passed as \"{type}\" by value -- use a pointer (\"{type} *\") instead");
+      }
+
       parameters.Add(new CParameter(name, type.Decay()));
     } while (Match(","));
 
@@ -796,6 +968,18 @@ public sealed class CParser
       // file-scope one is, so it (harmlessly, for every program this compiler is actually meant to
       // compile) remains visible for the rest of the file, not just the rest of this block.
       ParseTypedefDeclaratorList(baseType);
+      return;
+    }
+
+    // A bare "struct Tag { ... };" (or "struct Tag;") with no variable declared -- see
+    // ParseExternalDeclaration's own identical check for why this is needed.
+    if (Match(";"))
+    {
+      if (!baseType.IsStruct)
+      {
+        throw Error(specifierLocation, "expected a declarator after this declaration's type");
+      }
+
       return;
     }
 
@@ -1119,7 +1303,7 @@ public sealed class CParser
   private bool LooksLikeTypeAt(int index)
   {
     CToken token = _tokens[index];
-    return token.IsIdentifier && (token.Text is "void" or "char" or "int" or "float" or "unsigned" or "signed" or "const" or "volatile"
+    return token.IsIdentifier && (token.Text is "void" or "char" or "int" or "float" or "unsigned" or "signed" or "const" or "volatile" or "struct"
         || UnsupportedTypeKeywords.Contains(token.Text) || _typedefs.ContainsKey(token.Text));
   }
 
@@ -1235,7 +1419,11 @@ public sealed class CParser
 
       if (CheckWord(".") || CheckWord("->"))
       {
-        throw Error(location, "struct/union member access is not yet supported");
+        bool isArrow = CheckWord("->");
+        Advance();
+        string member = ExpectIdentifier(isArrow ? "after '->'" : "after '.'");
+        expr = new CMemberAccessExpr(location, expr, member, isArrow);
+        continue;
       }
 
       return expr;

@@ -154,6 +154,33 @@ public sealed class CDebuggerViewModel : ObservableObject
 
     var messages = new List<string>();
 
+    // Added 2026-09-26, after an unhandled exception from deep inside this pipeline (compile/assemble/
+    // export-primitives/link -- several thousand lines of code, most of it never before exercised
+    // end-to-end for a bare, freshly-typed snippet with no backing .c file at all) propagated all the
+    // way out of this RelayCommand's Execute and was caught by the UNRELATED try/catch around
+    // ChipWindow's own ShowDialog() in MainWindow.xaml.cs -- because that window is shown modally, its
+    // catch block stays on the call stack for as long as the window is open, so it ends up catching an
+    // exception from a completely different, later action (this one) and mislabels it "Unable to open
+    // the GA144 chip window". Every other risky command in this codebase already wraps itself this way
+    // (see CvmDebuggerViewModel.Assemble's own remarks on the exact same class of problem) -- this
+    // method never had that safety net. The exception's own type/message/stack trace are surfaced
+    // directly in DiagnosticsText rather than swallowed, since a silent no-op on an unhandled exception
+    // is worse than a wrong-looking error message, and because pinning down exactly which stage failed
+    // is the whole point of catching it here at all.
+    try
+    {
+      CompileAndLoadCore(messages);
+    }
+    catch (Exception exception)
+    {
+      messages.Add($"Compile && Load failed unexpectedly, inside the C toolchain itself rather than as an ordinary compile/link diagnostic ({exception.GetType().FullName}): {exception.Message}");
+      messages.Add(exception.StackTrace ?? "(no stack trace available)");
+      DiagnosticsText = string.Join(Environment.NewLine, messages);
+    }
+  }
+
+  private void CompileAndLoadCore(List<string> messages)
+  {
     // "all include files from all libraries are automatically included for the compiler. all libraries
     // are automatically included for the linker." -- every Library-kind project directly under the
     // shared "libs" directory, unconditionally; see this class's own remarks for why this differs from

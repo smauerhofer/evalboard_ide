@@ -293,6 +293,28 @@ namespace Ga144.C.Toolchain;
 /// anything other than <c>fr[0]</c> itself).</description></item>
 /// </list>
 /// </description></item>
+/// <item><description>
+/// <b>Basic <c>struct</c> support (added 2026-09-26), per Stefan's own "add 'struct' to the C language"
+/// instruction.</b> See <see cref="CType.StructOf"/>'s own remarks for the full scope. Unlike
+/// <c>float</c>, a struct needs no new expression-evaluation model at all -- every member this compiler
+/// supports (scalar, pointer, or a nested struct accessed no further than its own address) is reached
+/// purely through the EXISTING lvalue/address machinery above: a struct local/global/static already
+/// gets exactly <see cref="CType.SizeInWords"/> consecutive slots or data words for free (<see
+/// cref="DeclareLocal"/>/<see cref="EmitGlobal"/> already generalize over any size, not just 1), and
+/// "." / "->" member access (<see cref="CMemberAccessExpr"/>) is just one more address-plus-known-offset
+/// computation feeding the SAME <see cref="CacheIndirectAddress"/>/<see cref="EmitDereferenceLoad"/>/
+/// <see cref="EmitDereferenceStore"/> sequence <c>*ptr</c> and <c>arr[i]</c> already use -- see <see
+/// cref="EmitAddressOfMember"/>. The parts of a struct that DO need their own explicit guard are exactly
+/// the parts that would otherwise silently produce wrong-but-plausible-looking code rather than a clean
+/// diagnostic: pointer arithmetic/indexing on a struct pointer (this compiler's indexing has no element-
+/// size scaling for anything wider than one word -- see <see cref="RejectStructPointerArithmetic"/>) and
+/// reading/assigning an entire multi-word struct value as if it were the usual single stack
+/// word (<see cref="EmitAssign"/>/<see cref="EmitAssignForEffect"/>'s own struct checks, and <see
+/// cref="ResolveLvalue"/>'s/<see cref="EmitExpr"/>'s own <see cref="CMemberAccessExpr"/> cases). A
+/// struct is never passed/returned BY VALUE in a function signature (<see cref="CParser"/> rejects that
+/// at parse time, so <see cref="CCodeGenerator"/> never even sees one there) and there is no
+/// array-of-struct (also rejected at parse time), so neither needs a codegen-side guard of its own.
+/// </description></item>
 /// </list>
 /// </summary>
 public sealed class CCodeGenerator
@@ -1496,6 +1518,21 @@ public sealed class CCodeGenerator
           return CacheIndirectAddress(elementType);
         }
 
+      case CMemberAccessExpr member:
+        {
+          CType fieldType = EmitAddressOfMember(member);
+          if (fieldType.IsStruct)
+          {
+            // See CType.StructOf's own remarks: reading/assigning a WHOLE struct value in one expression
+            // is not yet supported -- access one of its own members instead, or use '&' for its address.
+            // Still returns a real (if unusable) CLvalue, same as every other error branch in this
+            // method, since a CParseException-style abort mid-codegen isn't this class's error model.
+            Error(expr.Location, $"\"{member.Member}\" is a struct member of type \"{fieldType}\" -- reading or assigning a whole struct value is not yet supported by this compiler");
+          }
+
+          return CacheIndirectAddress(fieldType);
+        }
+
       default:
         Error(expr.Location, "expression is not assignable");
         EmitCode("pushlit 0");
@@ -2138,11 +2175,80 @@ public sealed class CCodeGenerator
       case CIndexExpr index:
         return CType.PointerTo(EmitAddressOfIndex(index));
 
+      case CMemberAccessExpr member:
+        return CType.PointerTo(EmitAddressOfMember(member));
+
       default:
         Error(expr.Location, "cannot take the address of this expression");
         EmitCode("pushlit 0");
         return CType.PointerTo(CType.Int);
     }
+  }
+
+  /// <summary>
+  /// Pushes the address of "Base.Member" or "Base-&gt;Member" (the base's own address plus a
+  /// compile-time-known member offset -- no scaling needed, since an offset here is already expressed
+  /// in whole CVM words, exactly like <see cref="EmitAddressOfIndex"/>'s own "no scaling multiplication"
+  /// remark) and returns the member's own type. Added 2026-09-26 alongside basic <c>struct</c> support.
+  ///
+  /// <b>"-&gt;" vs ".", and how chained access (<c>a.b.c</c>, <c>p-&gt;q.r</c>, ...) falls out for
+  /// free.</b> "-&gt;" evaluates <see cref="CMemberAccessExpr.Base"/> as an ordinary VALUE (it must
+  /// already be a pointer to a struct); "." instead recurses into <see cref="EmitAddressOf"/> on <see
+  /// cref="CMemberAccessExpr.Base"/> (it must be an addressable struct VALUE) -- and <see
+  /// cref="EmitAddressOf"/>'s own <see cref="CMemberAccessExpr"/> case calls back into this method, so a
+  /// chain of any length composes purely through this mutual recursion, each level adding its own
+  /// member's offset onto whatever address the level below it already pushed. No separate "direct local
+  /// slot" fast path exists yet for a single-level struct member access the way one does for a local
+  /// array's constant-indexed element (see <see cref="TryGetConstantLocalArrayElementSlot"/>) -- every
+  /// struct member access goes through <see cref="CacheIndirectAddress"/>/node 306's dereference
+  /// sequence, correctly but not yet as cheaply as it could be; flagged in the design doc as a future
+  /// optimization in the same spirit as that one, not attempted here.
+  /// </summary>
+  private CType EmitAddressOfMember(CMemberAccessExpr member)
+  {
+    CType structType;
+    if (member.IsArrow)
+    {
+      CType pointerType = EmitExpr(member.Base);
+      if (!pointerType.IsPointer || !pointerType.ElementType!.IsStruct)
+      {
+        // NOTE: EmitExpr above already left exactly one word on the stack (the uniform codegen
+        // invariant -- see this class's own doc comment) -- do not push another placeholder here, or
+        // every caller up the chain (CacheIndirectAddress in particular) would see an extra, unbalanced
+        // word. Matches ResolveLvalue's own CUnaryExpr{Dereference} case, which has the identical shape.
+        Error(member.Location, $"\"->\" requires a pointer to a struct, but this expression has type \"{pointerType}\"");
+        return CType.Int;
+      }
+
+      structType = pointerType.ElementType!;
+    }
+    else
+    {
+      CType baseAddressType = EmitAddressOf(member.Base);
+      if (!baseAddressType.IsPointer || !baseAddressType.ElementType!.IsStruct)
+      {
+        Error(member.Location, $"\".\" requires a struct value, but this expression has type \"{(baseAddressType.IsPointer ? baseAddressType.ElementType : baseAddressType)}\"");
+        return CType.Int;
+      }
+
+      structType = baseAddressType.ElementType!;
+    }
+
+    CStructMember? field = structType.Members!.FirstOrDefault(m => m.Name == member.Member);
+    if (field is null)
+    {
+      Error(member.Location, $"\"{structType}\" has no member named \"{member.Member}\"");
+      return CType.Int;
+    }
+
+    if (field.Offset != 0)
+    {
+      EmitCode($"pushlit {field.Offset}");
+      EmitCode("pop");
+      EmitCode("add");
+    }
+
+    return field.Type;
   }
 
   /// <summary>Pushes the address of <c>Base[Index]</c> (base address + index; no scaling multiplication
@@ -2165,6 +2271,14 @@ public sealed class CCodeGenerator
     {
       Error(index.Location, $"cannot index into a value of type \"{baseType}\"");
       baseType = CType.PointerTo(CType.Int);
+    }
+    else
+    {
+      // Added 2026-09-26 alongside struct support -- see RejectStructPointerArithmetic's own remarks:
+      // indexing a struct pointer needs the same element-size scaling this compiler has never had for
+      // any multi-word element type. An array-of-struct is already rejected at parse time (CParser's
+      // ArrayOfChecked), so the only way to reach this is indexing a genuine "struct Tag *" pointer.
+      RejectStructPointerArithmetic(baseType, index.Location);
     }
 
     EmitExpr(index.Index);
@@ -2191,6 +2305,14 @@ public sealed class CCodeGenerator
     if (rhsType.IsFloat)
     {
       Error(assign.Location, $"cannot assign a 'float' value to a target of type \"{target.Type}\"");
+    }
+    else if (target.Type.IsStruct || rhsType.IsStruct)
+    {
+      // See CType.StructOf's own remarks: whole-struct assignment ("s1 = s2;") is not yet supported --
+      // assign through its own members instead. Still falls through to EmitDup/EmitStore below, same as
+      // every other error branch in this method: the diagnostic is what actually stops the build, not a
+      // separate early return.
+      Error(assign.Location, "assigning a whole struct value is not yet supported by this compiler (assign through its own members instead)");
     }
 
     EmitDup();
@@ -2223,6 +2345,10 @@ public sealed class CCodeGenerator
     if (rhsType.IsFloat)
     {
       Error(assign.Location, $"cannot assign a 'float' value to a target of type \"{target.Type}\"");
+    }
+    else if (target.Type.IsStruct || rhsType.IsStruct)
+    {
+      Error(assign.Location, "assigning a whole struct value is not yet supported by this compiler (assign through its own members instead)");
     }
 
     EmitStore(target);
@@ -2369,6 +2495,24 @@ public sealed class CCodeGenerator
 
   private static CType ComputeCommonType(CType a, CType b) => a.IsUnsigned || b.IsUnsigned ? CType.UnsignedInt : CType.Int;
 
+  /// <summary>Reports a diagnostic if <paramref name="pointerType"/> points to a <c>struct</c> -- added
+  /// 2026-09-26 alongside basic <c>struct</c> support. This compiler's pointer arithmetic and array
+  /// indexing are multiplication-free throughout (see this class's own doc comment: <c>arr[i]</c> is
+  /// always just "base address + i", never "base address + i * elementSize"), which only ever produces
+  /// correct results for a one-word element type -- exactly why <c>float *</c> was already rejected at
+  /// parse time (see <see cref="CType.Float"/>'s own remarks) and exactly why a struct pointer hits the
+  /// same limit here, at the one place this compiler still allows a NON-float multi-word pointee to
+  /// reach arithmetic: <see cref="CParser"/> rejects "float *" outright, but "struct Tag *" is
+  /// deliberately allowed to exist (for "-&gt;" member access), so the arithmetic-specific restriction
+  /// has to be enforced here in the code generator instead, not at parse time.</summary>
+  private void RejectStructPointerArithmetic(CType pointerType, CSourceLocation location)
+  {
+    if (pointerType.ElementType!.IsStruct)
+    {
+      Error(location, $"pointer arithmetic on \"{pointerType}\" is not yet supported by this compiler (a struct pointer supports only '->' member access, not '+'/'-'/indexing/'++'/'--')");
+    }
+  }
+
   private CType EmitBinaryOperation(CBinaryOp op, CType leftType, CType rightType, CSourceLocation location)
   {
     switch (op)
@@ -2378,11 +2522,13 @@ public sealed class CCodeGenerator
         EmitCode("add");
         if (leftType.IsPointer && !rightType.IsPointer)
         {
+          RejectStructPointerArithmetic(leftType, location);
           return leftType;
         }
 
         if (rightType.IsPointer && !leftType.IsPointer)
         {
+          RejectStructPointerArithmetic(rightType, location);
           return rightType;
         }
 
@@ -2391,7 +2537,20 @@ public sealed class CCodeGenerator
       case CBinaryOp.Subtract:
         EmitCode("pop");
         EmitCode("sub");
-        return leftType.IsPointer && rightType.IsPointer ? CType.Int : leftType.IsPointer ? leftType : ComputeCommonType(leftType, rightType);
+        if (leftType.IsPointer && rightType.IsPointer)
+        {
+          RejectStructPointerArithmetic(leftType, location);
+          RejectStructPointerArithmetic(rightType, location);
+          return CType.Int;
+        }
+
+        if (leftType.IsPointer)
+        {
+          RejectStructPointerArithmetic(leftType, location);
+          return leftType;
+        }
+
+        return ComputeCommonType(leftType, rightType);
 
       case CBinaryOp.Multiply:
         return EmitLibraryBinary(leftType, rightType, "__mul", location);
@@ -3045,6 +3204,24 @@ public sealed class CCodeGenerator
       case CIndexExpr index:
         {
           CLvalue lvalue = ResolveLvalue(index);
+          EmitLoad(lvalue);
+          return lvalue.Type;
+        }
+
+      case CMemberAccessExpr member:
+        {
+          CLvalue lvalue = ResolveLvalue(member);
+          if (lvalue.Type.IsStruct)
+          {
+            // ResolveLvalue's own CMemberAccessExpr case already reported this -- EmitLoad would read
+            // only the member's FIRST word (this compiler's uniform "one word per value" invariant does
+            // not hold for a multi-word struct), so a placeholder is emitted instead of a genuinely
+            // wrong partial read, matching this class's own error-branch convention elsewhere (e.g. the
+            // "expression kind not supported" default case just below).
+            EmitCode("pushlit 0");
+            return CType.Int;
+          }
+
           EmitLoad(lvalue);
           return lvalue.Type;
         }

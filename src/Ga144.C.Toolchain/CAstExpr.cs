@@ -89,3 +89,11 @@ public sealed record CSizeOfExprExpr(CSourceLocation Location, CExpr Operand) : 
 /// <summary>The comma operator: evaluates Left and discards it, then evaluates and yields Right.
 /// </summary>
 public sealed record CCommaExpr(CSourceLocation Location, CExpr Left, CExpr Right) : CExpr(Location);
+
+/// <summary>"Base.Member" (<paramref name="IsArrow"/> false) or "Base->Member" (<paramref
+/// name="IsArrow"/> true) -- struct member access, added 2026-09-26 alongside basic <c>struct</c>
+/// support (see <see cref="CType.StructOf"/>'s own remarks). Purely syntactic, like every other node
+/// here: whether <see cref="Base"/> actually has a struct type, which member offset "Member" resolves
+/// to, and whether <paramref name="IsArrow"/> is even the right operator for <see cref="Base"/>'s type
+/// are all resolved by <see cref="CCodeGenerator"/> during codegen, not here.</summary>
+public sealed record CMemberAccessExpr(CSourceLocation Location, CExpr Base, string Member, bool IsArrow) : CExpr(Location);

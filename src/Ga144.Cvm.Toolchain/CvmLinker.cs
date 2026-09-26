@@ -155,9 +155,30 @@ public static class CvmLinker
           {
             memberFile = CvmObjectFile.Load(new MemoryStream(member.ObjectBytes));
           }
-          catch (Exception exception) when (exception is InvalidDataException or EndOfStreamException)
+          // WIDENED, 2026-09-26: this used to only catch InvalidDataException/EndOfStreamException --
+          // the two failure shapes a genuinely truncated or wrong-file-kind GAFF stream produces -- but
+          // not the third, more insidious shape a STALE member produces: one saved before a breaking
+          // .gaobj chunk-shape change (e.g. CvmRelocation.EmbeddedValue, added 2026-09-11 to the "RELO"
+          // chunk -- see that field's own remarks) has one fewer field per RELO entry than the CURRENT
+          // reader expects, so every read after the first misaligns; the reader doesn't fail cleanly, it
+          // decodes GARBAGE section/symbol indices from what used to be the next entry's own bytes, which
+          // then throws a bare, unhelpful ArgumentOutOfRangeException ("Index was out of range...") from
+          // deep inside List<T>'s own indexer once one of those garbage indices happens to exceed this
+          // member's own Sections/Symbols count -- caught for real, 2026-09-26, the first time this C
+          // Debugger's own "auto-include every library, unconditionally" default pulled in a library that
+          // hadn't been rebuilt since an old .gaobj format change. OverflowException is included for the
+          // same reason: a garbage word/byte COUNT read as if it were still valid can also overflow a
+          // buffer-size computation before ever reaching an indexer. This is still a real, actionable
+          // problem (a stale build artifact), not something to paper over -- it stays a link failure
+          // message, exactly like the two pre-existing cases, just with a message that actually points at
+          // the fix instead of leaking a raw .NET exception with no context.
+          catch (Exception exception) when (exception is InvalidDataException or EndOfStreamException or ArgumentOutOfRangeException or OverflowException)
           {
-            messages.Add($"\"{library.DisplayName}\" member \"{memberName}\" is not a valid CVM object file: {exception.Message}");
+            messages.Add(
+                $"\"{library.DisplayName}\" member \"{memberName}\" could not be read as a valid CVM object file " +
+                $"({exception.GetType().Name}: {exception.Message}). This usually means the library was built " +
+                "with an older, incompatible version of this toolchain's .gaobj format -- rebuild that library " +
+                "project (its own \"Build\" button) and try again.");
             success = false;
             break;
           }

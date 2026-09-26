@@ -9,8 +9,8 @@ settings:
   krakenIdlePolicy: CloseAfterIdleTimeout
   recentCProjectPaths:
   - C:\devl\GreenArray\Ga144EvalboardIde\libs\libc
-  - C:\devl\GreenArray\Ga144EvalboardIde\prgs\CTest1
   - C:\devl\GreenArray\Ga144EvalboardIde\libs\cvm
+  - C:\devl\GreenArray\Ga144EvalboardIde\prgs\CTest1
   - C:\devl\GreenArray\Ga144EvalboardIde\libs\CTest1
   cWorkspaceRootPath: C:\devl\GreenArray\Ga144EvalboardIde
 boards:
@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-26T16:44:08.6061788
-      utcDateTime: 2026-09-26T16:44:08.6061788Z
-      localDateTime: 2026-09-26T18:44:08.6061788+02:00
+      dateTime: 2026-09-26T17:00:59.2565044
+      utcDateTime: 2026-09-26T17:00:59.2565044Z
+      localDateTime: 2026-09-26T19:00:59.2565044+02:00
       date: 2026-09-26T00:00:00.0000000
       day: 26
       dayOfWeek: Saturday
       dayOfYear: 269
-      hour: 16
-      millisecond: 606
-      microsecond: 178
-      nanosecond: 800
-      minute: 44
+      hour: 17
+      millisecond: 256
+      microsecond: 504
+      nanosecond: 400
+      minute: 0
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 8
-      ticks: 639260378486061788
-      utcTicks: 639260378486061788
-      timeOfDay: 16:44:08.6061788
+      second: 59
+      ticks: 639260388592565044
+      utcTicks: 639260388592565044
+      timeOfDay: 17:00:59.2565044
       year: 2026
   portB: 
   portC:

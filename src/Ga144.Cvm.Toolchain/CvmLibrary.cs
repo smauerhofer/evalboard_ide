@@ -61,9 +61,19 @@ public sealed class CvmLibrary
       {
         objectFile = CvmObjectFile.Load(new MemoryStream(member.ObjectBytes));
       }
-      catch (Exception exception) when (exception is InvalidDataException or EndOfStreamException)
+      // WIDENED, 2026-09-26, same reason and same fix as CvmLinker.Link's own identical catch around
+      // its own CvmObjectFile.Load(member.ObjectBytes) call (see that class's own remarks): a member
+      // saved before a breaking .gaobj chunk-shape change (e.g. CvmRelocation.EmbeddedValue, 2026-09-11)
+      // misaligns every read after the first and surfaces as a bare ArgumentOutOfRangeException/
+      // OverflowException from deep inside List<T>'s own indexer, not as InvalidDataException/
+      // EndOfStreamException -- this method only ever runs at Save/create/add time (per this class's own
+      // remarks), so it hasn't hit this in practice yet, but it is the exact same latent gap.
+      catch (Exception exception) when (exception is InvalidDataException or EndOfStreamException or ArgumentOutOfRangeException or OverflowException)
       {
-        errors.Add($"member \"{member.Name}\" is not a valid CVM object file: {exception.Message}");
+        errors.Add(
+            $"member \"{member.Name}\" could not be read as a valid CVM object file ({exception.GetType().Name}: " +
+            $"{exception.Message}). This usually means it was built with an older, incompatible version of this " +
+            "toolchain's .gaobj format -- rebuild it and try again.");
         continue;
       }
 
