@@ -297,23 +297,62 @@ namespace Ga144.C.Toolchain;
 /// <b>Basic <c>struct</c> support (added 2026-09-26), per Stefan's own "add 'struct' to the C language"
 /// instruction.</b> See <see cref="CType.StructOf"/>'s own remarks for the full scope. Unlike
 /// <c>float</c>, a struct needs no new expression-evaluation model at all -- every member this compiler
-/// supports (scalar, pointer, or a nested struct accessed no further than its own address) is reached
-/// purely through the EXISTING lvalue/address machinery above: a struct local/global/static already
-/// gets exactly <see cref="CType.SizeInWords"/> consecutive slots or data words for free (<see
+/// supports (scalar, pointer, float, array, or a nested struct accessed no further than its own address)
+/// is reached purely through the EXISTING lvalue/address machinery above: a struct local/global/static
+/// already gets exactly <see cref="CType.SizeInWords"/> consecutive slots or data words for free (<see
 /// cref="DeclareLocal"/>/<see cref="EmitGlobal"/> already generalize over any size, not just 1), and
 /// "." / "->" member access (<see cref="CMemberAccessExpr"/>) is just one more address-plus-known-offset
 /// computation feeding the SAME <see cref="CacheIndirectAddress"/>/<see cref="EmitDereferenceLoad"/>/
 /// <see cref="EmitDereferenceStore"/> sequence <c>*ptr</c> and <c>arr[i]</c> already use -- see <see
-/// cref="EmitAddressOfMember"/>. The parts of a struct that DO need their own explicit guard are exactly
-/// the parts that would otherwise silently produce wrong-but-plausible-looking code rather than a clean
-/// diagnostic: pointer arithmetic/indexing on a struct pointer (this compiler's indexing has no element-
-/// size scaling for anything wider than one word -- see <see cref="RejectStructPointerArithmetic"/>) and
-/// reading/assigning an entire multi-word struct value as if it were the usual single stack
-/// word (<see cref="EmitAssign"/>/<see cref="EmitAssignForEffect"/>'s own struct checks, and <see
-/// cref="ResolveLvalue"/>'s/<see cref="EmitExpr"/>'s own <see cref="CMemberAccessExpr"/> cases). A
-/// struct is never passed/returned BY VALUE in a function signature (<see cref="CParser"/> rejects that
-/// at parse time, so <see cref="CCodeGenerator"/> never even sees one there) and there is no
-/// array-of-struct (also rejected at parse time), so neither needs a codegen-side guard of its own.
+/// cref="EmitAddressOfMember"/>. The one part of a struct that DOES still need its own explicit guard is
+/// reading/assigning an entire multi-word struct value as if it were the usual single stack word (<see
+/// cref="EmitAssign"/>/<see cref="EmitAssignForEffect"/>'s own struct checks, and <see
+/// cref="ResolveLvalue"/>'s/<see cref="EmitExpr"/>'s own <see cref="CMemberAccessExpr"/>/<see
+/// cref="CIndexExpr"/> cases). A struct is never passed/returned BY VALUE in a function signature (<see
+/// cref="CParser"/> rejects that at parse time, so <see cref="CCodeGenerator"/> never even sees one
+/// there) -- that is the one struct-by-value scope limit that remains.
+/// </description></item>
+/// <item><description>
+/// <b>Multi-word pointer arithmetic/indexing (added 2026-09-26, the same day, per Stefan's own follow-up
+/// request to lift the struct/<c>float</c> pointer scope limits above).</b> Every pointer/array/index
+/// computation in this class used to assume every element was exactly one word (no scaling
+/// multiplication, ever) -- now <see cref="EmitScaleByElementSize"/>/<see
+/// cref="EmitDescaleByElementSize"/> multiply/divide by the pointee's own <see cref="CType.SizeInWords"/>
+/// via the same hand-written "__mul"/"__divs" runtime routines "*"/"/" already use, wired into <see
+/// cref="EmitAddressOfIndex"/>, <see cref="EmitBinaryOperation"/>'s pointer +/- cases (which is also how
+/// <see cref="EmitIncrementOrDecrement"/> automatically got correctly-scaled <c>p++</c>/<c>p--</c>, with
+/// no changes of its own), and <see cref="TryGetConstantLocalArrayElementSlot"/>'s constant-index fast
+/// path. This is what makes an array of <c>float</c>/<c>struct</c>, a <c>float</c>/array/struct member of
+/// a <c>struct</c>, a pointer to <c>float</c>/<c>struct</c>, and pointer arithmetic/indexing on any of
+/// those all correct rather than just "no longer rejected." The float ABI itself gained a matching <see
+/// cref="CFloatLvalueKind.Indirect"/> lvalue kind (<see cref="CacheFloatIndirectAddress"/>/<see
+/// cref="EmitFloatLoadIndirect"/>/<see cref="EmitFloatStoreIndirect"/>) for a dereferenced <c>float
+/// *</c>/a <c>float</c> array element/a <c>float</c> struct member, and <see cref="LooksLikeFloatExpr"/>
+/// gained a side-effect-free <see cref="TryGetStaticType"/> helper so it (and <see cref="EmitExpr"/>'s own
+/// dereference/index/member-access cases) can recognize these as 'float'-typed BEFORE emitting any code.
+/// <see cref="ComputeFunctionUsesFloatRegisters"/>'s "does this function use fr registers" scan also
+/// needed a safety fix the same day -- see <see cref="ExprUsesFloatDirectly"/>'s own remarks.
+///
+/// <b>Known limitation, discovered while implementing this (not something this pass attempts to fix):</b>
+/// this class's own confirmed rule that "a LOCAL's address is <c>f - offset</c>, DECREASING as the
+/// frame-slot offset increases" (see the <c>pushf</c>/<c>EmitLocalOrParameterAddress</c> remarks above)
+/// means a multi-word LOCAL aggregate's own words do NOT sit at ascending addresses as its slot number
+/// increases, the opposite of every other storage kind (global, heap, a pointer received as a parameter).
+/// <see cref="EmitFloatLoadLocal"/>/<see cref="EmitFloatStoreLocal"/> already special-case this for a
+/// PLAIN <c>float</c> local (storing it HIGH-then-LOW in slot order specifically so its actual memory
+/// order comes out low-then-high), and this pass's own <see cref="EmitAddressOf"/> fix for "&amp;" of a
+/// local <c>float</c> does the matching offset-by-one adjustment -- but <see
+/// cref="TryGetConstantLocalArrayElementSlot"/>'s general formula and <see cref="EmitAddressOfMember"/>'s
+/// offset-add do NOT apply an equivalent correction for a LOCAL array with more than one word per element
+/// or a LOCAL struct with more than one word total. This is consistent with (not a regression from) the
+/// SAME formula's pre-existing behavior for a plain LOCAL array indexed by a NON-constant expression (its
+/// general/runtime address path already composed addresses in the opposite direction from the
+/// constant-index fast path, for any element size, before today) -- a real, apparently long-standing gap
+/// in this compiler's local-frame addressing model, orthogonal to today's struct/float/scaling work and
+/// deliberately NOT investigated or fixed here. It does not affect GLOBAL or heap/parameter-passed
+/// pointers (the realistic case for struct-pointer arithmetic -- e.g. the <c>libc</c> <c>heap.c</c>
+/// free-list allocator that originally motivated <c>struct</c> support manages heap memory, not a local
+/// frame), only a LOCAL array/struct/float variable's own multi-word internal layout.
 /// </description></item>
 /// </list>
 /// </summary>
@@ -798,11 +837,22 @@ public sealed class CCodeGenerator
 
   /// <summary>Float ABI: true if <paramref name="stmt"/> (a function's own body, not descending into a
   /// nested function -- there are none in C) declares a <c>float</c> local anywhere, or contains a
-  /// <see cref="CFloatLiteralExpr"/> anywhere in any expression. Deliberately does NOT need full symbol
-  /// resolution (see this class's own doc comment) -- referencing an already-<c>float</c>-typed global
-  /// or parameter always flows through a <c>float</c> local, literal, or (already separately checked by
-  /// the caller) this function's own parameter/return type, for every program this "basic" <c>float</c>
-  /// support can compile at all (no implicit conversions, no pointer/array of <c>float</c>).</summary>
+  /// <see cref="CFloatLiteralExpr"/> anywhere in any expression. Originally (2026-09-26) deliberately did
+  /// NOT need full symbol resolution, on the reasoning that referencing an already-<c>float</c>-typed
+  /// global or parameter always flowed through a <c>float</c> local, literal, or (already separately
+  /// checked by the caller) this function's own parameter/return type -- true for every program "basic"
+  /// <c>float</c> support could compile AT THE TIME, since no pointer/array of <c>float</c> existed yet.
+  /// <b>That stopped being true the same day, once multi-word pointer arithmetic/indexing legalized
+  /// <c>float *</c>/an array or struct member of <c>float</c></b>: <c>void setpx(float *fp) { *fp =
+  /// 3.14f; }</c> is a genuine 'float'-register-using function (its body's OWN 'float' literal still gets
+  /// caught, but not every such function needs one -- e.g. "void copy(float *dst, float *src) { *dst =
+  /// *src; }" has no literal at all) whose SIGNATURE doesn't say so either (its parameters are `float *`,
+  /// not `float` -- <c>function.Parameters.Any(p =&gt; p.Type.IsFloat)</c> in <see
+  /// cref="ComputeFunctionUsesFloatRegisters"/> is false). Missing this would be a genuine SAFETY bug, not
+  /// just a missed optimization: <see cref="EmitCall"/> would then skip a save/restore a caller actually
+  /// needed, silently corrupting live float register state across the call. See <see
+  /// cref="ExprUsesFloatDirectly"/>'s own remarks for the (deliberately conservative, not precise) fix.
+  /// </summary>
   private static bool StatementUsesFloatDirectly(CStmt stmt)
   {
     switch (stmt)
@@ -839,11 +889,29 @@ public sealed class CCodeGenerator
     }
   }
 
+  /// <summary>See <see cref="StatementUsesFloatDirectly"/>'s own remarks for why the
+  /// <see cref="CUnaryExpr"/>{Dereference}/<see cref="CIndexExpr"/>/<see cref="CMemberAccessExpr"/> cases
+  /// below were added 2026-09-26 (the same day as basic <c>float</c> support itself, once a
+  /// pointer/array/struct member could first be 'float'-typed): this whole analysis runs before any
+  /// per-function type/symbol resolution is available (see this class's own doc comment on why the float
+  /// ABI's "does this function use fr registers" scan is context-free), so there is no cheap way to know
+  /// HERE whether a given dereference/index/member-access is actually 'float'-typed the way <see
+  /// cref="TryGetStaticType"/> can once real per-function symbol tables exist. Rather than risk the
+  /// SAFETY bug documented above, these three node shapes are treated as "uses float" UNCONDITIONALLY --
+  /// deliberately conservative, matching the SAME conservative choice this class already makes for a
+  /// callee whose body isn't visible (<see cref="CalleeUsesFloatRegisters"/>): a function that merely
+  /// dereferences/indexes/member-accesses through a pointer for entirely non-'float' reasons now also
+  /// gets an fpush/fpop save-restore its callers didn't strictly need, a missed optimization, never a
+  /// missed SAVE.</summary>
   private static bool ExprUsesFloatDirectly(CExpr expr)
   {
     switch (expr)
     {
       case CFloatLiteralExpr:
+        return true;
+      case CUnaryExpr { Op: CUnaryOp.Dereference }:
+      case CIndexExpr:
+      case CMemberAccessExpr:
         return true;
       case CUnaryExpr unary:
         return ExprUsesFloatDirectly(unary.Operand);
@@ -857,8 +925,6 @@ public sealed class CCodeGenerator
         return ExprUsesFloatDirectly(conditional.Condition) || ExprUsesFloatDirectly(conditional.WhenTrue) || ExprUsesFloatDirectly(conditional.WhenFalse);
       case CCallExpr call:
         return call.Arguments.Any(ExprUsesFloatDirectly);
-      case CIndexExpr index:
-        return ExprUsesFloatDirectly(index.Base) || ExprUsesFloatDirectly(index.Index);
       case CCastExpr cast:
         return cast.TargetType.IsFloat || ExprUsesFloatDirectly(cast.Operand);
       case CSizeOfExprExpr sizeOfExpr:
@@ -931,6 +997,13 @@ public sealed class CCodeGenerator
         return EnumerateCalls(conditional.Condition).Concat(EnumerateCalls(conditional.WhenTrue)).Concat(EnumerateCalls(conditional.WhenFalse));
       case CIndexExpr index:
         return EnumerateCalls(index.Base).Concat(EnumerateCalls(index.Index));
+      case CMemberAccessExpr member:
+        // Added 2026-09-26 alongside basic struct support's own CMemberAccessExpr node -- without this
+        // case, a call nested in a member access's own base (e.g. "getFoo()->x", legal since a function
+        // may return a struct pointer) would be invisible to the fixed-point "transitively calls a
+        // float-using function" scan below, the same class of gap ExprUsesFloatDirectly's own remarks
+        // describe for the "direct use" scan.
+        return EnumerateCalls(member.Base);
       case CCastExpr cast:
         return EnumerateCalls(cast.Operand);
       case CSizeOfExprExpr sizeOfExpr:
@@ -1434,8 +1507,14 @@ public sealed class CCodeGenerator
       return false;
     }
 
-    slot = symbol.Index + (int)constIndex;
     elementType = symbol.Type.ElementType!;
+
+    // Added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a local array's element used to
+    // always be exactly one word (this fast path predates 'float'/'struct' array elements), so the K-th
+    // element's own slot was always just "base slot + K". A wider element (float, struct, or an array
+    // member) now needs K scaled by its own SizeInWords, the same generalization EmitScaleByElementSize
+    // applies to the general (runtime-address) indexing path -- see that method's own remarks.
+    slot = symbol.Index + (int)constIndex * Math.Max(elementType.SizeInWords, 1);
     return true;
   }
 
@@ -1708,63 +1787,116 @@ public sealed class CCodeGenerator
     Local,
     Parameter,
     Global,
+
+    /// <summary>A <c>float</c> reached through a computed RUNTIME address -- a dereferenced <c>float
+    /// *</c>, a <c>float</c> array element, or a <c>float</c> struct member -- added 2026-09-26 alongside
+    /// multi-word pointer arithmetic/indexing, once a pointer/array/struct member could first be
+    /// 'float'-typed. Parallels <see cref="CLvalueKind.Indirect"/> exactly: <see cref="CFloatLvalue.Index"/>
+    /// names a local slot holding the cached address (of the LOW word -- see
+    /// <see cref="EmitFloatLoadIndirect"/>'s own remarks), re-derived from that slot each time it's
+    /// dereferenced rather than kept live in a register across other code, the same reason
+    /// <see cref="CacheIndirectAddress"/> caches into a slot instead of trusting a register to survive.
+    /// </summary>
+    Indirect,
   }
 
-  /// <summary>The resolved location of an assignable <c>float</c> value -- always a plain named
-  /// variable (see this class's own doc comment: pointer-to-float/array-of-float are rejected by
-  /// <see cref="CParser"/>, so there is no "Indirect" float lvalue kind to parallel <see
-  /// cref="CLvalueKind.Indirect"/>). <see cref="Index"/> is the base LOCAL slot or PARAMETER word offset
-  /// (the second word lives at <see cref="Index"/>+1, or -1 for Local -- see
-  /// <see cref="EmitFloatLoad"/>/<see cref="EmitFloatStore"/>'s own remarks on the direction flip); for
-  /// Global, <see cref="Label"/> is the low word's own label (the high word is
-  /// <c>{Label}__hi</c>).</summary>
+  /// <summary>The resolved location of an assignable <c>float</c> value. <see cref="Index"/> is the base
+  /// LOCAL slot or PARAMETER word offset (the second word lives at <see cref="Index"/>+1, or -1 for Local
+  /// -- see <see cref="EmitFloatLoad"/>/<see cref="EmitFloatStore"/>'s own remarks on the direction flip)
+  /// for <see cref="CFloatLvalueKind.Local"/>/<see cref="CFloatLvalueKind.Parameter"/>; the cached
+  /// address's own local slot for <see cref="CFloatLvalueKind.Indirect"/> (see
+  /// <see cref="CacheFloatIndirectAddress"/>); unused for Global. For Global, <see cref="Label"/> is the
+  /// low word's own label (the high word is <c>{Label}__hi</c>).</summary>
   private sealed record CFloatLvalue(CFloatLvalueKind Kind, int Index, string? Label = null);
 
-  /// <summary>Resolves a <c>float</c>-context lvalue -- ONLY a plain named variable is accepted (a
-  /// dereference or array index would need pointer-to-float/array-of-float, both rejected by
-  /// <see cref="CParser"/> already, so reaching one here means a deeper bug or an expression this
-  /// compiler's own "basic" float scope was never meant to reach); anything else is a clear
-  /// diagnostic.</summary>
+  /// <summary>Resolves a <c>float</c>-context lvalue: a plain named variable (<see
+  /// cref="CFloatLvalueKind.Local"/>/<see cref="CFloatLvalueKind.Parameter"/>/<see
+  /// cref="CFloatLvalueKind.Global"/>), or -- added 2026-09-26 alongside multi-word pointer
+  /// arithmetic/indexing -- a dereferenced <c>float *</c>, a <c>float</c> array element, or a <c>float</c>
+  /// struct member (all <see cref="CFloatLvalueKind.Indirect"/>, via <see
+  /// cref="CacheFloatIndirectAddress"/>). Each of the three new cases evaluates its own ADDRESS
+  /// computation through the exact same (non-float) helpers the general int/pointer lvalue machinery
+  /// uses (<see cref="EmitExpr"/> for the pointer operand, <see cref="EmitAddressOfIndex"/>, <see
+  /// cref="EmitAddressOfMember"/>) -- an address is always a plain one-word CVM value regardless of what
+  /// it points AT, so nothing float-specific is needed until the address is actually dereferenced.
+  /// Anything else (an arbitrary non-lvalue expression) is a clear diagnostic, same as before.</summary>
   private CFloatLvalue ResolveFloatLvalue(CExpr expr)
   {
-    if (expr is not CNameExpr name)
+    switch (expr)
     {
-      Error(expr.Location, "only a plain 'float' variable is supported here (pointers/arrays of 'float' are not yet supported by this compiler)");
-      return new CFloatLvalue(CFloatLvalueKind.Local, 0);
-    }
+      case CNameExpr name:
+        {
+          CVarSymbol? symbol = LookupVariable(name.Name);
+          if (symbol is { Kind: CVarKind.Local })
+          {
+            return new CFloatLvalue(CFloatLvalueKind.Local, symbol.Index);
+          }
 
-    CVarSymbol? symbol = LookupVariable(name.Name);
-    if (symbol is { Kind: CVarKind.Local })
-    {
-      return new CFloatLvalue(CFloatLvalueKind.Local, symbol.Index);
-    }
+          if (symbol is { Kind: CVarKind.Parameter })
+          {
+            return new CFloatLvalue(CFloatLvalueKind.Parameter, symbol.Index);
+          }
 
-    if (symbol is { Kind: CVarKind.Parameter })
-    {
-      return new CFloatLvalue(CFloatLvalueKind.Parameter, symbol.Index);
-    }
+          string label = symbol?.GlobalLabel ?? MangleExternalSymbol(name.Name);
+          if (symbol is not { Kind: CVarKind.Global })
+          {
+            if (_globals.ContainsKey(name.Name))
+            {
+              // A real global defined in this file -- EmitGlobal already declared its storage.
+            }
+            else if (_functions.ContainsKey(name.Name))
+            {
+              Error(expr.Location, $"\"{name.Name}\" is a function and cannot be assigned to");
+            }
+            else
+            {
+              // Not defined in this file -- assume an external 'float' global the linker will resolve.
+              // Both labels need importing -- see EmitGlobal's own remarks.
+              _imports.Add(label);
+              _imports.Add(label + "__hi");
+            }
+          }
 
-    string label = symbol?.GlobalLabel ?? MangleExternalSymbol(name.Name);
-    if (symbol is not { Kind: CVarKind.Global })
-    {
-      if (_globals.ContainsKey(name.Name))
-      {
-        // A real global defined in this file -- EmitGlobal already declared its storage.
-      }
-      else if (_functions.ContainsKey(name.Name))
-      {
-        Error(expr.Location, $"\"{name.Name}\" is a function and cannot be assigned to");
-      }
-      else
-      {
-        // Not defined in this file -- assume an external 'float' global the linker will resolve. Both
-        // labels need importing -- see EmitGlobal's own remarks.
-        _imports.Add(label);
-        _imports.Add(label + "__hi");
-      }
-    }
+          return new CFloatLvalue(CFloatLvalueKind.Global, 0, label);
+        }
 
-    return new CFloatLvalue(CFloatLvalueKind.Global, 0, label);
+      case CUnaryExpr { Op: CUnaryOp.Dereference } deref:
+        {
+          CType pointerType = EmitExpr(deref.Operand);
+          if (!pointerType.IsPointer || !pointerType.ElementType!.IsFloat)
+          {
+            Error(expr.Location, $"cannot dereference a value of type \"{pointerType}\" as 'float'");
+          }
+
+          return CacheFloatIndirectAddress();
+        }
+
+      case CIndexExpr index:
+        {
+          CType elementType = EmitAddressOfIndex(index);
+          if (!elementType.IsFloat)
+          {
+            Error(expr.Location, $"indexing here yields a value of type \"{elementType}\", not 'float'");
+          }
+
+          return CacheFloatIndirectAddress();
+        }
+
+      case CMemberAccessExpr member:
+        {
+          CType fieldType = EmitAddressOfMember(member);
+          if (!fieldType.IsFloat)
+          {
+            Error(expr.Location, $"\"{member.Member}\" is not a 'float' member");
+          }
+
+          return CacheFloatIndirectAddress();
+        }
+
+      default:
+        Error(expr.Location, "only a plain 'float' variable, dereference, array element, or struct member is supported here");
+        return new CFloatLvalue(CFloatLvalueKind.Local, 0);
+    }
   }
 
   /// <summary>Loads a <c>float</c> lvalue's two words into <c>fr[destReg]</c> -- pushes LOW then HIGH (in
@@ -1782,6 +1914,9 @@ public sealed class CCodeGenerator
         EmitCode($"ldp {lvalue.Index + 1}"); // high
         EmitCode("push");
         EmitCode($"fpop {destReg}");
+        break;
+      case CFloatLvalueKind.Indirect:
+        EmitFloatLoadIndirect(lvalue.Index, destReg);
         break;
       default:
         EmitGlobalFetch(lvalue.Label!);          // low
@@ -1807,6 +1942,9 @@ public sealed class CCodeGenerator
         EmitCode($"fpush {srcReg}");
         EmitCode("pop"); EmitCode($"stp {lvalue.Index + 1}"); // high -> offset+1
         EmitCode("pop"); EmitCode($"stp {lvalue.Index}");     // low -> offset
+        break;
+      case CFloatLvalueKind.Indirect:
+        EmitFloatStoreIndirect(lvalue.Index, srcReg);
         break;
       default:
         EmitCode($"fpush {srcReg}");
@@ -1838,6 +1976,79 @@ public sealed class CCodeGenerator
     EmitCode($"fpush {srcReg}");
     EmitCode("pop"); EmitCode($"stl {baseSlot}");     // high -> baseSlot
     EmitCode("pop"); EmitCode($"stl {baseSlot + 1}"); // low -> baseSlot+1
+  }
+
+  /// <summary>Float ABI, added 2026-09-26: caches an address already on top of the ordinary (non-float)
+  /// stack into a fresh local slot, for <see cref="CFloatLvalueKind.Indirect"/> -- a dereferenced <c>float
+  /// *</c>, a <c>float</c> array element, or a <c>float</c> struct member. Mirrors
+  /// <see cref="CacheIndirectAddress"/> exactly (identical single-word caching, same underlying node-306
+  /// dereference sequence); kept as a separate method only because it returns a <see cref="CFloatLvalue"/>
+  /// instead of a <see cref="CLvalue"/>. The cached address always points at the value's own LOW word --
+  /// see <see cref="EmitFloatLoadIndirect"/>'s own remarks for why.</summary>
+  private CFloatLvalue CacheFloatIndirectAddress()
+  {
+    int addressSlot = _currentFunction!.NextLocalSlot++;
+    EmitCode("pop");                // r := address; stack: []
+    EmitCode($"stl {addressSlot}"); // addressSlot := r (the address)
+    return new CFloatLvalue(CFloatLvalueKind.Indirect, addressSlot);
+  }
+
+  /// <summary>Float ABI, added 2026-09-26: loads <paramref name="addressSlot"/>'s cached address into r,
+  /// optionally offset by one word first (entirely via the ordinary one-word stack -- <c>ldl</c> only ever
+  /// sets r, so adding 1 needs the same "push, pushlit, pop, add, pop" dance <see
+  /// cref="EmitLocalOrParameterAddress"/> uses for "f +/- offset"). Stack-neutral overall (whatever was on
+  /// the stack before this call is still there after it, undisturbed underneath any temporaries this
+  /// pushes and pops again) -- safe to call with a not-yet-stored value already sitting on top of the
+  /// stack, which is exactly what <see cref="EmitFloatStoreIndirect"/> needs.</summary>
+  private void EmitLoadAddressSlotPlusOffsetIntoR(int addressSlot, int offset)
+  {
+    if (offset == 0)
+    {
+      EmitCode($"ldl {addressSlot}");
+      return;
+    }
+
+    EmitCode($"ldl {addressSlot}"); // r := the cached address
+    EmitCode("push");               // stack: [..., address]
+    EmitCode($"pushlit {offset}");  // stack: [..., address, offset]
+    EmitCode("pop");                // r := offset; stack: [..., address]
+    EmitCode("add");                // stack: [..., address + offset]
+    EmitCode("pop");                // r := address + offset; stack: [...] (back to where it started)
+  }
+
+  /// <summary>Float ABI, added 2026-09-26: loads the two words at a cached RUNTIME address (<see
+  /// cref="CFloatLvalueKind.Indirect"/>) into <c>fr[destReg]</c>. The LOW word lives at the cached address
+  /// itself and the HIGH word at address+1 -- the same "low at the lower address" layout a local/global
+  /// float already uses (see <see cref="EmitFloatLoadLocal"/>'s own remarks for the local case's reversed
+  /// SLOT order, which is exactly what makes its actual memory-ADDRESS order match this one), so a
+  /// pointer to <c>float</c> is simply the address of its low word, with no special-casing needed anywhere
+  /// pointer arithmetic itself happens. Re-derives the address from its cached slot twice (once for low,
+  /// once for high) rather than trying to keep an address register live across both dereferences,
+  /// mirroring <see cref="EmitLoad"/>/<see cref="EmitStore"/>'s own "default" (non-float Indirect) case,
+  /// which re-derives its own single-word address the same way.</summary>
+  private void EmitFloatLoadIndirect(int addressSlot, int destReg)
+  {
+    EmitLoadAddressSlotPlusOffsetIntoR(addressSlot, 0);
+    EmitDereferenceLoad();  // stack: [low]
+    EmitLoadAddressSlotPlusOffsetIntoR(addressSlot, 1);
+    EmitDereferenceLoad();  // stack: [low, high]
+    EmitCode($"fpop {destReg}");
+  }
+
+  /// <summary>Float ABI, added 2026-09-26: stores <c>fr[srcReg]</c>'s two words to a cached RUNTIME
+  /// address (<see cref="CFloatLvalueKind.Indirect"/>) -- the write-side counterpart of <see
+  /// cref="EmitFloatLoadIndirect"/>, same low-at-the-address/high-at-address+1 layout. <c>fpush srcReg</c>
+  /// leaves [low, high(top)] on the stack (per this class's own doc comment's word-order remarks), so the
+  /// HIGH word is stored FIRST (already on top, to address+1) and the LOW word second (to the address
+  /// itself) -- matching <see cref="EmitFloatStoreLocal"/>/<see cref="EmitFloatStore"/>'s own "pop HIGH
+  /// first" convention.</summary>
+  private void EmitFloatStoreIndirect(int addressSlot, int srcReg)
+  {
+    EmitCode($"fpush {srcReg}"); // stack: [low, high]
+    EmitLoadAddressSlotPlusOffsetIntoR(addressSlot, 1); // r := address+1; stack unchanged: [low, high]
+    EmitDereferenceStore();                             // pops "high", stores to address+1; stack: [low]
+    EmitLoadAddressSlotPlusOffsetIntoR(addressSlot, 0); // r := address; stack unchanged: [low]
+    EmitDereferenceStore();                             // pops "low", stores to address; stack: []
   }
 
   /// <summary>Materializes an arbitrary compile-time <c>float</c> constant into <c>fr[destReg]</c>: splits
@@ -1905,12 +2116,17 @@ public sealed class CCodeGenerator
   /// need to know BEFORE emitting any code (a cast's operand, an assignment's target). Deliberately not a
   /// full type-checker (this compiler has none -- see this class's own doc comment); every <c>float</c>
   /// sub-expression this "basic" support actually needs to recognize eventually bottoms out in a literal,
-  /// a name, a supported operator over those, a call, or a cast, all covered below.</summary>
+  /// a name, a supported operator over those, a call, a cast, or -- added 2026-09-26 alongside multi-word
+  /// pointer arithmetic/indexing -- a dereference/index/member-access resolved via
+  /// <see cref="TryGetStaticType"/>, all covered below.</summary>
   private bool LooksLikeFloatExpr(CExpr expr) => expr switch
   {
     CFloatLiteralExpr => true,
     CNameExpr name => IsFloatNamedVariable(name),
     CUnaryExpr { Op: CUnaryOp.Plus or CUnaryOp.Minus } unary => LooksLikeFloatExpr(unary.Operand),
+    CUnaryExpr { Op: CUnaryOp.Dereference } => TryGetStaticType(expr, out CType derefType) && derefType.IsFloat,
+    CIndexExpr => TryGetStaticType(expr, out CType indexType) && indexType.IsFloat,
+    CMemberAccessExpr => TryGetStaticType(expr, out CType memberType) && memberType.IsFloat,
     CBinaryExpr { Op: CBinaryOp.Add or CBinaryOp.Subtract or CBinaryOp.Multiply or CBinaryOp.Divide } binary =>
         LooksLikeFloatExpr(binary.Left) || LooksLikeFloatExpr(binary.Right),
     CCallExpr call => (FloatBuiltins.ContainsKey(call.FunctionName)) || (_functions.TryGetValue(call.FunctionName, out CFunctionSignature? sig) && sig.ReturnType.IsFloat),
@@ -1919,6 +2135,101 @@ public sealed class CCodeGenerator
     CCompoundAssignExpr compoundAssign => LooksLikeFloatExpr(compoundAssign.Target),
     _ => false,
   };
+
+  /// <summary>Float ABI, added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a
+  /// side-effect-free, best-effort STATIC re-derivation of an expression's type, used only by
+  /// <see cref="LooksLikeFloatExpr"/> to decide -- before emitting anything -- whether a
+  /// dereference/index/member-access expression would produce a 'float' value now that a
+  /// pointer/array/struct member can first be 'float'-typed. Mirrors <see cref="ResolveLvalue"/>/<see
+  /// cref="EmitAddressOf"/>'s own type logic for exactly these three node kinds, but computes no code:
+  /// the expression itself is never evaluated here (a variable/parameter/global's declared TYPE is looked
+  /// up, never a runtime value), so this is safe to call speculatively even on an expression with side
+  /// effects (the side effects still only actually happen once, when the caller goes on to really emit
+  /// it). Not a full type-checker -- an expression shape this compiler doesn't otherwise support returns
+  /// <see langword="false"/> rather than guessing.</summary>
+  private bool TryGetStaticType(CExpr expr, out CType type)
+  {
+    switch (expr)
+    {
+      case CNameExpr name:
+        {
+          CVarSymbol? symbol = LookupVariable(name.Name);
+          if (symbol is not null)
+          {
+            type = symbol.Type;
+            return true;
+          }
+
+          if (_globals.TryGetValue(name.Name, out CGlobalSymbol? global))
+          {
+            type = global.Type;
+            return true;
+          }
+
+          type = CType.Int;
+          return false;
+        }
+
+      case CUnaryExpr { Op: CUnaryOp.Dereference } deref:
+        {
+          if (TryGetStaticType(deref.Operand, out CType pointerType) && pointerType.IsPointer)
+          {
+            type = pointerType.ElementType!;
+            return true;
+          }
+
+          type = CType.Int;
+          return false;
+        }
+
+      case CIndexExpr index:
+        {
+          if (TryGetStaticType(index.Base, out CType baseType))
+          {
+            CType decayed = baseType.Decay();
+            if (decayed.IsPointer)
+            {
+              type = decayed.ElementType!;
+              return true;
+            }
+          }
+
+          type = CType.Int;
+          return false;
+        }
+
+      case CMemberAccessExpr member:
+        {
+          if (!TryGetStaticType(member.Base, out CType baseType))
+          {
+            type = CType.Int;
+            return false;
+          }
+
+          CType? structType = member.IsArrow
+              ? (baseType.IsPointer && baseType.ElementType!.IsStruct ? baseType.ElementType : null)
+              : (baseType.IsStruct ? baseType : null);
+
+          CStructMember? field = structType?.Members?.FirstOrDefault(m => m.Name == member.Member);
+          if (field is null)
+          {
+            type = CType.Int;
+            return false;
+          }
+
+          type = field.Type;
+          return true;
+        }
+
+      case CCastExpr cast:
+        type = cast.TargetType;
+        return true;
+
+      default:
+        type = CType.Int;
+        return false;
+    }
+  }
 
   private bool IsFloatNamedVariable(CNameExpr name)
   {
@@ -2008,6 +2319,17 @@ public sealed class CCodeGenerator
       case CUnaryExpr { Op: CUnaryOp.Minus } unary:
         EmitFloatExprInto(unary.Operand, destReg);
         EmitCode($"fneg {destReg} {destReg}");
+        return;
+
+      case CUnaryExpr { Op: CUnaryOp.Dereference }:
+      case CIndexExpr:
+      case CMemberAccessExpr:
+        // Added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a dereferenced 'float *', a
+        // 'float' array element, or a 'float' struct member, reached here either directly (a bare
+        // "*fp;"/"arr[i];"/"s.member;" float-context expression) or as an operand nested inside a larger
+        // float expression (e.g. "*fp + 1.0f") -- ResolveFloatLvalue's own new cases for these three node
+        // kinds do the actual address computation and float-ness check; this is just the read side.
+        EmitFloatLoad(ResolveFloatLvalue(expr), destReg);
         return;
 
       case CUnaryExpr:
@@ -2125,18 +2447,17 @@ public sealed class CCodeGenerator
     {
       case CNameExpr name:
         {
-          if (IsFloatNamedVariable(name))
-          {
-            // Float ABI: a pointer to 'float' is not yet supported -- see CType.Float's own remarks.
-            Error(expr.Location, "a pointer to 'float' is not yet supported by this compiler");
-            EmitCode("pushlit 0");
-            return CType.PointerTo(CType.Int);
-          }
-
           CVarSymbol? symbol = LookupVariable(name.Name);
           if (symbol is { Kind: CVarKind.Local })
           {
-            EmitLocalOrParameterAddress(symbol.Index, isParameter: false);
+            // Float ABI (2026-09-26 follow-up, once 'float *' became legal): a LOCAL float's two frame
+            // slots are stored HIGH-then-LOW (see EmitFloatLoadLocal's own remarks for why -- it's what
+            // makes the actual MEMORY address order come out low-then-high, matching every other float
+            // storage location), so the address a 'float *' must hold (the LOW word's own address) is
+            // this local's own slot number PLUS one, not the slot number itself (which is the HIGH
+            // word's address).
+            int offset = symbol.Type.IsFloat ? symbol.Index + 1 : symbol.Index;
+            EmitLocalOrParameterAddress(offset, isParameter: false);
             return CType.PointerTo(symbol.Type);
           }
 
@@ -2251,9 +2572,10 @@ public sealed class CCodeGenerator
     return field.Type;
   }
 
-  /// <summary>Pushes the address of <c>Base[Index]</c> (base address + index; no scaling multiplication
-  /// -- see this class's own doc comment) and returns the element's type. When <c>Base[Index]</c> is a
-  /// compile-time-constant-indexed element of a local array, shares <see
+  /// <summary>Pushes the address of <c>Base[Index]</c> (base address + Index scaled by the element's own
+  /// size -- see <see cref="EmitScaleByElementSize"/>'s own remarks for why scaling is needed at all, added
+  /// 2026-09-26 alongside multi-word pointer arithmetic/indexing) and returns the element's type. When
+  /// <c>Base[Index]</c> is a compile-time-constant-indexed element of a local array, shares <see
   /// cref="TryGetConstantLocalArrayElementSlot"/> with <see cref="ResolveLvalue"/> to compute the address
   /// directly from the combined slot number in one <see cref="EmitLocalOrParameterAddress"/> call, rather
   /// than evaluating the array's own base address and the index separately and adding them at
@@ -2272,16 +2594,9 @@ public sealed class CCodeGenerator
       Error(index.Location, $"cannot index into a value of type \"{baseType}\"");
       baseType = CType.PointerTo(CType.Int);
     }
-    else
-    {
-      // Added 2026-09-26 alongside struct support -- see RejectStructPointerArithmetic's own remarks:
-      // indexing a struct pointer needs the same element-size scaling this compiler has never had for
-      // any multi-word element type. An array-of-struct is already rejected at parse time (CParser's
-      // ArrayOfChecked), so the only way to reach this is indexing a genuine "struct Tag *" pointer.
-      RejectStructPointerArithmetic(baseType, index.Location);
-    }
 
     EmitExpr(index.Index);
+    EmitScaleByElementSize(Math.Max(baseType.ElementType!.SizeInWords, 1));
     EmitCode("pop");
     EmitCode("add");
     return baseType.ElementType!;
@@ -2495,22 +2810,43 @@ public sealed class CCodeGenerator
 
   private static CType ComputeCommonType(CType a, CType b) => a.IsUnsigned || b.IsUnsigned ? CType.UnsignedInt : CType.Int;
 
-  /// <summary>Reports a diagnostic if <paramref name="pointerType"/> points to a <c>struct</c> -- added
-  /// 2026-09-26 alongside basic <c>struct</c> support. This compiler's pointer arithmetic and array
-  /// indexing are multiplication-free throughout (see this class's own doc comment: <c>arr[i]</c> is
-  /// always just "base address + i", never "base address + i * elementSize"), which only ever produces
-  /// correct results for a one-word element type -- exactly why <c>float *</c> was already rejected at
-  /// parse time (see <see cref="CType.Float"/>'s own remarks) and exactly why a struct pointer hits the
-  /// same limit here, at the one place this compiler still allows a NON-float multi-word pointee to
-  /// reach arithmetic: <see cref="CParser"/> rejects "float *" outright, but "struct Tag *" is
-  /// deliberately allowed to exist (for "-&gt;" member access), so the arithmetic-specific restriction
-  /// has to be enforced here in the code generator instead, not at parse time.</summary>
-  private void RejectStructPointerArithmetic(CType pointerType, CSourceLocation location)
+  /// <summary>Multiplies the value already on top of the stack, in place, by <paramref
+  /// name="elementSizeInWords"/> -- added 2026-09-26 alongside multi-word pointer arithmetic/indexing,
+  /// replacing this compiler's old blanket assumption (documented on this class itself) that every
+  /// pointer/array element is exactly one word, so "base address + index" never needed a scaling
+  /// multiplication. Skipped entirely when the factor is 1 (the overwhelmingly common case -- a plain
+  /// int/char/pointer element), both as a cheap optimization and so a program that never indexes a wider
+  /// element never pulls in a spurious "__mul" import. Reuses "__mul" -- the same hand-written runtime
+  /// routine and calling convention "*" itself uses (see <see cref="EmitLibraryBinary"/>'s own remarks):
+  /// the value to scale is already on the stack, so only the factor needs pushing before the
+  /// call.</summary>
+  private void EmitScaleByElementSize(int elementSizeInWords)
   {
-    if (pointerType.ElementType!.IsStruct)
+    if (elementSizeInWords == 1)
     {
-      Error(location, $"pointer arithmetic on \"{pointerType}\" is not yet supported by this compiler (a struct pointer supports only '->' member access, not '+'/'-'/indexing/'++'/'--')");
+      return;
     }
+
+    EmitCode($"pushlit {elementSizeInWords}");
+    _imports.Add("__mul");
+    EmitCode("call __mul");
+  }
+
+  /// <summary>The inverse of <see cref="EmitScaleByElementSize"/>, for pointer-minus-pointer ("p2 - p1",
+  /// which yields a count of ELEMENTS, not words): divides the value already on top of the stack (the raw
+  /// word difference "pop; sub" just computed) by <paramref name="elementSizeInWords"/>, via "__divs"
+  /// (signed -- the difference can be negative). Skipped when the factor is 1, for the same reasons <see
+  /// cref="EmitScaleByElementSize"/> skips it.</summary>
+  private void EmitDescaleByElementSize(int elementSizeInWords)
+  {
+    if (elementSizeInWords == 1)
+    {
+      return;
+    }
+
+    EmitCode($"pushlit {elementSizeInWords}");
+    _imports.Add("__divs");
+    EmitCode("call __divs");
   }
 
   private CType EmitBinaryOperation(CBinaryOp op, CType leftType, CType rightType, CSourceLocation location)
@@ -2518,38 +2854,62 @@ public sealed class CCodeGenerator
     switch (op)
     {
       case CBinaryOp.Add:
-        EmitCode("pop");
-        EmitCode("add");
         if (leftType.IsPointer && !rightType.IsPointer)
         {
-          RejectStructPointerArithmetic(leftType, location);
+          // "pointer + int": stack is [pointerValue, intValue] -- scale the int (already on top) by the
+          // pointee's own size before the ordinary "pop; add", so a wider element (float, struct, or an
+          // array/struct member) advances the pointer by the right number of WORDS. See
+          // EmitScaleByElementSize's own remarks.
+          EmitScaleByElementSize(Math.Max(leftType.ElementType!.SizeInWords, 1));
+          EmitCode("pop");
+          EmitCode("add");
           return leftType;
         }
 
         if (rightType.IsPointer && !leftType.IsPointer)
         {
-          RejectStructPointerArithmetic(rightType, location);
+          int elementSize = Math.Max(rightType.ElementType!.SizeInWords, 1);
+          if (elementSize != 1)
+          {
+            // "int + pointer" (the int written first, e.g. "1 + p"): the value needing to be scaled (the
+            // int) sits UNDERNEATH the pointer value already on top of the stack, and this compiler's
+            // stack machine has no operation to reach or reorder a non-top word -- a deliberate, narrow
+            // SCOPE limit (not a hardware hypothesis), not a case worth a stack-reordering primitive for.
+            // Write "pointer + int" instead.
+            Error(location, $"\"int + {rightType}\" (the pointer written second) is not yet supported by this compiler for an element wider than one word -- write \"{rightType} + int\" instead");
+          }
+
+          EmitCode("pop");
+          EmitCode("add");
           return rightType;
         }
 
+        EmitCode("pop");
+        EmitCode("add");
         return ComputeCommonType(leftType, rightType);
 
       case CBinaryOp.Subtract:
-        EmitCode("pop");
-        EmitCode("sub");
         if (leftType.IsPointer && rightType.IsPointer)
         {
-          RejectStructPointerArithmetic(leftType, location);
-          RejectStructPointerArithmetic(rightType, location);
+          // "pointer - pointer" yields a count of ELEMENTS: compute the raw word difference first, then
+          // divide by the (common) element size -- see EmitDescaleByElementSize's own remarks.
+          EmitCode("pop");
+          EmitCode("sub");
+          EmitDescaleByElementSize(Math.Max(leftType.ElementType!.SizeInWords, 1));
           return CType.Int;
         }
 
         if (leftType.IsPointer)
         {
-          RejectStructPointerArithmetic(leftType, location);
+          // "pointer - int": same reasoning as "pointer + int" above.
+          EmitScaleByElementSize(Math.Max(leftType.ElementType!.SizeInWords, 1));
+          EmitCode("pop");
+          EmitCode("sub");
           return leftType;
         }
 
+        EmitCode("pop");
+        EmitCode("sub");
         return ComputeCommonType(leftType, rightType);
 
       case CBinaryOp.Multiply:
@@ -3171,6 +3531,17 @@ public sealed class CCodeGenerator
 
       case CUnaryExpr { Op: CUnaryOp.Dereference } unary:
         {
+          // Added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a dereferenced 'float *'
+          // reached via the general path (e.g. a bare "*fp;" statement) -- this compiler's uniform "leave
+          // exactly one word" invariant does not hold for a 2-word 'float', so it must be routed to the
+          // float-specific evaluator instead of ResolveLvalue/EmitLoad's ordinary single-word path. Mirrors
+          // CFloatLiteralExpr's own handling at the top of this switch.
+          if (LooksLikeFloatExpr(unary))
+          {
+            EmitFloatExprInto(unary, 0);
+            return CType.Float;
+          }
+
           CLvalue lvalue = ResolveLvalue(unary);
           EmitLoad(lvalue);
           return lvalue.Type;
@@ -3203,13 +3574,41 @@ public sealed class CCodeGenerator
 
       case CIndexExpr index:
         {
+          // Added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a 'float' array/pointer
+          // element reached via the general path -- see the CUnaryExpr{Dereference} case just above for
+          // why this needs the float-specific evaluator instead.
+          if (LooksLikeFloatExpr(index))
+          {
+            EmitFloatExprInto(index, 0);
+            return CType.Float;
+          }
+
           CLvalue lvalue = ResolveLvalue(index);
+          if (lvalue.Type.IsStruct)
+          {
+            // Added 2026-09-26 alongside array-of-struct support -- mirrors CMemberAccessExpr's own
+            // guard just below: EmitLoad would read only the element's FIRST word (this compiler's
+            // uniform "one word per value" invariant does not hold for a multi-word struct), so a
+            // placeholder is emitted instead of a genuinely wrong partial read.
+            Error(index.Location, $"indexing here yields a struct value of type \"{lvalue.Type}\" -- reading or assigning a whole struct value is not yet supported by this compiler (access one of its own members instead)");
+            EmitCode("pushlit 0");
+            return CType.Int;
+          }
+
           EmitLoad(lvalue);
           return lvalue.Type;
         }
 
       case CMemberAccessExpr member:
         {
+          // Added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a 'float' struct member
+          // reached via the general path -- see the CUnaryExpr{Dereference} case above for why.
+          if (LooksLikeFloatExpr(member))
+          {
+            EmitFloatExprInto(member, 0);
+            return CType.Float;
+          }
+
           CLvalue lvalue = ResolveLvalue(member);
           if (lvalue.Type.IsStruct)
           {

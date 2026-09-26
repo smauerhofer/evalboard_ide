@@ -10,21 +10,30 @@ namespace Ga144.C.Toolchain;
 /// functions. "goto"/labels, "switch"/"case"/"default", and every operator standard C defines over
 /// this compiler's supported types ARE supported.
 ///
-/// <b><c>float</c> -- added 2026-09-26, per Stefan's own float-ABI dictation.</b> Supported as a plain
-/// scalar only -- see <see cref="CType.Float"/>'s own remarks for the full scope (no pointer-to-float, no
-/// array-of-float, no comparisons, no int/float conversions in this first pass) and
-/// <see cref="CCodeGenerator"/>'s own doc comment for the codegen model.
+/// <b><c>float</c> -- added 2026-09-26, per Stefan's own float-ABI dictation.</b> See
+/// <see cref="CType.Float"/>'s own remarks and <see cref="CCodeGenerator"/>'s own doc comment for the
+/// codegen model. A pointer/array of <c>float</c> and pointer arithmetic/indexing on either were
+/// rejected outright in this first pass, then generalized the same day (see the next paragraph) once
+/// pointer arithmetic/indexing gained element-size scaling; still NOT supported: `float` comparisons,
+/// `++`/`--` on a plain `float` variable, and any implicit or explicit int/float conversion.
 ///
 /// <b><c>struct</c> -- added 2026-09-26, per Stefan's own "add 'struct' to the C language" instruction
 /// (prompted by a real `libc` `heap.c` build failure -- a free-list heap allocator needing a
 /// self-referential struct).</b> See <see cref="CType.StructOf"/>'s own remarks for the full scope: a
-/// tagged struct definition/reference, scalar/pointer/nested-struct-by-value members (never `float`,
-/// never an array), self-reference via a pointer member, local/parameter*/global/static struct
-/// variables (*only "struct Tag *", never a struct itself, as a parameter or return type), and "."/"->"
-/// member access including chained access and `&amp;`. NOT supported, rejected with a clear diagnostic
-/// rather than silently mishandled: `union`/`enum` (still), a struct passed/returned BY VALUE in a
-/// function signature, an array of struct, pointer arithmetic/indexing on a struct pointer (`p+1`,
-/// `p[i]`, `p++`/`p--`), and reading or assigning an entire struct value in one expression (`s1 = s2;`).
+/// tagged struct definition/reference, scalar/pointer/`float`/array/nested-struct-by-value members,
+/// self-reference via a pointer member, local/parameter*/global/static struct variables (*only
+/// "struct Tag *", never a struct itself, as a parameter or return type), and "."/"->" member access
+/// including chained access and `&amp;`. NOT supported, rejected with a clear diagnostic rather than
+/// silently mishandled: `union`/`enum` (still), a struct passed/returned BY VALUE in a function
+/// signature, and reading or assigning an entire struct value in one expression (`s1 = s2;`).
+///
+/// <b>Multi-word pointer arithmetic/indexing -- added 2026-09-26, the same day, per Stefan's own
+/// follow-up request to lift the struct/`float` pointer scope limits above.</b> An array of `float` or of
+/// `struct`, a `float`/array/struct member of a `struct`, a pointer to `float` or to `struct`, and
+/// pointer arithmetic/indexing/`++`/`--` on any of those (`p+1`, `p[i]`, `p++`) are now all supported --
+/// see <see cref="PointerToChecked"/>/<see cref="ArrayOfChecked"/>'s own remarks for why nothing is
+/// rejected here anymore, and <see cref="CCodeGenerator"/>'s own doc comment for how codegen scales by
+/// element size instead of assuming every element is one word.
 ///
 /// <b><c>typedef</c> -- added 2026-09-11, per Stefan's own build failure trying to compile a `libc`
 /// `heap.c` against `stddef.h`/`stdlib.h` (both need `size_t`).</b> Supported for a scalar/pointer/array
@@ -426,38 +435,29 @@ public sealed class CParser
     }
   }
 
-  /// <summary>Rejects a pointer-to-<c>float</c> before it can ever be constructed -- added 2026-09-26
-  /// alongside basic <c>float</c> support (see <see cref="CType.Float"/>'s own remarks for why: pointer
-  /// arithmetic/scaling has not been generalized for a multi-word element type, a deliberate SCOPE
-  /// decision for this first pass, not a hardware hypothesis). Every <see cref="CType.PointerTo"/> call
-  /// site in this class goes through this helper instead, so "float *" is rejected wherever it could
-  /// otherwise arise (a declarator's own "*" run, an abstract type for <c>sizeof</c>/a cast, a global's
-  /// declarator list).</summary>
-  private CType PointerToChecked(CType element, CSourceLocation location)
-  {
-    if (element.IsFloat)
-    {
-      throw Error(location, "a pointer to 'float' is not yet supported by this compiler");
-    }
+  /// <summary>Constructs "element *". Originally (2026-09-26, alongside basic <c>float</c> support)
+  /// rejected "float *" outright because pointer arithmetic had no element-size scaling; as of
+  /// 2026-09-26's follow-up (multi-word pointer arithmetic/indexing, per Stefan's own request), <see
+  /// cref="CCodeGenerator"/>'s <c>EmitAddressOfIndex</c>/binary-operator codegen scales by the pointee's
+  /// own <see cref="CType.SizeInWords"/> for every element type, so no type is rejected here anymore.
+  /// Kept as a named helper (every <see cref="CType.PointerTo"/> call site in this class still goes
+  /// through it) purely so a future scope limit has one place to land, not because one exists today.
+  /// </summary>
+  private CType PointerToChecked(CType element, CSourceLocation location) => CType.PointerTo(element);
 
-    return CType.PointerTo(element);
-  }
-
-  /// <summary>Rejects an array-of-<c>float</c> or an array-of-<c>struct</c> before either can ever be
-  /// constructed -- see <see cref="PointerToChecked"/>'s own remarks for why the <c>float</c> half of
-  /// this applies; a <c>struct</c> element hits the exact same multi-word-element-type scope limit (see
-  /// <see cref="CType.StructOf"/>'s own remarks), since this compiler's array indexing has no scaling
-  /// multiplication for anything wider than one word.</summary>
+  /// <summary>Constructs "element[length]". Originally (2026-09-26) rejected an array of <c>float</c> or
+  /// of <c>struct</c> for the same reason <see cref="PointerToChecked"/> once rejected "float *" --
+  /// see that helper's own remarks for why neither rejection applies anymore. Still rejects an array of an
+  /// INCOMPLETE struct (a forward-declared tag with no body yet) -- the same "incomplete type used by
+  /// value" rule <see cref="ParseStructSpecifier"/>'s own member-parsing loop enforces for a by-value
+  /// struct member, for the identical reason: <see cref="CType.SizeInWords"/> for such a <c>struct</c> is
+  /// (correctly) 0 until it's defined, so an array of it would silently reserve zero storage per element
+  /// rather than failing loudly.</summary>
   private CType ArrayOfChecked(CType element, int length, CSourceLocation location)
   {
-    if (element.IsFloat)
+    if (element.IsStruct && element.Members!.Count == 0)
     {
-      throw Error(location, "an array of 'float' is not yet supported by this compiler");
-    }
-
-    if (element.IsStruct)
-    {
-      throw Error(location, "an array of 'struct' is not yet supported by this compiler");
+      throw Error(location, $"an array of incomplete type \"{element}\" is not supported (the struct must be defined first)");
     }
 
     return CType.ArrayOf(element, length);
@@ -522,17 +522,11 @@ public sealed class CParser
       {
         CType memberType = ParseDeclaratorType(memberBaseType, "in a struct member declaration", out string memberName, out CSourceLocation memberNameLocation);
 
-        // See CType.StructOf's own remarks: float and array members aren't supported yet, the exact
-        // same multi-word/scaling scope limits that already reject "float *"/"float[]" and "struct[]".
-        if (memberType.IsFloat)
-        {
-          throw Error(memberNameLocation, "a 'float' struct member is not yet supported by this compiler");
-        }
-
-        if (memberType.IsArray)
-        {
-          throw Error(memberNameLocation, "an array struct member is not yet supported by this compiler");
-        }
+        // A 'float' or array member was rejected here in the original (2026-09-26) struct pass, the same
+        // multi-word/scaling scope limit PointerToChecked/ArrayOfChecked used to apply -- see their own
+        // remarks for why neither rejection applies anymore; CType.SizeInWords/CStructMember.Offset were
+        // already fully general (an array member's own size already accounts for its element size), so
+        // no change was needed there to allow this.
 
         // A member whose own type is a struct BY VALUE (not a pointer) must already be a COMPLETE type
         // -- an empty Members list here means either a genuinely-incomplete other tag (declared but
