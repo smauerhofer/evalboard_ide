@@ -1,0 +1,173 @@
+<Window x:Class="Ga144.Evb.Ide.Views.CDebuggerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="C Debugger"
+        Width="1080"
+        Height="1080"
+        MinWidth="860"
+        MinHeight="780"
+        WindowStartupLocation="CenterOwner">
+  <Grid Margin="12">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="2*" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="3*" />
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0">
+      <TextBlock Text="C Debugger" FontSize="22" FontWeight="SemiBold" />
+      <TextBlock Margin="0,3,0,0" Foreground="#555" TextWrapping="Wrap"
+                       Text="Quickly compiles and runs a snippet of C to try it out -- the text below is placed inside a hidden &quot;void main() { ... }&quot;, so type only declarations and statements, never the function signature itself. Every library found under this workspace's own C libraries folder is automatically searched for headers and automatically linked in, whether or not this snippet actually needs it. Everything below the source editor -- Start/Step/Continue/Run/Pause/Stop, breakpoints, the simulated SRAM inspector and its PC/breakpoint gutter, the transaction log -- is the exact same CVM Debugger this IDE already has, just aimed at whatever this panel last compiled and loaded." />
+    </StackPanel>
+
+    <Border Grid.Row="1" Background="#EEF4EF" BorderBrush="#C6D5C9" BorderThickness="1" Padding="9" Margin="0,10,0,0">
+      <StackPanel>
+        <StackPanel Orientation="Horizontal">
+          <Button Content="Start / Reinstall" Command="{Binding Debugger.StartCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Compiles this project's own CVM node sources, resets the chip, boots the mesh, loads whatever was last compiled and loaded below into simulated SRAM, and wakes node 708's 'start. Blocked while a Kraken is erected." />
+          <Button Content="Step" Command="{Binding Debugger.StepCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Services exactly one memory-interface transaction (one read or one write), ignoring breakpoints -- always executes the next full instruction fetch or stack access." />
+          <Button Content="Continue" Command="{Binding Debugger.ContinueCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Services transactions back-to-back until an armed breakpoint's read reply is withheld, the transaction cap is reached, or you click Pause." />
+          <Button Content="Run" Command="{Binding Debugger.RunCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Same as Continue, but with no transaction cap at all -- runs until an armed breakpoint's read reply is withheld or you click Pause." />
+          <Button Content="Pause" Command="{Binding Debugger.PauseCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Stops the current Continue after its transaction in progress finishes." />
+          <Button Content="Stop" Command="{Binding Debugger.StopCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Ends this debugging session: cancels any run in progress and closes the serial port to the chip. The window stays open -- click Start / Reinstall to reconnect." />
+          <Button Content="Core Dump..." Command="{Binding Debugger.CoreDumpCommand}" Padding="12,6" Margin="0,0,8,0"
+                          ToolTip="Stops any active debug session, resets the chip, installs Kraken on node 708, and reads every other node's A, IO, RAM, ROM, and both stacks -- opening a read-only post-mortem GA144 window with the result. Reading the stacks pops them off the live node. Kraken remains installed afterward." />
+          <TextBlock Text="PC:" VerticalAlignment="Center" Margin="14,0,4,0" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding Debugger.ProgramCounterText}" VerticalAlignment="Center" FontFamily="Consolas" FontWeight="SemiBold" />
+        </StackPanel>
+        <CheckBox Content="Fill stacks with 0x1555x debug pattern before starting" Margin="0,6,0,0"
+                        IsChecked="{Binding Debugger.FillStacksWithDebugPoison}"
+                        ToolTip="On (default): before each node's own real return/parameter stack initialization, Start/Reinstall first overwrites both stacks with a 0x15550 (top) .. sentinel pattern down to the bottom -- 0x15558 for the 9-word return stack, 0x15559 for the 10-word data stack -- so any of these values still on a stack once the program is running identifies a slot it never actually touched. Turn off for a run where only the node's own real stack values should be present at boot." />
+        <TextBox Margin="0,7,0,0" Text="{Binding Debugger.StatusText, Mode=OneWay}"
+                        IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                        BorderThickness="0" Background="Transparent"
+                        FontWeight="SemiBold" TextWrapping="Wrap" />
+        <TextBox Margin="0,2,0,0" Text="{Binding Debugger.InstallSummaryText, Mode=OneWay}"
+                        IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                        BorderThickness="0" Background="Transparent"
+                        Foreground="#555" FontSize="11" TextWrapping="Wrap" />
+      </StackPanel>
+    </Border>
+
+    <GroupBox Grid.Row="2" Header="Breakpoints (page:address, e.g. 1:FFFE -- or a flat hex address)" Margin="0,10,0,0" Padding="8">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="140" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="180" />
+        </Grid.ColumnDefinitions>
+        <TextBox Text="{Binding Debugger.NewBreakpointText, UpdateSourceTrigger=PropertyChanged}" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <Button Grid.Column="1" Content="Add" Command="{Binding Debugger.AddBreakpointCommand}" Padding="10,4" Margin="0,0,8,0" />
+        <Button Grid.Column="2" Content="Remove selected" Command="{Binding Debugger.RemoveBreakpointCommand}" Padding="10,4" Margin="0,0,8,0" />
+        <Button Grid.Column="3" Content="Clear all" Command="{Binding Debugger.ClearBreakpointsCommand}" Padding="10,4" Margin="0,0,8,0" />
+        <ListBox Grid.Column="5" ItemsSource="{Binding Debugger.Breakpoints}" SelectedItem="{Binding Debugger.SelectedBreakpoint}"
+                         Height="60" FontFamily="Consolas" />
+      </Grid>
+    </GroupBox>
+
+    <GroupBox Grid.Row="3" Header="C source (statements only -- wrapped in a hidden &quot;void main() { ... }&quot; when compiled)" Margin="0,10,0,0" Padding="8">
+      <StackPanel>
+        <TextBox Text="{Binding SourceCodeText, UpdateSourceTrigger=PropertyChanged}"
+                        AcceptsReturn="True" AcceptsTab="True"
+                        FontFamily="Consolas" FontSize="12"
+                        Height="180"
+                        TextWrapping="NoWrap"
+                        VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Auto" />
+        <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
+          <Button Content="Compile &amp;&amp; Load" Command="{Binding CompileAndLoadCommand}" Padding="12,6"
+                          ToolTip="Wraps the source above in a hidden 'void main() { ... }', compiles it against every library's own headers found under this workspace's C libraries folder, assembles and links the result against every one of those libraries unconditionally, and -- on success -- loads it into the debugger below, ready for Start/Step/Continue. Diagnostics from every stage appear below this button." />
+        </StackPanel>
+        <TextBox Margin="0,7,0,0" Text="{Binding DiagnosticsText, Mode=OneWay}"
+                        IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                        FontFamily="Consolas" FontSize="11"
+                        Height="70"
+                        TextWrapping="Wrap"
+                        VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Auto" />
+      </StackPanel>
+    </GroupBox>
+
+    <GroupBox Grid.Row="4" Header="Simulated SRAM inspector" Margin="0,10,0,0" Padding="8">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="140" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="Show from:" VerticalAlignment="Center" />
+        <TextBox Grid.Column="1" Text="{Binding Debugger.MemoryBaseText, UpdateSourceTrigger=PropertyChanged}" Margin="6,0" />
+        <Button Grid.Column="2" Content="Refresh" Command="{Binding Debugger.RefreshMemoryCommand}" Padding="10,4" />
+      </Grid>
+    </GroupBox>
+
+    <TextBlock Grid.Row="5" Margin="0,10,0,4" FontWeight="SemiBold" Text="Simulated SRAM (read-only) -- disassembly mixed with the C source line that produced it" />
+    <Grid Grid.Row="6">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+      <TextBlock Text="{Binding Debugger.MemoryStatusText}" Foreground="#A33333" FontWeight="SemiBold" Margin="0,0,0,4" TextWrapping="Wrap" />
+      <ListView Grid.Row="1" ItemsSource="{Binding Debugger.MemoryRows}"
+                      FontFamily="Consolas" FontSize="11"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto">
+        <ListView.View>
+          <GridView>
+            <!-- The exact same PC/breakpoint gutter column as the CVM Debugger's own memory inspector,
+                 per Stefan, "use the same column for the old CVM debugger", right down to reusing
+                 CvmDebuggerViewModel.ToggleBreakpointAtAddress and CvmMemoryRowViewModel itself, since
+                 Debugger (below) is a genuine CvmDebuggerViewModel instance, not a lookalike. -->
+            <GridViewColumn Header="" Width="34">
+              <GridViewColumn.CellTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding GutterText}" HorizontalAlignment="Center" FontWeight="Bold"
+                                  Foreground="#B00020" Cursor="Hand" Background="Transparent"
+                                  ToolTip="Click to set or clear a breakpoint at this address."
+                                  MouseLeftButtonDown="OnMemoryGutterClick" />
+                </DataTemplate>
+              </GridViewColumn.CellTemplate>
+            </GridViewColumn>
+            <GridViewColumn Header="Address" Width="80" DisplayMemberBinding="{Binding AddressText}" />
+            <GridViewColumn Header="Value" Width="60" DisplayMemberBinding="{Binding ValueText}" />
+            <GridViewColumn Header="Disassembly" Width="260" DisplayMemberBinding="{Binding DisassemblyText}" />
+            <!-- Populated by whatever CompileAndLoadCommand most recently compiled; see
+                 CDebuggerViewModel.CompileAndLoad's own remarks for how a C source line ends up here. -->
+            <GridViewColumn Header="C source" Width="280" DisplayMemberBinding="{Binding SourceCommentText}" />
+          </GridView>
+        </ListView.View>
+      </ListView>
+    </Grid>
+
+    <Grid Grid.Row="7" Margin="0,10,0,4">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <TextBlock FontWeight="SemiBold" Text="Transaction log (read-only)" VerticalAlignment="Center" />
+      <Button Grid.Column="1" Content="Copy log" Padding="10,2" Click="OnCopyLogClick"
+                      ToolTip="Copies the full transaction log to the clipboard." />
+    </Grid>
+    <TextBox x:Name="LogTextBox" Grid.Row="8" Text="{Binding Debugger.LogText, Mode=OneWay}"
+                  IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                  FontFamily="Consolas" FontSize="11"
+                  TextWrapping="Wrap"
+                  VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Auto"
+                  TextChanged="OnLogTextChanged" />
+  </Grid>
+</Window>

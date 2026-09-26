@@ -1,6 +1,7 @@
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.ViewModels;
 using System.Windows;
+using System.Windows.Input;
 using Microsoft.Win32;
 
 namespace Ga144.Evb.Ide.Views;
@@ -74,6 +75,20 @@ public partial class CvmDebuggerWindow : Window
 
   private void OnLogTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) =>
       LogTextBox.ScrollToEnd();
+
+  // The simulated SRAM inspector's own gutter column (added 2026-09-26 -- see
+  // CvmDebuggerViewModel.MemoryRows's own remarks): a click anywhere in the gutter cell toggles a
+  // breakpoint at that row's own address, regardless of which glyph (if any) happened to be showing.
+  // The view model has no UI dependency of its own (same convention as every other click handler in
+  // this file), so this just reads the clicked element's own DataContext (the row) and forwards its
+  // FlatAddress.
+  private void OnMemoryGutterClick(object sender, MouseButtonEventArgs e)
+  {
+    if (sender is FrameworkElement { DataContext: CvmMemoryRowViewModel row })
+    {
+      _viewModel.ToggleBreakpointAtAddress(row.FlatAddress);
+    }
+  }
 
   // The dialog itself lives here, not in the view model -- same convention as every other file-picking
   // action in this IDE (e.g. CProjectWindow's own "Add existing..." handlers): the view model has no UI

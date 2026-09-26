@@ -122,6 +122,15 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // decide what Start should apply) so the two never fight over which one wins.
   private CvmImage? _loadedImage;
 
+  // Set by LoadImage's own sourceComments argument, cleared by any of the same events that clear
+  // _loadedImageSymbols (Assemble, or a fresh LoadImage/LoadImageFile with no comments of its own) --
+  // added 2026-09-26 for the C Debugger's own "disassembled code mixed with the corresponding C code as
+  // comments" runtime display. Empty (never populated) for anything loaded via the Assembly Code editor
+  // or LoadImageFile's own file picker, since neither of those has any C source to draw a comment from --
+  // this is exactly why the ordinary CVM Debugger's own memory rows never show a SourceCommentText: only
+  // Ga144.Evb.Ide.ViewModels.CDebuggerViewModel's own compile pipeline ever passes a non-empty map in.
+  private IReadOnlyDictionary<int, string> _sourceCommentsByAddress = new Dictionary<int, string>();
+
   // Source-form equivalent of CvmMemoryProtocol.TryBuildDebuggerTestProgram's own assembled words --
   // both are literally CvmDebuggerDefaultProgram.Source, so assembling this unedited reproduces
   // exactly the program Start already loads today (43 of the CVM's 73 opcodes, each with a
@@ -139,7 +148,10 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   private string _statusText = "Not started. Click Start to compile, boot the mesh, and load the shared test program.";
   private string _installSummaryText = string.Empty;
   private string _logText = string.Empty;
-  private string _memoryViewText = string.Empty;
+  // Replaced 2026-09-26 by MemoryRows (see its own remarks) -- kept as a field no longer, this
+  // string-building approach could not support a clickable breakpoint gutter or a per-row source-code
+  // comment (a plain TextBox has no concept of "this substring is a separate, interactive column").
+  private string _memoryStatusText = string.Empty;
   private string _memoryBaseText = "0:0000";
   private string _programCounterText = "-";
   private string _newBreakpointText = "0:0005";
@@ -242,7 +254,30 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   // transcript in this project: Stefan needs to be able to Ctrl+C a transaction line out of here.
   public string LogText { get => _logText; private set => SetProperty(ref _logText, value); }
 
-  public string MemoryViewText { get => _memoryViewText; private set => SetProperty(ref _memoryViewText, value); }
+  /// <summary>
+  /// Added 2026-09-26, replacing the former plain-text <c>MemoryViewText</c>: one row per word shown by
+  /// the simulated SRAM inspector, refreshed wholesale (Clear + re-add) by <see cref="RefreshMemoryView"/>
+  /// every time it runs, same "recomputed on every call, not diffed" contract that method's own remarks
+  /// already documented for its former string-building version. A real per-row object (rather than one
+  /// long formatted string) is what makes a dedicated, CLICKABLE gutter column possible at all -- see
+  /// <see cref="CvmMemoryRowViewModel.GutterText"/>'s own remarks, and <see cref="ToggleBreakpointAtAddress"/>,
+  /// which the view's own gutter-cell click handler calls. Per Stefan's own instruction ("use the same
+  /// column for the old CVM debugger"), this same row shape/gutter convention is shared verbatim with the
+  /// new C Debugger (<c>Ga144.Evb.Ide.ViewModels.CDebuggerViewModel</c> wraps an instance of THIS view
+  /// model for its own run/breakpoint/memory-inspector machinery rather than reimplementing it) -- the
+  /// only thing that differs between the two is whether <see cref="CvmMemoryRowViewModel.SourceCommentText"/>
+  /// ever comes out non-empty, which depends purely on whether <see cref="LoadImage"/>'s own
+  /// <c>sourceComments</c> argument was supplied.
+  /// </summary>
+  public ObservableCollection<CvmMemoryRowViewModel> MemoryRows { get; } = [];
+
+  /// <summary>Set instead of populating <see cref="MemoryRows"/> at all, for the two edge cases the
+  /// former <c>MemoryViewText</c> used to report inline (an unparseable <see cref="MemoryBaseText"/>, or
+  /// one past the end of the simulated SRAM) -- kept as its own property, distinct from <see
+  /// cref="StatusText"/>, so an unrelated Start/Step/Continue status message never gets silently
+  /// overwritten just because the memory inspector's own "Show from:" box happens to hold bad text right
+  /// now. Empty whenever <see cref="MemoryRows"/> holds the current view instead.</summary>
+  public string MemoryStatusText { get => _memoryStatusText; private set => SetProperty(ref _memoryStatusText, value); }
 
   public string MemoryBaseText { get => _memoryBaseText; set => SetProperty(ref _memoryBaseText, value ?? string.Empty); }
 
@@ -1319,16 +1354,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     {
       using FileStream stream = File.OpenRead(path);
       CvmImage image = CvmImage.Load(stream);
-
-      _session?.LoadImage(image);
-      MirrorSessionProgramIntoStandaloneSram(image.Words);
-      _loadedImageSymbols = image.Symbols;
-      _loadedImage = image;
-
-      StatusText = $"Loaded \"{Path.GetFileName(path)}\": {image.Words.Count} word(s), entry address " +
-          $"{DescribeFlatAddress(image.EntryAddress)}, {image.Symbols.Count} symbol(s).";
-      RefreshMemoryView();
-      RefreshProgramCounter();
+      LoadImage(image, $"Loaded \"{Path.GetFileName(path)}\"");
     }
     catch (Exception exception)
     {
@@ -1337,7 +1363,71 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   }
 
   /// <summary>
-  /// Refreshes <see cref="MemoryViewText"/> starting at <see cref="MemoryBaseText"/>. The number of
+  /// The shared body <see cref="LoadImageFile"/> factors out to (2026-09-26) so a caller that already
+  /// has a <see cref="CvmImage"/> in hand -- <c>Ga144.Evb.Ide.ViewModels.CDebuggerViewModel</c>'s own
+  /// compile/assemble/link pipeline, in particular, which has no ".gaimg" FILE to read one back from --
+  /// can load it exactly the same way a file picked via "Load linked image (.gaimg)..." would be,
+  /// without a round trip through disk. <paramref name="description"/> is this method's caller's own
+  /// choice of what to call the thing it loaded (a file name, or "Compiled and linked from the C source
+  /// editor") -- purely for <see cref="StatusText"/>'s wording, nothing else depends on it. <paramref
+  /// name="sourceComments"/> (final CVM address -&gt; trimmed C source line text, or null/empty for
+  /// none) feeds <see cref="CvmMemoryRowViewModel.SourceCommentText"/> for the row at that exact address --
+  /// see <see cref="_sourceCommentsByAddress"/>'s own remarks for why this is empty for every OTHER
+  /// caller of this method today.
+  /// </summary>
+  public void LoadImage(CvmImage image, string description, IReadOnlyDictionary<int, string>? sourceComments = null)
+  {
+    if (IsBusy)
+    {
+      StatusText = "Cannot load an image while a Step/Continue/Start is in progress.";
+      return;
+    }
+
+    _session?.LoadImage(image);
+    MirrorSessionProgramIntoStandaloneSram(image.Words);
+    _loadedImageSymbols = image.Symbols;
+    _loadedImage = image;
+    _sourceCommentsByAddress = sourceComments ?? new Dictionary<int, string>();
+
+    StatusText = $"{description}: {image.Words.Count} word(s), entry address " +
+        $"{DescribeFlatAddress(image.EntryAddress)}, {image.Symbols.Count} symbol(s).";
+    RefreshMemoryView();
+    RefreshProgramCounter();
+  }
+
+  /// <summary>
+  /// The gutter column's own click handler (see <see cref="MemoryRows"/>'s own remarks) -- adds a
+  /// breakpoint at <paramref name="flatAddress"/> if none is armed there yet, removes it otherwise,
+  /// exactly like <see cref="AddBreakpointCommand"/>/<see cref="RemoveBreakpointCommand"/> but keyed
+  /// directly off the row that was clicked rather than a typed address. Same "needs a live session"
+  /// constraint those two commands already have (a breakpoint is armed against <see cref="_session"/>'s
+  /// own transaction-level pause mechanism, which has nothing to attach to without a connected chip) --
+  /// a click with no session active is a silent no-op, mirroring how <see cref="AddBreakpointCommand"/>
+  /// itself is simply disabled (<c>() => IsSessionActive</c>) rather than showing an error for the same
+  /// reason.
+  /// </summary>
+  public void ToggleBreakpointAtAddress(int flatAddress)
+  {
+    if (_session is null)
+    {
+      return;
+    }
+
+    if (_session.Breakpoints.Contains(flatAddress))
+    {
+      _session.RemoveBreakpoint(flatAddress);
+    }
+    else
+    {
+      _session.AddBreakpoint(flatAddress);
+    }
+
+    RefreshBreakpointList();
+    RefreshMemoryView();
+  }
+
+  /// <summary>
+  /// Refreshes <see cref="MemoryRows"/> starting at <see cref="MemoryBaseText"/>. The number of
   /// words shown is <see cref="MemoryViewWordCount"/>, however many words the CURRENTLY loaded
   /// program actually occupies, or one past the highest address any <see cref="_loadedImageSymbols"/>
   /// entry resolves to -- whichever is largest -- so opening the CVM Debugger with a short program (or
@@ -1364,7 +1454,8 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   {
     if (!TryParseAddress(MemoryBaseText, out int baseAddress))
     {
-      MemoryViewText = $"'{MemoryBaseText}' is not a valid address. Use \"p:aaaa\" or a flat hex address.";
+      MemoryRows.Clear();
+      MemoryStatusText = $"'{MemoryBaseText}' is not a valid address. Use \"p:aaaa\" or a flat hex address.";
       return;
     }
 
@@ -1377,7 +1468,8 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     int count = Math.Min(desiredWordCount, CvmSimulatedSram.WordCapacity - baseAddress);
     if (count <= 0)
     {
-      MemoryViewText = $"{DescribeFlatAddress(baseAddress)} is at or past the end of the simulated SRAM.";
+      MemoryRows.Clear();
+      MemoryStatusText = $"{DescribeFlatAddress(baseAddress)} is at or past the end of the simulated SRAM.";
       return;
     }
 
@@ -1417,24 +1509,29 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     // Grouped by address up front (an image can legitimately have several symbols at the same
     // address, e.g. __exit and a library-internal alias for it) so the row loop below is a plain
     // dictionary lookup rather than an O(symbols) scan per row.
-    ILookup<int, string> loadedImageSymbolsByAddress = _loadedImageSymbols.ToLookup(symbol => symbol.Address, symbol => symbol.Name);
+    //
+    // FILTERED to IsExported symbols only (added 2026-09-26, alongside CvmImageSymbol.IsExported's own
+    // introduction): CvmLinker now also includes every LOCAL symbol in a linked image (loop/branch
+    // labels, the C compiler's own per-statement "__srcline_N" source-comment labels, string-literal and
+    // "static"-local mangled names -- see CCodeGenerator's own label-naming remarks), which this
+    // pre-existing "<name>" annotation was never designed to show -- unfiltered, a real program's memory
+    // view would suddenly be dominated by compiler-internal noise instead of the handful of real
+    // function/global names it used to list. The C Debugger has its own separate, DefiningObjectName-
+    // filtered lookup for its own Local source-comment labels (see CDebuggerViewModel.CompileAndLoad) and
+    // does not go through this field at all.
+    ILookup<int, string> loadedImageSymbolsByAddress = _loadedImageSymbols
+        .Where(symbol => symbol.IsExported)
+        .ToLookup(symbol => symbol.Address, symbol => symbol.Name);
 
-    var builder = new StringBuilder();
-    builder.Append("Address   Value   Notes").Append('\n');
+    MemoryStatusText = string.Empty;
+    MemoryRows.Clear();
     for (int index = 0; index < words.Count; index++)
     {
       int flatAddress = baseAddress + index;
+      bool isCurrentPc = programCounter == flatAddress;
+      bool isBreakpoint = breakpoints.Contains(flatAddress);
+
       var notes = new List<string>();
-      if (programCounter == flatAddress)
-      {
-        notes.Add("<- PC");
-      }
-
-      if (breakpoints.Contains(flatAddress))
-      {
-        notes.Add("[BP]");
-      }
-
       foreach (string symbolName in loadedImageSymbolsByAddress[flatAddress])
       {
         notes.Add($"<{symbolName}>");
@@ -1445,16 +1542,40 @@ public sealed class CvmDebuggerViewModel : ObservableObject
         notes.Add(note);
       }
 
-      // The SRAM is 16-bit (CvmWordCodec.WordMask = 0xFFFF), so 4 hex digits always suffice; the
-      // leading "0x" is dropped since every value in this column is already known to be hex.
-      builder.Append(DescribeFlatAddress(flatAddress).PadRight(10))
-          .Append($"{words[index]:X4}".PadRight(8))
-          .Append(string.Join(' ', notes))
-          .Append('\n');
-    }
+      _sourceCommentsByAddress.TryGetValue(flatAddress, out string? sourceComment);
 
-    MemoryViewText = builder.ToString();
+      MemoryRows.Add(new CvmMemoryRowViewModel
+      {
+        FlatAddress = flatAddress,
+        AddressText = DescribeFlatAddress(flatAddress),
+        // The SRAM is 16-bit (CvmWordCodec.WordMask = 0xFFFF), so 4 hex digits always suffice; the
+        // leading "0x" is dropped since every value in this column is already known to be hex.
+        ValueText = $"{words[index]:X4}",
+        IsCurrentPc = isCurrentPc,
+        IsBreakpoint = isBreakpoint,
+        GutterText = FormatGutter(isCurrentPc, isBreakpoint),
+        DisassemblyText = string.Join(' ', notes),
+        SourceCommentText = sourceComment is null ? string.Empty : $"; {sourceComment}"
+      });
+    }
   }
+
+  /// <summary>
+  /// The gutter column's own text -- a right-pointing arrow for the current PC, a filled circle for an
+  /// armed breakpoint, both together when a breakpoint happens to sit exactly on the current PC. Kept as
+  /// its own small helper (rather than inlined into the row-construction loop above) only because
+  /// <see cref="ToggleBreakpointAtAddress"/>'s own caller (the view's gutter-cell click handler) has no
+  /// other reason to duplicate this exact formatting -- <see cref="RefreshMemoryView"/> is the only
+  /// caller today, but a second one (e.g. an eventual C Debugger-specific row decoration) would want the
+  /// identical convention, not a subtly different one.
+  /// </summary>
+  private static string FormatGutter(bool isCurrentPc, bool isBreakpoint) => (isCurrentPc, isBreakpoint) switch
+  {
+    (true, true) => "●→",
+    (true, false) => "→",
+    (false, true) => "●",
+    (false, false) => string.Empty,
+  };
 
   private void RefreshProgramCounter()
   {
@@ -1564,4 +1685,40 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     OnPropertyChanged(nameof(IsContinuing));
     OnPropertyChanged(nameof(IsSessionActive));
   }
+}
+
+/// <summary>
+/// One row of the simulated SRAM inspector (<see cref="CvmDebuggerViewModel.MemoryRows"/>), added
+/// 2026-09-26 replacing the former plain-text memory view -- see that property's own remarks. A plain
+/// data-holder (not itself an <see cref="ObservableObject"/>/mutable-in-place row): <see
+/// cref="CvmDebuggerViewModel.RefreshMemoryView"/> rebuilds the whole collection from scratch every time
+/// it runs, so no row is ever mutated after construction, and there is nothing here for a binding to
+/// listen for a change on.
+///
+/// <see cref="GutterText"/> is the column Stefan asked for directly ("there is a separate column after
+/// the address for the current program counter position and in the same column, breakpoints can be set
+/// and cleared... use the same column for the old CVM debugger"): a right-pointing arrow marks the
+/// current PC, a filled circle marks an armed breakpoint (both together when they coincide), and the
+/// view's own gutter cell is what's actually clickable -- a click calls
+/// <see cref="CvmDebuggerViewModel.ToggleBreakpointAtAddress"/> with this row's own <see cref="FlatAddress"/>,
+/// independently of whatever glyph happened to be showing at the moment of the click.
+/// </summary>
+public sealed class CvmMemoryRowViewModel
+{
+  public required int FlatAddress { get; init; }
+  public required string AddressText { get; init; }
+  public required string ValueText { get; init; }
+  public required bool IsCurrentPc { get; init; }
+  public required bool IsBreakpoint { get; init; }
+  public required string GutterText { get; init; }
+  public required string DisassemblyText { get; init; }
+
+  /// <summary>The C statement that produced this address, formatted as a trailing assembly-style
+  /// comment ("; a = a + 1;"), or empty when none is known -- either because nothing is loaded here that
+  /// carries source comments at all (the ordinary CVM Debugger's own Assembly Code editor / a plain
+  /// ".gaimg" loaded by file both leave this empty for every row), or because this particular address
+  /// simply isn't the first word of a statement (most words in a multi-word statement's own generated
+  /// code have no comment of their own -- see <see cref="Ga144.C.Toolchain.CCodeGenerator.SourceCommentLabels"/>'s
+  /// own remarks for why only ONE address per statement ever gets one).</summary>
+  public required string SourceCommentText { get; init; }
 }

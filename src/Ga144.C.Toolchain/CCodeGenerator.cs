@@ -430,9 +430,74 @@ public sealed class CCodeGenerator
   /// until Stefan has had a chance to verify it.</summary>
   private readonly bool _enablePeepholeOptimization;
 
-  public CCodeGenerator(bool enablePeepholeOptimization = false)
+  /// <summary>
+  /// Added 2026-09-26, for the C Debugger's own "disassembled code mixed with the corresponding C code
+  /// as comments" runtime display (see <see cref="SourceCommentLabels"/>'s own remarks). The top-level
+  /// file this generator is compiling, and that file's own raw source text split into lines -- both
+  /// null for a caller that doesn't want source-comment labels at all (every pre-existing call site,
+  /// via <see cref="CCodeGenerator(bool)"/>'s single-argument overload, still compiles and behaves
+  /// exactly as before this feature existed). Only a statement whose OWN <see cref="CSourceLocation.FileName"/>
+  /// matches <see cref="_sourceFileName"/> exactly gets a label -- one expanded from a macro defined in
+  /// an `#include`d header, for instance, has a DIFFERENT FileName, and deliberately gets no label at
+  /// all rather than one pointing at the wrong file's line N (this compiler has no multi-file source
+  /// map to draw on here, so "skip it" is the only correct choice, not "guess").
+  /// </summary>
+  private readonly string? _sourceFileName;
+  private readonly IReadOnlyList<string>? _sourceLines;
+
+  /// <summary>Every synthetic per-statement label this generator emitted (see <see cref="EmitSourceLineComment"/>),
+  /// mapped to that statement's own trimmed source line text -- e.g. "__srcline_3" -&gt; "a = a + 1;".
+  /// Empty when this generator was constructed with no <see cref="_sourceLines"/> to draw from. Each
+  /// label is a plain, NEVER-exported (<see cref="EmitLabel"/>, not ".export") local label -- assembled
+  /// with <c>Ga144.Cvm.Toolchain.CvmSymbolBinding.Local</c> binding, so it costs nothing at runtime (a
+  /// label consumes no word of its own) and is deliberately NOT required to be globally unique across a
+  /// whole link (see <c>Ga144.Cvm.Toolchain.CvmImageSymbol.DefiningObjectName</c>'s own remarks for how
+  /// a consumer like the C Debugger resolves one of these back to a final address without ambiguity once
+  /// several objects, each with their own "__srcline_0", are linked together).</summary>
+  public IReadOnlyDictionary<string, string> SourceCommentLabels => _sourceCommentLabels;
+
+  private readonly Dictionary<string, string> _sourceCommentLabels = new(StringComparer.Ordinal);
+  private int _sourceCommentCounter;
+
+  public CCodeGenerator(bool enablePeepholeOptimization = false, string? sourceFileName = null, IReadOnlyList<string>? sourceLines = null)
   {
     _enablePeepholeOptimization = enablePeepholeOptimization;
+    _sourceFileName = sourceFileName;
+    _sourceLines = sourceLines;
+  }
+
+  /// <summary>
+  /// Emits a synthetic, never-exported label (recorded in <see cref="_sourceCommentLabels"/>) right
+  /// before a statement's own generated code, naming the exact C source line it came from -- purely
+  /// additive metadata: the label itself is zero words wide, so a compile with nowhere to feed the
+  /// result (<see cref="_sourceLines"/> null, or a location outside <see cref="_sourceFileName"/>) can
+  /// just skip it with no effect on the generated program either way. Called once per statement from
+  /// <see cref="EmitStatement"/>'s own top-level dispatch -- never for a <see cref="CCompoundStmt"/>
+  /// itself (its own "location" is just its opening brace, not a statement with code of its own) or a
+  /// <see cref="CEmptyStmt"/> (a bare ";", nothing to label).
+  /// </summary>
+  private void EmitSourceLineComment(CSourceLocation location)
+  {
+    if (_sourceLines is null || !string.Equals(location.FileName, _sourceFileName, StringComparison.Ordinal))
+    {
+      return;
+    }
+
+    int lineIndex = location.Line - 1;
+    if (lineIndex < 0 || lineIndex >= _sourceLines.Count)
+    {
+      return;
+    }
+
+    string text = _sourceLines[lineIndex].Trim();
+    if (text.Length == 0)
+    {
+      return;
+    }
+
+    string label = $"__srcline_{_sourceCommentCounter++}";
+    EmitLabel(label);
+    _sourceCommentLabels[label] = text;
   }
 
   /// <summary>Generates CVM assembly text for <paramref name="unit"/>. Returns null (with at least one
@@ -2460,6 +2525,15 @@ public sealed class CCodeGenerator
 
   private void EmitStatement(CStmt stmt)
   {
+    // 2026-09-26: tag every "real" statement with its own source-comment label before emitting its
+    // code -- see EmitSourceLineComment's own remarks. Deliberately excluded: CCompoundStmt itself
+    // (its Location is just the opening brace; its own inner statements get tagged individually as
+    // this method recurses into them) and CEmptyStmt (a bare ";", nothing to label).
+    if (stmt is not (CCompoundStmt or CEmptyStmt))
+    {
+      EmitSourceLineComment(stmt.Location);
+    }
+
     switch (stmt)
     {
       case CCompoundStmt compound:

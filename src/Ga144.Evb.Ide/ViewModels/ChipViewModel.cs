@@ -20,7 +20,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     Func<Task> saveRomLibraryAsync,
     Func<KrakenEndpointInfo?> krakenEndpointResolver,
     KrakenLiveController krakenController,
-    IReadOnlyList<ProjectViewModel> allProjects)
+    IReadOnlyList<ProjectViewModel> allProjects,
+    string? cLibsDirectoryPath = null)
   {
     Project = project;
     Role = role;
@@ -31,6 +32,7 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     KrakenEndpointResolver = krakenEndpointResolver;
     KrakenController = krakenController ?? throw new ArgumentNullException(nameof(krakenController));
     AllProjects = allProjects ?? throw new ArgumentNullException(nameof(allProjects));
+    CLibsDirectoryPath = cLibsDirectoryPath;
     KrakenController.StateChanged += OnKrakenControllerStateChanged;
     ToggleKrakenCommand = new AsyncRelayCommand(ToggleKrakenAsync);
     VerifyAllRomsCommand = new AsyncRelayCommand(VerifyAllRomsAsync, () => !_verifyBusy);
@@ -51,6 +53,18 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public Func<Task> SaveRomLibraryAsync { get; }
   public Func<KrakenEndpointInfo?> KrakenEndpointResolver { get; }
   public KrakenLiveController KrakenController { get; }
+
+  /// <summary>
+  /// The shared "libs" workspace directory every C library project lives under (same directory
+  /// <c>MainWindowViewModel.CLibsDirectoryPath</c> names) -- added 2026-09-26 purely so this chip
+  /// window's own "C Debugger..." button (<see cref="Views.ChipWindow"/>'s code-behind) can hand it to a
+  /// new <see cref="CDebuggerViewModel"/>, which auto-includes every library found there unconditionally
+  /// (see that class's own remarks for why, unlike an ordinary C project's Build). Null when this chip
+  /// window was constructed without a workspace root to derive one from (e.g. a future standalone/test
+  /// caller) -- <see cref="CDebuggerViewModel"/> treats that the same as an empty libs folder, not an
+  /// error.
+  /// </summary>
+  public string? CLibsDirectoryPath { get; }
 
   /// <summary>
   /// Every project currently open in the workspace, including this chip

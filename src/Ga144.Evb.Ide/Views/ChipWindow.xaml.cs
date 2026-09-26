@@ -372,6 +372,54 @@ public partial class ChipWindow : Window
     _cvmDebuggerWindow = null;
   }
 
+  private CDebuggerWindow? _cDebuggerWindow;
+
+  // Same reusable, non-modal window pattern (and same reason) as OnOpenCvmDebuggerClick just above --
+  // CDebuggerViewModel.Debugger is a genuine CvmDebuggerViewModel of its own, holding its own serial
+  // port open for its whole life, so this needs the identical "Activate if already open" / "tear the
+  // session down on Closed" handling, not just a plain window Show.
+  private void OnOpenCDebuggerClick(object sender, RoutedEventArgs e)
+  {
+    if (_cDebuggerWindow is not null)
+    {
+      if (_cDebuggerWindow.WindowState == WindowState.Minimized)
+      {
+        _cDebuggerWindow.WindowState = WindowState.Normal;
+      }
+
+      _cDebuggerWindow.Activate();
+      return;
+    }
+
+    var viewModel = new CDebuggerViewModel(
+        _viewModel.Chip,
+        _viewModel.RomLibrary,
+        _viewModel.Project.Model.UserMacros,
+        _viewModel.KrakenController,
+        _viewModel.KrakenEndpointResolver,
+        _viewModel.Project.NotifyProjectChanged,
+        _viewModel.Project.Model.DefaultNodeColor,
+        _viewModel.CLibsDirectoryPath);
+    var window = new CDebuggerWindow(viewModel)
+    {
+      Owner = this
+    };
+
+    _cDebuggerWindow = window;
+    window.Closed += OnCDebuggerWindowClosed;
+    window.Show();
+  }
+
+  private void OnCDebuggerWindowClosed(object? sender, EventArgs e)
+  {
+    if (sender is CDebuggerWindow window)
+    {
+      window.Closed -= OnCDebuggerWindowClosed;
+    }
+
+    _cDebuggerWindow = null;
+  }
+
   private SimulatorChipWindow? _simulatorChipWindow;
 
   private void OnOpenSimulatorClick(object sender, RoutedEventArgs e)

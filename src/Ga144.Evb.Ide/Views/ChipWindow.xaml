@@ -106,6 +106,12 @@
                           Padding="12,6"
                           Margin="0,0,8,0"
                           ToolTip="Opens the CVM Debugger window: same compile-boot-load-wake sequence as 'Install &amp; run CVM test', but interactive -- step one memory-interface transaction at a time, run to a breakpoint (paused by withholding a read's reply, exactly what the physical CVM is blocked on), and inspect the simulated SRAM. Blocked while a Kraken is erected (this resets the whole chip)." />
+          <Button Content="C Debugger"
+                          Click="OnOpenCDebuggerClick"
+                          IsEnabled="True"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Opens the C Debugger window: type a snippet of C (wrapped automatically in a hidden 'void main() { ... }'), compile and link it against every C library found in this workspace, and step through it with the exact same CVM Debugger controls -- run/step/breakpoints, and the simulated SRAM inspector with disassembly shown alongside the originating C source line. Blocked while a Kraken is erected (this resets the whole chip)." />
           <Button Content="Simulator…"
                           Click="OnOpenSimulatorClick"
                           IsEnabled="True"

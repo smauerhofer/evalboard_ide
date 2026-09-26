@@ -78,7 +78,8 @@ public partial class MainWindow : Window
           _viewModel.SaveRomLibraryAsync,
           () => _viewModel.ResolveKrakenEndpoint(e.Role),
           krakenController,
-          _viewModel.Projects))
+          _viewModel.Projects,
+          _viewModel.CLibsDirectoryPath))
       {
         Owner = this
       };

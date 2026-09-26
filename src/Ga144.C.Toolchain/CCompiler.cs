@@ -21,6 +21,16 @@ public sealed class CCompileResult
   /// generation -- already formatted MSVC/Visual-Studio-style via <see
   /// cref="CSourceLocation.FormatDiagnostic"/>.</summary>
   public required IReadOnlyList<string> Diagnostics { get; init; }
+
+  /// <summary>
+  /// Added 2026-09-26, for the C Debugger's own "disassembled code mixed with the corresponding C code
+  /// as comments" runtime display -- see <see cref="CCodeGenerator.SourceCommentLabels"/>'s own remarks
+  /// for exactly what this maps (a synthetic, never-exported CVM assembly label to the trimmed C source
+  /// line it came from). Empty (never null) whenever <see cref="Assembly"/> is null, i.e. whenever
+  /// generation didn't run to completion. A caller that only cares about the compiled assembly text
+  /// (every pre-existing call site) can simply ignore this.
+  /// </summary>
+  public IReadOnlyDictionary<string, string> SourceCommentLabels { get; init; } = new Dictionary<string, string>();
 }
 
 /// <summary>
@@ -83,7 +93,13 @@ public static class CCompiler
       unit = CConstantFolder.Fold(unit);
     }
 
-    var generator = new CCodeGenerator(enablePeepholeOptimization);
+    // 2026-09-26: split into lines once here (never-null, so a CRLF-authored source and an LF-authored
+    // one both index the same way) so CCodeGenerator can turn a statement's own CSourceLocation.Line
+    // back into its literal source text for the C Debugger's source-comment labels -- see
+    // CCodeGenerator's own remarks. Only ever consulted for a location whose FileName is THIS file
+    // (fileName, below), never an #include'd header's.
+    string[] sourceLines = sourceText.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+    var generator = new CCodeGenerator(enablePeepholeOptimization, fileName, sourceLines);
     (string? assembly, IReadOnlyList<string> codeGenDiagnostics) = generator.Generate(unit);
 
     var allDiagnostics = new List<string>(preprocessResult.Diagnostics.Count + parseDiagnostics.Count + codeGenDiagnostics.Count);
@@ -91,6 +107,13 @@ public static class CCompiler
     allDiagnostics.AddRange(parseDiagnostics);
     allDiagnostics.AddRange(codeGenDiagnostics);
 
-    return new CCompileResult { Success = assembly is not null, PreprocessedText = preprocessedText, Assembly = assembly, Diagnostics = allDiagnostics };
+    return new CCompileResult
+    {
+      Success = assembly is not null,
+      PreprocessedText = preprocessedText,
+      Assembly = assembly,
+      Diagnostics = allDiagnostics,
+      SourceCommentLabels = generator.SourceCommentLabels
+    };
   }
 }

@@ -407,9 +407,55 @@ public static class CvmLinker
       words[0] = CvmInstructionSet.BranchTag | (offsetFromVector & CvmInstructionSet.BranchOffsetBitMask);
     }
 
-    List<CvmImageSymbol> imageSymbols = [.. finalAddress
-        .Select(pair => new CvmImageSymbol { Name = pair.Key, Address = pair.Value })
-        .OrderBy(symbol => symbol.Name, StringComparer.Ordinal)];
+    // Added 2026-09-26, alongside CvmImageSymbol.DefiningObjectName (see its own remarks): every
+    // finalAddress entry (a Global symbol this link resolved, or a primitive-table mnemonic) is still
+    // included exactly as before -- this only ADDS entries, never removes or renames one, so every
+    // existing caller that only ever looked up a Global/primitive name is unaffected. What's new is the
+    // second loop below: every LOCAL (non-exported) symbol each linked object defines for itself is now
+    // ALSO included -- previously dropped entirely (see the "FIXED, 2026-09-10" remarks on the
+    // relocation loop above for the bug that same omission caused there; this is the equivalent gap in
+    // the image's own symbol table). A Local symbol is only ever meaningful within its own object file
+    // (CvmAssembler itself refuses to let a name be both a local label and ".import"ed), so its final
+    // address is looked up the same way the relocation loop above already does for one: via THIS
+    // object's own FinalAddressOf, never the cross-object finalAddress table. This is what lets, e.g.,
+    // the C Debugger recover the final address of a per-statement source-comment label the C compiler
+    // emits as a Local symbol (see CCodeGenerator's own remarks) -- filtered by DefiningObjectName, since
+    // several linked objects may each define a same-named Local symbol (that label-naming scheme is
+    // deliberately only unique WITHIN one object, never across a whole link).
+    var imageSymbolList = new List<CvmImageSymbol>();
+    foreach ((string name, int address) in finalAddress)
+    {
+      imageSymbolList.Add(new CvmImageSymbol
+      {
+        Name = name,
+        Address = address,
+        DefiningObjectName = globalDefiningObject.TryGetValue(name, out string? definingObject) ? definingObject : null,
+        // IsExported (added 2026-09-26, see CvmImageSymbol's own remarks): every entry here came from
+        // finalAddress, i.e. is a Global symbol or a primitive-table mnemonic -- exactly the set a human
+        // reading the CVM Debugger's own "<name>" memory-view annotation actually wants to see.
+        IsExported = true
+      });
+    }
+
+    foreach (CvmLinkObjectInput input in linkedObjects)
+    {
+      foreach (CvmSymbol symbol in input.ObjectFile.Symbols.Where(s => s.Binding == CvmSymbolBinding.Local))
+      {
+        imageSymbolList.Add(new CvmImageSymbol
+        {
+          Name = symbol.Name,
+          Address = FinalAddressOf(symbol, input.DisplayName),
+          DefiningObjectName = input.DisplayName,
+          // Never exported (that's the whole point of Local binding) -- see CvmImageSymbol.IsExported's
+          // own remarks for why this is what keeps these out of the ordinary "<name>" annotation.
+          IsExported = false
+        });
+      }
+    }
+
+    List<CvmImageSymbol> imageSymbols = [.. imageSymbolList
+        .OrderBy(symbol => symbol.Name, StringComparer.Ordinal)
+        .ThenBy(symbol => symbol.Address)];
 
     var image = new CvmImage
     {

@@ -130,11 +130,43 @@
     </GroupBox>
 
     <TextBlock Grid.Row="5" Margin="0,10,0,4" FontWeight="SemiBold" Text="Simulated SRAM (read-only)" />
-    <TextBox Grid.Row="6" Text="{Binding MemoryViewText, Mode=OneWay}"
-                  IsReadOnly="True" IsReadOnlyCaretVisible="True"
-                  FontFamily="Consolas" FontSize="11"
-                  VerticalScrollBarVisibility="Auto"
-                  HorizontalScrollBarVisibility="Auto" />
+    <Grid Grid.Row="6">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+      <TextBlock Text="{Binding MemoryStatusText}" Foreground="#A33333" FontWeight="SemiBold" Margin="0,0,0,4" TextWrapping="Wrap" />
+      <ListView Grid.Row="1" ItemsSource="{Binding MemoryRows}"
+                      FontFamily="Consolas" FontSize="11"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto">
+        <ListView.View>
+          <GridView>
+            <!-- The gutter column Stefan asked for directly: right after the address, showing the
+                 current PC (an arrow) and any armed breakpoint (a filled circle); clicking anywhere
+                 in this cell toggles a breakpoint at that row's own address, via
+                 CvmDebuggerViewModel.ToggleBreakpointAtAddress. Shared verbatim by the C Debugger's own
+                 memory inspector, per Stefan: "use the same column for the old CVM debugger". -->
+            <GridViewColumn Header="" Width="34">
+              <GridViewColumn.CellTemplate>
+                <DataTemplate>
+                  <TextBlock Text="{Binding GutterText}" HorizontalAlignment="Center" FontWeight="Bold"
+                                  Foreground="#B00020" Cursor="Hand" Background="Transparent"
+                                  ToolTip="Click to set or clear a breakpoint at this address."
+                                  MouseLeftButtonDown="OnMemoryGutterClick" />
+                </DataTemplate>
+              </GridViewColumn.CellTemplate>
+            </GridViewColumn>
+            <GridViewColumn Header="Address" Width="80" DisplayMemberBinding="{Binding AddressText}" />
+            <GridViewColumn Header="Value" Width="60" DisplayMemberBinding="{Binding ValueText}" />
+            <GridViewColumn Header="Disassembly" Width="260" DisplayMemberBinding="{Binding DisassemblyText}" />
+            <!-- Empty for the ordinary CVM Debugger's own hand-typed/loaded programs; only ever
+                 populated when the C Debugger's own compile pipeline loaded what's showing here. -->
+            <GridViewColumn Header="C source" Width="280" DisplayMemberBinding="{Binding SourceCommentText}" />
+          </GridView>
+        </ListView.View>
+      </ListView>
+    </Grid>
 
     <Grid Grid.Row="7" Margin="0,10,0,4">
       <Grid.ColumnDefinitions>
