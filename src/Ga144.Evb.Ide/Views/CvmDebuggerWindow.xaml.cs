@@ -184,4 +184,51 @@ public partial class CvmDebuggerWindow : Window
       // Clipboard can transiently fail if another process holds it; ignore.
     }
   }
+
+  // Simulated SRAM inspector's own "Copy" button (added 2026-09-27), per Stefan: "make a button 'Copy'
+  // that copies the selected lines into an MD array in the clipboard." "MD" already means Markdown
+  // everywhere else in this codebase (see NodeEditorViewModel.CopyImageMarkdown's own "Copy MD" buttons,
+  // which build a GFM table), not a multi-dimensional array -- there is no C# array-literal convention
+  // anywhere in this project to match instead -- so this follows that same precedent: a
+  // "| Address | Value | Label | Disassembly | C source |" table, one row per SELECTED line, copied as
+  // plain text. Flagged here rather than silently assumed, since "MD array" was never spelled out.
+  //
+  // Only the currently SELECTED row(s) are copied (MemoryListView.SelectedItems, enabled via this
+  // ListView's own SelectionMode="Extended" -- previously implicitly "Single") -- sorted by address
+  // rather than by click/selection order, since a Shift/Ctrl-click selection's own internal order is not
+  // guaranteed to be address order. Nothing selected -> nothing to copy, so this quietly no-ops rather
+  // than falling back to the whole list. Same try/Clipboard.SetText/catch shape as OnCopyLogClick.
+  private void OnCopySramClick(object sender, RoutedEventArgs e)
+  {
+    if (MemoryListView.SelectedItems.Count == 0)
+    {
+      return;
+    }
+
+    try
+    {
+      List<CvmMemoryRowViewModel> selected = MemoryListView.SelectedItems
+          .Cast<CvmMemoryRowViewModel>()
+          .OrderBy(row => row.FlatAddress)
+          .ToList();
+
+      var lines = new List<string>(selected.Count + 2)
+      {
+        "| Address | Value | Label | Disassembly | C source |",
+        "| --- | --- | --- | --- | --- |",
+      };
+
+      foreach (CvmMemoryRowViewModel row in selected)
+      {
+        lines.Add($"| {row.AddressText} | {row.ValueText} | {row.LabelText} | {row.DisassemblyText} | {row.SourceCommentText} |");
+      }
+
+      Clipboard.SetText(string.Join(Environment.NewLine, lines));
+    }
+    catch
+    {
+      // Clipboard can transiently fail if another process holds it; ignore -- same convention as
+      // OnCopyLogClick.
+    }
+  }
 }

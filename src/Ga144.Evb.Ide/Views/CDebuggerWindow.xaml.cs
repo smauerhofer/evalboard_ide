@@ -150,4 +150,43 @@ public partial class CDebuggerWindow : Window
       // Clipboard can transiently fail if another process holds it; ignore.
     }
   }
+
+  // Same "Copy" button convention as CvmDebuggerWindow.xaml.cs's own OnCopySramClick -- see its own
+  // remarks for the "MD" = Markdown disambiguation and why only the SELECTED row(s) are copied, sorted
+  // by address. Duplicated here rather than shared for the same reason every other handler in this file
+  // is duplicated: this window's own MemoryListView is a distinct control, even though the rows it shows
+  // (Debugger.MemoryRows) come from a genuine CvmDebuggerViewModel instance.
+  private void OnCopySramClick(object sender, RoutedEventArgs e)
+  {
+    if (MemoryListView.SelectedItems.Count == 0)
+    {
+      return;
+    }
+
+    try
+    {
+      List<CvmMemoryRowViewModel> selected = MemoryListView.SelectedItems
+          .Cast<CvmMemoryRowViewModel>()
+          .OrderBy(row => row.FlatAddress)
+          .ToList();
+
+      var lines = new List<string>(selected.Count + 2)
+      {
+        "| Address | Value | Label | Disassembly | C source |",
+        "| --- | --- | --- | --- | --- |",
+      };
+
+      foreach (CvmMemoryRowViewModel row in selected)
+      {
+        lines.Add($"| {row.AddressText} | {row.ValueText} | {row.LabelText} | {row.DisassemblyText} | {row.SourceCommentText} |");
+      }
+
+      Clipboard.SetText(string.Join(Environment.NewLine, lines));
+    }
+    catch
+    {
+      // Clipboard can transiently fail if another process holds it; ignore -- same convention as
+      // OnCopyLogClick.
+    }
+  }
 }
