@@ -395,6 +395,15 @@ internal static class CvmAssemblyLanguage
   // 'gld's/'gst's own ADDRESSES on node 508 moved (resolved dynamically below, not re-derived here).
   private const int Node508LoadStoreGlobalTagBits = 0xA000;
 
+  // "literal" (2026-09-27, per Stefan: "change opcode 'literal' so that it uses 'lit' when the constant
+  // fits and 'litr' if the constant is too big for 'lit'") -- a pure assembler-level pseudo-mnemonic, not
+  // a real CVM opcode at all (it has no CvmInstructionSet.Instructions entry, no tag, no F18 symbol of
+  // its own): a hand-written .cvmasm source (or the CVM Debugger's own Assembly Code editor) can write
+  // "literal <value>" instead of choosing between "lit"/"litr" itself, and this file picks whichever one
+  // actually fits -- see EncodeLiteralPseudoMnemonic's own remarks. Intercepted by name in Assemble/
+  // GetWordLength/ParseSource, all BEFORE any CvmInstructionSet.TryGetShape/NodeSymbolByMnemonic lookup.
+  private const string LiteralPseudoMnemonic = "literal";
+
   // CVM2's node 509 unary-arithmetic tag (2026-09-05), per Stefan's node 509 source
   // (Cvm.Node509Program): its own u/main dispatch cascade falls through to its own remote-fetch-then-
   // "ex" tail (jump to whatever address is in R) once the fetched CVM opcode word's top 6 bits read
@@ -583,6 +592,14 @@ internal static class CvmAssemblyLanguage
         // cross-wire between 'gld'/'gst and node 508's own g/@/g/! primitives.
         [CvmInstructionSet.LoadGlobalMnemonic] = (Node508Program.Coordinate, "'gld", Node508LoadStoreGlobalTagBits),
         [CvmInstructionSet.StoreGlobalMnemonic] = (Node508Program.Coordinate, "'gst", Node508LoadStoreGlobalTagBits),
+        // Node 508's literal-load family (2026-09-27, "add litr, litm and lit2 to the language") --
+        // same node, same tag (Node508LoadStoreGlobalTagBits) as 'gld/'gst above, just three more
+        // tick-prefixed words resolved against the same live compile. See Node508Program's own remarks
+        // for 'litm's fall-through-into-'litr mechanism and CvmInstructionSet.LitrMnemonic's own remarks
+        // for the CVM-level shape (litr: TrailingWord; litm/lit2: the new TwoTrailingWords).
+        [CvmInstructionSet.LitrMnemonic] = (Node508Program.Coordinate, "'litr", Node508LoadStoreGlobalTagBits),
+        [CvmInstructionSet.LitmMnemonic] = (Node508Program.Coordinate, "'litm", Node508LoadStoreGlobalTagBits),
+        [CvmInstructionSet.Lit2Mnemonic] = (Node508Program.Coordinate, "'lit2", Node508LoadStoreGlobalTagBits),
         // CVM2's node 509 (2026-09-05) -- the unary-arithmetic node, resolved against node 509's own
         // live compile, tag 0xB000 (Node509UnaryArithmeticTagBits's own remarks). 'inv/'inc/'dec REPOINT
         // three of node 507's old, permanently-orphaned ALU-op mnemonics; 'neg is genuinely new (does
@@ -847,8 +864,12 @@ internal static class CvmAssemblyLanguage
 
   /// <summary>
   /// Every known CVM asm mnemonic THAT RESOLVES TO SOME NODE'S F18 SYMBOL, which node and symbol that
-  /// is, and how many words (its own opcode word included) it occupies once assembled. <c>pushlit</c>
-  /// is the only such instruction with a trailing operand word today -- extend
+  /// is, and how many words (its own opcode word included) it occupies once assembled. <c>pushlit</c>,
+  /// <c>lcall</c>/<c>ljmp</c>/<c>lbr</c>, <c>gld</c>/<c>gst</c>, and (2026-09-27) <c>litr</c> are the
+  /// single-trailing-word instructions today; <c>litm</c>/<c>lit2</c> (also 2026-09-27) are the first
+  /// two-trailing-word ones (<see cref="CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords"/>) -- see
+  /// <see cref="BuildEncodeTable"/>/<see cref="Assemble"/>/<see cref="DisassemblePage0"/>'s own remarks
+  /// for where that second operand word is actually written/read. Extend
   /// <see cref="CvmInstructionSet"/> plus <see cref="NodeSymbolByMnemonic"/> as more tagged-dispatch
   /// opcodes are defined on any node; nothing else in this file needs to change. A shape whose
   /// <see cref="CvmInstructionSet.CvmInstructionShape.Encoding"/> is
@@ -875,7 +896,7 @@ internal static class CvmAssemblyLanguage
   /// </summary>
   public static readonly IReadOnlyList<(string Mnemonic, int NodeCoordinate, string SymbolName, int Tag, int WordLength, bool HasOperand, CvmInstructionSet.CvmOperandEncoding Encoding)> Instructions =
       [.. CvmInstructionSet.Instructions
-          .Where(shape => shape.Encoding is CvmInstructionSet.CvmOperandEncoding.None or CvmInstructionSet.CvmOperandEncoding.TrailingWord or CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
+          .Where(shape => shape.Encoding is CvmInstructionSet.CvmOperandEncoding.None or CvmInstructionSet.CvmOperandEncoding.TrailingWord or CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords or CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
           .Where(shape => NodeSymbolByMnemonic.ContainsKey(shape.Mnemonic))
           .Select(shape =>
           {
@@ -1186,6 +1207,18 @@ internal static class CvmAssemblyLanguage
         continue; // a bare "label:" line -- nothing of its own to assemble.
       }
 
+      // "literal" (2026-09-27) does not support a label operand -- same restriction as "lit" itself (see
+      // LiteralPseudoMnemonic's own remarks), and for a stronger reason here: this mnemonic's own WORD
+      // COUNT depends on the operand's value (GetWordLength's own remarks), which a not-yet-resolved
+      // label could only tell us AFTER every earlier label's address has already been fixed by
+      // CollectLabelAddresses -- allowing one would risk every later label resolving to the wrong
+      // address whenever the label's own resolved value happened to fit "lit"'s narrower range. Checked
+      // before the generic OperandLabel resolution just below, so this never even reaches that step.
+      if (instruction.OperandLabel is not null && string.Equals(instruction.Mnemonic, LiteralPseudoMnemonic, StringComparison.OrdinalIgnoreCase))
+      {
+        return (null, null, $"line {line + 1}: \"literal\" does not support a label operand -- its word count depends on the value, which must be known up front; supply a literal number instead, or use \"litr\" directly for a label's own address.");
+      }
+
       if (instruction.OperandLabel is not null)
       {
         (int? resolvedOperand, string? resolveError) = ResolveOperandLabel(instruction, words.Count, labelAddresses, line + 1);
@@ -1195,6 +1228,23 @@ internal static class CvmAssemblyLanguage
         }
 
         instruction = instruction with { Operand = resolvedOperand };
+      }
+
+      // "literal" (2026-09-27) -- intercepted here, before CvmInstructionSet.TryGetShape/encodeTable
+      // lookups below, since it is a pure assembler-level pseudo-mnemonic with no CvmInstructionSet
+      // shape or NodeSymbolByMnemonic entry of its own (see LiteralPseudoMnemonic's own remarks). By this
+      // point instruction.Operand is guaranteed non-null-or-rejected by the label check just above and
+      // EncodeLiteralPseudoMnemonic's own null check.
+      if (string.Equals(instruction.Mnemonic, LiteralPseudoMnemonic, StringComparison.OrdinalIgnoreCase))
+      {
+        (List<int>? literalWords, string? literalError) = EncodeLiteralPseudoMnemonic(instruction, encodeTable, line + 1);
+        if (literalWords is null)
+        {
+          return (null, null, literalError);
+        }
+
+        words.AddRange(literalWords);
+        continue;
       }
 
       CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
@@ -1254,6 +1304,15 @@ internal static class CvmAssemblyLanguage
         return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" does not take an operand.");
       }
 
+      // litm/lit2 (2026-09-27, CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords, WordLength 3) need
+      // a SECOND trailing operand word too -- the checks just above already required and will validate
+      // the first (instruction.Operand). Every other tagged mnemonic here still has WordLength 1 or 2, so
+      // this is a no-op for them.
+      if (entry.WordLength >= 3 && instruction.Operand2 is null)
+      {
+        return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" requires two operands, e.g. \"{instruction.Mnemonic} 0x1234 0x5678\".");
+      }
+
       if (entry.OperandIsEmbedded)
       {
         // Node 511's four ops only (see BuildEncodeTable's own remarks): the operand is a register index
@@ -1271,6 +1330,12 @@ internal static class CvmAssemblyLanguage
       if (entry.HasOperand)
       {
         words.Add(instruction.Operand!.Value & CvmWordCodec.WordMask);
+        if (entry.WordLength >= 3)
+        {
+          // litm/lit2 only (see this method's own remarks just above) -- the second trailing word,
+          // immediately after the first, same masking.
+          words.Add(instruction.Operand2!.Value & CvmWordCodec.WordMask);
+        }
       }
     }
 
@@ -1306,7 +1371,7 @@ internal static class CvmAssemblyLanguage
 
       if (instruction.Mnemonic.Length > 0)
       {
-        address += GetWordLength(instruction.Mnemonic, encodeTable);
+        address += GetWordLength(instruction, encodeTable);
       }
     }
 
@@ -1314,24 +1379,43 @@ internal static class CvmAssemblyLanguage
   }
 
   /// <summary>
-  /// How many words <paramref name="mnemonic"/> occupies once assembled -- used by
+  /// How many words <paramref name="instruction"/>'s mnemonic occupies once assembled -- used by
   /// <see cref="CollectLabelAddresses"/> to compute label addresses BEFORE any operand (literal or
-  /// label) is resolved, since word length never depends on the operand's actual value. Mirrors
-  /// exactly what <see cref="Assemble"/>'s own pass 2 will actually emit for the same mnemonic, so the
-  /// two passes can never disagree on an address: a self-describing shape (<c>call</c>/<c>br</c>/
-  /// <c>cbr</c>/node 606's ops -- the now-retired <c>slit</c> used to belong here too) is always its own
-  /// <see cref="CvmInstructionSet.CvmInstructionShape.WordLength"/>; a tagged mnemonic resolves through
-  /// <paramref name="encodeTable"/> the same way pass 2 does; anything else -- a genuine opcode with no
-  /// live node to answer it, which pass 2's own "undefined opcode -&gt; nop" substitution (see
-  /// <see cref="Assemble"/>'s own remarks) always collapses to exactly one word regardless of the
-  /// substituted opcode's real shape, or an outright unrecognized mnemonic pass 2 will reject outright
-  /// -- is 1, a safe placeholder that never needs to be exact since pass 2 either matches it anyway or
-  /// fails that very line before any address past it is ever used.
+  /// label) is resolved, since word length never depends on the operand's actual value -- EXCEPT for the
+  /// new <c>"literal"</c> pseudo-mnemonic below (2026-09-27), which is variable-length BY DESIGN (that's
+  /// its whole point: pick the narrower encoding whenever the value allows it), so it alone needs the
+  /// instruction's own already-parsed <see cref="CvmAsmInstruction.Operand"/>, not just its mnemonic
+  /// name. Mirrors exactly what <see cref="Assemble"/>'s own pass 2 will actually emit for the same
+  /// mnemonic, so the two passes can never disagree on an address: a self-describing shape (<c>call</c>/
+  /// <c>br</c>/<c>cbr</c>/node 606's ops -- the now-retired <c>slit</c> used to belong here too) is
+  /// always its own <see cref="CvmInstructionSet.CvmInstructionShape.WordLength"/>; a tagged mnemonic
+  /// resolves through <paramref name="encodeTable"/> the same way pass 2 does; anything else -- a
+  /// genuine opcode with no live node to answer it, which pass 2's own "undefined opcode -&gt; nop"
+  /// substitution (see <see cref="Assemble"/>'s own remarks) always collapses to exactly one word
+  /// regardless of the substituted opcode's real shape, or an outright unrecognized mnemonic pass 2 will
+  /// reject outright -- is 1, a safe placeholder that never needs to be exact since pass 2 either matches
+  /// it anyway or fails that very line before any address past it is ever used.
+  ///
+  /// <c>"literal"</c> itself: 1 word if <see cref="CvmAsmInstruction.Operand"/> is a plain number that
+  /// fits <c>lit</c>'s signed range (pass 2 will emit <c>lit</c>), 2 otherwise (pass 2 will emit
+  /// <c>litr</c>'s tag word plus its own trailing operand word) -- see
+  /// <see cref="EncodeLiteralPseudoMnemonic"/>'s own remarks for the shared range check. A <c>"literal"</c>
+  /// line with no resolved <see cref="CvmAsmInstruction.Operand"/> yet (a label operand, which
+  /// <c>"literal"</c> does not support -- same restriction as <c>lit</c> itself, see that mnemonic's own
+  /// remarks) defaults to the worst case, 2: pass 2 will reject that exact line outright before any
+  /// address past it is ever used, so the guess here never needs to be exact for a SUCCESSFUL assembly,
+  /// only safe for a failing one.
   /// </summary>
   private static int GetWordLength(
-      string mnemonic,
+      CvmAsmInstruction instruction,
       IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> encodeTable)
   {
+    string mnemonic = instruction.Mnemonic;
+    if (string.Equals(mnemonic, LiteralPseudoMnemonic, StringComparison.OrdinalIgnoreCase))
+    {
+      return instruction.Operand is int value && FitsLitRange(value) ? 1 : 2;
+    }
+
     CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(mnemonic);
     if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair })
     {
@@ -1513,6 +1597,15 @@ internal static class CvmAssemblyLanguage
           int operandValue = sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1));
           notes[address] = $"{instruction.Mnemonic} {CvmInstructionSet.FormatOperand(operandValue)}";
         }
+        else if (operandCount == 2 && address + 2 < endAddressExclusive)
+        {
+          // litm/lit2 only (2026-09-27, CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords) -- two
+          // trailing operand words, printed in the same "mnemonic first second" shape
+          // TryDescribeSelfDecodingWord already uses for EmbeddedUnsignedValuePair (e.g. "fadd 3 2").
+          int firstOperandValue = sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1));
+          int secondOperandValue = sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 2));
+          notes[address] = $"{instruction.Mnemonic} {CvmInstructionSet.FormatOperand(firstOperandValue)} {CvmInstructionSet.FormatOperand(secondOperandValue)}";
+        }
         else
         {
           notes[address] = instruction.Mnemonic;
@@ -1527,6 +1620,60 @@ internal static class CvmAssemblyLanguage
     }
 
     return notes;
+  }
+
+  /// <summary>
+  /// True when <paramref name="value"/> fits <c>lit</c>'s own signed <see cref="CvmInstructionSet.CvmInstructionShape.ValueBitMask"/>
+  /// range -- shared by <see cref="GetWordLength"/> and <see cref="EncodeLiteralPseudoMnemonic"/> so the
+  /// two can never disagree on which of "lit"/"litr" a given value actually needs. Computed straight off
+  /// <c>lit</c>'s own <see cref="CvmInstructionSet.CvmInstructionShape"/> (never a hardcoded -256..255)
+  /// so a future change to <c>lit</c>'s own bit width is picked up automatically.
+  /// </summary>
+  private static bool FitsLitRange(int value)
+  {
+    CvmInstructionSet.CvmInstructionShape litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
+    int maxValue = litShape.ValueBitMask >> 1;
+    int minValue = -(maxValue + 1);
+    return value >= minValue && value <= maxValue;
+  }
+
+  /// <summary>
+  /// Encodes the <c>"literal"</c> pseudo-mnemonic (2026-09-27, per Stefan: "change opcode 'literal' so
+  /// that it uses 'lit' when the constant fits and 'litr' if the constant is too big for 'lit'") --
+  /// returns either <c>lit</c>'s own one-word self-describing encoding (<see cref="FitsLitRange"/>) or
+  /// <c>litr</c>'s own two-word tag-plus-trailing-operand encoding, resolved against
+  /// <paramref name="encodeTable"/> exactly like any other node-508 mnemonic (see
+  /// <see cref="CvmInstructionSet.LitrMnemonic"/>'s own remarks) -- never a bare <c>0x8000 | Id</c>
+  /// placeholder, since this file's assembler resolves immediately rather than deferring to a linker.
+  /// <see cref="Assemble"/>'s own remarks cover why a label operand is rejected before this is ever
+  /// called; by the time it runs, <paramref name="instruction"/>.Operand is the only operand form left to
+  /// handle.
+  /// </summary>
+  private static (List<int>? Words, string? Error) EncodeLiteralPseudoMnemonic(
+      CvmAsmInstruction instruction,
+      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> encodeTable,
+      int lineNumber)
+  {
+    if (instruction.Operand is not int value)
+    {
+      return (null, $"line {lineNumber}: \"literal\" requires a literal numeric operand, e.g. \"literal 1234\".");
+    }
+
+    if (FitsLitRange(value))
+    {
+      CvmInstructionSet.CvmInstructionShape litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
+      return ([litShape.Tag | (value & litShape.ValueBitMask)], null);
+    }
+
+    if (!encodeTable.TryGetValue(CvmInstructionSet.LitrMnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask) litrEntry))
+    {
+      CvmInstructionSet.CvmInstructionShape shape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
+      int maxValue = shape.ValueBitMask >> 1;
+      int minValue = -(maxValue + 1);
+      return (null, $"line {lineNumber}: {value} does not fit in \"lit\"'s signed value ({minValue}..{maxValue}), and \"litr\" is not available right now (node 508 has no live compile defining \"'litr\").");
+    }
+
+    return ([litrEntry.Opcode, value & CvmWordCodec.WordMask], null);
   }
 
   /// <summary>

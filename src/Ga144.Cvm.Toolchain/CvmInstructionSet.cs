@@ -994,6 +994,45 @@ public static class CvmInstructionSet
   // exactly like br/cbr/slit -- see LitTag's own remarks for the full bit derivation.
   public const string LitMnemonic = "lit";
 
+  // Node 508's own literal-load family, added 2026-09-27 per Stefan: "add litr, litm and lit2 to the
+  // language" -- three new tick-prefixed words ('litr/'litm/'lit2) on node 508, right alongside 'gld/
+  // 'gst (see Node508Program's own remarks for the full source and the fall-through mechanism between
+  // 'litm and 'litr). Unlike lit (node 509, self-describing, 9-bit embedded signed value, no live
+  // compile at all -- see LitMnemonic's own remarks), all three of these are dynamically-resolved-
+  // address opcodes exactly like gld/gst: TrailingWord/TwoTrailingWords shaped, tag | node 508's own
+  // live-compiled address for the word, resolved the same way (Node508LoadStoreGlobalTagBits, 0xA000 --
+  // see that constant's own remarks in Ga144.Evb.Ide.Services.CvmAssemblyLanguage) rather than a fixed,
+  // self-describing tag of their own.
+  //
+  // litr <value>: TrailingWord (one operand word) -- stores the trailing word directly into register r
+  // (node 508's own 'litr: g/next then g/r!). The wider, unrestricted counterpart to lit for when a
+  // value doesn't fit lit's narrow -256..255 signed range -- see the new "literal" pseudo-mnemonic in
+  // Ga144.Evb.Ide.Services.CvmAssemblyLanguage/Ga144.Cvm.Toolchain.CvmAssembler (added the same day),
+  // which picks lit or litr automatically so a hand-written .cvmasm source (or a future C-compiler call
+  // site) never has to make that choice itself.
+  //
+  // litm <high> <low>: TwoTrailingWords (two operand words) -- pushes the first trailing word onto the
+  // data stack, then stores the second into register r. OPTIMIZED 2026-09-27, same day as the addition
+  // (Stefan: "i could optimize 2 words in node 508"): node 508's own 'litm is now a plain CALL to a
+  // shared internal word, g/lit1 (fetch-and-push, not a CVM mnemonic of its own), with NO closing ";" of
+  // its own -- the call's return lands exactly at 'litr's own entry (since 'litm has nothing else
+  // compiled after the call), so calling 'litm still ends up pushing the first word then falling through
+  // into 'litr's own "store to r" body, same net effect as the original inline version, just via a real
+  // call to shared code instead of a duplicated inline copy -- see Node508Program's own remarks for the
+  // full trace and for how "leap"/"then" (the mechanism 'lit2 uses to share the same g/lit1) were
+  // finally confirmed to mean "compile a CALL to wherever the matching then resolves to".
+  //
+  // lit2 <high> <low>: TwoTrailingWords (two operand words) -- pushes BOTH trailing words onto the data
+  // stack, in order. OPTIMIZED 2026-09-27 alongside litm: node 508's own 'lit2 is now just a single
+  // "leap" (a CALL, per DB013 5.3.2.1) to the same shared g/lit1 -- because the call's own natural return
+  // address happens to equal g/lit1's own entry address (nothing is compiled between the leap and its
+  // matching then), returning from the first fetch-and-push re-enters g/lit1 a second time before the
+  // genuine caller's own return address is reached, so g/lit1's body runs exactly twice per 'lit2 call.
+  // See Node508Program's own remarks for the full instruction-by-instruction trace.
+  public const string LitrMnemonic = "litr";
+  public const string LitmMnemonic = "litm";
+  public const string Lit2Mnemonic = "lit2";
+
   // Node 509's tenth and eleventh unary-arithmetic ops, added 2026-09-05 per Stefan's own follow-up
   // ("I added 2 new opcodes to node 509. add them also to the language") and his own tick-naming rule,
   // exactly like the original nine. Both are genuinely NEW mnemonics -- no existing orphaned "parity" or
@@ -1599,6 +1638,20 @@ public static class CvmInstructionSet
     TrailingWord,
 
     /// <summary>
+    /// Like <see cref="TrailingWord"/>, except TWO operand words follow the tagged opcode word instead
+    /// of one (<c>litm</c>, <c>lit2</c> -- added 2026-09-27, node 508, alongside <c>litr</c> which stays
+    /// a plain single-<see cref="TrailingWord"/> mnemonic; see <see cref="LitrMnemonic"/>'s own remarks
+    /// for all three). <see cref="CvmInstructionShape.WordLength"/> is 3 for this shape (tag word + two
+    /// operand words) -- <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>'s own
+    /// <c>Assemble</c>/<c>DisassemblePage0</c> and <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/>'s own
+    /// pass-1 arg-count check and pass-2 emission were each extended with one new branch for this shape
+    /// alongside their existing <see cref="TrailingWord"/> handling -- see those classes' own remarks.
+    /// The first operand word is resolved/emitted exactly like <see cref="TrailingWord"/>'s single
+    /// operand; the second follows immediately after it, same rules (literal, label, or import).
+    /// </summary>
+    TwoTrailingWords,
+
+    /// <summary>
     /// The instruction's one and only word directly IS the (eventually resolved) target address, with
     /// no tag at all -- restricted to <see cref="CallAddressMask"/> so bit 15 stays clear (<c>call</c>).
     /// </summary>
@@ -2036,6 +2089,14 @@ public static class CvmInstructionSet
     new(Id: 173, BitSetMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: BitSetTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift),
     new(Id: 174, BitInvertMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: BitInvertTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift),
     new(Id: 175, BitCopyMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: BitCopyTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift, SecondValueBitMask: BitPositionSecondFieldBitMask, SecondValueBitShift: BitPositionSecondFieldShift),
+
+    // Node 508's literal-load family, added 2026-09-27 -- see LitrMnemonic's own remarks. litr is a
+    // plain single-TrailingWord mnemonic (dynamically resolved against node 508's own live compile,
+    // exactly like gld/gst above); litm/lit2 are the first two mnemonics in this project needing the new
+    // TwoTrailingWords shape (two operand words following the tag word, WordLength 3).
+    new(Id: 176, LitrMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 177, LitmMnemonic, 3, CvmOperandEncoding.TwoTrailingWords),
+    new(Id: 178, Lit2Mnemonic, 3, CvmOperandEncoding.TwoTrailingWords),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

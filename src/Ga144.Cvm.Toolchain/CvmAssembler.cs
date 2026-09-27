@@ -179,6 +179,34 @@ public static class CvmAssembler
           sectionCursors[section] += line.Args.Count;
           break;
 
+        case "literal":
+          // "literal" (2026-09-27, per Stefan: "change opcode 'literal' so that it uses 'lit' when the
+          // constant fits and 'litr' if the constant is too big for 'lit'") -- a pure assembler-level
+          // pseudo-mnemonic, not a real CvmInstructionSet.Instructions entry, so it needs its own case
+          // here rather than falling into the generic tagged-mnemonic default below. Unlike every other
+          // mnemonic in THIS pass (word length fixed by mnemonic alone, per this class's own remarks),
+          // "literal"'s word count depends on the operand's VALUE -- 1 word ("lit") if it fits, 2
+          // ("litr"'s tag word plus its own trailing operand word) otherwise -- so the value must be
+          // known here, in pass 1, same as ".word"'s own already-variable-length case just above. Only a
+          // plain numeric literal is supported, same restriction as "lit" itself (see that mnemonic's
+          // own remarks): a label's real address isn't resolved until a separate, later link step this
+          // assembler doesn't run itself, so there would be no way to know here which of "lit"/"litr" a
+          // label operand needs.
+          if (line.Args.Count != 1)
+          {
+            errors.Add($"line {line.LineNumber}: \"literal\" requires exactly one operand, e.g. \"literal 1234\".");
+            break;
+          }
+
+          if (!TryParseSignedNumericLiteral(line.Args[0], out int literalPass1Value))
+          {
+            errors.Add($"line {line.LineNumber}: \"literal\" does not support a label operand -- its word count depends on the value, which must be known at assemble time; supply a literal number instead, or use \"litr\" directly for a label's own address.");
+            break;
+          }
+
+          sectionCursors[section] += FitsLitRange(literalPass1Value) ? 1 : 2;
+          break;
+
         default:
           CvmInstructionSet.CvmInstructionShape? shape = CvmInstructionSet.TryGetShape(line.Directive);
           if (shape is null)
@@ -188,17 +216,18 @@ public static class CvmAssembler
           }
 
           // Node 306/305's twelve unified floating-point ops (EmbeddedUnsignedValuePair, 2026-09-16,
-          // widened from six to twelve in the 2026-09-21 rework) are the mnemonic family here needing
-          // exactly TWO operands -- comma-separated, matching this assembler's own established
-          // ".word 1, 2, 3" convention (e.g. "fadd 3, 2"), rather than Stefan's own space-separated
-          // "fadd 3 2" example, which describes the CVM Debugger's separate, immediately-resolving
-          // assembler (Ga144.Evb.Ide.Services.CvmAssemblyLanguage, whose own tokenizer splits on
-          // whitespace, not commas) -- the two assemblers' syntax conventions genuinely differ here, so
-          // each keeps its own rather than forcing one into the other's mold. EXCEPT fpop/fpush
-          // (CORRECTED 2026-09-21, per Stefan directly: "only 1 parameter, the other opcodes have 2") --
-          // those two are plain EmbeddedUnsignedValue, not Pair, so they fall into the one-operand branch
-          // below like any other EmbeddedUnsignedValue mnemonic.
-          int requiredArgCount = shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair ? 2 : shape.HasOperand ? 1 : 0;
+          // widened from six to twelve in the 2026-09-21 rework) and node 508's litm/lit2
+          // (TwoTrailingWords, 2026-09-27 -- see CvmInstructionSet.LitrMnemonic's own remarks) are the
+          // mnemonic families here needing exactly TWO operands -- comma-separated, matching this
+          // assembler's own established ".word 1, 2, 3" convention (e.g. "fadd 3, 2", "litm 0x1234,
+          // 0x5678"), rather than Stefan's own space-separated "fadd 3 2" example, which describes the
+          // CVM Debugger's separate, immediately-resolving assembler (Ga144.Evb.Ide.Services.CvmAssemblyLanguage,
+          // whose own tokenizer splits on whitespace, not commas) -- the two assemblers' syntax
+          // conventions genuinely differ here, so each keeps its own rather than forcing one into the
+          // other's mold. EXCEPT fpop/fpush (CORRECTED 2026-09-21, per Stefan directly: "only 1
+          // parameter, the other opcodes have 2") -- those two are plain EmbeddedUnsignedValue, not Pair,
+          // so they fall into the one-operand branch below like any other EmbeddedUnsignedValue mnemonic.
+          int requiredArgCount = shape.Encoding is CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords ? 2 : shape.HasOperand ? 1 : 0;
           if (line.Args.Count != requiredArgCount)
           {
             errors.Add(requiredArgCount switch
@@ -264,6 +293,41 @@ public static class CvmAssembler
           }
 
           break;
+
+        case "literal":
+          {
+            // See this method's own pass-1 remarks on "literal" -- pass 1 already validated the arg count
+            // and that the operand parses as a plain literal (never a label), so both are re-parsed here,
+            // not re-validated. "literal" has no CvmInstructionSet.Instructions entry of its own, so
+            // neither "lit"'s self-describing word nor "litr"'s placeholder-plus-relocation is reached via
+            // the generic default case below -- both are written out directly here instead.
+            TryParseSignedNumericLiteral(line.Args[0], out int literalValue);
+            CvmInstructionSet.CvmInstructionShape litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
+            CvmSection literalSection = objectFile.GetOrAddSection(section);
+            if (FitsLitRange(literalValue))
+            {
+              literalSection.Words.Add(litShape.Tag | (literalValue & litShape.ValueBitMask));
+              break;
+            }
+
+            // Too big for "lit" -- fall back to "litr": the exact same placeholder-word-plus-CvmOpcode-
+            // relocation-plus-trailing-operand-word shape the generic TrailingWord branch below emits for
+            // any other node-resolved mnemonic, just written out directly since "literal" bypasses that
+            // generic dispatch entirely.
+            CvmInstructionSet.CvmInstructionShape litrShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitrMnemonic)!;
+            int litrOpcodeOffset = literalSection.Words.Count;
+            literalSection.Words.Add(0x8000 | litrShape.Id);
+            externalSymbols.Add(litrShape.Mnemonic);
+            objectFile.Relocations.Add(new CvmRelocation
+            {
+              SectionName = section,
+              WordOffset = litrOpcodeOffset,
+              SymbolName = litrShape.Mnemonic,
+              Type = CvmRelocationType.CvmOpcode,
+            });
+            literalSection.Words.Add(literalValue & CvmWordCodec.WordMask);
+            break;
+          }
 
         default:
           CvmInstructionSet.CvmInstructionShape shape = CvmInstructionSet.TryGetShape(line.Directive)!;
@@ -375,6 +439,13 @@ public static class CvmAssembler
           if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.TrailingWord)
           {
             EmitOperandWord(objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+          }
+          else if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords)
+          {
+            // litm/lit2 only (2026-09-27) -- the SECOND operand word, immediately after the first;
+            // otherwise identical to the TrailingWord branch just above.
+            EmitOperandWord(objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+            EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
           }
 
           break;
@@ -665,6 +736,21 @@ public static class CvmAssembler
     }
 
     return TryParseNumericLiteral(text, out value);
+  }
+
+  /// <summary>
+  /// True when <paramref name="value"/> fits <c>lit</c>'s own signed <see cref="CvmInstructionSet.CvmInstructionShape.ValueBitMask"/>
+  /// range -- used by the "literal" pseudo-mnemonic's own pass-1/pass-2 cases above to decide "lit" vs
+  /// "litr" (see those cases' own remarks). A small, deliberate duplicate of
+  /// <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>'s own identically-named helper, per this
+  /// project's own standing practice of not sharing code between the two assemblers.
+  /// </summary>
+  private static bool FitsLitRange(int value)
+  {
+    CvmInstructionSet.CvmInstructionShape litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
+    int maxValue = litShape.ValueBitMask >> 1;
+    int minValue = -(maxValue + 1);
+    return value >= minValue && value <= maxValue;
   }
 
   private sealed record ParsedLine(int LineNumber, string? Label, string? Directive, IReadOnlyList<string> Args);

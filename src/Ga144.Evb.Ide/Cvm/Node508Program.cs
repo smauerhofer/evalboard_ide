@@ -250,6 +250,80 @@ internal static class Node508Program
   /// node 507, and the general dispatch shape -- all UNCHANGED by this re-sync except where called out
   /// here. Treat any specific numeric claim in the class remarks above (a compiled address, a bit width)
   /// as possibly stale until re-confirmed against a fresh compile of the source immediately below.
+  ///
+  /// <b>'litm/'litr/'lit2 added 2026-09-27</b>, per Stefan: "add litr, litm and lit2 to the language,"
+  /// with these new words inserted right after <c>g/!</c> (the <c>'gst</c> body) and before
+  /// <c>g/leave</c> -- <see cref="CvmInstructionSet.LitrMnemonic"/>'s own remarks have the full CVM-level
+  /// mnemonic wiring (tag/shape/word count); this note covers only the node's own F18 source.
+  ///
+  /// <b>Optimized the same day, 2026-09-27, per Stefan: "i could optimize 2 words in node 508."</b> The
+  /// three words now share a single body, <c>g/lit1</c> (an ordinary, un-ticked, internal word -- not a
+  /// CVM mnemonic of its own, exactly like <c>g/r@</c>/<c>g/r!</c>/<c>g/pop</c>/<c>g/push</c>/<c>g/next</c>
+  /// above), instead of each carrying its own copy of the "fetch the trailing word, push it" sequence.
+  /// This uses <c>leap</c>/<c>then</c> -- an F18 primitive pair already implemented in this project's own
+  /// <c>F18Compiler.cs</c> (<c>CompileLeap</c>, citing "DB013 5.3.2.1: leap compiles a CALL to the
+  /// matching then" -- the same GreenArrays datasheet reference this project already cites elsewhere) but
+  /// previously seen, unresolved, only on node 308's <c>'arinc2</c>/<c>'ardec2</c> and node 306's
+  /// <c>'fpop</c>/<c>'fpush</c> ("not a previously-defined F18 primitive anywhere in this project... its
+  /// meaning cannot be inferred from context" -- see <c>claude/cvm-assembler-description.md</c>'s own
+  /// long-standing flag for both). This occurrence is what finally resolves it: <c>leap</c> compiles an
+  /// ordinary F18 CALL instruction whose target address is wherever the matching <c>then</c> resolves to
+  /// -- exactly the same forward-patching <c>then</c> already does for <c>if</c>/<c>-if</c>, just backing
+  /// a CALL instead of a conditional branch.
+  ///
+  /// <b>'lit2</b> (<c>.loc</c> then <c>leap</c>, immediately followed by <c>: g/lit1 then / g/next
+  /// g/push ;</c>): compiles to exactly ONE instruction of its own, a CALL to <c>g/lit1</c> -- and
+  /// because nothing is compiled between the <c>leap</c> and the matching <c>then</c>, <c>g/lit1</c>'s
+  /// own entry address and the CALL's own natural return address (the word immediately after the CALL)
+  /// are the SAME address. Traced through: the CALL pushes that address and jumps to <c>g/lit1</c>, which
+  /// fetches the first trailing word and pushes it (<c>g/next g/push</c>), then hits its own <c>;</c> --
+  /// which pops the just-pushed return address, landing back at <c>g/lit1</c>'s own entry a SECOND time,
+  /// this time by a plain return rather than a call, so nothing new goes onto the return stack.
+  /// <c>g/lit1</c> runs again (fetching and pushing the SECOND trailing word), hits its own <c>;</c>
+  /// again, and this time pops the genuine original caller's return address, exiting for real. Net
+  /// effect: <c>g/next g/push</c> runs exactly twice, then returns -- matching Stefan's own stated
+  /// meaning, "lit2: push the next 2 words to the stack," using one compiled copy of "fetch+push"
+  /// (<c>g/lit1</c>, 3 words: call <c>g/next</c>, call <c>g/push</c>, <c>;</c>) plus a single <c>leap</c>
+  /// word, instead of two separate inline copies.
+  ///
+  /// <b>'litm</b> (<c>.loc</c> then a plain reference to <c>g/lit1</c>, deliberately NO trailing <c>;</c>)
+  /// is an ordinary CALL to <c>g/lit1</c> (fetching and pushing the FIRST trailing word, then returning),
+  /// landing back right after the call -- which, because <c>'litm</c> has no trailing <c>;</c> of its
+  /// own, is <c>'litr</c>'s own entry (<c>.loc</c> compiles nothing, so <c>'litr</c>'s real code starts at
+  /// the very next word). So calling <c>'litm</c> pushes the first trailing word (via the call+return
+  /// round trip through <c>g/lit1</c>), then falls through into <c>'litr</c>'s own <c>g/next g/r! ;</c>
+  /// (store the SECOND trailing word into r, then return) -- the same net behavior as the original,
+  /// non-optimized 2026-09-27 body, just reached via a real call to the shared <c>g/lit1</c> instead of
+  /// an inlined copy of "g/next g/push."
+  ///
+  /// <b>Flagged and resolved, not silently guessed: Stefan's own new trailing comment for 'litm read
+  /// "store next word in register r then push next word to the stack"</b> -- the OPPOSITE order from the
+  /// code (which pushes first, stores to r second, exactly as before) and from the original spec
+  /// ("high-word pushed to stack, low-word loaded to r"). Asked directly rather than silently picking a
+  /// side: confirmed the code's own order is correct -- push first, store-r second -- and the new comment
+  /// line was a wording slip, not an intended behavior change. The trailing comment block below states
+  /// the confirmed order.
+  ///
+  /// <b>'litr</b> (<c>.loc</c> then <c>g/next g/r! ;</c>, UNCHANGED from the original 2026-09-27 body):
+  /// fetches the caller's own trailing operand word and stores it into node 507's register r, then
+  /// returns. Stefan's own stated meaning: "litr store next word in register r."
+  ///
+  /// <b>Word count.</b> Before this optimization: <c>'litm</c> (2 words: <c>g/next</c>, <c>g/push</c>, no
+  /// <c>;</c>) + <c>'lit2</c> (5 words: <c>g/next</c>, <c>g/push</c>, <c>g/next</c>, <c>g/push</c>,
+  /// <c>;</c>) = 7 words, plus <c>'litr</c>'s own unchanged 3 (<c>g/next</c>, <c>g/r!</c>, <c>;</c>).
+  /// After: <c>g/lit1</c> (3 words: <c>g/next</c>, <c>g/push</c>, <c>;</c>) + <c>'lit2</c>'s own
+  /// <c>leap</c> (1 word) + <c>'litm</c>'s own call to <c>g/lit1</c> (1 word) = 5 words, plus the same
+  /// unchanged 3 for <c>'litr</c> -- a reduction of exactly 2 words, matching Stefan's own count ("i
+  /// could optimize 2 words in node 508").
+  ///
+  /// <b>Addresses shift again.</b> The reordering (now <c>'lit2</c>, then the internal <c>g/lit1</c>,
+  /// then <c>'litm</c>, then <c>'litr</c> -- a different physical order from the original 2026-09-27
+  /// body) and the 2-word reduction both move <c>g/leave</c>'s, <c>g/main</c>'s, and <c>'gld</c>'s/
+  /// <c>'gst</c>'s own compiled addresses again. Per this file's own standing practice, no specific new
+  /// hex address is asserted here without a fresh compile; every consumer (<see
+  /// cref="CvmInstructionSet.LitrMnemonic"/> and friends, <c>'gld</c>/<c>'gst</c>) resolves dynamically
+  /// against a live compile of this exact <see cref="Source"/>, never a hardcoded number, so nothing
+  /// downstream needed updating for the shift itself.
   /// </summary>
   public const string Source = """
       ( CVM2 node 508. globals, 101?_????_????_???? )
@@ -267,6 +341,14 @@ internal static class Node508Program
       : g/@ ( o-) A[ @p m/2@ ]] lit !b !b A[ over ]] lit !b ;
       : 'gst .loc
       : g/! ( o-) A[ over @p ]] lit !b !b A[ m/2! ]] lit !b ;
+      : 'lit2 .loc
+        leap
+      : g/lit1 then
+        g/next g/push ;
+      : 'litm .loc
+        g/lit1
+      : 'litr .loc
+        g/next g/r! ;
       : g/leave A[ ; ]] lit !b
       : g/main # g/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r
         -if // 1011_????_????_????
@@ -303,6 +385,9 @@ internal static class Node508Program
       'gld load global from r. address in the next word
       'gst store global into r. address in the next word
 
+      'litr store next word in register r
+      'litm push next word to the stack, then store next word in register r
+      'lit2 push the next 2 words to the stack
 
       )
       """;
