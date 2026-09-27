@@ -423,6 +423,16 @@ public sealed class CCodeGenerator
     public required IReadOnlyList<int?> ParameterFloatRegisterSlots { get; init; }
 
     public bool IsDefined { get; set; }
+
+    /// <summary><c>__optimize</c> (added 2026-09-27) -- true only for a function declared
+    /// <c>__optimize</c> (see <see cref="CFunctionDecl.IsOptimize"/>'s own remarks). <see
+    /// cref="CollectSignatures"/> rejects, at signature-collection time, any <c>__optimize</c> declaration
+    /// whose name+signature this compiler does not actually recognize (today, only
+    /// <c>fabsf(float) -&gt; float</c>) -- so once collection has finished without error, every
+    /// <c>CFunctionSignature</c> with <c>IsOptimize</c> true is guaranteed to be one of the recognized
+    /// substitutions consulted from <see cref="TryGetFloatBuiltin"/> (register path) and <see
+    /// cref="TryEmitOptimizedFabsAssignment"/> (narrow in-place path).</summary>
+    public bool IsOptimize { get; init; }
   }
 
   private sealed class CGlobalSymbol
@@ -721,6 +731,19 @@ public sealed class CCodeGenerator
         continue;
       }
 
+      // __optimize (added 2026-09-27; recognized name changed from "fabs" to "fabsf" the same day, per
+      // Stefan's own follow-up -- see IsRecognizedOptimizeSignature's own remarks): a declaration this
+      // compiler does not actually recognize by name+signature is a compile error here, not a
+      // silently-ignored keyword -- see CFunctionSignature.IsOptimize's own remarks. Checked once, at
+      // collection time, rather than at every call site, since the signature (not any particular call) is
+      // what makes a substitution possible at all. Only "float fabsf(float)" is recognized today; a future
+      // addition (per Stefan's own "later we will add more functions in a float-library" scope note)
+      // extends this check, not the substitution logic itself.
+      if (function.IsOptimize && !IsRecognizedOptimizeSignature(function))
+      {
+        Error(function.Location, $"\"{function.Name}\" is declared '__optimize', but this compiler does not recognize that name/signature as a compiler-substitutable function -- only \"float fabsf(float)\" is recognized today");
+      }
+
       IReadOnlyList<CType> parameterTypes = function.Parameters.Select(p => p.Type).ToList();
       _functions[function.Name] = new CFunctionSignature
       {
@@ -729,6 +752,7 @@ public sealed class CCodeGenerator
         ParameterRegisterSlots = ComputeParameterRegisterSlots(parameterTypes),
         ParameterFloatRegisterSlots = ComputeParameterFloatRegisterSlots(parameterTypes, function.IsFastcall),
         IsDefined = function.Body is not null,
+        IsOptimize = function.IsOptimize,
       };
     }
 
@@ -752,6 +776,27 @@ public sealed class CCodeGenerator
     // result for every call it emits, including a call to a function defined LATER in this file).
     ComputeFunctionUsesFloatRegisters(unit);
   }
+
+  /// <summary><c>__optimize</c> (added 2026-09-27): whether <paramref name="function"/>'s own declared
+  /// name+signature is one this compiler actually knows how to substitute. Today this is a single,
+  /// hardcoded case -- <c>float fabsf(float)</c> -- rather than a table, since it is the only substitution
+  /// Stefan has asked for so far; a future one (per Stefan's own "later we will add more functions in a
+  /// float-library" scope note) adds another explicit case here alongside <see
+  /// cref="OptimizeFloatRegisterMnemonics"/>'s own table entry and <see
+  /// cref="TryEmitOptimizedFabsAssignment"/>'s own narrow-path logic, rather than trying to infer a
+  /// substitution generically from an arbitrary signature.
+  ///
+  /// <b>RENAMED 2026-09-27</b> (later the same day), per Stefan's own direct follow-up: the recognized
+  /// name changed from <c>fabs</c> to <c>fabsf</c>, matching the standard C <c>&lt;math.h&gt;</c>
+  /// float-suffixed convention <see cref="FloatBuiltins"/>'s own <c>fabsf</c>/<c>fminf</c>/<c>fmaxf</c>
+  /// entries already use -- see <see cref="OptimizeFloatRegisterMnemonics"/>'s own remarks for the naming
+  /// overlap this creates with that unconditional, no-declaration-needed built-in, and why it is harmless
+  /// rather than a collision to resolve.</summary>
+  private static bool IsRecognizedOptimizeSignature(CFunctionDecl function) =>
+      function.Name == "fabsf" &&
+      function.ReturnType.IsFloat &&
+      function.Parameters.Count == 1 &&
+      function.Parameters[0].Type.IsFloat;
 
   /// <summary>How many of a function's own pointer-typed parameters get an address register (ABI v2) --
   /// node 306 has exactly four (see <see cref="CvmInstructionSet"/>'s own <c>ldar</c>/<c>star</c>/
@@ -1814,6 +1859,168 @@ public sealed class CCodeGenerator
     }
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // 2-word register-return ABI (added 2026-09-27), per Stefan verbatim: "a return type is like a
+  // parameter. it must be allowed for all types. for a 2 word (32 bit) return type the following rule is
+  // applied: a float return is always in fr[0] [unchanged] / a pointer return is always in ar[0] / all
+  // remaining types: low word in reg[0], high word in reg[1]" -- confirmed, after being asked whether this
+  // covers every return width or only a genuinely 2-word one, to be scoped to 2-word types only ("these
+  // new rules only apply to 2 word types" / "i meant all remaining 2-word types"): a 1-word return (int,
+  // char, unsigned, a 1-word struct) is UNCHANGED, still the original stack-based convention (see
+  // EmitStatement's own CReturnStmt case). "All remaining types" here means every 2-word return type that
+  // is neither float nor pointer -- in practice 'long', or a struct whose own SizeInWords is exactly 2
+  // (see CParser's own return-type remarks for what's rejected instead: an incomplete struct, or one wider
+  // than 2 words). See EmitCall's own remarks for how a CALLER retrieves each of these.
+  // ---------------------------------------------------------------------------------------------
+
+  /// <summary>
+  /// Loads ONE word (<paramref name="wordIndex"/> 0 = low, 1 = high, ...) of a plain named variable
+  /// directly into register r -- Local, Parameter, or Global only, never Indirect (see <see
+  /// cref="TryResolveTwoWordRegisterReturnLvalue"/>'s own remarks for why the register-return narrow path
+  /// never resolves anything else). Entirely independent of whether this TYPE's value is otherwise
+  /// supported (see <see cref="IsUnsupportedWholeValueType"/>) -- this reads raw words by STORAGE
+  /// LOCATION, the same way <see cref="EmitFloatWordLoadIntoR"/> already does for the <c>__optimize</c>
+  /// narrow path, just generalized from float's fixed 2-word width to an arbitrary <paramref
+  /// name="totalWords"/> (always 2 for this ABI's own callers, but written generally rather than
+  /// hardcoded).
+  ///
+  /// Local and Parameter mirror <see cref="EmitFloatWordLoadIntoR"/>'s own per-kind word order exactly (a
+  /// LOCAL's slots are HIGH-then-LOW -- <paramref name="lvalue"/>.Index is the HIGH word, since a local's
+  /// own address is <c>f - slot</c> and the LOW word must sit at the lower address, i.e. the HIGHER slot
+  /// number; a PARAMETER's are LOW-then-HIGH, natural increasing order -- see this class's own doc comment
+  /// and <see cref="CType.Long"/>'s own remarks). Global DIFFERS from the float case: a 'long'/struct
+  /// global has no "<c>{label}__hi</c>" companion label the way a <c>float</c> global does (see <see
+  /// cref="EmitGlobal"/>'s own remarks -- that convention only exists because <c>gld</c>/<c>gst</c> take a
+  /// literal label with no address arithmetic, and float's OWN codegen path was built around it; a
+  /// 'long'/struct global was never built out that far, since its value was rejected everywhere until
+  /// now). So word 0 (the low word, living at the global's own label) uses a plain <c>gld</c>, exactly like
+  /// an ordinary scalar global; every other word computes <c>label + wordIndex</c> at runtime and
+  /// dereferences through it, the same general address-plus-offset mechanism <see
+  /// cref="EmitAddressOfMember"/> already uses for a struct member's own offset.
+  /// </summary>
+  private void EmitRegisterWordLoadIntoR(CLvalue lvalue, int wordIndex, int totalWords)
+  {
+    switch (lvalue.Kind)
+    {
+      case CLvalueKind.Local:
+        EmitCode($"ldl {lvalue.Index + (totalWords - 1 - wordIndex)}");
+        break;
+
+      case CLvalueKind.Parameter:
+        EmitCode($"ldp {lvalue.Index + wordIndex}");
+        break;
+
+      case CLvalueKind.Global:
+        if (wordIndex == 0)
+        {
+          EmitGlobalFetch(lvalue.Label!);
+        }
+        else
+        {
+          EmitCode($"pushlit {lvalue.Label}"); // stack: [..., label_addr]
+          EmitCode($"pushlit {wordIndex}");    // stack: [..., label_addr, wordIndex]
+          EmitCode("pop");                     // r := wordIndex; stack: [..., label_addr]
+          EmitCode("add");                     // stack: [..., label_addr + wordIndex]
+          EmitCode("pop");                     // r := the target word's address; stack: [...]
+          EmitDereferenceLoad();               // stack: [..., value] (address consumed from r)
+          EmitCode("pop");                     // r := value; stack: [...]
+        }
+
+        break;
+
+      default:
+        throw new InvalidOperationException($"EmitRegisterWordLoadIntoR does not support a '{lvalue.Kind}' lvalue -- the 2-word register-return narrow path only ever resolves a plain named variable (see TryResolveTwoWordRegisterReturnLvalue).");
+    }
+  }
+
+  /// <summary>
+  /// Resolves <paramref name="expr"/> to a <see cref="CLvalue"/> ONLY when it is a plain named variable of
+  /// EXACTLY <paramref name="expectedType"/> -- never a dereference, array element, or struct member (an
+  /// Indirect lvalue computes a runtime address with its own side effects, which the raw word-at-a-time
+  /// read in <see cref="EmitRegisterWordLoadIntoR"/> cannot safely interleave with, the same reason <see
+  /// cref="TryResolveSimpleFloatLvalue"/> narrows the <c>__optimize</c> path the same way), and never a
+  /// variable of some OTHER 2-word type (reading a mismatched type's two words as if they were <paramref
+  /// name="expectedType"/>'s own would silently reinterpret unrelated bits). This is deliberately the
+  /// narrowest possible shape -- "<c>return someVariable;</c>" -- because this compiler has no general
+  /// mechanism to compute an arbitrary 'long'/struct-typed EXPRESSION's value at all (see <see
+  /// cref="IsUnsupportedWholeValueType"/>'s own remarks); only a value that is already sitting, fully
+  /// formed, in a plain variable's own storage can be forwarded this way.
+  /// </summary>
+  private bool TryResolveTwoWordRegisterReturnLvalue(CExpr expr, CType expectedType, out CLvalue lvalue)
+  {
+    if (expr is CNameExpr name)
+    {
+      CVarSymbol? symbol = LookupVariable(name.Name);
+      CType? type = symbol?.Type ?? (_globals.TryGetValue(name.Name, out CGlobalSymbol? global) ? global.Type : null);
+      if (type is not null && type.Equals(expectedType))
+      {
+        lvalue = ResolveLvalue(name);
+        return true;
+      }
+    }
+
+    lvalue = null!;
+    return false;
+  }
+
+  /// <summary>
+  /// Emits a <c>return</c> for a genuinely 2-word "remaining" (neither <c>float</c> nor pointer) type --
+  /// 'long', or a struct whose own <see cref="CType.SizeInWords"/> is exactly 2 -- into <c>reg[0]</c>
+  /// (low word) / <c>reg[1]</c> (high word) via node 511's own <c>rld</c> ("move r to reg[a]" -- see
+  /// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.LoadRegisterFileMnemonic</c>'s own remarks). Only the narrow
+  /// "<c>return someVariable;</c>" shape is supported (see <see
+  /// cref="TryResolveTwoWordRegisterReturnLvalue"/>'s own remarks for why) -- any other expression shape
+  /// is reported, the same "functions with long will come later" boundary already drawn for a 'long'
+  /// parameter/argument, and reg[0]/reg[1] are still written (to a deterministic zero) rather than left
+  /// holding stale content from some earlier, unrelated call, mirroring <see
+  /// cref="ReportUnsupportedValueRead"/>'s own "report, but still leave well-defined state behind"
+  /// convention.
+  /// </summary>
+  private void EmitRegisterReturn(CExpr value, CType returnType, CSourceLocation location, string functionName)
+  {
+    if (!TryResolveTwoWordRegisterReturnLvalue(value, returnType, out CLvalue lvalue))
+    {
+      Error(location, $"function \"{functionName}\" cannot return this \"{returnType}\" expression yet -- only returning a plain variable of exactly this type is supported so far (e.g. \"return someVariable;\"), not a computed expression");
+      EmitCode("pushlit 0");
+      EmitCode("pop");
+      EmitCode("rld 0");
+      EmitCode("pushlit 0");
+      EmitCode("pop");
+      EmitCode("rld 1");
+      return;
+    }
+
+    EmitRegisterWordLoadIntoR(lvalue, wordIndex: 0, totalWords: 2); // r := low word
+    EmitCode("rld 0");
+    EmitRegisterWordLoadIntoR(lvalue, wordIndex: 1, totalWords: 2); // r := high word
+    EmitCode("rld 1");
+  }
+
+  /// <summary>
+  /// Emits a <c>return</c> for a pointer -- always into <c>ar[0]</c>, per Stefan's own direct
+  /// clarification ("a pointer is always a 2 word type... these new rules only apply to 2 word types"),
+  /// regardless of this compiler's own in-memory pointer representation (still exactly one CVM word --
+  /// see <see cref="PointerToChecked"/>'s own remarks in <c>CParser</c>; that representation question is
+  /// separate from this ABI decision). The pointer VALUE itself is fully general -- unlike 'long'/struct,
+  /// nothing about reading or computing a pointer expression is restricted anywhere in this compiler -- so
+  /// this evaluates <paramref name="value"/> with the ordinary <see cref="EmitExpr"/> path (any expression
+  /// shape at all), then marshals the resulting address into <c>ar[0]</c> with the exact same
+  /// pop/pushlit-0/arld sequence <see cref="EmitCall"/> already uses to marshal a register-eligible
+  /// pointer PARAMETER at a call site.
+  /// </summary>
+  private void EmitPointerReturn(CExpr value, CSourceLocation location, string functionName)
+  {
+    CType valueType = EmitExpr(value);
+    if (!valueType.IsPointer)
+    {
+      Error(location, $"function \"{functionName}\" does not return a pointer (this expression has type \"{valueType}\")");
+    }
+
+    EmitCode("pop");
+    EmitCode("pushlit 0");
+    EmitCode("arld 0");
+  }
+
   /// <summary>Duplicates the current stack top: "pop" into r, then "push; push" -- the first push
   /// restores the original value, the second leaves a copy above it. Net stack effect: +1.</summary>
   private void EmitDup()
@@ -2139,6 +2346,40 @@ public sealed class CCodeGenerator
     ["fmaxf"] = ("fmax", 2),
   };
 
+  /// <summary><c>__optimize</c> register path (added 2026-09-27): a SEPARATE table from <see
+  /// cref="FloatBuiltins"/> above, on purpose -- <see cref="FloatBuiltins"/>'s names are recognized
+  /// unconditionally, by name alone, with no user declaration required at all, while an entry here only
+  /// ever applies to a name Stefan's own source has actually declared <c>__optimize</c> (checked via <see
+  /// cref="CFunctionSignature.IsOptimize"/> in <see cref="TryGetFloatBuiltin"/> below). This is the
+  /// GENERAL/register path of the two-path substitution Stefan asked for ("if the variable is in a float
+  /// register, there is already an 'fabs' opcode"): reuses <see cref="EmitFloatExprInto"/>'s existing
+  /// machinery unchanged, by emitting the same <c>fabs destReg destReg</c> node-305 opcode <see
+  /// cref="FloatBuiltins"/>'s own <c>fabsf</c> entry already uses. See <see
+  /// cref="TryEmitOptimizedFabsAssignment"/> for the OTHER (narrow, register-file-bypassing) path this
+  /// same <c>__optimize</c> declaration also enables.
+  ///
+  /// <b>RENAMED 2026-09-27</b> (later the same day, alongside <see
+  /// cref="IsRecognizedOptimizeSignature"/>'s own rename): the recognized name changed from <c>fabs</c> to
+  /// <c>fabsf</c>, which means this table's own key now COLLIDES, in NAME only, with <see
+  /// cref="FloatBuiltins"/>'s own pre-existing, unconditional <c>fabsf</c> entry above. This is harmless,
+  /// not a bug to fix: <see cref="TryGetFloatBuiltin"/> checks <see cref="FloatBuiltins"/> FIRST and
+  /// returns as soon as it matches, so for the REGISTER path specifically, a call to <c>fabsf(...)</c>
+  /// already resolves to the identical <c>fabs destReg destReg</c> substitution whether or not the source
+  /// ALSO declares <c>__optimize float fabsf(float);</c> -- this table's own <c>fabsf</c> entry is
+  /// therefore dead code for that path today (unreachable, but not wrong: it maps to the exact same
+  /// mnemonic <see cref="FloatBuiltins"/> already would have). It is NOT dead for the NARROW path, though
+  /// -- <see cref="TryEmitOptimizedFabsAssignment"/> bypasses <see cref="FloatBuiltins"/>/<see
+  /// cref="TryGetFloatBuiltin"/> entirely and checks <see cref="CFunctionSignature.IsOptimize"/> directly,
+  /// so an actual <c>__optimize float fabsf(float);</c> declaration is still REQUIRED to unlock that
+  /// register-file-bypassing substitution; a plain, non-<c>__optimize</c> <c>fabsf</c> call only ever gets
+  /// the register path via <see cref="FloatBuiltins"/>, exactly as it already did before this feature
+  /// existed.
+  /// </summary>
+  private static readonly Dictionary<string, (string Mnemonic, int Arity)> OptimizeFloatRegisterMnemonics = new(StringComparer.Ordinal)
+  {
+    ["fabsf"] = ("fabs", 1),
+  };
+
   private bool TryGetFloatBuiltin(CCallExpr call, out string mnemonic, out int arity)
   {
     if (FloatBuiltins.TryGetValue(call.FunctionName, out (string Mnemonic, int Arity) entry))
@@ -2150,6 +2391,19 @@ public sealed class CCodeGenerator
 
       mnemonic = entry.Mnemonic;
       arity = entry.Arity;
+      return true;
+    }
+
+    if (_functions.TryGetValue(call.FunctionName, out CFunctionSignature? signature) && signature.IsOptimize &&
+        OptimizeFloatRegisterMnemonics.TryGetValue(call.FunctionName, out (string Mnemonic, int Arity) optimizeEntry))
+    {
+      if (call.Arguments.Count != optimizeEntry.Arity)
+      {
+        Error(call.Location, $"\"{call.FunctionName}\" expects {optimizeEntry.Arity} argument(s), but {call.Arguments.Count} were given");
+      }
+
+      mnemonic = optimizeEntry.Mnemonic;
+      arity = optimizeEntry.Arity;
       return true;
     }
 
@@ -2751,6 +3005,177 @@ public sealed class CCodeGenerator
     return target.Type;
   }
 
+  /// <summary><c>__optimize</c> narrow path (added 2026-09-27): resolves <paramref name="expr"/> to a
+  /// <see cref="CFloatLvalue"/> ONLY when it is a plain named <c>float</c> variable (a local, a parameter,
+  /// or a global) -- never a dereference, array element, or struct member. Those three other shapes
+  /// (<see cref="CFloatLvalueKind.Indirect"/>, via <see cref="CacheFloatIndirectAddress"/>) compute a
+  /// RUNTIME address with their own emitted code and side effects, which <see
+  /// cref="EmitOptimizedFabsAssignment"/>'s raw "load high word into r, bclr, store it back" sequence
+  /// cannot safely interleave with -- so this deliberately narrower check, rather than reusing <see
+  /// cref="ResolveFloatLvalue"/> directly, is what keeps the bypass-the-register-file shortcut confined to
+  /// the exact statement shape Stefan described ("otherwise the compiler must load the high word into r,
+  /// then perform a 'bclr 15' and write it back").</summary>
+  private bool TryResolveSimpleFloatLvalue(CExpr expr, out CFloatLvalue lvalue)
+  {
+    if (expr is CNameExpr name && IsFloatNamedVariable(name))
+    {
+      lvalue = ResolveFloatLvalue(name);
+      return true;
+    }
+
+    lvalue = null!;
+    return false;
+  }
+
+  /// <summary>Whether two float lvalues, each already known (by <see cref="TryResolveSimpleFloatLvalue"/>)
+  /// to be a plain named variable, refer to the very same storage -- e.g. the degenerate <c>a = fabsf(a);</c>
+  /// -- in which case <see cref="EmitOptimizedFabsAssignment"/> skips copying the LOW word onto itself.
+  /// </summary>
+  private static bool FloatLvalueRefersToSameStorage(CFloatLvalue a, CFloatLvalue b)
+  {
+    if (a.Kind != b.Kind)
+    {
+      return false;
+    }
+
+    return a.Kind == CFloatLvalueKind.Global ? a.Label == b.Label : a.Index == b.Index;
+  }
+
+  /// <summary><c>__optimize</c> narrow path: loads one word (the HIGH word if <paramref name="high"/>,
+  /// otherwise the LOW word) of a plain named <c>float</c> variable directly into register <c>r</c> --
+  /// never through node 305's floating-point register file at all. Mirrors <see cref="EmitFloatLoad"/>'s
+  /// own per-kind word layout exactly (a LOCAL's slots are HIGH-then-LOW, a PARAMETER's/GLOBAL's are
+  /// LOW-then-HIGH -- see this class's own doc comment and <see cref="EmitFloatLoadLocal"/>'s own remarks
+  /// for why), but stops after the single-word <c>ldl</c>/<c>ldp</c>/<c>gld</c> -- no <c>push</c>/
+  /// <c>fpop</c> -- since nothing here ever needs the value anywhere but in <c>r</c>. Only ever called with
+  /// a Local/Parameter/Global lvalue -- see <see cref="TryResolveSimpleFloatLvalue"/>'s own remarks for why
+  /// an Indirect lvalue never reaches here.</summary>
+  private void EmitFloatWordLoadIntoR(CFloatLvalue lvalue, bool high)
+  {
+    switch (lvalue.Kind)
+    {
+      case CFloatLvalueKind.Local:
+        // Local layout: baseSlot (Index) = HIGH, baseSlot+1 = LOW.
+        EmitCode($"ldl {lvalue.Index + (high ? 0 : 1)}");
+        break;
+      case CFloatLvalueKind.Parameter:
+        // Parameter layout: Index = LOW, Index+1 = HIGH.
+        EmitCode($"ldp {lvalue.Index + (high ? 1 : 0)}");
+        break;
+      case CFloatLvalueKind.Global:
+        // Global layout: Label = LOW, "{Label}__hi" = HIGH.
+        EmitGlobalFetch(high ? lvalue.Label + "__hi" : lvalue.Label!);
+        break;
+      default:
+        throw new InvalidOperationException($"EmitFloatWordLoadIntoR does not support a '{lvalue.Kind}' float lvalue -- the __optimize narrow path only ever resolves a plain named variable (see TryResolveSimpleFloatLvalue)");
+    }
+  }
+
+  /// <summary>The write-side counterpart of <see cref="EmitFloatWordLoadIntoR"/>: stores register
+  /// <c>r</c> directly into one word (HIGH or LOW) of a plain named <c>float</c> variable, with no float
+  /// register file involved.</summary>
+  private void EmitFloatWordStoreFromR(CFloatLvalue lvalue, bool high)
+  {
+    switch (lvalue.Kind)
+    {
+      case CFloatLvalueKind.Local:
+        EmitCode($"stl {lvalue.Index + (high ? 0 : 1)}");
+        break;
+      case CFloatLvalueKind.Parameter:
+        EmitCode($"stp {lvalue.Index + (high ? 1 : 0)}");
+        break;
+      case CFloatLvalueKind.Global:
+        EmitGlobalAssign(high ? lvalue.Label + "__hi" : lvalue.Label!);
+        break;
+      default:
+        throw new InvalidOperationException($"EmitFloatWordStoreFromR does not support a '{lvalue.Kind}' float lvalue -- the __optimize narrow path only ever resolves a plain named variable (see TryResolveSimpleFloatLvalue)");
+    }
+  }
+
+  /// <summary>
+  /// <c>__optimize</c> narrow path (added 2026-09-27), per Stefan's own description: "if the variable is
+  /// in a float register, there is already an 'fabs' opcode. otherwise the compiler must load the high
+  /// word into r, then perform a 'bclr 15' and write it back." <c>fabs</c> only ever clears the IEEE-754
+  /// sign bit (bit 15) of the HIGH word -- the LOW word is bit-for-bit unchanged -- so this copies the LOW
+  /// word across verbatim (skipped entirely when <paramref name="target"/> and <paramref name="source"/>
+  /// are literally the same storage, e.g. <c>a = fabsf(a);</c>) and only ever touches the HIGH word: load
+  /// it into <c>r</c>, clear bit 15 with node 409's own <c>bclr 15</c> (see
+  /// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.BitClearMnemonic</c>'s own remarks and
+  /// <c>claude/cvm-node409-bit-operations.md</c>), and store it back -- entirely bypassing node 305's
+  /// floating-point register file, unlike every other float operation this compiler emits.
+  ///
+  /// <b>UNCONFIRMED ASSUMPTION, flagged rather than silently asserted:</b> this assumes <c>bclr</c>
+  /// operates directly on register <c>r</c> in place, needing no <c>push</c>/<c>pop</c> around it -- the
+  /// same convention already confirmed for <c>ldl</c>/<c>stl</c>/<c>ldp</c>/<c>stp</c>/<c>gld</c>/
+  /// <c>gst</c> and for the ALU ops <see cref="CUnaryOp.Minus"/>/<see cref="CUnaryOp.BitwiseNot"/> already
+  /// emit around (<c>pop</c>, the ALU op, <c>push</c>), and exactly matching Stefan's own literal
+  /// description above -- but node 409's bit-operation family has no behavioral CVM simulator yet to
+  /// confirm this against real execution, only the self-describing instruction-set wiring itself. If this
+  /// turns out wrong once node 409 is simulated or run on real hardware, the fix is localized to this one
+  /// method.
+  ///
+  /// <b>DELIBERATE SCOPE EXPANSION, also flagged rather than silently absorbed:</b> every other <c>float</c>
+  /// built-in this compiler recognizes (<see cref="FloatBuiltins"/>, <see
+  /// cref="OptimizeFloatRegisterMnemonics"/>) is backed by node 305's FP subprocessor itself, per Stefan's
+  /// own scope instruction ("only add functions that are directly supported by the FP subprocessor should
+  /// be used by the compiler"). <c>bclr</c> lives on a DIFFERENT physical node (409), not the FP
+  /// subprocessor (305/306) -- this narrow path is a one-off exception for the exact function Stefan asked
+  /// for by name (<c>float fabsf(float)</c> -- <b>RENAMED 2026-09-27</b> from <c>float fabs(float)</c>,
+  /// see <see cref="IsRecognizedOptimizeSignature"/>'s own remarks), not a general precedent for pulling
+  /// in other nodes' opcodes as float built-ins.
+  /// </summary>
+  private void EmitOptimizedFabsAssignment(CFloatLvalue target, CFloatLvalue source)
+  {
+    if (!FloatLvalueRefersToSameStorage(target, source))
+    {
+      EmitFloatWordLoadIntoR(source, high: false);
+      EmitFloatWordStoreFromR(target, high: false);
+    }
+
+    EmitFloatWordLoadIntoR(source, high: true);
+    EmitCode("bclr 15");
+    EmitFloatWordStoreFromR(target, high: true);
+  }
+
+  /// <summary>
+  /// Recognizes the <c>__optimize</c> narrow-path statement shape "<c>simpleTarget = fabsf(simpleSource);</c>"
+  /// (<b>RENAMED 2026-09-27</b> from <c>fabs</c> -- see <see cref="IsRecognizedOptimizeSignature"/>'s own
+  /// remarks) -- see <see cref="EmitOptimizedFabsAssignment"/>'s own remarks for why this bypasses node
+  /// 305's float register file entirely, and <see cref="TryResolveSimpleFloatLvalue"/>'s own remarks for
+  /// why both sides must be a plain named variable. Emits nothing and returns <see langword="false"/> for
+  /// every other shape (a call to a non-<c>__optimize</c> function, a wrong-arity call, a dereference/
+  /// array/struct-member operand, a nested expression), so <see cref="EmitAssignForEffect"/> falls through
+  /// to the general float-register path unchanged.</summary>
+  private bool TryEmitOptimizedFabsAssignment(CAssignExpr assign)
+  {
+    if (assign.Value is not CCallExpr { Arguments.Count: 1 } call)
+    {
+      return false;
+    }
+
+    if (!_functions.TryGetValue(call.FunctionName, out CFunctionSignature? signature) || !signature.IsOptimize)
+    {
+      return false;
+    }
+
+    if (call.FunctionName != "fabsf")
+    {
+      // Only "fabsf" has a narrow in-place substitution today -- CollectSignatures already rejects any
+      // other __optimize-declared name/signature outright (see IsRecognizedOptimizeSignature), so this
+      // branch is unreachable in practice; spelled out rather than assumed.
+      return false;
+    }
+
+    if (!TryResolveSimpleFloatLvalue(assign.Target, out CFloatLvalue target) ||
+        !TryResolveSimpleFloatLvalue(call.Arguments[0], out CFloatLvalue source))
+    {
+      return false;
+    }
+
+    EmitOptimizedFabsAssignment(target, source);
+    return true;
+  }
+
   /// <summary>Assignment used purely for its side effect -- a bare <c>a = expr;</c> statement, or a
   /// plain declaration's initializer -- where nothing downstream needs the assignment's own result
   /// value (C's rule that "a = expr" is itself an expression only matters when something actually
@@ -2760,9 +3185,21 @@ public sealed class CCodeGenerator
   /// stack effect of the whole assignment is zero with no discard <c>pop</c> needed either. 2026-09-09:
   /// this is what makes <c>int a = 3;</c> compile to just <c>pushlit 3; pop; stl 0</c> instead of
   /// dup-ing the value and immediately throwing the extra copy away. See <see cref="EmitAssign"/> for
-  /// the expression-context version that keeps the residual value.</summary>
+  /// the expression-context version that keeps the residual value.
+  ///
+  /// <c>__optimize</c> (added 2026-09-27): checked FIRST, before <see cref="LooksLikeFloatExpr"/> --
+  /// <see cref="TryEmitOptimizedFabsAssignment"/> only ever matches the exact narrow statement shape
+  /// "<c>simpleTarget = fabsf(simpleSource);</c>" and emits its own complete, self-contained code when it
+  /// does, so nothing below it runs for that shape. Every other assignment (including a call to fabsf whose
+  /// operands are not both plain variables) falls through unchanged to the general float-register path.
+  /// </summary>
   private void EmitAssignForEffect(CAssignExpr assign)
   {
+    if (TryEmitOptimizedFabsAssignment(assign))
+    {
+      return;
+    }
+
     if (LooksLikeFloatExpr(assign.Target))
     {
       CFloatLvalue floatTarget = ResolveFloatLvalue(assign.Target);
@@ -3391,6 +3828,18 @@ public sealed class CCodeGenerator
               // Float ABI HYPOTHESIS (see this class's own doc comment): the return value always goes in
               // fr[0], regardless of calling convention.
               EmitFloatExprInto(returnStmt.Value, 0);
+            }
+            else if (_currentFunction.ReturnType.IsPointer)
+            {
+              // Return-value ABI (added 2026-09-27, per Stefan verbatim -- see this class's own doc
+              // comment above EmitRegisterWordLoadIntoR): a pointer return always goes in ar[0].
+              EmitPointerReturn(returnStmt.Value, returnStmt.Location, _currentFunction.Name);
+            }
+            else if (_currentFunction.ReturnType.SizeInWords == 2)
+            {
+              // Same 2026-09-27 ABI: every remaining genuinely-2-word return type (neither float nor
+              // pointer -- 'long', or a 2-word struct) goes low word in reg[0], high word in reg[1].
+              EmitRegisterReturn(returnStmt.Value, _currentFunction.ReturnType, returnStmt.Location, _currentFunction.Name);
             }
             else
             {
@@ -4122,6 +4571,31 @@ public sealed class CCodeGenerator
         continue;
       }
 
+      // 'long' (added 2026-09-27, alongside allowing 'long' as a parameter type -- see CType.Long's own
+      // remarks): a live 'long' ARGUMENT cannot be marshalled correctly yet -- there is no 'long' value
+      // operation to read it with in the first place (IsUnsupportedWholeValueType's own guard already
+      // rejects that, generically, wherever a 'long' value would be read: a bare variable, a dereference,
+      // an array element, a struct member). That guard's own fallback pushes exactly ONE placeholder word
+      // (see ReportUnsupportedValueRead), which is correct for an ordinary expression context but would be
+      // WRONG here: EmitFunction's own callee-side prologue already reserves TWO stack words for this
+      // parameter (SizeInWords), so silently falling through to the generic EmitExpr path below would push
+      // only one, desynchronizing every later stack-passed parameter's own offset (and the return address)
+      // from what the callee expects -- a real stack-corruption bug, not just a "value unavailable"
+      // diagnostic. Reported here instead, with exactly two placeholder words pushed (matching
+      // CType.Long.SizeInWords) so the stack frame stays self-consistent for whatever follows, and the
+      // argument expression is deliberately never evaluated (no side effects run) rather than evaluated
+      // and discarded -- mirroring ReportUnsupportedValueRead's own "report and substitute a placeholder,
+      // don't try to salvage the real value" convention, just at the correct word width for a call
+      // argument. See ParseParameterList's own remarks: "functions with long will come later" is exactly
+      // this gap.
+      if (paramType.IsLong)
+      {
+        Error(call.Arguments[i].Location, $"passing a 'long' argument to \"{call.FunctionName}\" is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet");
+        EmitCode("pushlit 0");
+        EmitCode("pushlit 0");
+        continue;
+      }
+
       _liveFloatRegisterCount = argFloatFloor; // protect any float argument already placed above while this (non-float) argument evaluates.
       EmitExpr(call.Arguments[i]);
 
@@ -4144,11 +4618,52 @@ public sealed class CCodeGenerator
     EmitCode($"call {mangledName}");
 
     CType returnType = signature.ReturnType;
-    if (returnType.IsFloat && floatResultDestRegister is int destReg && destReg != 0)
+    if (returnType.IsFloat)
     {
-      // Retrieve the return value out of fr[0] BEFORE the restore pops below run -- fr[0] is always among
-      // the registers being restored whenever destReg != 0 (0..savedLiveFloatCount-1 always includes 0).
-      EmitCode($"fmove {destReg} 0");
+      // Float ABI (unchanged by the 2026-09-27 return-value ABI addition below): the callee already left
+      // the result in fr[0] itself (see EmitStatement's own CReturnStmt case), so there is nothing to
+      // retrieve here unless the caller wants it somewhere OTHER than fr[0].
+      if (floatResultDestRegister is int destReg && destReg != 0)
+      {
+        // Retrieve the return value out of fr[0] BEFORE the restore pops below run -- fr[0] is always
+        // among the registers being restored whenever destReg != 0 (0..savedLiveFloatCount-1 always
+        // includes 0).
+        EmitCode($"fmove {destReg} 0");
+      }
+    }
+    else if (returnType.IsPointer)
+    {
+      // Return-value ABI (added 2026-09-27, per Stefan verbatim -- see this class's own doc comment above
+      // EmitRegisterWordLoadIntoR): the callee left the pointer in ar[0]'s own stored (address, page)
+      // pair, not on the general stack (see EmitPointerReturn's own remarks), so it has to be retrieved
+      // here. "arst" sets r to the address but ALSO pushes the register's own page word onto the stack as
+      // an unavoidable side effect (see CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic's own
+      // remarks), so the address has to be saved to a compiler-allocated temporary local first -- "stl"
+      // reads r directly, without touching the stack, exactly like EmitFunction's own ABI v2 prologue
+      // spill for a register-eligible pointer PARAMETER -- before that leftover page word can be popped
+      // away; only then can the address be reloaded and pushed as the caller's own single return word,
+      // matching every other non-float, non-void call result (see CExprStmt's own discard-by-one-pop
+      // convention).
+      int scratchSlot = _currentFunction!.NextLocalSlot++;
+      EmitCode("arst 0");             // r := ar[0]'s address; stack: [..., page]
+      EmitCode($"stl {scratchSlot}"); // scratchSlot := r (the address); stack unchanged
+      EmitCode("pop");                // r := the leftover page word, discarded; stack: [...]
+      EmitCode($"ldl {scratchSlot}"); // r := the address (reloaded from the scratch slot)
+      EmitCode("push");               // stack: [..., address]
+    }
+    else if (returnType.SizeInWords == 2)
+    {
+      // Same 2026-09-27 ABI: the callee left this 'long'/2-word-struct return in reg[0]/reg[1] (see
+      // EmitRegisterReturn's own remarks), not on the general stack. This compiler has no general
+      // mechanism yet to bring a 2-word value back from there onto the stack (EmitRegisterReturn itself
+      // only ever supports the narrow "return someVariable;" shape on the CALLEE side -- there is no
+      // corresponding "receive it into a variable" story on the CALLER side yet either), so using the
+      // result here is rejected with a diagnostic; a single placeholder word is still pushed to preserve
+      // the same one-word-per-call-result invariant every other non-float, non-void caller relies on (see
+      // CExprStmt's own discard-by-one-pop logic) -- mirroring ReportUnsupportedValueRead's own "report,
+      // but still leave well-defined state behind" convention.
+      Error(call.Location, $"the return value of \"{call.FunctionName}\" (a \"{returnType}\") is not usable yet -- this compiler cannot bring a 2-word return value back from reg[0]/reg[1] into an expression yet");
+      EmitCode("pushlit 0");
     }
 
     if (needsFloatSaveRestore)

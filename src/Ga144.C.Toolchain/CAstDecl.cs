@@ -20,8 +20,20 @@ public sealed record CParameter(string Name, CType Type);
 /// parsing of these two keywords also rejects, with a specific diagnostic, a <c>__fastcall</c> function
 /// declaring more than 4 pointer parameters (the address-register node -- node 308 as of 2026-09-15,
 /// previously "node 306" -- has only 4 address registers, <c>ar[0..3]</c>) --
-/// see <see cref="CParser"/>'s own remarks.</summary>
-public sealed record CFunctionDecl(CSourceLocation Location, string Name, CType ReturnType, IReadOnlyList<CParameter> Parameters, CCompoundStmt? Body, bool IsStatic, bool IsFastcall, bool IsLower);
+/// see <see cref="CParser"/>'s own remarks.
+///
+/// <b><c>IsOptimize</c> -- added 2026-09-27</b>, per Stefan's own request to substitute direct
+/// register-file/bit-instruction code for specific <c>math.h</c>-style calls (starting with <c>float
+/// fabs(float)</c>) instead of ever emitting a real <c>call</c>. True only for a function declared
+/// <c>__optimize</c>. <see cref="CParser"/> requires such a declaration to have no <c>Body</c> (a
+/// compiler-substituted function is never actually called, so a supplied body would be dead code) --
+/// <c>Body</c> is always <c>null</c> whenever <c>IsOptimize</c> is true. <see cref="CCodeGenerator"/>'s
+/// own <c>CollectSignatures</c> further requires the declared name+signature to be one it actually
+/// recognizes (initially only <c>fabs(float) -&gt; float</c>) -- an unrecognized <c>__optimize</c>
+/// declaration is a compile error, not a silently-ignored keyword. See <c>CCodeGenerator</c>'s own
+/// remarks on <c>CFunctionSignature.IsOptimize</c>, <c>OptimizeFloatRegisterMnemonics</c>, and
+/// <c>EmitOptimizedFabsAssignment</c> for how a call to such a function is actually substituted.</summary>
+public sealed record CFunctionDecl(CSourceLocation Location, string Name, CType ReturnType, IReadOnlyList<CParameter> Parameters, CCompoundStmt? Body, bool IsStatic, bool IsFastcall, bool IsLower, bool IsOptimize);
 
 /// <summary>A file-scope variable. IsExtern means "declared here, defined elsewhere" (no storage is
 /// emitted, and it becomes an ".import" wherever it's used); IsStatic means internal linkage --

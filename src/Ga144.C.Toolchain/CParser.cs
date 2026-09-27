@@ -24,12 +24,21 @@ namespace Ga144.C.Toolchain;
 /// has to be defined first in the CVM."</b> See <see cref="CType.Long"/>'s own remarks for the full scope:
 /// a <c>long</c> variable (local/global/static/struct-member) is fully declarable, correctly sized (2
 /// words) and addressable, and <c>long *</c>/<c>long[]</c>/pointer arithmetic on either all work (pure
-/// address math, already generic over element size). What is rejected: a <c>long</c> passed or returned
-/// BY VALUE in a function signature (checked here, at the parser level, exactly the way <c>struct</c>'s
-/// own by-value restriction already is -- see just below); every actual VALUE-level operation (a read, an
-/// assignment, <c>++</c>/<c>--</c>, a cast, arithmetic, an initializer other than "none, so it's zero-
-/// filled") is instead rejected in <see cref="CCodeGenerator"/>, since those need codegen context this
-/// purely-syntactic class doesn't have.
+/// address math, already generic over element size). What is rejected: a <c>long</c> RETURNED by value
+/// (still checked here, at the parser level, exactly the way <c>struct</c>'s own by-value restriction
+/// already is -- see just below); every actual VALUE-level operation (a read, an assignment, <c>++</c>/
+/// <c>--</c>, a cast, arithmetic, an initializer other than "none, so it's zero-filled") is instead
+/// rejected in <see cref="CCodeGenerator"/>, since those need codegen context this purely-syntactic class
+/// doesn't have.
+///
+/// <b>UPDATED 2026-09-27</b>, per Stefan's own follow-up: "allow 'long' as struct member and parameter" --
+/// a <c>long</c> PARAMETER is no longer rejected here (see <see cref="ParseParameterList"/>'s own
+/// remarks): it is accepted into a function's signature on the same terms a <c>long</c> struct member
+/// already was, but the function's own body still can't read that parameter's value, and
+/// <see cref="CCodeGenerator"/>'s own <c>EmitCall</c> still rejects an actual call that would need to pass
+/// a live <c>long</c> argument -- "functions with long will come later" (same instruction) is why
+/// return-by-value stays rejected here and a real call stays rejected in codegen; only the DECLARATION
+/// itself is now allowed.
 ///
 /// <b><c>float</c> -- added 2026-09-26, per Stefan's own float-ABI dictation.</b> See
 /// <see cref="CType.Float"/>'s own remarks and <see cref="CCodeGenerator"/>'s own doc comment for the
@@ -77,7 +86,7 @@ public sealed class CParser
     "void", "char", "int", "unsigned", "signed", "static", "extern", "const", "volatile",
     "if", "else", "while", "do", "for", "return", "break", "continue", "goto", "switch", "case", "default",
     "sizeof", "struct", "union", "enum", "typedef", "float", "double", "long", "short", "auto", "register",
-    "__fastcall", "__lower",
+    "__fastcall", "__lower", "__optimize",
   ];
 
   // "typedef" REMOVED 2026-09-11 -- it used to sit here alongside struct/union/enum/float/double/long/
@@ -331,7 +340,7 @@ public sealed class CParser
       CheckWord("void") || CheckWord("char") || CheckWord("int") || CheckWord("float") || CheckWord("unsigned") || CheckWord("signed") ||
       CheckWord("short") || CheckWord("long") ||
       CheckWord("static") || CheckWord("extern") || CheckWord("const") || CheckWord("volatile") ||
-      CheckWord("__fastcall") || CheckWord("__lower") || CheckWord("typedef") || CheckWord("struct") ||
+      CheckWord("__fastcall") || CheckWord("__lower") || CheckWord("__optimize") || CheckWord("typedef") || CheckWord("struct") ||
       (Current.IsIdentifier && _typedefs.ContainsKey(Current.Text)) ||
       UnsupportedTypeKeywords.Any(CheckWord);
 
@@ -351,13 +360,27 @@ public sealed class CParser
   /// call site below that is not <see cref="ParseExternalDeclaration"/>'s own function-declarator branch
   /// rejects a true <paramref name="isFastcall"/>/<paramref name="isLower"/> immediately via
   /// <see cref="RejectCallingConventionKeywords"/>, with a specific diagnostic, rather than silently
-  /// dropping them or falling through to a confusing generic parse error.</summary>
-  private CType ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLower, out bool isTypedef)
+  /// dropping them or falling through to a confusing generic parse error.
+  ///
+  /// <b><c>__optimize</c> -- added 2026-09-27</b>, per Stefan's own request to substitute a direct
+  /// register-file or bit-instruction sequence for specific <c>math.h</c>-style calls (starting with
+  /// <c>float fabsf(float)</c> -- renamed from <c>fabs</c> later the same day, see
+  /// <c>CCodeGenerator.IsRecognizedOptimizeSignature</c>'s own remarks) instead of ever emitting a real
+  /// function <c>call</c>. Modeled directly on
+  /// <c>__fastcall</c>/<c>__lower</c> above: parsed in the same order-independent specifier bag, and
+  /// meaningless everywhere <see cref="RejectCallingConventionKeywords"/> already rejects those two --
+  /// see that method's own remarks for the extended check. Unlike <c>__fastcall</c>/<c>__lower</c>,
+  /// <c>__optimize</c> is not itself an ABI/placement flag; it only marks a DECLARATION (never a
+  /// definition -- see <see cref="ParseExternalDeclaration"/>'s own "no body" check) as one <see
+  /// cref="CCodeGenerator"/> recognizes and substitutes by name+signature, per <c>CCodeGenerator</c>'s own
+  /// remarks on <c>OptimizeFloatRegisterMnemonics</c> and <c>EmitOptimizedFabsAssignment</c>.</summary>
+  private CType ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLower, out bool isOptimize, out bool isTypedef)
   {
     isStatic = false;
     isExtern = false;
     isFastcall = false;
     isLower = false;
+    isOptimize = false;
     isTypedef = false;
     while (true)
     {
@@ -376,6 +399,10 @@ public sealed class CParser
       else if (Match("__lower"))
       {
         isLower = true;
+      }
+      else if (Match("__optimize"))
+      {
+        isOptimize = true;
       }
       else if (Match("typedef"))
       {
@@ -487,11 +514,12 @@ public sealed class CParser
     throw Error(Current.Location, $"expected a type, found \"{Current.Text}\"");
   }
 
-  /// <summary>Rejects <c>__fastcall</c>/<c>__lower</c> wherever <see cref="ParseDeclarationSpecifiers"/>
-  /// was called for something other than a function declaration (a parameter, a local/global variable,
-  /// or a bare type name for <c>sizeof</c>/a cast) -- both keywords describe a function's own calling
-  /// convention and code placement, and are meaningless anywhere else.</summary>
-  private void RejectCallingConventionKeywords(bool isFastcall, bool isLower, CSourceLocation location, string context)
+  /// <summary>Rejects <c>__fastcall</c>/<c>__lower</c>/<c>__optimize</c> wherever <see
+  /// cref="ParseDeclarationSpecifiers"/> was called for something other than a function declaration (a
+  /// parameter, a local/global variable, or a bare type name for <c>sizeof</c>/a cast) -- all three
+  /// keywords describe a function's own calling convention, code placement, or call-substitution, and are
+  /// meaningless anywhere else.</summary>
+  private void RejectCallingConventionKeywords(bool isFastcall, bool isLower, bool isOptimize, CSourceLocation location, string context)
   {
     if (isFastcall)
     {
@@ -501,6 +529,11 @@ public sealed class CParser
     if (isLower)
     {
       throw Error(location, $"'__lower' can only be used on a function declaration, not {context}");
+    }
+
+    if (isOptimize)
+    {
+      throw Error(location, $"'__optimize' can only be used on a function declaration, not {context}");
     }
   }
 
@@ -580,8 +613,8 @@ public sealed class CParser
     while (!CheckWord("}") && !AtEnd)
     {
       CSourceLocation memberSpecifierLocation = Current.Location;
-      CType memberBaseType = ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLower, out bool isTypedef);
-      RejectCallingConventionKeywords(isFastcall, isLower, memberSpecifierLocation, "a struct member declaration");
+      CType memberBaseType = ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLower, out bool isOptimize, out bool isTypedef);
+      RejectCallingConventionKeywords(isFastcall, isLower, isOptimize, memberSpecifierLocation, "a struct member declaration");
       if (isStatic || isExtern || isTypedef)
       {
         throw Error(memberSpecifierLocation, "'static'/'extern'/'typedef' cannot be used on a struct member");
@@ -596,6 +629,13 @@ public sealed class CParser
         // remarks for why neither rejection applies anymore; CType.SizeInWords/CStructMember.Offset were
         // already fully general (an array member's own size already accounts for its element size), so
         // no change was needed there to allow this.
+        //
+        // A 'long' member was NEVER specifically rejected here in the first place (unlike 'long' as a
+        // parameter or return type, both rejected explicitly elsewhere -- see CType.Long's own remarks):
+        // a struct member is just a named storage location, exactly like a local/global 'long' variable,
+        // and CType.SizeInWords/the offset sum above are already generic over element size the same way
+        // they are for a 2-word 'float' member -- so "allow 'long' as struct member" (Stefan, 2026-09-27)
+        // needed no code change here at all, only confirmation that it already worked.
 
         // A member whose own type is a struct BY VALUE (not a pointer) must already be a COMPLETE type
         // -- an empty Members list here means either a genuinely-incomplete other tag (declared but
@@ -666,8 +706,8 @@ public sealed class CParser
   private CType ParseAbstractType()
   {
     CSourceLocation location = Current.Location;
-    CType type = ParseDeclarationSpecifiers(out _, out _, out bool isFastcall, out bool isLower, out bool isTypedef);
-    RejectCallingConventionKeywords(isFastcall, isLower, location, "a type name");
+    CType type = ParseDeclarationSpecifiers(out _, out _, out bool isFastcall, out bool isLower, out bool isOptimize, out bool isTypedef);
+    RejectCallingConventionKeywords(isFastcall, isLower, isOptimize, location, "a type name");
     if (isTypedef)
     {
       throw Error(location, "'typedef' cannot be used in a type name");
@@ -787,11 +827,11 @@ public sealed class CParser
   private void ParseExternalDeclaration(List<CFunctionDecl> functions, List<CGlobalVarDecl> globals)
   {
     CSourceLocation location = Current.Location;
-    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLowerSpecified, out bool isTypedef);
+    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out bool isExtern, out bool isFastcall, out bool isLowerSpecified, out bool isOptimize, out bool isTypedef);
 
     if (isTypedef)
     {
-      RejectCallingConventionKeywords(isFastcall, isLowerSpecified, location, "a typedef declaration");
+      RejectCallingConventionKeywords(isFastcall, isLowerSpecified, isOptimize, location, "a typedef declaration");
       if (isStatic || isExtern)
       {
         throw Error(location, "'typedef' cannot be combined with 'static' or 'extern'");
@@ -831,22 +871,40 @@ public sealed class CParser
       List<CParameter> parameters = ParseParameterList();
       Expect(")", "to close the parameter list");
 
-      // Added 2026-09-26 alongside struct support: a struct can never be returned BY VALUE (only
-      // "struct Tag *" is supported -- see CType.StructOf's own remarks). Checked here, once, rather
-      // than in CCodeGenerator, since the return type is already fully resolved at this point and this
-      // is a pure syntax-level restriction, not something that needs codegen context.
-      if (type.IsStruct)
+      // UPDATED 2026-09-27, per Stefan verbatim: "a return type is like a parameter. it must be allowed
+      // for all types." REMOVED: the blanket "struct/long cannot be returned by value" rejections that
+      // stood here since 2026-09-26 (struct alongside basic struct support, long alongside basic long
+      // support). See CCodeGenerator's own EmitStatement (CReturnStmt case) and EmitCall for the register
+      // convention this unblocks: a float return stays in fr[0] (unchanged); a pointer return is always
+      // in ar[0] (Stefan, same instruction, in direct response to being asked whether this only covers a
+      // genuinely 2-word return type: "a pointer is always a 2 word type. there is no near or far
+      // pointer, there is no 1 word pointer type" -- so a pointer return goes through this new
+      // register-based path unconditionally, even though this compiler's own in-memory pointer
+      // REPRESENTATION is still exactly one CVM word today, per this class's own PointerToChecked remarks
+      // -- that representation question is separate from, and not resolved by, this ABI clarification);
+      // every other exactly-2-word return type (long, or a struct that fits in 1-2 words) goes in
+      // reg[0] (low word) / reg[1] (high word). Stefan's own direct follow-up confirmed the SCOPE is
+      // exactly this: "these new rules only apply to 2 word types" / "i meant all remaining 2-word
+      // types" -- a 1-word return type (int, char, unsigned, or a 1-word struct) is UNCHANGED, still the
+      // original Pascal-style "left on the stack" convention.
+      //
+      // What's still rejected, for reasons this instruction doesn't cover:
+      if (type.IsStruct && type.Members!.Count == 0)
       {
-        throw Error(location, $"\"{name}\" cannot return \"{type}\" by value -- return a pointer (\"{type} *\") instead");
+        // Same "incomplete type used by value" rule already enforced for a by-value struct member/array
+        // element -- see ParseStructSpecifier's/ArrayOfChecked's own remarks. A forward-declared-but-
+        // never-defined tag has no known size, so there is no way to know which of the two rules above
+        // (1-word stack, or 2-word register) would even apply.
+        throw Error(location, $"\"{name}\" cannot return incomplete type \"{type}\" by value (the struct must be defined first)");
       }
 
-      // Added 2026-09-26 alongside 'long' support -- see CType.Long's own remarks: this compiler has no
-      // calling convention for returning a 2-word value by value yet (the CVM has no 'long' instructions
-      // defined yet), so this is rejected the same way struct-by-value already is, for the same "pure
-      // syntax-level restriction" reason given in the comment just above.
-      if (type.IsLong)
+      if (type.SizeInWords > 2)
       {
-        throw Error(location, $"\"{name}\" cannot return \"{type}\" by value yet -- the CVM has no 'long' instructions defined yet (return a pointer, \"{type} *\", instead)");
+        // Neither Stefan's own rule above, nor the pre-existing 1-word stack convention, covers a return
+        // value wider than 2 words -- only a struct can actually reach this (every scalar/pointer/long is
+        // always <= 2 words). Rejected here rather than silently mishandled, the same "reproduce what's
+        // given, flag what's not" discipline used throughout this class.
+        throw Error(location, $"\"{name}\" cannot return \"{type}\" by value -- this compiler's return-value convention only covers up to 2 words (32 bits); return a pointer (\"{type} *\") instead");
       }
 
       // "__fastcall implies also __lower, so __fastcall includes __lower" (Stefan, 2026-09-07) -- a
@@ -902,11 +960,20 @@ public sealed class CParser
         body = ParseCompoundStatement();
       }
 
-      functions.Add(new CFunctionDecl(location, name, type, parameters, body, isStatic, isFastcall, isLower));
+      // "__optimize" -- added 2026-09-27: a compiler-substituted function is never actually CALLED (see
+      // CCodeGenerator's own remarks on CFunctionSignature.IsOptimize), so a supplied body would just be
+      // dead code the compiler silently never emits or checks -- rejected loudly here instead, rather than
+      // accepting it and quietly ignoring it.
+      if (isOptimize && body is not null)
+      {
+        throw Error(location, $"\"{name}\" is '__optimize' -- a compiler-substituted function cannot have a body (the compiler substitutes its own code for every call, and never calls this one)");
+      }
+
+      functions.Add(new CFunctionDecl(location, name, type, parameters, body, isStatic, isFastcall, isLower, isOptimize));
       return;
     }
 
-    RejectCallingConventionKeywords(isFastcall, isLowerSpecified, location, "a variable declaration");
+    RejectCallingConventionKeywords(isFastcall, isLowerSpecified, isOptimize, location, "a variable declaration");
 
     // One or more comma-separated global variable declarators sharing the same base type/specifiers.
     while (true)
@@ -967,8 +1034,8 @@ public sealed class CParser
     do
     {
       CSourceLocation specifierLocation = Current.Location;
-      CType baseType = ParseDeclarationSpecifiers(out _, out _, out bool isFastcall, out bool isLower, out bool isTypedef);
-      RejectCallingConventionKeywords(isFastcall, isLower, specifierLocation, "a parameter declaration");
+      CType baseType = ParseDeclarationSpecifiers(out _, out _, out bool isFastcall, out bool isLower, out bool isOptimize, out bool isTypedef);
+      RejectCallingConventionKeywords(isFastcall, isLower, isOptimize, specifierLocation, "a parameter declaration");
       if (isTypedef)
       {
         throw Error(specifierLocation, "'typedef' cannot be used in a parameter declaration");
@@ -983,13 +1050,17 @@ public sealed class CParser
         throw Error(nameLocation, $"\"{name}\" cannot be passed as \"{type}\" by value -- use a pointer (\"{type} *\") instead");
       }
 
-      // Added 2026-09-26 alongside 'long' support -- see this method's own return-type rejection just
-      // above (in ParseExternalDeclaration) for why this is a parser-level restriction, not a CCodeGenerator one.
-      if (type.IsLong)
-      {
-        throw Error(nameLocation, $"\"{name}\" cannot be passed as \"{type}\" by value yet -- the CVM has no 'long' instructions defined yet (use a pointer, \"{type} *\", instead)");
-      }
-
+      // 'long' -- UNLIKE struct just above, no longer rejected here as of 2026-09-27, per Stefan's own
+      // "allow 'long' as struct member and parameter" instruction. This is a narrower relaxation than it
+      // looks: a 'long' parameter is accepted into the SIGNATURE exactly the way a 'long' struct member
+      // already was (see CType.Long's own remarks -- declaring, taking its address, and pointer/array use
+      // all only need the correct word count, never an actual 'long' value operation), but the function's
+      // own BODY still cannot read this parameter's value (IsUnsupportedWholeValueType's own guard, in
+      // CCodeGenerator, still applies to it exactly like a 'long' local/global), and CCodeGenerator's own
+      // EmitCall still rejects an actual CALL that would need to marshal a live 'long' argument -- see
+      // EmitCall's own remarks. "functions with long will come later" (Stefan, same instruction) is why
+      // return-by-value stays rejected just above (in ParseExternalDeclaration) and a real call stays
+      // rejected in CCodeGenerator: only the DECLARATION-level restriction is lifted here.
       parameters.Add(new CParameter(name, type.Decay()));
     } while (Match(","));
 
@@ -1033,8 +1104,8 @@ public sealed class CParser
   private void ParseLocalDeclaration(List<CStmt> statements)
   {
     CSourceLocation specifierLocation = Current.Location;
-    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out _, out bool isFastcall, out bool isLower, out bool isTypedef);
-    RejectCallingConventionKeywords(isFastcall, isLower, specifierLocation, "a local declaration");
+    CType baseType = ParseDeclarationSpecifiers(out bool isStatic, out _, out bool isFastcall, out bool isLower, out bool isOptimize, out bool isTypedef);
+    RejectCallingConventionKeywords(isFastcall, isLower, isOptimize, specifierLocation, "a local declaration");
 
     if (isTypedef)
     {

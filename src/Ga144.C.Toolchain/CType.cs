@@ -77,11 +77,37 @@ public sealed class CType : IEquatable<CType>
   /// exactly the way <c>struct</c>'s own "whole value" restriction already is (see <see
   /// cref="StructOf"/>'s own remarks) rather than silently mishandled: reading a <c>long</c> value from
   /// anywhere (a bare variable, a dereferenced <c>long *</c>, an array element, a struct member),
-  /// assigning/compound-assigning to one, <c>++</c>/<c>--</c> on one, casting to or from one, passing or
-  /// returning one BY VALUE in a function signature (parser-level, mirroring <c>struct</c>'s own
-  /// by-value restriction), and initializing a global/static <c>long</c> with anything other than leaving
-  /// it zero-filled (a general integer constant would need correct sign-extension into the high word,
-  /// which is exactly the kind of "long instruction" this compiler isn't implementing yet).
+  /// assigning/compound-assigning to one, <c>++</c>/<c>--</c> on one, casting to or from one, and
+  /// initializing a global/static <c>long</c> with anything other than leaving it zero-filled (a general
+  /// integer constant would need correct sign-extension into the high word, which is exactly the kind of
+  /// "long instruction" this compiler isn't implementing yet). (Returning a <c>long</c> BY VALUE from a
+  /// function used to be rejected here too, mirroring <c>struct</c>'s own by-value restriction -- see the
+  /// 2026-09-27 update below for why that specific rejection was lifted.)
+  ///
+  /// <b>UPDATED 2026-09-27</b>, per Stefan's own "allow 'long' as struct member and parameter" follow-up:
+  /// a <c>long</c> function PARAMETER is no longer rejected at the parser level (see <see
+  /// cref="CParser.ParseParameterList"/>'s own remarks) -- it is accepted into a signature on the exact
+  /// same terms a <c>long</c> struct member already was above. This does NOT make a <c>long</c> parameter's
+  /// VALUE usable: reading it inside the function body is still rejected by <see
+  /// cref="CCodeGenerator"/>'s own <c>IsUnsupportedWholeValueType</c> guard, exactly like a <c>long</c>
+  /// local, and actually CALLING such a function with a live <c>long</c> argument is rejected by <see
+  /// cref="CCodeGenerator"/>'s own <c>EmitCall</c> (which still needs to keep the caller/callee stack frame
+  /// word-for-word consistent, so it cannot simply fall through to the generic 1-word argument path the
+  /// way an unsupported bare-variable READ safely can) -- "functions with long will come later" (same
+  /// instruction) is why a real call with a live <c>long</c> argument stays rejected, while only the
+  /// parameter DECLARATION itself was allowed at the time.
+  ///
+  /// <b>UPDATED AGAIN 2026-09-27</b> (later the same day), per Stefan's own full return-value ABI
+  /// dictation ("a return type is like a parameter... for a 2 word (32 bit) return type... all remaining
+  /// types: low word in reg[0], high word in reg[1]"): returning a <c>long</c> BY VALUE is no longer
+  /// rejected at the parser level either -- <c>long</c>'s own <see cref="SizeInWords"/> of 2 is exactly
+  /// what makes it one of the "remaining 2-word types" that rule covers. See
+  /// <c>claude/c-return-value-register-abi.md</c> for the full design: only the narrow
+  /// <c>return someVariable;</c> shape is supported on the callee side (<see
+  /// cref="CCodeGenerator"/>'s own <c>EmitRegisterReturn</c>), and using the result at a call site is
+  /// still rejected (<c>EmitCall</c> has no way yet to bring a <c>reg[0]</c>/<c>reg[1]</c> value back into
+  /// an expression) -- narrower gaps than a flat rejection, but real ones, not yet "long will come later"
+  /// in full.
   /// </summary>
   public static readonly CType Long = new() { Kind = CTypeKind.Long };
 
