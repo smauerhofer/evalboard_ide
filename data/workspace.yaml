@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-27T16:52:09.1092797
-      utcDateTime: 2026-09-27T16:52:09.1092797Z
-      localDateTime: 2026-09-27T18:52:09.1092797+02:00
+      dateTime: 2026-09-27T20:39:10.3539700
+      utcDateTime: 2026-09-27T20:39:10.3539700Z
+      localDateTime: 2026-09-27T22:39:10.3539700+02:00
       date: 2026-09-27T00:00:00.0000000
       day: 27
       dayOfWeek: Sunday
       dayOfYear: 270
-      hour: 16
-      millisecond: 109
-      microsecond: 279
-      nanosecond: 700
-      minute: 52
+      hour: 20
+      millisecond: 353
+      microsecond: 970
+      nanosecond: 0
+      minute: 39
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 9
-      ticks: 639261247291092797
-      utcTicks: 639261247291092797
-      timeOfDay: 16:52:09.1092797
+      second: 10
+      ticks: 639261383503539700
+      utcTicks: 639261383503539700
+      timeOfDay: 20:39:10.3539700
       year: 2026
   portB: 
   portC:
@@ -28663,7 +28663,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 409
       enabled: true
-      sourceCode: >
+      sourceCode: >+
         ( CVM2 node 409. bit operations, 1111_1???_????_???? )
 
         # 407 import
@@ -28672,10 +28672,10 @@ projects:
 
         # right /b
 
-        # 8 org
+        # 9 org
 
         (
-          1111_1bbb_baaa_a0oo
+          1111_1bbb_baaa_aooo
 
           bit operation o on register r
 
@@ -28683,15 +28683,16 @@ projects:
           0: clear bit[a], bclr a
           1: set bit[a], bset a
           2: toggle bit[a], binv a
-          3: copy bit[a] to bit[b], bcopy a b
-          4:
-          5:
-          6:
-          7:
+          3: copy bit[a] to bit[b], bcpy a b
+          4: clear all bits until a from bottom up, bclrup a
+          5: set all bits until a from bottom up, bsetup a
+          6: clear all bits until a from top down, bclrdown a
+          7: set all bits until a from top down, bsetdown a
 
           aaaa: bit position
           bbbb: bit position
         )
+
 
 
         : bit/mask ( bitpos - mask )
@@ -28724,6 +28725,40 @@ projects:
         ;
 
 
+        : bit/downmask ( - mask )
+          a bit/mask
+          -1 . +
+        ;
+
+
+        : bit/upmask ( - mask )
+          a bit/mask
+          2*
+          -1 . +
+        ;
+
+
+
+
+        : bit/clearup ( bitpos value - value' )
+          bit/upmask
+          bit/clear1
+        ;
+
+
+
+        : bit/setup ( bitpos value - value' )
+          bit/upmask
+        : bit/or ( a b - c ) >r inv r> inv and inv ;
+
+
+        : bit/cleardown ( bitpos value - value' )
+          bit/downmask
+          and
+        ;
+
+
+
 
         : bit/main
           dup 7 and >r
@@ -28740,60 +28775,74 @@ projects:
         bit/inv ;
 
         bit/copy ;
+
+        bit/clearup ;
+
+        bit/setup ;
+
+        bit/cleardown ;
+
+        : bit/setdown ( bitpos value - value' )
+          bit/downmask
+          inv
+          bit/or
+        ;
+
+
       ramWords:
-      - 0x1140E
-      - 0x11410
-      - 0x11413
-      - 0x11415
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1140F
+      - 0x11411
+      - 0x11414
+      - 0x11416
+      - 0x11428
+      - 0x1142A
+      - 0x1142D
+      - 0x13421
+      - 0x3372B
       - 0x040BF
       - 0x0000F
       - 0x00001
-      - 0x1F40D
+      - 0x1F40E
       - 0x15555
-      - 0x3770B
-      - 0x21608
+      - 0x3770C
+      - 0x21609
       - 0x32055
-      - 0x21608
+      - 0x21609
       - 0x248CA
       - 0x3ECE5
-      - 0x21608
+      - 0x21609
       - 0x39555
       - 0x248BA
-      - 0x13408
+      - 0x13409
       - 0x2EEC2
       - 0x307C2
-      - 0x13408
+      - 0x13409
       - 0x26CFA
-      - 0x1941E
+      - 0x1941F
       - 0x3AC82
-      - 0x11411
+      - 0x11412
       - 0x3AC82
-      - 0x1140F
+      - 0x11410
+      - 0x23609
+      - 0x049F5
+      - 0x3FFFF
+      - 0x23609
+      - 0x37DB0
+      - 0x3FFFF
+      - 0x15555
+      - 0x13424
+      - 0x11410
+      - 0x13424
+      - 0x2E69A
+      - 0x320CD
+      - 0x13421
+      - 0x3F555
       - 0x25DFA
       - 0x00007
       - 0x2E7C2
       - 0x30DAA
       - 0x01455
-      - 0x09720
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x0972F
       - 0x15555
       - 0x15555
       - 0x15555
@@ -28806,7 +28855,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x020
+        entryPoint: 0x02F
         p: 0x000
         a: 0x000
         b: 0x000
@@ -28816,8 +28865,32 @@ projects:
       color: '#D6ECF7'
       postMortemEnabled: false
     - coordinate: 410
-      enabled: false
-      sourceCode: ''
+      enabled: true
+      sourceCode: >+
+        ( CVM2 node 410.
+
+        storage for 64 register
+
+        )
+
+        # down /b
+
+        # down /p
+
+
+        # 0x0 org
+
+        [
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
+        ]
+
       ramWords: []
       startup:
         entryPoint: 0x000
@@ -28827,8 +28900,8 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
-      postMortemEnabled: false
+      color: '#E8E8E8'
+      postMortemEnabled: true
     - coordinate: 411
       enabled: false
       sourceCode: ''
@@ -30408,7 +30481,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 509
       enabled: true
-      sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ g/r@ ]] lit\r\n: u/get !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p g/r! ]] lit !b !b ;\n: u/pop ( -w) A[ g/pop ]] lit u/get ;\n: u/push ( w) A[ @p g/push ]] lit !b !b ;\r\n: u/next ( -w) A[ g/next ]] lit u/get ;\n: u/leave A[ g/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ !p 2* !p ]] lit !b @b @b\n  -if // 1011_1???_????_????\n    // \n    --l- ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // \n    --l- ;\n  then // 1011_00??_????_????\n  2* -if // 1011_001?_????_????\n    // load literal -256..255\r\n    drop 0x01ff and dup 0x0200 and if drop 0xfe00 xor u/r! ; then drop u/r! ;\n  then // 1011_000?_????_????\r\n  // unary\n  drop >r u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\nbegin [ swap ]\r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\r\n: 'parity 'bitcnt\r\n: 'odd 1 and ;\r\n: 'not until dup xor ;\n\r\n(\r\nopcode lit 1011_01??_????_???? load literal to r. the range of the literal is -0x200 to 0x1ff.\r\n\r\n'abs make r absolute\r\n'neg negate r\n'inc increment r\r\n'dec decrement r\r\n'inv invert all bits in r\r\n'mul2 shift left r\r\n'div2 signed shift right of r\r\n'udiv2 unsigned shift right of r\r\n'bitcnt count 1 bits in r\r\n'parity if r contains an odd number of 1 bits, then r becomes 1 otherwise r becomes 0.\r\n'odd r becomes 1 of r is odd, otherwise r becomes 0.\r\n'not logical not. if r is 0 then r = 1, otherwise r = 0\r\n)\r\n"
+      sourceCode: "( CVM2 node 509. unary arithmetic, 1011_????_????_???? )\n# 508 import\n# 0 org\nentry u/main\n# 0 /a\n# right /b\n: u/r@ ( -w) A[ g/r@ ]] lit\r\n: u/get !b A[ !p ]] lit !b @b ;\n: u/r! ( w) A[ @p g/r! ]] lit !b !b ;\n: u/pop ( -w) A[ g/pop ]] lit u/get ;\n: u/push ( w) A[ @p g/push ]] lit !b !b ;\r\n: u/next ( -w) A[ g/next ]] lit u/get ;\n: u/leave A[ g/leave ; ]] lit !b\n: u/main # u/leave lit >r A[ !p 2* !p ]] lit !b @b @b\n  -if // 1011_1???_????_????\n    // load literal -1024..1023\r\n    drop 0x07ff and dup 0x0400 and if drop 0xf800 xor u/r! ; then drop u/r! ;\n  then // 1011_0???_????_????\n  2* -if // 1011_01??_????_????\n    // \n    --l- ;\n  then // 1011_00??_????_????\n  // unary\n  drop >r u/r@ ex 0xffff and u/r! ;\r\n  \n: 'abs ( x-y) 2* 2* 2/ 2/ -if\r\n: 'neg ( x-y) inv \r\nbegin [ swap ]\r\n: 'inc ( x-y) 1 . + ;\r\n: 'dec ( x-y) -1 . + ;\r\nthen\r\n: 'inv ( x-x) inv ;\r\n: 'mul2 ( x-y) 2* ;\r\n: 'div2 ( x-y) 2* 2* 2/ 2/\r\n: 'udiv2 ( x-y) 2/ ;\r\n: 'bitcnt dup dup xor >r begin if r> 'inc >r dup 'dec and [ swap ] again then r> ;\r\n: 'parity 'bitcnt\r\n: 'odd 1 and ;\r\n: 'not until dup xor ;\n\r\n(\r\nopcode lit 1011_1???_????_???? load literal to r. the range of the literal is -0x400 to 0x3ff.\r\n\r\n'abs make r absolute\r\n'neg negate r\n'inc increment r\r\n'dec decrement r\r\n'inv invert all bits in r\r\n'mul2 shift left r\r\n'div2 signed shift right of r\r\n'udiv2 unsigned shift right of r\r\n'bitcnt count 1 bits in r\r\n'parity if r contains an odd number of 1 bits, then r becomes 1 otherwise r becomes 0.\r\n'odd r becomes 1 if r is odd, otherwise r becomes 0.\r\n'not logical not. if r is 0 then r = 1, otherwise r = 0\r\n)\r\n"
       ramWords:
       - 0x049B2
       - 0x13400
@@ -30429,19 +30502,17 @@ projects:
       - 0x0000D
       - 0x0C432
       - 0x09F02
-      - 0x1B415
-      - 0x11575
-      - 0x37217
-      - 0x11575
-      - 0x37220
+      - 0x1B41C
       - 0x3BDFB
-      - 0x001FF
-      - 0x04067
-      - 0x00200
+      - 0x007FF
+      - 0x04063
+      - 0x00400
       - 0x3BDE2
-      - 0x0FE00
+      - 0x0F800
       - 0x11405
       - 0x3B705
+      - 0x3721E
+      - 0x11575
       - 0x3A8B2
       - 0x13400
       - 0x17555
@@ -30449,7 +30520,7 @@ projects:
       - 0x0FFFF
       - 0x11405
       - 0x364C2
-      - 0x3122D
+      - 0x3122B
       - 0x329B2
       - 0x049F5
       - 0x00001
@@ -30462,17 +30533,19 @@ projects:
       - 0x31555
       - 0x24DE2
       - 0x2E9B2
-      - 0x19439
-      - 0x27629
+      - 0x19437
+      - 0x27627
       - 0x2EDB2
-      - 0x1342B
-      - 0x3F734
+      - 0x13429
+      - 0x3F732
       - 0x27555
-      - 0x13432
+      - 0x13430
       - 0x04055
       - 0x00001
-      - 0x19429
+      - 0x19427
       - 0x24355
+      - 0x15555
+      - 0x15555
       - 0x15555
       startup:
         entryPoint: 0x00F
@@ -30486,7 +30559,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 510
       enabled: true
-      sourceCode: "( CVM2 node 510. extended register access, 1011_1???_????_????\r\n\r\nhandle reg[x] access. 0 <= x <= 63\r\n\r\n)\n# 509 import\nentry reg/main\n# right /a\n# left /b\n\r\n# 8 org\n\r\n: reg/r@ ( -w) A[ u/r@ ]] lit\r\n: reg/get !b A[ !p ]] lit !b @b ;\n: reg/st reg/rd\r\n: reg/r! ( w) A[ @p u/r! ]] lit !b !b ;\n: reg/pop ( -w) A[ u/pop ]] lit reg/get ;\n: reg/pu reg/rd\r\n: reg/push ( w) A[ @p u/push ]] lit !b !b ;\r\n: reg/next ( -w) A[ u/next ]] lit reg/get ;\n\r\n: reg/lit reg/next\r\n: reg/wr ( w-) A[ @b !+ ]] lit ! ! ;\r\n: reg/rd ( -w) A[ @+ !b ]] lit ! @ ;\r\n\r\n: reg/clr dup xor reg/wr ;\r\n\r\n: reg/ld reg/r@ reg/wr ;\r\n: reg/po2 leap\r\n: reg/po then reg/pop reg/wr ;\r\n\r\n: reg/pu2 reg/rd reg/rd reg/push reg/push ;\r\n\r\n: reg/leave A[ u/leave ; ]] lit !b\n: reg/main # reg/leave lit >r A[ drop !p ]] lit !b @b\r\n  ( w )\n  dup 0xf and >r\r\n  2/ 2/ 2/ 2/ 0x3f and\r\n  ( reg )\r\n  // select register in node 511\r\n  A[ @b a! ]] lit ! ! \r\n  ex ;\n\n(\r\n  1011_1?xx_xxxx_?ooo\r\n\r\nooo: 3-bit operation code\r\nxxxxxx: 6-bit register selection\r\n\r\nooo | operation | opcode     |description\r\n----+-----------+------------+----------------------\r\n 0  | clear     | rclr       | reg[x] = 0\r\n 1  | set       | rlit       | reg[x] = next_word\r\n 2  | pop2      | rpop2      | reg[x] = pop{}, reg[x+1] = pop{}\r\n 3  | push2     | rpush2     | push{reg[x+1]}, push{reg[x]}\r\n 4  | load      | rld        | reg[x] = r\r\n 5  | store     | rst        | r = reg[x]\r\n 6  | pop       | rpop       | reg[x] = pop{}\r\n 7  | push      | rpush      | push{reg[x]}\r\n \r\n\n)\r\n\r\n# 0 org\n\r\nreg/clr ;\r\nreg/lit ;\r\nreg/po2 ;\r\nreg/pu2 ;\r\nreg/ld ;\r\nreg/st ;\r\nreg/po ;\r\nreg/pu ;\r\n\r\n\r\n"
+      sourceCode: "( CVM2 node 510. extended register access, 1011_01??_????_????\r\n\r\nhandle reg[x] access. 0 <= x <= 63\r\n\r\nnode 410 contains the memory for the 64 register.\r\n\r\n)\n# 509 import\nentry reg/main\n# down /a\n# left /b\n\r\n# 8 org\n\r\n: reg/r@ ( -w) A[ u/r@ ]] lit\r\n: reg/get !b A[ !p ]] lit !b @b ;\n: reg/st reg/rd\r\n: reg/r! ( w) A[ @p u/r! ]] lit !b !b ;\n: reg/pop ( -w) A[ u/pop ]] lit reg/get ;\n: reg/pu reg/rd\r\n: reg/push ( w) A[ @p u/push ]] lit !b !b ;\r\n: reg/next ( -w) A[ u/next ]] lit reg/get ;\n\r\n: reg/lit reg/next\r\n: reg/wr ( w-) A[ @b !+ ]] lit ! ! ;\r\n: reg/rd ( -w) A[ @+ !b ]] lit ! @ ;\r\n\r\n: reg/clr dup xor reg/wr ;\r\n\r\n: reg/ld reg/r@ reg/wr ;\r\n: reg/po2 leap\r\n: reg/po then reg/pop reg/wr ;\r\n\r\n: reg/pu2 reg/rd reg/rd reg/push reg/push ;\r\n\r\n: reg/leave A[ u/leave ; ]] lit !b\n: reg/main # reg/leave lit >r A[ drop !p ]] lit !b @b\r\n  ( w )\n  dup 0xf and >r\r\n  2/ 2/ 2/ 2/ 0x3f and\r\n  ( reg )\r\n  // select register in node 410\r\n  A[ @b a! ]] lit ! ! \r\n  ex ;\n\n(\r\n  1011_01xx_xxxx_0ooo\r\n\r\nooo: 3-bit operation code\r\nxxxxxx: 6-bit register selection\r\n\r\nFor rpop2/rpush2, register x+1 is evaluated modulo 64. mem[0x40] = mem[0x00].\nThus x=63 operates on registers 63 and 0.\r\n\r\nooo | operation | opcode     |description\r\n----+-----------+------------+----------------------\r\n 0  | clear     | rclr       | reg[x] = 0\r\n 1  | set       | rlit       | reg[x] = next_word\r\n 2  | pop2      | rpop2      | reg[x] = pop{}, reg[x+1] = pop{}\r\n 3  | push2     | rpush2     | push{reg[x+1]}, push{reg[x]}\r\n 4  | load      | rld        | reg[x] = r\r\n 5  | store     | rst        | r = reg[x]\r\n 6  | pop       | rpop       | reg[x] = pop{}\r\n 7  | push      | rpush      | push{reg[x]}\r\n \r\n\n)\r\n\r\n# 0 org\n\r\nreg/clr ;\r\nreg/lit ;\r\nreg/po2 ;\r\nreg/pu2 ;\r\nreg/ld ;\r\nreg/st ;\r\nreg/po ;\r\nreg/pu ;\r\n\r\n\r\n"
       ramWords:
       - 0x1141C
       - 0x11417
@@ -30563,97 +30636,73 @@ projects:
       color: '#D6ECF7'
       postMortemEnabled: false
     - coordinate: 511
-      enabled: true
-      sourceCode: >+
-        ( CVM2 node 511. register storage
-
-        storage for 64 register
-
-        )
-
-        # right /b
-
-        # right /p
-
-
-        # 0x0 org
-
-        [
-          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
-          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
-          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
-          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
-          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
-          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
-          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
-          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 , 
-        ]
-
+      enabled: false
+      sourceCode: ''
       ramWords:
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x1D5
         p: 0x000
