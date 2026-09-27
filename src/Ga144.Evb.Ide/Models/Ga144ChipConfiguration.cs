@@ -48,6 +48,35 @@ public sealed class Ga144ChipConfiguration
   public string? LastSelectedDebuggerProgramName { get; set; }
 
   /// <summary>
+  /// The C Debugger's own named programs (added 2026-09-27, per Stefan: "the C debugger must support
+  /// multiple programs like the CVM debugger") -- mirrors <see cref="DebuggerPrograms"/>'s own "always at
+  /// least one, 'default' always first" contract exactly, via its own <see cref="Ga144CDebuggerProgramConfiguration"/>
+  /// type and its own <see cref="EnsureCDebuggerPrograms"/> pass in <see cref="Normalize"/>, but as a
+  /// SEPARATE list from <see cref="DebuggerPrograms"/>: a C source snippet and a CVM assembly program are
+  /// different content entirely, even though both live on this same chip and both debuggers are opened
+  /// from the same chip window.
+  ///
+  /// UNLIKE <see cref="DebuggerPrograms"/>'s own "default" entry, this class's "default" has NO special
+  /// "always shows a fixed built-in text regardless of what's saved" override anywhere in
+  /// <see cref="ViewModels.CDebuggerViewModel"/> -- that CVM-side behavior exists to guarantee one always-
+  /// known-good, always-assemblable test program for hardware-confidence testing (see
+  /// <see cref="ViewModels.CvmDebuggerViewModel.LoadEditorFromProgram"/>'s own remarks); nothing here calls
+  /// for that same guarantee, so this "default" is just an ordinary, normally-editable, normally-persisted
+  /// program that merely happens to be the first one a chip starts with, seeded once from
+  /// <see cref="CDebuggerDefaultProgram.Source"/>. Flagged here rather than silently copied, since this is
+  /// the one deliberate deviation from an otherwise exact mirror of <see cref="DebuggerPrograms"/>'s own
+  /// design.
+  /// </summary>
+  public List<Ga144CDebuggerProgramConfiguration> CDebuggerPrograms { get; set; } = [];
+
+  /// <summary>
+  /// The name of whichever <see cref="CDebuggerPrograms"/> entry the C Debugger had selected the last
+  /// time it was open on this chip -- mirrors <see cref="LastSelectedDebuggerProgramName"/> exactly, as
+  /// its own separate field for the same reason <see cref="CDebuggerPrograms"/> is its own separate list.
+  /// </summary>
+  public string? LastSelectedCDebuggerProgramName { get; set; }
+
+  /// <summary>
   /// The Kraken structure (head 708 + three fixed tentacles) is a constant of the
   /// GA144 array and the boot protocol, not per-chip configuration. It is never
   /// persisted: it is always the one fixed topology, recreated in memory. Whether
@@ -79,6 +108,7 @@ public sealed class Ga144ChipConfiguration
     EnsureAllNodes();
     Nodes.Sort((left, right) => left.Coordinate.CompareTo(right.Coordinate));
     EnsureDebuggerPrograms();
+    EnsureCDebuggerPrograms();
   }
 
   /// <summary>
@@ -125,6 +155,36 @@ public sealed class Ga144ChipConfiguration
     DebuggerAssemblyCode = null;
   }
 
+  /// <summary>
+  /// Ensures <see cref="CDebuggerPrograms"/> always has at least one entry, with a "default"-named one
+  /// (if any exists) always first -- mirrors <see cref="EnsureDebuggerPrograms"/> exactly, except there is
+  /// no legacy single-scratch-buffer field to migrate here (the C Debugger never had one before this
+  /// feature existed -- see <see cref="CDebuggerPrograms"/>'s own remarks).
+  /// </summary>
+  private void EnsureCDebuggerPrograms()
+  {
+    CDebuggerPrograms ??= [];
+    foreach (Ga144CDebuggerProgramConfiguration program in CDebuggerPrograms)
+    {
+      program.Normalize();
+    }
+
+    if (CDebuggerPrograms.Count == 0)
+    {
+      CDebuggerPrograms.Add(new Ga144CDebuggerProgramConfiguration { Name = "default", Source = CDebuggerDefaultProgram.Source });
+    }
+    else
+    {
+      int defaultIndex = CDebuggerPrograms.FindIndex(program => string.Equals(program.Name, "default", StringComparison.OrdinalIgnoreCase));
+      if (defaultIndex > 0)
+      {
+        Ga144CDebuggerProgramConfiguration defaultProgram = CDebuggerPrograms[defaultIndex];
+        CDebuggerPrograms.RemoveAt(defaultIndex);
+        CDebuggerPrograms.Insert(0, defaultProgram);
+      }
+    }
+  }
+
   public Ga144NodeConfiguration GetNode(int coordinate)
   {
     Normalize();
@@ -163,6 +223,48 @@ public sealed class Ga144ChipConfiguration
 /// nothing in this app binds it for live display inside a list the way <see cref="Name"/> is.
 /// </summary>
 public sealed class Ga144DebuggerProgramConfiguration : INotifyPropertyChanged
+{
+  private string _name = string.Empty;
+
+  public string Name
+  {
+    get => _name;
+    set
+    {
+      if (_name == value)
+      {
+        return;
+      }
+
+      _name = value;
+      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Name)));
+    }
+  }
+
+  public string Source { get; set; } = string.Empty;
+
+  public event PropertyChangedEventHandler? PropertyChanged;
+
+  public void Normalize()
+  {
+    Name ??= string.Empty;
+    Source ??= string.Empty;
+  }
+}
+
+/// <summary>
+/// One named C Debugger program stored on a chip -- see <see cref="Ga144ChipConfiguration.CDebuggerPrograms"/>'s
+/// own remarks for the "always at least one, 'default' always first" contract this is part of, and for the
+/// one deliberate deviation from <see cref="Ga144DebuggerProgramConfiguration"/> (no special-cased "default").
+///
+/// Implements <see cref="INotifyPropertyChanged"/> for <see cref="Name"/> alone, for the exact same reason
+/// <see cref="Ga144DebuggerProgramConfiguration"/> does -- <see cref="ViewModels.CDebuggerViewModel"/> keeps
+/// these SAME instances inside its own <c>Programs</c> <c>ObservableCollection</c> rather than replacing
+/// them, so the WPF ComboBox bound to it (<c>DisplayMemberPath="Name"</c>) only picks up a rename via this
+/// notification. <see cref="Source"/> needs no such notification: nothing in this app binds it for live
+/// display inside a list the way <see cref="Name"/> is.
+/// </summary>
+public sealed class Ga144CDebuggerProgramConfiguration : INotifyPropertyChanged
 {
   private string _name = string.Empty;
 

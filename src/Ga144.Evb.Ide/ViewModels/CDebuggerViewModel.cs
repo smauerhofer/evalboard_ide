@@ -1,8 +1,10 @@
-using System.IO;
 using Ga144.C.Toolchain;
 using Ga144.Cvm.Toolchain;
+using Ga144.Evb.Ide.Cvm;
 using Ga144.Evb.Ide.Models;
 using Ga144.Evb.Ide.Services;
+using System.Collections.ObjectModel;
+using System.IO;
 
 namespace Ga144.Evb.Ide.ViewModels;
 
@@ -62,11 +64,33 @@ public sealed class CDebuggerViewModel : ObservableObject
   private readonly IReadOnlyList<F18MacroDefinition> _userMacros;
   private readonly string? _librariesDirectoryPath;
   private readonly CProjectStore _projectStore = new();
+  private readonly Action _notifyProjectChanged;
 
-  private string _sourceCodeText = DefaultSourceCodeText;
-  private string _diagnosticsText = "Not compiled yet. Click \"Compile && Load\" to build this source and load it into the debugger below.";
+  // The C Debugger's own named programs (added 2026-09-27, per Stefan: "the C debugger must support
+  // multiple programs like the CVM debugger") -- see this class's own remarks on Programs/SelectedProgram
+  // below for the full mirrored design, and Ga144ChipConfiguration.CDebuggerPrograms's own remarks for
+  // the one deliberate deviation from CvmDebuggerViewModel's own "default" special case. _sourceCodeText
+  // is now populated by InitializePrograms (constructor) / SelectedProgram's own setter, never left at a
+  // hardcoded default the way it was before this feature existed.
+  private Ga144CDebuggerProgramConfiguration? _selectedProgram;
+  private string _programNameText = string.Empty;
 
-  private const string DefaultSourceCodeText = "// Statements only -- this text is placed inside a hidden \"void main() { ... }\".\nint a = 3;\nint b = 4;\nint c = a + b;\n";
+  private string _sourceCodeText = CDebuggerDefaultProgram.Source;
+  private string _diagnosticsText = "Not compiled yet. Click \"Compile & Load\" to build this source and load it into the debugger below.";
+
+  // Added 2026-09-27, per Stefan: "in the C debugger i want to be able to select the compiler
+  // optimization options." CCompiler.Compile has taken both of these as optional parameters since
+  // 2026-09-10 (see its own doc comment, "the IDE's own C project settings... expose both as a
+  // per-project, persisted choice") -- CProjectViewModel's Build already exposes them via two checkboxes
+  // bound to its own backing CProject (see EnableConstantFolding/EnablePeepholeOptimization there, and
+  // CProjectWindow.xaml's own matching CheckBoxes). This window has no backing CProject at all (see this
+  // class's own doc comment -- it's a standalone snippet compiler, not a project), so there is nothing to
+  // persist these into; they simply live here as plain view-model state, defaulting to the exact same
+  // values CCompiler.Compile itself defaults to when neither is specified (constant folding on, peephole
+  // optimization off), so leaving both untouched compiles exactly as this window already did before this
+  // feature existed.
+  private bool _enableConstantFolding = true;
+  private bool _enablePeepholeOptimization;
 
   public CDebuggerViewModel(
       Ga144ChipConfiguration chip,
@@ -82,6 +106,7 @@ public sealed class CDebuggerViewModel : ObservableObject
     _romLibrary = romLibrary ?? throw new ArgumentNullException(nameof(romLibrary));
     _userMacros = userMacros ?? [];
     _librariesDirectoryPath = librariesDirectoryPath;
+    _notifyProjectChanged = notifyProjectChanged ?? throw new ArgumentNullException(nameof(notifyProjectChanged));
 
     // The CVM Debugger instance this window's own run/step/breakpoint/memory-inspector controls are
     // bound to -- see this class's own remarks for why composition, not reimplementation, is the right
@@ -91,10 +116,13 @@ public sealed class CDebuggerViewModel : ObservableObject
     Debugger = new CvmDebuggerViewModel(chip, romLibrary, _userMacros, krakenController, resolveEndpoint, notifyProjectChanged, projectDefaultNodeColor);
 
     CompileAndLoadCommand = new RelayCommand(CompileAndLoad, () => !Debugger.IsBusy);
+    AddProgramCommand = new RelayCommand(AddProgram);
+    SaveCommand = new RelayCommand(SaveProgram);
+    RestoreCommand = new RelayCommand(RestoreProgram);
 
     // Debugger.IsBusy flips on every Start/Step/Continue/Run/Assemble/CoreDump -- Debugger's own
     // NotifyCommandStates (see its own remarks) only ever re-queries ITS OWN commands, since it has no
-    // idea this wrapper's CompileAndLoadCommand exists, so without this subscription "Compile && Load"
+    // idea this wrapper's CompileAndLoadCommand exists, so without this subscription "Compile & Load"
     // would stay enabled (or stay stuck disabled) independently of whether the wrapped debugger is
     // actually free to accept a new image right now.
     Debugger.PropertyChanged += (_, e) =>
@@ -104,6 +132,15 @@ public sealed class CDebuggerViewModel : ObservableObject
         CompileAndLoadCommand.NotifyCanExecuteChanged();
       }
     };
+
+    // Multiple named programs (added 2026-09-27, per Stefan: "the C debugger must support multiple
+    // programs like the CVM debugger") -- rebuilds Programs/SelectedProgram/SourceCodeText/ProgramNameText
+    // from this chip's own Ga144ChipConfiguration.CDebuggerPrograms, reselecting whichever program was
+    // selected last time. See InitializePrograms's own remarks for the one deliberate difference from
+    // CvmDebuggerViewModel's own constructor: no auto Compile & Load runs here (or when SelectedProgram
+    // changes below) -- switching a program only loads its text into the editor, since a full compile is a
+    // much heavier, more visible operation than the CVM Debugger's own in-memory Assemble.
+    InitializePrograms();
   }
 
   /// <summary>The wrapped CVM Debugger this window's Start/Step/Continue/Run/Pause/Stop/breakpoints/
@@ -118,15 +155,134 @@ public sealed class CDebuggerViewModel : ObservableObject
   /// wrapper adds text to the FRONT of line 1 only (never a whole extra line), so a compile diagnostic's
   /// own reported line number still matches this editor's own line numbers exactly -- only a column
   /// offset on line 1 itself is affected.
+  ///
+  /// <b>Multiple programs (added 2026-09-27)</b>: this is now always <see cref="SelectedProgram"/>'s own
+  /// editable text, mirroring <see cref="CvmDebuggerViewModel.AssemblyCodeText"/>'s exact relationship to
+  /// its own <c>SelectedProgram</c> -- see <see cref="Programs"/>'s own remarks for the full design.
   /// </summary>
   public string SourceCodeText { get => _sourceCodeText; set => SetProperty(ref _sourceCodeText, value ?? string.Empty); }
 
   /// <summary>Every message from the most recent <see cref="CompileAndLoadCommand"/> run -- warnings
   /// about a not-yet-built library, compile/assemble/link diagnostics on failure, or a plain success
-  /// line once <see cref="Debugger"/>'s own <see cref="CvmDebuggerViewModel.LoadImage"/> has run.</summary>
+  /// line once <see cref="Debugger"/>'s own <see cref="CvmDebuggerViewModel.LoadImage"/> has run. Also
+  /// doubles as the status line for <see cref="AddProgramCommand"/>/<see cref="SaveCommand"/>/
+  /// <see cref="RestoreCommand"/> (this class has no separate "StatusText" the way
+  /// <see cref="CvmDebuggerViewModel"/> does).</summary>
   public string DiagnosticsText { get => _diagnosticsText; private set => SetProperty(ref _diagnosticsText, value); }
 
+  /// <summary>Added 2026-09-27 -- see this class's own remarks on <see cref="_enableConstantFolding"/>.
+  /// Threaded straight into the next <see cref="CompileAndLoadCommand"/> run's own
+  /// <see cref="CCompiler.Compile"/> call; changing it has no effect on a program already loaded into
+  /// <see cref="Debugger"/> until "Compile &amp; Load" runs again.</summary>
+  public bool EnableConstantFolding { get => _enableConstantFolding; set => SetProperty(ref _enableConstantFolding, value); }
+
+  /// <summary>Added 2026-09-27 -- see this class's own remarks on <see cref="_enableConstantFolding"/>.
+  /// Off by default, same as <see cref="CCompiler.Compile"/>'s own default and
+  /// <see cref="CProjectViewModel.EnablePeepholeOptimization"/>'s own starting value, since
+  /// <see cref="CvmPeepholeOptimizer"/>'s two reload-elision rules rely on a "a store leaves r unchanged"
+  /// hardware assumption not yet confirmed against real hardware (see that class's own remarks and
+  /// <see cref="OptimizerDescription"/> below).</summary>
+  public bool EnablePeepholeOptimization { get => _enablePeepholeOptimization; set => SetProperty(ref _enablePeepholeOptimization, value); }
+
+  /// <summary>Added 2026-09-27 -- shown next to the two checkboxes above so it's clear from the window
+  /// itself, not just a tooltip, what each one does. Same wording as
+  /// <see cref="CProjectViewModel.OptimizerDescription"/>'s own (not shared via a common base type, since
+  /// the two view models otherwise have nothing else in common).</summary>
+  public string OptimizerDescription =>
+      "Constant folding evaluates compile-time-constant arithmetic in the C source before code generation; " +
+      "peephole optimization removes redundant instruction sequences the code generator itself introduces " +
+      "(not yet confirmed against real hardware -- see the C compiler design doc).";
+
+  // ---------------------------------------------------------------------------------------------
+  // Multiple programs (added 2026-09-27), per Stefan: "the C debugger must support multiple programs
+  // like the CVM debugger." Mirrors CvmDebuggerViewModel's own Programs/SelectedProgram/ProgramNameText/
+  // AddProgramCommand/SaveCommand/RestoreCommand design (see that class's own doc comment and each
+  // member's own remarks there) almost exactly -- same "always at least one, 'default' always first"
+  // contract (Ga144ChipConfiguration.CDebuggerPrograms/EnsureCDebuggerPrograms, mirroring
+  // DebuggerPrograms/EnsureDebuggerPrograms), same working-copy-instances-until-Save discipline, same
+  // "switching a program commits its source but discards an unsaved rename" asymmetry, same
+  // empty-name/name-collision refusal on Save, same "Restore reloads from what's actually persisted, or
+  // no-ops with a message for a program that was never saved" behavior.
+  //
+  // Two deliberate differences from the CVM Debugger's own version, both flagged rather than silently
+  // carried over:
+  // 1. No "default" special case. CvmDebuggerViewModel.LoadEditorFromProgram always shows the built-in
+  //    CvmDebuggerDefaultProgram.Source for a program literally named "default", regardless of what is
+  //    actually saved under that name -- a deliberate "always one known-good, always-assemblable test
+  //    program" guarantee tied to that debugger's own hardware-confidence-test role (see that method's
+  //    own remarks). Nothing here calls for the same guarantee, so this class's own "default" is just an
+  //    ordinary, normally-editable, normally-persisted program that merely happens to be seeded from
+  //    CDebuggerDefaultProgram.Source the first time a chip gets one and to sort first in the list.
+  // 2. No auto Compile & Load on selection or at startup. CvmDebuggerViewModel's own SelectedProgram
+  //    setter (and its constructor) immediately re-Assembles after loading a program's text, because
+  //    Assemble is a cheap, side-effect-limited, purely in-memory operation ("selecting IS loading",
+  //    Stefan's own words). CompileAndLoad here is a much heavier, more visible pipeline (parse, codegen,
+  //    assemble, resolve every library on disk, link, and hand the result to Debugger.LoadImage, which
+  //    can replace whatever the wrapped debugger currently has loaded) -- silently re-running all of that
+  //    every time the program dropdown changes, or the moment this window opens, seemed like the wrong
+  //    default to assume unasked. Switching programs (or opening the window) only loads the selected
+  //    program's own text into SourceCodeText; "Compile & Load" still has to be clicked explicitly, same
+  //    as before this feature existed. Happy to wire up auto-compile-on-switch too if that's what was
+  //    actually wanted.
+  // ---------------------------------------------------------------------------------------------
+
+  /// <summary>The C Debugger's own named programs, mirroring
+  /// <see cref="CvmDebuggerViewModel.Programs"/> -- see this section's own remarks for the two deliberate
+  /// differences. Fresh working-copy <see cref="Ga144CDebuggerProgramConfiguration"/> instances (never the
+  /// same references <see cref="Ga144ChipConfiguration.CDebuggerPrograms"/> holds), so nothing typed here
+  /// reaches the project's own persisted data until <see cref="SaveCommand"/> runs.</summary>
+  public ObservableCollection<Ga144CDebuggerProgramConfiguration> Programs { get; } = [];
+
+  /// <summary>The program selector's own <c>SelectedItem</c>, mirroring
+  /// <see cref="CvmDebuggerViewModel.SelectedProgram"/> -- switching first commits
+  /// <see cref="SourceCodeText"/>'s current contents back into the program being switched AWAY from (an
+  /// unsaved RENAME in <see cref="ProgramNameText"/> is discarded instead, same asymmetry as the CVM
+  /// Debugger's own version), then loads the newly selected program's own saved text into
+  /// <see cref="SourceCodeText"/> -- but, unlike the CVM Debugger, does NOT auto-compile (see this
+  /// section's own remarks, point 2). Persists
+  /// <see cref="Ga144ChipConfiguration.LastSelectedCDebuggerProgramName"/> immediately, not gated behind
+  /// Save, same as the CVM Debugger's own version.</summary>
+  public Ga144CDebuggerProgramConfiguration? SelectedProgram
+  {
+    get => _selectedProgram;
+    set
+    {
+      if (ReferenceEquals(_selectedProgram, value))
+      {
+        return;
+      }
+
+      CommitEditorSourceIntoSelectedProgram();
+      _selectedProgram = value;
+      OnPropertyChanged();
+      if (value is not null)
+      {
+        LoadEditorFromProgram(value);
+      }
+
+      _chip.LastSelectedCDebuggerProgramName = value?.Name;
+      _notifyProjectChanged();
+    }
+  }
+
+  /// <summary>The program-name text box's own contents, mirroring
+  /// <see cref="CvmDebuggerViewModel.ProgramNameText"/> exactly -- always shows
+  /// <see cref="SelectedProgram"/>'s current name, but a typed edit here only actually renames the
+  /// program when <see cref="SaveCommand"/> runs; switching <see cref="SelectedProgram"/> away first
+  /// discards a not-yet-saved rename attempt (unlike an edited-but-unsaved <see cref="SourceCodeText"/>,
+  /// which IS carried over across a switch).</summary>
+  public string ProgramNameText { get => _programNameText; set => SetProperty(ref _programNameText, value ?? string.Empty); }
+
   public RelayCommand CompileAndLoadCommand { get; }
+
+  /// <summary>"Add", mirroring <see cref="CvmDebuggerViewModel.AddProgramCommand"/>.</summary>
+  public RelayCommand AddProgramCommand { get; }
+
+  /// <summary>"Save", mirroring <see cref="CvmDebuggerViewModel.SaveCommand"/>.</summary>
+  public RelayCommand SaveCommand { get; }
+
+  /// <summary>"Restore", mirroring <see cref="CvmDebuggerViewModel.RestoreCommand"/>.</summary>
+  public RelayCommand RestoreCommand { get; }
 
   /// <summary>
   /// Wraps <see cref="SourceCodeText"/> in the hidden <c>void main() { ... }</c>, compiles it
@@ -173,7 +329,7 @@ public sealed class CDebuggerViewModel : ObservableObject
     }
     catch (Exception exception)
     {
-      messages.Add($"Compile && Load failed unexpectedly, inside the C toolchain itself rather than as an ordinary compile/link diagnostic ({exception.GetType().FullName}): {exception.Message}");
+      messages.Add($"Compile & Load failed unexpectedly, inside the C toolchain itself rather than as an ordinary compile/link diagnostic ({exception.GetType().FullName}): {exception.Message}");
       messages.Add(exception.StackTrace ?? "(no stack trace available)");
       DiagnosticsText = string.Join(Environment.NewLine, messages);
     }
@@ -227,7 +383,12 @@ public sealed class CDebuggerViewModel : ObservableObject
     string wrappedSource = "void main() { " + SourceCodeText + "\n}\n";
 
     var resolver = new FileSystemIncludeResolver(includeDirectories);
-    CCompileResult compileResult = CCompiler.Compile(DebuggerSourceFileName, wrappedSource, resolver);
+    CCompileResult compileResult = CCompiler.Compile(
+        DebuggerSourceFileName,
+        wrappedSource,
+        resolver,
+        enableConstantFolding: EnableConstantFolding,
+        enablePeepholeOptimization: EnablePeepholeOptimization);
     if (!compileResult.Success || compileResult.Assembly is null)
     {
       messages.Add("Compile failed:");
@@ -283,5 +444,174 @@ public sealed class CDebuggerViewModel : ObservableObject
     Debugger.LoadImage(image, "Compiled and linked from the C source editor", sourceComments);
     messages.Add("Compiled, assembled, and linked successfully -- loaded into the debugger below.");
     DiagnosticsText = string.Join(Environment.NewLine, messages);
+  }
+
+  /// <summary>
+  /// (Re)builds <see cref="Programs"/>/<see cref="SelectedProgram"/>/<see cref="SourceCodeText"/>/
+  /// <see cref="ProgramNameText"/> from this chip's own <see cref="Ga144ChipConfiguration.CDebuggerPrograms"/>
+  /// -- called once, by the constructor. Mirrors <see cref="CvmDebuggerViewModel.InitializePrograms"/>
+  /// exactly, except it does not re-compile at the end (see this class's own remarks on
+  /// <see cref="Programs"/>, point 2). <see cref="Ga144ChipConfiguration.Normalize"/> is what actually
+  /// guarantees at least one ("default") entry exists -- this method just mirrors whatever it produces
+  /// into fresh working copies (never the SAME <see cref="Ga144CDebuggerProgramConfiguration"/> instances
+  /// <c>_chip</c> holds) so nothing typed here reaches the project's own data ahead of
+  /// <see cref="SaveCommand"/>.
+  /// </summary>
+  private void InitializePrograms()
+  {
+    _chip.Normalize();
+    Programs.Clear();
+    foreach (Ga144CDebuggerProgramConfiguration saved in _chip.CDebuggerPrograms)
+    {
+      Programs.Add(new Ga144CDebuggerProgramConfiguration { Name = saved.Name, Source = saved.Source });
+    }
+
+    Ga144CDebuggerProgramConfiguration selected = Programs.FirstOrDefault(
+        program => string.Equals(program.Name, _chip.LastSelectedCDebuggerProgramName, StringComparison.OrdinalIgnoreCase))
+        ?? Programs[0];
+
+    _selectedProgram = selected;
+    OnPropertyChanged(nameof(SelectedProgram));
+    LoadEditorFromProgram(selected);
+  }
+
+  /// <summary>Loads one program's text/name into <see cref="SourceCodeText"/>/<see cref="ProgramNameText"/>
+  /// -- shared by <see cref="InitializePrograms"/> (opening the window) and <see cref="SelectedProgram"/>'s
+  /// own setter (switching programs). UNLIKE <see cref="CvmDebuggerViewModel.LoadEditorFromProgram"/>,
+  /// there is no "default" name override here -- every program, including one named "default", always
+  /// loads its own actually-saved <see cref="Ga144CDebuggerProgramConfiguration.Source"/> (see this
+  /// class's own remarks on <see cref="Programs"/>, point 1).</summary>
+  private void LoadEditorFromProgram(Ga144CDebuggerProgramConfiguration program)
+  {
+    _sourceCodeText = program.Source;
+    OnPropertyChanged(nameof(SourceCodeText));
+    _programNameText = program.Name;
+    OnPropertyChanged(nameof(ProgramNameText));
+  }
+
+  /// <summary>Writes <see cref="SourceCodeText"/>'s current contents back into <see cref="SelectedProgram"/>'s
+  /// own <see cref="Ga144CDebuggerProgramConfiguration.Source"/> -- called before switching
+  /// <see cref="SelectedProgram"/> away (so the edit is not lost) and again at the top of
+  /// <see cref="SaveProgram"/>. Deliberately does NOT also copy <see cref="ProgramNameText"/> into
+  /// <see cref="SelectedProgram"/>'s own Name -- see that property's own remarks for why a rename is held
+  /// back until Save specifically.</summary>
+  private void CommitEditorSourceIntoSelectedProgram()
+  {
+    if (_selectedProgram is not null)
+    {
+      _selectedProgram.Source = SourceCodeText;
+    }
+  }
+
+  /// <summary>
+  /// "Add": appends a new, empty, uniquely-named program (e.g. "New program", "New program 2", ...) to
+  /// <see cref="Programs"/> and selects it -- selecting it is what actually loads its (empty) text into
+  /// the editor (see <see cref="SelectedProgram"/>'s own remarks). Purely an in-memory addition: like
+  /// every other edit here, it is not persisted onto <see cref="Ga144ChipConfiguration.CDebuggerPrograms"/>
+  /// until <see cref="SaveCommand"/> runs, so closing the C Debugger without Saving afterward discards it.
+  /// </summary>
+  private void AddProgram()
+  {
+    // No explicit CommitEditorSourceIntoSelectedProgram() call needed here -- the SelectedProgram setter
+    // below already flushes the currently-selected program's edited text before switching.
+    string name = GenerateUniqueProgramName("New program");
+    var program = new Ga144CDebuggerProgramConfiguration { Name = name, Source = string.Empty };
+    Programs.Add(program);
+    SelectedProgram = program;
+    DiagnosticsText = $"Added a new program \"{name}\". Edit its C source, then click Save to keep it in the project.";
+  }
+
+  private string GenerateUniqueProgramName(string baseName)
+  {
+    if (Programs.All(program => !string.Equals(program.Name, baseName, StringComparison.OrdinalIgnoreCase)))
+    {
+      return baseName;
+    }
+
+    int suffix = 2;
+    while (Programs.Any(program => string.Equals(program.Name, $"{baseName} {suffix}", StringComparison.OrdinalIgnoreCase)))
+    {
+      suffix++;
+    }
+
+    return $"{baseName} {suffix}";
+  }
+
+  /// <summary>
+  /// "Save": commits the editor's current <see cref="SourceCodeText"/> into <see cref="SelectedProgram"/>'s
+  /// own Source, renames it to whatever <see cref="ProgramNameText"/> currently holds (a no-op if it was
+  /// not actually changed), then persists the WHOLE <see cref="Programs"/> list -- every program, not just
+  /// the selected one, so an edit made to another program before switching away, or a brand-new one from
+  /// <see cref="AddProgramCommand"/>, is never silently lost -- onto
+  /// <see cref="Ga144ChipConfiguration.CDebuggerPrograms"/> and notifies the owning project. Refuses an
+  /// empty name or one that collides with a DIFFERENT program already in the list, leaving everything else
+  /// (including the source-text commit) exactly where it stood so a rename mistake never blocks getting
+  /// the source itself saved.
+  /// </summary>
+  private void SaveProgram()
+  {
+    if (SelectedProgram is not { } selected)
+    {
+      return;
+    }
+
+    CommitEditorSourceIntoSelectedProgram();
+
+    string newName = ProgramNameText.Trim();
+    if (newName.Length == 0)
+    {
+      DiagnosticsText = "Cannot save: the program name cannot be empty.";
+      return;
+    }
+
+    if (Programs.Any(program => !ReferenceEquals(program, selected) && string.Equals(program.Name, newName, StringComparison.OrdinalIgnoreCase)))
+    {
+      DiagnosticsText = $"Cannot save: another program is already named \"{newName}\".";
+      return;
+    }
+
+    // Ga144CDebuggerProgramConfiguration.Name raises INotifyPropertyChanged (same bug-fix precedent as
+    // Ga144DebuggerProgramConfiguration -- see that class's own remarks), so this plain assignment is
+    // enough for the ComboBox's DisplayMemberPath binding to pick up the new text immediately.
+    bool renamed = !string.Equals(selected.Name, newName, StringComparison.Ordinal);
+    selected.Name = newName;
+    ProgramNameText = newName;
+
+    _chip.CDebuggerPrograms = [.. Programs.Select(program => new Ga144CDebuggerProgramConfiguration { Name = program.Name, Source = program.Source })];
+    _notifyProjectChanged();
+    DiagnosticsText = renamed
+        ? $"Saved and renamed the program to \"{newName}\"."
+        : $"Saved \"{newName}\" to the project.";
+  }
+
+  /// <summary>
+  /// "Restore": reloads the CURRENTLY selected program from what is actually persisted on this chip
+  /// (<see cref="Ga144ChipConfiguration.CDebuggerPrograms"/>), undoing whatever has been typed or renamed
+  /// here since the last <see cref="SaveCommand"/>. Matches the selected program's persisted counterpart
+  /// by <see cref="SelectedProgram"/>'s own <see cref="Ga144CDebuggerProgramConfiguration.Name"/> -- which
+  /// only ever changes at Save time, so this still finds the right persisted entry even with an unsaved,
+  /// not-yet-saved rename sitting in <see cref="ProgramNameText"/>. A program <see cref="AddProgramCommand"/>
+  /// created that has never been saved has no persisted counterpart at all -- restoring it would mean
+  /// deleting it, which is not what "undo unsaved writing" means for a program that was never written
+  /// anywhere yet, so this is a no-op (with an explanatory message) instead.
+  /// </summary>
+  private void RestoreProgram()
+  {
+    if (SelectedProgram is not { } selected)
+    {
+      return;
+    }
+
+    Ga144CDebuggerProgramConfiguration? persisted = _chip.CDebuggerPrograms.FirstOrDefault(
+        program => string.Equals(program.Name, selected.Name, StringComparison.Ordinal));
+    if (persisted is null)
+    {
+      DiagnosticsText = $"\"{selected.Name}\" has never been saved -- nothing in the project to restore from.";
+      return;
+    }
+
+    LoadEditorFromProgram(persisted);
+    selected.Source = _sourceCodeText;
+    DiagnosticsText = $"Restored \"{selected.Name}\" to what was last saved.";
   }
 }

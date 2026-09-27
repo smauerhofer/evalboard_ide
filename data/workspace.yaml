@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-27T10:14:03.7096458
-      utcDateTime: 2026-09-27T10:14:03.7096458Z
-      localDateTime: 2026-09-27T12:14:03.7096458+02:00
+      dateTime: 2026-09-27T14:47:50.7528920
+      utcDateTime: 2026-09-27T14:47:50.7528920Z
+      localDateTime: 2026-09-27T16:47:50.7528920+02:00
       date: 2026-09-27T00:00:00.0000000
       day: 27
       dayOfWeek: Sunday
       dayOfYear: 270
-      hour: 10
-      millisecond: 709
-      microsecond: 645
-      nanosecond: 800
-      minute: 14
+      hour: 14
+      millisecond: 752
+      microsecond: 892
+      nanosecond: 0
+      minute: 47
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 3
-      ticks: 639261008437096458
-      utcTicks: 639261008437096458
-      timeOfDay: 10:14:03.7096458
+      second: 50
+      ticks: 639261172707528920
+      utcTicks: 639261172707528920
+      timeOfDay: 14:47:50.7528920
       year: 2026
   portB: 
   portC:
@@ -10541,6 +10541,17 @@ projects:
 
         halt
     lastSelectedDebuggerProgramName: fmul regression test
+    cDebuggerPrograms:
+    - name: default
+      source: >
+        // Statements only -- this text is placed inside a hidden "void main() { ... }".
+
+        int a = 3;
+
+        int b = 4;
+
+        int c = a + b;
+    lastSelectedCDebuggerProgramName: 
   - role: Target
     name: Target GA144
     nodes:
@@ -12754,6 +12765,17 @@ projects:
 
         ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/cbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)
     lastSelectedDebuggerProgramName: 
+    cDebuggerPrograms:
+    - name: default
+      source: >
+        // Statements only -- this text is placed inside a hidden "void main() { ... }".
+
+        int a = 3;
+
+        int b = 4;
+
+        int c = a + b;
+    lastSelectedCDebuggerProgramName: 
   userMacros: []
   defaultNodeColor: '#FFF1C7'
 - id: 0b82b025-33c0-4c4b-b948-acc38bb23ca3
@@ -20172,6 +20194,17 @@ projects:
         halt
 
     lastSelectedDebuggerProgramName: 
+    cDebuggerPrograms:
+    - name: default
+      source: >
+        // Statements only -- this text is placed inside a hidden "void main() { ... }".
+
+        int a = 3;
+
+        int b = 4;
+
+        int c = a + b;
+    lastSelectedCDebuggerProgramName: 
   - role: Target
     name: Target GA144
     nodes:
@@ -22385,6 +22418,17 @@ projects:
 
         ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/cbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)
     lastSelectedDebuggerProgramName: 
+    cDebuggerPrograms:
+    - name: default
+      source: >
+        // Statements only -- this text is placed inside a hidden "void main() { ... }".
+
+        int a = 3;
+
+        int b = 4;
+
+        int c = a + b;
+    lastSelectedCDebuggerProgramName: 
   userMacros: []
   defaultNodeColor: '#FFF1C7'
 - id: 817aefbe-3708-4f08-a4d3-76e936db5dad
@@ -30105,8 +30149,6 @@ projects:
 
         'jump jump to address in next word
 
-        'plit push literal to stack
-
         'ret return from subroutine
 
         'push push r onto stack
@@ -30230,6 +30272,8 @@ projects:
 
         : g/! ( o-) A[ over @p ]] lit !b !b A[ m/2! ]] lit !b ;
 
+        : 'litr g/next g/r! ;
+
         : g/leave A[ ; ]] lit !b
 
         : g/main # g/leave lit >r A[ 2* !p !p ]] lit !b @b @b >r
@@ -30299,28 +30343,30 @@ projects:
       - 0x21DB2
       - 0x13418
       - 0x09555
+      - 0x1340A
+      - 0x11402
       - 0x05BB2
       - 0x15555
       - 0x04812
-      - 0x00016
+      - 0x00018
       - 0x37932
       - 0x09F02
-      - 0x2F21F
+      - 0x2F221
       - 0x269B2
       - 0x115D5
-      - 0x37232
-      - 0x3722B
+      - 0x37234
+      - 0x3722D
       - 0x13400
-      - 0x19424
-      - 0x27616
+      - 0x19426
+      - 0x27618
       - 0x364DA
-      - 0x37228
+      - 0x3722A
       - 0x3BDE3
       - 0x0FC00
       - 0x3BD36
       - 0x0561A
       - 0x15555
-      - 0x3722F
+      - 0x37231
       - 0x27DFA
       - 0x001FF
       - 0x11412
@@ -30339,10 +30385,8 @@ projects:
       - 0x15555
       - 0x15555
       - 0x15555
-      - 0x15555
-      - 0x15555
       startup:
-        entryPoint: 0x018
+        entryPoint: 0x01A
         p: 0x000
         a: 0x000
         b: 0x000
@@ -62820,7 +62864,20 @@ projects:
         nop
 
         halt
-    lastSelectedDebuggerProgramName: FP fdiv regression test 1
+    lastSelectedDebuggerProgramName: test
+    cDebuggerPrograms:
+    - name: default
+      source: >
+        // Statements only -- this text is placed inside a hidden "void main() { ... }".
+
+        int a = 3;
+
+        int b = 4;
+
+        int c = a + b;
+    - name: test1
+      source: int a = 1;
+    lastSelectedCDebuggerProgramName: New program
   - role: Target
     name: Target GA144
     nodes:
@@ -65034,5 +65091,16 @@ projects:
 
         ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/cbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)
     lastSelectedDebuggerProgramName: 
+    cDebuggerPrograms:
+    - name: default
+      source: >
+        // Statements only -- this text is placed inside a hidden "void main() { ... }".
+
+        int a = 3;
+
+        int b = 4;
+
+        int c = a + b;
+    lastSelectedCDebuggerProgramName: 
   userMacros: []
   defaultNodeColor: '#FFF1C7'
