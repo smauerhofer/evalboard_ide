@@ -201,6 +201,7 @@ public static class CvmNodeMesh
     Node511Program.Coordinate, // 511, CVM2's 32-register register-file node (added 2026-09-09).
     Node406Program.Coordinate, // 406, CVM2's binary-arithmetic node (added 2026-09-05).
     Node405Program.Coordinate, // 405, CVM2's multiword-arithmetic (carry-flag) node (added 2026-09-09).
+    Node409Program.Coordinate, // 409, CVM2's bit-operations node (bclr/bset/binv/bcopy, added 2026-09-27).
     Node408Program.Coordinate, // 408, CVM2's comparison node (added 2026-09-06).
     Node307Program.Coordinate, // 307, CVM2's "VM ternary main" relay node (added 2026-09-09).
     Node308Program.Coordinate, // 308, CVM2's address-register node (added 2026-09-09 as "306"; RENUMBERED 2026-09-15 -- see Node308Program's own remarks).

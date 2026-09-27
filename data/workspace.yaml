@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-26T20:52:22.0836347
-      utcDateTime: 2026-09-26T20:52:22.0836347Z
-      localDateTime: 2026-09-26T22:52:22.0836347+02:00
-      date: 2026-09-26T00:00:00.0000000
-      day: 26
-      dayOfWeek: Saturday
-      dayOfYear: 269
-      hour: 20
-      millisecond: 83
-      microsecond: 634
-      nanosecond: 700
-      minute: 52
+      dateTime: 2026-09-27T06:53:40.3544522
+      utcDateTime: 2026-09-27T06:53:40.3544522Z
+      localDateTime: 2026-09-27T08:53:40.3544522+02:00
+      date: 2026-09-27T00:00:00.0000000
+      day: 27
+      dayOfWeek: Sunday
+      dayOfYear: 270
+      hour: 6
+      millisecond: 354
+      microsecond: 452
+      nanosecond: 200
+      minute: 53
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 22
-      ticks: 639260527420836347
-      utcTicks: 639260527420836347
-      timeOfDay: 20:52:22.0836347
+      second: 40
+      ticks: 639260888203544522
+      utcTicks: 639260888203544522
+      timeOfDay: 06:53:40.3544522
       year: 2026
   portB: 
   portC:
@@ -26779,7 +26779,7 @@ projects:
     - coordinate: 308
       enabled: true
       sourceCode: >-
-        ( CVM2 node 308. VM 32 bit addres pointer, 1101_10??_????_???? )
+        ( CVM2 node 308. VM 32 bit address register, 1101_10??_????_???? )
 
         ( contains 6 32-bit address register )
 
@@ -28451,8 +28451,8 @@ projects:
 
         : c/main # c/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b
           -if // 1111_1???_????_????
-            // register file
-            r> r--- ;
+            // bitop
+            right a! drop ! c/r@ ! @ c/r! ;
           then // 1111_0???_????_????
           2* -if // 1111_01??_????_????
             // binary comparison
@@ -28563,10 +28563,13 @@ projects:
       - 0x0000E
       - 0x0C432
       - 0x09FBA
-      - 0x01217
-      - 0x269B2
-      - 0x115D5
-      - 0x37219
+      - 0x0121A
+      - 0x04AEA
+      - 0x001D5
+      - 0x0B600
+      - 0x0BEB2
+      - 0x11404
+      - 0x3721C
       - 0x13406
       - 0x13400
       - 0x17555
@@ -28575,38 +28578,35 @@ projects:
       - 0x00001
       - 0x24355
       - 0x389B2
-      - 0x19422
-      - 0x1141C
-      - 0x1141E
-      - 0x1341F
+      - 0x19425
+      - 0x1141F
+      - 0x11421
+      - 0x13422
       - 0x04355
       - 0x00001
-      - 0x13420
-      - 0x11424
+      - 0x13423
+      - 0x11427
       - 0x329F2
       - 0x049F5
       - 0x00001
       - 0x1340A
-      - 0x13428
+      - 0x1342B
       - 0x364B2
-      - 0x1B41C
-      - 0x1141E
+      - 0x1B41F
+      - 0x11421
       - 0x1340A
-      - 0x13428
-      - 0x1342D
-      - 0x11424
+      - 0x1342B
+      - 0x13430
+      - 0x11427
       - 0x1340A
-      - 0x13428
+      - 0x1342B
       - 0x364B2
-      - 0x1B41C
-      - 0x11426
+      - 0x1B41F
+      - 0x11429
       - 0x1340A
-      - 0x13428
-      - 0x13436
-      - 0x11424
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1342B
+      - 0x13439
+      - 0x11427
       startup:
         entryPoint: 0x010
         p: 0x000
@@ -28618,47 +28618,123 @@ projects:
       color: '#D6ECF7'
       postMortemEnabled: false
     - coordinate: 409
-      enabled: false
-      sourceCode: ''
+      enabled: true
+      sourceCode: >
+        ( CVM2 node 409. bit operations, 1111_1???_????_???? )
+
+        # 407 import
+
+        entry bit/main
+
+        # right /b
+
+        # 8 org
+
+        (
+          1111_1bbb_baaa_a0oo
+
+          bit operation o on register r
+
+          ooo: operation, opcode
+          0: clear bit[a], bclr a
+          1: set bit[a], bset a
+          2: toggle bit[a], binv a
+          3: copy bit[a] to bit[b], bcopy a b
+          4:
+          5:
+          6:
+          7:
+
+          aaaa: bit position
+          bbbb: bit position
+        )
+
+
+        : bit/mask ( bitpos - mask )
+          0xf and >r 1 begin zif ; then 2* end
+
+        : bit/clear ( bitpos value - value' )
+          over bit/mask
+          ( value  mask - value' )
+        : bit/clear1  inv and ;
+
+
+        : bit/set ( bitpos value - value' )
+          over bit/mask
+          ( value  mask - value' )
+        : bit/set1  dup >r inv and r> xor ;
+
+
+        : bit/inv ( bitpos value - value' )
+          over bit/mask xor ;
+
+        : bit/copy ( bitpos value - value' )
+          dup >r >r bit/mask >r a 2/ 2/ 2/ 2/ bit/mask
+          ( dmask / value value smask )
+          r> r> and if // set
+            drop r> over
+            bit/set1 ;
+          then // clear
+          drop r> over
+          bit/clear1
+        ;
+
+
+
+        : bit/main
+          dup 7 and >r
+          2/ 2/ 2/ dup a! 
+          @b ex !b
+          bit/main ;
+
+        # 0 org
+
+        bit/clear ;
+
+        bit/set ;
+
+        bit/inv ;
+
+        bit/copy ;
       ramWords:
+      - 0x1140E
+      - 0x11410
+      - 0x11413
+      - 0x11415
       - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
+      - 0x040BF
+      - 0x0000F
+      - 0x00001
+      - 0x1F40D
       - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x3770B
+      - 0x21608
+      - 0x32055
+      - 0x21608
+      - 0x248CA
+      - 0x3ECE5
+      - 0x21608
+      - 0x39555
+      - 0x248BA
+      - 0x13408
+      - 0x2EEC2
+      - 0x307C2
+      - 0x13408
+      - 0x26CFA
+      - 0x1941E
+      - 0x3AC82
+      - 0x11411
+      - 0x3AC82
+      - 0x1140F
+      - 0x25DFA
+      - 0x00007
+      - 0x2E7C2
+      - 0x30DAA
+      - 0x01455
+      - 0x09720
       - 0x15555
       - 0x15555
       - 0x15555
@@ -28686,14 +28762,14 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x004
+        entryPoint: 0x020
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#FFF1C7'
+      color: '#D6ECF7'
       postMortemEnabled: false
     - coordinate: 410
       enabled: false

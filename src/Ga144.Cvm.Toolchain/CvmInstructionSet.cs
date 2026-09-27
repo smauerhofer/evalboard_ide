@@ -1205,6 +1205,62 @@ public static class CvmInstructionSet
   public const string ExtendedDivideByTwoMnemonic = "xdiv2";
   public const string ExtendedUnsignedMultiplyMnemonic = "xumul";
 
+  // Node 409's four "bit operation" mnemonics (bclr/bset/binv/bcopy), added 2026-09-27 per Stefan's own
+  // complete node 409 F18 source ("CVM2 node 409. bit operations"). Bit layout, confirmed directly from
+  // Stefan's own header comment (1111_1bbb_baaa_a0oo): fixed prefix bits 15-11 = 11111
+  // (BitOperationTag, 0xF800), bbbb (bits 10-7, BitPositionSecondFieldBitMask/Shift) is the second bit
+  // position, aaaa (bits 6-3, BitPositionFieldBitMask/Shift) is the first bit position, bit 2 is a fixed
+  // 0, and oo (bits 1-0) selects the operation: 0=bclr, 1=bset, 2=binv, 3=bcopy. Fully self-describing
+  // (CvmOperandEncoding.EmbeddedUnsignedValue for bclr/bset/binv, one operand; EmbeddedUnsignedValuePair
+  // for bcopy, two operands), no live node compile needed to assemble or disassemble -- mirroring node
+  // 306's own split between EmbeddedUnsignedValue (fpop/fpush, one operand) and EmbeddedUnsignedValuePair
+  // (the other ten, two operands); see FloatingPointAddMnemonic's own remarks for that precedent.
+  //
+  // FLAGGED, not silently resolved: Stefan's own header comment lists "ooo: operation, opcode" with
+  // slots for values 0 through 7 (implying a 3-bit field), and node 409's own bit/main dispatcher reads
+  // exactly 3 bits ("dup 7 and >r") -- but the bit-layout diagram immediately below that same comment
+  // hardwires bit 2 to a fixed 0 within this tag family, leaving only 2 bits (bits 1-0) actually
+  // variable under a 1111_1??? tag word, so only operations 0-3 (bclr/bset/binv/bcopy) are reachable this
+  // way; slots 4-7 are listed but architecturally unreachable under this tag as written. Reproduced
+  // verbatim rather than "corrected" either way, per this project's standing convention for an apparent
+  // self-contradiction in Stefan's own source (see e.g. Node505Program's own remarks on its 'f/'fx
+  // collision).
+  //
+  // FLAGGED, also not silently resolved: Stefan's own source imports node 407 ("# 407 import"), but node
+  // 409 (row 4, col 9) is not node 407's (row 4, col 7) physical grid neighbor under this project's own
+  // row*100+column adjacency convention (CvmBootStreamBuilder.GetPhysicalNeighbors) -- node 409's actual
+  // physical neighbor at column 8 would be node 408. Reproduced verbatim in Node409Program's own Source
+  // string and wired into CvmBootStreamBuilder exactly as written (importing from node 407), per the same
+  // "reproduce, flag, don't guess" convention.
+  public const string BitClearMnemonic = "bclr";
+  public const string BitSetMnemonic = "bset";
+  public const string BitInvertMnemonic = "binv";
+  public const string BitCopyMnemonic = "bcopy";
+
+  /// <summary>Fixed prefix for node 409's four bit-operation opcodes -- bits 15-11 = 11111, i.e. 0xF800. See the remarks above <see cref="BitClearMnemonic"/> for the full bit-layout derivation.</summary>
+  public const int BitOperationTag = 0xF800;
+
+  /// <summary>Isolates node 409's first bit-position operand field, <c>aaaa</c> (bits 6-3, 0-15) -- the sole operand of <c>bclr</c>/<c>bset</c>/<c>binv</c>, and the first operand of <c>bcopy</c>. See the remarks above <see cref="BitClearMnemonic"/>.</summary>
+  public const int BitPositionFieldBitMask = 0x0078;
+
+  /// <summary>How far left the first bit-position operand is shifted before OR-ing into <see cref="BitPositionFieldBitMask"/>'s bits -- 3, since bit 2 (the operation field's own fixed-0 bit) and the 2-bit <c>oo</c> field sit below it. See the remarks above <see cref="BitClearMnemonic"/>.</summary>
+  public const int BitPositionFieldShift = 3;
+
+  /// <summary>Isolates node 409's second bit-position operand field, <c>bbbb</c> (bits 10-7, 0-15) -- <c>bcopy</c>'s own second operand only; unused by <c>bclr</c>/<c>bset</c>/<c>binv</c>. See the remarks above <see cref="BitClearMnemonic"/>.</summary>
+  public const int BitPositionSecondFieldBitMask = 0x0780;
+
+  /// <summary>How far left the second bit-position operand is shifted before OR-ing into <see cref="BitPositionSecondFieldBitMask"/>'s bits -- 7, since the 4-bit <c>aaaa</c> field (bits 6-3), the fixed-0 bit 2, and the 2-bit <c>oo</c> field all sit below it. See the remarks above <see cref="BitClearMnemonic"/>.</summary>
+  public const int BitPositionSecondFieldShift = 7;
+
+  /// <summary>Per-mnemonic tag for <see cref="BitClearMnemonic"/> -- operation index 0 (<see cref="BitOperationTag"/> | 0).</summary>
+  public const int BitClearTag = BitOperationTag | 0;
+  /// <summary>Per-mnemonic tag for <see cref="BitSetMnemonic"/> -- operation index 1.</summary>
+  public const int BitSetTag = BitOperationTag | 1;
+  /// <summary>Per-mnemonic tag for <see cref="BitInvertMnemonic"/> -- operation index 2.</summary>
+  public const int BitInvertTag = BitOperationTag | 2;
+  /// <summary>Per-mnemonic tag for <see cref="BitCopyMnemonic"/> -- operation index 3. UNLIKE bclr/bset/binv, takes TWO operands ("bcopy a b") -- see the remarks above <see cref="BitClearMnemonic"/>.</summary>
+  public const int BitCopyTag = BitOperationTag | 3;
+
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
   /// 15 bits. Bit 15 (0x8000) must stay clear on a <c>call</c> word -- that is the only thing that
@@ -1969,6 +2025,17 @@ public static class CvmInstructionSet
     // ("fpop a ; ggg is not used {only 1 argument}").
     new(Id: 170, FloatingPointPopMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointPopTag, ValueBitMask: FloatingPointRegisterFieldBitMask),
     new(Id: 171, FloatingPointPushMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointPushTag, ValueBitMask: FloatingPointRegisterFieldBitMask),
+
+    // Node 409's four bit-operation mnemonics (2026-09-27) -- see BitClearMnemonic's own remarks for the
+    // full bit-layout derivation and the two flagged opens (the ooo-vs-oo field width, and the # 407
+    // import vs. node 408's physical adjacency). bclr/bset/binv take one operand (EmbeddedUnsignedValue,
+    // aaaa only); bcopy takes two (EmbeddedUnsignedValuePair, aaaa first/bbbb second) -- the same
+    // one-operand/two-operand split precedent as node 306's fpop/fpush vs. its other ten floating-point
+    // ops.
+    new(Id: 172, BitClearMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: BitClearTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift),
+    new(Id: 173, BitSetMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: BitSetTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift),
+    new(Id: 174, BitInvertMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: BitInvertTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift),
+    new(Id: 175, BitCopyMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: BitCopyTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift, SecondValueBitMask: BitPositionSecondFieldBitMask, SecondValueBitShift: BitPositionSecondFieldShift),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =

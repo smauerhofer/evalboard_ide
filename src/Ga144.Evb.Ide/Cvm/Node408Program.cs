@@ -29,11 +29,39 @@ namespace Ga144.Evb.Ide.Cvm;
 /// register/stack helpers, reads two words over <c>@b</c> into a held first word, then a cascade of
 /// <c>-if</c>/<c>2*</c> tests consuming the already-known "1111" prefix two bits at a time):
 /// <list type="bullet">
-/// <item><c>1111_1???_????_????</c> (0xF800-0xFFFF) -- "register file", <c>r&gt; r--- ;</c>, the SAME
-/// shape as <see cref="Node406Program"/>'s own unanswered "1110_1???" ("more arithmetic") branch: a
-/// reserved, not-yet-implemented slot with no tick-prefixed word to hang a CVM mnemonic off of, so it is
-/// NOT wired into <see cref="Services.CvmAssemblyLanguage"/> below, matching that same precedent of
-/// leaving an unnamed reserved branch alone rather than guessing at a future design.</item>
+/// <item><c>1111_1???_????_????</c> (0xF800-0xFFFF) -- "bitop", <c>right a! drop ! c/r@ ! @ c/r! ;</c>.
+///
+/// <b>CONFIRMED 2026-09-27, resolving what this class's remarks previously only FLAGGED as "possibly
+/// answered."</b> This branch used to be <c>r&gt; r--- ;</c>, a reserved/not-yet-implemented slot (the
+/// SAME shape as <see cref="Node406Program"/>'s own unanswered "1110_1???" branch) -- Stefan's own SAME-DAY
+/// follow-up source (this exact class's own remarks, re-synced immediately after this branch was first
+/// flagged) replaces that with a real "bitop" relay to node 409 (<see cref="Node409Program"/>, the
+/// brand-new "bit operations" family). This is exactly the relay this class's own earlier remarks inferred
+/// from three independent pieces of circumstantial evidence (the tag prefix 0xF800 matching
+/// <see cref="CvmInstructionSet.BitOperationTag"/> exactly, this branch's own RIGHT relay landing on column
+/// 9 under this project's physical-adjacency convention, and node 409's own header declaring an
+/// apparently-unused <c># 407 import</c>) -- now directly confirmed by Stefan supplying the real dispatch
+/// code rather than left as a guess. <c>right a! drop ! c/r@ ! @ c/r! ;</c> points the address register at
+/// the right port (<c>right a!</c>), forwards the raw dispatch word through it (<c>drop !</c> -- the
+/// duplicate top-of-stack copy this shared tail no longer needs is dropped, and the word already held via
+/// the earlier <c>@b &gt;r @b</c> is written out), writes the operand register's own value through the same
+/// port (<c>c/r@ !</c>), then reads node 409's result back (<c>@</c>) and stores it into the caller's own
+/// register (<c>c/r!</c>) -- the same "relay out, fetch result, write back" shape this node's own shared
+/// tail (<c>c/r@ ex c/r! ;</c>) already uses for its OWN locally-resolved ops, just relayed one hop further
+/// out instead of resolved with a local <c>ex</c>. The exact token-by-token stack semantics are inferred
+/// from the source alone, not independently simulated -- reproduced verbatim either way.
+///
+/// <b>Also confirms node 409's own header, <c># right /b</c>: node 409 names the SAME physical link
+/// "right" too</b> -- an apparent mismatch with this project's usual physical-direction port naming (node
+/// 409, at column 9, would call its column-8 neighbor "left," not "right") that is in fact the SAME
+/// "alternating-mirror, same local name on both ends" pattern already confirmed for 407&lt;-&gt;507
+/// ("down"/"down") and 406&lt;-&gt;407 ("right"/"right") above -- not a fresh inconsistency, just this
+/// project's established naming quirk showing up a third time. Node 409's own <c># 407 import</c>,
+/// unaffected by any of this and still apparently unused by its own body, is reproduced and wired exactly
+/// as Stefan wrote it -- see <see cref="Node409Program"/>'s own remarks. This is NOT wired into
+/// <see cref="Services.CvmAssemblyLanguage"/> below (nothing to wire -- node 409's four mnemonics are
+/// fully self-describing, see <see cref="CvmInstructionSet.BitClearMnemonic"/>'s own remarks, not
+/// node-resolved the way this file's own comparison ops are).</item>
 /// <item><c>1111_01??_????_????</c> (0xF400-0xF7FF) -- "binary comparison": pops a second operand off the
 /// CVM data stack via <c>c/pop</c> before falling into the shared tail, for ops whose own stack comment
 /// takes two inputs (<c>( xy-f)</c>): <c>'eq</c>, <c>'ne</c>, <c>'lt</c>, and (added 2026-09-06)
@@ -162,6 +190,10 @@ internal static class Node408Program
   /// <summary>
   /// Node 408's full resident F18 source. See the class remarks for the <c>c/main</c> dispatch cascade,
   /// the tag derivation, the repointed mnemonics, and the two FLAGGED fall-through polarity notes.
+  /// <b>RE-SYNCED 2026-09-27, same day as node 409's own addition:</b> Stefan supplied this node's own
+  /// "1111_1???_????_????" branch for the first time, filling what was previously the reserved/unanswered
+  /// "register file" slot with a real "bitop" relay to node 409 -- see the class remarks' own CONFIRMED
+  /// note above for the full derivation. No other content in this source changed.
   /// <b>RE-SYNCED 2026-09-09</b> against Stefan's own <c>workspace.yaml</c> project export as part of the
   /// opcode/assembler-vs-node reconciliation audit -- this is the exact gap that prompted the audit
   /// ("there are 'ugt' opcodes in the nodes"): the PRIOR "SYNCED, 2026-09-08" copy here was missing a
@@ -194,8 +226,8 @@ internal static class Node408Program
       : c/leave A[ n/leave ; ]] lit !b
       : c/main # c/leave lit >r A[ !p 2* !p ]] lit !b @b >r @b
         -if // 1111_1???_????_????
-          // register file
-          r> r--- ;
+          // bitop
+          right a! drop ! c/r@ ! @ c/r! ;
         then // 1111_0???_????_????
         2* -if // 1111_01??_????_????
           // binary comparison

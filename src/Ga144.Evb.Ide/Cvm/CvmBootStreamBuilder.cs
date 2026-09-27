@@ -255,6 +255,34 @@ public static class CvmBootStreamBuilder
     });
     ThrowIfFailed(result408);
 
+    // ADDED 2026-09-27, per Stefan's own complete node 409 source ("add the bit operation opcodes to
+    // the CVM language"): node 409, the "bit operations" node (bclr/bset/binv/bcopy -- see
+    // CvmInstructionSet.BitClearMnemonic's own remarks for the full bit-layout derivation). Declares
+    // '# 407 import' and so must compile AFTER result407 above (grouped here alongside result406/
+    // result408 for that reason) -- but is actually REACHED, on real hardware, over node 408's own RIGHT
+    // port, CONFIRMED the same day by Stefan's own follow-up node 408 source (see Node408Program's and
+    // Node409Program's own remarks for the full derivation: node 408's own previously-reserved
+    // "1111_1???" (0xF800-0xFFFF) branch now relays RIGHT to this node with a real "bitop" dispatch, tag
+    // 0xF800 matching CvmInstructionSet.BitOperationTag exactly). Node409Program's own source never
+    // actually calls any of node 407's imported symbols, so this compile step's ImportResolver (below)
+    // stays pointed at node 407 -- reproducing the header's own literal '# 407 import' exactly, since
+    // nothing in the new evidence says that declaration is itself wrong, only that the physical relay
+    // path alongside it runs through node 408. GetPhysicalNeighbors below already reaches node 409 via
+    // its real physical neighbor, node 408, regardless of this import declaration -- BuildLoadOrder's own
+    // physical-grid fill needed no change for this.
+    F18CompileResult result409 = Compile(compiler, Node409Program.Source, new F18CompilerOptions
+    {
+      MemorySpace = F18MemorySpace.Ram,
+      NodeCoordinate = Node409Program.Coordinate,
+      MemoryBaseAddress = 0x000,
+      MemoryWordCount = 64,
+      IncludeCommonRomWords = true,
+      ImportResolver = importedCoordinate => importedCoordinate == Node407Program.Coordinate
+          ? F18ImportResolution.FromExports(result407.Exports)
+          : F18ImportResolution.Failure($"node {importedCoordinate} not available"),
+    });
+    ThrowIfFailed(result409);
+
     // CVM2 (2026-09-06): node 307, "VM ternary main" -- fills node 407's own long-FLAGGED "1101"
     // dispatch branch (see Node407Program's own remarks). Imports 407 by name ('# 407 import',
     // n/@/n/!/n/r@/n/r!/n/pop/n/push/n/next/n/leave), so must compile AFTER result407 above.
@@ -701,6 +729,7 @@ public static class CvmBootStreamBuilder
       CvmBootDescriptor.FromCompileResult(result407),
       CvmBootDescriptor.FromCompileResult(result406),
       CvmBootDescriptor.FromCompileResult(result405),
+      CvmBootDescriptor.FromCompileResult(result409),
       CvmBootDescriptor.FromCompileResult(result408),
       CvmBootDescriptor.FromCompileResult(result307),
       CvmBootDescriptor.FromCompileResult(result308),
@@ -1217,6 +1246,7 @@ public static class CvmBootStreamBuilder
     Node407Program.Coordinate => Node407Program.Source,
     Node406Program.Coordinate => Node406Program.Source,
     Node405Program.Coordinate => Node405Program.Source,
+    Node409Program.Coordinate => Node409Program.Source,
     Node408Program.Coordinate => Node408Program.Source,
     Node307Program.Coordinate => Node307Program.Source,
     Node306Program.Coordinate => Node306Program.Source,
