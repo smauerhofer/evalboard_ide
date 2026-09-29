@@ -1,6 +1,6 @@
 schemaVersion: 7
 activeBoardId: d6e6f99b-8d7d-4604-9709-4d6a0b6820f7
-activeProjectId: 817aefbe-3708-4f08-a4d3-76e936db5dad
+activeProjectId: 08b90630-a572-4b5f-ad49-9c905e466a71
 settings:
   autoDetect: false
   activeProbeNewFtdiPorts: true
@@ -30,39 +30,6 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-27T20:39:10.3539700
-      utcDateTime: 2026-09-27T20:39:10.3539700Z
-      localDateTime: 2026-09-27T22:39:10.3539700+02:00
-      date: 2026-09-27T00:00:00.0000000
-      day: 27
-      dayOfWeek: Sunday
-      dayOfYear: 270
-      hour: 20
-      millisecond: 353
-      microsecond: 970
-      nanosecond: 0
-      minute: 39
-      month: 9
-      offset: 00:00:00
-      totalOffsetMinutes: 0
-      second: 10
-      ticks: 639261383503539700
-      utcTicks: 639261383503539700
-      timeOfDay: 20:39:10.3539700
-      year: 2026
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -83,6 +50,19 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -24934,7 +24914,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#D6DFF7'
+      color: '#E6D6F7'
       postMortemEnabled: true
     - coordinate: 205
       enabled: true
@@ -26822,12 +26802,27 @@ projects:
       postMortemEnabled: false
     - coordinate: 308
       enabled: true
-      sourceCode: >-
-        ( CVM2 node 308. VM 32 bit address register, 1101_10??_????_???? )
+      sourceCode: >
+        ( CVM2 node 308. VM 32 bit address register, 1101_10??_????_????
+         contains 6 32-bit address register
 
-        ( contains 6 32-bit address register )
+        opcode lda   1101_10??_????_?aaa load r from address in address register 0..5. register encoded in aaa
 
-        ( address word in x, page word in x+1 )
+        opcode sta   1101_10??_????_?aaa store r to address in address register 0..5. register encoded in aaa
+
+        opcode arinc 1101_10??_????_?aaa increment address register 0..5. register encoded in aaa
+
+        opcode ardec 1101_10??_????_?aaa decrement address register 0..5. register encoded in aaa
+
+        opcode aradd 1101_10??_????_?aaa add r to address register 0..5. register encoded in aaa
+
+        opcode arld  1101_1000_1???_?aa0 load address register 0..5, address in r, page in stack. register encoded in aaa
+
+        opcode arst  1101_1000_0???_?aa0 store address register 0..5, address in r, page in stack. register encoded in aaa
+
+
+        )
+
 
         # 307 import
 
@@ -26846,21 +26841,16 @@ projects:
         ]
 
 
-        # 0x0c org
+        : ar/r@ ( -w)
+          A[ k/r@ ]] lit !b
+        : ar/get
+          A[ !p ]] lit !b @b ;
 
-
-        : ar/inc 1 . + ;
-
-        : ar/dec -1 . + ;
-
-        // : ar/reg 0x06 and a! ;
-
-
-        : ar/r@ ( -w) A[ k/r@ ]] lit !b A[ !p ]] lit !b @b ;
+        : ar/pop ( -w)
+          A[ k/pop ]] lit !b
+          ar/get ;
 
         : ar/r! ( w) A[ @p k/r! ]] lit !b !b ;
-
-        : ar/pop ( -w) A[ k/pop ]] lit !b A[ !p ]] lit !b @b ;
 
         : ar/push ( w) A[ @p k/push ]] lit !b !b ;
 
@@ -26879,39 +26869,30 @@ projects:
 
         : 'sta A[ k/! ]] lit ar/adr ;
 
-        : 'arinc2 leap
-
-        : 'arinc then @ ar/inc !+ 0x10000 and # ar/leave until @ ar/inc ! ;
-
-        : 'ardec2 leap
-
-        : 'ardec then @ ar/dec !+ # ar/leave -until @ ar/dec ! ;
 
         : 'arld ar/r@ !+ ar/pop ! ;
+
 
         : 'arst @+ ar/r! @ ar/push ;
 
 
+        : 'arinc
+          1
+        : ar/add
+          @ . +
+          dup 0xffff and !+
+          dup 2*
+          # ar/leave -until
+          drop -if -1 else 1 then
+          @ . + !
+        ;
 
-        (
 
-        opcode lda   1101_10??_????_?aaa load r from address in address register 0..5. register encoded in aaa
+        : 'aradd
+          ar/r@ ar/add ;
 
-        opcode sta   1101_10??_????_?aaa store r to address in address register 0..5. register encoded in aaa
-
-        opcode arinc 1101_10??_????_?aaa increment address register 0..5. register encoded in aaa
-
-        opcode ardec 1101_10??_????_?aaa decrement address register 0..5. register encoded in aaa
-
-        opcode arinc2 1101_10??_????_?aaa increment address register 0..5 by 2. register encoded in aaa
-
-        opcode ardec2 1101_10??_????_?aaa decrement address register 0..5 by 2. register encoded in aaa
-
-        opcode arld  1101_1000_1???_?aa0 load address register 0..5, address in r, page in stack. register encoded in aaa
-
-        opcode arst  1101_1000_0???_?aa0 store address register 0..5, address in r, page in stack. register encoded in aaa
-
-        )
+        : 'ardec
+          -1 ar/add ;
       ramWords:
       - 0x00000
       - 0x00000
@@ -26925,20 +26906,15 @@ projects:
       - 0x00000
       - 0x00000
       - 0x00000
-      - 0x049F5
-      - 0x00001
-      - 0x049F5
-      - 0x3FFFF
-      - 0x05B12
+      - 0x05BB2
       - 0x1340C
+      - 0x05B05
       - 0x0C9B2
-      - 0x09F55
+      - 0x05BB2
+      - 0x13412
+      - 0x1140E
       - 0x05B25
       - 0x05610
-      - 0x05B12
-      - 0x13412
-      - 0x0C9B2
-      - 0x09F55
       - 0x05B25
       - 0x05616
       - 0x05BB2
@@ -26951,41 +26927,46 @@ projects:
       - 0x31DFA
       - 0x0003F
       - 0x2F455
-      - 0x1141C
+      - 0x11417
       - 0x049B2
       - 0x13400
       - 0x05B1A
       - 0x05DB2
       - 0x09E22
       - 0x09555
-      - 0x05729
+      - 0x05724
       - 0x13406
-      - 0x13430
-      - 0x0360C
-      - 0x0FDFA
-      - 0x10000
-      - 0x1941C
-      - 0x0360C
+      - 0x1340C
+      - 0x0F610
       - 0x0B555
-      - 0x13437
-      - 0x0360E
-      - 0x0F21C
-      - 0x0360E
+      - 0x07613
+      - 0x03715
+      - 0x049B2
+      - 0x00001
+      - 0x029F3
+      - 0x0403B
+      - 0x0FFFF
+      - 0x37217
+      - 0x3B238
+      - 0x0573A
+      - 0x3FFFF
+      - 0x049B2
+      - 0x00001
+      - 0x029F2
       - 0x0B555
-      - 0x13410
-      - 0x0F616
-      - 0x0B555
-      - 0x07614
-      - 0x0371A
+      - 0x1340C
+      - 0x11431
+      - 0x05731
+      - 0x3FFFF
       startup:
-        entryPoint: 0x01E
+        entryPoint: 0x019
         p: 0x000
         a: 0x000
         b: 0x000
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#FBD6EC'
+      color: '#D6ECF7'
       postMortemEnabled: false
     - coordinate: 309
       enabled: false
@@ -28023,10 +28004,47 @@ projects:
       postMortemEnabled: true
     - coordinate: 405
       enabled: true
-      sourceCode: >-
-        ( CVM2 node 405. multiword arithmetic, 1110_1???_????_???? )
+      sourceCode: >+
+        ( CVM2 node 405. multiword arithmetic, 1110_1???_????_????
+          A: carry bit 0 or 1 for multiword arithmetic
 
-        ( A: carry bit 0 or 1 for multiword arithmetic )
+        'tgc toggle carry.
+
+        'ldc load carry. set carry if r != 0 else clear carry.
+
+        'clc clear carry.
+
+        'sec set carry.
+
+        'stc store carry into r.
+
+
+        'adc add with carry. carry,r = r + pop + carry.
+
+        'sbc subtract with carry. carry,r = pop - r + !carry.
+
+
+        'shl logical shift left of least-significant word.
+             Clears carry; continue higher words with rol.
+        'rol rotate left through carry. carry,r = r << 1,carry.
+
+
+        'shr logical shift right of most-significant word.
+             Clears carry; continue lower words with ror.
+        'ror rotate right through carry. r,carry = carry,r >> 1.
+
+        'asr arithmetic shift right of most-significant word.
+             Continue lower words with ror.
+
+        'umul2 unsigned 16x16 -> 32 bit.
+               Push high word, return low word in r, clear carry.
+
+        'negc complement r and add carry; update carry.
+              Start multiword negation with sec.
+        'adc0 add carry to r; update carry.
+              Useful for propagating carry through higher words.
+
+        )
 
         # 406 import
 
@@ -28038,129 +28056,157 @@ projects:
 
         # left /b
 
-        : mw/r@ ( -w) A[ y/r@ ]] lit !b A[ !p ]] lit !b @b ;
 
-        : mw/r! ( w) A[ @p y/r! ]] lit !b !b ;
+        : mw/r@ ( -w) A[ y/r@ ]] lit
 
-        : mw/pop ( -w) A[ y/pop ]] lit !b A[ !p ]] lit !b @b ;
+        : mw/get !b A[ !p ]] lit !b @b ;
 
-        : mw/leave A[ y/leave ; ]] lit !b
 
-        : mw/main  A[ drop !p ]] lit !b @b >r mw/r@ ex mw/leave ;
+        : mw/pop ( -w) A[ y/pop ]] lit mw/get ;
 
+
+        : mw/leave !b A[ y/leave ; ]] lit !b
+
+        : mw/main  A[ drop !p ]] lit !b @b >r
+          mw/r@
+          ex 
+          0xffff and A[ @p y/r! ]] lit !b
+          mw/leave ;
 
         : 'tgc ( ) a 1 xor a! ;
 
-        : 'adc ( w-) mw/pop + a . + 
-
-        : mw/! ( w-) dup 0xffff mw/r! 0x10000 and
-
-        : 'ldc ( w-) if
-
-        : 'sec ( w-) dup xor a! @+ drop ;
-
-        then
-
-        : 'clc ( w-) dup xor a! ;
-
-        : 'stc ( ) a mw/r! ;
-
-        : 'sbc ( w-) 'tgc inv 'adc ;
-
-        : 'rol ( w-) 2* a xor mw/! ;
-
-        : 'ror ( w-) a if drop 0x10000 xor dup then drop dup 1 and 'stc 2/ mw/r! ;
+        : 'sec ( ) 1 a! ;
 
 
-        (
+        : 'umul2 ( w - w' )
+          // unsigned 16x16 -> 32 bit
+          // push high word, return low word in r
+          // clear carry
 
-        'tgc toggle carry. invert carry.
+          mw/pop a!
+          dup dup xor
 
-        'ldc load carry. set carry if r != 0 else clear carry
+          15 >r . begin +* unext
 
-        'clc clear carry
+          // T = high16, A = low16 << 2
+          A[ @p y/push ]] lit !b !b              // push high16
+          a 2/ 2/              // low16
 
-        'sec set carry
+        : 'clc ( ) dup dup xor a! ;
 
-        'stc store carry into r
+        : 'stc ( ) a ;
 
-        'adc add with carry. carry,r = r + pop + carry
+        : 'ldc ( w - w ) if 'sec ; then 'clc ;
 
-        'sbc subtract with carry. carry,r = pop - r + !carry
+        : 'sbc ( w - w' ) 'tgc inv
 
-        'rol rotate left. carry, r = r << 1, carry
+        : 'adc ( w - w' ) mw/pop + a . + 
 
-        'ror rotate right. r, carry = carry, r >> 1
+        : mw/fin ( w - w ) dup 0x10000 and 'ldc drop ;
 
 
-        )
+        : 'shl ( w - w' )
+          // Logical left shift of least-significant word.
+          // Continue higher words with rol.
+          'clc
+        : 'rol ( w-) 2* a xor mw/fin ;
+
+
+        : 'shr ( w - w' )
+          // Logical right shift of most-significant word.
+          // Continue lower words with ror.
+          'clc
+        : 'ror ( w - w' )
+          a if drop 0x10000 xor dup then drop
+        : mw/shr ( w - w' ) dup 1 and a! 2/ ;
+
+
+        : 'asr ( w - w' )
+          // Sign-extend the 16-bit high word before shifting.
+          2* 2* 2/ 2/
+          mw/shr
+        ;
+
+
+
+
+        : 'negc ( w - w' )
+          // r = ~r + carry, update carry.
+          // Start a multiword negate with sec.
+          0xffff xor
+
+        : 'adc0 ( w - w' )
+          // r = r + carry, update carry.
+          a . + mw/fin
+        ;
+
       ramWords:
-      - 0x05B12
+      - 0x049B2
       - 0x13402
+      - 0x09D22
       - 0x0C9B2
-      - 0x09F55
-      - 0x05B25
-      - 0x05606
-      - 0x05B12
-      - 0x13408
-      - 0x0C9B2
-      - 0x09F55
-      - 0x05BB2
-      - 0x11412
+      - 0x01555
+      - 0x05702
+      - 0x1340A
+      - 0x09D22
+      - 0x11410
       - 0x05B02
       - 0x3B9B2
       - 0x2F600
       - 0x17555
-      - 0x1140A
+      - 0x04012
+      - 0x0FFFF
+      - 0x05607
+      - 0x09707
       - 0x23DE2
       - 0x00001
       - 0x2B555
-      - 0x13406
-      - 0x3CEB0
-      - 0x25DB2
-      - 0x0FFFF
-      - 0x13404
-      - 0x040B2
-      - 0x10000
-      - 0x1941E
-      - 0x243AA
-      - 0x06255
-      - 0x243AD
-      - 0x23704
+      - 0x04A55
+      - 0x00001
+      - 0x13405
+      - 0x2AD92
+      - 0x39DBA
+      - 0x0000F
+      - 0x35112
+      - 0x0560C
+      - 0x09B8A
+      - 0x307B2
+      - 0x24DE2
+      - 0x2B555
+      - 0x23555
+      - 0x19423
+      - 0x11414
+      - 0x1141E
       - 0x13411
-      - 0x33714
+      - 0x329B2
+      - 0x13405
+      - 0x3CEB0
+      - 0x25DFA
+      - 0x10000
+      - 0x13421
+      - 0x3B555
+      - 0x1341E
       - 0x36EE2
-      - 0x11416
-      - 0x23327
+      - 0x11428
+      - 0x1341E
+      - 0x23333
       - 0x3BDE3
       - 0x10000
-      - 0x3AD12
+      - 0x3A9B2
+      - 0x25DFA
       - 0x00001
-      - 0x3F61F
-      - 0x31704
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x2A755
+      - 0x364C2
+      - 0x31734
+      - 0x043B2
+      - 0x0FFFF
+      - 0x229F2
+      - 0x11428
       - 0x15555
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x00C
+        entryPoint: 0x009
         p: 0x000
         a: 0x000
         b: 0x000
@@ -28186,15 +28232,23 @@ projects:
 
         : y/limit 0x000f and ;
 
-        : y/r@ ( -w) A[ n/r@ ]] lit !b A[ !p ]] lit !b @b ;
 
-        : y/r! ( w) A[ @p n/r! ]] lit !b !b ;
+        : y/r@ ( -w) A[ n/r@ ]] lit
 
-        : y/pop ( -w) A[ n/pop ]] lit !b A[ !p ]] lit !b @b ;
+        : y/get !b A[ !p ]] lit !b @b ;
 
-        : y/push ( w) A[ @p n/push ]] lit !b !b ;
 
-        : y/next ( -w) A[ n/next ]] lit !b A[ !p ]] lit !b @b ;
+        : y/r! ( w) A[ @p n/r! ]] lit
+
+        : y/put !b !b ;
+
+
+        : y/pop ( -w) A[ n/pop ]] lit y/get ;
+
+        : y/push ( w) A[ @p n/push ]] lit y/put ;
+
+        : y/next ( -w) A[ n/next ]] lit y/get ;
+
 
         : y/leave A[ n/leave ; ]] lit !b
 
@@ -28209,39 +28263,66 @@ projects:
           then // 1110_00??_????_????
           // binary operator with parameter on stack
           y/pop then y/r@ ex 0xffff and y/r! ;
-        : 'add ( xy-z) + ;
+        : 'add ( x y - z ) + ;
 
-        : 'sub ( xy-z) over
+        : 'sub ( x y - z ) over
 
-        : 'rsb ( xy-z) inv . + 1 . + ;
+        : 'rsb ( x y - z ) inv . + 1 . + ;
 
-        : 'and ( xy-z) and ;
+        : 'and ( x y - z ) and ;
 
-        : 'xor ( xy-z) xor ;
+        : 'xor ( x y - z ) xor ;
 
-        : 'or ( xy-z) inv over inv and inv ;
+        : 'or ( x y - z ) inv over inv and inv ;
 
-        : 'rsl ( xy-z) over
+        : 'rsl ( x y - z ) over
 
-        : 'usl ( xy-z) y/limit if for 2* unext ; then begin begin drop ;
+        : 'usl ( x y - z ) y/limit if for 2* unext ; then begin drop ;
 
-        : 'rsr ( xy-z) over
 
-        : 'ssr ( xy-z) 2* 2* 2/ 2/ y/limit until for 2/ unext ;
+        : 'rur ( x y - z ) over
 
-        : 'rur ( xy-z) over
+        : 'usr ( x y - z )
 
-        : 'usr ( xy-z) y/limit until for 2/ unext ;
+        : y/shr
+          y/limit until
+          for 2/ unext
+        ;
+
+
+        : 'rsr ( x y - z ) over
+
+        : 'ssr ( x y - z )
+          2* 2* 2/ 2/
+          y/shr
+        ;
+
+
+        : 'mul ( x y - .. z )
+          // 16x16 bit multiply.
+          // Valid for signed and unsigned CVM values;
+          // the low 16 product bits are identical.
+
+          a!                // A=y, T=x
+          dup dup xor       // S=x, T=0
+
+          17 >r . begin +* unext
+
+          a
+        ;
+
+
 
         (
           1110_01??_????_???? binary operation with r and next word as parameter
           1110_00??_????_???? binary operation with r and parameter on stack
           'add add r with parameter
           'sub subtract r with parameter
-          'rsb reverse subtract. subtract r from parameter
+          'rsb reverse subtract. subtract r from parameter.
           'and bitwise and.
           'xor bitwise exclusive or.
           'or bitwise or.
+          'mul. unsigned 16x16 bit multiplication. Valid for signed and unsigned 16-bit operands. returns the low 16 bits of the product.
           'rsl reverse unsigned shift left r by parameter bits
           'usl unsigned shift left parameter by r bits
           'rsr reverse signed shift right r by parameter bits
@@ -28253,40 +28334,38 @@ projects:
       ramWords:
       - 0x04055
       - 0x0000F
-      - 0x05B12
+      - 0x049B2
       - 0x1340E
+      - 0x09D22
       - 0x0C9B2
-      - 0x09F55
-      - 0x05B25
-      - 0x05610
-      - 0x05B12
+      - 0x01555
+      - 0x049B2
+      - 0x05613
+      - 0x09B55
+      - 0x05704
       - 0x13400
-      - 0x0C9B2
-      - 0x09F55
-      - 0x05B25
-      - 0x05612
-      - 0x05B12
-      - 0x13414
-      - 0x0C9B2
-      - 0x09F55
+      - 0x05709
+      - 0x05615
+      - 0x05704
+      - 0x13417
       - 0x05BB2
-      - 0x11418
+      - 0x1141B
       - 0x04812
-      - 0x00012
+      - 0x00010
       - 0x0C432
       - 0x09FBA
-      - 0x0121B
+      - 0x01219
       - 0x269B2
       - 0x11575
-      - 0x3721E
+      - 0x3721C
       - 0x1340E
-      - 0x1141F
-      - 0x13408
+      - 0x1141D
+      - 0x1340A
       - 0x13402
       - 0x17555
       - 0x040B2
       - 0x0FFFF
-      - 0x11406
+      - 0x11407
       - 0x3D555
       - 0x209B2
       - 0x329F7
@@ -28298,25 +28377,27 @@ projects:
       - 0x3E655
       - 0x209B2
       - 0x13400
-      - 0x19432
+      - 0x19430
       - 0x2E9B2
       - 0x37155
       - 0x3B555
       - 0x209B2
-      - 0x364C2
-      - 0x31600
-      - 0x19432
+      - 0x13400
+      - 0x19430
       - 0x2E9B2
       - 0x31155
       - 0x209B2
-      - 0x13400
-      - 0x19432
-      - 0x2E9B2
-      - 0x31155
+      - 0x364C2
+      - 0x31732
+      - 0x2AD92
+      - 0x39DBA
+      - 0x00011
+      - 0x3518D
+      - 0x15555
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x014
+        entryPoint: 0x012
         p: 0x000
         a: 0x000
         b: 0x000
@@ -28327,10 +28408,31 @@ projects:
       postMortemEnabled: false
     - coordinate: 407
       enabled: true
-      sourceCode: >-
-        ( CVM2 node 407. VM secondary main, 11??_????_????_???? )
+      sourceCode: >+
+        ( CVM2 node 407. VM secondary main, 11??_????_????_????
+          secondary displatcher.
+          binary immediate operations.
 
-        ( A: temporary register tmp1 )
+        this node provides support for extending the VM to neighbour nodes.
+
+
+        'lcall long call. the next word defines the destination address.
+
+        'ljmp long jump. jumps to the address in the next word
+
+        'lbr long branch. branch with offset in the next word {position independant}
+
+
+        'addi add immediate. r = r + next
+
+        'andi and immediate. r = r and next
+
+        'xori xor immediate. r = r xor next
+
+        'ori or immediate. r = r or next
+
+        )
+
 
         # 507 import
 
@@ -28342,19 +28444,34 @@ projects:
 
         # down /b
 
-        : n/pop ( -w) A[ m/pop ]] lit !b begin A[ !p ]] lit !b @b ;
 
-        : n/@ ( ba-w) A[ @p @p ]] lit !b !b !b A[ m/@ ]] lit !b end
+        : n/next ( -w)
+          A[ m/next ]] lit !b
+        : n/get A[ !p ]] lit !b @b ;
+
+
+        : n/@ ( ba-w)
+          A[ @p @p ]] lit !b !b !b
+          A[ m/@ ]] lit !b
+          n/get ;
+
+        : n/pop ( -w) A[ m/pop ]] lit !b
+          n/get ;
 
         : n/! ( baw) A[ @p @p @p ]] lit !b !b !b !b A[ m/! ]] lit !b ;
 
+
         : n/r@ ( -w) A[ over !p ]] lit !b @b ;
+
+
+        : 'ori n/r@ >r inv r> inv and inv
 
         : n/r! ( w) A[ @p over ]] lit !b !b ;
 
+
         : n/push ( w) A[ @p m/push ]] lit !b !b ;
 
-        : n/next ( -w) A[ m/next ]] lit !b A[ !p ]] lit !b @b ;
+
 
         : n/leave A[ ; ]] lit !b
 
@@ -28369,85 +28486,77 @@ projects:
             r> ---u ;
           then // 1100_????_????_????
           A[ m/next ]] lit !b ex ;
-        : 'lcall A[ >r a ]] lit !b A[ m/push ]] lit !b A[ r> a! ]] lit !b ;
+
+        : 'lcall A[ dup m/call ]] lit !b ;
 
         : 'ljmp A[ a! ]] lit !b ;
 
         : 'lbr A[ m/branch ]] lit !b ; 
 
 
+        : 'addi n/r@ + n/r! ;
 
+        : 'andi n/r@ and n/r! ;
 
-        (
+        : 'xori n/r@ xor n/r! ;
 
-        this node provides support for extending the VM to neighbour nodes.
-
-        tmp1 is a register available to the neighbouring nodes.
-
-        'lcall long call. the next word defines the destination address.
-
-        'ljmp long jump. jumps to the address in the next word
-
-        'lbr long branch. branch with offset in the next word
-
-        )
       ramWords:
       - 0x05BB2
-      - 0x13401
+      - 0x13410
       - 0x05B05
       - 0x0C9B2
       - 0x05B22
       - 0x05DB2
       - 0x09D22
-      - 0x13406
+      - 0x13403
+      - 0x11402
+      - 0x05BB2
+      - 0x13409
       - 0x11402
       - 0x05B22
       - 0x05D12
       - 0x09B12
-      - 0x13414
+      - 0x13406
       - 0x09555
       - 0x05B05
       - 0x219B2
+      - 0x13411
+      - 0x2E69A
+      - 0x320CA
       - 0x05B25
       - 0x04FB2
       - 0x05B25
-      - 0x0560F
-      - 0x05B12
-      - 0x13407
-      - 0x0C9B2
-      - 0x09F55
+      - 0x05618
       - 0x05BB2
       - 0x15555
       - 0x04812
-      - 0x00018
+      - 0x0001A
       - 0x37932
       - 0x09F02
-      - 0x2F224
-      - 0x37222
+      - 0x2F226
+      - 0x37224
       - 0x269B2
       - 0x11575
       - 0x269B2
       - 0x115D5
-      - 0x37227
+      - 0x37229
       - 0x269B2
       - 0x11545
       - 0x05B5D
-      - 0x13407
+      - 0x13410
       - 0x15555
-      - 0x05B12
-      - 0x2EEB2
-      - 0x1340F
-      - 0x09D25
-      - 0x26AB2
+      - 0x05B55
+      - 0x2561F
       - 0x05B55
       - 0x2A9B2
       - 0x05B55
-      - 0x1341A
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x13415
+      - 0x13411
+      - 0x3D716
+      - 0x13411
+      - 0x3F716
+      - 0x13411
+      - 0x39716
       - 0x15555
       - 0x15555
       - 0x15555
@@ -28457,7 +28566,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x01A
+        entryPoint: 0x01C
         p: 0x000
         a: 0x000
         b: 0x000
@@ -28698,47 +28807,16 @@ projects:
         : bit/mask ( bitpos - mask )
           0xf and >r 1 begin zif ; then 2* end
 
-        : bit/clear ( bitpos value - value' )
-          over bit/mask
-          ( value  mask - value' )
-        : bit/clear1  inv and ;
-
-
-        : bit/set ( bitpos value - value' )
-          over bit/mask
-          ( value  mask - value' )
-        : bit/set1  dup >r inv and r> xor ;
-
-
-        : bit/inv ( bitpos value - value' )
-          over bit/mask xor ;
-
-        : bit/copy ( bitpos value - value' )
-          dup >r >r bit/mask >r a 2/ 2/ 2/ 2/ bit/mask
-          ( dmask / value value smask )
-          r> r> and if // set
-            drop r> over
-            bit/set1 ;
-          then // clear
-          drop r> over
-          bit/clear1
-        ;
-
-
         : bit/downmask ( - mask )
           a bit/mask
+        : bit/dec
           -1 . +
         ;
 
 
         : bit/upmask ( - mask )
           a bit/mask
-          2*
-          -1 . +
-        ;
-
-
-
+          2* bit/dec ;
 
         : bit/clearup ( bitpos value - value' )
           bit/upmask
@@ -28755,6 +28833,33 @@ projects:
         : bit/cleardown ( bitpos value - value' )
           bit/downmask
           and
+        ;
+
+
+
+        : bit/clear ( bitpos value - value' )
+          over bit/mask
+          ( value  mask - value' )
+        : bit/clear1  inv and ;
+
+
+        : bit/set ( bitpos value - value' )
+          over bit/mask
+          ( value  mask - value' )
+          bit/or ;
+
+        : bit/inv ( bitpos value - value' )
+          over bit/mask xor ;
+
+        : bit/copy ( bitpos value - value' )
+          dup >r >r bit/mask >r a 2/ 2/ 2/ 2/ bit/mask
+          ( dmask / value value smask )
+          r> r> and if // set
+            drop r> over
+            bit/or ;
+          then // clear
+          drop r> over
+          inv and
         ;
 
 
@@ -28790,26 +28895,37 @@ projects:
 
 
       ramWords:
-      - 0x1140F
-      - 0x11411
+      - 0x1141B
+      - 0x1141D
+      - 0x1141F
+      - 0x11421
       - 0x11414
       - 0x11416
-      - 0x11428
-      - 0x1142A
-      - 0x1142D
-      - 0x13421
-      - 0x3372B
+      - 0x11419
+      - 0x1340F
+      - 0x33717
       - 0x040BF
       - 0x0000F
       - 0x00001
       - 0x1F40E
       - 0x15555
       - 0x3770C
+      - 0x23609
+      - 0x049F5
+      - 0x3FFFF
+      - 0x23609
+      - 0x37710
+      - 0x13412
+      - 0x1141C
+      - 0x13412
+      - 0x2E69A
+      - 0x320CD
+      - 0x1340F
+      - 0x3F555
       - 0x21609
       - 0x32055
       - 0x21609
-      - 0x248CA
-      - 0x3ECE5
+      - 0x11417
       - 0x21609
       - 0x39555
       - 0x248BA
@@ -28818,31 +28934,20 @@ projects:
       - 0x307C2
       - 0x13409
       - 0x26CFA
-      - 0x1941F
+      - 0x1942A
       - 0x3AC82
-      - 0x11412
+      - 0x11417
       - 0x3AC82
-      - 0x11410
-      - 0x23609
-      - 0x049F5
-      - 0x3FFFF
-      - 0x23609
-      - 0x37DB0
-      - 0x3FFFF
-      - 0x15555
-      - 0x13424
-      - 0x11410
-      - 0x13424
-      - 0x2E69A
-      - 0x320CD
-      - 0x13421
-      - 0x3F555
+      - 0x32055
       - 0x25DFA
       - 0x00007
       - 0x2E7C2
       - 0x30DAA
       - 0x01455
-      - 0x0972F
+      - 0x0972C
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -28855,7 +28960,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x02F
+        entryPoint: 0x02C
         p: 0x000
         a: 0x000
         b: 0x000
@@ -30116,50 +30221,101 @@ projects:
       postMortemEnabled: false
     - coordinate: 507
       enabled: true
-      sourceCode: >
-        ( CVM2 node 507. main CVM2 node, ????_????_????_???? )
+      sourceCode: >+
+        ( CVM2 node 507. main CVM2 node, ????_????_????_????
+          primary dispatcher.
 
-        ( T: stack pointer s, A: program counter p, S: register r)
+          T: stack pointer s, A: program counter p, S: register r
+
+        opcode call 0???_????_????_???? calls a function in the lower half of the code memory.
+
+        opcode br   1000_0???_????_???? branch relative signed 11-bit offset in opcode.
+
+
+        m/call push current p on stack and jumps to function
+
+        m/main CVM interpreter loop
+
+        m/next read the current word and increment p
+
+
+        'tjmp table jump to address in table with offset in r
+
+        'jump jump to address in next word
+
+        'ret return from subroutine
+
+        'push push r onto stack
+
+        'pop pop r from stack
+
+        'xs exchange s and r
+
+        'halt halt execution until next interrupt.
+
+        )
+
+
+        # 607 import
+
 
         # 1 org
 
         entry m/main
 
-        # 0 /a // program counter
-
         # up /b // SRAM port
+
+
+        // initial state
 
         [ 0 0xffff 2 ] /stack // r = 0, s = 0xffff
 
+        # 0 /a // program counter
+
+
+        : 'halt A[ mem/halt ]] lit !b ;
+
+
+        : m/@ ( rsab-rsw)
+          A[ mem/rdup ]] lit !b
+        : m/rd2 !b !b @b ;
+
+
+        : m/! ( rswab-rs)
+          A[ mem/wrup ]] lit !b
+        : m/wr3 !b !b !b ;
+
+
         : m/pop ( rs-rsw) dup >r 1 . + r>
 
-        : m/1@ 1 ( rsa-rsw)
+        : m/1@ ( rsa-rsw)
+          A[ mem/rdup1 ]] lit m/rd2 ;
 
-        : m/@ ( rsab-rsw) !b !b @b ;
+        : m/2@ ( rsa-rsw)
+          A[ mem/rdup2 ]] lit m/rd2 ;
 
-        : m/next ( rs-rsx) a dup 1 . + a!
+        : m/next ( rs-rsx)
+          A[ mem/rdup0 ]] lit
+        : m/nx ( rsao-rsx) !b a !b @b 1
 
-        : m/0@ ( rsa-rsw) 0 m/@ ;
-
-        : m/2@ ( rsa-rsw) 2 m/@ ;
+        : m/branch ( rso-rs)
+          a . + a! ;
 
         : 'plit ( rs-rs) m/next 
 
         : m/push ( rsw-rs) >r -1 . + r> over
 
-        : m/1! ( rswa-rs) 1
+        : m/1! ( rswa-rs)
+          A[ mem/wrup1 ]] lit m/wr3 ;
 
-        : m/! ( rswab-rs) inv !b inv !b !b ;
+        : m/2! ( rswa-rs)
+          A[ mem/wrup2 ]] lit m/wr3 ;
 
-        : m/0! ( rswa-rs) 0 m/! ;
 
-        : m/2! ( rswa-rs) 2 m/! ;
-
-        : m/branch ( rso-rs) a . + a! ;
 
         : m/call ( rsxy-rs)
           begin drop >r a m/push r> a!
-        : m/main ( rs-rs) m/next
+        : m/main ( rs-rs) A[ mem/rdupinstr ]] lit m/nx
           ( rsx)
           dup 2* 2* ..
           -until // 0???_????_????_????
@@ -30186,124 +30342,85 @@ projects:
           ( rsxy) 2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ a . + a! drop ;
         : 'push .loc ( rs-rs) over m/push ;
 
-        : 'ret .loc ( rs-rs) m/pop a! ;
+        : 'ret .loc ( rs-rs) m/pop
 
-        : 'tjmp .loc ( rso-rs) a . + a!
+        : m/jmp ( rsa-rs) a! ;
+
+        : 'tjmp .loc ( rs-rs) over m/branch
 
         : 'jump .loc ( rs-rs) m/next a! ;
 
-        : 'pop .loc ( rs-rs) m/pop over ;
+        : 'pop .loc ( rs-rs) m/pop
 
         : 'xs .loc ( rs-rs) over ;
 
-        : 'xp .loc ( rs-rs) >r a over a! r> ;
-
-        : 'halt .loc ( rs) dup xor dup inv !b !b 0x8800 !b ;
-
-        : 'nop .loc ( rs-rs) ;
-
-
-        (
-
-        opcode call 0???_????_????_???? calls a function in the lower half of the code memory.
-
-        opcode br   1000_0???_????_???? branch relative signed 11-bit offset in opcode.
-
-
-        m/call push current p on stack and jumps to function
-
-        m/main CVM interpreter loop
-
-        m/next read the current word and increment p
-
-        'nop do nothing
-
-        'tjmp table jump to address in table with offset
-
-        'jump jump to address in next word
-
-        'ret return from subroutine
-
-        'push push r onto stack
-
-        'pop pop r from stack
-
-        'xs exchange s and r
-
-        'xp exchange p and r
-
-        'nop no operation
-
-        'halt execution by setting the SRAM mask to left and right.
-
-        )
       ramWords:
       - 0x15555
+      - 0x05B55
+      - 0x1342C
+      - 0x05BB2
+      - 0x13403
+      - 0x09B05
+      - 0x05BB2
+      - 0x1341A
+      - 0x09B25
       - 0x24812
       - 0x00001
       - 0x3CCB2
+      - 0x05705
+      - 0x1340D
+      - 0x05705
+      - 0x1340F
       - 0x049B2
+      - 0x1340B
+      - 0x08E22
+      - 0x01DB2
       - 0x00001
-      - 0x09B05
-      - 0x22D12
-      - 0x00001
-      - 0x3CAB2
-      - 0x05706
-      - 0x00000
-      - 0x05706
-      - 0x00002
-      - 0x13407
+      - 0x229F2
+      - 0x2B555
+      - 0x13410
       - 0x2FDB0
       - 0x3FFFF
       - 0x26FB2
-      - 0x049B2
-      - 0x00001
-      - 0x33BCA
-      - 0x09B55
-      - 0x05714
-      - 0x00000
-      - 0x05714
-      - 0x00002
-      - 0x229F2
-      - 0x2B555
+      - 0x05708
+      - 0x13424
+      - 0x05708
+      - 0x13426
       - 0x3A88A
-      - 0x1340F
+      - 0x13418
       - 0x26AB2
-      - 0x13407
+      - 0x05612
+      - 0x13415
       - 0x244DA
-      - 0x1B41C
+      - 0x1B41F
       - 0x048DA
-      - 0x0001F
-      - 0x1B426
+      - 0x00022
+      - 0x1B42A
       - 0x11515
-      - 0x37228
-      - 0x11575
-      - 0x3722A
-      - 0x115D5
       - 0x3722C
+      - 0x11575
+      - 0x3722E
+      - 0x115D5
+      - 0x37230
       - 0x3A855
       - 0x367C2
       - 0x307C2
       - 0x3078A
       - 0x3CAED
-      - 0x2170F
-      - 0x13401
+      - 0x21718
+      - 0x13409
       - 0x2B555
-      - 0x229F2
-      - 0x2A9B2
-      - 0x13407
+      - 0x21615
+      - 0x13410
       - 0x2B555
-      - 0x13401
+      - 0x13409
       - 0x21555
-      - 0x21555
-      - 0x2EE82
-      - 0x2AC55
-      - 0x24392
-      - 0x33B27
-      - 0x08800
-      - 0x09555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x01F
+        entryPoint: 0x022
         p: 0x000
         a: 0x000
         b: 0x000
@@ -31153,91 +31270,164 @@ projects:
       postMortemEnabled: false
     - coordinate: 607
       enabled: true
-      sourceCode: >
-        ( CVM2 node 607. SRAM simulator using the PC )
+      sourceCode: >+
+        ( CVM2 node 607.
+
+        SRAM simulator using the PC
+
+
+        Provides memory access to the CVM
+
+
+        )
+
 
         # 0 org
 
         # down /b
 
-        # up /a // confine the access to node 507 only for now
+        # r-lu /p
 
-        entry main
 
-        : main
-          @
-          // we have something to do
-          -if
-            !b @ -if
-              // ( ~p ~a )  write word
-              !b @ !b main ;
-            then
-            // ( ~n p ) compare and exchange
-            !b @ !b @ !b @b ! main ;
+        // up is node 507
+
+        // right is node 606
+
+        // left is node 608
+
+
+        # 0 f18var intr/pend 
+          // interupt pending flag
+          // == 0: no interrupt pending
+          // != 0: interrupt pending
+
+        // read
+
+
+        : mem/rdup
+          up
+        : mem/read
+          a!
+          @         // page
+        : mem/rd
+          @         // a16
+          !b !b @b ! ;
+
+        : mem/urd up a! mem/rd ;
+
+
+        : mem/rdup0 0 mem/urd ;
+
+
+        : mem/rdup1 1 mem/urd ;
+
+
+        : mem/rdup2 2 mem/urd ;
+
+
+        : mem/rdleft left mem/read ;
+
+
+        : mem/rdright right mem/read ;
+
+
+        : mem/rdupinstr
+          intr/pend if
+            // interrupt
+            dup dup xor !intr/pend
           then
-          @ -if
-            // ( x ~op )
-            inv if
-              // stimuli
-              a @ a! dup ! a!
-            else
-              // set mask
-              @ a!
-            then
-            !b @ !b main ;
-          then
-          // ( p a ) read
-          >r !b r> !b @b !
-          main ;
+          drop mem/rdup0 ;
+
+        // write
+
+
+        : mem/wrup
+          up
+        : mem/write
+          a!
+          @         // page
+        : mem/wr
+          @         // a16
+          !b inv !b @ !b ;
+
+        : mem/uwr up a! mem/wr ;
+
+
+        : mem/wrup0 0 mem/uwr ;
+
+
+        : mem/wrup1 1 mem/uwr ;
+
+
+        : mem/wrup2 2 mem/uwr ;
+
+
+
+
+        : mem/wrleft left mem/write ;
+
+
+
+        : mem/wrright right mem/write ;
+
+
+        // other 
+
+
+        : mem/halt r-l- ;
+
+
+        : mem/intr 1 !intr/pend r-lu ;
+
       ramWords:
-      - 0x03207
-      - 0x09E6C
-      - 0x09E22
-      - 0x11400
-      - 0x09E22
-      - 0x03B02
-      - 0x0B700
-      - 0x0320E
-      - 0x3330B
-      - 0x23EAB
-      - 0x0AA44
-      - 0x02AB2
-      - 0x09E22
-      - 0x11400
-      - 0x2FB9A
-      - 0x09F2A
-      - 0x11400
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x04235
+      - 0x05555
+      - 0x00000
+      - 0x049B2
+      - 0x00145
+      - 0x2BEB2
+      - 0x03B22
+      - 0x01A55
+      - 0x04AB2
+      - 0x00145
+      - 0x11406
+      - 0x05708
+      - 0x00000
+      - 0x05708
+      - 0x00001
+      - 0x05708
+      - 0x00002
+      - 0x05705
+      - 0x00175
+      - 0x05705
+      - 0x001D5
+      - 0x13401
+      - 0x19419
+      - 0x24DE2
+      - 0x13400
+      - 0x3B70B
+      - 0x049B2
+      - 0x00145
+      - 0x2BEB2
+      - 0x03BCA
+      - 0x09E25
+      - 0x04AB2
+      - 0x00145
+      - 0x1141D
+      - 0x0571F
+      - 0x00000
+      - 0x0571F
+      - 0x00001
+      - 0x0571F
+      - 0x00002
+      - 0x0571C
+      - 0x00175
+      - 0x0571C
+      - 0x001D5
+      - 0x115F5
+      - 0x05600
+      - 0x00001
+      - 0x115E5
       - 0x15555
       - 0x15555
       - 0x15555
@@ -31255,7 +31445,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x1E5
         p: 0x000
         a: 0x000
         b: 0x000
@@ -62897,6 +63087,5381 @@ projects:
     - name: test1
       source: int a = 1;
     lastSelectedCDebuggerProgramName: New program
+  - role: Target
+    name: Target GA144
+    nodes:
+    - coordinate: 0
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 1
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 2
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 3
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 4
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 5
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 6
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 7
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 8
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 9
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 10
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 11
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 12
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 13
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 14
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 15
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 16
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 17
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 100
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 101
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 102
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 103
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 104
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 105
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 106
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 107
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 108
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 109
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 110
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 111
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 112
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 113
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 114
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 115
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 116
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 117
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 200
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 201
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 202
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 203
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 204
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 205
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 206
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 207
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 208
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 209
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 210
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 211
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 212
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 213
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 214
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 215
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 216
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 217
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 300
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 301
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 302
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 303
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 304
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 305
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 306
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 307
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 308
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 309
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 310
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 311
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 312
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 313
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 314
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 315
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 316
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 317
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 400
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 401
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 402
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 403
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 404
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 405
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 406
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 407
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 408
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 409
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 410
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 411
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 412
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 413
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 414
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 415
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 416
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 417
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 500
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 501
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 502
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 503
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 504
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 505
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 506
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 507
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 508
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 509
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 510
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 511
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 512
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 513
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 514
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 515
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 516
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 517
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 600
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 601
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 602
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 603
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 604
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 605
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 606
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 607
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 608
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 609
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 610
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 611
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 612
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 613
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 614
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 615
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 616
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 617
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 700
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 701
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 702
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 703
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 704
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 705
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 706
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 707
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 708
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 709
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 710
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 711
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 712
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 713
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 714
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 715
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 716
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 717
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    debuggerAssemblyCode: 
+    debuggerPrograms:
+    - name: default
+      source: >
+        nop               ; cold-start fetch; no side effect
+
+        nop
+
+        nop
+
+        pushlit 0x0100    ; push literal 0x0100 onto S (native stack, NOT external memory)
+
+        pop               ; treats 0x0100 as the external stack pointer p; READs page1:0100 (fresh SRAM=0) into r
+
+        push              ; writes r (0) back out; WRITE page1:0100 <- 0000
+
+        lit 100           ; r = 0x0064
+
+        push              ; WRITE <- 0064
+
+        lit -1            ; r = 0xFFFF (lit's negative range)
+
+        push              ; WRITE <- FFFF
+
+        lit 511           ; r = 0x01FF (lit's positive extreme -- narrower than the retired slit's old 12-bit range)
+
+        push              ; WRITE <- 01FF
+
+        lit -512          ; r = 0xFE00 (lit's negative extreme -- narrower than the retired slit's old 12-bit range)
+
+        push              ; WRITE <- FE00
+
+        lit 15            ; r = 0x000F
+
+        inv               ; r = ~0x000F = 0xFFF0
+
+        push              ; WRITE <- FFF0
+
+        lit 41            ; r = 0x0029
+
+        inc               ; r = 0x002A
+
+        push              ; WRITE <- 002A
+
+        lit 41            ; r = 0x0029
+
+        dec               ; r = 0x0028
+
+        push              ; WRITE <- 0028
+
+        lit 0x0012        ; X=0x0012 (shiftee)
+
+        push              ; WRITE <- 0012
+
+        lit 8             ; Y=8 (shift count, becomes r) -- node 507's 'for'/'next' loop runs (r+1) times, the standard F18 for-loop off-by-one, so this actually shifts by 9, not 8
+
+        usl               ; pop X(0012) READ <- 0012; r = 0012<<(8+1) = 2400
+
+        push              ; WRITE <- 2400
+
+        lit -100          ; X=0xFF9C
+
+        push              ; WRITE <- FF9C
+
+        lit 3             ; Y=3 (count) -- actually shifts by (3+1)=4, same 'for'/'next' off-by-one as usl above
+
+        ssr               ; pop X(FF9C) READ <- FF9C; r = signed(FF9C)>>(3+1) = FFF9
+
+        push              ; WRITE <- FFF9
+
+        lit -100          ; X=0xFF9C
+
+        push              ; WRITE <- FF9C
+
+        lit 3             ; Y=3 (count) -- actually shifts by (3+1)=4, same 'for'/'next' off-by-one as usl above
+
+        usr               ; pop X(FF9C) READ <- FF9C; r = unsigned(FF9C)>>(3+1) = 0FF9
+
+        push              ; WRITE <- 0FF9
+
+        lit 100           ; X=100
+
+        push              ; WRITE <- 0064
+
+        lit 200           ; Y=200
+
+        add               ; pop X(0064) READ <- 0064; r = 0064+00C8 = 012C
+
+        push              ; WRITE <- 012C
+
+        lit 500           ; X=500
+
+        push              ; WRITE <- 01F4
+
+        lit 200           ; Y=200
+
+        sub               ; pop X(01F4) READ <- 01F4; r = X-Y = 01F4-00C8 = 012C
+
+        push              ; WRITE <- 012C
+
+        lit 0x0FF         ; X=0x0FF
+
+        push              ; WRITE <- 00FF
+
+        lit 0x0F0         ; Y=0x0F0
+
+        and               ; pop X(00FF) READ <- 00FF; r = 00FF & 00F0 = 00F0
+
+        push              ; WRITE <- 00F0
+
+        lit 0x0FF         ; X=0x0FF
+
+        push              ; WRITE <- 00FF
+
+        lit 0x0F0         ; Y=0x0F0
+
+        xor               ; pop X(00FF) READ <- 00FF; r = 00FF ^ 00F0 = 000F
+
+        push              ; WRITE <- 000F
+
+        lit 0x00F         ; X=0x00F
+
+        push              ; WRITE <- 000F
+
+        lit 0x0F0         ; Y=0x0F0
+
+        or                ; pop X(000F) READ <- 000F; r = 000F | 00F0 = 00FF
+
+        push              ; WRITE <- 00FF
+
+        ; node 506's register-d block (zext/addc/ldd/std/xd/mul2d/div2d/sext/umuld) and node 407's
+
+        ; register-w/port block (xpt/sthi/ldlo/stlo/ldhi) were REMOVED here 2026-09-09 as part of the
+
+        ; CVM1-opcode cleanup -- eight of the nine register-d mnemonics and all five register-w/port
+
+        ; mnemonics no longer assemble at all (no live CVM2 node backs them), and addc's own test
+
+        ; (which validated node 506's now-retired addc, not addc's current home on node 510) is omitted
+
+        ; rather than replaced with a fabricated, unverified expected value -- see this class's own
+
+        ; remarks for the full explanation. Removing these lines shifted the frame-pointer subroutine's
+
+        ; word address from 141 (0x8D) to 73 (0x49); the 'call below was updated to match.
+
+        call 73           ; jump to the frame-pointer subroutine near the end of this program -- its own word address, computed by counting words (pushlit is the only 2-word instruction here); 73 (0x49)
+
+        nop               ; execution resumes here once FRAME_TEST's own 'ret' returns
+
+        nop
+
+        nop
+
+        br 1              ; EXPLORATORY -- Node607.f18 has no real branch decode for this tag yet; observe, don't assume, what the log shows
+
+        nop
+
+        cbr 1            ; EXPLORATORY -- same caveat as br above. This is the last instruction the main flow was ever designed to reach
+
+        nop
+
+        halt              ; stop the CPU cleanly here -- everything the main flow cares about has now been observed. Node 606's own 'halt (Stefan's addition: "wait for a word that will never come") parks execution in a blocking @b that never returns, so unlike every earlier revision of this program, control never falls through into FRAME_TEST's body a second time -- only a chip reset can move it now
+
+        enter 4           ; reserve a 4-word frame; WRITE (old f, expected 0000) at the address 'leave' will read back; new f := that write address
+
+        lit 0x0AB         ; r=0x00AB
+
+        stl 1             ; WRITE r(00AB) to local #1 (frame-relative offset 1)
+
+        lit 0x0CD         ; r=0x00CD
+
+        stp 2             ; WRITE r(00CD) to parameter #2 (frame-relative offset 2)
+
+        ldl 1             ; READ local #1 back into r -- expect the SAME address and value 00AB as the stl above
+
+        push              ; WRITE <- 00AB (round-trips ldl's own fetch)
+
+        ldp 2             ; READ parameter #2 back into r -- expect the SAME address and value 00CD as the stp above
+
+        push              ; WRITE <- 00CD (round-trips ldp's own fetch)
+
+        ; lal/lap RETIRED 2026-09-09 -- no longer assemble at all. The self-check that used to live here
+
+        ; (comparing lal's/lap's freshly computed addresses against the stl/ldl and stp/ldp transactions
+
+        ; above) is omitted rather than replaced with an unverified 'pushf-based guess -- see this class's
+
+        ; own remarks for why.
+
+        leave             ; READ back the frame's saved old f -- expect value 0000, restoring f to its pre-enter value
+
+        ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/cbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)
+    lastSelectedDebuggerProgramName: 
+    cDebuggerPrograms:
+    - name: default
+      source: >
+        // Statements only -- this text is placed inside a hidden "void main() { ... }".
+
+        int a = 3;
+
+        int b = 4;
+
+        int c = a + b;
+    lastSelectedCDebuggerProgramName: 
+  userMacros: []
+  defaultNodeColor: '#FFF1C7'
+- id: 08b90630-a572-4b5f-ad49-9c905e466a71
+  name: CVM_pipeline
+  board: 
+  chips:
+  - role: Host
+    name: Host GA144
+    nodes:
+    - coordinate: 0
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 1
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 2
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 3
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 4
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 5
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 6
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 7
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 8
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 9
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 10
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 11
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 12
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 13
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 14
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 15
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 16
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 17
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 100
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 101
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 102
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 103
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 104
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 105
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 106
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 107
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 108
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 109
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 110
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 111
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 112
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 113
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 114
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 115
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 116
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 117
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 200
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 201
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 202
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 203
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 204
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 205
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 206
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 207
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 208
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 209
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 210
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 211
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 212
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 213
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 214
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 215
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 216
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 217
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 300
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 301
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 302
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 303
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 304
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 305
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 306
+      enabled: true
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#7CDEAD'
+      postMortemEnabled: true
+    - coordinate: 307
+      enabled: true
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#7CDE95'
+      postMortemEnabled: true
+    - coordinate: 308
+      enabled: true
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#7CDE7C'
+      postMortemEnabled: true
+    - coordinate: 309
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 310
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 311
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 312
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 313
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 314
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 315
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 316
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 317
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 400
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 401
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 402
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 403
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 404
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 405
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 406
+      enabled: true
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#7CDEC6'
+      postMortemEnabled: true
+    - coordinate: 407
+      enabled: true
+      sourceCode: >+
+        ( CVM_pipeline node 407.
+
+
+        register file.
+
+
+        A: selected register
+
+
+        r[0] .. r[63]
+
+
+        r[0] : zero register, contains always 0
+
+
+        r[60] : stack pointer
+
+        r[61] : frame pointer
+
+        r[62] : return register
+
+        r[63] : interrupt
+
+
+        )
+
+
+        # 0 const zero
+
+
+        # 60 const sp
+
+        # 61 const fp
+
+        # 62 const ret
+
+        # 63 const intr
+
+
+        # 0 org
+
+        # rdlu /p
+
+
+        [
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
+        ]
+      ramWords:
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      startup:
+        entryPoint: 0x1A5
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#E8E8E8'
+      postMortemEnabled: true
+    - coordinate: 408
+      enabled: true
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#DEDE7C'
+      postMortemEnabled: true
+    - coordinate: 409
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 410
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 411
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 412
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 413
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 414
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 415
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 416
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 417
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 500
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 501
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 502
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 503
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 504
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 505
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 506
+      enabled: true
+      sourceCode: >+
+        ( CVM_pipeline node 506.
+
+
+        instruction decode.
+
+
+        1111|11
+
+        5432|1098|7654|3210|
+
+        ----+----+----+----+----------------------------
+
+        0aaa|aaaa|aaaa|aaaa| short call
+
+        10bb|bbbb|iiii|iiii| immediate
+
+        110c|cccc|yyyy|xxxx| binary
+
+        1110|dddd|dddd|xxxx| unary
+
+        1111|0eee|eeee|xxxx| branch
+
+        1111|1fff|ffff|ffff| implied
+
+
+        )
+
+        # 507 import
+
+
+        # right /b
+
+        # down /a
+
+
+        entry n506/main
+
+
+        # 0 org
+
+
+        : n506/leave
+          A[ ; ]] lit b!
+        : n506/main
+          # n506/leave lit >r
+          @b
+          ( x )
+          dup 2* 2*
+          . -if // other instruction
+            2* -if //
+              2* -if //
+                2* -if //
+                  2* -if // implied
+                    ;
+                  then
+                  // branch
+                  ;
+                then
+                // unary
+                ;
+              then
+              // binary
+              ;
+            then
+            // immediate
+            ;
+          then
+          // short call
+          drop A[ @p n507/call ; ]] lit b! !b n506/main ;
+      ramWords:
+      - 0x04BB2
+      - 0x15555
+      - 0x04803
+      - 0x00000
+      - 0x364B2
+      - 0x1B409
+      - 0x37209
+      - 0x37209
+      - 0x37209
+      - 0x3BDA2
+      - 0x0570C
+      - 0x09702
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x002
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#7CDEDE'
+      postMortemEnabled: true
+    - coordinate: 507
+      enabled: true
+      sourceCode: >+
+        ( CVM_pipeline node 507.
+
+
+        Memory access node.
+
+
+        1} fetch next instruction
+
+        2} read from memory
+
+        3} write to memory
+
+
+        A: instruction pointer {PC}
+
+
+        memory interface:
+
+        +a16 +p / w16         read
+
+        +a16 ~p w16           write
+
+        ~0 +a16 / w16         read instruction
+
+        ~left +a16 +p / w16   read from left
+
+        ~right +a16 +p / w16  read from right
+
+        ~left +a16 ~p w16     write from left
+
+        ~right +a16 ~p w16    write from right
+
+
+        )
+
+
+        # 407 import
+
+
+        # left /p
+
+        # 0 /a
+
+
+        # 0 org
+
+
+        : n507/rfocus ( r - )
+          down b!
+          A[ -d-- ]] lit !b !b
+        : n507/reg ( r - )
+          A[ @p a! ]] lit !b ;
+
+        : n507/defocus ( - )
+          A[ ; ]] lit !b ;
+
+
+        : n507/r@ ( - w )
+          A[ @ !p ]] lit !b
+          @b ;
+
+        : n507/r! ( w - )
+          A[ @p ! ]] lit !b
+          !b ;
+
+        : n507/call ( a - )
+          ret n507/rfocus a n507/r! n507/defocus
+        : n507/branch ( a - )
+          ( set new PC )
+          left b!
+          @b            // new address
+          a!            // set new PC
+        ;
+
+
+        : n507/pop ( - w )
+          sp n507/rfocus
+          n507/r@ 1 . + dup n507/r!
+          n507/defocus
+          ( a )
+          up b!         // select node 607
+          !b 1 !b @b ;
+
+        : n507/push ( w - )
+          sp n507/rfocus
+          n507/r@ dup -1 . + n507/r!
+          n507/defocus
+          ( w a )
+          up b!         // select node 607
+          !b -2 !b !b ;
+
+        : n507/read ( p a - w )
+          up b!         // select node 607
+          !b !b @b ;  
+
+        : n507/write ( w p a - )
+          up b!         // select node 607
+          !b inv !b !b ;  
+
+        : n507/fetch ( r - w )
+          n507/rfocus n507/r@ n507/defocus ;
+
+        : n507/store ( w r - )
+          n507/rfocus n507/r! n507/defocus ;
+
+        : n507/next  ( - type )
+          ( fetch next word )
+          up b!         // select node 607
+          @+ !b         // a16
+          dup xor !b    // read page 0
+          @b            // next instruction
+          ( x )
+        ;
+
+
+        : n507/nextinstr  ( - type )
+          ( fetch next instruction )
+          up b!             // select node 607
+          dup xor inv b!    // send ~0
+          @+ !b             // ~a16
+          @b                // next instruction
+          ( x )
+          right b! !b
+          r---
+        ;
+
+
+      ramWords:
+      - 0x04B12
+      - 0x00115
+      - 0x13515
+      - 0x09BB2
+      - 0x05B55
+      - 0x04AB2
+      - 0x05B55
+      - 0x15555
+      - 0x05B05
+      - 0x039B2
+      - 0x05B25
+      - 0x05AB2
+      - 0x05600
+      - 0x0003E
+      - 0x2360A
+      - 0x13406
+      - 0x04B02
+      - 0x00175
+      - 0x2B555
+      - 0x05600
+      - 0x0003C
+      - 0x13408
+      - 0x049F3
+      - 0x00001
+      - 0x1340A
+      - 0x13406
+      - 0x04B27
+      - 0x00145
+      - 0x00001
+      - 0x09F55
+      - 0x05600
+      - 0x0003C
+      - 0x13408
+      - 0x25DB0
+      - 0x3FFFF
+      - 0x1340A
+      - 0x13406
+      - 0x04B27
+      - 0x00145
+      - 0x3FFFE
+      - 0x09B55
+      - 0x04B22
+      - 0x00145
+      - 0x09F55
+      - 0x04B22
+      - 0x00145
+      - 0x33B25
+      - 0x13400
+      - 0x13408
+      - 0x11406
+      - 0x13400
+      - 0x1340A
+      - 0x11406
+      - 0x04B1A
+      - 0x00145
+      - 0x08DE2
+      - 0x09F55
+      - 0x04B92
+      - 0x00145
+      - 0x386A2
+      - 0x07B02
+      - 0x115D5
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x175
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#DE957C'
+      postMortemEnabled: true
+    - coordinate: 508
+      enabled: true
+      sourceCode: >+
+        ( CVM_pipeline node 508.
+
+
+        Memory access coordination.
+
+
+        1} check for pending memory instruction
+
+        2} read next instruction
+
+
+        )
+
+
+
+        # 0 org
+
+        # io /b
+
+        entry n508/main
+
+
+        : down-writing?  io b!  @b  0x2000 and ;
+
+
+        : n508/main
+
+          down-writing? if
+            down b!
+            @
+
+          then
+
+          n508/main ;
+      ramWords:
+      - 0x11400
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#DEAD7C'
+      postMortemEnabled: true
+    - coordinate: 509
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 510
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 511
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 512
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 513
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 514
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 515
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 516
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 517
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 600
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 601
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 602
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 603
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 604
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 605
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 606
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 607
+      enabled: true
+      sourceCode: >+
+        ( CVM_pipeline node 607.
+
+        SRAM simulator using the PC
+
+
+        Provides memory access to the CVM
+
+
+        memory interface:
+
+        +a16 +p / w16         read
+
+        +a16 ~p w16           write
+
+        ~0 +a16 / w16         read instruction
+
+        ~left +a16 +p / w16   read from left
+
+        ~right +a16 +p / w16  read from right
+
+        ~left +a16 ~p w16     write from left
+
+        ~right +a16 ~p w16    write from right
+
+
+
+        )
+
+
+        # 0 org
+
+        # down /b
+
+        # r-lu /p
+
+
+        // up is node 507
+
+        // right is node 606
+
+        // left is node 608
+
+
+        # 0 f18var intr/pend 
+          // interupt pending flag
+          // == 0: no interrupt pending
+          // != 0: interrupt pending
+
+        // read
+
+
+        : mem/rdup
+          up
+        : mem/read
+          a!
+          @         // page
+        : mem/rd
+          @         // a16
+          !b !b @b ! ;
+
+        : mem/urd up a! mem/rd ;
+
+
+        : mem/rdup0 0 mem/urd ;
+
+
+        : mem/rdup1 1 mem/urd ;
+
+
+        : mem/rdup2 2 mem/urd ;
+
+
+        : mem/rdleft left mem/read ;
+
+
+        : mem/rdright right mem/read ;
+
+
+        : mem/rdupinstr
+          intr/pend if
+            // interrupt
+            dup dup xor !intr/pend
+          then
+          drop mem/rdup0 ;
+
+        // write
+
+
+        : mem/wrup
+          up
+        : mem/write
+          a!
+          @         // page
+        : mem/wr
+          @         // a16
+          !b inv !b @ !b ;
+
+        : mem/uwr up a! mem/wr ;
+
+
+        : mem/wrup0 0 mem/uwr ;
+
+
+        : mem/wrup1 1 mem/uwr ;
+
+
+        : mem/wrup2 2 mem/uwr ;
+
+
+
+
+        : mem/wrleft left mem/write ;
+
+
+
+        : mem/wrright right mem/write ;
+
+
+        // other 
+
+
+        : mem/halt r-l- ;
+
+
+        : mem/intr 1 !intr/pend r-lu ;
+
+      ramWords:
+      - 0x04235
+      - 0x05555
+      - 0x00000
+      - 0x049B2
+      - 0x00145
+      - 0x2BEB2
+      - 0x03B22
+      - 0x01A55
+      - 0x04AB2
+      - 0x00145
+      - 0x11406
+      - 0x05708
+      - 0x00000
+      - 0x05708
+      - 0x00001
+      - 0x05708
+      - 0x00002
+      - 0x05705
+      - 0x00175
+      - 0x05705
+      - 0x001D5
+      - 0x13401
+      - 0x19419
+      - 0x24DE2
+      - 0x13400
+      - 0x3B70B
+      - 0x049B2
+      - 0x00145
+      - 0x2BEB2
+      - 0x03BCA
+      - 0x09E25
+      - 0x04AB2
+      - 0x00145
+      - 0x1141D
+      - 0x0571F
+      - 0x00000
+      - 0x0571F
+      - 0x00001
+      - 0x0571F
+      - 0x00002
+      - 0x0571C
+      - 0x00175
+      - 0x0571C
+      - 0x001D5
+      - 0x115F5
+      - 0x05600
+      - 0x00001
+      - 0x115E5
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x1E5
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#F5E6B8'
+      postMortemEnabled: false
+    - coordinate: 608
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 609
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 610
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 611
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 612
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 613
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 614
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 615
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 616
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 617
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 700
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 701
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 702
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 703
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 704
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 705
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 706
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 707
+      enabled: true
+      sourceCode: >
+        ( CVM_pipeline node 707. SRAM communication between nodes 607 and 708 )
+
+        # 708 import
+
+        # 0 org
+
+        # down /b
+
+        # left /a
+
+        entry main
+
+        : main
+          @b
+          // we hase something to do
+          -if
+            @b -if
+              // ( ~p ~a )  write word
+              A[ /wr ; ]] lit !
+              >r ! r> ! @b ! main ;
+            then
+            // ( ~n p ) compare and exchange
+            A[ /cx ; ]] lit !
+            >r ! r> ! @b ! @b ! @ !b main ;
+          then
+          // ( p a ) read word
+          A[ /rd ; ]] lit !
+          ! @b ! @ !b 
+          main ;
+      ramWords:
+      - 0x0120C
+      - 0x01206
+      - 0x05ABA
+      - 0x11414
+      - 0x0AC2A
+      - 0x01A40
+      - 0x05ABA
+      - 0x11423
+      - 0x0AC2A
+      - 0x01A02
+      - 0x0BE22
+      - 0x11400
+      - 0x05A2A
+      - 0x1141A
+      - 0x01A0A
+      - 0x09700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#F5E6B8'
+      postMortemEnabled: false
+    - coordinate: 708
+      enabled: true
+      sourceCode: >-
+        ( CVM_pipeline node 708. PC async interface )
+
+        # 0 org
+
+        # io /b
+
+        entry /start
+
+
+        : obit ( dwn-dwx) !b over >r delay ;
+
+        : oword ( dw-d) leap drop leap drop leap drop drop ;
+
+        : obyt ( dw-dwx) then then then 3 obit drop
+            7 for dup 1 and 3 xor obit drop 2/ next
+            2 obit ;
+        : /start ( -d) 18ibits drop drop 10 for dup unext --l- ;
+
+        : /wr ( d-d) left a! @ oword @ oword @ oword --l- ;
+
+        : /rd ( d-d) left a! @ oword @ oword : recv 18ibits drop left a! ! --l- ;
+
+        : /cx ( d-d) left a! @ oword @ oword @ oword @ oword recv ;
+
+
+        (
+
+        d is the delay is kept in T, so it can be used for every write. Any read will generate a new delay.
+
+        /start waits from a stimulus from the PC, signaling that the PC is ready to play the SRAM.
+
+        /wr write to PC, write 3 words, read 0 words
+
+        /rd read from PC, write 2 words, read 1 word
+
+        /cx compare and exchange with PC, write 4 words, read 1 word
+
+        )
+      ramWords:
+      - 0x08FBA
+      - 0x114C8
+      - 0x13406
+      - 0x3B606
+      - 0x3B606
+      - 0x3A255
+      - 0x05600
+      - 0x00003
+      - 0x3BDBA
+      - 0x00007
+      - 0x25DFF
+      - 0x00001
+      - 0x00003
+      - 0x39600
+      - 0x3A77A
+      - 0x05700
+      - 0x00002
+      - 0x134CB
+      - 0x3A212
+      - 0x0000A
+      - 0x2E9B2
+      - 0x251B2
+      - 0x11575
+      - 0x04A0A
+      - 0x00175
+      - 0x13402
+      - 0x03602
+      - 0x03602
+      - 0x11575
+      - 0x04A0A
+      - 0x00175
+      - 0x13402
+      - 0x03602
+      - 0x134CB
+      - 0x3BDAA
+      - 0x00175
+      - 0x0A9B2
+      - 0x11575
+      - 0x04A0A
+      - 0x00175
+      - 0x13402
+      - 0x03602
+      - 0x03602
+      - 0x03602
+      - 0x11421
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      startup:
+        entryPoint: 0x011
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: '#F5E6B8'
+      postMortemEnabled: false
+    - coordinate: 709
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 710
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 711
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 712
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 713
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 714
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 715
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 716
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    - coordinate: 717
+      enabled: false
+      sourceCode: ''
+      ramWords: []
+      startup:
+        entryPoint: 0x000
+        p: 0x000
+        a: 0x000
+        b: 0x000
+        io: 0x00000
+        returnStack: []
+        parameterStack: []
+      color: 
+      postMortemEnabled: true
+    debuggerAssemblyCode: 
+    debuggerPrograms:
+    - name: default
+      source: >
+        nop               ; cold-start fetch; no side effect
+
+        nop
+
+        nop
+
+        pushlit 0x0100    ; push literal 0x0100 onto S (native stack, NOT external memory)
+
+        pop               ; treats 0x0100 as the external stack pointer p; READs page1:0100 (fresh SRAM=0) into r
+
+        push              ; writes r (0) back out; WRITE page1:0100 <- 0000
+
+        lit 100           ; r = 0x0064
+
+        push              ; WRITE <- 0064
+
+        lit -1            ; r = 0xFFFF (lit's negative range)
+
+        push              ; WRITE <- FFFF
+
+        lit 511           ; r = 0x01FF (lit's positive extreme -- narrower than the retired slit's old 12-bit range)
+
+        push              ; WRITE <- 01FF
+
+        lit -512          ; r = 0xFE00 (lit's negative extreme -- narrower than the retired slit's old 12-bit range)
+
+        push              ; WRITE <- FE00
+
+        lit 15            ; r = 0x000F
+
+        inv               ; r = ~0x000F = 0xFFF0
+
+        push              ; WRITE <- FFF0
+
+        lit 41            ; r = 0x0029
+
+        inc               ; r = 0x002A
+
+        push              ; WRITE <- 002A
+
+        lit 41            ; r = 0x0029
+
+        dec               ; r = 0x0028
+
+        push              ; WRITE <- 0028
+
+        lit 0x0012        ; X=0x0012 (shiftee)
+
+        push              ; WRITE <- 0012
+
+        lit 8             ; Y=8 (shift count, becomes r) -- node 507's 'for'/'next' loop runs (r+1) times, the standard F18 for-loop off-by-one, so this actually shifts by 9, not 8
+
+        usl               ; pop X(0012) READ <- 0012; r = 0012<<(8+1) = 2400
+
+        push              ; WRITE <- 2400
+
+        lit -100          ; X=0xFF9C
+
+        push              ; WRITE <- FF9C
+
+        lit 3             ; Y=3 (count) -- actually shifts by (3+1)=4, same 'for'/'next' off-by-one as usl above
+
+        ssr               ; pop X(FF9C) READ <- FF9C; r = signed(FF9C)>>(3+1) = FFF9
+
+        push              ; WRITE <- FFF9
+
+        lit -100          ; X=0xFF9C
+
+        push              ; WRITE <- FF9C
+
+        lit 3             ; Y=3 (count) -- actually shifts by (3+1)=4, same 'for'/'next' off-by-one as usl above
+
+        usr               ; pop X(FF9C) READ <- FF9C; r = unsigned(FF9C)>>(3+1) = 0FF9
+
+        push              ; WRITE <- 0FF9
+
+        lit 100           ; X=100
+
+        push              ; WRITE <- 0064
+
+        lit 200           ; Y=200
+
+        add               ; pop X(0064) READ <- 0064; r = 0064+00C8 = 012C
+
+        push              ; WRITE <- 012C
+
+        lit 500           ; X=500
+
+        push              ; WRITE <- 01F4
+
+        lit 200           ; Y=200
+
+        sub               ; pop X(01F4) READ <- 01F4; r = X-Y = 01F4-00C8 = 012C
+
+        push              ; WRITE <- 012C
+
+        lit 0x0FF         ; X=0x0FF
+
+        push              ; WRITE <- 00FF
+
+        lit 0x0F0         ; Y=0x0F0
+
+        and               ; pop X(00FF) READ <- 00FF; r = 00FF & 00F0 = 00F0
+
+        push              ; WRITE <- 00F0
+
+        lit 0x0FF         ; X=0x0FF
+
+        push              ; WRITE <- 00FF
+
+        lit 0x0F0         ; Y=0x0F0
+
+        xor               ; pop X(00FF) READ <- 00FF; r = 00FF ^ 00F0 = 000F
+
+        push              ; WRITE <- 000F
+
+        lit 0x00F         ; X=0x00F
+
+        push              ; WRITE <- 000F
+
+        lit 0x0F0         ; Y=0x0F0
+
+        or                ; pop X(000F) READ <- 000F; r = 000F | 00F0 = 00FF
+
+        push              ; WRITE <- 00FF
+
+        ; node 506's register-d block (zext/addc/ldd/std/xd/mul2d/div2d/sext/umuld) and node 407's
+
+        ; register-w/port block (xpt/sthi/ldlo/stlo/ldhi) were REMOVED here 2026-09-09 as part of the
+
+        ; CVM1-opcode cleanup -- eight of the nine register-d mnemonics and all five register-w/port
+
+        ; mnemonics no longer assemble at all (no live CVM2 node backs them), and addc's own test
+
+        ; (which validated node 506's now-retired addc, not addc's current home on node 510) is omitted
+
+        ; rather than replaced with a fabricated, unverified expected value -- see this class's own
+
+        ; remarks for the full explanation. Removing these lines shifted the frame-pointer subroutine's
+
+        ; word address from 141 (0x8D) to 73 (0x49); the 'call below was updated to match.
+
+        call 73           ; jump to the frame-pointer subroutine near the end of this program -- its own word address, computed by counting words (pushlit is the only 2-word instruction here); 73 (0x49)
+
+        nop               ; execution resumes here once FRAME_TEST's own 'ret' returns
+
+        nop
+
+        nop
+
+        br 1              ; EXPLORATORY -- Node607.f18 has no real branch decode for this tag yet; observe, don't assume, what the log shows
+
+        nop
+
+        cbr 1            ; EXPLORATORY -- same caveat as br above. This is the last instruction the main flow was ever designed to reach
+
+        nop
+
+        halt              ; stop the CPU cleanly here -- everything the main flow cares about has now been observed. Node 606's own 'halt (Stefan's addition: "wait for a word that will never come") parks execution in a blocking @b that never returns, so unlike every earlier revision of this program, control never falls through into FRAME_TEST's body a second time -- only a chip reset can move it now
+
+        enter 4           ; reserve a 4-word frame; WRITE (old f, expected 0000) at the address 'leave' will read back; new f := that write address
+
+        lit 0x0AB         ; r=0x00AB
+
+        stl 1             ; WRITE r(00AB) to local #1 (frame-relative offset 1)
+
+        lit 0x0CD         ; r=0x00CD
+
+        stp 2             ; WRITE r(00CD) to parameter #2 (frame-relative offset 2)
+
+        ldl 1             ; READ local #1 back into r -- expect the SAME address and value 00AB as the stl above
+
+        push              ; WRITE <- 00AB (round-trips ldl's own fetch)
+
+        ldp 2             ; READ parameter #2 back into r -- expect the SAME address and value 00CD as the stp above
+
+        push              ; WRITE <- 00CD (round-trips ldp's own fetch)
+
+        ; lal/lap RETIRED 2026-09-09 -- no longer assemble at all. The self-check that used to live here
+
+        ; (comparing lal's/lap's freshly computed addresses against the stl/ldl and stp/ldp transactions
+
+        ; above) is omitted rather than replaced with an unverified 'pushf-based guess -- see this class's
+
+        ; own remarks for why.
+
+        leave             ; READ back the frame's saved old f -- expect value 0000, restoring f to its pre-enter value
+
+        ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/cbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)
+    lastSelectedDebuggerProgramName: 
+    cDebuggerPrograms:
+    - name: default
+      source: >
+        // Statements only -- this text is placed inside a hidden "void main() { ... }".
+
+        int a = 3;
+
+        int b = 4;
+
+        int c = a + b;
+    lastSelectedCDebuggerProgramName: 
   - role: Target
     name: Target GA144
     nodes:
