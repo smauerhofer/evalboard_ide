@@ -66162,7 +66162,17 @@ projects:
       postMortemEnabled: true
     - coordinate: 306
       enabled: true
-      sourceCode: ''
+      sourceCode: >
+        ( CVM_pipeline node 306.
+
+
+        instruction execute.
+
+
+        register fetch
+
+
+        )
       ramWords: []
       startup:
         entryPoint: 0x000
@@ -66176,7 +66186,17 @@ projects:
       postMortemEnabled: true
     - coordinate: 307
       enabled: true
-      sourceCode: ''
+      sourceCode: >
+        ( CVM_pipeline node 307.
+
+
+        instruction execute.
+
+
+        register fetch
+
+
+        )
       ramWords: []
       startup:
         entryPoint: 0x000
@@ -66190,7 +66210,17 @@ projects:
       postMortemEnabled: true
     - coordinate: 308
       enabled: true
-      sourceCode: ''
+      sourceCode: >
+        ( CVM_pipeline node 308.
+
+
+        instruction execute.
+
+
+        register fetch
+
+
+        )
       ramWords: []
       startup:
         entryPoint: 0x000
@@ -66414,8 +66444,191 @@ projects:
       postMortemEnabled: true
     - coordinate: 406
       enabled: true
-      sourceCode: ''
-      ramWords: []
+      sourceCode: >+
+        ( CVM_pipeline node 406.
+
+
+        instruction execute.
+
+
+        read register
+
+          read16-1:
+            in: [x1/read16-1] r
+
+          read32-2:
+            in: [x1/read32-2] r
+
+          immediate-with-register-16bit:
+            in: [x1/immediate-with-register-16bit] r w const
+
+          immediate-with-register-32bit:
+            in: [x1/immediate-with-register-32bit] r hi lo const
+
+
+        )
+
+
+        # down /b     // node 506
+
+        # up /a       // node 306
+
+
+        # 0 org
+
+
+        : x1/wfocus ( - )
+          right b!
+          A[ --l- ]] lit !b !b
+          down b! ;
+
+        : x1/rfocus ( r - )
+          right b!
+          A[ r--- ]] lit !b !b
+        : x1/reg ( r - )
+          A[ @p a! ]] lit !b ;
+
+        : x1/defocus2 ( - ) leap
+
+        : x1/defocus ( - ) then
+          A[ ; ]] lit !b down b! ;
+
+
+        : x1/r@ ( - w )
+          A[ @+ !p ]] lit !b
+          @b ;
+
+        // : x1/r! ( w - )
+
+        //  A[ @p !+ ]] lit !b
+
+        //  !b ;
+
+
+
+
+        : x1/main
+          @b >r ex
+          x1/main ;
+
+
+        : x1/read16-2 ( w1 w2 ) leap
+
+        : x1/read16-1 ( w ) then
+          @b x1/rfocus x1/r@ x1/defocus ;
+
+        : x1/read32-2 ( lo1 hi1 lo2 hi2 ) leap
+
+        : x1/read32-1 ( lo hi ) then
+          @b x1/rfocus x1/r@ x1/r@ x1/defocus ;
+
+        : x1/binary-16
+          @b !             // operation
+          x1/read16-2
+          ! !
+          @b !             // destination register
+        ;
+
+
+        : x1/binary-32
+          @b !             // operation
+          x1/read32-2
+          ! ! ! !
+          @b !             // destination register
+        ;
+
+
+        : x1/unary-16
+          @b !             // operation
+          x1/read16-1
+          !
+          @b !             // destination register
+        ;
+
+
+        : x1/unary-32
+          @b !             // operation
+          x1/read32-1
+          ! ! 
+          @b !             // destination register
+        ;
+
+
+        : x1/immediate-with-register-32bit
+          @b !             // operation
+          x1/read32-1
+          ! ! @b ! dup xor !
+          @b !             // destination register
+        ;
+
+
+
+
+      ramWords:
+      - 0x04B12
+      - 0x001D5
+      - 0x13575
+      - 0x09B12
+      - 0x00115
+      - 0x29555
+      - 0x04B12
+      - 0x001D5
+      - 0x135D5
+      - 0x09BB2
+      - 0x05B55
+      - 0x04AB2
+      - 0x1340D
+      - 0x05B12
+      - 0x15555
+      - 0x00115
+      - 0x29555
+      - 0x05B05
+      - 0x079B2
+      - 0x0085D
+      - 0x11413
+      - 0x13416
+      - 0x01606
+      - 0x13411
+      - 0x1140D
+      - 0x1341A
+      - 0x01606
+      - 0x13411
+      - 0x13411
+      - 0x1140D
+      - 0x01AB2
+      - 0x13415
+      - 0x0BA02
+      - 0x0B555
+      - 0x01AB2
+      - 0x13419
+      - 0x0BA2A
+      - 0x0BF2D
+      - 0x01AB2
+      - 0x13416
+      - 0x0BF2D
+      - 0x01AB2
+      - 0x1341A
+      - 0x0BA02
+      - 0x0B555
+      - 0x01AB2
+      - 0x1341A
+      - 0x0BA02
+      - 0x0ADE2
+      - 0x0BF2D
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -66428,7 +66641,7 @@ projects:
       postMortemEnabled: true
     - coordinate: 407
       enabled: true
-      sourceCode: >+
+      sourceCode: >
         ( CVM_pipeline node 407.
 
 
@@ -66556,7 +66769,17 @@ projects:
       postMortemEnabled: true
     - coordinate: 408
       enabled: true
-      sourceCode: ''
+      sourceCode: >
+        ( CVM_pipeline node 408.
+
+
+        instruction execute.
+
+
+        register store
+
+
+        )
       ramWords: []
       startup:
         entryPoint: 0x000
@@ -66765,9 +66988,159 @@ projects:
       color: 
       postMortemEnabled: true
     - coordinate: 505
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: >+
+        ( CVM_pipeline node 505.
+
+
+        instruction decode support.
+
+
+
+        )
+
+        # 507 import
+
+        # 506 import
+
+
+        # left /b
+
+
+        entry d1/main
+
+
+        # 0 org
+
+
+        : d1/main
+          # d1/main lit >r
+          A[ dup !p ]] lit !b @b dup
+          ( x x )
+          2* 2* . -if
+            2* -if
+              2* -if
+                2* -if
+                  2* -if
+                    2* -if
+                      // implied
+                      A[ d/implied ; ]] lit b! ;
+                    then
+                    // implied with next
+                      A[ d/implied-with-next ; ]] lit b! ;
+                  then
+                  // long branch/call
+                  2* -if
+                    2* -if
+                      // long branch always
+                      A[ d/long-branch-always ; ]] lit b! ;
+                    then
+                    // long branch if
+                    A[ d/long-branch-if ; ]] lit b! ;
+                  then
+                  // long call
+                  A[ d/long-call ; ]] lit b! ;
+                then
+                // unary
+                2* -if
+                  // unary32 bit
+                  A[ d/unary-32bit ; ]] lit b! ;
+                then
+                // unary16 bit
+                A[ d/unary-16bit ; ]] lit b! ;
+              then
+              // binary
+              2* -if
+                // binary 32 bit
+                A[ d/binary-32bit ; ]] lit b! ;
+              then
+              // binary 16 bit
+              A[ d/binary-16bit ; ]] lit b! ;
+            then
+            // immediate
+            2* -if
+              // immediate 32 bit
+              A[ d/immediate-with-register-32bit ; ]] lit b! ;
+            then
+            // immediate 16 bit
+            A[ d/immediate-with-register-16bit ; ]] lit b! ;
+          then
+          // immediate branch/call
+          2* -if
+            2* -if
+              // branch always
+              A[ d/branch-always ; ]] lit b! ;
+            then
+            // branch if
+            A[ d/branch-if ; ]] lit b! ;
+          then
+          // short call
+          A[ d/short-call ; ]] lit b! ;
+      ramWords:
+      - 0x04812
+      - 0x00000
+      - 0x259B2
+      - 0x09F92
+      - 0x364B2
+      - 0x1B426
+      - 0x37221
+      - 0x3721C
+      - 0x37217
+      - 0x3720F
+      - 0x3720D
+      - 0x04B55
+      - 0x1140C
+      - 0x04B55
+      - 0x1140C
+      - 0x37215
+      - 0x37213
+      - 0x04B55
+      - 0x1140C
+      - 0x04B55
+      - 0x1140C
+      - 0x04B55
+      - 0x1140C
+      - 0x3721A
+      - 0x04B55
+      - 0x1140C
+      - 0x04B55
+      - 0x1140C
+      - 0x3721F
+      - 0x04B55
+      - 0x1140C
+      - 0x04B55
+      - 0x1140C
+      - 0x37224
+      - 0x04B55
+      - 0x1140C
+      - 0x04B55
+      - 0x1140C
+      - 0x3722C
+      - 0x3722A
+      - 0x04B55
+      - 0x1140C
+      - 0x04B55
+      - 0x1140C
+      - 0x04B55
+      - 0x1140C
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -66776,7 +67149,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#7CDEDE'
       postMortemEnabled: true
     - coordinate: 506
       enabled: true
@@ -66793,17 +67166,33 @@ projects:
 
         ----+----+----+----+----------------------------
 
-        0aaa|aaaa|aaaa|aaaa| short call
+        00aa|aaaa|aaaa|aaaa| short call
 
-        10bb|bbbb|iiii|iiii| immediate
+        010o|oooo|oooo|rrrr| branch if r == 0
 
-        110c|cccc|yyyy|xxxx| binary
+        011o|oooo|oooo|oooo| branch always
 
-        1110|dddd|dddd|xxxx| unary
+        100b|bbbb|iiii|rrrr| immediate with register {16 bit}
 
-        1111|0eee|eeee|xxxx| branch
+        101b|bbbb|iiii|rrrr| immediate with register {32 bit}
 
-        1111|1fff|ffff|ffff| implied
+        1100|cccc|yyyy|xxxx| binary {16 bit}
+
+        1101|cccc|yyyy|xxxx| binary {32 bit}
+
+        1110|0ddd|dddd|xxxx| unary {16 bit}
+
+        1110|1ddd|dddd|xxxx| unary {32 bit}
+
+        1111|00..|....|....| long call
+
+        1111|010.|cond|rrrr| long branch if cond{r}
+
+        1111|011.|....|....| long branch always
+
+        1111|10ff|ffff|feee| implied with next
+
+        1111|11ff|ffff|feee| implied 
 
 
         )
@@ -66816,55 +67205,87 @@ projects:
         # down /a
 
 
-        entry n506/main
+        entry d/main
 
 
         # 0 org
 
 
-        : n506/leave
+        : d/main
+          @b --l-
           A[ ; ]] lit b!
-        : n506/main
-          # n506/leave lit >r
-          @b
-          ( x )
-          dup 2* 2*
-          . -if // other instruction
-            2* -if //
-              2* -if //
-                2* -if //
-                  2* -if // implied
-                    ;
-                  then
-                  // branch
-                  ;
-                then
-                // unary
-                ;
-              then
-              // binary
-              ;
-            then
-            // immediate
-            ;
-          then
-          // short call
-          drop A[ @p n507/call ; ]] lit b! !b n506/main ;
+          d/main ;
+
+        : d/next ( - w )
+          A[ m/next ]] lit !b
+          A[ !p ]] lit !b @b ;
+
+        : d/r16 ( r - w )
+          0xf and
+
+        : d/r32 ( r - lo hi )
+          0xf and
+
+        : d/implied
+
+
+        : d/implied-with-next
+
+
+        : d/long-branch-always
+
+
+        : d/long-branch-if
+
+
+        : d/long-call
+
+
+        : d/unary-32bit
+
+
+        : d/unary-16bit
+
+
+        : d/binary-32bit
+
+
+        : d/binary-16bit
+
+
+        : d/immediate-with-register-32bit
+
+
+        : d/immediate-with-register-16bit
+
+
+        : d/branch-always
+
+
+        : d/branch-if
+
+
+        : d/short-call ( code-addr )
+          A[ @p m/call ; ]] lit b! b! ;
+
+
+
+
       ramWords:
-      - 0x04BB2
+      - 0x009B2
+      - 0x13575
+      - 0x04B40
       - 0x15555
-      - 0x04803
-      - 0x00000
-      - 0x364B2
-      - 0x1B409
-      - 0x37209
-      - 0x37209
-      - 0x37209
-      - 0x3BDA2
+      - 0x05B12
+      - 0x13435
+      - 0x0C9B2
+      - 0x09F55
+      - 0x040B2
+      - 0x0000F
+      - 0x040B2
+      - 0x0000F
+      - 0x04BA5
       - 0x0570C
-      - 0x09702
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -66916,7 +67337,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x002
+        entryPoint: 0x000
         p: 0x000
         a: 0x000
         b: 0x000
@@ -66975,27 +67396,27 @@ projects:
         # 0 org
 
 
-        : n507/rfocus ( r - )
+        : m/rfocus ( r - )
           down b!
           A[ -d-- ]] lit !b !b
-        : n507/reg ( r - )
+        : m/reg ( r - )
           A[ @p a! ]] lit !b ;
 
-        : n507/defocus ( - )
+        : m/defocus ( - )
           A[ ; ]] lit !b ;
 
 
-        : n507/r@ ( - w )
+        : m/r@ ( - w )
           A[ @ !p ]] lit !b
           @b ;
 
-        : n507/r! ( w - )
+        : m/r! ( w - )
           A[ @p ! ]] lit !b
           !b ;
 
-        : n507/call ( a - )
-          ret n507/rfocus a n507/r! n507/defocus
-        : n507/branch ( a - )
+        : m/call ( a - )
+          ret m/rfocus a m/r! m/defocus
+        : m/branch ( a - )
           ( set new PC )
           left b!
           @b            // new address
@@ -67003,47 +67424,47 @@ projects:
         ;
 
 
-        : n507/pop ( - w )
-          sp n507/rfocus
-          n507/r@ 1 . + dup n507/r!
-          n507/defocus
+        : m/pop ( - w )
+          sp m/rfocus
+          m/r@ 1 . + dup m/r!
+          m/defocus
           ( a )
           up b!         // select node 607
           !b 1 !b @b ;
 
-        : n507/push ( w - )
-          sp n507/rfocus
-          n507/r@ dup -1 . + n507/r!
-          n507/defocus
+        : m/push ( w - )
+          sp m/rfocus
+          m/r@ dup -1 . + m/r!
+          m/defocus
           ( w a )
           up b!         // select node 607
           !b -2 !b !b ;
 
-        : n507/read ( p a - w )
+        : m/read ( p a - w )
           up b!         // select node 607
           !b !b @b ;  
 
-        : n507/write ( w p a - )
+        : m/write ( w p a - )
           up b!         // select node 607
           !b inv !b !b ;  
 
-        : n507/fetch ( r - w )
-          n507/rfocus n507/r@ n507/defocus ;
+        : m/fetch ( r - w )
+          m/rfocus m/r@ m/defocus ;
 
-        : n507/store ( w r - )
-          n507/rfocus n507/r! n507/defocus ;
+        : m/store ( w r - )
+          m/rfocus m/r! m/defocus ;
 
-        : n507/next  ( - type )
+        : m/next  ( - w )
           ( fetch next word )
           up b!         // select node 607
           @+ !b         // a16
           dup xor !b    // read page 0
-          @b            // next instruction
+          @b            // next word
           ( x )
         ;
 
 
-        : n507/nextinstr  ( - type )
+        : m/nextinstr  ( - type )
           ( fetch next instruction )
           up b!             // select node 607
           dup xor inv b!    // send ~0
@@ -67116,10 +67537,10 @@ projects:
       - 0x04B92
       - 0x00145
       - 0x386A2
-      - 0x07B02
+      - 0x07B07
+      - 0x001D5
+      - 0x29BB2
       - 0x115D5
-      - 0x15555
-      - 0x15555
       startup:
         entryPoint: 0x175
         p: 0x000
@@ -67132,16 +67553,14 @@ projects:
       postMortemEnabled: true
     - coordinate: 508
       enabled: true
-      sourceCode: >+
+      sourceCode: >
         ( CVM_pipeline node 508.
 
 
-        Memory access coordination.
+        instruction execute.
 
 
-        1} check for pending memory instruction
-
-        2} read next instruction
+        memory fetch/store
 
 
         )
@@ -67240,7 +67659,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#DEAD7C'
+      color: '#DEC67C'
       postMortemEnabled: true
     - coordinate: 509
       enabled: false
