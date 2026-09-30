@@ -90,6 +90,11 @@
                           Padding="12,6"
                           Margin="0,0,8,0"
                           ToolTip="Copies every configured node in this chip (enabled, or with non-blank RAM source -- the same nodes highlighted yellow below) into the same node coordinates in another open project. ROM is shared across all projects and is not copied, same policy as the node editor's own 'Copy to project…'." />
+          <Button Content="Copy all"
+                          Command="{Binding CopyAllSourceToClipboardCommand}"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Copies the F18 source of every configured node in this chip (enabled, or with non-blank RAM source -- the same nodes highlighted yellow below) to the clipboard as plain text, one node after another in coordinate order, each preceded by a small 'node NNN' header comment." />
           <Button Content="Include all in PM"
                           Command="{Binding IncludeAllInPostMortemCommand}"
                           Padding="12,6"

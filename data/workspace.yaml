@@ -65333,7 +65333,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 1
       enabled: false
       sourceCode: ''
@@ -65347,7 +65347,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 2
       enabled: false
       sourceCode: ''
@@ -65361,7 +65361,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 3
       enabled: false
       sourceCode: ''
@@ -65375,7 +65375,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 4
       enabled: false
       sourceCode: ''
@@ -65389,7 +65389,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 5
       enabled: false
       sourceCode: ''
@@ -65403,7 +65403,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 6
       enabled: false
       sourceCode: ''
@@ -65417,7 +65417,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 7
       enabled: false
       sourceCode: ''
@@ -65431,7 +65431,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 8
       enabled: false
       sourceCode: ''
@@ -65445,7 +65445,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 9
       enabled: false
       sourceCode: ''
@@ -65459,7 +65459,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 10
       enabled: false
       sourceCode: ''
@@ -65473,7 +65473,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 11
       enabled: false
       sourceCode: ''
@@ -65487,7 +65487,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 12
       enabled: false
       sourceCode: ''
@@ -65501,7 +65501,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 13
       enabled: false
       sourceCode: ''
@@ -65515,7 +65515,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 14
       enabled: false
       sourceCode: ''
@@ -65529,7 +65529,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 15
       enabled: false
       sourceCode: ''
@@ -65543,7 +65543,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 16
       enabled: false
       sourceCode: ''
@@ -65557,7 +65557,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 17
       enabled: false
       sourceCode: ''
@@ -65571,7 +65571,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 100
       enabled: false
       sourceCode: ''
@@ -65585,7 +65585,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 101
       enabled: false
       sourceCode: ''
@@ -65599,7 +65599,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 102
       enabled: false
       sourceCode: ''
@@ -65613,7 +65613,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 103
       enabled: false
       sourceCode: ''
@@ -65627,7 +65627,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 104
       enabled: false
       sourceCode: ''
@@ -65641,7 +65641,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 105
       enabled: false
       sourceCode: ''
@@ -65655,7 +65655,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 106
       enabled: false
       sourceCode: ''
@@ -65669,7 +65669,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 107
       enabled: false
       sourceCode: ''
@@ -65683,7 +65683,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 108
       enabled: false
       sourceCode: ''
@@ -65697,7 +65697,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 109
       enabled: false
       sourceCode: ''
@@ -65711,7 +65711,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 110
       enabled: false
       sourceCode: ''
@@ -65725,7 +65725,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 111
       enabled: false
       sourceCode: ''
@@ -65739,7 +65739,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 112
       enabled: false
       sourceCode: ''
@@ -65753,7 +65753,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 113
       enabled: false
       sourceCode: ''
@@ -65767,7 +65767,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 114
       enabled: false
       sourceCode: ''
@@ -65781,7 +65781,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 115
       enabled: false
       sourceCode: ''
@@ -65795,7 +65795,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 116
       enabled: false
       sourceCode: ''
@@ -65809,7 +65809,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 117
       enabled: false
       sourceCode: ''
@@ -65823,7 +65823,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 200
       enabled: false
       sourceCode: ''
@@ -65837,7 +65837,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 201
       enabled: false
       sourceCode: ''
@@ -65851,7 +65851,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 202
       enabled: false
       sourceCode: ''
@@ -65865,7 +65865,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 203
       enabled: false
       sourceCode: ''
@@ -65879,7 +65879,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 204
       enabled: false
       sourceCode: ''
@@ -65893,7 +65893,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 205
       enabled: false
       sourceCode: ''
@@ -65907,7 +65907,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 206
       enabled: false
       sourceCode: ''
@@ -65921,7 +65921,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 207
       enabled: false
       sourceCode: ''
@@ -65935,7 +65935,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 208
       enabled: false
       sourceCode: ''
@@ -65949,7 +65949,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 209
       enabled: false
       sourceCode: ''
@@ -65963,7 +65963,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 210
       enabled: false
       sourceCode: ''
@@ -65977,7 +65977,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 211
       enabled: false
       sourceCode: ''
@@ -65991,7 +65991,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 212
       enabled: false
       sourceCode: ''
@@ -66005,7 +66005,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 213
       enabled: false
       sourceCode: ''
@@ -66019,7 +66019,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 214
       enabled: false
       sourceCode: ''
@@ -66033,7 +66033,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 215
       enabled: false
       sourceCode: ''
@@ -66047,7 +66047,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 216
       enabled: false
       sourceCode: ''
@@ -66061,7 +66061,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 217
       enabled: false
       sourceCode: ''
@@ -66075,7 +66075,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 300
       enabled: false
       sourceCode: ''
@@ -66089,7 +66089,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 301
       enabled: false
       sourceCode: ''
@@ -66103,7 +66103,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 302
       enabled: false
       sourceCode: ''
@@ -66117,7 +66117,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 303
       enabled: false
       sourceCode: ''
@@ -66131,7 +66131,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 304
       enabled: false
       sourceCode: ''
@@ -66145,7 +66145,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 305
       enabled: false
       sourceCode: ''
@@ -66159,7 +66159,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 306
       enabled: true
       sourceCode: >
@@ -66183,7 +66183,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEAD'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 307
       enabled: true
       sourceCode: >
@@ -66207,7 +66207,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDE95'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 308
       enabled: true
       sourceCode: >
@@ -66231,7 +66231,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDE7C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 309
       enabled: false
       sourceCode: ''
@@ -66245,7 +66245,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 310
       enabled: false
       sourceCode: ''
@@ -66259,7 +66259,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 311
       enabled: false
       sourceCode: ''
@@ -66273,7 +66273,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 312
       enabled: false
       sourceCode: ''
@@ -66287,7 +66287,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 313
       enabled: false
       sourceCode: ''
@@ -66301,7 +66301,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 314
       enabled: false
       sourceCode: ''
@@ -66315,7 +66315,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 315
       enabled: false
       sourceCode: ''
@@ -66329,7 +66329,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 316
       enabled: false
       sourceCode: ''
@@ -66343,7 +66343,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 317
       enabled: false
       sourceCode: ''
@@ -66357,7 +66357,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 400
       enabled: false
       sourceCode: ''
@@ -66371,7 +66371,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 401
       enabled: false
       sourceCode: ''
@@ -66385,7 +66385,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 402
       enabled: false
       sourceCode: ''
@@ -66399,7 +66399,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 403
       enabled: false
       sourceCode: ''
@@ -66413,7 +66413,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 404
       enabled: false
       sourceCode: ''
@@ -66427,7 +66427,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 405
       enabled: false
       sourceCode: ''
@@ -66441,7 +66441,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 406
       enabled: true
       sourceCode: >+
@@ -66511,6 +66511,8 @@ projects:
           @b >r ex
           x1/main ;
 
+        : x1/get ( w - ) !b ;
+
 
         : x1/read16-2 ( w1 w2 ) leap
 
@@ -66520,7 +66522,7 @@ projects:
         : x1/read32-2 ( lo1 hi1 lo2 hi2 ) leap
 
         : x1/read32-1 ( lo hi ) then
-          @b x1/rfocus x1/r@ x1/r@ x1/defocus ;
+          @b 2* x1/rfocus x1/r@ x1/r@ x1/defocus ;
 
         : x1/binary-16
           @b !             // operation
@@ -66586,37 +66588,37 @@ projects:
       - 0x079B2
       - 0x0085D
       - 0x11413
-      - 0x13416
+      - 0x09555
+      - 0x13417
       - 0x01606
       - 0x13411
       - 0x1140D
-      - 0x1341A
-      - 0x01606
+      - 0x1341B
+      - 0x004B2
+      - 0x13406
       - 0x13411
       - 0x13411
       - 0x1140D
       - 0x01AB2
-      - 0x13415
+      - 0x13416
       - 0x0BA02
       - 0x0B555
       - 0x01AB2
-      - 0x13419
+      - 0x1341A
       - 0x0BA2A
       - 0x0BF2D
       - 0x01AB2
-      - 0x13416
+      - 0x13417
       - 0x0BF2D
       - 0x01AB2
-      - 0x1341A
+      - 0x1341B
       - 0x0BA02
       - 0x0B555
       - 0x01AB2
-      - 0x1341A
+      - 0x1341B
       - 0x0BA02
       - 0x0ADE2
       - 0x0BF2D
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -66638,47 +66640,36 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEC6'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 407
       enabled: true
-      sourceCode: >
+      sourceCode: >+
         ( CVM_pipeline node 407.
 
 
-        register file.
+        register file for 20 16-bit register.
 
 
         A: selected register
 
 
-        r[0] .. r[63]
+        r[0], r[1], r[2] .. r[19] 20 x 16-bit register
+
+        r[0], r[2], r[4] .. r[9]  10 x 32-bit register
 
 
-        r[0] : zero register, contains always 0
 
+        r[18] : frame pointer
 
-        r[60] : stack pointer
-
-        r[61] : frame pointer
-
-        r[62] : return register
-
-        r[63] : interrupt
+        r[19] : stack pointer
 
 
         )
 
 
-        # 0 const zero
+        # 18 const fp
 
-
-        # 60 const sp
-
-        # 61 const fp
-
-        # 62 const ret
-
-        # 63 const intr
+        # 19 const sp
 
 
         # 0 org
@@ -66688,10 +66679,51 @@ projects:
 
         [
           0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
-          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
-          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
-          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
+          0 , 0 , 0 , 0 , 
         ]
+
+
+        : r/defocus ( port - ) rdlu  ;
+
+
+        : r/focus ( port - ) dup b! >r ;
+
+
+        : r/focus_507 ( - ) down r/focus ;
+
+        : r/focus_406 ( - ) right r/focus ;
+
+        : r/focus_307 ( - ) up r/focus ;
+
+        : r/focus_408 ( - ) left r/focus ;
+
+
+        : r/@ @b a! @ !b ;
+
+        : r/! @b a! @b ! ;
+
+
+        : r/2@ @b a! @+ !b @+ !b ;
+
+        : r/2! @b a! @b !+ @b !+ ;
+
+
+        : r/++ ( reg - old new ) a! @ dup 1 . + ! ;
+
+        : r/-- ( reg - old new ) a! @ dup dup xor inv . + ! ;
+
+
+        : r/push ( { ,adr } ) sp r/-- drop !b ;
+
+        : r/pop  ( { ,adr } ) sp r/++ !b ;
+
+
+        : r/link ( { 'offset ,old-fp } )
+          fp a! a >r @+ @ dup @b . + ! r> a! ! !b ;
+
+        : r/unlink ( { ,adr 'old-fp } )
+          fp a! @ dup !b @b !+ ! ;
+
       ramWords:
       - 0x00000
       - 0x00000
@@ -66713,50 +66745,50 @@ projects:
       - 0x00000
       - 0x00000
       - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
-      - 0x00000
+      - 0x115A5
+      - 0x24BBD
+      - 0x05715
+      - 0x00115
+      - 0x05715
+      - 0x001D5
+      - 0x05715
+      - 0x00145
+      - 0x05715
+      - 0x00175
+      - 0x00A0A
+      - 0x09555
+      - 0x00A02
+      - 0x0B555
+      - 0x00A1A
+      - 0x09C25
+      - 0x00A02
+      - 0x0FF3D
+      - 0x2BE97
+      - 0x00001
+      - 0x2C12D
+      - 0x2BE93
+      - 0x386B0
+      - 0x0B555
+      - 0x05629
+      - 0x00013
+      - 0x3BB55
+      - 0x05626
+      - 0x00013
+      - 0x09555
+      - 0x04A8A
+      - 0x00012
+      - 0x2FC0B
+      - 0x009F2
+      - 0x0ACAA
+      - 0x0BB55
+      - 0x04A0A
+      - 0x00012
+      - 0x0182D
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x1A5
         p: 0x000
@@ -66766,7 +66798,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E8E8E8'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 408
       enabled: true
       sourceCode: >
@@ -66790,7 +66822,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#DEDE7C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 409
       enabled: false
       sourceCode: ''
@@ -66804,7 +66836,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 410
       enabled: false
       sourceCode: ''
@@ -66818,7 +66850,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 411
       enabled: false
       sourceCode: ''
@@ -66832,7 +66864,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 412
       enabled: false
       sourceCode: ''
@@ -66846,7 +66878,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 413
       enabled: false
       sourceCode: ''
@@ -66860,7 +66892,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 414
       enabled: false
       sourceCode: ''
@@ -66874,7 +66906,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 415
       enabled: false
       sourceCode: ''
@@ -66888,7 +66920,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 416
       enabled: false
       sourceCode: ''
@@ -66902,7 +66934,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 417
       enabled: false
       sourceCode: ''
@@ -66916,7 +66948,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 500
       enabled: false
       sourceCode: ''
@@ -66930,7 +66962,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 501
       enabled: false
       sourceCode: ''
@@ -66944,7 +66976,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 502
       enabled: false
       sourceCode: ''
@@ -66958,7 +66990,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 503
       enabled: false
       sourceCode: ''
@@ -66972,7 +67004,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 504
       enabled: false
       sourceCode: ''
@@ -66986,10 +67018,10 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 505
       enabled: true
-      sourceCode: >+
+      sourceCode: >
         ( CVM_pipeline node 505.
 
 
@@ -67150,7 +67182,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEDE'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 506
       enabled: true
       sourceCode: >+
@@ -67199,6 +67231,8 @@ projects:
 
         # 507 import
 
+        # 406 import
+
 
         # right /b
 
@@ -67221,10 +67255,10 @@ projects:
           A[ !p ]] lit !b @b ;
 
         : d/r16 ( r - w )
-          0xf and
+          A[ x1/read16-1 ]] lit ! 0xf and ! A[ x1/get ]] lit ! @ ;
 
-        : d/r32 ( r - lo hi )
-          0xf and
+        : d/jump ( a - )
+          A[ m/jump ]] lit b! b! ;
 
         : d/implied
 
@@ -67236,6 +67270,11 @@ projects:
 
 
         : d/long-branch-if
+          d/r16
+          d/next
+          over if ; then
+          d/jump
+        ;
 
 
         : d/long-call
@@ -67280,21 +67319,21 @@ projects:
       - 0x13435
       - 0x0C9B2
       - 0x09F55
-      - 0x040B2
+      - 0x05A12
+      - 0x13417
       - 0x0000F
-      - 0x040B2
-      - 0x0000F
+      - 0x3FA12
+      - 0x13415
+      - 0x0BE55
+      - 0x04BA5
+      - 0x13410
+      - 0x13408
+      - 0x13404
+      - 0x21314
+      - 0x15555
+      - 0x1140E
       - 0x04BA5
       - 0x0570C
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -67345,7 +67384,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEDE'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 507
       enabled: true
       sourceCode: >+
@@ -67396,151 +67435,244 @@ projects:
         # 0 org
 
 
-        : m/rfocus ( r - )
-          down b!
-          A[ -d-- ]] lit !b !b
-        : m/reg ( r - )
-          A[ @p a! ]] lit !b ;
+        : m/pc++ ( - adr )
+          1
+        : m/pc+ ( offset - adr )
+          a dup >r . + 0xffff and a! r> ;
+
+        : m/rsend ( w - )
+          down b! !b ;
+
+        : m/focus ( - )
+          A[ r/focus_507 ]] lit m/rsend ;
 
         : m/defocus ( - )
-          A[ ; ]] lit !b ;
+          A[ r/defocus ]] lit m/rsend ;
 
-
-        : m/r@ ( - w )
-          A[ @ !p ]] lit !b
-          @b ;
-
-        : m/r! ( w - )
-          A[ @p ! ]] lit !b
-          !b ;
-
-        : m/call ( a - )
-          ret m/rfocus a m/r! m/defocus
-        : m/branch ( a - )
-          ( set new PC )
-          left b!
-          @b            // new address
-          a!            // set new PC
-        ;
-
-
-        : m/pop ( - w )
-          sp m/rfocus
-          m/r@ 1 . + dup m/r!
-          m/defocus
-          ( a )
-          up b!         // select node 607
-          !b 1 !b @b ;
+        : m/rget ( - w )
+          A[ !p ]] lit m/rsend 1 @b ;
 
         : m/push ( w - )
-          sp m/rfocus
-          m/r@ dup -1 . + m/r!
-          m/defocus
-          ( w a )
-          up b!         // select node 607
-          !b -2 !b !b ;
-
-        : m/read ( p a - w )
-          up b!         // select node 607
-          !b !b @b ;  
-
+          A[ r/push ]] lit m/rsend
+          1 @
+          ( w p a )
         : m/write ( w p a - )
           up b!         // select node 607
           !b inv !b !b ;  
 
-        : m/fetch ( r - w )
-          m/rfocus m/r@ m/defocus ;
-
-        : m/store ( w r - )
-          m/rfocus m/r! m/defocus ;
-
-        : m/next  ( - w )
-          ( fetch next word )
+        : m/pop ( - w )
+          A[ @p r/pop ]] lit m/rsend
+          1 @
+          ( p 1 )
+        : m/read ( p a - w )
           up b!         // select node 607
-          @+ !b         // a16
-          dup xor !b    // read page 0
-          @b            // next word
-          ( x )
-        ;
+          !b !b @b ;  
 
-
-        : m/nextinstr  ( - type )
+        : m/nextinstr  ( - )
           ( fetch next instruction )
-          up b!             // select node 607
-          dup xor inv b!    // send ~0
-          @+ !b             // ~a16
-          @b                // next instruction
-          ( x )
+          dup xor inv m/pc++ m/read
+          ( opcode )
           right b! !b
           r---
         ;
 
 
+        : m/call ( adr - )
+          a m/push a! ;
+
+        : m/ret ( - )
+          m/pop a! ;
+
+        : m/link ( offset - )
+          A[ @p r/link ]] lit m/rsend !b
+          @b m/push ;
+
+        : m/unlink ( - )
+          1 A[ @p r/unlink ]] lit m/rsend @b
+          ( 1 adr )
+          m/read m/rsend ;
+
+        // : m/reg ( r - )
+
+        //  A[ @p a! ]] lit !b ;
+
+
+
+        // : m/rfocus_r@ ( r - w )
+
+        //   m/rfocus
+
+        // : m/r@ ( - w )
+
+        //  A[ @ !p ]] lit !b
+
+        //  @b ;
+
+
+        // : m/fetch ( r - w )
+
+        //   m/rfocus_r@
+
+        // : m/defocus ( - )
+
+        //   A[ ; ]] lit !b ;
+
+
+
+        // : m/r! ( w - )
+
+        //   A[ @p ! ]] lit !b
+
+        //  !b ;
+
+
+        // : m/call ( adr - )
+
+        //  a
+
+
+
+        //   ret m/rfocus a m/r! m/defocus
+
+        // : m/jump ( adr - )
+
+        //  ( set new PC )
+
+        //  a!            // set new PC
+
+        // ;
+
+
+        // : m/store ( w r - )
+
+        //  m/rfocus
+
+        // : m/r!_defocus ( w - )
+
+        //  m/r! m/defocus ;
+
+
+        // : m/ret ( - )
+
+        //  ret m/rfocus_r@ a! m/defocus ;
+
+
+
+        // : m/pop ( - w )
+
+        //  1
+
+        //  sp m/rfocus_r@
+
+        //  1 . + dup m/r!_defocus
+
+        //  ( a )
+
+        // : m/read ( p a - w )
+
+        //  up b!         // select node 607
+
+        //  !b !b @b ;  
+
+
+        // : m/unlink
+
+        //    fp m/rfocus_r@ sp m/reg m/r!
+
+        //    m/pop fp m/reg m/r!_defocus ;
+
+
+        // : m/push ( w - )
+
+        //  sp m/rfocus
+
+        //  -2
+
+        //  m/r@ dup -1 . + m/r!_defocus
+
+        //  ( w p a )
+
+        // : m/write ( w p a - )
+
+        //  up b!         // select node 607
+
+        //  !b inv !b !b ;  
+
+
+        // : m/next ( - w )
+
+        //  dup xor m/pc++
+
+        //  m/read ;
+
+
+
+
       ramWords:
-      - 0x04B12
+      - 0x049B2
+      - 0x00001
+      - 0x22DBA
+      - 0x3DDFA
+      - 0x0FFFF
+      - 0x2AC55
+      - 0x04B25
       - 0x00115
-      - 0x13515
-      - 0x09BB2
-      - 0x05B55
-      - 0x04AB2
-      - 0x05B55
-      - 0x15555
-      - 0x05B05
-      - 0x039B2
-      - 0x05B25
-      - 0x05AB2
-      - 0x05600
-      - 0x0003E
-      - 0x2360A
-      - 0x13406
-      - 0x04B02
-      - 0x00175
-      - 0x2B555
-      - 0x05600
-      - 0x0003C
-      - 0x13408
-      - 0x049F3
+      - 0x05706
+      - 0x13416
+      - 0x05706
+      - 0x13414
+      - 0x05606
+      - 0x0C9B2
+      - 0x05F55
       - 0x00001
-      - 0x1340A
-      - 0x13406
-      - 0x04B27
-      - 0x00145
+      - 0x05606
+      - 0x1342C
+      - 0x05EB2
       - 0x00001
-      - 0x09F55
-      - 0x05600
-      - 0x0003C
-      - 0x13408
-      - 0x25DB0
-      - 0x3FFFF
-      - 0x1340A
-      - 0x13406
-      - 0x04B27
-      - 0x00145
-      - 0x3FFFE
-      - 0x09B55
-      - 0x04B22
-      - 0x00145
-      - 0x09F55
       - 0x04B22
       - 0x00145
       - 0x33B25
-      - 0x13400
-      - 0x13408
-      - 0x11406
-      - 0x13400
-      - 0x1340A
-      - 0x11406
-      - 0x04B1A
+      - 0x05606
+      - 0x0562F
+      - 0x05EB2
+      - 0x00001
+      - 0x04B22
       - 0x00145
-      - 0x08DE2
       - 0x09F55
-      - 0x04B92
-      - 0x00145
-      - 0x386A2
-      - 0x07B07
+      - 0x243CA
+      - 0x13400
+      - 0x1341B
+      - 0x04B22
       - 0x001D5
-      - 0x29BB2
       - 0x115D5
+      - 0x23610
+      - 0x2B555
+      - 0x13417
+      - 0x2B555
+      - 0x05606
+      - 0x05632
+      - 0x09FB2
+      - 0x11410
+      - 0x05DB2
+      - 0x00001
+      - 0x05638
+      - 0x13406
+      - 0x0161B
+      - 0x11406
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x175
         p: 0x000
@@ -67550,7 +67682,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#DE957C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 508
       enabled: true
       sourceCode: >
@@ -67578,23 +67710,21 @@ projects:
 
 
         : n508/main
-
+          # n508/main lit >r
           down-writing? if
-            down b!
-            @
-
+            -d-- ;
           then
 
-          n508/main ;
+          ;
       ramWords:
-      - 0x11400
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x04B07
+      - 0x0015D
+      - 0x02000
+      - 0x3F555
+      - 0x04848
+      - 0x00004
+      - 0x19408
+      - 0x11515
       - 0x15555
       - 0x15555
       - 0x15555
@@ -67652,7 +67782,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x004
         p: 0x000
         a: 0x000
         b: 0x000
@@ -67660,7 +67790,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#DEC67C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 509
       enabled: false
       sourceCode: ''
@@ -67674,7 +67804,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 510
       enabled: false
       sourceCode: ''
@@ -67688,7 +67818,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 511
       enabled: false
       sourceCode: ''
@@ -67702,7 +67832,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 512
       enabled: false
       sourceCode: ''
@@ -67716,7 +67846,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 513
       enabled: false
       sourceCode: ''
@@ -67730,7 +67860,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 514
       enabled: false
       sourceCode: ''
@@ -67744,7 +67874,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 515
       enabled: false
       sourceCode: ''
@@ -67758,7 +67888,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 516
       enabled: false
       sourceCode: ''
@@ -67772,7 +67902,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 517
       enabled: false
       sourceCode: ''
@@ -67786,7 +67916,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 600
       enabled: false
       sourceCode: ''
@@ -67800,7 +67930,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 601
       enabled: false
       sourceCode: ''
@@ -67814,7 +67944,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 602
       enabled: false
       sourceCode: ''
@@ -67828,7 +67958,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 603
       enabled: false
       sourceCode: ''
@@ -67842,7 +67972,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 604
       enabled: false
       sourceCode: ''
@@ -67856,7 +67986,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 605
       enabled: false
       sourceCode: ''
@@ -67870,7 +68000,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 606
       enabled: false
       sourceCode: ''
@@ -67884,7 +68014,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 607
       enabled: true
       sourceCode: >+
@@ -68102,7 +68232,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 609
       enabled: false
       sourceCode: ''
@@ -68116,7 +68246,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 610
       enabled: false
       sourceCode: ''
@@ -68130,7 +68260,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 611
       enabled: false
       sourceCode: ''
@@ -68144,7 +68274,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 612
       enabled: false
       sourceCode: ''
@@ -68158,7 +68288,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 613
       enabled: false
       sourceCode: ''
@@ -68172,7 +68302,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 614
       enabled: false
       sourceCode: ''
@@ -68186,7 +68316,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 615
       enabled: false
       sourceCode: ''
@@ -68200,7 +68330,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 616
       enabled: false
       sourceCode: ''
@@ -68214,7 +68344,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 617
       enabled: false
       sourceCode: ''
@@ -68228,7 +68358,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 700
       enabled: false
       sourceCode: ''
@@ -68242,7 +68372,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 701
       enabled: false
       sourceCode: ''
@@ -68256,7 +68386,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 702
       enabled: false
       sourceCode: ''
@@ -68270,7 +68400,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 703
       enabled: false
       sourceCode: ''
@@ -68284,7 +68414,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 704
       enabled: false
       sourceCode: ''
@@ -68298,7 +68428,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 705
       enabled: false
       sourceCode: ''
@@ -68312,7 +68442,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 706
       enabled: false
       sourceCode: ''
@@ -68326,7 +68456,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 707
       enabled: true
       sourceCode: >
@@ -68563,7 +68693,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 710
       enabled: false
       sourceCode: ''
@@ -68577,7 +68707,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 711
       enabled: false
       sourceCode: ''
@@ -68591,7 +68721,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 712
       enabled: false
       sourceCode: ''
@@ -68605,7 +68735,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 713
       enabled: false
       sourceCode: ''
@@ -68619,7 +68749,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 714
       enabled: false
       sourceCode: ''
@@ -68633,7 +68763,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 715
       enabled: false
       sourceCode: ''
@@ -68647,7 +68777,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 716
       enabled: false
       sourceCode: ''
@@ -68661,7 +68791,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 717
       enabled: false
       sourceCode: ''
@@ -68675,7 +68805,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: 
-      postMortemEnabled: true
+      postMortemEnabled: false
     debuggerAssemblyCode: 
     debuggerPrograms:
     - name: default

@@ -37,9 +37,8 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     ToggleKrakenCommand = new AsyncRelayCommand(ToggleKrakenAsync);
     VerifyAllRomsCommand = new AsyncRelayCommand(VerifyAllRomsAsync, () => !_verifyBusy);
     VerifyNode708RomCommand = new AsyncRelayCommand(VerifyNode708RomAsync, () => !_verifyBusy);
-    RunNode708EchoTestCommand = new AsyncRelayCommand(RunNode708EchoTestAsync, () => !_verifyBusy);
-    RunNode708DispatchTestCommand = new AsyncRelayCommand(RunNode708DispatchTestAsync, () => !_verifyBusy);
     CopyAllNodesToProjectCommand = new RelayCommand(CopyAllNodesToProject);
+    CopyAllSourceToClipboardCommand = new RelayCommand(CopyAllSourceToClipboard);
     IncludeAllInPostMortemCommand = new RelayCommand(() => SetAllPostMortemEnabled(true));
     ExcludeAllFromPostMortemCommand = new RelayCommand(() => SetAllPostMortemEnabled(false));
     RebuildNodes();
@@ -78,9 +77,16 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
   public AsyncRelayCommand ToggleKrakenCommand { get; }
   public AsyncRelayCommand VerifyAllRomsCommand { get; }
   public AsyncRelayCommand VerifyNode708RomCommand { get; }
-  public AsyncRelayCommand RunNode708EchoTestCommand { get; }
-  public AsyncRelayCommand RunNode708DispatchTestCommand { get; }
   public RelayCommand CopyAllNodesToProjectCommand { get; }
+
+  /// <summary>ADDED 2026-09-30, per Stefan directly: "i want a button 'Copy all' in the GA144 window
+  /// that copies the source of all configured nodes into the clipboard." Unlike
+  /// <see cref="CopyAllNodesToProjectCommand"/> (which copies full node CONFIGURATION -- RAM words,
+  /// startup state, color, enabled/PM flags -- into another open project's chip), this gathers only
+  /// the F18 SOURCE TEXT of this chip's own "configured" nodes and puts it on the clipboard as plain
+  /// text, for pasting elsewhere (an email, a text file, another editor). See
+  /// <see cref="CopyAllSourceToClipboard"/>.</summary>
+  public RelayCommand CopyAllSourceToClipboardCommand { get; }
 
   /// <summary>ADDED 2026-09-22, per Stefan directly: "i need a button to include all nodes for PM and
   /// a button to exclude all nodes from PM." Sets every one of this chip's 144 nodes'
@@ -107,8 +113,6 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
       {
         VerifyAllRomsCommand.NotifyCanExecuteChanged();
         VerifyNode708RomCommand.NotifyCanExecuteChanged();
-        RunNode708EchoTestCommand.NotifyCanExecuteChanged();
-        RunNode708DispatchTestCommand.NotifyCanExecuteChanged();
       }
     }
   }
@@ -466,219 +470,18 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
     }
   }
 
-  /// <summary>
-  /// Test node 708's own hand-written direct-UART transmit routines
-  /// (obit/oword/obyt/echo) instead of the old carrier-clock
-  /// wait-high/wait-low scheme: uploads a one-shot program that receives an
-  /// 18-bit word the normal way (via the ROM's own already-verified
-  /// <c>18ibits</c>, which self-calibrates via <c>sync</c>) and immediately
-  /// transmits it straight back out as genuine, self-timed UART bytes via
-  /// <c>delay</c> -- no host-driven carrier clocking on the return path. One
-  /// boot then drives a whole suite over the same session: a sweep of fixed
-  /// and walking-single-bit test patterns, each checked against an
-  /// independent bit-level prediction of obit/oword/obyt's own algorithm, and
-  /// a speed test estimating write and read throughput. See
-  /// <see cref="Ga144Node708EchoProbe"/> for details. This supersedes the
-  /// earlier "Read node 708 delay" probe (Ga144Node708DelayProbe, now
-  /// removable from the project). Same reset requirement and
-  /// Kraken-exclusivity restriction as "Verify node 708 ROM".
-  /// </summary>
-  private async Task RunNode708EchoTestAsync()
-  {
-    if (_verifyBusy)
-    {
-      return;
-    }
-
-    if (KrakenController.HardwareErected)
-    {
-      MessageBox.Show(
-          "Node 708's echo test cannot run while a Kraken is erected on this chip. "
-          + "This probe requires resetting node 708 to load a one-shot test program, and a "
-          + "resident Kraken must never be reset. Remove the Kraken first, then try again.",
-          "Node 708 echo test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
-    if (endpoint is null)
-    {
-      MessageBox.Show(
-          "No serial endpoint is assigned to this chip. Assign a COM port before running the node 708 echo test.",
-          "Node 708 echo test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    VerifyBusy = true;
-    VerifyStatus = "Running node 708 echo test…";
-    try
-    {
-      var probe = new Ga144Node708EchoProbe();
-      Node708EchoReport report = await probe.RunEchoSuiteAsync(endpoint.PortName, Chip, RomLibrary);
-
-      int matched = report.PatternResults.Count(item => item.Matched);
-      int mismatched = report.PatternResults.Count - matched;
-      var mismatches = report.PatternResults.Where(item => !item.Matched).ToList();
-
-      VerifyStatus = mismatched == 0
-          ? $"Node 708 echo test: {matched}/{report.PatternResults.Count} patterns matched. "
-              + $"~{report.SpeedResult.WriteBitsPerSecond:F0} bit/s write, ~{report.SpeedResult.ReadBitsPerSecond:F0} bit/s read."
-          : $"Node 708 echo test: {mismatched}/{report.PatternResults.Count} pattern(s) MISMATCHED.";
-
-      var summary = new System.Text.StringBuilder();
-      summary.AppendLine($"Pattern sweep: {matched}/{report.PatternResults.Count} matched.");
-      if (mismatches.Count > 0)
-      {
-        summary.AppendLine();
-        summary.AppendLine("Mismatches:");
-        foreach (Node708EchoPatternResult item in mismatches)
-        {
-          string received = string.Join(" ", item.ReceivedBytes.Select(b => $"{b:X2}"));
-          string expected = string.Join(" ", item.ExpectedBytes.Select(b => $"{b:X2}"));
-          summary.AppendLine($"  0x{item.SentWord:X5}: received {received}, expected {expected}");
-        }
-      }
-
-      summary.AppendLine();
-      Node708EchoSpeedResult speed = report.SpeedResult;
-      summary.AppendLine($"Speed test ({speed.Iterations} round trips of a fixed 0x15555 test word):");
-      summary.AppendLine($"  Write: avg {speed.AverageWriteTime.TotalMilliseconds:F2} ms  (~{speed.WriteBitsPerSecond:F0} data bit/s)");
-      summary.AppendLine($"  Read:  avg {speed.AverageReadTime.TotalMilliseconds:F2} ms  (~{speed.ReadBitsPerSecond:F0} data bit/s)");
-      summary.AppendLine($"  Round trip: avg {speed.AverageRoundTripTime.TotalMilliseconds:F2} ms  (~{speed.RoundTripsPerSecond:F1} round trips/s)");
-      summary.AppendLine();
-      summary.AppendLine("\"Write\" is the host write call plus draining the local output buffer "
-          + "(the closest thing .NET's SerialPort API exposes to \"the bytes actually left\" -- "
-          + "there is no true hardware transmit-complete signal). \"Read\" is everything after "
-          + "that: remaining wire time, node 708's own receive/decode/reply work, and the wire "
-          + "time of its reply -- so read is the more representative figure for real round-trip "
-          + "latency; round trips/s is the most trustworthy single number here.");
-      summary.AppendLine();
-      summary.AppendLine("\"Expected\" bytes are computed independently in C# from obit/oword/obyt's own "
-          + "bit-extraction algorithm (LSB-first, F18 arithmetic '2/' shift), not copied from any single "
-          + "observed result, so a mismatch here is a real discrepancy worth investigating.");
-
-      MessageBox.Show(
-          summary.ToString(),
-          "Node 708 echo test",
-          MessageBoxButton.OK,
-          mismatched > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
-    }
-    catch (Exception exception)
-    {
-      VerifyStatus = "Node 708 echo test failed.";
-      MessageBox.Show(
-          $"Node 708 echo test could not complete:\n\n{exception.Message}",
-          "Node 708 echo test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Error);
-    }
-    finally
-    {
-      VerifyBusy = false;
-    }
-  }
-
-  /// <summary>
-  /// Tests node 708's own main/sett dispatch loop specifically -- built after
-  /// a hardware test found that calling 'sett' twice in a row (the exact same
-  /// call, same value) succeeds the first time and times out (0 of 3 bytes)
-  /// the second time, even after the boot-frame completion-address fix. That
-  /// ruled out 'w/r's own complexity as the cause -- it never even ran -- and
-  /// pointed at something about a SECOND dispatch through 'main' itself.
-  /// This probe boots only main/obit/readw/oword/obyt/sett (no setn/dec/w/r)
-  /// and repeats the exact same 'sett' call so a pass/fail pattern across
-  /// repeated calls is visible on its own, decoupled from w/r entirely. Same
-  /// reset requirement and Kraken-exclusivity restriction as the echo test.
-  /// </summary>
-  private async Task RunNode708DispatchTestAsync()
-  {
-    if (_verifyBusy)
-    {
-      return;
-    }
-
-    if (KrakenController.HardwareErected)
-    {
-      MessageBox.Show(
-          "Node 708's dispatch test cannot run while a Kraken is erected on this chip. "
-          + "This probe requires resetting node 708 to load a one-shot test program, and a "
-          + "resident Kraken must never be reset. Remove the Kraken first, then try again.",
-          "Node 708 dispatch test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    KrakenEndpointInfo? endpoint = KrakenEndpointResolver();
-    if (endpoint is null)
-    {
-      MessageBox.Show(
-          "No serial endpoint is assigned to this chip. Assign a COM port before running the node 708 dispatch test.",
-          "Node 708 dispatch test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Warning);
-      return;
-    }
-
-    // The same port value 'focus' erection sends node 707 (tentacle 1
-    // position 0) -- the exact call that surfaced this on real hardware --
-    // so a pass/fail here is directly comparable to that failure.
-    const int testPortValue = 0x175;
-    const int testCallCount = 2;
-
-    VerifyBusy = true;
-    VerifyStatus = "Running node 708 dispatch test…";
-    try
-    {
-      var probe = new Ga144Node708DispatchProbe();
-      Node708DispatchReport report = await probe.RunDispatchProbeAsync(
-          endpoint.PortName, Chip, RomLibrary, testPortValue, testCallCount);
-
-      int succeeded = report.Calls.Count(item => item.Succeeded);
-      VerifyStatus = succeeded == report.Calls.Count
-          ? $"Node 708 dispatch test: {succeeded}/{report.Calls.Count} 'sett' calls succeeded."
-          : $"Node 708 dispatch test: {report.Calls.Count - succeeded}/{report.Calls.Count} 'sett' call(s) FAILED.";
-
-      var summary = new System.Text.StringBuilder();
-      summary.AppendLine($"Calling 'sett' with the same port value (0x{testPortValue:X3}) {testCallCount} times in a row, over the exact NativeWindowsSerialPort transport Kraken uses:");
-      summary.AppendLine();
-      foreach (Node708DispatchCallResult call in report.Calls)
-      {
-        if (call.Succeeded)
-        {
-          string echoed = call.EchoedBytes is null ? "" : string.Join(" ", call.EchoedBytes.Select(b => $"{b:X2}"));
-          summary.AppendLine($"  Call {call.CallNumber}: OK ({call.Elapsed.TotalMilliseconds:F1} ms, echoed {echoed})");
-        }
-        else
-        {
-          summary.AppendLine($"  Call {call.CallNumber}: FAILED ({call.Elapsed.TotalMilliseconds:F1} ms) -- {call.FailureMessage}");
-        }
-      }
-
-      MessageBox.Show(
-          summary.ToString(),
-          "Node 708 dispatch test",
-          MessageBoxButton.OK,
-          succeeded < report.Calls.Count ? MessageBoxImage.Warning : MessageBoxImage.Information);
-    }
-    catch (Exception exception)
-    {
-      VerifyStatus = "Node 708 dispatch test failed.";
-      MessageBox.Show(
-          $"Node 708 dispatch test could not complete:\n\n{exception.Message}",
-          "Node 708 dispatch test",
-          MessageBoxButton.OK,
-          MessageBoxImage.Error);
-    }
-    finally
-    {
-      VerifyBusy = false;
-    }
-  }
+  // The chip window's "Node 708 echo test" and "Node 708 dispatch test" buttons were removed
+  // 2026-09-30, per Stefan directly ("remove button 'Node 708 echo test' and 'Node 708 dispatch
+  // test'"). Their ViewModel-side implementations (RunNode708EchoTestAsync/RunNode708DispatchTestAsync,
+  // the RunNode708EchoTestCommand/RunNode708DispatchTestCommand properties, and their
+  // NotifyCanExecuteChanged wiring in VerifyBusy's setter) were removed along with them, the same
+  // way the old "Compile CVM test"/"Install & run CVM test" buttons were retired below. The
+  // underlying probes themselves (Ga144Node708EchoProbe.cs, Ga144Node708DispatchProbe.cs) were left
+  // in place -- only asked to remove the buttons, not the probe classes, and both are still
+  // referenced from other services' own doc comments (Ga144Node708HeadProtocol.cs,
+  // Ga144Node708SetNodeProbe.cs, KrakenSession.cs) as background on hardware behavior those files
+  // build on -- flagged here rather than silently deleted, since nothing else in this chip window
+  // still calls them.
 
   // The chip window's old "Compile CVM test" (dry-run compile of this project's node sources
   // through CvmBootStreamBuilder's load order) and "Install & run CVM test" (real hardware
@@ -769,6 +572,68 @@ public sealed class ChipViewModel : ObservableObject, IAsyncDisposable
         $"Copied {configuredNodes.Count} configured node(s) from \"{Project.Name}\" ({Chip.Name}) "
         + $"into \"{pickerViewModel.SelectedProject.DisplayName}\" ({pickerViewModel.SelectedRole}).",
         "Copy all nodes to project",
+        MessageBoxButton.OK,
+        MessageBoxImage.Information);
+  }
+
+  // ADDED 2026-09-30, per Stefan directly: "i want a button 'Copy all' in the GA144 window that
+  // copies the source of all configured nodes into the clipboard." Reuses the exact same
+  // "configured" predicate as CopyAllNodesToProject above (NodeViewModel.IsConfigured's own logic,
+  // reproduced here for the same reason: this operates on the underlying Ga144NodeConfiguration
+  // models, not the node editor's live/unsaved textbox state), but copies only the SOURCE TEXT --
+  // no RAM words, startup state, color, or enabled/PM flags travel with it, unlike
+  // CopyAllNodesToProject's destination-project copy. Chip.Nodes is kept sorted by coordinate
+  // (Ga144ChipConfiguration's own EnsureAllNodes/Sort), so the nodes come out here in ascending
+  // coordinate order with no separate sort needed. Each node's source is preceded by a small
+  // "( ---- node NNN ---- )" header line -- plain F18 comment syntax, so the whole block still reads
+  // as a single valid-looking source listing rather than plain-text noise -- so the boundary between
+  // one node's source and the next stays unambiguous once pasted elsewhere.
+  private void CopyAllSourceToClipboard()
+  {
+    List<Ga144NodeConfiguration> configuredNodes = Chip.Nodes
+        .Where(node => node.Enabled || !string.IsNullOrWhiteSpace(node.SourceCode))
+        .ToList();
+    if (configuredNodes.Count == 0)
+    {
+      MessageBox.Show(
+          "This chip has no configured nodes (enabled, or with RAM source) to copy.",
+          "Copy all",
+          MessageBoxButton.OK,
+          MessageBoxImage.Information);
+      return;
+    }
+
+    var text = new System.Text.StringBuilder();
+    for (int i = 0; i < configuredNodes.Count; i++)
+    {
+      if (i > 0)
+      {
+        text.AppendLine();
+      }
+
+      Ga144NodeConfiguration node = configuredNodes[i];
+      text.AppendLine($"( ---- node {node.Coordinate} ---- )");
+      text.AppendLine(node.SourceCode);
+    }
+
+    try
+    {
+      Clipboard.SetText(text.ToString());
+    }
+    catch (Exception exception)
+    {
+      MessageBox.Show(
+          $"Could not copy to the clipboard:\n\n{exception.Message}",
+          "Copy all",
+          MessageBoxButton.OK,
+          MessageBoxImage.Error);
+      return;
+    }
+
+    MessageBox.Show(
+        $"Copied source from {configuredNodes.Count} configured node(s) on \"{Project.Name}\" "
+        + $"({Chip.Name}) to the clipboard.",
+        "Copy all",
         MessageBoxButton.OK,
         MessageBoxImage.Information);
   }
