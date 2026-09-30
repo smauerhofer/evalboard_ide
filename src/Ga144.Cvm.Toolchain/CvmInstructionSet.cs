@@ -641,6 +641,25 @@ public static class CvmInstructionSet
   public const int ShortCallAddressMask = 0x3FFF;
 
   /// <summary>
+  /// The narrowest word address <c>scall</c> can actually be used for: 1, not 0. CONFIRMED 2026-09-30
+  /// (same day scall/lcall/call were first wired up), per Stefan directly: "scall 0 does not exist. 'nop'
+  /// has precedence." -- the word <c>scall 0</c> would produce, 0x0000, is bit-for-bit identical to
+  /// <c>nop</c>'s own fixed word, and nop wins that overlap (<see cref="TryDescribeSelfDecodingWord"/>
+  /// already checked every <see cref="CvmOperandEncoding.FixedOpcode"/> shape before the generalized
+  /// <see cref="CvmOperandEncoding.EmbeddedAddress"/> loop for exactly this reason, before Stefan even
+  /// confirmed it -- see <see cref="CvmOperandEncoding.EmbeddedAddress"/>'s own remarks). Rather than let
+  /// an assembled <c>scall 0</c> silently become indistinguishable from <c>nop</c>, both
+  /// <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/> and <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>
+  /// now reject a literal <c>scall 0</c> outright as a hard assemble error, and the <c>call</c> pseudo-
+  /// mnemonic treats address 0 as "does not fit scall" (exactly like a too-large address), always lowering
+  /// to <c>lcall</c> instead -- <c>lcall</c> itself has no such restriction: its own tag word (0xF000) does
+  /// not overlap 0x0000 at all, so <c>lcall 0</c> is a perfectly ordinary, valid way to call address 0.
+  /// <see cref="ShortCallAddressMask"/> itself is unchanged (still 0x3FFF) -- this is a separate, narrower
+  /// lower bound alongside it, not a replacement for it.
+  /// </summary>
+  public const int ShortCallMinimumAddress = 1;
+
+  /// <summary>
   /// The new VM's own lcall (2026-09-30): the fixed, universally-known high-bit pattern (bits 15-10) of
   /// its own tag word, binary 111100 -- spec row "1111|00..|....|....|" (see this file's own class-level
   /// remarks on the new VM's "call" family, right after <see cref="ConditionalBranchMnemonic"/>, for
@@ -2098,6 +2117,29 @@ public static class CvmInstructionSet
     // own remarks).
     new(Id: 182, ShortCallMnemonic, 1, CvmOperandEncoding.EmbeddedAddress, Tag: 0x0000, ValueBitMask: ShortCallAddressMask),
     new(Id: 183, LongCallMnemonic, 2, CvmOperandEncoding.FixedOpcodeWithTrailingWord, Tag: LongCallTag),
+    // ADDED 2026-09-30 (same day, third new-VM opcode): Stefan placed a label 'ret in the new VM's node
+    // 506 (the bit-pattern-table/dispatch node -- see Cvm.Node506Program's own remarks) for the "ret"
+    // opcode, spec row "1111|11ff|ffff|feee| implied" (e = 0, always; f = the 7-bit address of 'ret in
+    // node 506). Shaped exactly like every other node-resolved, tagged, single-bare-opcode-word mnemonic
+    // this file has ever had (CvmOperandEncoding.None, no operand, real numeric value depends entirely on
+    // where 'ret lands in node 506's own compiled RAM) -- see this file's own class-level remarks on that
+    // shape. Reuses the EXISTING RetMnemonic ("ret") constant declared at the very top of this file rather
+    // than adding a new name: Stefan's own node source names this word 'ret, and his own naming rule
+    // (mnemonic = tick name minus the tick) gives that same string -- pure naming coincidence with CVM2's
+    // OLD node-507 "ret" (former Id 5, fully retired below along with every other CVM2 opcode), not a
+    // continuation of it; the two share nothing else (different node, different tag, different era).
+    //
+    // FLAGGED: unlike scall/lcall and every prior None-shaped mnemonic in this file's history (which all
+    // OR their resolved node address in unshifted, at bit 0), this spec's own address field "f" sits at
+    // bits 9-3, not bits 6-0 -- the bottom 3 bits ("eee") are fixed at 0, "implied" per Stefan's own
+    // wording, not a free field. The real opcode is therefore Tag(0xFC00, bits 15-10 all 1) | (resolvedAddress << 3),
+    // not the plain "tag | resolvedAddress" every earlier None-shaped mnemonic used -- this needed a new,
+    // dedicated address-shift lookup on the IDE side (see
+    // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.NodeResolvedAddressShiftByMnemonic) rather than a change
+    // here: this project's own Instructions table still has no Tag/shift of its own for a None-shaped row
+    // (never has -- see this file's own class-level remarks on why the real tag/node pairing lives entirely
+    // on the IDE side), so nothing about that split changes for this entry.
+    new(Id: 184, RetMnemonic, 1, CvmOperandEncoding.None),
     // ---------------------------------------------------------------------------------------------
     // new(Id: 1, PushLitMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // new(Id: 2, PushMnemonic, 1, CvmOperandEncoding.None),

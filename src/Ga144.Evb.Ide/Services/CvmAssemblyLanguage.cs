@@ -371,6 +371,19 @@ internal static class CvmAssemblyLanguage
   // encoded"), so this tag's range no longer overlaps br's at all.
   private const int Node506LeaveTagBits = 0x9000;
 
+  // ADDED 2026-09-30 (new VM, third opcode after scall/lcall): the new VM's node 506 -- a completely
+  // different, unrelated node 506 than the CVM2 stack-frame node Node506LeaveTagBits just above
+  // belongs to (see Cvm.Node506Program's own remarks for the new VM's bit-pattern-table/dispatch
+  // role) -- names a 'ret word for the "ret" opcode, spec row "1111|11ff|ffff|feee| implied" per
+  // Stefan (e = 0, always; f = the 7-bit address of 'ret in node 506) -- see
+  // CvmInstructionSet.Instructions' own remarks on RetMnemonic's new Id 184 for the full derivation.
+  // Top 6 bits fixed at 1 (bits 15-10): as a plain 16-bit tag word (address bits zeroed) this is
+  // 0xFC00. UNLIKE every other tag constant in this file, the resolved node address is not ORed in
+  // at bit 0 -- it occupies bits 9-3, with the bottom 3 bits ("eee") forced to 0 -- so this mnemonic
+  // also needs an entry in NodeResolvedAddressShiftByMnemonic (below) to left-shift the resolved
+  // address by 3 before combining it with this tag.
+  private const int Node506RetTagBits = 0xFC00;
+
   // CVM2's node 508 'gld/'gst tag (2026-09-04, renamed 2026-09-09 from 'ldg'/'stg -- see
   // CvmInstructionSet.LoadGlobalMnemonic's own remarks), per Stefan's node 508 source
   // (Cvm.Node508Program): its
@@ -513,19 +526,26 @@ internal static class CvmAssemblyLanguage
   // compile, so NodeSymbolByMnemonic/NodeResolvedEmbeddedValueFieldLayoutByMnemonic simply have no rows
   // for any of the twelve floating-point mnemonics any more.
 
-  // ---- 2026-09-30: NEW VIRTUAL MACHINE, full reset -- this whole dictionary is now INERT -----------
+  // ---- 2026-09-30: NEW VIRTUAL MACHINE, full reset -- this whole dictionary was made INERT --------
   // Per Stefan directly: "there is a new virtual machine. all opcodes are invalid. except that 'nop'
-  // has the opcode '0'." CvmInstructionSet.Instructions now contains exactly one live entry (nop), and
-  // its own encoding is CvmOperandEncoding.FixedOpcode -- a shape that, by design, needs no node/symbol
-  // resolution at all (see that encoding's own remarks). None of the four encodings this file's own
-  // Instructions list (below) filters for -- None/TrailingWord/TwoTrailingWords/NodeResolvedEmbeddedValue
-  // -- exist in CvmInstructionSet.Instructions any longer, so that filtered list comes out EMPTY, and
-  // every entry below is simply never looked up by anything any more (BuildDecodeTable/BuildEncodeTable
-  // both iterate that now-empty list, not this dictionary directly). Left in place, uncommented, per
-  // this file's own "do not remove any opcodes" convention -- commenting out ~280 individual dictionary
-  // entries here would be pure busywork with no behavioral effect, since the filter upstream already
-  // makes every one of them unreachable; this note exists so a future reader doesn't mistake "still
-  // compiles" for "still wired."
+  // has the opcode '0'." At that moment CvmInstructionSet.Instructions contained exactly one live entry
+  // (nop), and its own encoding is CvmOperandEncoding.FixedOpcode -- a shape that, by design, needs no
+  // node/symbol resolution at all (see that encoding's own remarks). None of the four encodings this
+  // file's own Instructions list (below) filters for -- None/TrailingWord/TwoTrailingWords/
+  // NodeResolvedEmbeddedValue -- existed in CvmInstructionSet.Instructions any longer at that point, so
+  // that filtered list came out EMPTY, and every entry below was simply never looked up by anything any
+  // more (BuildDecodeTable/BuildEncodeTable both iterate that filtered list, not this dictionary
+  // directly). Left in place, uncommented, per this file's own "do not remove any opcodes" convention --
+  // commenting out ~280 individual dictionary entries here would be pure busywork with no behavioral
+  // effect, since the filter upstream already made every one of them unreachable; this note exists so a
+  // future reader doesn't mistake "still compiles" for "still wired."
+  //
+  // NO LONGER FULLY INERT, same day: ret (Id 184, CvmOperandEncoding.None -- see
+  // CvmInstructionSet.Instructions' own remarks) is the new VM's first None/TrailingWord/
+  // TwoTrailingWords/NodeResolvedEmbeddedValue-shaped mnemonic, so it DOES pass the filtered list's own
+  // .Where clause and DOES need a live entry here -- see the new, live [RetMnemonic] row below (node
+  // 506, Node506RetTagBits), right where the OLD, now-commented-out CVM2 node-507 "ret" row used to be.
+  // Every other row in this dictionary remains exactly as inert as described just above.
   //
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
   // tag bits its opcode word must carry (Node508TagBits for the OLD, permanently-orphaned CVM1
@@ -560,7 +580,17 @@ internal static class CvmAssemblyLanguage
         [PushLitMnemonic] = (Node507Program.Coordinate, "'plit", Node507Cvm2LocalExecuteTagBits),
         [PushMnemonic] = (Node507Program.Coordinate, "'push", Node507Cvm2LocalExecuteTagBits),
         [PopMnemonic] = (Node507Program.Coordinate, "'pop", Node507Cvm2LocalExecuteTagBits),
-        [RetMnemonic] = (Node507Program.Coordinate, "'ret", Node507Cvm2LocalExecuteTagBits),
+        // RetMnemonic ("ret") -- REPOINTED 2026-09-30 (new VM reset) from CVM2's node 507 to the new
+        // VM's node 506 -- see CvmInstructionSet.Instructions' own remarks on RetMnemonic's new Id 184
+        // for the full derivation. The OLD CVM2 entry is commented out just below (not merely left
+        // inert like every other still-uncommented row in this dictionary) because a Dictionary literal
+        // cannot hold two entries for the same key ([RetMnemonic] appearing twice would throw
+        // "An item with the same key has already been added" at class-load time, taking down every
+        // other mnemonic's resolution with it) -- kept as a comment, per "do not remove any opcodes",
+        // as the historical record of CVM2's OLD node-507 "ret" (Node507Cvm2LocalExecuteTagBits,
+        // 0x8800 | address), which shares nothing with the new entry below except the mnemonic string.
+        // [RetMnemonic] = (Node507Program.Coordinate, "'ret", Node507Cvm2LocalExecuteTagBits),
+        [RetMnemonic] = (Node506Program.Coordinate, "'ret", Node506RetTagBits),
         [CvmInstructionSet.HaltMnemonic] = (Node507Program.Coordinate, "'halt", Node507Cvm2LocalExecuteTagBits),
         // tjmp (2026-09-09, "'tjmp is in node 507") -- node 507's own table-jump primitive, reached the
         // SAME "1000_1???" local-execute tag family as the six above (Node507Cvm2LocalExecuteTagBits) --
@@ -903,12 +933,35 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
       };
 
-  // EMPTY as of 2026-09-30 -- see NodeSymbolByMnemonic's own header note above. CvmInstructionSet.
-  // Instructions no longer contains any None/TrailingWord/TwoTrailingWords/NodeResolvedEmbeddedValue
-  // shape (nop, the one survivor, is CvmOperandEncoding.FixedOpcode instead -- excluded by this list's
-  // own .Where filter below by design), so this list's own LINQ query below now evaluates to an empty
-  // list, not merely a stale one. BuildDecodeTable/BuildEncodeTable both iterate this list, so they
-  // degrade to producing empty tables automatically -- no code change was needed in either.
+  /// <summary>
+  /// ADDED 2026-09-30, for the new VM's <c>ret</c> alone: per-mnemonic left-shift applied to a
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.None"/> mnemonic's resolved node address before it
+  /// is OR'd into that mnemonic's tag in <see cref="BuildDecodeTable"/>/<see cref="BuildEncodeTable"/>.
+  /// Every None-shaped mnemonic before <c>ret</c> (scall's own EmbeddedAddress shape aside -- scall
+  /// isn't tagged/node-resolved at all) used the plain "tag | resolvedAddress" formula, address bits
+  /// starting at bit 0 -- so this dictionary was never needed until now. <c>ret</c>'s own spec row
+  /// ("1111|11ff|ffff|feee| implied", per Stefan) puts its 7-bit address field at bits 9-3 instead,
+  /// with the bottom 3 bits ("eee") forced to 0 -- i.e. the resolved address must be shifted left by 3
+  /// before it is OR'd into <see cref="Node506RetTagBits"/>. A mnemonic absent from this dictionary
+  /// gets shift 0, so every pre-existing None-shaped mnemonic's behavior is unchanged.
+  /// </summary>
+  private static readonly IReadOnlyDictionary<string, int> NodeResolvedAddressShiftByMnemonic =
+      new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+      {
+        [CvmInstructionSet.RetMnemonic] = 3,
+      };
+
+  // EMPTY as of 2026-09-30, NO LONGER EMPTY same day (see NodeSymbolByMnemonic's own header note
+  // above for the ret exception) -- immediately after the full reset, CvmInstructionSet.Instructions
+  // contained no None/TrailingWord/TwoTrailingWords/NodeResolvedEmbeddedValue shape at all (nop, the
+  // one survivor, is CvmOperandEncoding.FixedOpcode instead -- excluded by this list's own .Where
+  // filter below by design; scall/lcall, added later that same day, are EmbeddedAddress/
+  // FixedOpcodeWithTrailingWord -- also excluded), so this list's own LINQ query evaluated to an empty
+  // list. ret (Id 184, CvmOperandEncoding.None) is the first new-VM mnemonic to pass the filter: this
+  // list now yields exactly that one row, resolved against node 506's live compile the same way every
+  // pre-reset None-shaped mnemonic here used to be. BuildDecodeTable/BuildEncodeTable both iterate
+  // this list, so both automatically pick ret up -- no further change was needed in either beyond the
+  // address-shift lookup described on NodeResolvedAddressShiftByMnemonic.
   /// <summary>
   /// Every known CVM asm mnemonic THAT RESOLVES TO SOME NODE'S F18 SYMBOL, which node and symbol that
   /// is, and how many words (its own opcode word included) it occupies once assembled. <c>pushlit</c>,
@@ -1038,7 +1091,12 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
-      table[tag | resolvedAddress] = (mnemonic, wordLength, null);
+      // ADDED 2026-09-30, for ret alone: NodeResolvedAddressShiftByMnemonic left-shifts the resolved
+      // address before it's OR'd into the tag -- see that dictionary's own remarks. Every mnemonic
+      // absent from it (every None-shaped mnemonic before ret) gets shift 0, so this is a no-op for
+      // them: unchanged "tag | resolvedAddress".
+      int addressShift = NodeResolvedAddressShiftByMnemonic.TryGetValue(mnemonic, out int decodeShift) ? decodeShift : 0;
+      table[tag | (resolvedAddress << addressShift)] = (mnemonic, wordLength, null);
     }
 
     return table;
@@ -1101,7 +1159,11 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
-      table[mnemonic] = (tag | resolvedAddress, wordLength, hasOperand, false, 0, 0);
+      // ADDED 2026-09-30, for ret alone: see BuildDecodeTable's own remarks on
+      // NodeResolvedAddressShiftByMnemonic -- same left-shift, same no-op for every mnemonic absent
+      // from it.
+      int addressShift = NodeResolvedAddressShiftByMnemonic.TryGetValue(mnemonic, out int encodeShift) ? encodeShift : 0;
+      table[mnemonic] = (tag | (resolvedAddress << addressShift), wordLength, hasOperand, false, 0, 0);
     }
 
     return table;
@@ -1438,28 +1500,97 @@ internal static class CvmAssemblyLanguage
   /// instead (see <see cref="ResolveOperandLabel"/>'s own remarks), since only pass 2 knows which
   /// mnemonic is asking for it. Label names are matched case-insensitively, like every mnemonic in
   /// this file.
+  ///
+  /// <b>ADDED 2026-09-30 -- an optimistic, iterative sizing pass for "call" targeting a LABEL.</b> Per
+  /// Stefan directly, right after "call"/"scall"/"lcall" were first wired up: "can you use a more
+  /// optimistic smart iterator for sizing pass?" -- this assembler, unlike
+  /// <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/>, resolves every label to a real, final address itself
+  /// (no separate link step, no relocations -- see this file's own remarks on why the two assemblers
+  /// differ here), so it really CAN know whether a label-targeted "call" would fit scall, once the rest of
+  /// the layout is known. The wrinkle is circular: "call"'s own word count affects every LATER label's
+  /// address, but whether "call" fits scall depends on its OWN target label's address, which this very
+  /// walk is computing. Resolved by starting OPTIMISTIC (guess every label-targeted "call" as the short
+  /// form, scall, 1 word) and iterating: lay out the whole program under the current guesses, then check
+  /// each optimistically-short "call" against the address that layout just gave its own target label --
+  /// grow any that don't actually fit (or that resolve to address 0 -- <see cref="FitsShortCallRange"/>'s
+  /// own remarks: "scall 0 does not exist"), and redo the walk. A guess only ever grows (1 -> 2), never
+  /// shrinks back, because growing an EARLIER call can only push LATER addresses up, never down -- so once
+  /// a call's own target address has grown past scall's range it can never come back into range on a later
+  /// round. That makes this provably terminating (each round either grows at least one call or is the
+  /// final, stable one; at most one call per line to grow) and gives the smallest correct sizing this
+  /// assembler can produce without ever building on a wrong guess. A "call" with a LITERAL operand, or with
+  /// no operand at all, is unaffected -- <see cref="GetWordLength"/> already sizes those directly, with no
+  /// guessing needed, and is used as-is for every line this pass doesn't override.
   /// </summary>
   private static (IReadOnlyDictionary<string, int>? Labels, string? Error) CollectLabelAddresses(
       IReadOnlyList<CvmAsmInstruction> instructions,
       IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable)
   {
-    var labels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-    int address = 0;
+    // Seed one optimistic guess (1 word, scall) per "call" line with a LABEL operand -- the only kind of
+    // line whose own word count this pass ever needs to revise. A literal or missing operand is sized
+    // directly by GetWordLength below, unconditionally, on every round -- it never depends on anything
+    // this loop computes.
+    var callWordLengthGuess = new Dictionary<int, int>();
     for (int line = 0; line < instructions.Count; line++)
     {
-      CvmAsmInstruction instruction = instructions[line];
-      if (instruction.Label is not null && !labels.TryAdd(instruction.Label, address))
+      if (instructions[line].OperandLabel is not null && string.Equals(instructions[line].Mnemonic, CvmInstructionSet.CallMnemonic, StringComparison.OrdinalIgnoreCase))
       {
-        return (null, $"line {line + 1}: label \"{instruction.Label}\" is already defined.");
-      }
-
-      if (instruction.Mnemonic.Length > 0)
-      {
-        address += GetWordLength(instruction, encodeTable);
+        callWordLengthGuess[line] = 1;
       }
     }
 
-    return (labels, null);
+    Dictionary<string, int> labels;
+    int roundGuard = 0;
+    while (true)
+    {
+      labels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+      int address = 0;
+      for (int line = 0; line < instructions.Count; line++)
+      {
+        CvmAsmInstruction instruction = instructions[line];
+        if (instruction.Label is not null && !labels.TryAdd(instruction.Label, address))
+        {
+          return (null, $"line {line + 1}: label \"{instruction.Label}\" is already defined.");
+        }
+
+        if (instruction.Mnemonic.Length > 0)
+        {
+          address += callWordLengthGuess.TryGetValue(line, out int guessedLength) ? guessedLength : GetWordLength(instruction, encodeTable);
+        }
+      }
+
+      // Re-check every still-optimistic ("short") guess against the layout this round just produced --
+      // an undefined label (pass 2's own concern, per this method's own remarks) also fails the fit check
+      // below and simply grows to lcall here; the real "undefined label" error still comes from pass 2.
+      bool grewAny = false;
+      foreach (int line in callWordLengthGuess.Keys.ToList())
+      {
+        if (callWordLengthGuess[line] != 1)
+        {
+          continue;
+        }
+
+        string targetLabel = instructions[line].OperandLabel!;
+        if (!labels.TryGetValue(targetLabel, out int targetAddress) || !FitsShortCallRange(targetAddress))
+        {
+          callWordLengthGuess[line] = 2;
+          grewAny = true;
+        }
+      }
+
+      if (!grewAny)
+      {
+        return (labels, null);
+      }
+
+      // Mathematically unreachable (each round that changes anything grows at least one line, and there
+      // are at most callWordLengthGuess.Count of those to grow, ever) -- guarded anyway rather than ever
+      // risking an infinite loop on a future change to this method.
+      if (++roundGuard > instructions.Count + 2)
+      {
+        return (null, "internal error: \"call\" sizing did not converge -- please report this.");
+      }
+    }
   }
 
   /// <summary>
@@ -1491,9 +1622,15 @@ internal static class CvmAssemblyLanguage
   /// only safe for a failing one.
   ///
   /// <c>"call"</c> (2026-09-30, alongside the new VM's own <c>scall</c>/<c>lcall</c>) is also variable-
-  /// length, but unlike <c>"literal"</c> it DOES support a label operand -- see this method's own "call"
-  /// case for why a label always sizes as lcall (2 words) here, while a resolved literal gets the real
-  /// scall/lcall fitting check.
+  /// length, but unlike <c>"literal"</c> it DOES support a label operand: a LITERAL operand gets the real
+  /// scall/lcall fitting check right here (<see cref="FitsShortCallRange"/> -- NOT just "0x3FFF or under":
+  /// Stefan later confirmed, same day, "scall 0 does not exist. 'nop' has precedence."), while a LABEL
+  /// operand's own fitting decision is made by <see cref="CollectLabelAddresses"/>'s own iterative
+  /// optimistic sizing pass instead (added 2026-09-30, per Stefan: "can you use a more optimistic smart
+  /// iterator for sizing pass?") -- that pass calls this method only for lines it ISN'T overriding, so the
+  /// "OperandLabel is not null" branch just below is a defensive fallback for a hypothetical caller that
+  /// bypasses that pass, not something the real call path through <see cref="CollectLabelAddresses"/> ever
+  /// actually reaches today.
   /// </summary>
   private static int GetWordLength(
       CvmAsmInstruction instruction,
@@ -1507,13 +1644,11 @@ internal static class CvmAssemblyLanguage
 
     // "call" (2026-09-30) -- also variable-length by design, exactly like "literal" just above, but for
     // the OPPOSITE reason regarding a label operand: "literal" refuses one outright, while "call" is
-    // expected to routinely take one (calling a named subroutine is its whole point), so it is never
-    // rejected here -- it is simply, always, sized as lcall (2 words), since this assembler's own single
-    // label-resolution pass (CollectLabelAddresses, which is what calls this very method) hasn't run yet
-    // at this point, so there is no way to know a label's eventual address to test it against scall's own
-    // narrower field. Only a plain literal number already sitting in Operand (never a label reference,
-    // instruction.OperandLabel null) gets the real fitting check -- see EncodeCallPseudoMnemonic's own
-    // remarks for the matching pass-2 logic this must never disagree with.
+    // expected to routinely take one (calling a named subroutine is its whole point). A literal operand is
+    // sized directly, right here, via FitsShortCallRange. A label operand's real fitting decision is made
+    // by CollectLabelAddresses's own iterative pass instead (see this method's own class-level remarks) --
+    // the "always 2" answer just below is only ever reached as a defensive fallback, never on the real
+    // CollectLabelAddresses call path.
     if (string.Equals(mnemonic, CvmInstructionSet.CallMnemonic, StringComparison.OrdinalIgnoreCase))
     {
       if (instruction.OperandLabel is not null)
@@ -1521,8 +1656,7 @@ internal static class CvmAssemblyLanguage
         return 2;
       }
 
-      CvmInstructionSet.CvmInstructionShape? shortCallShapeForLength = CvmInstructionSet.TryGetShape(CvmInstructionSet.ShortCallMnemonic);
-      return instruction.Operand is int callValue && shortCallShapeForLength is not null && (uint)callValue <= (uint)shortCallShapeForLength.ValueBitMask ? 1 : 2;
+      return instruction.Operand is int callValue && FitsShortCallRange(callValue) ? 1 : 2;
     }
 
     CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(mnemonic);
@@ -1765,6 +1899,21 @@ internal static class CvmAssemblyLanguage
   }
 
   /// <summary>
+  /// True when <paramref name="value"/> fits <c>scall</c>'s actually-usable address range -- 1..
+  /// <see cref="CvmInstructionSet.ShortCallAddressMask"/>, NOT 0..<see cref="CvmInstructionSet.ShortCallAddressMask"/>.
+  /// Address 0 is excluded on purpose: CONFIRMED 2026-09-30 per Stefan directly ("scall 0 does not exist.
+  /// 'nop' has precedence."), because the word <c>scall 0</c> would produce (0x0000) is bit-for-bit
+  /// identical to <c>nop</c>'s own encoding, and <c>nop</c> wins that overlap. Shared by every "call"-family
+  /// caller in this file -- <see cref="CollectLabelAddresses"/>'s iterative sizing pass, <see cref="GetWordLength"/>,
+  /// and <see cref="EncodeCallPseudoMnemonic"/> -- so none of them can ever disagree on whether a given
+  /// resolved address needs one word (<c>scall</c>) or two (<c>lcall</c>). Mirrors <see cref="FitsLitRange"/>'s
+  /// own precedent of a small private per-file duplicate rather than sharing code with <c>CvmAssembler.cs</c>'s
+  /// own copy of the same test.
+  /// </summary>
+  private static bool FitsShortCallRange(int value) =>
+      value >= CvmInstructionSet.ShortCallMinimumAddress && value <= CvmInstructionSet.ShortCallAddressMask;
+
+  /// <summary>
   /// Encodes the <c>"literal"</c> pseudo-mnemonic (2026-09-27, per Stefan: "change opcode 'literal' so
   /// that it uses 'lit' when the constant fits and 'litr' if the constant is too big for 'lit'") --
   /// returns either <c>lit</c>'s own one-word self-describing encoding (<see cref="FitsLitRange"/>) or
@@ -1912,7 +2061,22 @@ internal static class CvmAssemblyLanguage
         return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s {System.Numerics.BitOperations.PopCount((uint)shape.ValueBitMask)}-bit target (0x0000-0x{shape.ValueBitMask:X4}).");
       }
 
-      return ([value & shape.ValueBitMask], null);
+      // ADDED 2026-09-30, CONFIRMED per Stefan directly: "scall 0 does not exist. 'nop' has precedence."
+      // A literal "scall 0" would otherwise silently encode as 0x0000 -- bit-for-bit identical to nop's own
+      // encoding -- so it is rejected here as a hard error rather than emitted. Mirrors CvmAssembler.cs's
+      // own equivalent check on its "call" pass-2 branch. Only "scall" itself needs this guard: a bare
+      // "call 0" never reaches here as scall in the first place, since EncodeCallPseudoMnemonic's own
+      // FitsShortCallRange test already routes value 0 to "lcall" before this method is ever called.
+      if (string.Equals(shape.Mnemonic, CvmInstructionSet.ShortCallMnemonic, StringComparison.Ordinal) && value == 0)
+      {
+        return (null, $"line {lineNumber}: \"scall 0\" does not exist -- address 0 is reserved for \"nop\" (the word scall would produce, 0x0000, is identical to nop's own); use \"lcall 0\" instead.");
+      }
+
+      // DEFENSIVE, added 2026-09-30 during review: scall's own Tag happens to be 0x0000 today, so
+      // "| shape.Tag" is currently a no-op -- but omitting it here would silently drop a future
+      // EmbeddedAddress mnemonic's tag bits if one is ever added with a nonzero Tag (and TryDescribeSelfDecodingWord's
+      // own decode side already masks against Tag, so a missing Tag here would fail to round-trip).
+      return ([shape.Tag | (value & shape.ValueBitMask)], null);
     }
 
     if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue)
@@ -1950,12 +2114,19 @@ internal static class CvmAssemblyLanguage
   /// <c>lcall</c>, per Stefan: "'call' should try to fit the address into a 'scall' and use 'lcall' if the
   /// address does not fit. if an address is unknown at compile time, e.g. an external symbol, 'call' will
   /// always use 'lcall'.") -- see <see cref="CvmInstructionSet.ShortCallMnemonic"/>'s own class-level
-  /// remarks for the full derivation, and <see cref="GetWordLength"/>'s own "call" case, which this must
-  /// never disagree with on word count. By the time this runs, <paramref name="instruction"/>.Operand
-  /// already holds a resolved absolute address whether the source said a literal number or a label name
-  /// (see <see cref="Assemble"/>'s own remarks on where "call" is intercepted, after label resolution) --
-  /// <paramref name="instruction"/>.OperandLabel survives that resolution untouched, so it alone is what
-  /// tells a label-derived operand apart from a hand-typed literal here.
+  /// remarks for the full derivation.
+  ///
+  /// <b>CORRECTED 2026-09-30 (same day), alongside <see cref="CollectLabelAddresses"/>'s own new iterative
+  /// sizing pass ("can you use a more optimistic smart iterator for sizing pass?").</b> This method MUST
+  /// reproduce the exact same scall-fits test <see cref="CollectLabelAddresses"/> already converged on for
+  /// this exact line -- a mismatch here would mean pass 1 laid out every LATER label under one word count
+  /// for this "call" while pass 2 actually emits a different one, silently shifting every one of those
+  /// later labels' own real addresses out from under the layout pass 1 already committed to. Earlier
+  /// (before the iterative pass existed), a label operand always meant lcall unconditionally, since sizing
+  /// had to happen before any label was resolved -- now that <see cref="CollectLabelAddresses"/> resolves
+  /// that exact question FOR label-targeted "call" lines before this ever runs, this method simply checks
+  /// the same <see cref="FitsShortCallRange"/> test against the final resolved value, literal or label
+  /// alike -- <paramref name="instruction"/>.OperandLabel no longer needs to be consulted here at all.
   /// </summary>
   private static (List<int>? Words, string? Error) EncodeCallPseudoMnemonic(CvmAsmInstruction instruction, int lineNumber)
   {
@@ -1967,13 +2138,12 @@ internal static class CvmAssemblyLanguage
     CvmInstructionSet.CvmInstructionShape shortCallShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.ShortCallMnemonic)!;
     CvmInstructionSet.CvmInstructionShape longCallShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LongCallMnemonic)!;
 
-    // A label operand ALWAYS lowers to lcall, regardless of whether the resolved address would actually
-    // have fit scall -- see this method's own class-level remarks and GetWordLength's own "call" case for
-    // why: sizing happens before label resolution runs, so guessing here would risk disagreeing with the
-    // word count GetWordLength already committed every later label's own address to.
-    if (instruction.OperandLabel is null && (uint)value <= (uint)shortCallShape.ValueBitMask)
+    if (FitsShortCallRange(value))
     {
-      return ([value & shortCallShape.ValueBitMask], null);
+      // DEFENSIVE, added 2026-09-30 during review: mirrors EncodeSelfDescribingWord's own equivalent
+      // "| shape.Tag" -- a no-op today (scall's Tag is 0x0000) but keeps this in lockstep with that
+      // method's encoding should scall's Tag ever become nonzero.
+      return ([shortCallShape.Tag | (value & shortCallShape.ValueBitMask)], null);
     }
 
     return ([longCallShape.Tag, value & CvmWordCodec.WordMask], null);

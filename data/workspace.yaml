@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-30T17:22:14.0458519
-      utcDateTime: 2026-09-30T17:22:14.0458519Z
-      localDateTime: 2026-09-30T19:22:14.0458519+02:00
+      dateTime: 2026-09-30T20:02:52.4873338
+      utcDateTime: 2026-09-30T20:02:52.4873338Z
+      localDateTime: 2026-09-30T22:02:52.4873338+02:00
       date: 2026-09-30T00:00:00.0000000
       day: 30
       dayOfWeek: Wednesday
       dayOfYear: 273
-      hour: 17
-      millisecond: 45
-      microsecond: 851
-      nanosecond: 900
-      minute: 22
+      hour: 20
+      millisecond: 487
+      microsecond: 333
+      nanosecond: 800
+      minute: 2
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 14
-      ticks: 639263857340458519
-      utcTicks: 639263857340458519
-      timeOfDay: 17:22:14.0458519
+      second: 52
+      ticks: 639263953724873338
+      utcTicks: 639263953724873338
+      timeOfDay: 20:02:52.4873338
       year: 2026
   portB: 
   portC:
@@ -66582,10 +66582,15 @@ projects:
 
         )
 
+        # 407 import
+
 
         # down /b     // node 506
 
         # up /a       // node 306
+
+
+        entry x1/main
 
 
         # 0 org
@@ -66593,12 +66598,12 @@ projects:
 
         : x1/wfocus ( - )
           right b!
-          A[ --l- ]] lit !b !b
+          A[ r/focus_408 ]] lit !b !b
           down b! ;
 
         : x1/rfocus ( r - )
           right b!
-          A[ r--- ]] lit !b !b
+          A[ r/focus_406 ]] lit !b !b
         : x1/reg ( r - )
           A[ @p a! ]] lit !b ;
 
@@ -66683,13 +66688,13 @@ projects:
       ramWords:
       - 0x04B12
       - 0x001D5
-      - 0x13575
+      - 0x13422
       - 0x09B12
       - 0x00115
       - 0x29555
       - 0x04B12
       - 0x001D5
-      - 0x135D5
+      - 0x1341A
       - 0x09BB2
       - 0x05B55
       - 0x04AB2
@@ -66746,7 +66751,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x013
         p: 0x000
         a: 0x000
         b: 0x000
@@ -66788,16 +66793,14 @@ projects:
 
         # 0 org
 
-        // # rdlu /p
+        # rdlu /p
 
 
         [
           0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
-          0 , 0 , 0 , 0 , 
+          0 , 0 , 0 , 0xffff , 
         ]
 
-
-        entry r/start
 
 
 
@@ -66807,17 +66810,13 @@ projects:
         : r/focus ( port - ) dup b! >r ;
 
 
-        : r/focus_507 ( - ) down : brk brk ; r/focus ;
+        : r/focus_507 ( - ) down r/focus ;
 
         : r/focus_406 ( - ) right r/focus ;
 
         : r/focus_307 ( - ) up r/focus ;
 
         : r/focus_408 ( - ) left r/focus ;
-
-
-        : r/start
-          0x4321 rdlu  r/focus_507 0x1234 ;
 
 
         : r/@ @b a! @ !b ;
@@ -66842,9 +66841,7 @@ projects:
 
 
         : r/link ( { 'offset ,old-fp } )
-
-        //  fp a! a >r @+ @ dup @b . + ! r> a! ! !b ;
-
+          fp a! a >r @+ @ dup @b . + ! r> a! ! !b ;
 
         : r/unlink ( { ,adr 'old-fp } )
           fp a! @ dup !b @b !+ ! ;
@@ -66872,22 +66869,14 @@ projects:
       - 0x00000
       - 0x115A5
       - 0x24BBD
-      - 0x049B2
+      - 0x05715
       - 0x00115
-      - 0x11418
-      - 0x11415
       - 0x05715
       - 0x001D5
       - 0x05715
       - 0x00145
       - 0x05715
       - 0x00175
-      - 0x049B2
-      - 0x04321
-      - 0x135A5
-      - 0x13416
-      - 0x05555
-      - 0x01234
       - 0x00A0A
       - 0x09555
       - 0x00A02
@@ -66904,18 +66893,26 @@ projects:
       - 0x3FFFF
       - 0x2C192
       - 0x0B555
-      - 0x05632
+      - 0x0562A
       - 0x00013
       - 0x3BB55
-      - 0x0562E
+      - 0x05626
       - 0x00013
       - 0x09555
+      - 0x04A8A
+      - 0x00012
+      - 0x2FC0B
+      - 0x009F2
+      - 0x0ACAA
+      - 0x0BB55
       - 0x04A0B
       - 0x00012
       - 0x09F3A
       - 0x0B555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x020
+        entryPoint: 0x1A5
         p: 0x000
         a: 0x000
         b: 0x000
@@ -67191,7 +67188,11 @@ projects:
                   2* -if
                     2* -if
                       // implied
-                      A[ d/implied ; ]] lit !b ;
+                      drop dup 7 and
+                      if // some other node
+                      then
+        : brk brk ;
+                      drop A[ @p >r ; ]] lit !b !b ;
                     then
                     // implied with next
                       A[ d/implied-with-next ; ]] lit !b ;
@@ -67249,52 +67250,52 @@ projects:
       - 0x259B2
       - 0x09F92
       - 0x364B2
-      - 0x1B426
+      - 0x1B42B
+      - 0x37226
       - 0x37221
       - 0x3721C
-      - 0x37217
-      - 0x3720F
-      - 0x3720D
+      - 0x37214
+      - 0x37212
+      - 0x3AD12
+      - 0x00007
+      - 0x3F30E
+      - 0x1140E
+      - 0x3BD22
+      - 0x04855
+      - 0x09555
       - 0x05B55
-      - 0x11410
-      - 0x05B55
-      - 0x11410
-      - 0x37215
-      - 0x37213
-      - 0x05B55
-      - 0x11410
-      - 0x05B55
-      - 0x11410
-      - 0x05B55
-      - 0x11415
+      - 0x11416
       - 0x3721A
+      - 0x37218
       - 0x05B55
-      - 0x11415
+      - 0x11416
       - 0x05B55
-      - 0x11415
+      - 0x11416
+      - 0x05B55
+      - 0x1141B
       - 0x3721F
       - 0x05B55
-      - 0x11415
+      - 0x1141B
       - 0x05B55
-      - 0x11415
+      - 0x1141B
       - 0x37224
       - 0x05B55
-      - 0x11415
+      - 0x1141B
       - 0x05B55
-      - 0x11415
-      - 0x3722C
-      - 0x3722A
+      - 0x1141B
+      - 0x37229
       - 0x05B55
-      - 0x11415
+      - 0x1141B
       - 0x05B55
-      - 0x11415
+      - 0x1141B
+      - 0x37231
+      - 0x3722F
       - 0x05B55
-      - 0x11415
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1141B
+      - 0x05B55
+      - 0x1141B
+      - 0x05B55
+      - 0x1141B
       - 0x15555
       - 0x15555
       - 0x15555
@@ -67428,6 +67429,9 @@ projects:
         : d/jump ( a - )
           A[ m/jump ]] lit !b !b ;
 
+        : 'ret A[ m/ret ; ]] lit !b ;
+
+
         : d/implied
 
 
@@ -67501,16 +67505,16 @@ projects:
       - 0x0BE55
       - 0x05B25
       - 0x1342E
+      - 0x05B55
+      - 0x1142F
       - 0x1340C
       - 0x13408
-      - 0x21318
+      - 0x2131A
       - 0x15555
       - 0x11412
       - 0x2FD9A
       - 0x0002D
       - 0x11404
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -67623,7 +67627,7 @@ projects:
           ( w p a )
         : m/write ( w p a - )
           up b!         // select node 607
-          A[ mem/uwr ]] lit !b
+          A[ mem/wrup ]] lit !b
           !b !b !b ;  
 
         : m/pop ( - w )
@@ -67632,7 +67636,7 @@ projects:
           ( p 1 )
         : m/read ( p a - w )
           up b!         // select node 607
-          A[ mem/urd ]] lit !b
+          A[ mem/rdup ]] lit !b
           !b !b @b ;  
 
         : m/nextinstr  ( - )
@@ -67813,7 +67817,7 @@ projects:
       - 0x00001
       - 0x04B12
       - 0x00145
-      - 0x1341F
+      - 0x13415
       - 0x09B22
       - 0x09555
       - 0x05606
@@ -67822,13 +67826,13 @@ projects:
       - 0x00001
       - 0x04B12
       - 0x00145
-      - 0x13408
+      - 0x13403
       - 0x09B22
       - 0x01555
       - 0x13400
       - 0x04B12
       - 0x00145
-      - 0x13415
+      - 0x13410
       - 0x09B07
       - 0x001D5
       - 0x29BB2
@@ -68245,22 +68249,9 @@ projects:
           up
         : mem/read
           a!
-          @         // page
-        : mem/rd
-          @         // a16
-          !b !b @b ! ;
-
-        : mem/urd up a! mem/rd ;
-
-
-        : mem/rdup0 0 mem/urd ;
-
-
-        : mem/rdup1 1 mem/urd ;
-
-
-        : mem/rdup2 2 mem/urd ;
-
+          @ !b      // a16
+          @ !b      // page
+          @b ! ;    // data
 
         : mem/rdleft left mem/read ;
 
@@ -68273,7 +68264,10 @@ projects:
             // interrupt
             dup dup xor !intr/pend
           then
-          drop mem/rdup0 ;
+          drop up a!
+          @ !b        // a16
+          dup xor !b  // page = 0
+          @b ! ;
 
         // write
 
@@ -68282,27 +68276,11 @@ projects:
           up
         : mem/write
           a!
-          @         // page
-        : mem/wr
-          @         // a16
-          !b inv !b @ !b ;
-
-        : mem/uwr up a! mem/wr ;
-
-
-        : mem/wrup0 0 mem/uwr ;
-
-
-        : mem/wrup1 1 mem/uwr ;
-
-
-        : mem/wrup2 2 mem/uwr ;
-
-
-
+          @ !b        // a16
+          @ inv !b    // page
+          @ !b ;      // data
 
         : mem/wrleft left mem/write ;
-
 
 
         : mem/wrright right mem/write ;
@@ -68322,49 +68300,49 @@ projects:
       - 0x00000
       - 0x049B2
       - 0x00145
-      - 0x2BEB2
-      - 0x03B22
-      - 0x01A55
-      - 0x04AB2
-      - 0x00145
-      - 0x11406
-      - 0x05708
-      - 0x00000
-      - 0x05708
-      - 0x00001
-      - 0x05708
-      - 0x00002
+      - 0x2BE22
+      - 0x03B02
+      - 0x0B555
       - 0x05705
       - 0x00175
       - 0x05705
       - 0x001D5
       - 0x13401
-      - 0x19419
+      - 0x19410
       - 0x24DE2
       - 0x13400
-      - 0x3B70B
+      - 0x3BDAA
+      - 0x00145
+      - 0x03B92
+      - 0x39B02
+      - 0x0B555
       - 0x049B2
       - 0x00145
-      - 0x2BEB2
-      - 0x03BCA
-      - 0x09E25
-      - 0x04AB2
-      - 0x00145
-      - 0x1141D
-      - 0x0571F
-      - 0x00000
-      - 0x0571F
-      - 0x00001
-      - 0x0571F
-      - 0x00002
-      - 0x0571C
+      - 0x2BE22
+      - 0x02622
+      - 0x03B55
+      - 0x05717
       - 0x00175
-      - 0x0571C
+      - 0x05717
       - 0x001D5
       - 0x115F5
       - 0x05600
       - 0x00001
       - 0x115E5
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -68632,7 +68610,23 @@ projects:
     - coordinate: 707
       enabled: true
       sourceCode: >
-        ( CVM_pipeline node 707. SRAM communication between nodes 607 and 708 )
+        ( CVM_pipeline node 707. SRAM communication between nodes 607 and 708
+
+
+        +-------+---------------+
+
+        |  Op   |   Sequence    |
+
+        +-------+---------------+
+
+        | read  | p adr -> data |
+
+        | write | ~p ~adr data  |
+
+        +-------+---------------+
+
+
+        )
 
         # 708 import
 
@@ -68647,27 +68641,26 @@ projects:
         : main
           @b      // adr
           @b      // p
-          // we hase something to do
           -if
             // write
             A[ /wr ; ]] lit !
-            >r inv ! r> inv ! @b ! main ;
+            ! inv ! @b ! main ;
           then
           // ( p a ) read word
           A[ /rd ; ]] lit !
           ! ! @ !b 
           main ;
       ramWords:
-      - 0x01F6E
-      - 0x05ABA
+      - 0x01F6D
+      - 0x05A2A
       - 0x11417
-      - 0x33A9A
       - 0x33A02
       - 0x0B700
       - 0x05A2A
       - 0x1141D
-      - 0x01A0A
-      - 0x09700
+      - 0x0BE22
+      - 0x11400
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -69185,7 +69178,7 @@ projects:
 
         test1:
 
-        scall test0
+        ret
 
         nop
 
