@@ -6,7 +6,26 @@ namespace Ga144.Cvm.Toolchain;
 /// <summary>
 /// Assembles CVM assembly language source text into a relocatable <see cref="CvmObjectFile"/>.
 ///
-/// Syntax, in full:
+/// <b>2026-09-30: NEW VIRTUAL MACHINE, full reset -- READ THIS FIRST, before the syntax example just
+/// below.</b> Per Stefan directly: "there is a new virtual machine. all opcodes are invalid. except that
+/// 'nop' has the opcode '0'." Every mnemonic the syntax example below shows (<c>pushlit</c>, <c>push</c>,
+/// <c>pop</c>, <c>call</c>, <c>ret</c>, <c>br</c>, <c>cbr</c>, <c>lit</c>, <c>enter</c>, <c>ldp</c>,
+/// <c>stl</c>, and everything else <see cref="CvmInstructionSet.Instructions"/> ever listed) is RETIRED
+/// as of this reset -- see that list's own remarks at its own top. <c>nop</c> is the one survivor, and its
+/// own SHAPE changed too: it is no longer a tagged, node-resolved mnemonic needing a
+/// <see cref="CvmRelocationType.CvmOpcode"/> relocation the way this whole doc comment describes below
+/// (and the way it always used to be, alongside push/pop/ret) -- it is now
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.FixedOpcode"/>: a fixed, universally-known literal
+/// opcode word, 0x0000, known the moment the mnemonic is, with no live node, no linker, and no relocation
+/// involved at all (see that encoding's own remarks). This assembler now emits it directly
+/// (<c>shape.Tag</c>, unconditionally) rather than routing it through the generic tagged-mnemonic path.
+/// Everything else in this doc comment -- the syntax example, and every paragraph describing a specific
+/// retired mnemonic's own encoding -- is kept for historical reference (per this project's own "do not
+/// remove any opcodes" convention) but no longer describes a live, assemblable program: assembling
+/// anything other than a bare <c>nop</c> today fails to resolve, since <see cref="CvmInstructionSet.TryGetShape"/>
+/// no longer recognizes any other mnemonic.
+///
+/// Syntax, in full (HISTORICAL -- see the reset notice just above):
 /// <code>
 /// ; a line comment (// also works)
 /// .section CODE            ; switches which section subsequent lines assemble into (default: CODE)
@@ -204,6 +223,17 @@ public static class CvmAssembler
             break;
           }
 
+          // ADDED 2026-09-30: "lit"/"litr" were both retired in the new VM's reset (see
+          // CvmInstructionSet.Instructions' own remarks at the top of its list) -- "literal" has nothing
+          // left to lower to. Checked here, in pass 1, before FitsLitRange even runs (see that method's
+          // own guard, which returns false rather than crashing for the same reason) so this fails with
+          // one clear, specific message instead of reaching pass 2's own litr-fallback crash.
+          if (CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic) is null)
+          {
+            errors.Add($"line {line.LineNumber}: \"literal\" is not supported -- \"lit\"/\"litr\" were both retired in the new VM's 2026-09-30 reset (see CvmInstructionSet.Instructions' own remarks); \"nop\" is the only valid opcode right now.");
+            break;
+          }
+
           sectionCursors[section] += FitsLitRange(literalPass1Value) ? 1 : 2;
           break;
 
@@ -300,7 +330,11 @@ public static class CvmAssembler
             // and that the operand parses as a plain literal (never a label), so both are re-parsed here,
             // not re-validated. "literal" has no CvmInstructionSet.Instructions entry of its own, so
             // neither "lit"'s self-describing word nor "litr"'s placeholder-plus-relocation is reached via
-            // the generic default case below -- both are written out directly here instead.
+            // the generic default case below -- both are written out directly here instead. The "!" below
+            // is safe by the same invariant the generic default case's own pass-1/pass-2 split already
+            // relies on (see this method's own class-level remarks): pass 2 only ever runs once pass 1 has
+            // found zero errors across every line, and pass 1's own "literal" case (above) now guards
+            // against "lit" being retired (ADDED 2026-09-30) before this point is ever reached.
             TryParseSignedNumericLiteral(line.Args[0], out int literalValue);
             CvmInstructionSet.CvmInstructionShape litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
             CvmSection literalSection = objectFile.GetOrAddSection(section);
@@ -390,6 +424,21 @@ public static class CvmAssembler
             break;
           }
 
+          if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.FixedOpcode)
+          {
+            // ADDED 2026-09-30, for the new VM's reset (nop, Id 0 -- see CvmInstructionSet.Instructions'
+            // own remarks at the top of its list, and CvmOperandEncoding.FixedOpcode's own remarks).
+            // Unlike every mnemonic that falls through to the generic tagged path below (None/
+            // TrailingWord/TwoTrailingWords/NodeResolvedEmbeddedValue -- all of which need a live node
+            // compile to resolve their real opcode, so they get a 0x8000|Id placeholder plus a CvmOpcode
+            // relocation for the linker to fill in later), a FixedOpcode mnemonic's real opcode is
+            // ALREADY fully known right now, from shape.Tag alone -- no node, no linker, no relocation,
+            // no external symbol. Takes no operand either (HasOperand is false for this encoding), so
+            // there is nothing else to emit.
+            codeSection.Words.Add(shape.Tag);
+            break;
+          }
+
           // The address-register family's eight ops (arinc/ardec/arinc2/ardec2/arld/arst/lda/sta --
           // RENUMBERED 2026-09-15 from physical node 306 to physical node 308, see Cvm.Node308Program's
           // own remarks) need BOTH a live-node-resolved base (which function -- exactly what the generic
@@ -411,11 +460,19 @@ public static class CvmAssembler
           int embeddedRegisterValue = 0;
           if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
           {
-            if (!TryParseNumericLiteral(line.Args[0], out embeddedRegisterValue) || embeddedRegisterValue < 0 || embeddedRegisterValue > shape.ValueBitMask)
+            if (!TryParseNumericLiteral(line.Args[0], out int registerIndex) || registerIndex < 0 || registerIndex > shape.ValueBitMask)
             {
               errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register index for \"{shape.Mnemonic}\" -- expected 0..{shape.ValueBitMask}, e.g. \"{shape.Mnemonic} 0\".");
-              embeddedRegisterValue = 0;
+              registerIndex = 0;
             }
+
+            // 2026-09-27: shifted left by shape.ValueBitShift before being carried on the relocation, so
+            // a register field that does NOT sit at bit 0 (the new node-510 register-access family's own
+            // 6-bit register field occupies bits 9-4, not bits 5-0 the way node 511's/node 308's own
+            // register fields always have) still lands in the right place once CvmLinker OR's this
+            // relocation's own EmbeddedValue straight into the resolved base word -- see CvmLinker.cs's
+            // own CvmOpcode case, unchanged by this addition since the shift is already applied here.
+            embeddedRegisterValue = registerIndex << shape.ValueBitShift;
           }
 
           int opcodeOffset = codeSection.Words.Count;
@@ -747,7 +804,19 @@ public static class CvmAssembler
   /// </summary>
   private static bool FitsLitRange(int value)
   {
-    CvmInstructionSet.CvmInstructionShape litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
+    // GUARD added 2026-09-30: "lit" was retired in the new VM's reset (see CvmInstructionSet.
+    // Instructions' own remarks at the top of its list) -- TryGetShape now returns null for it, where
+    // this used to unconditionally assume a shape existed (the "!" null-forgiving operator would
+    // otherwise crash with a NullReferenceException the moment a source file used "literal" at all, even
+    // in pass 1's own cursor-advancing walk). Returning false routes the caller down its own "too big for
+    // lit" / litr path instead, which the "literal" case's own guard (both passes, above) turns into a
+    // clean, specific error rather than a crash.
+    CvmInstructionSet.CvmInstructionShape? litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic);
+    if (litShape is null)
+    {
+      return false;
+    }
+
     int maxValue = litShape.ValueBitMask >> 1;
     int minValue = -(maxValue + 1);
     return value >= minValue && value <= maxValue;

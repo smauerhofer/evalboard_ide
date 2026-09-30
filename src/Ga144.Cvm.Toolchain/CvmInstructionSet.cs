@@ -756,22 +756,100 @@ public static class CvmInstructionSet
   // 'rpush ARE, once again, four separately named, separately addressed F18 words. These are therefore
   // real, live, currently-defined opcodes on node 511 -- not orphaned, not retired -- and are restored to
   // Instructions below under their ORIGINAL Ids (107-110), never renumbered.
+  //
+  // REPOINTED, 2026-09-27 -- Stefan redesigned nodes 510/511 wholesale: physical node 511 is now pure
+  // passive 64-word register STORAGE with no logic of its own at all ("register storage, storage for 64
+  // register"), and physical node 510 ("extended register access") absorbs everything r/main used to do,
+  // directly, one hop closer to node 509 (imports node 509, not node 510) -- see Cvm.Node510Program's and
+  // Cvm.Node511Program's own remarks for the new source. Node 510's own new reg/main once again names
+  // rld/rst/rpop/rpush (per "only update existing opcodes where possible") -- Ids 107-110 and these four
+  // mnemonic strings are UNCHANGED, only WHICH node/symbol/field-layout they resolve against changes (see
+  // RegisterAccessTag/RegisterAccessRegisterFieldBitMask/RegisterAccessRegisterFieldShift below, and
+  // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own NodeSymbolByMnemonic/
+  // NodeResolvedEmbeddedValueFieldLayoutByMnemonic entries). The OLD node-511 field layout just below
+  // (Node511FunctionFieldBitMask/Shift/BaseAddress, Node511RegisterFieldBitMask) is now SUPERSEDED, not
+  // deleted -- kept per this file's own "do not remove any opcodes" convention, describing the PRIOR
+  // (2026-09-07 through 2026-09-27) revision of this opcode family for historical reference.
   public const string LoadRegisterFileMnemonic = "rld";
   public const string StoreRegisterFileMnemonic = "rst";
   public const string PopRegisterFileMnemonic = "rpop";
   public const string PushRegisterFileMnemonic = "rpush";
 
-  /// <summary>Isolates node 511's 5-bit "which function" field (bits 9-5) -- the resolved target address (0x20-0x3F) minus <see cref="Node511FunctionFieldBaseAddress"/>, shifted left by <see cref="Node511FunctionFieldShift"/>. See <see cref="LoadRegisterFileMnemonic"/>'s own remarks.</summary>
+  /// <summary>SUPERSEDED 2026-09-27 (see <see cref="LoadRegisterFileMnemonic"/>'s own remarks) -- isolates node 511's OLD 5-bit "which function" field (bits 9-5) -- the resolved target address (0x20-0x3F) minus <see cref="Node511FunctionFieldBaseAddress"/>, shifted left by <see cref="Node511FunctionFieldShift"/>. Kept for historical reference; the current layout is <see cref="RegisterAccessFunctionFieldBitMask"/>.</summary>
   public const int Node511FunctionFieldBitMask = 0x03E0;
 
-  /// <summary>How far left node 511's resolved (address - <see cref="Node511FunctionFieldBaseAddress"/>) is shifted before OR-ing into <see cref="Node511FunctionFieldBitMask"/>'s bits -- 5, since the 5-bit register field occupies bits 4-0 below it. See <see cref="LoadRegisterFileMnemonic"/>'s own remarks.</summary>
+  /// <summary>SUPERSEDED 2026-09-27 -- how far left node 511's OLD resolved (address - <see cref="Node511FunctionFieldBaseAddress"/>) was shifted before OR-ing into <see cref="Node511FunctionFieldBitMask"/>'s bits -- 5, since the OLD 5-bit register field occupied bits 4-0 below it. Kept for historical reference; see <see cref="RegisterAccessFunctionFieldShift"/> for the current value.</summary>
   public const int Node511FunctionFieldShift = 5;
 
-  /// <summary>Node 511's own "# 0x20 org" -- every one of its compiled word addresses starts at 0x20, so the function-select field is the RESOLVED address minus this, never the raw address itself. See <see cref="LoadRegisterFileMnemonic"/>'s own remarks.</summary>
+  /// <summary>SUPERSEDED 2026-09-27 -- node 511's OLD "# 0x20 org": every one of its compiled word addresses started at 0x20, so the function-select field was the RESOLVED address minus this. Kept for historical reference; see <see cref="RegisterAccessFunctionFieldBaseAddress"/> for the current value (0, unconfirmed -- see Cvm.Node510Program's own remarks).</summary>
   public const int Node511FunctionFieldBaseAddress = 0x20;
 
-  /// <summary>Isolates node 511's 5-bit register-index field (bits 4-0, unshifted, 0-31) -- see <see cref="LoadRegisterFileMnemonic"/>'s own remarks.</summary>
+  /// <summary>SUPERSEDED 2026-09-27 -- isolates node 511's OLD 5-bit register-index field (bits 4-0, unshifted, 0-31). Kept for historical reference; see <see cref="RegisterAccessRegisterFieldBitMask"/> for the current (6-bit, 0-63) value.</summary>
   public const int Node511RegisterFieldBitMask = 0x001F;
+
+  // The new "extended register access" family (2026-09-27, replacing node 511's old direct field-
+  // extraction scheme above) -- Stefan's own header: "handle reg[x] access. 0 <= x <= 63", bit layout
+  // "1011_1?xx_xxxx_?ooo" (ooo: 3-bit operation code, xxxxxx: 6-bit register selection, the two "?" bits
+  // unused/don't-care). This is now ONE hop off node 509 (not two, as the old node 509 -> 510 -> 511
+  // chain was) -- physical node 510 does everything itself and merely forwards the actual storage
+  // read/write to physical node 511's own passive RAM. See Cvm.Node510Program's own remarks for the full
+  // derivation and, importantly, for what is FLAGGED as unconfirmed rather than guessed here: how the
+  // 3-bit "ooo" field actually indexes into the 8-entry jump table (each entry may be more than one word),
+  // and where register r is loaded with the jump target before reg/main's own final "ex".
+  //
+  // Register field: bits 9-4 (6 bits, 0-63) -- WIDER than the old node-511 layout (5 bits, 0-31) and, for
+  // the first time in this family, NOT at bits 4-0 -- shifted up by 4 to make room for the 3-bit op field
+  // below it. This is why Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own
+  // NodeResolvedEmbeddedValueFieldLayoutByMnemonic dictionary gained a RegisterFieldShift member
+  // (2026-09-27) alongside its existing RegisterFieldBitMask -- every earlier NodeResolvedEmbeddedValue
+  // family (node 511's old layout, node 308's address-register family) happened to keep its own register
+  // field at bit 0, so no shift was ever needed before now.
+  public const int RegisterAccessRegisterFieldBitMask = 0x003F;
+
+  /// <summary>How far left the register operand is shifted before OR-ing it into the opcode word -- 4, since the 3-bit op-select field (see <see cref="RegisterAccessFunctionFieldBitMask"/>) occupies bits 2-0 below it. See <see cref="RegisterAccessRegisterFieldBitMask"/>'s own remarks.</summary>
+  public const int RegisterAccessRegisterFieldShift = 4;
+
+  /// <summary>Isolates the 3-bit "ooo" op-select field (bits 2-0, unshifted, 0-7) -- per Stefan's own table: 0=clear (rclr), 1=set (rlit, NOT yet wired -- see <see cref="LoadRegisterFileMnemonic"/>'s remarks two blocks up for why), 2=pop2 (rpop2), 3=push2 (rpush2), 4=load (rld), 5=store (rst), 6=pop (rpop), 7=push (rpush).</summary>
+  public const int RegisterAccessFunctionFieldBitMask = 0x0007;
+
+  /// <summary>No shift -- the op-select field sits at bits 2-0, the bottom of the word. See <see cref="RegisterAccessFunctionFieldBitMask"/>'s own remarks.</summary>
+  public const int RegisterAccessFunctionFieldShift = 0;
+
+  /// <summary>NOT CONFIRMED against a live compile -- assumes node 510's own 8-entry jump table (<c># 0 org</c>, "reg/clr ; reg/lit ; reg/po2 ; reg/pu2 ; reg/ld ; reg/st ; reg/po ; reg/pu ;") places one entry per word starting at address 0, so the op-select field needs no bias at all. Each entry as pasted compiles a CALL-then-RETURN pair, which strongly suggests 2 words per entry, not 1 -- see Cvm.Node510Program's own remarks for why this is flagged rather than guessed, and Stefan should confirm before this base address (or a required x2 op-index scaling this file does not currently apply) is trusted.</summary>
+  public const int RegisterAccessFunctionFieldBaseAddress = 0;
+
+  // The tag shared by every "extended register access" opcode -- the fixed top 5 bits of
+  // "1011_1?xx_xxxx_?ooo", i.e. 0xB800 (mask 0xF800). This is the SAME top-level bit range the OLD node
+  // 510 ("extended arithmetic", 0xB800-0xBBFF) and OLD node 511 ("register file", 0xBC00-0xBFFF) used to
+  // split between them -- the new single node now answers the whole combined range directly, one hop
+  // closer to node 509. Like every other live-node-resolved tag, this lives in
+  // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own NodeSymbolByMnemonic (as Node510RegisterAccessTag),
+  // not here -- ValueBitMask/ValueBitShift above are the only pieces of this shape's layout this file
+  // itself needs, for CvmAssembler's own offline register-range validation and embedding.
+
+  // Three genuinely new mnemonics from this same family (op codes 0, 2, 3 -- see
+  // RegisterAccessFunctionFieldBitMask's own remarks for the full 0-7 table). Each is a plain
+  // register-index-only op (WordLength 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, no trailing word)
+  // -- confirmed from each one's own F18 body (reg/clr: "dup xor reg/wr", no word fetch; reg/pu2: "reg/rd
+  // reg/rd reg/push reg/push", no word fetch either) -- unlike op code 1 (rlit), see below.
+  public const string RegisterClearMnemonic = "rclr";
+  public const string RegisterPopPairMnemonic = "rpop2";
+  public const string RegisterPushPairMnemonic = "rpush2";
+
+  // FLAGGED, NOT WIRED: op code 1, "rlit" ("set", "reg[x] = next_word" per Stefan's own table). Node
+  // 510's own "reg/lit" is defined as a plain word-reference with no trailing ";" (falls through into
+  // reg/next), and reg/next's own body chains reg/get -> u/next -> node 508's g/next -> node 507's own
+  // m/next -- the CVM-level "fetch the NEXT WORD from the instruction stream" primitive every other
+  // TrailingWord mnemonic in this file (pushlit, gld/gst, litr, ...) also goes through. This strongly
+  // suggests "rlit" is a TWO-WORD instruction (opcode word carrying the register index, PLUS a trailing
+  // literal word) -- a shape this file has never needed before: every existing
+  // CvmOperandEncoding.NodeResolvedEmbeddedValue mnemonic (node 511's old family above, node 308's
+  // address-register family) is WordLength 1, register-only, no trailing word at all. Rather than invent
+  // a new combined encoding (register embedded in the opcode word AND a trailing operand word) on a
+  // guess, "rlit" is deliberately left OUT of Instructions below -- Stefan should confirm the exact word
+  // count/operand shape before this is wired in. The mnemonic string itself is recorded here so the name
+  // is reserved and this gap is easy to find later.
+  public const string RegisterSetMnemonic = "rlit";
 
   // REMOVED OUTRIGHT, 2026-09-15, per Stefan's own direct instruction ("remove the old dpop/dpush/
   // dinc/ddec/dadd/dor family completely"). This used to be "Node308FunctionFieldBitMask"/"Shift"/
@@ -1755,6 +1833,32 @@ public static class CvmInstructionSet
     /// by <see cref="TryDescribeSelfDecodingWord"/>.
     /// </summary>
     EmbeddedUnsignedValuePair,
+
+    /// <summary>
+    /// ADDED 2026-09-30, for the new VM's reset (<c>nop</c>, Id 0, the one surviving instruction --
+    /// see <see cref="Instructions"/>'s own remarks at the top of its list). The instruction's one and
+    /// only word is a fixed, universally-known literal <see cref="CvmInstructionShape.Tag"/> -- nothing
+    /// else. This looks similar to <see cref="None"/> (no assembled operand) and to
+    /// <see cref="EmbeddedSignedValue"/>/<see cref="EmbeddedUnsignedValue"/> (self-describing, a literal
+    /// <see cref="CvmInstructionShape.Tag"/>) but is neither: unlike <see cref="None"/>, NO live node
+    /// compile is ever consulted to resolve it -- the opcode word is already fully known the moment the
+    /// mnemonic is; and unlike <see cref="EmbeddedSignedValue"/>/<see cref="EmbeddedUnsignedValue"/>,
+    /// there is no embedded value field at all (<see cref="CvmInstructionShape.ValueBitMask"/> is
+    /// meaningless here, always 0) -- the whole word IS the tag, with nothing else packed into it, so no
+    /// operand is ever assembled (<see cref="CvmInstructionShape.HasOperand"/> is false for this
+    /// encoding, exactly like <see cref="None"/>). <see cref="CvmAssembler"/> emits
+    /// <see cref="CvmInstructionShape.Tag"/> directly with no relocation entry at all -- the same "fully
+    /// known from the mnemonic alone" treatment <see cref="EmbeddedAddress"/>/<see cref="EmbeddedSignedValue"/>
+    /// give their own literal operand, just with no operand to combine it with here.
+    /// <see cref="TryDescribeSelfDecodingWord"/> matches it generically (an exact <c>word == shape.Tag</c>
+    /// check over every <see cref="FixedOpcode"/> shape in <see cref="Instructions"/>), checked FIRST,
+    /// before the hardcoded <c>call</c>/<c>br</c>/<c>cbr</c>/<c>lit</c> checks below it -- important for
+    /// <c>nop</c> specifically, since its own word, 0x0000, would otherwise also satisfy <c>call</c>'s own
+    /// "word &lt;= <see cref="CallAddressMask"/>" range check (that hardcoded check itself is commented
+    /// out as part of this same reset -- see <see cref="TryDescribeSelfDecodingWord"/>'s own remarks --
+    /// but the ordering is kept defensively correct regardless).
+    /// </summary>
+    FixedOpcode,
   }
 
   /// <summary>
@@ -1766,8 +1870,10 @@ public static class CvmInstructionSet
   /// </summary>
   public sealed record CvmInstructionShape(int Id, string Mnemonic, int WordLength, CvmOperandEncoding Encoding, int Tag = 0, int ValueBitMask = 0, int ValueBitShift = 0, int SecondValueBitMask = 0, int SecondValueBitShift = 0)
   {
-    /// <summary>True for every encoding except <see cref="CvmOperandEncoding.None"/> -- whether the assembler requires exactly one operand argument for this mnemonic.</summary>
-    public bool HasOperand => Encoding != CvmOperandEncoding.None;
+    /// <summary>True for every encoding except <see cref="CvmOperandEncoding.None"/> and
+    /// <see cref="CvmOperandEncoding.FixedOpcode"/> (ADDED 2026-09-30 -- see that case's own remarks) --
+    /// whether the assembler requires exactly one operand argument for this mnemonic.</summary>
+    public bool HasOperand => Encoding != CvmOperandEncoding.None && Encoding != CvmOperandEncoding.FixedOpcode;
 
     /// <summary>
     /// For an <see cref="CvmOperandEncoding.EmbeddedSignedValue"/>/<see cref="CvmOperandEncoding.EmbeddedUnsignedValue"/>
@@ -1827,70 +1933,92 @@ public static class CvmInstructionSet
   /// </summary>
   public static readonly IReadOnlyList<CvmInstructionShape> Instructions =
   [
-    new(Id: 0, NopMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 1, PushLitMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 2, PushMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 3, PopMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 4, CallMnemonic, 1, CvmOperandEncoding.EmbeddedAddress),
-    new(Id: 5, RetMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 6, BranchMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: BranchTag, ValueBitMask: BranchOffsetBitMask),
-    new(Id: 7, ConditionalBranchMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: ConditionalBranchTag, ValueBitMask: ConditionalBranchOffsetBitMask),
+    // ---- 2026-09-30: NEW VIRTUAL MACHINE, full reset -----------------------------------------
+    // Per Stefan directly: "there is a new virtual machine. all opcodes are invalid. except that
+    // 'nop' has the opcode '0'." Every row below this point (all of CVM2's opcodes, down to the
+    // very last one) is RETIRED as of this reset -- commented out in place, never deleted, exactly
+    // this file's own long-standing "do not remove any opcodes" convention, so every Id below is
+    // still never to be reused. This is a WHOLESALE reset, not a further reconciliation pass: this
+    // new VM shares no opcode with CVM2 except the coincidence that 'nop' happens to be named the
+    // same thing again -- nothing below should be read as "still valid, just unwired."
+    //
+    // Id 0 (nop) is the ONE survivor, but its own SHAPE changed too, not just its status: under
+    // CVM2 it was a TAGGED mnemonic (CvmOperandEncoding.None, resolved only against a live node's
+    // own compile, exactly like push/pop/ret/leave -- see this file's own class-level remarks
+    // above). Stefan's own words this time -- "'nop' has the opcode '0'" -- describe a FIXED,
+    // universally-known literal opcode, not "whatever address nop happens to land at in some future
+    // node's compiled RAM": no live node, no linker, no relocation entry at all. That is a genuinely
+    // new shape this table has never needed before, so a new encoding was added for it --
+    // CvmOperandEncoding.FixedOpcode, see that enum case's own remarks -- rather than stretching
+    // None (which has always meant "node-resolved" everywhere else in this file) to also mean
+    // "already fully known." nop keeps Id 0 -- the same Id it has always had -- since this is a
+    // reshaping of what nop IS, not a retirement-and-replacement the way every other entry in this
+    // file has ever been renumbered/repointed.
+    new(Id: 0, NopMnemonic, 1, CvmOperandEncoding.FixedOpcode, Tag: 0x0000),
+    // ---------------------------------------------------------------------------------------------
+    // new(Id: 1, PushLitMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 2, PushMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 3, PopMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 4, CallMnemonic, 1, CvmOperandEncoding.EmbeddedAddress),
+    // new(Id: 5, RetMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 6, BranchMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: BranchTag, ValueBitMask: BranchOffsetBitMask),
+    // new(Id: 7, ConditionalBranchMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: ConditionalBranchTag, ValueBitMask: ConditionalBranchOffsetBitMask),
     // Id 8 (was SlitMnemonic, "slit") RETIRED 2026-09-09, and its own mnemonic/tag constants and decode
     // helper deleted outright later the same day -- see this file's own remarks above on the
     // 2026-09-09 CVM1-opcode purge. Never reuse Id 8.
-    new(Id: 9, UnsignedShiftLeftMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 10, SignedShiftRightMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 11, UnsignedShiftRightMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 12, AddMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 13, SubtractMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 14, AndMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 15, XorMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 16, OrMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 17, InvertMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 18, IncrementMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 19, DecrementMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 20, EnterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506EnterTag, ValueBitMask: Node506FrameValueBitMask),
+    // new(Id: 9, UnsignedShiftLeftMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 10, SignedShiftRightMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 11, UnsignedShiftRightMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 12, AddMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 13, SubtractMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 14, AndMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 15, XorMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 16, OrMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 17, InvertMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 18, IncrementMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 19, DecrementMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 20, EnterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506EnterTag, ValueBitMask: Node506FrameValueBitMask),
     // Id 21 (was AdjustMnemonic "adjust") is retired -- DELETED OUTRIGHT 2026-09-10 per Stefan: "'adjust'
     // no longer exists. you can remove it." See AdjustMnemonic's own former remarks (now removed) and
     // this file's own class-level remarks above for the full history, including the real hardware run
     // that showed executing it corrupted the whole cluster's control flow. Never reuse Id 21.
-    new(Id: 22, StoreLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506StoreLocalTag, ValueBitMask: Node506FrameValueBitMask),
-    new(Id: 23, StoreParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506StoreParameterTag, ValueBitMask: Node506FrameValueBitMask),
-    new(Id: 24, LoadLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506LoadLocalTag, ValueBitMask: Node506FrameValueBitMask),
-    new(Id: 25, LoadParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506LoadParameterTag, ValueBitMask: Node506FrameValueBitMask),
+    // new(Id: 22, StoreLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506StoreLocalTag, ValueBitMask: Node506FrameValueBitMask),
+    // new(Id: 23, StoreParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506StoreParameterTag, ValueBitMask: Node506FrameValueBitMask),
+    // new(Id: 24, LoadLocalMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506LoadLocalTag, ValueBitMask: Node506FrameValueBitMask),
+    // new(Id: 25, LoadParameterMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: Node506LoadParameterTag, ValueBitMask: Node506FrameValueBitMask),
     // Ids 26/27 (were LoadAddressOfLocalMnemonic "lal" / LoadAddressOfParameterMnemonic "lap") RETIRED
     // 2026-09-09, their mnemonic/tag constants later deleted outright too -- see this file's own remarks
     // above on the 2026-09-09 CVM1-opcode purge. Never reuse Ids 26/27.
-    new(Id: 28, LeaveMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 29, EqualMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 30, EqualToZeroMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 31, FalseMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 32, TrueMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 33, NotEqualMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 34, NotEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 28, LeaveMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 29, EqualMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 30, EqualToZeroMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 31, FalseMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 32, TrueMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 33, NotEqualMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 34, NotEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
     // Id 35 (UnsignedGreaterThanMnemonic "ugt") -- RESOLVED 2026-09-09 (second pass): node 408's own
     // current source defines a real 'ugt word (via its c/u helper) -- see UnsignedGreaterThanMnemonic's
     // own remarks. No longer merely kept for CCodeGenerator's sake; now genuinely live.
-    new(Id: 35, UnsignedGreaterThanMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 36, GreaterThanMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 37, GreaterThanZeroMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 38, GreaterOrEqualMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 39, GreaterOrEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 35, UnsignedGreaterThanMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 36, GreaterThanMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 37, GreaterThanZeroMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 38, GreaterOrEqualMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 39, GreaterOrEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
     // Id 40 (UnsignedLessOrEqualMnemonic "ule") -- RESOLVED 2026-09-09, same as Id 35 above: node 408
     // defines a real 'ule word.
-    new(Id: 40, UnsignedLessOrEqualMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 41, LessOrEqualMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 42, LessOrEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 43, LessThanMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 44, LessThanZeroMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 40, UnsignedLessOrEqualMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 41, LessOrEqualMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 42, LessOrEqualToZeroMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 43, LessThanMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 44, LessThanZeroMnemonic, 1, CvmOperandEncoding.None),
     // Ids 45/46 (UnsignedLessThanMnemonic "ult" / UnsignedGreaterOrEqualMnemonic "uge") -- RESOLVED
     // 2026-09-09, same as Id 35/40 above: node 408 defines real 'ult/'uge words.
-    new(Id: 45, UnsignedLessThanMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 46, UnsignedGreaterOrEqualMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 47, MultiplyByTwoMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 48, UnsignedDivideByTwoMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 49, DivideByTwoMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 50, AbsoluteValueMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 45, UnsignedLessThanMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 46, UnsignedGreaterOrEqualMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 47, MultiplyByTwoMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 48, UnsignedDivideByTwoMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 49, DivideByTwoMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 50, AbsoluteValueMnemonic, 1, CvmOperandEncoding.None),
     // Id 51 (was NegateMnemonic "negate") -- FLAGGED at the time, NOT retired: CCodeGenerator emitted
     // "negate" for unary minus (do not confuse with NegMnemonic "neg", node 509's own genuinely
     // different, still-live mnemonic). DELETED OUTRIGHT 2026-09-09 (CVM1-opcode purge, later the same
@@ -1901,7 +2029,7 @@ public static class CvmInstructionSet
     // (load/store through an lvalue address) in C source. DELETED OUTRIGHT 2026-09-09 (same purge) once
     // CCodeGenerator was rewritten to use node 306's arst/lda/sta instead -- see this file's own remarks
     // above. Never reuse Ids 52-54.
-    new(Id: 55, BitCountMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 55, BitCountMnemonic, 1, CvmOperandEncoding.None),
     // Ids 56, 58-64 (were ZeroExtendMnemonic "zext" through UnsignedMultiplyDoubleMnemonic "umuld",
     // minus Id 57/addc) -- FLAGGED at the time, NOT retired, despite CVM1's old node 506 (this family's
     // own implementing node, deleted 2026-09-01, coordinate reused for CVM2's stack-frame node) never
@@ -1912,7 +2040,12 @@ public static class CvmInstructionSet
     // actually runs. DELETED OUTRIGHT 2026-09-09 (same purge) once CvmDebuggerDefaultProgram's own smoke
     // test was rewritten to drop this whole block -- see this file's own remarks above. Never reuse Ids
     // 56, 58-64. Id 57 (addc) is the sole survivor of this family -- see its own remarks just below.
-    new(Id: 57, AddWithCarryMnemonic, 1, CvmOperandEncoding.None),
+    // RETIRED 2026-09-27 (kept, per this file's own "do not remove any opcodes" convention): node 510's
+    // wholesale redesign ("extended register access", replacing "extended arithmetic") no longer defines
+    // an 'addc word anywhere -- AddWithCarryMnemonic ("addc", Id 57) has no live node behind it at all any
+    // more, for the first time since it was repointed here from node 506's old register-d family
+    // (2026-09-09) and then again to node 510 (also 2026-09-09). Id 57 is still never to be reused.
+    // new(Id: 57, AddWithCarryMnemonic, 1, CvmOperandEncoding.None),
     // Ids 65-71 (were ExchangePortMnemonic "xpt" through StoreLowMnemonic "stlo") -- FLAGGED at the
     // time, NOT retired, same reason: five of these seven (xpt/ldhi/ldlo/sthi/stlo -- 'in'/'out' were
     // deliberately excluded from testing by Stefan's own choice, though never assembled anywhere else
@@ -1920,36 +2053,36 @@ public static class CvmInstructionSet
     // only against CVM1's old node 407. DELETED OUTRIGHT 2026-09-09 (same purge) once
     // CvmDebuggerDefaultProgram's own smoke test was rewritten to drop this whole block -- see this
     // file's own remarks above. Never reuse Ids 65-71.
-    new(Id: 72, HaltMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 73, LongCallMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 74, LongJumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 75, LoadGlobalMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 76, StoreGlobalMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 77, NegMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 78, LitMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: LitTag, ValueBitMask: LitValueBitMask),
-    new(Id: 79, ParityMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 80, OddMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 81, NotMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 82, ReverseSubtractMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 83, ReverseShiftLeftMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 84, ReverseShiftRightMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 85, ReverseUnsignedShiftRightMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 86, AddConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 87, SubtractConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 88, ReverseSubtractConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 89, AndConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 90, XorConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 91, OrConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 92, ReverseShiftLeftConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 93, UnsignedShiftLeftConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 94, ReverseShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 95, SignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 96, ReverseUnsignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 97, UnsignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 72, HaltMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 73, LongCallMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 74, LongJumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 75, LoadGlobalMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 76, StoreGlobalMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 77, NegMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 78, LitMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: LitTag, ValueBitMask: LitValueBitMask),
+    // new(Id: 79, ParityMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 80, OddMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 81, NotMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 82, ReverseSubtractMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 83, ReverseShiftLeftMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 84, ReverseShiftRightMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 85, ReverseUnsignedShiftRightMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 86, AddConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 87, SubtractConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 88, ReverseSubtractConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 89, AndConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 90, XorConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 91, OrConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 92, ReverseShiftLeftConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 93, UnsignedShiftLeftConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 94, ReverseShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 95, SignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 96, ReverseUnsignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 97, UnsignedShiftRightConstantMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // Id 98 (clbr) and Id 100 (cljmp) are retired -- removed 2026-09-06 per Stefan ("I remove clbr and
     // cljmp from node 407. remove it also from the CVM assembler and disassembler"), before either was
     // confirmed on real hardware. Never reuse either Id for a different instruction.
-    new(Id: 99, LongBranchMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 99, LongBranchMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // Ids 101-106 (were ldar/star/inca/deca/lda/sta, self-describing EmbeddedUnsignedValue) RETIRED
     // 2026-09-09 -- node 306's own current source no longer defines this family at all; their mnemonic
     // and tag constants were later deleted outright too, see this file's own remarks above on the
@@ -1964,28 +2097,32 @@ public static class CvmInstructionSet
     // embedded in the same opcode word (see
     // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own Node511* field-layout wiring). Restored under
     // their ORIGINAL Ids, never renumbered.
-    new(Id: 107, LoadRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
-    new(Id: 108, StoreRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
-    new(Id: 109, PopRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
-    new(Id: 110, PushRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue),
+    // REPOINTED 2026-09-27 from node 511's old 5-bit/5-bit layout to the new "extended register access"
+    // node's 6-bit/3-bit one (ValueBitMask/ValueBitShift added so CvmAssembler's own offline register-
+    // range validation and embedded-value shifting are correct for the new, wider, shifted field) -- see
+    // LoadRegisterFileMnemonic's own remarks.
+    // new(Id: 107, LoadRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: RegisterAccessRegisterFieldBitMask, ValueBitShift: RegisterAccessRegisterFieldShift),
+    // new(Id: 108, StoreRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: RegisterAccessRegisterFieldBitMask, ValueBitShift: RegisterAccessRegisterFieldShift),
+    // new(Id: 109, PopRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: RegisterAccessRegisterFieldBitMask, ValueBitShift: RegisterAccessRegisterFieldShift),
+    // new(Id: 110, PushRegisterFileMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: RegisterAccessRegisterFieldBitMask, ValueBitShift: RegisterAccessRegisterFieldShift),
 
     // tjmp (node 507's own table-jump primitive, confirmed located 2026-09-09 -- see
     // TableJumpMnemonic's own remarks) and node 506's new f/fpush (2026-09-09, replacing the retired
     // lal/lap -- see FrameToRegisterMnemonic's own remarks). All three are tagged/node-resolved, exactly
     // like leave/halt above (CvmOperandEncoding.None, no Tag/ValueBitMask here -- resolved only against
     // a live compile via Ga144.Evb.Ide.Services.CvmAssemblyLanguage.NodeSymbolByMnemonic).
-    new(Id: 111, TableJumpMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 112, FrameToRegisterMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 113, PushFrameMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 111, TableJumpMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 112, FrameToRegisterMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 113, PushFrameMnemonic, 1, CvmOperandEncoding.None),
 
     // jump/xs/xp, node 507's own last three tick-labeled opcodes, added 2026-09-09 by the opcode/
     // assembler-vs-node reconciliation audit -- see JumpMnemonic's own remarks. jump is shaped exactly
     // like pushlit/lcall/ljmp/ldg/stg (CvmOperandEncoding.TrailingWord, 2 words); xs/xp take no operand
     // at all, exactly like nop/push/pop/ret/halt/tjmp (CvmOperandEncoding.None, 1 word). All three are
     // tagged/node-resolved against node 507's own live compile, no Tag/ValueBitMask here.
-    new(Id: 114, JumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 115, ExchangeSMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 116, ExchangePMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 114, JumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 115, ExchangeSMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 116, ExchangePMnemonic, 1, CvmOperandEncoding.None),
 
     // The address-register family's CURRENT ops (2026-09-09, second pass; RE-TASKED again 2026-09-11 to
     // a real register operand -- see ArithmeticStoreAddressRegisterMnemonic's own remarks; RENUMBERED
@@ -1993,12 +2130,12 @@ public static class CvmInstructionSet
     // tick-prefixed, node-resolved, with a 3-bit embedded register-index operand
     // (CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask = AddressRegisterRegisterFieldBitMask),
     // replacing the retired self-describing family above (Ids 101-106).
-    new(Id: 117, ArithmeticIncrementAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
-    new(Id: 118, ArithmeticDecrementAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
-    new(Id: 119, ArithmeticLoadAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
-    new(Id: 120, ArithmeticStoreAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
-    new(Id: 121, LoadAddressRegisterValueMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
-    new(Id: 122, StoreAddressRegisterValueMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
+    // new(Id: 117, ArithmeticIncrementAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
+    // new(Id: 118, ArithmeticDecrementAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
+    // new(Id: 119, ArithmeticLoadAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
+    // new(Id: 120, ArithmeticStoreAddressRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
+    // new(Id: 121, LoadAddressRegisterValueMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
+    // new(Id: 122, StoreAddressRegisterValueMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
 
     // Ids 123-128 (were dpop/dpush/dinc/ddec/dadd/dor, node 308's OLD "VM 32 arithmetic" family) REMOVED
     // OUTRIGHT 2026-09-15 per Stefan's own direct instruction -- see the removal note above
@@ -2006,44 +2143,49 @@ public static class CvmInstructionSet
 
     // Node 405's nine ops (2026-09-09) -- tagged/node-resolved, CvmOperandEncoding.None. See
     // ToggleCarryMnemonic's own remarks.
-    new(Id: 129, ToggleCarryMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 130, AddWithCarryFlagMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 131, LoadCarryMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 132, SetCarryMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 133, ClearCarryMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 134, StoreCarryMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 135, SubtractWithCarryMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 136, RotateLeftMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 137, RotateRightMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 129, ToggleCarryMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 130, AddWithCarryFlagMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 131, LoadCarryMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 132, SetCarryMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 133, ClearCarryMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 134, StoreCarryMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 135, SubtractWithCarryMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 136, RotateLeftMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 137, RotateRightMnemonic, 1, CvmOperandEncoding.None),
 
     // Node 505's 'fx (2026-09-09) -- tagged/node-resolved, CvmOperandEncoding.None. See
     // FrameExchangeMnemonic's own remarks (including the deliberately-unwired 'f collision with node
     // 506's own FrameToRegisterMnemonic).
-    new(Id: 138, FrameExchangeMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 138, FrameExchangeMnemonic, 1, CvmOperandEncoding.None),
 
     // Node 510's five genuinely new ops (2026-09-09) -- tagged/node-resolved, CvmOperandEncoding.None.
     // 'addc itself REPOINTS the existing AddWithCarryMnemonic (Id 57) rather than adding a new Id -- see
     // ExtendedStoreMnemonic's own remarks for the (since-resolved) CvmDebuggerDefaultProgram implication.
-    new(Id: 139, ExtendedStoreMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 140, ExtendedLoadMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 141, ExtendedMultiplyByTwoMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 142, ExtendedDivideByTwoMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 143, ExtendedUnsignedMultiplyMnemonic, 1, CvmOperandEncoding.None),
+    // RETIRED 2026-09-27 (kept, per this file's own "do not remove any opcodes" convention): node 510's
+    // wholesale redesign ("extended register access", replacing "extended arithmetic") no longer defines
+    // 'xst/'xld/'xmul2/'xdiv2/'xumul at all -- the entire double-word (32-bit) arithmetic role node 510
+    // used to play is simply gone from the new source, with no successor anywhere in the mesh. Ids
+    // 139-143 are still never to be reused.
+    // new(Id: 139, ExtendedStoreMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 140, ExtendedLoadMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 141, ExtendedMultiplyByTwoMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 142, ExtendedDivideByTwoMnemonic, 1, CvmOperandEncoding.None),
+    // new(Id: 143, ExtendedUnsignedMultiplyMnemonic, 1, CvmOperandEncoding.None),
 
     // Node 508's embedded-9-bit-offset global fetch/store (2026-09-10) -- see
     // LoadGlobalEmbeddedMnemonic/StoreGlobalEmbeddedMnemonic's own remarks for the bit derivation and
     // the relationship to gld/gst (Id 75/76) above. A tag-range overlap with AdjustTag was flagged
     // (accepted) when this was added, then mooted the same day once adjust itself was deleted outright
     // -- see those same remarks and this file's own class-level remarks on the 2026-09-10 removal.
-    new(Id: 144, LoadGlobalEmbeddedMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadGlobalEmbeddedTag, ValueBitMask: GlobalEmbeddedOffsetBitMask),
-    new(Id: 145, StoreGlobalEmbeddedMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: StoreGlobalEmbeddedTag, ValueBitMask: GlobalEmbeddedOffsetBitMask),
+    // new(Id: 144, LoadGlobalEmbeddedMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: LoadGlobalEmbeddedTag, ValueBitMask: GlobalEmbeddedOffsetBitMask),
+    // new(Id: 145, StoreGlobalEmbeddedMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: StoreGlobalEmbeddedTag, ValueBitMask: GlobalEmbeddedOffsetBitMask),
 
     // arinc2/ardec2 (2026-09-15) -- see ArithmeticIncrementAddressRegisterByTwoMnemonic's own remarks
     // for "I gave up the 7th register for 2 new opcodes" and the flagged, unwired-at-the-F18-level
     // "leap"/"then" body shape. Wired here purely on the strength of the shared, already-confirmed
     // encoding shape (same tag/field layout as arinc/ardec).
-    new(Id: 146, ArithmeticIncrementAddressRegisterByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
-    new(Id: 147, ArithmeticDecrementAddressRegisterByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
+    // new(Id: 146, ArithmeticIncrementAddressRegisterByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
+    // new(Id: 147, ArithmeticDecrementAddressRegisterByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: AddressRegisterRegisterFieldBitMask),
 
     // Ids 148-159 (were the OLD 'fpop/'fpush/fadd/fsub/fmin/fmax/fmul/fdiv/fln2/filn2/fpi2/f2pi family,
     // 2026-09-15/16/17) RETIRED OUTRIGHT 2026-09-21 -- REWORKED per Stefan's own direct instruction ("i
@@ -2061,23 +2203,23 @@ public static class CvmInstructionSet
     // only) -- CORRECTED 2026-09-21, per Stefan directly ("fpush and fpop only have 1 parameter, the
     // other opcodes have 2 parameter"; ggg is simply unused/always zero for these two, per his own node
     // 306 header: "fpop a ; ggg is not used {only 1 argument}").
-    new(Id: 160, FloatingPointAddMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointAddTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
-    new(Id: 161, FloatingPointSubtractMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointSubtractTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
-    new(Id: 162, FloatingPointMinimumMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMinimumTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
-    new(Id: 163, FloatingPointMaximumMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMaximumTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
-    new(Id: 164, FloatingPointMultiplyMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMultiplyTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
-    new(Id: 165, FloatingPointDivideMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointDivideTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
-    new(Id: 166, FloatingPointMoveMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMoveTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
-    new(Id: 167, FloatingPointConstantMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointConstantTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
-    new(Id: 168, FloatingPointNegateMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointNegateTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
-    new(Id: 169, FloatingPointAbsoluteMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointAbsoluteTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    // new(Id: 160, FloatingPointAddMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointAddTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    // new(Id: 161, FloatingPointSubtractMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointSubtractTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    // new(Id: 162, FloatingPointMinimumMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMinimumTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    // new(Id: 163, FloatingPointMaximumMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMaximumTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    // new(Id: 164, FloatingPointMultiplyMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMultiplyTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    // new(Id: 165, FloatingPointDivideMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointDivideTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    // new(Id: 166, FloatingPointMoveMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointMoveTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    // new(Id: 167, FloatingPointConstantMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointConstantTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    // new(Id: 168, FloatingPointNegateMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointNegateTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
+    // new(Id: 169, FloatingPointAbsoluteMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointAbsoluteTag, ValueBitMask: FloatingPointRegisterFieldBitMask, SecondValueBitMask: FloatingPointSecondOperandRegisterFieldBitMask, SecondValueBitShift: FloatingPointSecondOperandRegisterFieldShift),
     // fpop/fpush: ONE argument each ("fpop f"/"fpush f"), not the "f g" pair every other op above takes --
     // CORRECTED 2026-09-21 per Stefan directly. Plain EmbeddedUnsignedValue (fff only, no
     // SecondValueBitMask/SecondValueBitShift): the assembler now requires exactly one operand for these
     // two, and the emitted word's ggg bits (5-3) are simply always zero, matching node 306's own header
     // ("fpop a ; ggg is not used {only 1 argument}").
-    new(Id: 170, FloatingPointPopMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointPopTag, ValueBitMask: FloatingPointRegisterFieldBitMask),
-    new(Id: 171, FloatingPointPushMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointPushTag, ValueBitMask: FloatingPointRegisterFieldBitMask),
+    // new(Id: 170, FloatingPointPopMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointPopTag, ValueBitMask: FloatingPointRegisterFieldBitMask),
+    // new(Id: 171, FloatingPointPushMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: FloatingPointPushTag, ValueBitMask: FloatingPointRegisterFieldBitMask),
 
     // Node 409's four bit-operation mnemonics (2026-09-27) -- see BitClearMnemonic's own remarks for the
     // full bit-layout derivation and the two flagged opens (the ooo-vs-oo field width, and the # 407
@@ -2085,18 +2227,25 @@ public static class CvmInstructionSet
     // aaaa only); bcopy takes two (EmbeddedUnsignedValuePair, aaaa first/bbbb second) -- the same
     // one-operand/two-operand split precedent as node 306's fpop/fpush vs. its other ten floating-point
     // ops.
-    new(Id: 172, BitClearMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: BitClearTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift),
-    new(Id: 173, BitSetMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: BitSetTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift),
-    new(Id: 174, BitInvertMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: BitInvertTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift),
-    new(Id: 175, BitCopyMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: BitCopyTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift, SecondValueBitMask: BitPositionSecondFieldBitMask, SecondValueBitShift: BitPositionSecondFieldShift),
+    // new(Id: 172, BitClearMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: BitClearTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift),
+    // new(Id: 173, BitSetMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: BitSetTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift),
+    // new(Id: 174, BitInvertMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: BitInvertTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift),
+    // new(Id: 175, BitCopyMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: BitCopyTag, ValueBitMask: BitPositionFieldBitMask, ValueBitShift: BitPositionFieldShift, SecondValueBitMask: BitPositionSecondFieldBitMask, SecondValueBitShift: BitPositionSecondFieldShift),
 
     // Node 508's literal-load family, added 2026-09-27 -- see LitrMnemonic's own remarks. litr is a
     // plain single-TrailingWord mnemonic (dynamically resolved against node 508's own live compile,
     // exactly like gld/gst above); litm/lit2 are the first two mnemonics in this project needing the new
     // TwoTrailingWords shape (two operand words following the tag word, WordLength 3).
-    new(Id: 176, LitrMnemonic, 2, CvmOperandEncoding.TrailingWord),
-    new(Id: 177, LitmMnemonic, 3, CvmOperandEncoding.TwoTrailingWords),
-    new(Id: 178, Lit2Mnemonic, 3, CvmOperandEncoding.TwoTrailingWords),
+    // new(Id: 176, LitrMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // new(Id: 177, LitmMnemonic, 3, CvmOperandEncoding.TwoTrailingWords),
+    // new(Id: 178, Lit2Mnemonic, 3, CvmOperandEncoding.TwoTrailingWords),
+
+    // The new "extended register access" node's three genuinely new, register-only ops (2026-09-27) --
+    // see RegisterClearMnemonic's own remarks. "rlit" (op code 1) is deliberately NOT here -- see
+    // RegisterSetMnemonic's own remarks for why.
+    // new(Id: 179, RegisterClearMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: RegisterAccessRegisterFieldBitMask, ValueBitShift: RegisterAccessRegisterFieldShift),
+    // new(Id: 180, RegisterPopPairMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: RegisterAccessRegisterFieldBitMask, ValueBitShift: RegisterAccessRegisterFieldShift),
+    // new(Id: 181, RegisterPushPairMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: RegisterAccessRegisterFieldBitMask, ValueBitShift: RegisterAccessRegisterFieldShift),
   ];
 
   private static readonly IReadOnlyDictionary<string, CvmInstructionShape> ByMnemonic =
@@ -2205,33 +2354,59 @@ public static class CvmInstructionSet
   /// </summary>
   public static string? TryDescribeSelfDecodingWord(int word, int? wordAddress = null)
   {
-    if (word <= CallAddressMask)
+    // ADDED 2026-09-30, checked FIRST, ahead of every hardcoded check below: the new VM's own
+    // CvmOperandEncoding.FixedOpcode shapes (today, just nop, word 0x0000 -- see that enum case's own
+    // remarks and Instructions' own remarks at the top of its list). An exact word match against each
+    // live FixedOpcode shape's own Tag, matched generically the same way the EmbeddedUnsignedValue loop
+    // further down already is, so a future FixedOpcode mnemonic needs no new check here. Checked first
+    // specifically so nop's own 0x0000 can never be shadowed by call's old "word <= CallAddressMask"
+    // range check just below (0 satisfies that range too) -- moot today since that check is itself
+    // commented out as part of this same reset, but kept defensively correct regardless.
+    foreach (CvmInstructionShape fixedOpcodeShape in Instructions)
     {
-      return $"{CallMnemonic} {FormatOperand(word)}";
+      if (fixedOpcodeShape.Encoding == CvmOperandEncoding.FixedOpcode && word == fixedOpcodeShape.Tag)
+      {
+        return fixedOpcodeShape.Mnemonic;
+      }
     }
 
-    if ((word & BranchTagMask) == BranchTag)
-    {
-      return $"{BranchMnemonic} {FormatOperand(DecodeBranchOffset(word))}{DescribeBranchTarget(wordAddress, DecodeBranchOffset(word))}";
-    }
-
-    // cbr, CONFIRMED 2026-09-09 (replacing the old, unconfirmed "ifbr" placeholder guess -- see
-    // ConditionalBranchTag's own remarks for Stefan's exact bit pattern). Checked here, right after br
-    // and well before the generic EmbeddedUnsignedValue loop below. Originally this ordering mattered
-    // because cbr's tag (0xAC00, mask 0xFC00) briefly, fully contained the unconfirmed, orphaned lal/lap
-    // tags (0xAE00/0xAF00) that loop would otherwise have matched -- lal/lap were retired outright the
-    // same day (see ConditionalBranchTag's own remarks), so that collision no longer exists at all, but
-    // cbr is kept here rather than moved back into the generic loop since a self-describing branch shape
-    // reads more clearly grouped with br above it.
-    if ((word & ConditionalBranchTagMask) == ConditionalBranchTag)
-    {
-      return $"{ConditionalBranchMnemonic} {FormatOperand(DecodeConditionalBranchOffset(word))}{DescribeBranchTarget(wordAddress, DecodeConditionalBranchOffset(word))}";
-    }
-
-    if ((word & LitTagMask) == LitTag)
-    {
-      return $"{LitMnemonic} {FormatOperand(DecodeLitValue(word))}";
-    }
+    // call/br/cbr/lit -- RETIRED 2026-09-30 along with every other CVM2 opcode (see Instructions' own
+    // remarks at the top of its list: "there is a new virtual machine. all opcodes are invalid. except
+    // that 'nop' has the opcode '0'."). Commented out rather than deleted, same "do not remove any
+    // opcodes" convention as everywhere else in this file -- unlike every retirement before this one,
+    // these four hardcoded checks do NOT consult Instructions' own retirement state at all (they always
+    // fired directly off CallAddressMask/BranchTag/ConditionalBranchTag/LitTag regardless of whether
+    // call/br/cbr/lit's own Instructions rows were still present), so leaving them active would have
+    // kept describing words as "call"/"br"/"cbr"/"lit" even though none of those mnemonics exist in the
+    // new VM any longer -- silently contradicting "all opcodes are invalid except nop." Commented out
+    // together with their own Instructions rows for that reason.
+    // if (word <= CallAddressMask)
+    // {
+    //   return $"{CallMnemonic} {FormatOperand(word)}";
+    // }
+    //
+    // if ((word & BranchTagMask) == BranchTag)
+    // {
+    //   return $"{BranchMnemonic} {FormatOperand(DecodeBranchOffset(word))}{DescribeBranchTarget(wordAddress, DecodeBranchOffset(word))}";
+    // }
+    //
+    // // cbr, CONFIRMED 2026-09-09 (replacing the old, unconfirmed "ifbr" placeholder guess -- see
+    // // ConditionalBranchTag's own remarks for Stefan's exact bit pattern). Checked here, right after br
+    // // and well before the generic EmbeddedUnsignedValue loop below. Originally this ordering mattered
+    // // because cbr's tag (0xAC00, mask 0xFC00) briefly, fully contained the unconfirmed, orphaned lal/lap
+    // // tags (0xAE00/0xAF00) that loop would otherwise have matched -- lal/lap were retired outright the
+    // // same day (see ConditionalBranchTag's own remarks), so that collision no longer exists at all, but
+    // // cbr is kept here rather than moved back into the generic loop since a self-describing branch shape
+    // // reads more clearly grouped with br above it.
+    // if ((word & ConditionalBranchTagMask) == ConditionalBranchTag)
+    // {
+    //   return $"{ConditionalBranchMnemonic} {FormatOperand(DecodeConditionalBranchOffset(word))}{DescribeBranchTarget(wordAddress, DecodeConditionalBranchOffset(word))}";
+    // }
+    //
+    // if ((word & LitTagMask) == LitTag)
+    // {
+    //   return $"{LitMnemonic} {FormatOperand(DecodeLitValue(word))}";
+    // }
 
     // Every EmbeddedUnsignedValue shape, self-describing the same way: a fixed tag OR'd with an
     // unsigned value in the low ValueBitMask bits. Matched generically against every such shape in

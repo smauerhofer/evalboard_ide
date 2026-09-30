@@ -88,7 +88,16 @@ public static class CvmPrimitiveTableExporter
 
     var encodeTable = CvmAssemblyLanguage.BuildEncodeTable(compiledRam);
     var entries = new Dictionary<string, int>(StringComparer.Ordinal);
-    foreach (KeyValuePair<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> pair in encodeTable)
+    // NOTE, fixed 2026-09-30: this loop used to spell out BuildEncodeTable's own value-tuple shape by
+    // hand (Opcode/WordLength/HasOperand/OperandIsEmbedded/EmbeddedValueMask, 5 elements) -- once that
+    // tuple grew a 6th element, EmbeddedValueShift (for a field-layout that needs a shift alongside its
+    // mask), this hand-written copy silently fell out of step and stopped compiling at all
+    // ("CS0030: Cannot convert ... 6 elements ... to ... 5 elements"), surfaced by Stefan's own build
+    // right after the 2026-09-30 CVM reset even though this exporter itself was not touched by that
+    // reset. Switched to `var` so this loop tracks BuildEncodeTable's own return shape automatically --
+    // only `Opcode`/`OperandIsEmbedded` are ever read here, so there is nothing this file needs to name
+    // explicitly, and any future change to that tuple's shape can no longer break this file again.
+    foreach (var pair in encodeTable)
     {
       if (pair.Value.OperandIsEmbedded)
       {

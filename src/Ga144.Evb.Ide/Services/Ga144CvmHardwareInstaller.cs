@@ -96,15 +96,16 @@ public sealed class Ga144CvmHardwareInstaller
   /// resulting read/write traffic to completion, leaving the port open and handing back a session
   /// the CVM Debugger window drives one transaction (or one breakpoint run) at a time.
   ///
-  /// <b>CVM2 (2026-09-01): the default program can currently fail to build, and that's tolerated.</b>
-  /// <see cref="CvmDebuggerDefaultProgram.Source"/> is still CVM1-era content exercising opcodes (ALU
-  /// ops like <c>inv</c> among them) that CVM2's mesh has no node for any more -- every one of CVM1's
-  /// old node 507 ALU mnemonics is now permanently orphaned (see
-  /// <see cref="Services.CvmAssemblyLanguage"/>'s own remarks), so assembling it throws. Rather than
-  /// let that abort Start Debug Session entirely, this method falls back to a minimal
-  /// <c>nop</c>/<c>plit</c>/<c>pop</c>/<c>push</c> program (<see cref="CvmMemoryProtocol.TryBuildTestProgram"/>)
-  /// and only throws if THAT also fails. <see cref="CvmDebuggerDefaultProgram"/> itself stays
-  /// untouched, per Stefan's own standing instruction.
+  /// <b>The default program can currently fail to build, and that's tolerated.</b>
+  /// <see cref="CvmDebuggerDefaultProgram.Source"/> still exercises dozens of CVM opcodes that no
+  /// longer exist at all as of the 2026-09-30 new-VM reset (every mnemonic except <c>nop</c> was
+  /// retired -- see <see cref="Services.CvmAssemblyLanguage"/>'s own remarks), so assembling it
+  /// throws. Rather than let that abort Start Debug Session entirely, this method falls back to a
+  /// minimal, all-<c>nop</c> smoke-test program (<see cref="CvmMemoryProtocol.TryBuildTestProgram"/>,
+  /// itself rewritten the same day to build straight from <c>nop</c>'s own fixed opcode rather than
+  /// resolving anything against a live node compile) and only throws if THAT also fails.
+  /// <see cref="CvmDebuggerDefaultProgram"/> itself stays untouched, per Stefan's own standing
+  /// instruction.
   /// </summary>
   public Task<CvmDebugSession> StartDebugSessionAsync(
       string portName,

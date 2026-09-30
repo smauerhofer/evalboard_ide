@@ -481,6 +481,18 @@ internal static class CvmAssemblyLanguage
   // this one.)
   private const int Node511Tag = 0xBC00;
 
+  // SUPERSEDES Node511Tag (and the OLD node 510 "extended arithmetic" tag, 0xB800, formerly used for
+  // 'addc/'xst/'xld/'xmul2/'xdiv2/'xumul below) as of 2026-09-27: Stefan redesigned nodes 510/511
+  // wholesale -- node 511 is now pure passive 64-word register STORAGE with no opcode-relevant F18 symbols
+  // of its own at all, and node 510 ("extended register access") absorbs the WHOLE combined range
+  // directly, one hop closer to node 509 (imports node 509, not node 510) rather than two. Same
+  // NodeResolvedEmbeddedValue shape as the old Node511Tag family -- see
+  // CvmInstructionSet.RegisterAccessRegisterFieldBitMask's own remarks for the new 6-bit/3-bit field
+  // layout (register now at bits 9-4, not bits 4-0 -- the first NodeResolvedEmbeddedValue family in this
+  // file whose register field needs an actual shift, see NodeResolvedEmbeddedValueFieldLayoutByMnemonic's
+  // own RegisterFieldShift member).
+  private const int Node510RegisterAccessTag = 0xB800;
+
   // REMOVED OUTRIGHT, 2026-09-15: "Node308Tag" (0xDC00) used to tag node 308's OLD dpop/dpush/dinc/
   // ddec/dadd/dor family (added 2026-09-09) -- removed completely per Stefan's own direct instruction,
   // see CvmInstructionSet's own removal note above FloatingPointRegisterFieldBitMask. The numeric value
@@ -501,6 +513,20 @@ internal static class CvmAssemblyLanguage
   // compile, so NodeSymbolByMnemonic/NodeResolvedEmbeddedValueFieldLayoutByMnemonic simply have no rows
   // for any of the twelve floating-point mnemonics any more.
 
+  // ---- 2026-09-30: NEW VIRTUAL MACHINE, full reset -- this whole dictionary is now INERT -----------
+  // Per Stefan directly: "there is a new virtual machine. all opcodes are invalid. except that 'nop'
+  // has the opcode '0'." CvmInstructionSet.Instructions now contains exactly one live entry (nop), and
+  // its own encoding is CvmOperandEncoding.FixedOpcode -- a shape that, by design, needs no node/symbol
+  // resolution at all (see that encoding's own remarks). None of the four encodings this file's own
+  // Instructions list (below) filters for -- None/TrailingWord/TwoTrailingWords/NodeResolvedEmbeddedValue
+  // -- exist in CvmInstructionSet.Instructions any longer, so that filtered list comes out EMPTY, and
+  // every entry below is simply never looked up by anything any more (BuildDecodeTable/BuildEncodeTable
+  // both iterate that now-empty list, not this dictionary directly). Left in place, uncommented, per
+  // this file's own "do not remove any opcodes" convention -- commenting out ~280 individual dictionary
+  // entries here would be pure busywork with no behavioral effect, since the filter upstream already
+  // makes every one of them unreachable; this note exists so a future reader doesn't mistake "still
+  // compiles" for "still wired."
+  //
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
   // tag bits its opcode word must carry (Node508TagBits for the OLD, permanently-orphaned CVM1
   // comparison ops; Node507Cvm2LocalExecuteTagBits for CVM2's own six repointed primitives -- these
@@ -709,10 +735,22 @@ internal static class CvmAssemblyLanguage
         // CvmInstructionSet.LoadRegisterFileMnemonic's own remarks. A PRIOR pass of this same audit,
         // working from an intermediate re-sync of node 511's own source, had retired these four; that
         // retirement is reversed here.
-        [CvmInstructionSet.LoadRegisterFileMnemonic] = (Node511Program.Coordinate, "'rld", Node511Tag),
-        [CvmInstructionSet.StoreRegisterFileMnemonic] = (Node511Program.Coordinate, "'rst", Node511Tag),
-        [CvmInstructionSet.PopRegisterFileMnemonic] = (Node511Program.Coordinate, "'rpop", Node511Tag),
-        [CvmInstructionSet.PushRegisterFileMnemonic] = (Node511Program.Coordinate, "'rpush", Node511Tag),
+        // REPOINTED 2026-09-27: node 511 is now pure passive register STORAGE with no F18 symbols of its
+        // own opcode-relevant kind at all -- physical node 510's own new "extended register access" source
+        // (reg/main) absorbs the whole family directly. Note these four symbols are NOT tick-prefixed in
+        // Stefan's own new source (reg/ld/reg/st/reg/po/reg/pu) -- a departure from the usual "only a
+        // leading ' makes a CVM opcode" naming rule, called out in Cvm.Node510Program's own remarks rather
+        // than silently normalized here.
+        [CvmInstructionSet.LoadRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/ld", Node510RegisterAccessTag),
+        [CvmInstructionSet.StoreRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/st", Node510RegisterAccessTag),
+        [CvmInstructionSet.PopRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/po", Node510RegisterAccessTag),
+        [CvmInstructionSet.PushRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/pu", Node510RegisterAccessTag),
+        // Three genuinely new ops from the same family (2026-09-27) -- see
+        // CvmInstructionSet.RegisterClearMnemonic's own remarks. "rlit" is deliberately not wired here --
+        // see CvmInstructionSet.RegisterSetMnemonic's own remarks for why.
+        [CvmInstructionSet.RegisterClearMnemonic] = (Node510Program.Coordinate, "reg/clr", Node510RegisterAccessTag),
+        [CvmInstructionSet.RegisterPopPairMnemonic] = (Node510Program.Coordinate, "reg/po2", Node510RegisterAccessTag),
+        [CvmInstructionSet.RegisterPushPairMnemonic] = (Node510Program.Coordinate, "reg/pu2", Node510RegisterAccessTag),
 
         // Node 306's CURRENT six ops (2026-09-09, second pass of the opcode/assembler-vs-node
         // reconciliation audit against Stefan's own workspace.yaml export) -- tick-prefixed, node-
@@ -790,19 +828,15 @@ internal static class CvmAssemblyLanguage
         // the FLAGGED collision with FrameToRegisterMnemonic ("f") above, already wired to node 506.
         [CvmInstructionSet.FrameExchangeMnemonic] = (Node505Program.Coordinate, "'fx", 0x9400),
 
-        // Node 510's own "extended arithmetic" ops (2026-09-09) -- tagged/node-resolved, sharing node
-        // 510's own "1011_10??" local-execute tag (0xB800) OR'd with each op's own address on node 510.
-        // 'addc REPOINTS the existing AddWithCarryMnemonic ("addc") -- FLAGGED, see
-        // ExtendedStoreMnemonic's own remarks in CvmInstructionSet for the CvmDebuggerDefaultProgram
-        // implication of this repoint.
-        [CvmInstructionSet.AddWithCarryMnemonic] = (Node510Program.Coordinate, "'addc", 0xB800),
-        [CvmInstructionSet.ExtendedStoreMnemonic] = (Node510Program.Coordinate, "'xst", 0xB800),
-        [CvmInstructionSet.ExtendedLoadMnemonic] = (Node510Program.Coordinate, "'xld", 0xB800),
-        [CvmInstructionSet.ExtendedMultiplyByTwoMnemonic] = (Node510Program.Coordinate, "'xmul2", 0xB800),
-        [CvmInstructionSet.ExtendedDivideByTwoMnemonic] = (Node510Program.Coordinate, "'xdiv2", 0xB800),
-        [CvmInstructionSet.ExtendedUnsignedMultiplyMnemonic] = (Node510Program.Coordinate, "'xumul", 0xB800),
+        // REMOVED OUTRIGHT, 2026-09-27: node 510's OLD "extended arithmetic" ops (2026-09-09,
+        // 'addc/'xst/'xld/'xmul2/'xdiv2/'xumul, tag 0xB800) -- node 510's wholesale redesign into
+        // "extended register access" no longer defines any of these six F18 symbols at all; see
+        // CvmInstructionSet.AddWithCarryMnemonic's/ExtendedStoreMnemonic's own remarks for the retirement.
       };
 
+  // INERT as of 2026-09-30 -- see NodeSymbolByMnemonic's own header note just above for why: no
+  // NodeResolvedEmbeddedValue mnemonic survives the new VM's reset, so nothing looks this dictionary up
+  // any more either. Kept, uncommented, for the same reason.
   /// <summary>
   /// Per-mnemonic field layout for <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>
   /// mnemonics only (node 511's <c>rld</c>/<c>rst</c>/<c>rpop</c>/<c>rpush</c> and the address-register
@@ -820,13 +854,20 @@ internal static class CvmAssemblyLanguage
   /// own remarks -- since the new floating-point family is fully self-describing and needs no live-node
   /// field layout at all.)
   /// </summary>
-  private static readonly IReadOnlyDictionary<string, (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask)> NodeResolvedEmbeddedValueFieldLayoutByMnemonic =
-      new Dictionary<string, (int, int, int, int)>(StringComparer.OrdinalIgnoreCase)
+  private static readonly IReadOnlyDictionary<string, (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask, int RegisterFieldShift)> NodeResolvedEmbeddedValueFieldLayoutByMnemonic =
+      new Dictionary<string, (int, int, int, int, int)>(StringComparer.OrdinalIgnoreCase)
       {
-        [CvmInstructionSet.LoadRegisterFileMnemonic] = (CvmInstructionSet.Node511FunctionFieldBitMask, CvmInstructionSet.Node511FunctionFieldShift, CvmInstructionSet.Node511FunctionFieldBaseAddress, CvmInstructionSet.Node511RegisterFieldBitMask),
-        [CvmInstructionSet.StoreRegisterFileMnemonic] = (CvmInstructionSet.Node511FunctionFieldBitMask, CvmInstructionSet.Node511FunctionFieldShift, CvmInstructionSet.Node511FunctionFieldBaseAddress, CvmInstructionSet.Node511RegisterFieldBitMask),
-        [CvmInstructionSet.PopRegisterFileMnemonic] = (CvmInstructionSet.Node511FunctionFieldBitMask, CvmInstructionSet.Node511FunctionFieldShift, CvmInstructionSet.Node511FunctionFieldBaseAddress, CvmInstructionSet.Node511RegisterFieldBitMask),
-        [CvmInstructionSet.PushRegisterFileMnemonic] = (CvmInstructionSet.Node511FunctionFieldBitMask, CvmInstructionSet.Node511FunctionFieldShift, CvmInstructionSet.Node511FunctionFieldBaseAddress, CvmInstructionSet.Node511RegisterFieldBitMask),
+        // REPOINTED 2026-09-27 from node 511's OLD 5-bit/5-bit layout (Node511FunctionField*/
+        // Node511RegisterFieldBitMask, kept for historical reference in CvmInstructionSet) to the new
+        // "extended register access" node's 6-bit/3-bit one -- the FIRST family in this dictionary whose
+        // own register field needs a real RegisterFieldShift (4), since it no longer sits at bit 0.
+        [CvmInstructionSet.LoadRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        [CvmInstructionSet.StoreRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        [CvmInstructionSet.PopRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        [CvmInstructionSet.PushRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        [CvmInstructionSet.RegisterClearMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        [CvmInstructionSet.RegisterPopPairMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        [CvmInstructionSet.RegisterPushPairMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
         // REMOVED OUTRIGHT, 2026-09-15: node 308's old dpop/dpush/dinc/ddec/dadd/dor field-layout entries
         // (Node308FunctionFieldBitMask/Shift/BaseAddress/RegisterFieldBitMask) -- see CvmInstructionSet's
         // own removal note above FloatingPointRegisterFieldBitMask for why (Stefan's own direct
@@ -852,16 +893,22 @@ internal static class CvmAssemblyLanguage
         // general shape node 306's OLD 'fpop used to use too (now retired, see the removal note above).
         // arinc2/ardec2 (2026-09-15, "I gave up the 7th register for 2 new opcodes") share this exact
         // same layout.
-        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
-        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
-        [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
-        [CvmInstructionSet.ArithmeticDecrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
-        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
-        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
-        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
-        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask),
+        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
+        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
+        [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
+        [CvmInstructionSet.ArithmeticDecrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
+        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
+        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
+        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
+        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
       };
 
+  // EMPTY as of 2026-09-30 -- see NodeSymbolByMnemonic's own header note above. CvmInstructionSet.
+  // Instructions no longer contains any None/TrailingWord/TwoTrailingWords/NodeResolvedEmbeddedValue
+  // shape (nop, the one survivor, is CvmOperandEncoding.FixedOpcode instead -- excluded by this list's
+  // own .Where filter below by design), so this list's own LINQ query below now evaluates to an empty
+  // list, not merely a stale one. BuildDecodeTable/BuildEncodeTable both iterate this list, so they
+  // degrade to producing empty tables automatically -- no code change was needed in either.
   /// <summary>
   /// Every known CVM asm mnemonic THAT RESOLVES TO SOME NODE'S F18 SYMBOL, which node and symbol that
   /// is, and how many words (its own opcode word included) it occupies once assembled. <c>pushlit</c>,
@@ -971,7 +1018,7 @@ internal static class CvmAssemblyLanguage
         // for this scheme to represent it at all. A symbol resolving outside that window (the node's own
         // source grew past its own reserved word count) is silently omitted, same as any other mnemonic
         // whose node/symbol doesn't resolve -- Stefan's own node source is never second-guessed here.
-        if (!NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask) layout))
+        if (!NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask, int RegisterFieldShift) layout))
         {
           continue;
         }
@@ -985,7 +1032,7 @@ internal static class CvmAssemblyLanguage
         int baseOpcode = tag | (functionField << layout.FunctionFieldShift);
         for (int register = 0; register <= layout.RegisterFieldBitMask; register++)
         {
-          table[baseOpcode | register] = (mnemonic, wordLength, register);
+          table[baseOpcode | (register << layout.RegisterFieldShift)] = (mnemonic, wordLength, register);
         }
 
         continue;
@@ -1012,10 +1059,10 @@ internal static class CvmAssemblyLanguage
   /// mnemonic needs a live resolution AND an embedded operand where every other tagged mnemonic here
   /// only ever needed one or the other.
   /// </summary>
-  public static IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> BuildEncodeTable(
+  public static IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> BuildEncodeTable(
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
-    var table = new Dictionary<string, (int, int, bool, bool, int)>(StringComparer.OrdinalIgnoreCase);
+    var table = new Dictionary<string, (int, int, bool, bool, int, int)>(StringComparer.OrdinalIgnoreCase);
     foreach ((string mnemonic, int nodeCoordinate, string symbolName, int tag, int wordLength, bool hasOperand, CvmInstructionSet.CvmOperandEncoding encoding) in Instructions)
     {
       if (!compiledRam.TryGetValue(nodeCoordinate, out F18CompileResult? compile))
@@ -1038,7 +1085,7 @@ internal static class CvmAssemblyLanguage
       {
         // See BuildDecodeTable's own remarks for the same per-mnemonic field-layout lookup and window
         // check.
-        if (!NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask) layout))
+        if (!NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask, int RegisterFieldShift) layout))
         {
           continue;
         }
@@ -1050,11 +1097,11 @@ internal static class CvmAssemblyLanguage
         }
 
         int baseOpcode = tag | (functionField << layout.FunctionFieldShift);
-        table[mnemonic] = (baseOpcode, wordLength, true, true, layout.RegisterFieldBitMask);
+        table[mnemonic] = (baseOpcode, wordLength, true, true, layout.RegisterFieldBitMask, layout.RegisterFieldShift);
         continue;
       }
 
-      table[mnemonic] = (tag | resolvedAddress, wordLength, hasOperand, false, 0);
+      table[mnemonic] = (tag | resolvedAddress, wordLength, hasOperand, false, 0, 0);
     }
 
     return table;
@@ -1085,6 +1132,19 @@ internal static class CvmAssemblyLanguage
   /// </summary>
   private static string? DiagnoseUnresolvedWiredMnemonic(string mnemonic, IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
+    // ADDED 2026-09-30, for the new VM's reset: NodeSymbolByMnemonic itself is now INERT (see its own
+    // header note) but deliberately left un-emptied, so a mnemonic retired by this reset (e.g. "push")
+    // still has a stale entry in it. Without this guard, such a mnemonic would wrongly be diagnosed as
+    // "implemented on node NNN, but that node didn't compile this run" -- a real, wired-but-currently-
+    // unresolved failure -- instead of the true story, "not a known CVM asm mnemonic any more." Checking
+    // CvmInstructionSet.TryGetShape first (the live, authoritative Instructions table, which no longer
+    // defines "push" at all) restores the correct fall-through to Assemble's own final
+    // "is not a known CVM asm mnemonic" error for every retired mnemonic.
+    if (CvmInstructionSet.TryGetShape(mnemonic) is null)
+    {
+      return null;
+    }
+
     if (!NodeSymbolByMnemonic.TryGetValue(mnemonic, out (int NodeCoordinate, string SymbolName, int Tag) wiring))
     {
       // No live-node wiring at all -- a genuinely, permanently unimplemented mnemonic (CVM1 leftovers,
@@ -1103,7 +1163,7 @@ internal static class CvmAssemblyLanguage
       return $"is implemented on node {wiring.NodeCoordinate:000}, but that node's CURRENT source does not define \"{wiring.SymbolName}\" -- it may have been renamed or removed.";
     }
 
-    if (NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask) layout))
+    if (NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask, int RegisterFieldShift) layout))
     {
       int resolvedAddress = symbol.Value & CvmWordCodec.WordMask;
       int functionField = resolvedAddress - layout.FunctionFieldBaseAddress;
@@ -1190,7 +1250,7 @@ internal static class CvmAssemblyLanguage
       IReadOnlyList<CvmAsmInstruction> instructions,
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
-    IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> encodeTable = BuildEncodeTable(compiledRam);
+    IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable = BuildEncodeTable(compiledRam);
 
     (IReadOnlyDictionary<string, int>? labelAddresses, string? labelError) = CollectLabelAddresses(instructions, encodeTable);
     if (labelAddresses is null)
@@ -1248,7 +1308,7 @@ internal static class CvmAssemblyLanguage
       }
 
       CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
-      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair })
+      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode })
       {
         (int? word, string? selfDescribingError) = EncodeSelfDescribingWord(selfDescribingShape, instruction.Operand, instruction.Operand2, line + 1);
         if (word is null)
@@ -1260,7 +1320,7 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
-      if (!encodeTable.TryGetValue(instruction.Mnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask) entry))
+      if (!encodeTable.TryGetValue(instruction.Mnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) entry))
       {
         // CORRECTED 2026-09-11 (see DiagnoseUnresolvedWiredMnemonic's own remarks for the full incident):
         // a mnemonic that IS wired to a live node (NodeSymbolByMnemonic has an entry for it) but simply
@@ -1279,7 +1339,7 @@ internal static class CvmAssemblyLanguage
           // A genuine CVM opcode (CvmInstructionSet knows its shape) that just has no live node to
           // answer it right now -- per Stefan, substitute node 507's own current 'nop opcode rather
           // than failing the whole assemble. See this method's own remarks.
-          if (!encodeTable.TryGetValue(NopMnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask) nopEntry))
+          if (!encodeTable.TryGetValue(NopMnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) nopEntry))
           {
             return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" has no defined opcode yet, and could not be " +
                 $"substituted with \"{NopMnemonic}\" because node 507's current compile doesn't define \"'nop\" either.");
@@ -1322,7 +1382,7 @@ internal static class CvmAssemblyLanguage
           return (null, null, $"line {line + 1}: {instruction.Operand!.Value} does not fit in \"{instruction.Mnemonic}\"'s embedded register operand (0..{entry.EmbeddedValueMask}).");
         }
 
-        words.Add(entry.Opcode | (instruction.Operand!.Value & entry.EmbeddedValueMask));
+        words.Add(entry.Opcode | ((instruction.Operand!.Value & entry.EmbeddedValueMask) << entry.EmbeddedValueShift));
         continue;
       }
 
@@ -1357,7 +1417,7 @@ internal static class CvmAssemblyLanguage
   /// </summary>
   private static (IReadOnlyDictionary<string, int>? Labels, string? Error) CollectLabelAddresses(
       IReadOnlyList<CvmAsmInstruction> instructions,
-      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> encodeTable)
+      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable)
   {
     var labels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
     int address = 0;
@@ -1408,7 +1468,7 @@ internal static class CvmAssemblyLanguage
   /// </summary>
   private static int GetWordLength(
       CvmAsmInstruction instruction,
-      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> encodeTable)
+      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable)
   {
     string mnemonic = instruction.Mnemonic;
     if (string.Equals(mnemonic, LiteralPseudoMnemonic, StringComparison.OrdinalIgnoreCase))
@@ -1417,12 +1477,12 @@ internal static class CvmAssemblyLanguage
     }
 
     CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(mnemonic);
-    if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair })
+    if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode })
     {
       return selfDescribingShape.WordLength;
     }
 
-    return encodeTable.TryGetValue(mnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask) entry) ? entry.WordLength : 1;
+    return encodeTable.TryGetValue(mnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) entry) ? entry.WordLength : 1;
   }
 
   /// <summary>
@@ -1474,7 +1534,7 @@ internal static class CvmAssemblyLanguage
       // the exact max value depends on which mnemonic's own field layout applies (see
       // NodeResolvedEmbeddedValueFieldLayoutByMnemonic's own remarks), so it is looked up per mnemonic
       // rather than assumed to always be node 511's own 5-bit range.
-      int maxRegister = NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(instruction.Mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask) layout)
+      int maxRegister = NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(instruction.Mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask, int RegisterFieldShift) layout)
           ? layout.RegisterFieldBitMask
           : CvmInstructionSet.Node511RegisterFieldBitMask;
       return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" does not support a label operand -- its value is a register index, not an address; supply a literal 0..{maxRegister} value instead.");
@@ -1631,7 +1691,19 @@ internal static class CvmAssemblyLanguage
   /// </summary>
   private static bool FitsLitRange(int value)
   {
-    CvmInstructionSet.CvmInstructionShape litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
+    // GUARD added 2026-09-30: "lit" was retired in the new VM's reset (see CvmInstructionSet.
+    // Instructions' own remarks at the top of its list) -- TryGetShape now returns null for it, where
+    // this used to unconditionally assume a shape existed (the "!" null-forgiving operator would
+    // otherwise crash with a NullReferenceException the moment anything called GetWordLength/
+    // EncodeLiteralPseudoMnemonic on a "literal" line). Returning false routes the caller down its own
+    // "too big for lit" / litr path instead, which EncodeLiteralPseudoMnemonic's own guard turns into a
+    // clean, specific error rather than a crash.
+    CvmInstructionSet.CvmInstructionShape? litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic);
+    if (litShape is null)
+    {
+      return false;
+    }
+
     int maxValue = litShape.ValueBitMask >> 1;
     int minValue = -(maxValue + 1);
     return value >= minValue && value <= maxValue;
@@ -1651,12 +1723,22 @@ internal static class CvmAssemblyLanguage
   /// </summary>
   private static (List<int>? Words, string? Error) EncodeLiteralPseudoMnemonic(
       CvmAsmInstruction instruction,
-      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask)> encodeTable,
+      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable,
       int lineNumber)
   {
     if (instruction.Operand is not int value)
     {
       return (null, $"line {lineNumber}: \"literal\" requires a literal numeric operand, e.g. \"literal 1234\".");
+    }
+
+    // ADDED 2026-09-30: "lit"/"litr" were both retired in the new VM's reset (see CvmInstructionSet.
+    // Instructions' own remarks at the top of its list) -- "literal" has nothing left to lower to.
+    // Checked before FitsLitRange even runs (see that method's own guard, which returns false rather
+    // than crashing for the same reason) so this fails with one clear, specific message instead of a
+    // confusing "litr is not available right now" one two branches down, or an outright crash.
+    if (CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic) is null)
+    {
+      return (null, $"line {lineNumber}: \"literal\" is not supported -- \"lit\"/\"litr\" were both retired in the new VM's 2026-09-30 reset (see CvmInstructionSet.Instructions' own remarks); \"nop\" is the only valid opcode right now.");
     }
 
     if (FitsLitRange(value))
@@ -1665,7 +1747,7 @@ internal static class CvmAssemblyLanguage
       return ([litShape.Tag | (value & litShape.ValueBitMask)], null);
     }
 
-    if (!encodeTable.TryGetValue(CvmInstructionSet.LitrMnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask) litrEntry))
+    if (!encodeTable.TryGetValue(CvmInstructionSet.LitrMnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) litrEntry))
     {
       CvmInstructionSet.CvmInstructionShape shape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
       int maxValue = shape.ValueBitMask >> 1;
@@ -1721,6 +1803,21 @@ internal static class CvmAssemblyLanguage
       }
 
       return (shape.Tag | ((first << shape.ValueBitShift) & shape.ValueBitMask) | ((second << shape.SecondValueBitShift) & shape.SecondValueBitMask), null);
+    }
+
+    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.FixedOpcode)
+    {
+      // ADDED 2026-09-30, for the new VM's reset (nop, the one surviving mnemonic -- see
+      // CvmInstructionSet.Instructions' own remarks at the top of its list, and
+      // CvmOperandEncoding.FixedOpcode's own remarks). No operand at all: the whole word is already
+      // fully known from shape.Tag alone, so unlike every other branch in this method there is nothing
+      // to validate against a value -- only that the caller didn't also try to give it one.
+      if (operand is not null || operand2 is not null)
+      {
+        return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" does not take an operand.");
+      }
+
+      return (shape.Tag, null);
     }
 
     if (operand is not int value)

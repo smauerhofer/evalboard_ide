@@ -52,6 +52,12 @@
                           Padding="12,6"
                           Margin="0,0,8,0"
                           ToolTip="Install or remove the project-side Kraken topology on this Host or Target GA144." />
+          <Button Content="SRAM Tentacle"
+                          Click="OnOpenSramTentacleClick"
+                          IsEnabled="True"
+                          Padding="12,6"
+                          Margin="0,0,8,0"
+                          ToolTip="Opens the SRAM Tentacle window: installs AN003's SRAM Control Cluster (nodes 007/008/009/107) for a chosen memory-master node (106, 108, or 207), then reads/writes/compare-exchanges words in the eval board's external SRAM and sets node 107's master mask through that master. Requires an online Kraken; the window reports if it is not available." />
           <Button Content="Verify all node ROMs"
                           Command="{Binding VerifyAllRomsCommand}"
                           Padding="12,6"
@@ -62,29 +68,14 @@
                           Padding="12,6"
                           Margin="0,0,8,0"
                           ToolTip="Direct-boot readback of node 708's own ROM (it cannot be read through Kraken). Resets the chip once to load a one-shot dump-rom program, so this is blocked while a Kraken is erected -- remove the Kraken first." />
-          <Button Content="Node 708 echo test"
-                          Command="{Binding RunNode708EchoTestCommand}"
-                          Padding="12,6"
-                          Margin="0,0,8,0"
-                          ToolTip="Tests node 708's own direct-UART obit/oword/obyt/echo routines: sends one async-encoded word, node 708 receives it via its own 18ibits/sync and transmits it straight back as real, self-timed UART bytes (no host carrier clocking). Requires node 708's ROM to define '18ibits' and 'delay'. Resets the chip once, so this is blocked while a Kraken is erected." />
-          <Button Content="Node 708 dispatch test"
-                          Command="{Binding RunNode708DispatchTestCommand}"
-                          Padding="12,6"
-                          ToolTip="Tests node 708's own main/sett dispatch loop specifically (not obit/oword/obyt/readw, already proven by the echo test): boots main/sett only, then calls 'sett' with the same port value twice in a row over Kraken's own NativeWindowsSerialPort transport, reporting each call's outcome separately. Built to isolate a hardware finding: the same sett call that succeeds once times out on a second call, unrelated to w/r's complexity. Resets the chip once, so this is blocked while a Kraken is erected." />
-        </StackPanel>
-        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-          <Button Content="SRAM Tentacle"
-                          Click="OnOpenSramTentacleClick"
-                          IsEnabled="True"
-                          Padding="12,6"
-                          Margin="0,0,8,0"
-                          ToolTip="Opens the SRAM Tentacle window: installs AN003's SRAM Control Cluster (nodes 007/008/009/107) for a chosen memory-master node (106, 108, or 207), then reads/writes/compare-exchanges words in the eval board's external SRAM and sets node 107's master mask through that master. Requires an online Kraken; the window reports if it is not available." />
           <Button Content="SRAM Simulator (707)"
                           Click="OnOpenSramSimulatorClick"
                           IsEnabled="True"
                           Padding="12,6"
                           Margin="0,0,8,0"
                           ToolTip="Opens the SRAM Simulator window: installs a software stand-in for the real SRAM cluster entirely on node 707 (Tentacle 1, position 0), speaking the same ex@/ex!/cx?/mk!/echo protocol over a small local backing array instead of the real external SRAM chip. Built for CVM (C virtual machine) development -- exercises SRAM-shaped memory traffic over Kraken without the real SRAM Tentacle installed or wired up. Requires an online Kraken; the window reports if it is not available." />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
           <Button Content="Copy all nodes to project…"
                           Command="{Binding CopyAllNodesToProjectCommand}"
                           Padding="12,6"
