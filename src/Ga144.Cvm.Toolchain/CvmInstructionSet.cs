@@ -224,6 +224,67 @@ public static class CvmInstructionSet
   public const string BranchMnemonic = "br";
   public const string ConditionalBranchMnemonic = "cbr";
 
+  // ---- 2026-09-30 (same day as the reset), the new VM's own "call" family: scall/lcall/call ----------
+  // Per Stefan directly, right after giving the new VM's own instruction-word bit-pattern spec: "the next
+  // instruction i want to define is 'call'. there is a short variant 'scall' and a long variant 'lcall'.
+  // 'call' should try to fit the address into a 'scall' and use 'lcall' if the address does not fit. if
+  // an address is unknown at compile time, e.g. an external symbol, 'call' will always use 'lcall'."
+  //
+  // ShortCallMnemonic ("scall") is a genuinely NEW mnemonic name -- spec row "00aa|aaaa|aaaa|aaaa": the
+  // instruction's one and only word directly IS the target address, no tag bits at all beyond the two
+  // fixed leading zeros. Structurally IDENTICAL to CVM2's OLD call (CvmOperandEncoding.EmbeddedAddress),
+  // just a NARROWER field -- 14 bits, not 15 -- so this is also the first shape to actually exercise
+  // EmbeddedAddress's field width read generically off the shape's own ValueBitMask (ShortCallAddressMask
+  // below) rather than the single hardcoded CallAddressMask constant every consumer used to reference
+  // directly -- see EmbeddedAddress's own remarks for the full generalization, and CallAddressMask's own
+  // remarks: that constant is untouched, kept purely for the historical CVM2 record, no longer referenced
+  // by anything live.
+  public const string ShortCallMnemonic = "scall";
+
+  // LongCallMnemonic ("lcall") REUSES CVM2's own old mnemonic STRING (defined further below, alongside
+  // ljmp, in CVM2's own long-call/long-jump remarks) but is a completely different SHAPE under the new
+  // VM -- spec row "1111|00..|....|....|": a fixed, universally-known tag word (LongCallTag, 0xF000) that
+  // needs no live node compile to resolve at all (unlike CVM2's OLD lcall, which shared this exact
+  // mnemonic string but was node-resolved, CvmOperandEncoding.TrailingWord, against node 407's own live
+  // compile), followed by one full trailing word holding the actual target address. Neither existing
+  // encoding covered "a fixed, self-describing tag word THEN a real trailing operand" -- FixedOpcode has
+  // no operand at all (nop), TrailingWord's tag is never self-describing on its own -- so
+  // CvmOperandEncoding.FixedOpcodeWithTrailingWord (see its own remarks) was added specifically for it.
+  // The spec's own low 10 bits on lcall's first word ("..........") are marked don't-care/reserved, not
+  // given any meaning -- this toolchain always emits and matches them as 0 (LongCallTag itself already
+  // has them clear), since nothing today defines any other use for them. FLAGGED, not confirmed: this is
+  // an assumption about unspecified bits, exactly like every other still-open bit in this spec.
+  //
+  // NOTE, flagged rather than silently resolved: scall's own word 0x0000 (address 0) is bit-for-bit
+  // identical to nop's own fixed 0x0000 -- the spec gives nop and "short call to address 0" the exact same
+  // bit pattern. TryDescribeSelfDecodingWord checks every FixedOpcode shape (nop) before the generalized
+  // EmbeddedAddress check, so a disassembled 0x0000 always reads "nop", never "scall 0x0000" -- consistent
+  // with nop being checked first specifically for this reason (see FixedOpcode's own remarks), but this
+  // does mean "scall 0" assembles fine yet will always disassemble back as "nop", never round-tripping to
+  // "scall 0x0000". Left exactly as specified until Stefan says otherwise -- he already flagged this same
+  // overlap himself as unconfirmed when the bit-pattern spec first arrived.
+  //
+  // "call" itself is a PURE ASSEMBLER-LEVEL PSEUDO-MNEMONIC, exactly like "literal" (see
+  // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.LiteralPseudoMnemonic's own remarks for that precedent) --
+  // it has no CvmInstructionSet.Instructions entry, no Id, no shape of its own at all: both
+  // Ga144.Cvm.Toolchain.CvmAssembler and Ga144.Evb.Ide.Services.CvmAssemblyLanguage intercept it by name
+  // and lower it to a real "scall"/"lcall" line before any shape lookup happens, mirroring exactly how
+  // "literal" lowers itself to "lit"/"litr". A literal numeric address picks whichever of scall/lcall
+  // actually fits (scall when it's in ShortCallAddressMask's own 0..0x3FFF range, lcall otherwise); a
+  // label or (CvmAssembler-only) ".import"ed external symbol ALWAYS lowers to lcall, unconditionally, per
+  // Stefan's own words above -- FLAGGED, a deliberate design choice rather than something he spelled out
+  // in full: both assemblers here are two-pass (see CvmAssembler's own class-level remarks), fixing every
+  // instruction's word length during pass 1 BEFORE most labels' own final addresses are known, so there is
+  // no way to shrink a label-targeted "call" down to scall without a further, iterative relaxation pass
+  // neither assembler implements -- exactly the same restriction "literal" already imposes on itself for a
+  // label operand (see EncodeLiteralPseudoMnemonic's own remarks), just applied to "call" instead of
+  // refusing the label outright: rather than reject a label operand (which "call" needs to support for its
+  // primary, ordinary use -- calling a named subroutine), it conservatively always takes the safe, always-
+  // correct lcall for a label, never attempting to guess whether the label's eventual address would have
+  // fit scall. This means "call" to an already-defined nearby label will sometimes emit an lcall where a
+  // human hand-writing "scall" directly could have gotten away with the shorter form -- a known, accepted
+  // conservatism, not a bug, until/unless Stefan asks for a real relaxation pass instead.
+
   // SlitMnemonic ("slit") -- RETIRED 2026-09-09 ("'slit' is replaced by 'lit'. remove it from the
   // language.") and DELETED OUTRIGHT (along with SlitTag/SlitTagMask/SlitValueBitMask/
   // SlitValueMinValue/SlitValueMaxValue and the DecodeSlitValue method) later the same day, per Stefan's
@@ -552,6 +613,44 @@ public static class CvmInstructionSet
   // Cvm.Node407Program's own remarks for the transaction log.
   public const string LongCallMnemonic = "lcall";
   public const string LongJumpMnemonic = "ljmp";
+
+  // REDEFINED 2026-09-30, for the new VM's own "call" family (see this file's own class-level remarks
+  // right after ConditionalBranchMnemonic, above): LongCallMnemonic's own STRING ("lcall") survives, but
+  // everything about its SHAPE just above -- node 407, the 0xC000 "tag | local address" scheme, the
+  // node-507/node-407 relay protocol, the real-hardware confirmation -- describes CVM2's OLD lcall only,
+  // fully retired along with every other CVM2 opcode in this reset (see Instructions' own remarks at the
+  // top of its list). The new VM's own lcall shares nothing with it beyond the name: no node, no relay, no
+  // 0xC000 tag -- see ShortCallMnemonic's own remarks (above) and LongCallTag's own remarks (below) for
+  // the new, unrelated shape this mnemonic string now means. Kept here, unedited otherwise, purely as the
+  // historical record of what "lcall" used to be, per this file's own "do not remove any opcodes"/"do not
+  // rewrite history" convention.
+
+  /// <summary>
+  /// The new VM's own scall (2026-09-30): the widest word address it can directly encode into its own
+  /// opcode word -- 0x3FFF, i.e. 14 bits, per spec row "00aa|aaaa|aaaa|aaaa|" (see this file's own class-
+  /// level remarks on the new VM's "call" family, right after <see cref="ConditionalBranchMnemonic"/>, for
+  /// Stefan's exact wording and the full derivation). Structurally the same idea as CVM2's OLD
+  /// <see cref="CallAddressMask"/> (also <see cref="CvmOperandEncoding.EmbeddedAddress"/>, also "the whole
+  /// word IS the address"), just one bit narrower -- <see cref="CallAddressMask"/> itself is untouched,
+  /// kept purely for the historical CVM2 record; this is scall's own, independent mask, carried on its own
+  /// <see cref="Instructions"/> row via <see cref="CvmInstructionShape.ValueBitMask"/> rather than a second
+  /// hardcoded constant baked into every EmbeddedAddress consumer the way <see cref="CallAddressMask"/>
+  /// used to be -- see <see cref="CvmOperandEncoding.EmbeddedAddress"/>'s own remarks for that
+  /// generalization.
+  /// </summary>
+  public const int ShortCallAddressMask = 0x3FFF;
+
+  /// <summary>
+  /// The new VM's own lcall (2026-09-30): the fixed, universally-known high-bit pattern (bits 15-10) of
+  /// its own tag word, binary 111100 -- spec row "1111|00..|....|....|" (see this file's own class-level
+  /// remarks on the new VM's "call" family, right after <see cref="ConditionalBranchMnemonic"/>, for
+  /// Stefan's exact wording and the full derivation). The spec's own low 10 bits are marked don't-
+  /// care/reserved; this toolchain always emits and matches them as 0 (already true of 0xF000 itself), so
+  /// no separate mask constant is needed the way <see cref="BranchTagMask"/>/<see cref="ConditionalBranchTagMask"/>
+  /// exist alongside their own tags -- <see cref="CvmOperandEncoding.FixedOpcodeWithTrailingWord"/> always
+  /// matches this tag with a plain exact <c>word == LongCallTag</c> check, never a masked one.
+  /// </summary>
+  public const int LongCallTag = 0xF000;
 
   // Node 407's long-branch op, added 2026-09-06 per Stefan's own follow-up node 407 source ("more opcodes
   // to node 407 added. use them in assembler and disassembler"), which also renamed the node's own header
@@ -1731,7 +1830,21 @@ public static class CvmInstructionSet
 
     /// <summary>
     /// The instruction's one and only word directly IS the (eventually resolved) target address, with
-    /// no tag at all -- restricted to <see cref="CallAddressMask"/> so bit 15 stays clear (<c>call</c>).
+    /// no tag at all -- CVM2's OLD <c>call</c>, restricted to <see cref="CallAddressMask"/> so bit 15
+    /// stayed clear, now retired alongside every other CVM2 opcode (see <see cref="Instructions"/>'s own
+    /// remarks at the top of its list).
+    ///
+    /// GENERALIZED 2026-09-30, for the new VM's own <c>scall</c> (see this file's own class-level remarks
+    /// on the new VM's "call" family, right after <see cref="ConditionalBranchMnemonic"/>): the field
+    /// width is no longer a single hardcoded constant every consumer referenced directly -- it is read
+    /// generically off each shape's own <see cref="CvmInstructionShape.ValueBitMask"/> instead (0x3FFF,
+    /// <see cref="ShortCallAddressMask"/>, for scall; CVM2's OLD call would have used
+    /// <see cref="CallAddressMask"/> here had this generalization existed at the time), the same way
+    /// <see cref="EmbeddedUnsignedValue"/> already reads its own width per-shape rather than assuming one
+    /// fixed value across every mnemonic using it. <see cref="CvmInstructionShape.Tag"/> is expected to
+    /// already be aligned to whatever's outside the mask, exactly like <see cref="EmbeddedSignedValue"/>'s
+    /// own convention -- scall's own Tag is 0, since its top two bits are simply required to be clear, not
+    /// carrying any distinct tag value of their own.
     /// </summary>
     EmbeddedAddress,
 
@@ -1859,6 +1972,27 @@ public static class CvmInstructionSet
     /// but the ordering is kept defensively correct regardless).
     /// </summary>
     FixedOpcode,
+
+    /// <summary>
+    /// ADDED 2026-09-30, for the new VM's own <c>lcall</c> (see this file's own class-level remarks on
+    /// the new VM's "call" family, right after <see cref="ConditionalBranchMnemonic"/>). Two words: the
+    /// first is a fixed, universally-known literal <see cref="CvmInstructionShape.Tag"/> -- like
+    /// <see cref="FixedOpcode"/>, no live node compile is ever consulted to resolve it, the tag word is
+    /// already fully known the moment the mnemonic is -- but unlike <see cref="FixedOpcode"/> (which takes
+    /// no operand at all), a real operand follows in a second, trailing word: the actual target address,
+    /// resolved exactly like a <see cref="TrailingWord"/> mnemonic's own trailing operand (a literal,
+    /// label, or import all resolve the same way -- see <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/>'s
+    /// own <c>EmitOperandWord</c>), just with no node/linker involvement for the LEADING tag word the way
+    /// <see cref="TrailingWord"/>'s own tag always needs. <see cref="CvmInstructionShape.HasOperand"/> is
+    /// therefore true for this encoding (it is neither <see cref="None"/> nor <see cref="FixedOpcode"/>),
+    /// same as every other operand-taking encoding. <see cref="TryDescribeSelfDecodingWord"/> matches the
+    /// leading tag word generically (an exact <c>word == shape.Tag</c> check over every
+    /// <see cref="FixedOpcodeWithTrailingWord"/> shape in <see cref="Instructions"/>, mirroring
+    /// <see cref="FixedOpcode"/>'s own loop) but, unlike every other case there, needs a SECOND word (the
+    /// already-fetched trailing operand, if the caller has it) to describe the full instruction -- see that
+    /// method's own <c>nextWord</c>/<c>wordLength</c> parameters, added alongside this encoding.
+    /// </summary>
+    FixedOpcodeWithTrailingWord,
   }
 
   /// <summary>
@@ -1955,6 +2089,15 @@ public static class CvmInstructionSet
     // reshaping of what nop IS, not a retirement-and-replacement the way every other entry in this
     // file has ever been renumbered/repointed.
     new(Id: 0, NopMnemonic, 1, CvmOperandEncoding.FixedOpcode, Tag: 0x0000),
+    // ADDED 2026-09-30 (same day as the reset), the new VM's own scall/lcall -- see this file's own
+    // class-level remarks on the new VM's "call" family, right after ConditionalBranchMnemonic, for the
+    // full derivation and Stefan's exact wording. IDs 182/183 are the first ever assigned to the NEW VM
+    // (every prior Id, 1-181, belongs to the now-fully-retired CVM2 opcode set below) -- append-only,
+    // same as always. "call" itself has no row here at all: it is a pure assembler-level pseudo-mnemonic
+    // that lowers to one of these two, exactly like "literal" lowers to lit/litr (see ShortCallMnemonic's
+    // own remarks).
+    new(Id: 182, ShortCallMnemonic, 1, CvmOperandEncoding.EmbeddedAddress, Tag: 0x0000, ValueBitMask: ShortCallAddressMask),
+    new(Id: 183, LongCallMnemonic, 2, CvmOperandEncoding.FixedOpcodeWithTrailingWord, Tag: LongCallTag),
     // ---------------------------------------------------------------------------------------------
     // new(Id: 1, PushLitMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // new(Id: 2, PushMnemonic, 1, CvmOperandEncoding.None),
@@ -2351,9 +2494,27 @@ public static class CvmInstructionSet
   /// is exactly the confusion this optional target annotation exists to prevent from recurring. Pass
   /// null (the default) to keep the OLD offset-only rendering -- e.g. for a word decoded with no
   /// meaningful address of its own (an unlinked object's raw word, say).
+  ///
+  /// <paramref name="wordLength"/> (ADDED 2026-09-30, alongside <see cref="CvmOperandEncoding.FixedOpcodeWithTrailingWord"/>)
+  /// tells the caller how many words this decode actually consumed -- always 1, EXCEPT for a
+  /// <see cref="CvmOperandEncoding.FixedOpcodeWithTrailingWord"/> match (<c>lcall</c>), which is 2 (its own
+  /// tag word plus the trailing address word). Every earlier self-describing shape this method recognizes
+  /// is exactly one word, so this parameter is new machinery introduced specifically for lcall, not a
+  /// behavior change for anything that came before it.
+  ///
+  /// <paramref name="nextWord"/> (ADDED 2026-09-30, same reason) is this word's own already-fetched
+  /// successor, needed ONLY to print a <see cref="CvmOperandEncoding.FixedOpcodeWithTrailingWord"/> shape's
+  /// real operand (lcall's own target address) -- this method decodes one word's own bit pattern in
+  /// isolation and has no memory/SRAM access of its own, so a caller walking a real program (see the IDE's
+  /// own Ga144.Evb.Ide.Services.CvmAssemblyLanguage.DisassemblePage0) must read that next word itself and
+  /// pass it in. Pass null (the default) when there is no next word to give (e.g. lcall's own tag word
+  /// happens to be the very last word in a truncated range) -- the mnemonic alone is still returned, just
+  /// without an operand.
   /// </summary>
-  public static string? TryDescribeSelfDecodingWord(int word, int? wordAddress = null)
+  public static string? TryDescribeSelfDecodingWord(int word, out int wordLength, int? wordAddress = null, int? nextWord = null)
   {
+    wordLength = 1;
+
     // ADDED 2026-09-30, checked FIRST, ahead of every hardcoded check below: the new VM's own
     // CvmOperandEncoding.FixedOpcode shapes (today, just nop, word 0x0000 -- see that enum case's own
     // remarks and Instructions' own remarks at the top of its list). An exact word match against each
@@ -2361,12 +2522,58 @@ public static class CvmInstructionSet
     // further down already is, so a future FixedOpcode mnemonic needs no new check here. Checked first
     // specifically so nop's own 0x0000 can never be shadowed by call's old "word <= CallAddressMask"
     // range check just below (0 satisfies that range too) -- moot today since that check is itself
-    // commented out as part of this same reset, but kept defensively correct regardless.
+    // commented out as part of this same reset, but kept defensively correct regardless. Also checked
+    // ahead of the new (2026-09-30) generalized EmbeddedAddress loop further down, for the SAME reason:
+    // scall's own address 0 (word 0x0000) is bit-for-bit identical to nop's own fixed word -- see
+    // ShortCallMnemonic's own remarks on this exact, flagged-not-resolved overlap.
     foreach (CvmInstructionShape fixedOpcodeShape in Instructions)
     {
       if (fixedOpcodeShape.Encoding == CvmOperandEncoding.FixedOpcode && word == fixedOpcodeShape.Tag)
       {
         return fixedOpcodeShape.Mnemonic;
+      }
+    }
+
+    // ADDED 2026-09-30, for the new VM's own lcall (CvmOperandEncoding.FixedOpcodeWithTrailingWord -- see
+    // that enum case's own remarks). An exact word match against each live FixedOpcodeWithTrailingWord
+    // shape's own Tag, the same generic-loop-over-Instructions pattern the FixedOpcode loop just above
+    // already uses -- checked right after it (grouping every EXACT-tag self-describing shape together)
+    // and well before the generalized, RANGE-based EmbeddedAddress loop below: lcall's own tag, 0xF000,
+    // does not overlap scall's own 0x0000-0x3FFF range at all, so this ordering doesn't change any actual
+    // decode outcome today, it just reads more clearly grouped this way.
+    foreach (CvmInstructionShape fixedTagWithTrailingWordShape in Instructions)
+    {
+      if (fixedTagWithTrailingWordShape.Encoding != CvmOperandEncoding.FixedOpcodeWithTrailingWord || word != fixedTagWithTrailingWordShape.Tag)
+      {
+        continue;
+      }
+
+      wordLength = 2;
+      return nextWord is int lcallTarget
+          ? $"{fixedTagWithTrailingWordShape.Mnemonic} {FormatOperand(lcallTarget)}"
+          : fixedTagWithTrailingWordShape.Mnemonic;
+    }
+
+    // ADDED 2026-09-30, for the new VM's own scall: CVM2's OLD call used to be a single hardcoded
+    // "word <= CallAddressMask" check (see the commented-out block just below) -- GENERALIZED here into a
+    // per-shape loop over every live CvmOperandEncoding.EmbeddedAddress shape, the same pattern the
+    // EmbeddedUnsignedValue loop further down already uses, so a shape's own Tag/ValueBitMask (not a
+    // single hardcoded constant) decides what it matches -- see EmbeddedAddress's own remarks for the
+    // full generalization. Checked after the two exact-tag loops above (FixedOpcode/nop,
+    // FixedOpcodeWithTrailingWord/lcall) so neither can ever be shadowed by scall's own wide 0x0000-0x3FFF
+    // range -- specifically nop's own 0x0000, which is bit-for-bit identical to "scall 0x0000" (see
+    // ShortCallMnemonic's own remarks on this exact, flagged-not-resolved overlap).
+    foreach (CvmInstructionShape embeddedAddressShape in Instructions)
+    {
+      if (embeddedAddressShape.Encoding != CvmOperandEncoding.EmbeddedAddress)
+      {
+        continue;
+      }
+
+      int embeddedAddressTagMask = ~embeddedAddressShape.ValueBitMask & 0xFFFF;
+      if ((word & embeddedAddressTagMask) == embeddedAddressShape.Tag)
+      {
+        return $"{embeddedAddressShape.Mnemonic} {FormatOperand(word & embeddedAddressShape.ValueBitMask)}";
       }
     }
 

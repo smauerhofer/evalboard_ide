@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-30T11:55:39.3029335
-      utcDateTime: 2026-09-30T11:55:39.3029335Z
-      localDateTime: 2026-09-30T13:55:39.3029335+02:00
+      dateTime: 2026-09-30T17:22:14.0458519
+      utcDateTime: 2026-09-30T17:22:14.0458519Z
+      localDateTime: 2026-09-30T19:22:14.0458519+02:00
       date: 2026-09-30T00:00:00.0000000
       day: 30
       dayOfWeek: Wednesday
       dayOfYear: 273
-      hour: 11
-      millisecond: 302
-      microsecond: 933
-      nanosecond: 500
-      minute: 55
+      hour: 17
+      millisecond: 45
+      microsecond: 851
+      nanosecond: 900
+      minute: 22
       month: 9
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 39
-      ticks: 639263661393029335
-      utcTicks: 639263661393029335
-      timeOfDay: 11:55:39.3029335
+      second: 14
+      ticks: 639263857340458519
+      utcTicks: 639263857340458519
+      timeOfDay: 17:22:14.0458519
       year: 2026
   portB: 
   portC:
@@ -66788,7 +66788,7 @@ projects:
 
         # 0 org
 
-        # rdlu /p
+        // # rdlu /p
 
 
         [
@@ -66797,19 +66797,27 @@ projects:
         ]
 
 
-        : r/defocus ( port - ) rdlu  ;
+        entry r/start
+
+
+
+        : r/defocus ( port - ) rdlu ;
 
 
         : r/focus ( port - ) dup b! >r ;
 
 
-        : r/focus_507 ( - ) down r/focus ;
+        : r/focus_507 ( - ) down : brk brk ; r/focus ;
 
         : r/focus_406 ( - ) right r/focus ;
 
         : r/focus_307 ( - ) up r/focus ;
 
         : r/focus_408 ( - ) left r/focus ;
+
+
+        : r/start
+          0x4321 rdlu  r/focus_507 0x1234 ;
 
 
         : r/@ @b a! @ !b ;
@@ -66822,10 +66830,11 @@ projects:
         : r/2! @b a! @b !+ @b !+ ;
 
 
-        : r/++ ( reg - old new ) a! @ dup 1 . + ! ;
+        : r/++ ( reg - old new )
+          a! @ dup 1 . + dup ! ;
 
-        : r/-- ( reg - old new ) a! @ dup dup xor inv . + ! ;
-
+        : r/-- ( reg - old new )
+          a! @ dup -1 . + dup ! ;
 
         : r/push ( { ,adr } ) sp r/-- drop !b ;
 
@@ -66833,7 +66842,9 @@ projects:
 
 
         : r/link ( { 'offset ,old-fp } )
-          fp a! a >r @+ @ dup @b . + ! r> a! ! !b ;
+
+        //  fp a! a >r @+ @ dup @b . + ! r> a! ! !b ;
+
 
         : r/unlink ( { ,adr 'old-fp } )
           fp a! @ dup !b @b !+ ! ;
@@ -66861,14 +66872,22 @@ projects:
       - 0x00000
       - 0x115A5
       - 0x24BBD
-      - 0x05715
+      - 0x049B2
       - 0x00115
+      - 0x11418
+      - 0x11415
       - 0x05715
       - 0x001D5
       - 0x05715
       - 0x00145
       - 0x05715
       - 0x00175
+      - 0x049B2
+      - 0x04321
+      - 0x135A5
+      - 0x13416
+      - 0x05555
+      - 0x01234
       - 0x00A0A
       - 0x09555
       - 0x00A02
@@ -66879,32 +66898,24 @@ projects:
       - 0x0FF3D
       - 0x2BE97
       - 0x00001
-      - 0x2C12D
-      - 0x2BE93
-      - 0x386B0
+      - 0x2C192
       - 0x0B555
-      - 0x05629
+      - 0x2BE97
+      - 0x3FFFF
+      - 0x2C192
+      - 0x0B555
+      - 0x05632
       - 0x00013
       - 0x3BB55
-      - 0x05626
+      - 0x0562E
       - 0x00013
       - 0x09555
-      - 0x04A8A
+      - 0x04A0B
       - 0x00012
-      - 0x2FC0B
-      - 0x009F2
-      - 0x0ACAA
-      - 0x0BB55
-      - 0x04A0A
-      - 0x00012
-      - 0x0182D
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x09F3A
+      - 0x0B555
       startup:
-        entryPoint: 0x1A5
+        entryPoint: 0x020
         p: 0x000
         a: 0x000
         b: 0x000
@@ -66912,7 +66923,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E8E8E8'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 408
       enabled: true
       sourceCode: >
@@ -67402,6 +67413,11 @@ projects:
           A[ ; ]] lit !b
           d/main ;
 
+        : d/save1 ( instr_addr w - )
+          A[ @p ]] lit !b !b
+        : d/save ( instr_addr - )
+          A[ @p m/exec_save ]] lit !b !b ;
+
         : d/next ( - w )
           A[ m/next ]] lit !b
           A[ !p ]] lit !b @b ;
@@ -67410,7 +67426,7 @@ projects:
           A[ x1/read16-1 ]] lit ! 0xf and ! A[ x1/get ]] lit ! @ ;
 
         : d/jump ( a - )
-          A[ m/jump ]] lit b! b! ;
+          A[ m/jump ]] lit !b !b ;
 
         : d/implied
 
@@ -67456,9 +67472,11 @@ projects:
         : d/branch-if
 
 
-        : d/short-call ( code-addr )
-          A[ @p m/call ; ]] lit b! b! ;
-
+        : d/short-call ( code-addr - )
+          >r
+          # m/call lit
+          r>
+          d/save1 ;
 
 
 
@@ -67467,8 +67485,12 @@ projects:
       - 0x13575
       - 0x05B40
       - 0x15555
+      - 0x05B22
+      - 0x049B2
+      - 0x05B25
+      - 0x0560C
       - 0x05B12
-      - 0x13438
+      - 0x1343B
       - 0x0C9B2
       - 0x09F55
       - 0x05A12
@@ -67477,20 +67499,16 @@ projects:
       - 0x3FA12
       - 0x13415
       - 0x0BE55
-      - 0x04BA5
-      - 0x1342B
+      - 0x05B25
+      - 0x1342E
+      - 0x1340C
       - 0x13408
-      - 0x13404
-      - 0x21314
+      - 0x21318
       - 0x15555
-      - 0x1140E
-      - 0x04BA5
-      - 0x0572A
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x11412
+      - 0x2FD9A
+      - 0x0002D
+      - 0x11404
       - 0x15555
       - 0x15555
       - 0x15555
@@ -67592,12 +67610,16 @@ projects:
         : m/defocus ( - )
           A[ r/defocus ]] lit m/rsend ;
 
+        : m/exec_save ( instr_addr - )
+          >r m/focus
+          ex m/defocus ;
+
         : m/rget ( - w )
           A[ !p ]] lit m/rsend 1 @b ;
 
         : m/push ( w - )
           A[ r/push ]] lit m/rsend
-          1 @
+          1 @b
           ( w p a )
         : m/write ( w p a - )
           up b!         // select node 607
@@ -67605,8 +67627,8 @@ projects:
           !b !b !b ;  
 
         : m/pop ( - w )
-          A[ @p r/pop ]] lit m/rsend
-          1 @
+          A[ r/pop ]] lit m/rsend
+          1 @b
           ( p 1 )
         : m/read ( p a - w )
           up b!         // select node 607
@@ -67778,27 +67800,30 @@ projects:
       - 0x13416
       - 0x05706
       - 0x13414
+      - 0x2F608
+      - 0x17555
+      - 0x1140A
       - 0x05606
       - 0x0C9B2
       - 0x05F55
       - 0x00001
       - 0x05606
-      - 0x1342C
-      - 0x05EB2
+      - 0x1342E
+      - 0x05FB2
       - 0x00001
       - 0x04B12
       - 0x00145
       - 0x1341F
-      - 0x29B22
+      - 0x09B22
       - 0x09555
       - 0x05606
-      - 0x0562F
-      - 0x05EB2
+      - 0x13431
+      - 0x05FB2
       - 0x00001
       - 0x04B12
       - 0x00145
       - 0x13408
-      - 0x29B22
+      - 0x09B22
       - 0x01555
       - 0x13400
       - 0x04B12
@@ -67808,26 +67833,23 @@ projects:
       - 0x001D5
       - 0x29BB2
       - 0x115D5
-      - 0x23610
+      - 0x23613
       - 0x2B555
-      - 0x13419
+      - 0x1341C
       - 0x2B555
       - 0x05606
-      - 0x05632
+      - 0x05634
       - 0x09FB2
-      - 0x11410
+      - 0x11413
       - 0x05DB2
       - 0x00001
-      - 0x05638
+      - 0x0563A
       - 0x13406
-      - 0x0161D
+      - 0x01620
       - 0x11406
       - 0x243B2
       - 0x13400
-      - 0x1141D
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x11420
       - 0x15555
       - 0x15555
       startup:
@@ -69149,7 +69171,9 @@ projects:
       source: >
         nop
 
-        nop
+        test0:
+
+        scall test1
 
         nop
 
@@ -69159,7 +69183,9 @@ projects:
 
         nop
 
-        nop
+        test1:
+
+        scall test0
 
         nop
 

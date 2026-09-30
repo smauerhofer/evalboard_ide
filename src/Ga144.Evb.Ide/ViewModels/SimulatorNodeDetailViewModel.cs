@@ -12,7 +12,10 @@ public sealed record SimulatorStackRow(string Label, string ValueText);
 
 /// <summary>One decoded RAM/ROM word row. <see cref="IsCurrentPosition"/> drives Stefan's own requirement
 /// 5) "highlighting the current position P" -- true for the single word <see cref="F18NodeSimulationState.CurrentWordAddress"/>
-/// currently points at (the word the node is stepping through slot-by-slot), false otherwise.</summary>
+/// currently points at (the word the node is stepping through slot-by-slot), false otherwise.
+/// <see cref="AddressHex"/> also carries its own local label in parenthesis when one lands exactly
+/// here (e.g. "014 (brk)"; see <see cref="F18Disassembler.FormatAddressWithLabel"/>, 2026-09-30),
+/// additive to -- not a replacement for -- the separate <see cref="Label"/> column.</summary>
 public sealed record SimulatorWordRow(string AddressHex, string? Label, string HexText, string Disassembly, bool IsCurrentPosition);
 
 /// <summary>One of a node's (up to) four comm ports, for the "all ports" panel (Stefan's own requirement
@@ -176,8 +179,11 @@ public sealed class SimulatorNodeDetailViewModel(int coordinate, Ga144SimulatorE
     {
       string? label = labelsByAddress.TryGetValue(word.Address, out string? name) ? name : null;
       bool isCurrent = hasCurrentWord && word.Address == state.CurrentWordAddress;
+      // FormatAddressWithLabel (2026-09-30, per Stefan: "the disassembler also displays local labels
+      // after the address") -- additive to the separate Label column above, not a replacement for it.
+      string addressText = F18Disassembler.FormatAddressWithLabel(word.Address.ToString("X3"), word.Address, labelsByAddress);
       rows.Add(new SimulatorWordRow(
-          word.Address.ToString("X3"),
+          addressText,
           label,
           word.RawWord.ToString("X5"),
           word.Format(labelsByAddress),

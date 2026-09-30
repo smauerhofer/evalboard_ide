@@ -132,6 +132,16 @@ namespace Ga144.Cvm.Toolchain;
 /// words and relocations, by which point every label's section-relative offset is already known, so
 /// forward references (an instruction near the top of a file referring to a label declared near the
 /// bottom, like <c>loop</c> above) resolve correctly.
+///
+/// <b>ADDED 2026-09-30 (same day as the reset), the new VM's own "call" family:</b> <c>scall</c>
+/// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>, generalized off
+/// <see cref="CvmInstructionSet.ShortCallAddressMask"/>) and <c>lcall</c>
+/// (<see cref="CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord"/>, a new encoding added
+/// specifically for it) are real <see cref="CvmInstructionSet.Instructions"/> entries; <c>call</c> itself
+/// is a pure pseudo-mnemonic, exactly like <c>literal</c> above, that lowers to whichever of the two fits
+/// (see <see cref="CvmInstructionSet.ShortCallMnemonic"/>'s own class-level remarks for the full
+/// derivation and the "a label/import operand always means lcall" restriction this class's own two-pass
+/// layout forces on it).
 /// </summary>
 public static class CvmAssembler
 {
@@ -235,6 +245,40 @@ public static class CvmAssembler
           }
 
           sectionCursors[section] += FitsLitRange(literalPass1Value) ? 1 : 2;
+          break;
+
+        case "call":
+          // "call" (2026-09-30, alongside the new VM's own "scall"/"lcall") -- a pure assembler-level
+          // pseudo-mnemonic exactly like "literal" just above, not a real CvmInstructionSet.Instructions
+          // entry (see CvmInstructionSet.ShortCallMnemonic's own class-level remarks for the full
+          // derivation and Stefan's exact wording): "'call' should try to fit the address into a 'scall'
+          // and use 'lcall' if the address does not fit. if an address is unknown at compile time, e.g.
+          // an external symbol, 'call' will always use 'lcall'." Its own word count depends on the
+          // operand, exactly like "literal" -- 1 word (scall) when a PLAIN LITERAL number fits scall's own
+          // 14-bit address field, 2 (lcall's tag word plus its own trailing address word) otherwise.
+          //
+          // Unlike "literal" (which refuses a label operand outright, since sizing depends on knowing the
+          // value up front), "call" is expected to routinely take a label operand -- calling a named
+          // subroutine is its whole point -- so a label/import name is never rejected, but per Stefan's own
+          // words above it ALWAYS sizes as lcall: this two-pass assembler fixes every instruction's word
+          // length here, in pass 1, before most labels' own final section-relative offsets are known (a
+          // forward reference is the common case for a subroutine placed after its own caller -- see this
+          // class's own remarks), so there is no way to know here whether a label's eventual address would
+          // have fit scall without a further, iterative relaxation pass this assembler does not implement.
+          // Treating "unresolved right now" the same as "unknown at compile time" (Stefan's own example is
+          // an external symbol, but a not-yet-resolved local label is, operationally, exactly the same
+          // kind of "can't decide yet" case) keeps this always correct, if occasionally more conservative
+          // than a human hand-writing "scall" directly could have been -- a known, accepted trade-off, not
+          // a bug, flagged in full in CvmInstructionSet.ShortCallMnemonic's own remarks.
+          if (line.Args.Count != 1)
+          {
+            errors.Add($"line {line.LineNumber}: \"call\" requires exactly one operand, e.g. \"call 0x1234\" or \"call loop\".");
+            break;
+          }
+
+          sectionCursors[section] += TryParseNumericLiteral(line.Args[0], out int callPass1Value) && (uint)callPass1Value <= (uint)CvmInstructionSet.ShortCallAddressMask
+              ? 1
+              : 2;
           break;
 
         default:
@@ -363,22 +407,68 @@ public static class CvmAssembler
             break;
           }
 
+        case "call":
+          {
+            // See this method's own pass-1 remarks on "call" for the fitting rule this mirrors, and
+            // CvmInstructionSet.ShortCallMnemonic's own class-level remarks for the full derivation. "call"
+            // has no CvmInstructionSet.Instructions entry of its own, so neither "scall"'s self-describing
+            // word nor "lcall"'s tag-word-plus-trailing-operand-word is reached via the generic default case
+            // below -- both are written out directly here instead, exactly like "literal" just above.
+            CvmInstructionSet.CvmInstructionShape shortCallShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.ShortCallMnemonic)!;
+            CvmInstructionSet.CvmInstructionShape longCallShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LongCallMnemonic)!;
+            CvmSection callSection = objectFile.GetOrAddSection(section);
+
+            if (TryParseNumericLiteral(line.Args[0], out int callLiteralValue) && (uint)callLiteralValue <= (uint)shortCallShape.ValueBitMask)
+            {
+              // Fits scall's own address field -- emit it directly, exactly like a bare "scall" line would
+              // (see the generic EmbeddedAddress branch below): no tag, no relocation, the word IS the
+              // address, fully known right now.
+              callSection.Words.Add(callLiteralValue & shortCallShape.ValueBitMask);
+              break;
+            }
+
+            // Either too big for scall, or not a plain literal at all (a label or ".import"ed name) --
+            // per this method's own pass-1 remarks on "call", either case always lowers to lcall here: no
+            // relocation for the TAG word (already fully known, shape.Tag), then the exact same
+            // AbsoluteAddress-relocated trailing word a ".word"/"pushlit" label or import operand would get.
+            callSection.Words.Add(longCallShape.Tag);
+            EmitOperandWord(objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+            break;
+          }
+
         default:
           CvmInstructionSet.CvmInstructionShape shape = CvmInstructionSet.TryGetShape(line.Directive)!;
           CvmSection codeSection = objectFile.GetOrAddSection(section);
 
           if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress)
           {
-            // "call"-style: there is no tag word at all here -- the instruction's one and only word
-            // IS the (eventually resolved) target address, exactly the same relocation a ".word"/
-            // "pushlit" label or import operand would get (AbsoluteAddress: "write the resolved
-            // address into this word as-is"), just narrower -- 15 bits, not 16, since bit 15 must
-            // stay clear so a linked program's interpreter can tell a call word apart from a tagged
-            // instruction word by that bit alone.
+            // "scall"-style (CVM2's OLD "call" used to be the only mnemonic here -- see
+            // CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress's own remarks): there is no tag word
+            // at all here -- the instruction's one and only word IS the (eventually resolved) target
+            // address, exactly the same relocation a ".word"/"pushlit" label or import operand would get
+            // (AbsoluteAddress: "write the resolved address into this word as-is"), just narrower than a
+            // full word -- GENERALIZED 2026-09-30 to read the field width straight off shape.ValueBitMask
+            // (0x3FFF/14 bits for scall) rather than the single hardcoded CallAddressMask (0x7FFF/15 bits)
+            // this branch used exclusively for CVM2's OLD call, so a future EmbeddedAddress mnemonic with
+            // yet another width needs no change here either.
             EmitOperandWord(
                 objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors,
-                maxValue: CvmInstructionSet.CallAddressMask,
-                rangeDescription: "a 15-bit call target (0x0000-0x7FFF -- bit 15 is reserved to tell a call word apart from a tagged instruction word)");
+                maxValue: shape.ValueBitMask,
+                rangeDescription: $"a {System.Numerics.BitOperations.PopCount((uint)shape.ValueBitMask)}-bit \"{shape.Mnemonic}\" target (0x0000-0x{shape.ValueBitMask:X4})");
+            break;
+          }
+
+          if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord)
+          {
+            // "lcall"-style (2026-09-30, new VM): shape.Tag is already fully known -- no node, no linker,
+            // no relocation for the tag word itself, exactly like FixedOpcode's own nop just below -- but
+            // unlike nop, a real operand follows: the target address, in a full trailing word, resolved
+            // exactly like a TrailingWord mnemonic's own trailing operand (literal, label, or import all
+            // resolve the same way via EmitOperandWord's default full-word range). Checked here, ahead of
+            // the generic tagged-mnemonic path further down (which would otherwise treat this shape's tag
+            // word as needing a live-node CvmOpcode relocation, which it never does).
+            codeSection.Words.Add(shape.Tag);
+            EmitOperandWord(objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
             break;
           }
 

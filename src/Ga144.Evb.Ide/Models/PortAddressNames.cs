@@ -45,13 +45,24 @@ public static class PortAddressNames
   {
     var map = new Dictionary<int, string>();
 
-    // The 15 documented multiport addresses (DB013 SS4.2.7.3), using the dashed
-    // spelling as the canonical display name for a genuinely combined (more than
-    // one direction present) address -- skip the un-dashed convenience aliases
-    // F18InstructionSet also defines for the same 15 values.
+    // The 15 documented multiport addresses (DB013 SS4.2.7.3), using the canonical
+    // dash-padded spelling as the display name -- skip the shorter convenience
+    // aliases F18InstructionSet also defines for the same 15 values.
+    //
+    // BUG FIX 2026-09-30, per Stefan directly ("jump 0x1A5 (rlu) in the disassembly is wrong. it
+    // should be jump 0x1A5 (rdlu)"): this used to test `entry.Key.Contains('-')` to tell a canonical
+    // name from a convenience alias, which is wrong for exactly one of the 15 -- "rdlu" -- since it
+    // has ALL FOUR directions present and so, unlike its 14 siblings, needs no dash to mark an
+    // absent one. That excluded "rdlu" here entirely (leaving 0x1A5 unmapped by this loop), and, in
+    // F18Disassembler's own separate but related bug fixed the same day, let the address-keyed
+    // symbol map fall back to "rlu" (0x1E5's own alias, wrongly collapsed onto 0x1A5) instead. Every
+    // one of the 15 canonical spellings is dash-PADDED to exactly 4 characters (one slot per
+    // direction, "-" marking an absent one -- "---u", "--l-", ..., "rdlu"), while every one of the 10
+    // convenience aliases is shorter (2-3 characters, the absent-direction slots dropped rather than
+    // dashed) -- so length, not dash content, is what actually tells the two apart.
     foreach (KeyValuePair<string, int> entry in F18InstructionSet.NamedMultiportCalls)
     {
-      if (entry.Key.Contains('-') && !map.ContainsKey(entry.Value))
+      if (entry.Key.Length == 4 && !map.ContainsKey(entry.Value))
       {
         map[entry.Value] = entry.Key;
       }

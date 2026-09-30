@@ -1307,16 +1307,40 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
-      CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
-      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode })
+      // "call" (2026-09-30, alongside the new VM's own "scall"/"lcall") -- intercepted here, right after
+      // "literal", for the same fundamental reason: it is a pure assembler-level pseudo-mnemonic with no
+      // CvmInstructionSet shape or NodeSymbolByMnemonic entry of its own (see
+      // CvmInstructionSet.ShortCallMnemonic's own class-level remarks for the full derivation). Unlike
+      // "literal", it runs AFTER the generic OperandLabel resolution just above, not before -- a label
+      // operand is a perfectly normal, expected way to use "call" (calling a named subroutine is its whole
+      // point), so it is resolved to a plain absolute address here exactly like "call"'s own OLD
+      // EmbeddedAddress shape (and pushlit's trailing word) already resolve one, via ResolveOperandLabel's
+      // own default branch. instruction.OperandLabel itself survives that resolution untouched (only
+      // Operand is replaced), so EncodeCallPseudoMnemonic can still tell "this came from a label" apart
+      // from "this was typed as a literal number" purely from whether OperandLabel is still set -- exactly
+      // the distinction it needs to decide "always lcall" vs. "try to fit scall" (see its own remarks).
+      if (string.Equals(instruction.Mnemonic, CvmInstructionSet.CallMnemonic, StringComparison.OrdinalIgnoreCase))
       {
-        (int? word, string? selfDescribingError) = EncodeSelfDescribingWord(selfDescribingShape, instruction.Operand, instruction.Operand2, line + 1);
-        if (word is null)
+        (List<int>? callWords, string? callError) = EncodeCallPseudoMnemonic(instruction, line + 1);
+        if (callWords is null)
+        {
+          return (null, null, callError);
+        }
+
+        words.AddRange(callWords);
+        continue;
+      }
+
+      CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
+      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord })
+      {
+        (List<int>? selfDescribingWords, string? selfDescribingError) = EncodeSelfDescribingWord(selfDescribingShape, instruction.Operand, instruction.Operand2, line + 1);
+        if (selfDescribingWords is null)
         {
           return (null, null, selfDescribingError);
         }
 
-        words.Add(word.Value);
+        words.AddRange(selfDescribingWords);
         continue;
       }
 
@@ -1465,6 +1489,11 @@ internal static class CvmAssemblyLanguage
   /// remarks) defaults to the worst case, 2: pass 2 will reject that exact line outright before any
   /// address past it is ever used, so the guess here never needs to be exact for a SUCCESSFUL assembly,
   /// only safe for a failing one.
+  ///
+  /// <c>"call"</c> (2026-09-30, alongside the new VM's own <c>scall</c>/<c>lcall</c>) is also variable-
+  /// length, but unlike <c>"literal"</c> it DOES support a label operand -- see this method's own "call"
+  /// case for why a label always sizes as lcall (2 words) here, while a resolved literal gets the real
+  /// scall/lcall fitting check.
   /// </summary>
   private static int GetWordLength(
       CvmAsmInstruction instruction,
@@ -1476,8 +1505,28 @@ internal static class CvmAssemblyLanguage
       return instruction.Operand is int value && FitsLitRange(value) ? 1 : 2;
     }
 
+    // "call" (2026-09-30) -- also variable-length by design, exactly like "literal" just above, but for
+    // the OPPOSITE reason regarding a label operand: "literal" refuses one outright, while "call" is
+    // expected to routinely take one (calling a named subroutine is its whole point), so it is never
+    // rejected here -- it is simply, always, sized as lcall (2 words), since this assembler's own single
+    // label-resolution pass (CollectLabelAddresses, which is what calls this very method) hasn't run yet
+    // at this point, so there is no way to know a label's eventual address to test it against scall's own
+    // narrower field. Only a plain literal number already sitting in Operand (never a label reference,
+    // instruction.OperandLabel null) gets the real fitting check -- see EncodeCallPseudoMnemonic's own
+    // remarks for the matching pass-2 logic this must never disagree with.
+    if (string.Equals(mnemonic, CvmInstructionSet.CallMnemonic, StringComparison.OrdinalIgnoreCase))
+    {
+      if (instruction.OperandLabel is not null)
+      {
+        return 2;
+      }
+
+      CvmInstructionSet.CvmInstructionShape? shortCallShapeForLength = CvmInstructionSet.TryGetShape(CvmInstructionSet.ShortCallMnemonic);
+      return instruction.Operand is int callValue && shortCallShapeForLength is not null && (uint)callValue <= (uint)shortCallShapeForLength.ValueBitMask ? 1 : 2;
+    }
+
     CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(mnemonic);
-    if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode })
+    if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord })
     {
       return selfDescribingShape.WordLength;
     }
@@ -1622,20 +1671,26 @@ internal static class CvmAssemblyLanguage
     {
       int word = sram.Read(CvmMemoryProtocol.CombineAddress(0, address));
 
-      // "call", "br", and "cbr" have no F18 symbol to resolve -- each one's whole word is
+      // "scall", "br", and "cbr" have no F18 symbol to resolve -- each one's whole word is
       // fully determined by its own bit pattern and operand alone (CvmInstructionSet.
       // CvmOperandEncoding.EmbeddedAddress / EmbeddedSignedValue), independent of node 607's live
       // compile, so all three are checked before consulting the (symbol-driven) decode table at all.
-      // (the now-retired "slit" used to be a fourth self-describing mnemonic here.)
+      // (the now-retired "slit" used to be a fourth self-describing mnemonic here; CVM2's OLD "call"
+      // used to be a fifth, in scall's own place, before this same 2026-09-30 reset.)
       // wordAddress passed through 2026-09-09 so br/cbr's own listing line can also show the
       // RESOLVED absolute target next to the raw offset -- see TryDescribeSelfDecodingWord's own
       // remarks (Stefan asked why the linker put "__exit" at "location 0x200"; it doesn't -- that
       // was always just the raw offset field, easy to misread as an address in this exact listing).
-      string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word, wordAddress: address);
+      // nextWord (ADDED 2026-09-30, alongside "lcall") is a one-word lookahead, read only when there IS
+      // a next word in range -- needed purely so TryDescribeSelfDecodingWord can print lcall's own real
+      // operand rather than just its bare tag-word mnemonic; wordLength (also new) tells this loop
+      // whether it just consumed one word (every earlier self-describing shape) or two (lcall).
+      int? nextWord = address + 1 < endAddressExclusive ? sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1)) : null;
+      string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word, out int selfDescribingWordLength, wordAddress: address, nextWord: nextWord);
       if (selfDescribing is not null)
       {
         notes[address] = selfDescribing;
-        address += 1;
+        address += selfDescribingWordLength;
         continue;
       }
 
@@ -1759,21 +1814,27 @@ internal static class CvmAssemblyLanguage
   }
 
   /// <summary>
-  /// Encodes one <c>call</c>/<c>br</c>/<c>cbr</c>/node-606 word directly from
-  /// <paramref name="shape"/> and its literal operand (the now-retired <c>slit</c> used to belong here
-  /// too) -- the same arithmetic
+  /// Encodes one <c>scall</c>/<c>br</c>/<c>cbr</c>/node-606 instruction's word(s) directly from
+  /// <paramref name="shape"/> and its literal operand (CVM2's OLD <c>call</c>, now retired, and the
+  /// now-retired <c>slit</c> used to belong here too) -- the same arithmetic
   /// <see cref="CvmAssembler.EmitEmbeddedSignedValue"/>/<see cref="CvmAssembler.EmitEmbeddedUnsignedValue"/>
   /// use for <c>br</c>/<c>cbr</c> and node 606's eight ops respectively (mask-derived
   /// min/max, tag OR'd with the value's low bits) and <see cref="CvmAssembler"/>'s own
-  /// <c>EmbeddedAddress</c> case uses for <c>call</c>, kept as a small duplicate here rather than
-  /// shared: that assembler resolves a label/import operand through relocations against a
-  /// <see cref="CvmObjectFile"/>, deferred all the way to a not-yet-implemented linker, which has no
-  /// place in this simpler, immediately-loaded assembler -- this file's own label support (see
-  /// <see cref="Assemble"/>'s own remarks) resolves a label to a plain literal <c>int</c> BEFORE this
-  /// method is ever called, so from here a label-derived operand and a hand-typed one are
-  /// indistinguishable.
+  /// generalized <c>EmbeddedAddress</c> case uses for <c>scall</c>, kept as a small duplicate here rather
+  /// than shared: that assembler resolves a label/import operand through relocations against a
+  /// <see cref="CvmObjectFile"/>, deferred all the way to a linker, which has no place in this simpler,
+  /// immediately-loaded assembler -- this file's own label support (see <see cref="Assemble"/>'s own
+  /// remarks) resolves a label to a plain literal <c>int</c> BEFORE this method is ever called, so from
+  /// here a label-derived operand and a hand-typed one are indistinguishable.
+  ///
+  /// Returns a WORD LIST, not a single word (CHANGED 2026-09-30, alongside <c>lcall</c>'s own addition):
+  /// every branch here still returns exactly one word except
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord"/> (<c>lcall</c>), the
+  /// first shape in this file ever needing two -- its own tag word, already fully known from
+  /// <paramref name="shape"/>.Tag alone, plus a full trailing operand word carrying the actual resolved
+  /// address.
   /// </summary>
-  private static (int? Word, string? Error) EncodeSelfDescribingWord(CvmInstructionSet.CvmInstructionShape shape, int? operand, int? operand2, int lineNumber)
+  private static (List<int>? Words, string? Error) EncodeSelfDescribingWord(CvmInstructionSet.CvmInstructionShape shape, int? operand, int? operand2, int lineNumber)
   {
     if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair)
     {
@@ -1802,7 +1863,7 @@ internal static class CvmAssemblyLanguage
         return (null, $"line {lineNumber}: {second} does not fit in \"{shape.Mnemonic}\"'s second (register) operand (0..{secondMaxValue}).");
       }
 
-      return (shape.Tag | ((first << shape.ValueBitShift) & shape.ValueBitMask) | ((second << shape.SecondValueBitShift) & shape.SecondValueBitMask), null);
+      return ([shape.Tag | ((first << shape.ValueBitShift) & shape.ValueBitMask) | ((second << shape.SecondValueBitShift) & shape.SecondValueBitMask)], null);
     }
 
     if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.FixedOpcode)
@@ -1817,7 +1878,22 @@ internal static class CvmAssemblyLanguage
         return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" does not take an operand.");
       }
 
-      return (shape.Tag, null);
+      return ([shape.Tag], null);
+    }
+
+    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord)
+    {
+      // ADDED 2026-09-30, for the new VM's own lcall -- see CvmOperandEncoding.FixedOpcodeWithTrailingWord's
+      // own remarks. shape.Tag is already fully known (no node, no relocation for it, exactly like nop
+      // just above), but unlike nop a real operand DOES follow: the resolved target address, already a
+      // plain int by this point (a label operand is resolved to one before this method is ever called,
+      // same as every other branch here).
+      if (operand is not int lcallTarget)
+      {
+        return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" requires an operand, e.g. \"{shape.Mnemonic} 0x1234\" or \"{shape.Mnemonic} loop\".");
+      }
+
+      return ([shape.Tag, lcallTarget & CvmWordCodec.WordMask], null);
     }
 
     if (operand is not int value)
@@ -1827,12 +1903,16 @@ internal static class CvmAssemblyLanguage
 
     if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress)
     {
-      if ((uint)value > (uint)CvmInstructionSet.CallAddressMask)
+      // GENERALIZED 2026-09-30, for the new VM's own scall (CVM2's OLD call used to be the only mnemonic
+      // here, hardcoded to its own 15-bit CallAddressMask) -- the field width is now read straight off
+      // shape.ValueBitMask (0x3FFF/14 bits for scall), mirroring CvmAssembler's own matching
+      // generalization, so a future EmbeddedAddress mnemonic with yet another width needs no change here.
+      if ((uint)value > (uint)shape.ValueBitMask)
       {
-        return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s 15-bit call target (0x0000-0x7FFF -- bit 15 is reserved).");
+        return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s {System.Numerics.BitOperations.PopCount((uint)shape.ValueBitMask)}-bit target (0x0000-0x{shape.ValueBitMask:X4}).");
       }
 
-      return (value, null);
+      return ([value & shape.ValueBitMask], null);
     }
 
     if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue)
@@ -1852,7 +1932,7 @@ internal static class CvmAssemblyLanguage
         return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s unsigned value (0..{unsignedMaxValue}).");
       }
 
-      return (shape.Tag | ((value << shape.ValueBitShift) & shape.ValueBitMask), null);
+      return ([shape.Tag | ((value << shape.ValueBitShift) & shape.ValueBitMask)], null);
     }
 
     int maxValue = shape.ValueBitMask >> 1;
@@ -1862,7 +1942,41 @@ internal static class CvmAssemblyLanguage
       return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s signed value ({minValue}..{maxValue}).");
     }
 
-    return (shape.Tag | (value & shape.ValueBitMask), null);
+    return ([shape.Tag | (value & shape.ValueBitMask)], null);
+  }
+
+  /// <summary>
+  /// Encodes the <c>"call"</c> pseudo-mnemonic (2026-09-30, alongside the new VM's own <c>scall</c>/
+  /// <c>lcall</c>, per Stefan: "'call' should try to fit the address into a 'scall' and use 'lcall' if the
+  /// address does not fit. if an address is unknown at compile time, e.g. an external symbol, 'call' will
+  /// always use 'lcall'.") -- see <see cref="CvmInstructionSet.ShortCallMnemonic"/>'s own class-level
+  /// remarks for the full derivation, and <see cref="GetWordLength"/>'s own "call" case, which this must
+  /// never disagree with on word count. By the time this runs, <paramref name="instruction"/>.Operand
+  /// already holds a resolved absolute address whether the source said a literal number or a label name
+  /// (see <see cref="Assemble"/>'s own remarks on where "call" is intercepted, after label resolution) --
+  /// <paramref name="instruction"/>.OperandLabel survives that resolution untouched, so it alone is what
+  /// tells a label-derived operand apart from a hand-typed literal here.
+  /// </summary>
+  private static (List<int>? Words, string? Error) EncodeCallPseudoMnemonic(CvmAsmInstruction instruction, int lineNumber)
+  {
+    if (instruction.Operand is not int value)
+    {
+      return (null, $"line {lineNumber}: \"call\" requires an operand, e.g. \"call 0x1234\" or \"call loop\".");
+    }
+
+    CvmInstructionSet.CvmInstructionShape shortCallShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.ShortCallMnemonic)!;
+    CvmInstructionSet.CvmInstructionShape longCallShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LongCallMnemonic)!;
+
+    // A label operand ALWAYS lowers to lcall, regardless of whether the resolved address would actually
+    // have fit scall -- see this method's own class-level remarks and GetWordLength's own "call" case for
+    // why: sizing happens before label resolution runs, so guessing here would risk disagreeing with the
+    // word count GetWordLength already committed every later label's own address to.
+    if (instruction.OperandLabel is null && (uint)value <= (uint)shortCallShape.ValueBitMask)
+    {
+      return ([value & shortCallShape.ValueBitMask], null);
+    }
+
+    return ([longCallShape.Tag, value & CvmWordCodec.WordMask], null);
   }
 
   /// <summary>

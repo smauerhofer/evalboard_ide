@@ -12,7 +12,10 @@ public sealed record PostMortemStackRow(string Label, string ValueText);
 
 /// <summary>One decoded word row (RAM or ROM) in the post-mortem node window, column order matching
 /// <see cref="Views.PostMortemNodeWindow"/>'s own left-to-right layout: <see cref="AddressHex"/> (the
-/// 10-bit address, 3 hex digits, no "0x" prefix), <see cref="Label"/> (the name this project's
+/// 10-bit address, 3 hex digits, no "0x" prefix -- PLUS its own local label in parenthesis when one
+/// lands exactly here, e.g. "014 (brk)"; see <see cref="F18Disassembler.FormatAddressWithLabel"/>,
+/// 2026-09-30, additive to -- not a replacement for -- the separate <see cref="Label"/> column right
+/// after it), <see cref="Label"/> (the name this project's
 /// currently compiled source binds to this address -- a colon-definition entry point or an explicit
 /// label -- or null when no such symbol lands exactly here), <see cref="HexText"/> (the raw on-chip
 /// 18-bit word content, 5 hex digits, no "0x" prefix), <see cref="Disassembly"/> (the on-chip word's
@@ -183,9 +186,12 @@ public sealed class PostMortemNodeDetailViewModel
       // compiled-for-comparison one.
       string? compiledDisassembly = hasCompiledWord ? F18Disassembler.Decode(word.Address, compiledWord).Format(labelsByAddress) : null;
       string? label = labelsByAddress.TryGetValue(word.Address, out string? labelName) ? labelName : null;
+      // FormatAddressWithLabel (2026-09-30, per Stefan: "the disassembler also displays local labels
+      // after the address") -- additive to the separate Label column above, not a replacement for it.
+      string addressText = F18Disassembler.FormatAddressWithLabel(word.Address.ToString("X3"), word.Address, labelsByAddress);
 
       rows.Add(new PostMortemWordRow(
-          word.Address.ToString("X3"),
+          addressText,
           label,
           word.RawWord.ToString("X5"),
           word.Format(labelsByAddress),

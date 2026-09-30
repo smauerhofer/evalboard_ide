@@ -142,7 +142,10 @@
             </ListView.ItemContainerStyle>
             <ListView.View>
               <GridView>
-                <GridViewColumn Header="Address" DisplayMemberBinding="{Binding AddressHex}" Width="60" />
+                <!-- Widened 2026-09-30 (from 60): AddressHex can now also carry the address's own
+                     local label in parenthesis (e.g. "014 (brk)"); see
+                     F18Disassembler.FormatAddressWithLabel's own remarks. -->
+                <GridViewColumn Header="Address" DisplayMemberBinding="{Binding AddressHex}" Width="120" />
                 <GridViewColumn Header="Label" DisplayMemberBinding="{Binding Label}" Width="120" />
                 <GridViewColumn Header="Hex" DisplayMemberBinding="{Binding HexText}" Width="70" />
                 <GridViewColumn Header="Disassembly" DisplayMemberBinding="{Binding Disassembly}" Width="420" />
@@ -171,7 +174,10 @@
             </ListView.ItemContainerStyle>
             <ListView.View>
               <GridView>
-                <GridViewColumn Header="Address" DisplayMemberBinding="{Binding AddressHex}" Width="60" />
+                <!-- Widened 2026-09-30 (from 60): AddressHex can now also carry the address's own
+                     local label in parenthesis (e.g. "014 (brk)"); see
+                     F18Disassembler.FormatAddressWithLabel's own remarks. -->
+                <GridViewColumn Header="Address" DisplayMemberBinding="{Binding AddressHex}" Width="120" />
                 <GridViewColumn Header="Label" DisplayMemberBinding="{Binding Label}" Width="120" />
                 <GridViewColumn Header="Hex" DisplayMemberBinding="{Binding HexText}" Width="70" />
                 <GridViewColumn Header="Disassembly" DisplayMemberBinding="{Binding Disassembly}" Width="420" />
