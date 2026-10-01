@@ -379,10 +379,15 @@ internal static class CvmAssemblyLanguage
   // CvmInstructionSet.Instructions' own remarks on RetMnemonic's new Id 184 for the full derivation.
   // Top 6 bits fixed at 1 (bits 15-10): as a plain 16-bit tag word (address bits zeroed) this is
   // 0xFC00. UNLIKE every other tag constant in this file, the resolved node address is not ORed in
-  // at bit 0 -- it occupies bits 9-3, with the bottom 3 bits ("eee") forced to 0 -- so this mnemonic
-  // also needs an entry in NodeResolvedAddressShiftByMnemonic (below) to left-shift the resolved
-  // address by 3 before combining it with this tag.
-  private const int Node506RetTagBits = 0xFC00;
+  // at bit 0 -- it occupies bits 9-3, with the bottom 3 bits ("eee") forced to 0 -- so every mnemonic
+  // in this family also needs an entry in NodeResolvedAddressShiftByMnemonic (below) to left-shift
+  // the resolved address by 3 before combining it with this tag.
+  //
+  // RENAMED 2026-10-01 from "Node506RetTagBits": per Stefan, link/unlink's own opcodes are "like the
+  // opcode for ret" -- the exact same tag/shift, just a different word in node 506 -- so this is the
+  // whole node-506 bit-pattern-table family's shared tag, not ret's alone. See
+  // CvmInstructionSet.Instructions' own remarks on Ids 185/186 for link/unlink's own derivation.
+  private const int Node506BitPatternTableTagBits = 0xFC00;
 
   // CVM2's node 508 'gld/'gst tag (2026-09-04, renamed 2026-09-09 from 'ldg'/'stg -- see
   // CvmInstructionSet.LoadGlobalMnemonic's own remarks), per Stefan's node 508 source
@@ -544,8 +549,10 @@ internal static class CvmAssemblyLanguage
   // CvmInstructionSet.Instructions' own remarks) is the new VM's first None/TrailingWord/
   // TwoTrailingWords/NodeResolvedEmbeddedValue-shaped mnemonic, so it DOES pass the filtered list's own
   // .Where clause and DOES need a live entry here -- see the new, live [RetMnemonic] row below (node
-  // 506, Node506RetTagBits), right where the OLD, now-commented-out CVM2 node-507 "ret" row used to be.
-  // Every other row in this dictionary remains exactly as inert as described just above.
+  // 506, Node506BitPatternTableTagBits), right where the OLD, now-commented-out CVM2 node-507 "ret"
+  // row used to be. ADDED 2026-10-01: link/unlink (Ids 185/186) join ret in this same family -- see
+  // their own entries just below. Every other row in this dictionary remains exactly as inert as
+  // described just above.
   //
   // Which node implements each shared-toolchain mnemonic, that node's own F18 symbol for it, and the
   // tag bits its opcode word must carry (Node508TagBits for the OLD, permanently-orphaned CVM1
@@ -590,7 +597,13 @@ internal static class CvmAssemblyLanguage
         // as the historical record of CVM2's OLD node-507 "ret" (Node507Cvm2LocalExecuteTagBits,
         // 0x8800 | address), which shares nothing with the new entry below except the mnemonic string.
         // [RetMnemonic] = (Node507Program.Coordinate, "'ret", Node507Cvm2LocalExecuteTagBits),
-        [RetMnemonic] = (Node506Program.Coordinate, "'ret", Node506RetTagBits),
+        [RetMnemonic] = (Node506Program.Coordinate, "'ret", Node506BitPatternTableTagBits),
+        // LinkMnemonic ("link")/UnlinkMnemonic ("unlink") -- ADDED 2026-10-01, alongside ret in node
+        // 506's bit-pattern-table family (see Node506BitPatternTableTagBits' own remarks and
+        // CvmInstructionSet.Instructions' own remarks on Ids 185/186). Brand new mnemonic names, no
+        // OLD CVM1/CVM2 entry to comment out first (unlike ret just above).
+        [CvmInstructionSet.LinkMnemonic] = (Node506Program.Coordinate, "'link", Node506BitPatternTableTagBits),
+        [CvmInstructionSet.UnlinkMnemonic] = (Node506Program.Coordinate, "'unlink", Node506BitPatternTableTagBits),
         [CvmInstructionSet.HaltMnemonic] = (Node507Program.Coordinate, "'halt", Node507Cvm2LocalExecuteTagBits),
         // tjmp (2026-09-09, "'tjmp is in node 507") -- node 507's own table-jump primitive, reached the
         // SAME "1000_1???" local-execute tag family as the six above (Node507Cvm2LocalExecuteTagBits) --
@@ -934,7 +947,8 @@ internal static class CvmAssemblyLanguage
       };
 
   /// <summary>
-  /// ADDED 2026-09-30, for the new VM's <c>ret</c> alone: per-mnemonic left-shift applied to a
+  /// ADDED 2026-09-30, for the new VM's <c>ret</c> (joined 2026-10-01 by <c>link</c>/<c>unlink</c>,
+  /// the same node-506 bit-pattern-table family): per-mnemonic left-shift applied to a
   /// <see cref="CvmInstructionSet.CvmOperandEncoding.None"/> mnemonic's resolved node address before it
   /// is OR'd into that mnemonic's tag in <see cref="BuildDecodeTable"/>/<see cref="BuildEncodeTable"/>.
   /// Every None-shaped mnemonic before <c>ret</c> (scall's own EmbeddedAddress shape aside -- scall
@@ -942,13 +956,17 @@ internal static class CvmAssemblyLanguage
   /// starting at bit 0 -- so this dictionary was never needed until now. <c>ret</c>'s own spec row
   /// ("1111|11ff|ffff|feee| implied", per Stefan) puts its 7-bit address field at bits 9-3 instead,
   /// with the bottom 3 bits ("eee") forced to 0 -- i.e. the resolved address must be shifted left by 3
-  /// before it is OR'd into <see cref="Node506RetTagBits"/>. A mnemonic absent from this dictionary
-  /// gets shift 0, so every pre-existing None-shaped mnemonic's behavior is unchanged.
+  /// before it is OR'd into <see cref="Node506BitPatternTableTagBits"/>. A mnemonic absent from this
+  /// dictionary gets shift 0, so every pre-existing None-shaped mnemonic's behavior is unchanged.
+  /// ADDED 2026-10-01: link/unlink (Ids 185/186) join ret in node 506's bit-pattern-table family and
+  /// need the same shift of 3.
   /// </summary>
   private static readonly IReadOnlyDictionary<string, int> NodeResolvedAddressShiftByMnemonic =
       new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
       {
         [CvmInstructionSet.RetMnemonic] = 3,
+        [CvmInstructionSet.LinkMnemonic] = 3,
+        [CvmInstructionSet.UnlinkMnemonic] = 3,
       };
 
   // EMPTY as of 2026-09-30, NO LONGER EMPTY same day (see NodeSymbolByMnemonic's own header note
@@ -962,6 +980,12 @@ internal static class CvmAssemblyLanguage
   // pre-reset None-shaped mnemonic here used to be. BuildDecodeTable/BuildEncodeTable both iterate
   // this list, so both automatically pick ret up -- no further change was needed in either beyond the
   // address-shift lookup described on NodeResolvedAddressShiftByMnemonic.
+  //
+  // JOINED 2026-10-01 by link (Id 185, CvmOperandEncoding.TrailingWord) and unlink (Id 186,
+  // CvmOperandEncoding.None) -- same node-506 family, same filter, same automatic pickup by
+  // BuildDecodeTable/BuildEncodeTable; link's TrailingWord shape needs no special handling here
+  // either, since this list (and both Build*Table methods) already treat TrailingWord as just
+  // another tagged shape with a different WordLength, exactly as pushlit/gld/gst/litr already do.
   /// <summary>
   /// Every known CVM asm mnemonic THAT RESOLVES TO SOME NODE'S F18 SYMBOL, which node and symbol that
   /// is, and how many words (its own opcode word included) it occupies once assembled. <c>pushlit</c>,

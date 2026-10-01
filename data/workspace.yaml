@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-09-30T20:02:52.4873338
-      utcDateTime: 2026-09-30T20:02:52.4873338Z
-      localDateTime: 2026-09-30T22:02:52.4873338+02:00
-      date: 2026-09-30T00:00:00.0000000
-      day: 30
-      dayOfWeek: Wednesday
-      dayOfYear: 273
-      hour: 20
-      millisecond: 487
-      microsecond: 333
-      nanosecond: 800
-      minute: 2
-      month: 9
+      dateTime: 2026-10-01T04:32:40.4372923
+      utcDateTime: 2026-10-01T04:32:40.4372923Z
+      localDateTime: 2026-10-01T06:32:40.4372923+02:00
+      date: 2026-10-01T00:00:00.0000000
+      day: 1
+      dayOfWeek: Thursday
+      dayOfYear: 274
+      hour: 4
+      millisecond: 437
+      microsecond: 292
+      nanosecond: 300
+      minute: 32
+      month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 52
-      ticks: 639263953724873338
-      utcTicks: 639263953724873338
-      timeOfDay: 20:02:52.4873338
+      second: 40
+      ticks: 639264259604372923
+      utcTicks: 639264259604372923
+      timeOfDay: 04:32:40.4372923
       year: 2026
   portB: 
   portC:
@@ -66802,8 +66802,6 @@ projects:
         ]
 
 
-
-
         : r/defocus ( port - ) rdlu ;
 
 
@@ -66840,8 +66838,22 @@ projects:
         : r/pop  ( { ,adr } ) sp r/++ !b ;
 
 
-        : r/link ( { 'offset ,old-fp } )
-          fp a! a >r @+ @ dup @b . + ! r> a! ! !b ;
+        // : r/link ( { 'offset ,old-fp } )
+
+        //  fp a! 
+
+        //  a >r @+ @ dup @b . + 0xffff and ! r> a! ! !b ;
+
+
+        : r/link ( receives offset; sends old-fp, save-address )
+          fp a! @+                   // old FP
+          @ dup !b                   // old FP, old SP; send address
+          fp a! dup !+               // FP = old SP
+          @b . + 0xffff and          // SP = old SP + offset
+          !
+          !b                         // old FP
+          ;
+
 
         : r/unlink ( { ,adr 'old-fp } )
           fp a! @ dup !b @b !+ ! ;
@@ -66866,7 +66878,7 @@ projects:
       - 0x00000
       - 0x00000
       - 0x00000
-      - 0x00000
+      - 0x0FFFF
       - 0x115A5
       - 0x24BBD
       - 0x05715
@@ -66899,18 +66911,18 @@ projects:
       - 0x05626
       - 0x00013
       - 0x09555
-      - 0x04A8A
+      - 0x04A1A
       - 0x00012
-      - 0x2FC0B
-      - 0x009F2
-      - 0x0ACAA
-      - 0x0BB55
+      - 0x02D27
+      - 0x00012
+      - 0x2AD3A
+      - 0x009F7
+      - 0x0FFFF
+      - 0x3FA25
       - 0x04A0B
       - 0x00012
       - 0x09F3A
       - 0x0B555
-      - 0x15555
-      - 0x15555
       startup:
         entryPoint: 0x1A5
         p: 0x000
@@ -67191,8 +67203,8 @@ projects:
                       drop dup 7 and
                       if // some other node
                       then
-        : brk brk ;
-                      drop A[ @p >r ; ]] lit !b !b ;
+                      drop 2/ 2/ 2/ 0x3f and
+                      A[ @p >r ; ]] lit !b !b ;
                     then
                     // implied with next
                       A[ d/implied-with-next ; ]] lit !b ;
@@ -67250,53 +67262,53 @@ projects:
       - 0x259B2
       - 0x09F92
       - 0x364B2
-      - 0x1B42B
-      - 0x37226
-      - 0x37221
-      - 0x3721C
-      - 0x37214
-      - 0x37212
+      - 0x1B42C
+      - 0x37227
+      - 0x37222
+      - 0x3721D
+      - 0x37215
+      - 0x37213
       - 0x3AD12
       - 0x00007
       - 0x3F30E
-      - 0x1140E
-      - 0x3BD22
+      - 0x3A7C2
+      - 0x31DFF
+      - 0x0003F
       - 0x04855
-      - 0x09555
+      - 0x09B55
       - 0x05B55
-      - 0x11416
-      - 0x3721A
-      - 0x37218
+      - 0x11417
+      - 0x3721B
+      - 0x37219
       - 0x05B55
-      - 0x11416
+      - 0x11417
       - 0x05B55
-      - 0x11416
+      - 0x11417
       - 0x05B55
-      - 0x1141B
-      - 0x3721F
+      - 0x1141C
+      - 0x37220
       - 0x05B55
-      - 0x1141B
+      - 0x1141C
       - 0x05B55
-      - 0x1141B
-      - 0x37224
+      - 0x1141C
+      - 0x37225
       - 0x05B55
-      - 0x1141B
+      - 0x1141C
       - 0x05B55
-      - 0x1141B
-      - 0x37229
+      - 0x1141C
+      - 0x3722A
       - 0x05B55
-      - 0x1141B
+      - 0x1141C
       - 0x05B55
-      - 0x1141B
-      - 0x37231
-      - 0x3722F
+      - 0x1141C
+      - 0x37232
+      - 0x37230
       - 0x05B55
-      - 0x1141B
+      - 0x1141C
       - 0x05B55
-      - 0x1141B
+      - 0x1141C
       - 0x05B55
-      - 0x1141B
-      - 0x15555
+      - 0x1141C
       - 0x15555
       - 0x15555
       - 0x15555
@@ -67318,7 +67330,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEDE'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 506
       enabled: true
       sourceCode: >+
@@ -67429,7 +67441,16 @@ projects:
         : d/jump ( a - )
           A[ m/jump ]] lit !b !b ;
 
-        : 'ret A[ m/ret ; ]] lit !b ;
+        : 'ret
+          # m/ret lit d/save ;
+        //  A[ m/ret ; ]] lit !b ;
+
+
+        : 'link
+          # m/link lit d/save ;
+
+        : 'unlink
+          # m/unlink lit d/save ;
 
 
         : d/implied
@@ -67505,20 +67526,20 @@ projects:
       - 0x0BE55
       - 0x05B25
       - 0x1342E
-      - 0x05B55
-      - 0x1142F
+      - 0x05706
+      - 0x0002F
+      - 0x05706
+      - 0x00031
+      - 0x05706
+      - 0x00035
       - 0x1340C
       - 0x13408
-      - 0x2131A
+      - 0x2131E
       - 0x15555
       - 0x11412
       - 0x2FD9A
       - 0x0002D
       - 0x11404
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -67600,11 +67621,22 @@ projects:
         # 0 org
 
 
+        : m/next ( - w )
+          dup xor m/pc++
+          ( 0 a )
+          m/read
+        ;
+
+
         : m/pc++ ( - adr )
           1
         : m/pc+ ( offset - adr )
           a dup >r . + 0xffff and a! r> ;
 
+        : m/unlink ( - )
+          1 A[ r/unlink ]] lit m/rsend @b
+          ( 1 adr )
+          m/read
         : m/rsend ( w - )
           down b! !b ;
 
@@ -67618,8 +67650,15 @@ projects:
           >r m/focus
           ex m/defocus ;
 
-        : m/rget ( - w )
-          A[ !p ]] lit m/rsend 1 @b ;
+        : m/pop ( - w )
+          A[ r/pop ]] lit m/rsend
+          1 @b
+          ( p 1 )
+        : m/read ( p a - w )
+          up b!         // select node 607
+          A[ mem/rdup ]] lit !b
+          !b !b @b ;  
+
 
         : m/push ( w - )
           A[ r/push ]] lit m/rsend
@@ -67630,14 +67669,14 @@ projects:
           A[ mem/wrup ]] lit !b
           !b !b !b ;  
 
-        : m/pop ( - w )
-          A[ r/pop ]] lit m/rsend
-          1 @b
-          ( p 1 )
-        : m/read ( p a - w )
-          up b!         // select node 607
-          A[ mem/rdup ]] lit !b
-          !b !b @b ;  
+        : m/link ( - )
+          m/next
+          A[ r/link ]] lit m/rsend
+          @b >r                      // receive save address
+          !b                         // send offset
+          @b                         // receive old FP
+          1 r>                       // old FP, page, address
+          m/write ;
 
         : m/nextinstr  ( - )
           ( fetch next instruction )
@@ -67659,168 +67698,39 @@ projects:
         : m/ret ( - )
           m/pop a! ;
 
-        : m/link ( offset - )
-          A[ @p r/link ]] lit m/rsend !b
-          @b m/push ;
 
-        : m/unlink ( - )
-          1 A[ @p r/unlink ]] lit m/rsend @b
-          ( 1 adr )
-          m/read m/rsend ;
 
-        : m/next ( - w )
-          dup xor m/pc++
-          ( 0 a )
-          m/read
-        ;
 
-
-        // : m/reg ( r - )
-
-        //  A[ @p a! ]] lit !b ;
-
-
-
-        // : m/rfocus_r@ ( r - w )
-
-        //   m/rfocus
-
-        // : m/r@ ( - w )
-
-        //  A[ @ !p ]] lit !b
-
-        //  @b ;
-
-
-        // : m/fetch ( r - w )
-
-        //   m/rfocus_r@
-
-        // : m/defocus ( - )
-
-        //   A[ ; ]] lit !b ;
-
-
-
-        // : m/r! ( w - )
-
-        //   A[ @p ! ]] lit !b
-
-        //  !b ;
-
-
-        // : m/call ( adr - )
-
-        //  a
-
-
-
-        //   ret m/rfocus a m/r! m/defocus
-
-        // : m/jump ( adr - )
-
-        //  ( set new PC )
-
-        //  a!            // set new PC
-
-        // ;
-
-
-        // : m/store ( w r - )
-
-        //  m/rfocus
-
-        // : m/r!_defocus ( w - )
-
-        //  m/r! m/defocus ;
-
-
-        // : m/ret ( - )
-
-        //  ret m/rfocus_r@ a! m/defocus ;
-
-
-
-        // : m/pop ( - w )
-
-        //  1
-
-        //  sp m/rfocus_r@
-
-        //  1 . + dup m/r!_defocus
-
-        //  ( a )
-
-        // : m/read ( p a - w )
-
-        //  up b!         // select node 607
-
-        //  !b !b @b ;  
-
-
-        // : m/unlink
-
-        //    fp m/rfocus_r@ sp m/reg m/r!
-
-        //    m/pop fp m/reg m/r!_defocus ;
-
-
-        // : m/push ( w - )
-
-        //  sp m/rfocus
-
-        //  -2
-
-        //  m/r@ dup -1 . + m/r!_defocus
-
-        //  ( w p a )
-
-        // : m/write ( w p a - )
-
-        //  up b!         // select node 607
-
-        //  !b inv !b !b ;  
-
-
-        // : m/next ( - w )
-
-        //  dup xor m/pc++
-
-        //  m/read ;
 
 
 
 
       ramWords:
+      - 0x243B2
+      - 0x13403
+      - 0x1141C
       - 0x049B2
       - 0x00001
       - 0x22DBA
       - 0x3DDFA
       - 0x0FFFF
       - 0x2AC55
+      - 0x05DB2
+      - 0x00001
+      - 0x1343C
+      - 0x1340F
+      - 0x009B2
+      - 0x1341C
       - 0x04B25
       - 0x00115
-      - 0x05706
+      - 0x0570F
       - 0x13416
-      - 0x05706
+      - 0x0570F
       - 0x13414
-      - 0x2F608
+      - 0x2F611
       - 0x17555
-      - 0x1140A
-      - 0x05606
-      - 0x0C9B2
-      - 0x05F55
-      - 0x00001
-      - 0x05606
-      - 0x1342E
-      - 0x05FB2
-      - 0x00001
-      - 0x04B12
-      - 0x00145
-      - 0x13415
-      - 0x09B22
-      - 0x09555
-      - 0x05606
+      - 0x11413
+      - 0x0560F
       - 0x13431
       - 0x05FB2
       - 0x00001
@@ -67829,31 +67739,35 @@ projects:
       - 0x13403
       - 0x09B22
       - 0x01555
-      - 0x13400
+      - 0x0560F
+      - 0x1342E
+      - 0x05FB2
+      - 0x00001
       - 0x04B12
       - 0x00145
-      - 0x13410
+      - 0x13415
+      - 0x09B22
+      - 0x09555
+      - 0x13400
+      - 0x0560F
+      - 0x13434
+      - 0x00822
+      - 0x01D9A
+      - 0x00001
+      - 0x11425
+      - 0x13403
+      - 0x04B12
+      - 0x00145
+      - 0x1340C
       - 0x09B07
       - 0x001D5
       - 0x29BB2
       - 0x115D5
-      - 0x23613
+      - 0x23621
       - 0x2B555
-      - 0x1341C
+      - 0x13418
       - 0x2B555
-      - 0x05606
-      - 0x05634
-      - 0x09FB2
-      - 0x11413
-      - 0x05DB2
-      - 0x00001
-      - 0x0563A
-      - 0x13406
-      - 0x01620
-      - 0x11406
-      - 0x243B2
-      - 0x13400
-      - 0x11420
+      - 0x15555
       - 0x15555
       - 0x15555
       startup:
@@ -68368,7 +68282,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#F5E6B8'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 608
       enabled: false
       sourceCode: ''
@@ -68724,7 +68638,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#F5E6B8'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 708
       enabled: true
       sourceCode: >-
@@ -69177,6 +69091,18 @@ projects:
         nop
 
         test1:
+
+        link -1
+
+        unlink
+
+        link -3
+
+        link -2
+
+        unlink
+
+        unlink
 
         ret
 

@@ -224,6 +224,13 @@ public static class CvmInstructionSet
   public const string BranchMnemonic = "br";
   public const string ConditionalBranchMnemonic = "cbr";
 
+  // LinkMnemonic ("link")/UnlinkMnemonic ("unlink") -- ADDED 2026-10-01, the new VM's fourth/fifth
+  // opcodes (right after ret, same node-506 bit-pattern-table/dispatch family) -- see this file's own
+  // Instructions remarks on Ids 185/186 for the full derivation. Brand new names, no CVM1/CVM2
+  // namesake to collide or coincide with (unlike RetMnemonic's own "ret").
+  public const string LinkMnemonic = "link";
+  public const string UnlinkMnemonic = "unlink";
+
   // ---- 2026-09-30 (same day as the reset), the new VM's own "call" family: scall/lcall/call ----------
   // Per Stefan directly, right after giving the new VM's own instruction-word bit-pattern spec: "the next
   // instruction i want to define is 'call'. there is a short variant 'scall' and a long variant 'lcall'.
@@ -2140,6 +2147,30 @@ public static class CvmInstructionSet
     // (never has -- see this file's own class-level remarks on why the real tag/node pairing lives entirely
     // on the IDE side), so nothing about that split changes for this entry.
     new(Id: 184, RetMnemonic, 1, CvmOperandEncoding.None),
+    // ADDED 2026-10-01 (same node-506 bit-pattern-table/dispatch family as ret, just above): Stefan
+    // placed labels 'link and 'unlink in the new VM's node 506, each tagged "like the opcode for
+    // ret" -- i.e. the SAME spec row shape ("1111|11ff|ffff|feee| implied", e = 0 always, f = the
+    // 7-bit address of the corresponding word in node 506) -- so link/unlink share ret's own tag
+    // (0xFC00) and its own bits-9-3 address shift; only which word in node 506 each one resolves
+    // against differs. Because that tag/shift pairing is no longer ret-specific, the IDE-side
+    // constant/dictionary entries backing it were generalized accordingly rather than duplicated --
+    // see Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own remarks on Node506RetTagBits (now
+    // Node506BitPatternTableTagBits) and NodeResolvedAddressShiftByMnemonic.
+    //
+    // "link" (Id 185): per Stefan, "the offset for 'link' is in the word after the opcode... 'link'
+    // is encoded in 2 words: the first is the opcode, the second is the offset, which is added to
+    // the stack pointer." That is CvmOperandEncoding.TrailingWord -- a node-resolved, tagged opcode
+    // word (word 1) immediately followed by one plain operand word (word 2, the literal offset) --
+    // structurally identical to pushlit/gld/gst/litr's own shape, just resolved against node 506
+    // instead. The offset itself is an ordinary trailing word (CvmAssembler's existing generic
+    // TrailingWord path emits it, via EmitOperandWord, exactly as it does for every other
+    // TrailingWord mnemonic -- no new assembler code needed); Stefan's own wording doesn't restrict
+    // it to a narrower range or forbid a label/import operand, so none is imposed here.
+    new(Id: 185, LinkMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    // "unlink" (Id 186): per Stefan, "'unlink' has no parameter and is encode[d] in 1 word like
+    // 'ret'." Same shape as ret exactly -- CvmOperandEncoding.None, no operand -- just a different
+    // node-506 word to resolve against.
+    new(Id: 186, UnlinkMnemonic, 1, CvmOperandEncoding.None),
     // ---------------------------------------------------------------------------------------------
     // new(Id: 1, PushLitMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // new(Id: 2, PushMnemonic, 1, CvmOperandEncoding.None),
