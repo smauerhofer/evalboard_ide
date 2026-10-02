@@ -301,41 +301,55 @@ public static class CvmAssembler
         // ADDED 2026-10-02, for the "CVM_pipeline" table's own cbr, RENAMED the same day to if
         // (CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord -- see that
         // enum case's own remarks, and CvmInstructionSet.IfMnemonic's own remarks for the full,
-        // now-FULLY-confirmed account). UPDATED again the same day: every open question Stefan was asked
-        // is now answered -- the "cond" field is a node-406-resolved reference (not a plain number), the
-        // branch's own FINAL polarity (the intuitive "goto label when the condition holds" reading,
-        // achieved by Stefan's own change to node 406's flag evaluation, not anything this assembler
-        // encodes), the register field's hard r0-r15 limit (4 bits, by design), and the complete
-        // three-operand syntax "if &lt;reg&gt; &lt;cond&gt; &lt;target&gt;" (Ga144.Evb.Ide.Services.
-        // CvmAssemblyLanguage.EncodeIfInstruction now implements this for the CVM Debugger's own
-        // immediately-resolving assembler).
+        // now-FULLY-confirmed account). Every open question Stefan was asked is now answered -- the
+        // "cond" field is a node-406-resolved reference (not a plain number), the branch's own FINAL
+        // polarity (the intuitive "goto label when the condition holds" reading, achieved by Stefan's
+        // own change to node 406's flag evaluation, not anything this assembler encodes), the register
+        // field's hard r0-r15 limit (4 bits, by design), and the complete three-operand syntax
+        // "if <reg> <cond> <target>".
         //
-        // STILL deliberately rejected HERE, in this separate, linker-based assembler, for a genuinely
-        // different reason than before: not a missing confirmation, but a missing MECHANISM. Every other
-        // tagged mnemonic this assembler resolves against a live node leaves a single
-        // CvmRelocationType.CvmOpcode relocation keyed by MNEMONIC against CvmPrimitiveTable (see this
-        // class's own remarks on that relocation, and CvmPrimitiveTable's own remarks on where its
-        // entries come from -- Ga144.Evb.Ide.Services.CvmPrimitiveTableExporter, reading
-        // CvmAssemblyLanguage.BuildEncodeTable verbatim). "if"'s own "cond" field resolves per NAMED
-        // OPERAND VALUE of one mnemonic (ten different node-406 symbols, one per condition name), not per
-        // mnemonic -- a resolution shape BuildEncodeTable's own Instructions list structurally excludes
-        // today (it only iterates None/TrailingWord/TwoTrailingWords/NodeResolvedEmbeddedValue-shaped
-        // rows; EmbeddedUnsignedValuePairWithTrailingWord, "if"'s own shape, is not among them), so there
-        // is no primitive-table entry for any of node 406's ten condition symbols for this assembler to
-        // even ask for yet. Wiring this up for real would need a genuinely new mechanism -- for instance,
-        // ten synthetic primitive-table entries (one per condition name, each the complete tag|cond word
-        // with the register left at 0 for CvmRelocation.EmbeddedValue to OR in, mirroring node 306's own
-        // address-register ops) -- which would mean real, new code in BOTH
-        // Ga144.Evb.Ide.Services.CvmAssemblyLanguage (to compute and expose those ten entries at all) AND
-        // CvmPrimitiveTableExporter (to carry them into the exported table), not merely a "mirror what
-        // CvmAssemblyLanguage.EncodeIfInstruction already does" change confined to this one file. Flagged
-        // here rather than attempted without Stefan's own confirmation that this is the mechanism he
-        // wants, per this project's own "never assert an unconfirmed design decision" rule -- the
-        // CvmAssemblyLanguage.cs side (the CVM Debugger's own assembler) is real and working today; this
-        // side is not, and needs a design decision from Stefan before it can be.
+        // REAL SUPPORT ADDED here the same day, per Stefan directly asking for the missing MECHANISM
+        // (not just a confirmation) to be invented: every other tagged mnemonic this assembler resolves
+        // against a live node leaves a single CvmRelocationType.CvmOpcode relocation keyed by MNEMONIC
+        // against CvmPrimitiveTable -- but "if"'s own "cond" field resolves per NAMED CONDITION VALUE
+        // (ten different node-406 symbols), not per mnemonic, a shape BuildEncodeTable's own
+        // Instructions list structurally excludes (see that list's own remarks). The invented mechanism:
+        // ten synthetic CvmPrimitiveTable entries, one per condition name, each the complete BASE word
+        // (tag | resolved-cond-address<<4, register left at 0) -- computed by
+        // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.BuildIfConditionEncodeTable (the condition-keyed
+        // sibling of BuildEncodeTable) and merged into the exported table by
+        // Ga144.Evb.Ide.Services.CvmPrimitiveTableExporter, under synthetic keys
+        // CvmInstructionSet.IfPrimitiveNamePrefix + CvmInstructionSet.IfConditionPrimitiveKeyByName[name]
+        // (e.g. "if.eq0" for "==0" -- never the raw condition name itself, which would corrupt
+        // CvmPrimitiveTable's own ".gaprim" text format for the four names containing "=" -- see that
+        // dictionary's own remarks). This case below resolves the condition name to that same synthetic
+        // key and emits a CvmRelocationType.CvmOpcode relocation against it, with the literal register
+        // operand carried on CvmRelocation.EmbeddedValue -- exactly node 308's own address-register
+        // mechanism, reused verbatim; CvmLinker.cs/CvmPrimitiveTable.cs themselves need NO changes.
+        //
+        // The third operand (the branch target) is a SEPARATE trailing word -- a signed relative offset,
+        // same-section-label-only (mirroring EmitEmbeddedSignedValue's own br/cbr convention, see
+        // EmitIfTargetWord's own remarks for exactly how and why it differs) -- resolved independently of
+        // the relocation above, since a relative offset to a same-file label is fully known at assemble
+        // time and needs no linker involvement at all.
         case CvmInstructionSet.IfMnemonic:
-          errors.Add($"line {line.LineNumber}: \"if\" is not yet assemblable here -- its full semantics (cond/polarity/register-width/operand syntax) are now confirmed and already work in the CVM Debugger's own Assembly Code editor, but this separate, linker-based assembler has no mechanism yet to resolve a per-CONDITION-NAME (not per-mnemonic) node-406 symbol through a primitive table -- that needs new plumbing in CvmAssemblyLanguage.BuildEncodeTable and CvmPrimitiveTableExporter, not just here; ask Stefan how he wants that exposed before wiring this up.");
-          break;
+          {
+            if (line.Args.Count != 3)
+            {
+              errors.Add($"line {line.LineNumber}: \"if\" requires exactly three operands (register, condition, target), e.g. \"if 0, ==0, loop\".");
+              break;
+            }
+
+            if (!CvmInstructionSet.IfConditionPrimitiveKeyByName.ContainsKey(line.Args[1]))
+            {
+              string validConditionNames = string.Join(", ", CvmInstructionSet.IfConditionPrimitiveKeyByName.Keys);
+              errors.Add($"line {line.LineNumber}: \"if\" does not recognize condition \"{line.Args[1]}\" -- valid conditions are: {validConditionNames}.");
+              break;
+            }
+
+            sectionCursors[section] += 2; // this shape's own fixed WordLength -- tag word + trailing offset word, regardless of operand values.
+            break;
+          }
 
         default:
           CvmInstructionSet.CvmInstructionShape? shape = CvmInstructionSet.TryGetShape(line.Directive);
@@ -362,11 +376,11 @@ public static class CvmAssembler
           // same two-operand group, same reasoning as litm/lit2 -- two separate trailing words, each a
           // plain literal/label operand (see CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords' own
           // remarks). if (CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord, renamed from cbr
-          // 2026-10-02) never reaches this generic branch at all -- it has its own dedicated, error-only
-          // case above, since its now-confirmed 3-operand syntax (register, condition name, branch
-          // target) is a shape this switch has no group for, and -- unlike every other rejection this
-          // switch used to carry -- the remaining blocker is a missing per-condition-name primitive-table
-          // mechanism, not an unconfirmed design question; see that case's own remarks.
+          // 2026-10-02) never reaches this generic branch at all -- it has its own dedicated,
+          // 3-operand case above (register, condition name, branch target), since this switch's own
+          // requiredArgCount/EmitOperandWord machinery has no group for a mnemonic needing a
+          // per-condition-name (not per-mnemonic) node-resolved relocation plus a separately-resolved
+          // relative-offset trailing word; see that case's own remarks for the real encoding.
           int requiredArgCount = shape.Encoding is CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords ? 2 : shape.HasOperand ? 1 : 0;
           if (line.Args.Count != requiredArgCount)
           {
@@ -524,6 +538,55 @@ public static class CvmAssembler
               EmbeddedValue = 0,
             });
             EmitOperandWord(objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+            break;
+          }
+
+        case CvmInstructionSet.IfMnemonic:
+          {
+            // See this method's own pass-1 remarks on "if" for the full design. "if" has no
+            // CvmInstructionSet.Instructions-driven generic dispatch path (its 3-operand shape doesn't fit
+            // the generic default case's own one/two-operand assumption), so, like "call" and "literal"
+            // above, it is written out directly here.
+            CvmInstructionSet.CvmInstructionShape ifShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.IfMnemonic)!;
+            CvmSection ifSection = objectFile.GetOrAddSection(section);
+
+            if (!TryParseNumericLiteral(line.Args[0], out int ifRegister) || ifRegister < 0 || ifRegister > ifShape.SecondValueBitMask)
+            {
+              errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register index for \"if\" -- expected 0..{ifShape.SecondValueBitMask} (r0-r15 only, per Stefan directly), e.g. \"if 0, ==0, loop\".");
+              ifRegister = 0; // keep going -- pass 1 already fixed this instruction's own 2-word size and every later label's address against it; emitting a wrong-but-correctly-SIZED word here (same resilience convention the generic NodeResolvedEmbeddedValue branch below already uses for an out-of-range register) keeps the rest of the file's layout intact even though this run will fail overall.
+            }
+
+            // Pass 1 already rejected an unrecognized condition name outright, so this lookup cannot fail
+            // here -- unlike the register check just above, there is no sensible default base word to
+            // substitute for an unknown condition (which of ten would it be?), so this is asserted, not
+            // defended against a second time.
+            string ifConditionKey = CvmInstructionSet.IfConditionPrimitiveKeyByName[line.Args[1]];
+            string ifPrimitiveName = CvmInstructionSet.IfPrimitiveNamePrefix + ifConditionKey;
+
+            int ifOpcodeOffset = ifSection.Words.Count;
+            // Same 0x8000|Id self-describing placeholder convention as every other node-resolved mnemonic
+            // below -- readable in an unlinked dump even though the linker (not this placeholder) supplies
+            // the real, tagged word via the CvmOpcode relocation just below.
+            ifSection.Words.Add(0x8000 | ifShape.Id);
+            externalSymbols.Add(ifPrimitiveName);
+            objectFile.Relocations.Add(new CvmRelocation
+            {
+              SectionName = section,
+              WordOffset = ifOpcodeOffset,
+              SymbolName = ifPrimitiveName,
+              Type = CvmRelocationType.CvmOpcode,
+              // The register operand is a plain literal this assembler already knows in full right now --
+              // exactly node 308's own address-register mechanism, reused verbatim (see this file's own
+              // remarks on that family, and CvmLinker's own CvmOpcode case) -- never shifted, since "if"'s
+              // own SecondValueBitShift is 0 (the register field sits at bits 3-0 already).
+              EmbeddedValue = ifRegister & ifShape.SecondValueBitMask,
+            });
+
+            // The third operand -- the branch target -- is this shape's own SEPARATE trailing word (a
+            // signed relative offset), resolved independently of the relocation above: see
+            // EmitIfTargetWord's own remarks for why this needs its own method rather than reusing
+            // EmitEmbeddedSignedValue or EmitOperandWord as-is.
+            EmitIfTargetWord(objectFile, section, line.Args[2], line.LineNumber, ifOpcodeOffset, labelOffsets, imported, errors);
             break;
           }
 
@@ -900,6 +963,73 @@ public static class CvmAssembler
     }
 
     targetSection.Words.Add(shape.Tag | (value & valueBitMask));
+  }
+
+  /// <summary>
+  /// ADDED 2026-10-02, for "if" alone -- emits this shape's own SEPARATE trailing word (the branch's
+  /// signed relative offset), per Stefan directly asking for the real mechanism to be built. This is
+  /// NOT <see cref="EmitEmbeddedSignedValue"/> reused as-is, for two reasons: (1) "if"'s own offset is a
+  /// full, standalone 16-bit word, not a narrower field packed into the SAME word as a tag -- there is
+  /// no <c>shape.Tag</c> to OR it into, and no <c>ValueBitMask</c>-derived width to range-check against
+  /// (the whole word IS the offset, masked only to 16 bits, exactly like
+  /// Ga144.Evb.Ide.Services.CvmAssemblyLanguage.EncodeIfInstruction's own trailing word on the CVM
+  /// Debugger side); (2) it is unconditionally relative (mirroring that same method's own
+  /// <c>supportsRelativeLabel: true</c> case for br/cbr, with no "literal-only" mode to support, since
+  /// "if" always takes a label-or-literal third operand per Stefan's own confirmed syntax). A literal
+  /// operand is used exactly as typed, with no address arithmetic at all. A label operand resolves to
+  /// <c>labelOffset - (thisInstructionOffset + 2)</c> -- SAME convention as, and flagged for the SAME
+  /// reason as, Ga144.Evb.Ide.Services.CvmAssemblyLanguage.EncodeIfInstruction's own identical formula
+  /// is flagged there: an extrapolation of br/cbr's own hardware-confirmed
+  /// ONE-WORD convention (<paramref name="thisInstructionOffset"/> + 1, see
+  /// <see cref="EmitEmbeddedSignedValue"/>'s own remarks) to this TWO-word shape, not independently
+  /// confirmed against real hardware for "if" specifically -- if Stefan confirms otherwise, the fix is
+  /// this one line's "+ 2". <paramref name="thisInstructionOffset"/> is the TAG word's own
+  /// section-relative offset (the caller passes <c>ifOpcodeOffset</c>, not this trailing word's own
+  /// offset), matching that same method's own <c>instructionAddress</c> parameter
+  /// exactly. Same same-section-only, no-cross-file-relative-relocation restriction as
+  /// <see cref="EmitEmbeddedSignedValue"/>'s own label branch, for the identical reason: there is no
+  /// <see cref="CvmRelocationType"/> for "this many words from here, resolved at link time."
+  /// </summary>
+  private static void EmitIfTargetWord(
+      CvmObjectFile objectFile,
+      string section,
+      string operand,
+      int lineNumber,
+      int thisInstructionOffset,
+      IReadOnlyDictionary<string, (string Section, int Offset)> labelOffsets,
+      ISet<string> imported,
+      List<string> errors)
+  {
+    CvmSection targetSection = objectFile.GetOrAddSection(section);
+
+    if (TryParseSignedNumericLiteral(operand, out int literalOffset))
+    {
+      targetSection.Words.Add(literalOffset & CvmWordCodec.WordMask);
+      return;
+    }
+
+    if (labelOffsets.TryGetValue(operand, out (string Section, int Offset) target))
+    {
+      if (target.Section != section)
+      {
+        errors.Add($"line {lineNumber}: \"if\" cannot branch to \"{operand}\" across sections (\"{operand}\" is in \".section {target.Section}\", this instruction is in \".section {section}\").");
+        targetSection.Words.Add(0);
+        return;
+      }
+
+      targetSection.Words.Add((target.Offset - (thisInstructionOffset + 2)) & CvmWordCodec.WordMask);
+      return;
+    }
+
+    if (imported.Contains(operand))
+    {
+      errors.Add($"line {lineNumber}: \"if\" cannot branch to \".import\"ed \"{operand}\" -- its offset from here is not known until link time (there is no relative-offset relocation).");
+      targetSection.Words.Add(0);
+      return;
+    }
+
+    errors.Add($"line {lineNumber}: \"{operand}\" is not a literal signed value or a label defined in this file -- \"if\"'s own branch target does not support anything else.");
+    targetSection.Words.Add(0);
   }
 
   /// <summary>

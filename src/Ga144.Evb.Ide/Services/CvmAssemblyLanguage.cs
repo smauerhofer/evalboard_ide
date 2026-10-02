@@ -1345,6 +1345,74 @@ internal static class CvmAssemblyLanguage
   }
 
   /// <summary>
+  /// ADDED 2026-10-02, per Stefan directly asking this file's own "if"-vs-<see cref="CvmAssembler"/>
+  /// gap to be closed by inventing the missing mechanism (see <see cref="CvmInstructionSet.IfPrimitiveNamePrefix"/>/
+  /// <see cref="CvmInstructionSet.IfConditionPrimitiveKeyByName"/>'s own remarks for the full design).
+  /// <see cref="BuildEncodeTable"/> resolves one node+symbol pair per MNEMONIC -- exactly what
+  /// <see cref="Ga144.Evb.Ide.Services.CvmPrimitiveTableExporter"/> needs to feed <see cref="Ga144.Cvm.Toolchain.CvmPrimitiveTable"/>
+  /// for every OTHER node-wired mnemonic (<c>ret</c>/<c>link</c>/<c>unlink</c>/<c>lcall</c>/<c>ljmp</c>/
+  /// <c>push</c>). <c>if</c> needs a DIFFERENT shape entirely -- one node+symbol pair per NAMED
+  /// CONDITION VALUE (<see cref="IfConditionSymbolByName"/>'s own ten entries), which is exactly why
+  /// <c>if</c>'s own <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord"/>
+  /// shape is structurally excluded from <see cref="BuildEncodeTable"/>'s own <see cref="Instructions"/>
+  /// iteration (see that list's own remarks) -- this method is the parallel, condition-keyed sibling
+  /// <see cref="Ga144.Evb.Ide.Services.CvmPrimitiveTableExporter"/> also reads, so <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/>'s
+  /// own, separate linker-based assembler can resolve <c>if</c> too, through the exact same
+  /// <see cref="Ga144.Cvm.Toolchain.CvmRelocationType.CvmOpcode"/> relocation mechanism it already
+  /// trusts for everything else -- see that assembler's own dedicated <c>if</c> case.
+  ///
+  /// Each entry's KEY is <see cref="CvmInstructionSet.IfPrimitiveNamePrefix"/> plus that condition's own
+  /// <see cref="CvmInstructionSet.IfConditionPrimitiveKeyByName"/> value (e.g. <c>"if.eq0"</c> for
+  /// <c>"==0"</c>) -- never the raw condition name itself (see that dictionary's own remarks for why:
+  /// four of the ten names contain a bare <c>=</c>, which would corrupt <see cref="Ga144.Cvm.Toolchain.CvmPrimitiveTable"/>'s
+  /// own hand-written <c>.gaprim</c> text format). Each entry's VALUE is the complete BASE word --
+  /// <c>if</c>'s own tag (<c>0xA000</c>) OR'd with that condition's own node-406-resolved address,
+  /// already shifted into bits 7-4 -- with the register field left at 0 for
+  /// <see cref="Ga144.Cvm.Toolchain.CvmRelocation.EmbeddedValue"/> to OR in at link time, exactly
+  /// mirroring how node 308's address-register family's own base word is produced by
+  /// <see cref="BuildEncodeTable"/>'s own <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>
+  /// branch just above. A condition whose symbol isn't defined in node 406's CURRENT compile (still
+  /// true as of this method's own addition -- <see cref="Node406Program"/> is 2026-09-30's older
+  /// stub, per standing instruction) or whose resolved address doesn't fit this shape's own 4-bit
+  /// "cond" field is simply omitted, the same graceful-omission convention
+  /// <see cref="BuildEncodeTable"/>/<see cref="BuildDecodeTable"/> already use for every other
+  /// mnemonic that fails to resolve this run.
+  /// </summary>
+  public static IReadOnlyDictionary<string, int> BuildIfConditionEncodeTable(IReadOnlyDictionary<int, F18CompileResult> compiledRam)
+  {
+    var table = new Dictionary<string, int>(StringComparer.Ordinal);
+    if (CvmInstructionSet.TryGetShape(CvmInstructionSet.IfMnemonic) is not { } ifShape ||
+        !compiledRam.TryGetValue(Node406Program.Coordinate, out F18CompileResult? compile))
+    {
+      return table;
+    }
+
+    int maxCond = ifShape.ValueBitMask >> ifShape.ValueBitShift;
+    foreach ((string conditionName, string symbolName) in IfConditionSymbolByName)
+    {
+      if (!compile.Symbols.TryGetValue(symbolName, out F18ExportedSymbol? symbol))
+      {
+        continue;
+      }
+
+      int resolvedCond = symbol.Value & CvmWordCodec.WordMask;
+      if (resolvedCond < 0 || resolvedCond > maxCond)
+      {
+        continue;
+      }
+
+      if (!CvmInstructionSet.IfConditionPrimitiveKeyByName.TryGetValue(conditionName, out string? key))
+      {
+        continue;
+      }
+
+      table[CvmInstructionSet.IfPrimitiveNamePrefix + key] = ifShape.Tag | ((resolvedCond << ifShape.ValueBitShift) & ifShape.ValueBitMask);
+    }
+
+    return table;
+  }
+
+  /// <summary>
   /// CORRECTED 2026-09-11: Stefan reported "arld 1" silently assembling as a bare, operand-dropped
   /// <c>nop</c> even though node 306 is a real, wired opcode family (see <see cref="NodeSymbolByMnemonic"/>'s
   /// own node 306 entries) -- and firmly rejected the theory this session first reached for (node 307's

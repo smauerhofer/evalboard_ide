@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-02T12:33:50.1878954
-      utcDateTime: 2026-10-02T12:33:50.1878954Z
-      localDateTime: 2026-10-02T14:33:50.1878954+02:00
+      dateTime: 2026-10-02T16:55:59.1393121
+      utcDateTime: 2026-10-02T16:55:59.1393121Z
+      localDateTime: 2026-10-02T18:55:59.1393121+02:00
       date: 2026-10-02T00:00:00.0000000
       day: 2
       dayOfWeek: Friday
       dayOfYear: 275
-      hour: 12
-      millisecond: 187
-      microsecond: 895
-      nanosecond: 400
-      minute: 33
+      hour: 16
+      millisecond: 139
+      microsecond: 312
+      nanosecond: 100
+      minute: 55
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 50
-      ticks: 639265412301878954
-      utcTicks: 639265412301878954
-      timeOfDay: 12:33:50.1878954
+      second: 59
+      ticks: 639265569591393121
+      utcTicks: 639265569591393121
+      timeOfDay: 16:55:59.1393121
       year: 2026
   portB: 
   portC:
@@ -65916,15 +65916,50 @@ projects:
       postMortemEnabled: false
     - coordinate: 205
       enabled: true
-      sourceCode: "( CVM_pipeline node 205.\n\ninstruction execution.\n\n\n)\n\r\n# down /b\r\n\r\nentry x2b/main\r\n\r\n# 0 org\r\n\n: x2b/main\n  @b\r\n  \n  x2b/main ;\n\r\n\r\n\r\n"
+      sourceCode: >+
+        ( CVM_pipeline node 205.
+
+
+        instruction execution.
+
+
+
+        )
+
+        # 206 import
+
+
+        # down /b
+
+
+        entry x2b/main
+
+
+        # 0 org
+
+
+        : x2b/main
+          down b!
+          @b >r @b
+          ( op / addr )
+        ;
+
+
+        : x2b/write16 ( op -  )
+          left b!
+          # x2c/write16 lit !b !b
+          x2b/main
+        ;
+
+
       ramWords:
-      - 0x01700
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x04B02
+      - 0x00115
+      - 0x2FF55
+      - 0x04B12
+      - 0x00175
+      - 0x00001
+      - 0x09B40
       - 0x15555
       - 0x15555
       - 0x15555
@@ -65994,7 +66029,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 206
       enabled: true
-      sourceCode: "( CVM_pipeline node 206.\n\ninstruction execution.\n\n\n)\n\r\n# down /b\r\n\r\nentry x2c/main\r\n\r\n# 0 org\r\n\n: x2c/main\n  @b\r\n  \n  x2c/main ;\n\r\n\r\n\r\n"
+      sourceCode: "( CVM_pipeline node 206.\n\ninstruction execution.\n\n\n)\n\r\n# down /b\r\n\r\nentry x2c/main\r\n\r\n# 0 org\r\n\n: x2c/main\n  @b\r\n  \n  x2c/main ;\n\r\n: x2c/write16 ( op -  )\r\n  left b!\r\n\r\n  x2c/main\n;\n\r\n\r\n"
       ramWords:
       - 0x01700
       - 0x15555
@@ -66072,17 +66107,52 @@ projects:
       postMortemEnabled: false
     - coordinate: 207
       enabled: true
-      sourceCode: "( CVM_pipeline node 207.\n\ninstruction execution.\n\n\n)\n\r\n# up /b\r\n\r\nentry x3a/main\r\n\r\n# 0 org\r\n\n: x3a/main\n  @b\r\n  \n  x3a/main ;\n\r\n\r\n\r\n"
+      sourceCode: >+
+        ( CVM_pipeline node 207.
+
+
+        instruction execution.
+
+
+
+        )
+
+        # 307 import
+
+
+        # up /b
+
+
+        entry x3a/main
+
+
+        # 0 org
+
+
+        : x3a/main
+          left b!
+          @b >r @b
+          ( op / addr )
+        ;
+
+
+        : x3a/write16 ( op -  )
+          down b!
+          A[ @p x3/store16 ]] lit !b 0x0f and !b
+          x3a/main
+        ;
+
+
       ramWords:
-      - 0x01700
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x04B02
+      - 0x00175
+      - 0x2FF55
+      - 0x04B12
+      - 0x00115
+      - 0x05600
+      - 0x09DFA
+      - 0x0000F
+      - 0x09700
       - 0x15555
       - 0x15555
       - 0x15555
@@ -66498,6 +66568,8 @@ projects:
 
         )
 
+        # 205 import
+
 
         # up /b
 
@@ -66510,14 +66582,15 @@ projects:
 
         : x2a/main
           up b!
-          @b >r @b @b
-          ( op sop )
-          ex
-          ( op sop )
-          x2a/main ;
+          @b >r @b
+          ( op / addr )
+        ;
 
-        : x2a/unary16 ( sop -  )
 
+        : x2a/write16 ( op -  )
+          down b!
+          # x2b/write16 lit !b !b
+          x2a/main
         ;
 
 
@@ -66608,7 +66681,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 306
       enabled: true
-      sourceCode: >
+      sourceCode: >+
         ( CVM_pipeline node 306.
 
 
@@ -66621,18 +66694,32 @@ projects:
         )
 
 
-        entry x2/main
+        // entry x2/main
+
+        # -dl- /p
+
+        # up /b
+
+        # right /a
 
 
         # 0 org
 
 
-        : x2/main
-          x2/main ;
+        : x2/pass4 leap
+
+        : x2/pass2 then leap
+
+        : x2/pass1 then @b ! ;
+
+
+
+
+
       ramWords:
-      - 0x11400
-      - 0x15555
-      - 0x15555
+      - 0x13401
+      - 0x13402
+      - 0x01A55
       - 0x15555
       - 0x15555
       - 0x15555
@@ -66695,7 +66782,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x135
         p: 0x000
         a: 0x000
         b: 0x000
@@ -66706,7 +66793,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 307
       enabled: true
-      sourceCode: >
+      sourceCode: >+
         ( CVM_pipeline node 307.
 
 
@@ -66719,31 +66806,63 @@ projects:
         )
 
 
-        entry x3/main
+        # 407 import
+
+
+        // entry x3/main
+
+
+        # right /b
+
+        # left /a
+
+        # down /p
+
 
 
         # 0 org
 
 
-        : x3/main
-          x3/main ;
+        // : x3/main
+
+        //  x3/main ;
+
+
+        : x3/store16 ( r - )
+          @b
+          ( r w )
+          up b!
+          A[ r/! ]] lit b! >r b! r> b!
+        : x3/finish
+          A[ r/defocus ; ]] lit b!
+          down b! ;
+
+        : x3/store32 ( r - )
+          @b @b
+          ( r hi lo )
+          up b!
+          A[ r/2! ]] lit b! >r >r b! r> b! r> b!
+          x3/finish ;
+
+
+
       ramWords:
-      - 0x11400
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x01DA7
+      - 0x00145
+      - 0x1341E
+      - 0x288A2
+      - 0x26BB2
+      - 0x04B12
+      - 0x11414
+      - 0x00115
+      - 0x29555
+      - 0x01F12
+      - 0x00145
+      - 0x29DA2
+      - 0x13422
+      - 0x2E8A2
+      - 0x26B9A
+      - 0x29705
       - 0x15555
       - 0x15555
       - 0x15555
@@ -66793,7 +66912,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x115
         p: 0x000
         a: 0x000
         b: 0x000
@@ -67162,7 +67281,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 405
       enabled: true
-      sourceCode: "( CVM_pipeline node 405.\n\ninstruction execution.\n\n\n)\r\n# 406 import\n\r\n# down /b\r\n# left /a\r\n\r\nentry x1a/main\r\n\r\n# 0 org\r\n\n: x1a/main\r\n  down b!\n  @b >r ex\r\n  ( sop op addr )\r\n  up b!\r\n  !b !b\n  x1a/main ;\n\r\n  \r\n\r\n: x1a/direct16 ( sop -  )\r\n;\r\n\r\n: x1a/direct32 ( sop )\r\n;\r\n\r\n: x1a/other ( sop )\r\n  @b\r\n  ( sob op )\r\n;\r\n\r\n: x1a/reg2 ( op - r )\r\n  2/ 2/ 2/ 2/\r\n: x1a/reg1 ( op - r )\r\n  0xf and ;\r\n\r\n\r\n: x1a/unary16 ( op - op )\r\n  dup x1a/reg1\r\n  A[ x1/r@ ]] lit\r\n: x1a/cmd ( r cmd - )\r\n  >r A[ @p x1/rfocus ]] lit ! !\r\n  r> !\r\n  A[ x1/pass ]] lit ! ;\r\n: x1a/unary32 ( op - op )\r\n  dup x1a/reg1 2*\r\n  A[ x1/r@2 ]] lit x1a/cmd ;\r\n\r\n\r\n: x1a/binary16 ( op - op )\r\n  dup x1a/reg2 over x1a/reg1\r\n  A[ x1/r@ ]] lit\r\n: x1a/cmd2 ( r2 r1 cmd - )\r\n  >r A[ @p x1/rfocus ]] lit ! !\r\n  r> dup ! r>\r\n  A[ @p x1/reg ]] lit ! !\r\n  r> !\r\n  A[ x1/pass ]] lit ! ;\r\n: x1a/binary32 ( op - op )\r\n  dup x1a/reg2 over x1a/reg1\r\n  A[ x1/r@2 ]] lit x1a/cmd2 ;\r\n\r\n\r\n\r\n"
+      sourceCode: "( CVM_pipeline node 405.\n\ninstruction execution.\n\n\n)\r\n# 406 import\n\r\n# down /b\r\n# left /a\r\n\r\nentry x1a/main\r\n\r\n# 0 org\r\n\n: x1a/main\r\n  down b!\n  @b >r ex\r\n  ( sop op addr )\r\n  up b!\r\n  !b !b\n  x1a/main ;\n\r\n  \r\n\r\n: x1a/direct16 ( sop -  )\r\n  A[ x1/pass ]] lit !\r\n  A[ @b ! ]] lit !\r\n  @b\r\n  ( sop op )\r\n;\r\n\r\n: x1a/direct32 ( sop )\r\n;\r\n\r\n: x1a/other ( sop )\r\n  @b\r\n  ( sob op )\r\n;\r\n\r\n: x1a/reg2 ( op - r )\r\n  2/ 2/ 2/ 2/\r\n: x1a/reg1 ( op - r )\r\n  0xf and ;\r\n\r\n\r\n: x1a/unary16 ( op - op )\r\n  dup x1a/reg1\r\n  A[ x1/r@ ]] lit\r\n: x1a/cmd ( r cmd - )\r\n  >r A[ @p x1/rfocus ]] lit ! !\r\n  r> !\r\n  A[ x1/pass ]] lit ! ;\r\n: x1a/unary32 ( op - op )\r\n  dup x1a/reg1 2*\r\n  A[ x1/r@2 ]] lit x1a/cmd ;\r\n\r\n\r\n: x1a/binary16 ( op - op )\r\n  dup x1a/reg2 over x1a/reg1\r\n  A[ x1/r@ ]] lit\r\n: x1a/cmd2 ( r2 r1 cmd - )\r\n  >r A[ @p x1/rfocus ]] lit ! !\r\n  r> dup ! r>\r\n  A[ @p x1/reg ]] lit ! !\r\n  r> !\r\n  A[ x1/pass ]] lit ! ;\r\n: x1a/binary32 ( op - op )\r\n  dup x1a/reg2 over x1a/reg1\r\n  A[ x1/r@2 ]] lit x1a/cmd2 ;\r\n\r\n\r\n\r\n"
       ramWords:
       - 0x04B02
       - 0x00115
@@ -67960,7 +68079,7 @@ projects:
 
               // 001* special
               // the encode address is from node 507
-              drop A[ @p d/save ]] lit !b !b ;
+              A[ @p d/save ]] lit !b !b !b ;
             then
 
             // 000* scall
@@ -67992,59 +68111,59 @@ projects:
       - 0x3721C
       - 0x3720B
       - 0x05700
-      - 0x00004
+      - 0x0000B
       - 0x37215
       - 0x37212
       - 0x367C2
       - 0x307C2
       - 0x31D22
-      - 0x0560C
+      - 0x0560A
       - 0x09555
       - 0x3BD22
-      - 0x05626
+      - 0x05624
       - 0x09555
       - 0x37219
       - 0x3BD22
-      - 0x0562D
+      - 0x0562B
       - 0x09555
       - 0x3BD22
-      - 0x05630
+      - 0x0562E
       - 0x09555
       - 0x3722C
       - 0x37225
       - 0x37222
       - 0x049B2
-      - 0x13416
+      - 0x13414
       - 0x1143C
       - 0x049B2
-      - 0x13417
+      - 0x13415
       - 0x11436
       - 0x37229
       - 0x049B2
-      - 0x13410
+      - 0x1340E
       - 0x1143C
       - 0x049B2
-      - 0x13411
+      - 0x1340F
       - 0x11436
       - 0x37230
-      - 0x3BD22
-      - 0x05609
+      - 0x05B22
+      - 0x05608
       - 0x09555
       - 0x3BD22
       - 0x05604
       - 0x09555
       - 0x15555
       - 0x05B25
-      - 0x05724
+      - 0x05722
       - 0x05DB2
-      - 0x00002
-      - 0x0001A
+      - 0x00006
+      - 0x00018
       - 0x05B22
       - 0x05734
       - 0x0B555
       - 0x05D41
-      - 0x00003
-      - 0x00019
+      - 0x0000A
+      - 0x00017
       - 0x15555
       startup:
         entryPoint: 0x004
@@ -68058,7 +68177,7 @@ projects:
       postMortemEnabled: true
     - coordinate: 506
       enabled: true
-      sourceCode: "( CVM_pipeline node 506.\n\ninstruction decode.\n\n1111|11\n5432|1098|7654|3210|\n----+----+----+----+----------------------------\n0000|0000|0000|0000| nop\n000a|aaaa|aaaa|aaaa| scall\n0010|0000|00ww|wwww| special {link, unlink, ret, lcall, ljmp}\n0100|    |    |    | next16\n0101|    |    |    | next32\n0110|    |    |    | pop16\n0111|    |    |    | pop32\n1000|....|....|xxxx| rjmp {jump to address in register r}\n1001|....|....|xxxx| rcall {call to address in register r}\n1010|....|cccc|xxxx| if {conditional long branch, relative}\n1011|oooo|oooo|oooo| sbr {short branch, relative}\n\n11  |    |    |    | other\n----+----+----+----+----------------------------------------\n1100|000w|wwww|weee| implied\n1100|1000|iiii|xxxx| immediate\n1101|0   |    |xxxx| unary {16 bit}\n1101|1   |yyyy|xxxx| binary {16 bit}\n1110|0   |    |xxxx| unary {32 bit}\n1110|1   |yyyy|xxxx| binary {32 bit}\n1111|0   |    |xxxx| unary {32 bit float}\n1111|1   |yyyy|xxxx| binary {32 bit float}\n\na: absolute address\nb: immediate instruction\nc: binary instruction address {address in corresponing node}\nd: unary instruction address {address in corresponing node}\ne: node identifier\nf: instruction address  {address in corresponing node}\ni: immediate unsigned value\no: signed offset\ncond: condition\nx: parameter1 binary: x = x op y\ny: parameter2\n.: unused bit\n\n)\r\n# 406 import\n# 507 import\n\n# right /b\n# left /a\n\nentry d/main\n\n# 0 org\n\n: d/main\n  @b ! --l- A[ ; ]] lit !b d/main ;\n\r\n\r\n: d/call ( a - )\n  >r # m/call lit r>\n: d/save1 ( instr_addr w - )\n  A[ @p ]] lit !b !b ;\n\r\n: d/save ( instr_addr - )\n  A[ @p m/exec_save ]] lit\n  ( w command - )\n  !b !b ;\n\n: d/branch ( offset - )\n  A[ @p m/branch ]] lit !b !b ;\n\n: d/jump ( a - )\n  A[ @p m/jump ]] lit !b !b ;\r\n\n\r\n\n// : d/call ( a - )\r\n//  >r\n//  # m/call lit\n//  r>\n// : d/save1 ( instr_addr w - )\n//  A[ @p ]] lit !b !b\n// : d/save ( instr_addr - )\n//  A[ @p m/exec_save ]] lit !b !b ;\n\r\n\r\n// : d/branch ( offset - )\r\n//  A[ @p m/branch ]] lit !b !b ;\n\n// : d/jump ( a - )\n//   A[ @p m/jump ]] lit !b !b ;\n\n: d/next2 ( - w1 w2 ) leap\n: d/next1 ( - w ) then\n  A[ m/next ]] lit\n: d/get !b\n  A[ !p ]] lit !b @b ;\n\n: d/pop2 ( - w1 w2 ) leap\n: d/pop1 ( - w ) then\n  A[ m/pop ]] lit d/get ;\n\n: d/pass2 ( w1 w2 - ) leap\r\n: d/pass1 ( w - ) then\r\n  down b!\r\n  !b !b\r\n  right b!\r\n;\r\n\r\n: d/get1 ( - w )\r\n  down b!\r\n  A[ !p ]] lit !b @b\r\n  right b!\r\n;\n\n\r\n: d/postpone ( addr - )\r\n  r> over >r >r drop ;\r\n  \r\n: d/conditional ( op - )\n  A[ @p x1/cond ]] lit d/pass2\n  d/get1                     // flag\n  d/next1                    // flag offset\n  >r\n  if\n    r> drop ;\n  then\n  r> d/branch ;\r\n\r\n: d/rcall ( r - )\r\n  A[ @p m/call ]] lit d/rreg ;\r\n: d/rjump ( r - )\r\n  A[ @p m/jump ]] lit \r\n: d/rreg ( r m-op - w )\r\n  !b\r\n  down b!\r\n  # x1/read16-1 lit !b !b\r\n  # x1/get lit !b @b\r\n  right b!\r\n  !b ;\r\n\r\n\n\n\n"
+      sourceCode: "( CVM_pipeline node 506.\n\ninstruction decode.\n\n\r\n\n\n)\r\n# 406 import\n# 507 import\n\n# right /b\n# left /a\n\nentry d/main\n\n# 0 org\n\n: d/main\n  @b ! --l- A[ ; ]] lit !b d/main ;\n\r\n\r\n: d/call ( a - )\n  >r # m/call lit r>\n: d/save1 ( instr_addr w - )\n  A[ @p ]] lit !b !b ;\n\r\n: d/save ( instr_addr - )\n  A[ @p m/exec_save ]] lit\n  ( w command - )\n  !b !b ;\n\n: d/branch ( offset - )\n  A[ @p m/branch ]] lit !b !b ;\n\n: d/jump ( a - )\n  A[ @p m/jump ]] lit !b !b ;\r\n\n\r\n\n\n: d/next2 ( - w1 w2 ) leap\n: d/next1 ( - w ) then\n  A[ m/next ]] lit\n: d/get !b\n  A[ !p ]] lit !b @b ;\n\n: d/pop2 ( - w1 w2 ) leap\n: d/pop1 ( - w ) then\n  A[ m/pop ]] lit d/get ;\n\n: d/pass2 ( w1 w2 - ) leap\r\n: d/pass1 ( w - ) then\r\n  down b!\r\n  !b !b\r\n  right b!\r\n;\r\n\r\n: d/get1 ( - w )\r\n  down b!\r\n  A[ !p ]] lit !b @b\r\n  right b!\r\n;\n\r\n: d/special ( sop - )\r\n  2* if // push\r\n    @ dup 0x3f and d/save\r\n    2/ 2/ 2/ 2/ 2/ 2/ !b ;\r\n  then\r\n  // special\r\n  @ d/save ;\n\r\n: d/postpone ( addr - )\r\n  r> over >r >r drop ;\r\n  \r\n: d/conditional ( op - )\n  A[ @p x1/cond ]] lit d/pass2\n  d/get1                     // flag\n  d/next1                    // flag offset\n  >r\n  if\n    r> drop ;\n  then\n  r> d/branch ;\r\n\r\n: d/rcall ( r - )\r\n  A[ @p m/call ]] lit d/rreg ;\r\n: d/rjump ( r - )\r\n  A[ @p m/jump ]] lit \r\n: d/rreg ( r m-op - w )\r\n  !b\r\n  down b!\r\n  # x1/read16-1 lit !b !b\r\n  # x1/get lit !b @b\r\n  right b!\r\n  !b ;\r\n\r\n\n\n\n"
       ramWords:
       - 0x01AB2
       - 0x13575
@@ -68094,18 +68213,26 @@ projects:
       - 0x09F12
       - 0x001D5
       - 0x29555
+      - 0x37329
+      - 0x02D12
+      - 0x0003F
+      - 0x3F608
+      - 0x307C2
+      - 0x307C2
+      - 0x09555
+      - 0x03708
       - 0x26FBA
       - 0x2E255
       - 0x05617
       - 0x05630
       - 0x1341C
       - 0x1340F
-      - 0x2F32A
+      - 0x2F332
       - 0x26255
       - 0x2770A
       - 0x049B2
       - 0x05639
-      - 0x11430
+      - 0x11438
       - 0x049B2
       - 0x0563A
       - 0x09DA7
@@ -68116,14 +68243,6 @@ projects:
       - 0x09F12
       - 0x001D5
       - 0x29B55
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -68158,6 +68277,86 @@ projects:
         read:  <instr> a16 p4 -> w16
 
         write: <instr> a16 p4 w16
+
+
+
+        1111|11
+
+        5432|1098|7654|3210| node |
+
+        ----+----+----+----+------+----------------------------
+
+        0000|0000|0000|0000|      | nop
+
+        000a|aaaa|aaaa|aaaa|      | scall
+
+        0010|0000|00ww|wwww|      | special {link, unlink, ret, lcall, ljmp}
+
+        0100|....|....|xxxx|      | next16. load 16 bit literal into register. example, "lit r0"
+
+        0101|....|....|xxxx|      | next32. load 32 bit literal into register. example, "lit d0"
+
+        0110|....|....|xxxx|      | pop16. pop 16 bit value from stack into register. example, "pop r0"
+
+        0111|....|....|xxxx|      | pop32. pop 32 bit value from stack into register. example, "pop d0"
+
+        1000|....|....|xxxx|      | rjmp {jump to address in register r}
+
+        1001|....|....|xxxx|      | rcall {call to address in register r}
+
+        1010|....|cccc|xxxx|      | if {conditional long branch, relative}
+
+        1011|oooo|oooo|oooo|      | sbr {short branch, relative}
+
+
+        11  |    |    |    | other
+
+        ----+----+----+----+----------------------------------------
+
+        1100|000w|wwww|weee| implied
+
+        1100|1000|iiii|xxxx| immediate
+
+        1101|0   |    |xxxx| unary {16 bit}
+
+        1101|1   |yyyy|xxxx| binary {16 bit}
+
+        1110|0   |    |xxxx| unary {32 bit}
+
+        1110|1   |yyyy|xxxx| binary {32 bit}
+
+        1111|0   |    |xxxx| unary {32 bit float}
+
+        1111|1   |yyyy|xxxx| binary {32 bit float}
+
+
+        a: absolute address
+
+        b: immediate instruction
+
+        c: binary instruction address {address in corresponing node}
+
+        d: unary instruction address {address in corresponing node}
+
+        e: node identifier
+
+        f: instruction address  {address in corresponing node}
+
+        i: immediate unsigned value
+
+        o: signed offset
+
+        cond: condition
+
+        x: parameter1 binary: x = x op y
+
+        y: parameter2
+
+        .: unused bit
+
+
+
+
 
 
         )
@@ -68231,41 +68430,6 @@ projects:
           right b! !b
           r---
           --l- ;
-
-
-        // : m/pop ( - w )
-
-        //   A[ r/pop ]] lit m/rsend
-
-        //   1 @b
-
-        //   ( p 1 )
-
-        // : m/read ( p a - w )
-
-        //   up b!         // select node 607
-
-        //   A[ mem/rdup ]] lit !b
-
-        //   !b !b @b ;  
-
-
-        // : m/push ( w - )
-
-        // A[ r/push ]] lit m/rsend
-
-        //   1 @b
-
-        //   ( w p a )
-
-        // : m/write ( w p a - )
-
-        //   up b!         // select node 607
-
-        //   A[ mem/wrup ]] lit !b
-
-        //   !b !b !b ;  
-
 
         : 'link ( - )
           m/next
@@ -69756,11 +69920,9 @@ projects:
       source: >
         nop
 
-        link -3
-
         push 0x1234
 
-        unlink
+        pop r1
 
         nop
 

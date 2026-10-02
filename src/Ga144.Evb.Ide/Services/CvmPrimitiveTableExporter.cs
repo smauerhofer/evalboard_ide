@@ -41,6 +41,16 @@ namespace Ga144.Evb.Ide.Services;
 /// <c>NodeResolvedEmbeddedValue</c> mnemonics (<c>rld</c>/<c>rst</c>/<c>rpop</c>/<c>rpush</c>) are
 /// excluded the same way (they also have <c>OperandIsEmbedded == true</c>) -- consistent with
 /// <see cref="CvmAssembler"/> itself refusing to assemble them at all today (see its own remarks).
+///
+/// <b>ADDED 2026-10-02: a second, separate source feeds this table too.</b> <c>if</c>'s own "cond"
+/// field resolves one node-406 symbol per NAMED CONDITION VALUE, not per mnemonic, so it never
+/// appears in <see cref="CvmAssemblyLanguage.BuildEncodeTable"/>'s own output at all (that method's
+/// own <c>Instructions</c> list structurally excludes <c>if</c>'s shape -- see its own remarks) --
+/// <see cref="CvmAssemblyLanguage.BuildIfConditionEncodeTable"/> is the parallel, condition-keyed
+/// method that computes <c>if</c>'s own ten synthetic <c>"if.&lt;key&gt;"</c> entries instead (see
+/// <see cref="CvmInstructionSet.IfPrimitiveNamePrefix"/>/<see cref="CvmInstructionSet.IfConditionPrimitiveKeyByName"/>'s
+/// own remarks for the full design), merged into this same table so <see cref="CvmAssembler"/>'s own
+/// dedicated <c>if</c> case can resolve them exactly like every other primitive here.
 /// </summary>
 public static class CvmPrimitiveTableExporter
 {
@@ -107,6 +117,21 @@ public static class CvmPrimitiveTableExporter
       }
 
       entries[pair.Key] = pair.Value.Opcode;
+    }
+
+    // ADDED 2026-10-02, per Stefan directly asking for the "if"-vs-CvmAssembler gap to be closed: "if"'s
+    // own "cond" field resolves one node-406 symbol per NAMED CONDITION VALUE, not per mnemonic, so it
+    // is structurally excluded from the loop just above (see BuildEncodeTable's own Instructions list
+    // remarks, and CvmInstructionSet.IfPrimitiveNamePrefix/IfConditionPrimitiveKeyByName's own remarks
+    // for the full design). CvmAssemblyLanguage.BuildIfConditionEncodeTable is the parallel,
+    // condition-keyed sibling of BuildEncodeTable that computes these entries instead -- merged in here,
+    // under their own synthetic "if.<key>" names (never colliding with any real mnemonic name, since no
+    // mnemonic contains "."), so CvmAssembler's own dedicated "if" case can resolve them through the
+    // exact same CvmPrimitiveTable/CvmRelocationType.CvmOpcode mechanism as every other entry in this
+    // table.
+    foreach ((string name, int opcode) in CvmAssemblyLanguage.BuildIfConditionEncodeTable(compiledRam))
+    {
+      entries[name] = opcode;
     }
 
     var table = CvmPrimitiveTable.FromEntries(entries);

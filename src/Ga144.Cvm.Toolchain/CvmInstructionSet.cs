@@ -233,6 +233,67 @@ public static class CvmInstructionSet
   // it is simply no longer referenced by Id 193's own row, which now uses this constant instead.
   public const string IfMnemonic = "if";
 
+  // IfPrimitiveNamePrefix/IfConditionPrimitiveKeyByName -- ADDED 2026-10-02, the mechanism that lets
+  // Ga144.Cvm.Toolchain.CvmAssembler (THIS project, which has no notion of a live F18 node compile at
+  // all -- see this file's own class-level remarks on how it resolves every other node-wired mnemonic,
+  // purely through CvmPrimitiveTable/CvmRelocationType.CvmOpcode) support "if" too, the same way it
+  // already supports every other node-resolved mnemonic (ret/link/unlink/lcall/ljmp/push). Those six
+  // all resolve ONE node+symbol pair per MNEMONIC, so a plain CvmRelocationType.CvmOpcode relocation
+  // keyed on the mnemonic string itself (e.g. "lcall") already works, because CvmPrimitiveTable has
+  // exactly one entry per such mnemonic (see CvmPrimitiveTableExporter's own remarks on where that
+  // comes from: Ga144.Evb.Ide.Services.CvmAssemblyLanguage.BuildEncodeTable, keyed by mnemonic).
+  //
+  // "if" is different: its own "cond" field resolves one node+symbol pair per NAMED CONDITION VALUE
+  // (ten of them), not per mnemonic -- BuildEncodeTable's own Instructions list structurally excludes
+  // "if"'s shape entirely (see that list's own remarks), so there has never been a primitive-table
+  // entry keyed "if" to begin with, and couldn't meaningfully be just one even if there were (which of
+  // the ten conditions would it mean?). The fix, mirroring node 308's own address-register family
+  // (which needs a live-resolved base AND a literal, assemble-time-known value in the SAME word --
+  // see this file's own remarks on NodeResolvedEmbeddedValue): TEN separate synthetic primitive-table
+  // entries, one per condition name, each the COMPLETE base word (tag | resolved-cond-address<<4,
+  // register left at 0) -- see Ga144.Evb.Ide.Services.CvmAssemblyLanguage.BuildIfConditionEncodeTable
+  // for where these ten entries are actually computed (against node 406's live compile) and
+  // CvmPrimitiveTableExporter for where they are merged into the exported table alongside every other
+  // mnemonic's own entry. CvmAssembler's own dedicated "if" case (see its own remarks) then emits a
+  // CvmRelocationType.CvmOpcode relocation keyed on one of THESE synthetic names instead of "if"
+  // itself, with CvmRelocation.EmbeddedValue carrying the literal register operand -- the exact same
+  // "resolved-base OR literal-embedded-value" mechanism CvmLinker.cs already applies unchanged for
+  // node 308's ops (CvmLinker.cs itself needs NO changes at all for this).
+  //
+  // The synthetic key for condition name X is IfPrimitiveNamePrefix + IfConditionPrimitiveKeyByName[X]
+  // (e.g. "if.eq0" for "==0") -- NEVER the condition name itself (e.g. "if.==0"), because
+  // CvmPrimitiveTable's own hand-written ".gaprim" text format (see that class's own remarks) splits
+  // each line on the FIRST "=" character, and four of the ten condition names ("==0", "!=0", "<=0",
+  // ">=0") contain one -- a literal "if.==0 = 0xA000" line would mis-split. The safe keys below borrow
+  // node 406's own internal x1/-prefixed naming where this project has actually SEEN it in live F18
+  // source (x1/eq0, x1/ne0, x1/true, x1/false, x1/even, x1/odd -- see this project's own
+  // cvm-pipeline-instruction-set-rebuild.md, §7f) and extend the same obvious pattern for the
+  // remaining four (x1/lt0, x1/le0, x1/gt0, x1/ge0 were never explicitly shown, so this specific
+  // extension is this toolchain's own invented bookkeeping label, not a confirmed F18 name) -- but
+  // this key is PURELY an internal CvmPrimitiveTable lookup string, never sent to or compared against
+  // any live F18 symbol table, so even if it differs from whatever node 406's own source actually
+  // calls that word internally, nothing breaks: the real symbol resolution still goes entirely through
+  // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.IfConditionSymbolByName's own tick-prefixed names
+  // (`'==0`, `'<=0`, etc.), which ARE confirmed. "true"/"false"/"even"/"odd" pass through unchanged --
+  // already plain identifier text, no "=" collision, and already confirmed to match node 406's own
+  // x1/ names exactly.
+  public const string IfPrimitiveNamePrefix = "if.";
+
+  public static readonly IReadOnlyDictionary<string, string> IfConditionPrimitiveKeyByName =
+      new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+      {
+        ["==0"] = "eq0",
+        ["!=0"] = "ne0",
+        ["<0"] = "lt0",
+        ["<=0"] = "le0",
+        [">0"] = "gt0",
+        [">=0"] = "ge0",
+        ["true"] = "true",
+        ["false"] = "false",
+        ["even"] = "even",
+        ["odd"] = "odd",
+      };
+
   // LinkMnemonic ("link")/UnlinkMnemonic ("unlink") -- ADDED 2026-10-01, the new VM's fourth/fifth
   // opcodes (right after ret, same node-506 bit-pattern-table/dispatch family) -- see this file's own
   // Instructions remarks on Ids 185/186 for the full derivation. Brand new names, no CVM1/CVM2
