@@ -224,6 +224,15 @@ public static class CvmInstructionSet
   public const string BranchMnemonic = "br";
   public const string ConditionalBranchMnemonic = "cbr";
 
+  // IfMnemonic ("if") -- ADDED 2026-10-02, per Stefan directly: "'cbr' has been renamed to 'if'." This
+  // is a RENAME of the "CVM_pipeline" table's own Id 193 row (see this file's own class-level remarks
+  // right after UnlinkMnemonic, and Instructions' own remarks at Id 193) -- same Id, same tag (0xA000),
+  // same bit layout (cccc at bits 7-4, xxxx at bits 3-0), only the mnemonic string changes. The OLD
+  // ConditionalBranchMnemonic ("cbr") constant just above is left exactly as it was, still carrying
+  // CVM2's OLD, fully-retired cbr (former Id 7, EmbeddedSignedValue) per "do not remove any opcodes" --
+  // it is simply no longer referenced by Id 193's own row, which now uses this constant instead.
+  public const string IfMnemonic = "if";
+
   // LinkMnemonic ("link")/UnlinkMnemonic ("unlink") -- ADDED 2026-10-01, the new VM's fourth/fifth
   // opcodes (right after ret, same node-506 bit-pattern-table/dispatch family) -- see this file's own
   // Instructions remarks on Ids 185/186 for the full derivation. Brand new names, no CVM1/CVM2
@@ -308,26 +317,68 @@ public static class CvmInstructionSet
   public const string ShortBranchMnemonic = "sbr";
   // ConditionalBranchMnemonic ("cbr") REUSES the existing constant declared above (right after
   // BranchMnemonic) -- that constant already carries CVM2's OLD, fully-retired cbr (former Id 7,
-  // EmbeddedSignedValue, tag 0xA800); this table's own cbr (new Id below) is a DIFFERENT shape in a
+  // EmbeddedSignedValue, tag 0xA800); this table's own cbr (new Id below) was a DIFFERENT shape in a
   // DIFFERENT era, pure naming coincidence, exactly like RetMnemonic's own two unrelated "ret"s -- see
   // this file's own class-level remarks on mnemonic STRINGS being freely reused across eras while only
-  // the numeric Id stays append-only. No new constant needed.
+  // the numeric Id stays append-only.
   //
-  // FLAGGED, not confirmed -- genuinely ambiguous, left unresolved rather than silently decided:
-  // the table's own legend defines "c" as "binary instruction address {address in corresponing
-  // node}", not a plain numeric condition code -- i.e. cbr's own cccc field may be meant to SELECT
-  // (by address, resolved against some node's live compile) which comparison routine decides the
-  // branch, the same way "special"'s ww field selects a word in node 506, rather than carrying a
-  // literal 0-15 condition number the way CVM2's OLD cbr used to. Nothing in the live F18 source
-  // Stefan pasted shows which node (if any) such a table would live in, or confirms either reading.
-  // Implemented below as a plain embedded 4-bit value (no node resolution at all) purely so the
-  // table's own BIT LAYOUT (tag, field widths, trailing offset word) is captured and usable -- the
-  // field's real SEMANTICS are left for Stefan to confirm before anything depends on a particular
-  // interpretation.
+  // RENAMED 2026-10-02, per Stefan directly: "'cbr' has been renamed to 'if' / CVM syntax is / 'if
+  // <reg> <cond>' / cond is defined in node 406. the offset is taken as the value for c." Id 193's own
+  // row below now uses IfMnemonic ("if") instead -- same Id, same tag (0xA000), same bit layout. Three
+  // things this rename settles, two of them FLAGGED-and-now-CONFIRMED and one newly confirmed as a
+  // deliberate design constraint:
+  //
+  // (1) CONFIRMED -- "c" (cccc, bits 7-4) is a NODE-406-RESOLVED reference, not a plain numeric
+  // condition code, exactly as this remark originally flagged as the open, unconfirmed possibility.
+  // Node 406 defines exactly ten named conditions ("==0"/"!=0"/"<0"/"<=0"/">0"/">="/"true"/"false"/
+  // "even"/"odd"), each its own tick-prefixed F18 word; its own x1/cond dispatcher reads the operand's
+  // register-index nibble, focuses that register, pushes "c" to the return stack via ">r", reads the
+  // focused register's value, then hits its own ";" -- which pops "c" (never popped back off before
+  // that ";") instead of a real return address, i.e. a COMPUTED JUMP straight into whichever named
+  // condition routine is compiled at that node-406-local address. That routine's own ";" then pops what
+  // is now exposed underneath -- the true original return address -- and returns normally. This is the
+  // exact same resolve-an-address-and-transfer-control pattern this table's own ret/link/lcall/ljmp/
+  // push already use against node 507 (see this file's own remarks on those, right after this block),
+  // just one level more indirect (a computed jump via the return stack, not a direct call/jump).
+  //
+  // (2) CONFIRMED by Stefan directly (2026-10-02), then SUPERSEDED by Stefan himself the same day once
+  // the complete operand syntax (see (4) below) made the question concrete: his FIRST answer, while "if"
+  // still only had two named operands, was that the branch's own polarity is the OPPOSITE of node 406's
+  // own table-text wording ("return true if r == 0" for '==0, etc.) -- "the evaluation of the flag is
+  // reversed, so my example ['if r0 ==0' branches when r0 != 0] is correct." Once Stefan spelled out the
+  // real, complete syntax with a branch-target operand ("if r0 ==0 loop_label"), he REVERSED this answer
+  // again, in his own words: "yes, the correct syntax is 'if r0 ==0 loop_label', so I will have to
+  // reverse the flag evaluation, so it is still understandable for humans. then 'if r0 ==0 loop_label'
+  // means 'if r0 is 0 the goto loop_label'." So the FINAL, standing answer is the intuitive one: "if r0
+  // ==0 loop_label" branches (goes) to loop_label WHEN r0 IS 0, not the inverse his first answer
+  // described. This is Stefan's own change to the underlying hardware/firmware flag evaluation on node
+  // 406's side (something he is doing, not something this toolchain's bit encoding controls) -- nothing
+  // in this file encodes polarity directly either way, it is a runtime/node-406 behavior, not a bit the
+  // assembler packs -- but any future disassembly description text must describe "if r0 ==0 loop_label"
+  // as branching to loop_label when r0 == 0, matching this final answer, not the earlier-confirmed-then-
+  // superseded one.
+  //
+  // (3) CONFIRMED by Stefan directly: the register field (xxxx, bits 3-0, 4 bits) genuinely limits "if"
+  // to registers r0-r15 only, out of node 407's full 20-register file (r0-r19, fp=18/sp=19) -- not a
+  // misreading. Stefan's own words: "with 4 bits you an only access 16 register, so only r0 to r15 are
+  // accessible." He also volunteered, unprompted, that node 407 additionally exposes ten 32-bit DOUBLE
+  // registers d0-d9 (d0 = r1:r0, d1 = r3:r2, ... pairing consecutive 16-bit registers; d9 is special,
+  // holding fp/sp) -- context on the register file generally, not something "if" reaches via this 4-bit
+  // field either (a double register would need its own, wider addressing, which "if" does not have).
+  //
+  // (4) CONFIRMED by Stefan directly, resolving what was previously this remark's own "STILL OPEN" item:
+  // the complete hand-typed assembler syntax is "if <reg> <cond> <target>" -- three space-separated
+  // operands, not two. Stefan's own words: "yes, the correct syntax is 'if r0 ==0 loop_label' ... that
+  // makes 'if' a word than has 3 parameter: register, condition and (target address or label)." The
+  // third operand (a literal branch-target address or a label name, mirroring br/sbr's own existing
+  // label-operand convention) resolves to this shape's own trailing word -- see
+  // EmbeddedUnsignedValuePairWithTrailingWord's own remarks, and Ga144.Evb.Ide.Services.
+  // CvmAssemblyLanguage.EncodeIfInstruction's own remarks for the real encoder this unblocked, including
+  // the one remaining inferred-not-confirmed detail (the trailing word's own relative-offset base point).
   //
   // ---- end CVM_pipeline bit-pattern table mnemonics; see Instructions' own remarks further below for
   // the new Ids (187-194) and ValueBitMask/Tag details, and TryDescribeSelfDecodingWord's own remarks
-  // for how next32/cbr's extra trailing word(s) are disassembled. ----
+  // for how next32/if's extra trailing word(s) are disassembled. ----
 
   // ---- 2026-10-02: CVM_pipeline table's "other" row family (implied/immediate/unary/binary) -- tag
   // RANGES ONLY, RESERVED, NOT IMPLEMENTED. FLAGGED, not confirmed: no concrete F18 mnemonic or node
@@ -2189,27 +2240,35 @@ public static class CvmInstructionSet
     FixedOpcodeWithTwoTrailingWords,
 
     /// <summary>
-    /// ADDED 2026-10-02, for the "CVM_pipeline" bit-pattern table's own <c>cbr</c> (see this file's own
-    /// class-level remarks right after <see cref="UnlinkMnemonic"/>, table row "1010|....|cccc|xxxx|
-    /// cbr {conditional long branch, relative}"). The instruction's FIRST word is a fixed
-    /// <see cref="CvmInstructionShape.Tag"/> OR'd with TWO independently-packed embedded unsigned
-    /// fields (like <see cref="EmbeddedUnsignedValuePair"/>'s own first word: a "cond" field in
-    /// <see cref="CvmInstructionShape.ValueBitMask"/>/<see cref="CvmInstructionShape.ValueBitShift"/>,
-    /// a register field in <see cref="CvmInstructionShape.SecondValueBitMask"/>/
-    /// <see cref="CvmInstructionShape.SecondValueBitShift"/>) -- but UNLIKE
-    /// <see cref="EmbeddedUnsignedValuePair"/>, a real trailing operand word follows: the branch's own
-    /// signed relative offset, resolved exactly like a <see cref="TrailingWord"/> mnemonic's trailing
-    /// operand (a literal or label both resolve the same way), needed because cbr is explicitly a
-    /// "long" branch (<see cref="ShortBranchMnemonic"/>'s own row, by contrast, embeds its offset
-    /// directly in the one word it has, with no trailing word at all -- that is what makes it
-    /// "short"). <see cref="CvmInstructionShape.WordLength"/> is 2 for this shape.
+    /// ADDED 2026-10-02, for the "CVM_pipeline" bit-pattern table's own <c>cbr</c>, RENAMED the same day
+    /// to <c>if</c> (see <see cref="IfMnemonic"/>'s own remarks -- this file's class-level remarks right
+    /// after <see cref="UnlinkMnemonic"/>, table row "1010|....|cccc|xxxx| cbr {conditional long branch,
+    /// relative}"). The instruction's FIRST word is a fixed <see cref="CvmInstructionShape.Tag"/> OR'd
+    /// with TWO independently-packed embedded unsigned fields (like <see cref="EmbeddedUnsignedValuePair"/>'s
+    /// own first word: a "cond" field in <see cref="CvmInstructionShape.ValueBitMask"/>/
+    /// <see cref="CvmInstructionShape.ValueBitShift"/>, a register field in
+    /// <see cref="CvmInstructionShape.SecondValueBitMask"/>/<see cref="CvmInstructionShape.SecondValueBitShift"/>)
+    /// -- but UNLIKE <see cref="EmbeddedUnsignedValuePair"/>, a real trailing operand word follows: the
+    /// branch's own signed relative offset, resolved exactly like a <see cref="TrailingWord"/> mnemonic's
+    /// trailing operand (a literal or label both resolve the same way), needed because this is explicitly
+    /// a "long" branch (<see cref="ShortBranchMnemonic"/>'s own row, by contrast, embeds its offset
+    /// directly in the one word it has, with no trailing word at all -- that is what makes it "short").
+    /// <see cref="CvmInstructionShape.WordLength"/> is 2 for this shape.
     ///
-    /// FLAGGED, not confirmed -- see <see cref="ConditionalBranchMnemonic"/>'s own remarks (this
-    /// file's class-level remarks right after <see cref="UnlinkMnemonic"/>) for why the "cond" field's
-    /// real SEMANTICS (a plain numeric condition code vs. a node-resolved reference to a comparison
-    /// routine, per the table's own legend: "c: binary instruction address") are left unresolved --
-    /// only the BIT LAYOUT captured by this encoding is confident, cross-checked against node 505's own
-    /// live d1/main dispatch to d/conditional for the "1010" prefix.
+    /// CONFIRMED 2026-10-02 -- see <see cref="IfMnemonic"/>'s own remarks (this file's class-level
+    /// remarks right after <see cref="UnlinkMnemonic"/>) for the full account: the "cond" field is a
+    /// node-406-resolved reference (a computed-jump target into one of node 406's ten named condition
+    /// routines), not a plain numeric condition code, per the table's own legend ("c: binary instruction
+    /// address") -- resolving what was FLAGGED here as the open question. The register field's hard
+    /// 4-bit/r0-r15 limit is also confirmed, not flagged. The branch's own polarity went through TWO
+    /// confirmed answers the same day, the second superseding the first (see <see cref="IfMnemonic"/>'s
+    /// own remarks, item (2), for the full back-and-forth): the FINAL, standing answer is that "if r0
+    /// ==0 loop_label" branches to loop_label WHEN r0 IS 0 -- the intuitive reading -- achieved by
+    /// Stefan's own change to node 406's underlying flag evaluation, not by anything this shape's bit
+    /// layout encodes. The complete hand-typed operand syntax (how the branch target reaches this
+    /// shape's own trailing word) is ALSO now confirmed -- "if &lt;reg&gt; &lt;cond&gt; &lt;target&gt;",
+    /// three operands -- see <see cref="IfMnemonic"/>'s own remarks, item (4), and Ga144.Evb.Ide.Services.
+    /// CvmAssemblyLanguage.EncodeIfInstruction's own remarks for the real encoder this unblocked.
     /// </summary>
     EmbeddedUnsignedValuePairWithTrailingWord,
   }
@@ -2451,17 +2510,21 @@ public static class CvmInstructionSet
     // shape as rjmp, tag 0x9000 instead. Cross-checked against node 505's own live d1/main falling to
     // d/rcall for the "1001" prefix.
     new(Id: 192, RegisterCallMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: 0x9000, ValueBitMask: 0x000F),
-    // cbr (Id 193, REUSES the existing ConditionalBranchMnemonic ("cbr") constant -- see that
-    // constant's own remarks, this file's class-level remarks right after UnlinkMnemonic, for why no
-    // new name was needed and exactly which part of this shape is flagged rather than confirmed):
-    // table row "1010|....|cccc|xxxx| cbr {conditional long branch, relative}" -- bits 15-12 fixed
-    // "1010" (0xA000), bits 11-8 unused/don't-care, bits 7-4 a 4-bit "cond" field (mask 0x00F0, shift
-    // 4), bits 3-0 a 4-bit register field (mask 0x000F, shift 0), PLUS one trailing signed-offset word
-    // (CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord, added alongside this row -- see
-    // that enum case's own remarks for the full derivation and the flagged "cond" semantics). Cross-
-    // checked (bit layout and prefix only) against node 505's own live d1/main falling to
-    // d/conditional for the "1010" prefix.
-    new(Id: 193, ConditionalBranchMnemonic, 2, CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord, Tag: 0xA000, ValueBitMask: 0x00F0, ValueBitShift: 4, SecondValueBitMask: 0x000F),
+    // if (Id 193) -- RENAMED 2026-10-02 from "cbr" to "if", per Stefan directly (see IfMnemonic's own
+    // remarks, and this file's class-level remarks right after UnlinkMnemonic, for the full account of
+    // what's now confirmed: node-406 resolution of the "cond" field, the branch's own final polarity, the
+    // register field's hard r0-r15 limit, and the complete 3-operand hand-typed syntax). Same Id, same
+    // bit layout as the original table row: "1010|....|cccc|xxxx| cbr {conditional long branch,
+    // relative}" -- bits 15-12 fixed "1010" (0xA000), bits 11-8 unused/don't-care, bits 7-4 a 4-bit
+    // "cond" field (mask 0x00F0, shift 4, node-406-resolved per IfMnemonic's own remarks), bits 3-0 a
+    // 4-bit register field (mask 0x000F, shift 0, r0-r15 only), PLUS one trailing signed-offset word
+    // (CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord -- see that enum case's own remarks
+    // for the full derivation). Cross-checked (bit layout and prefix only) against node 505's own live
+    // d1/main falling to d/conditional for the "1010" prefix. Now assemblable from hand-typed source --
+    // see Ga144.Evb.Ide.Services.CvmAssemblyLanguage.EncodeIfInstruction's own remarks for the real
+    // encoder, including the one remaining inferred-not-confirmed detail (the trailing word's own
+    // relative-offset base point).
+    new(Id: 193, IfMnemonic, 2, CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord, Tag: 0xA000, ValueBitMask: 0x00F0, ValueBitShift: 4, SecondValueBitMask: 0x000F),
     // sbr (Id 194): table row "1011|oooo|oooo|oooo| sbr {short branch, relative}" -- bits 15-12 fixed
     // "1011" (0xB000), bits 11-0 a 12-bit SIGNED relative offset ("o", per the table's own legend:
     // "o: signed offset") embedded directly in the one word -- no trailing word at all, which is
@@ -2529,6 +2592,38 @@ public static class CvmInstructionSet
     // row before this one; these are genuinely new Ids, not a repoint of an existing live row.
     new(Id: 195, LongCallMnemonic, 2, CvmOperandEncoding.TrailingWord),
     new(Id: 196, LongJumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    //
+    // ADDED 2026-10-02, same day, Id 197: Stefan's own direct follow-up, after the lcall/ljmp
+    // correction just above: "there is a new word 'push'. it is also a special word (node 507
+    // 'push). it pushed the next word onto the stack." PushMnemonic ("push") is an EXISTING constant
+    // (reused, not new -- CVM1's OLD "push", former Id 2, CvmOperandEncoding.None, retired below along
+    // with every other CVM1 opcode; pure naming coincidence, same convention as ret's own two
+    // unrelated "ret"s and ljmp's own two unrelated "ljmp"s).
+    //
+    // Confirmed against node 507's own live source Stefan pasted alongside this: 'push falls straight
+    // into m/next (node 507's own "fetch the next word from memory, advance the instruction pointer"
+    // primitive -- the exact same one 'link/'lcall/'ljmp already use for their own trailing word)
+    // before falling into m/push (w - ), which sends an r/push command to the register file and then
+    // writes the fetched word to the return-stack's own memory page via m/write:
+    //   : 'push ( - )
+    //     m/next
+    //   : m/push ( w - )
+    //     A[ r/push ]] lit m/rsend
+    //     1 @b
+    //   : m/write ( w p a - )
+    //     A[ mem/wrup ]] lit m/usend
+    //     !b !b !b ;
+    // So 'push takes a real trailing operand word -- the literal value it pushes -- exactly the same
+    // CvmOperandEncoding.TrailingWord shape as link/lcall/ljmp (a node-507-resolved tag word, then one
+    // plain trailing word), joining them in the same "special" family (tag 0x2000, per the
+    // "CVM_pipeline" table's own "special" row -- that row's own text, "special {ink, unlink, ret}",
+    // was never a claim the family had only three members; it is simply the three Stefan happened to
+    // name when he first introduced the row). Per this file's own standing convention, the tag/node
+    // pairing for a None/TrailingWord-shaped row lives entirely on the IDE side, never here -- see
+    // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own NodeSymbolByMnemonic remarks for the actual
+    // node-507/tag/shift wiring (and for the OLD CVM2-era "push" entry this supersedes, kept as a
+    // comment per "do not remove any opcodes").
+    new(Id: 197, PushMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // ---------------------------------------------------------------------------------------------
     // new(Id: 1, PushLitMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // new(Id: 2, PushMnemonic, 1, CvmOperandEncoding.None),
@@ -3145,12 +3240,18 @@ public static class CvmInstructionSet
       }
     }
 
-    // ADDED 2026-10-02, for the "CVM_pipeline" table's own cbr (CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord
-    // -- see that enum case's own remarks, and ConditionalBranchMnemonic's own remarks for the flagged,
-    // unconfirmed "cond" field semantics). Same tag-mask-excludes-both-fields matching as the
-    // EmbeddedUnsignedValuePair loop just above, except a trailing offset word follows the tag word --
-    // printed if the caller supplied one via nextWord, omitted otherwise, the same "print what's
-    // available" convention FixedOpcodeWithTrailingWord's own loop (lcall/next16) already uses.
+    // ADDED 2026-10-02, for the "CVM_pipeline" table's own cbr, RENAMED the same day to if
+    // (CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord -- see that enum case's own
+    // remarks, and IfMnemonic's own remarks for what's now confirmed vs. still open). Same
+    // tag-mask-excludes-both-fields matching as the EmbeddedUnsignedValuePair loop just above, except a
+    // trailing offset word follows the tag word -- printed if the caller supplied one via nextWord,
+    // omitted otherwise, the same "print what's available" convention FixedOpcodeWithTrailingWord's own
+    // loop (lcall/next16) already uses. Operand order printed here (register, then cond) matches
+    // Stefan's own confirmed "if <reg> <cond>" syntax -- NOT the cond/register order this shape's own
+    // ValueBitMask/SecondValueBitMask happen to be declared in. "cond" is still printed as a raw 0-15
+    // number, not yet resolved back to one of node 406's ten named conditions (==0/!=0/.../even/odd) --
+    // that reverse lookup is part of the still-open work IfMnemonic's own remarks describe, not
+    // implemented here.
     foreach (CvmInstructionShape shape in Instructions)
     {
       if (shape.Encoding != CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord)
@@ -3164,9 +3265,9 @@ public static class CvmInstructionSet
         wordLength = 2;
         int cond = (word & shape.ValueBitMask) >> shape.ValueBitShift;
         int register = (word & shape.SecondValueBitMask) >> shape.SecondValueBitShift;
-        return nextWord is int cbrOffset
-            ? $"{shape.Mnemonic} {FormatOperand(cond)} {FormatOperand(register)} {FormatOperand(cbrOffset)}"
-            : $"{shape.Mnemonic} {FormatOperand(cond)} {FormatOperand(register)}";
+        return nextWord is int ifOffset
+            ? $"{shape.Mnemonic} {FormatOperand(register)} {FormatOperand(cond)} {FormatOperand(ifOffset)}"
+            : $"{shape.Mnemonic} {FormatOperand(register)} {FormatOperand(cond)}";
       }
     }
 

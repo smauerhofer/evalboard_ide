@@ -298,18 +298,43 @@ public static class CvmAssembler
               : 2;
           break;
 
-        // ADDED 2026-10-02, for the "CVM_pipeline" table's own cbr (CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord
-        // -- see that enum case's own remarks, and CvmInstructionSet.ConditionalBranchMnemonic's own
-        // remarks for why this shape's bit LAYOUT is confident but its field SEMANTICS are flagged).
-        // Given its own dedicated case here, ahead of the generic "default" tagged-mnemonic branch
-        // below, purely to fail with one clear, specific message: this mnemonic needs THREE operands
-        // (cond, register, offset), which neither this assembler's generic one-operand nor
-        // two-operand branches expect, and Stefan has not specified cbr's own assembler-level syntax
-        // (comma-separated like fadd/litm, or something else) to justify guessing one. Mirrors
-        // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own identical, deliberate rejection -- see that
-        // class's own Assemble remarks.
-        case CvmInstructionSet.ConditionalBranchMnemonic:
-          errors.Add($"line {line.LineNumber}: \"cbr\" (the new CVM_pipeline opcode, not CVM2's old one) is not yet assemblable here -- it needs a 3-operand syntax (condition, register, offset) this assembler doesn't support yet, and its condition field's own real meaning is still unconfirmed; ask Stefan before wiring this up.");
+        // ADDED 2026-10-02, for the "CVM_pipeline" table's own cbr, RENAMED the same day to if
+        // (CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord -- see that
+        // enum case's own remarks, and CvmInstructionSet.IfMnemonic's own remarks for the full,
+        // now-FULLY-confirmed account). UPDATED again the same day: every open question Stefan was asked
+        // is now answered -- the "cond" field is a node-406-resolved reference (not a plain number), the
+        // branch's own FINAL polarity (the intuitive "goto label when the condition holds" reading,
+        // achieved by Stefan's own change to node 406's flag evaluation, not anything this assembler
+        // encodes), the register field's hard r0-r15 limit (4 bits, by design), and the complete
+        // three-operand syntax "if &lt;reg&gt; &lt;cond&gt; &lt;target&gt;" (Ga144.Evb.Ide.Services.
+        // CvmAssemblyLanguage.EncodeIfInstruction now implements this for the CVM Debugger's own
+        // immediately-resolving assembler).
+        //
+        // STILL deliberately rejected HERE, in this separate, linker-based assembler, for a genuinely
+        // different reason than before: not a missing confirmation, but a missing MECHANISM. Every other
+        // tagged mnemonic this assembler resolves against a live node leaves a single
+        // CvmRelocationType.CvmOpcode relocation keyed by MNEMONIC against CvmPrimitiveTable (see this
+        // class's own remarks on that relocation, and CvmPrimitiveTable's own remarks on where its
+        // entries come from -- Ga144.Evb.Ide.Services.CvmPrimitiveTableExporter, reading
+        // CvmAssemblyLanguage.BuildEncodeTable verbatim). "if"'s own "cond" field resolves per NAMED
+        // OPERAND VALUE of one mnemonic (ten different node-406 symbols, one per condition name), not per
+        // mnemonic -- a resolution shape BuildEncodeTable's own Instructions list structurally excludes
+        // today (it only iterates None/TrailingWord/TwoTrailingWords/NodeResolvedEmbeddedValue-shaped
+        // rows; EmbeddedUnsignedValuePairWithTrailingWord, "if"'s own shape, is not among them), so there
+        // is no primitive-table entry for any of node 406's ten condition symbols for this assembler to
+        // even ask for yet. Wiring this up for real would need a genuinely new mechanism -- for instance,
+        // ten synthetic primitive-table entries (one per condition name, each the complete tag|cond word
+        // with the register left at 0 for CvmRelocation.EmbeddedValue to OR in, mirroring node 306's own
+        // address-register ops) -- which would mean real, new code in BOTH
+        // Ga144.Evb.Ide.Services.CvmAssemblyLanguage (to compute and expose those ten entries at all) AND
+        // CvmPrimitiveTableExporter (to carry them into the exported table), not merely a "mirror what
+        // CvmAssemblyLanguage.EncodeIfInstruction already does" change confined to this one file. Flagged
+        // here rather than attempted without Stefan's own confirmation that this is the mechanism he
+        // wants, per this project's own "never assert an unconfirmed design decision" rule -- the
+        // CvmAssemblyLanguage.cs side (the CVM Debugger's own assembler) is real and working today; this
+        // side is not, and needs a design decision from Stefan before it can be.
+        case CvmInstructionSet.IfMnemonic:
+          errors.Add($"line {line.LineNumber}: \"if\" is not yet assemblable here -- its full semantics (cond/polarity/register-width/operand syntax) are now confirmed and already work in the CVM Debugger's own Assembly Code editor, but this separate, linker-based assembler has no mechanism yet to resolve a per-CONDITION-NAME (not per-mnemonic) node-406 symbol through a primitive table -- that needs new plumbing in CvmAssemblyLanguage.BuildEncodeTable and CvmPrimitiveTableExporter, not just here; ask Stefan how he wants that exposed before wiring this up.");
           break;
 
         default:
@@ -336,9 +361,12 @@ public static class CvmAssembler
           // ADDED 2026-10-02: next32 (CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords) joins this
           // same two-operand group, same reasoning as litm/lit2 -- two separate trailing words, each a
           // plain literal/label operand (see CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords' own
-          // remarks). cbr (CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord) never reaches
-          // this generic branch at all -- it has its own dedicated, error-only case above, since it
-          // needs three operands, a shape this switch has no group for yet.
+          // remarks). if (CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord, renamed from cbr
+          // 2026-10-02) never reaches this generic branch at all -- it has its own dedicated, error-only
+          // case above, since its now-confirmed 3-operand syntax (register, condition name, branch
+          // target) is a shape this switch has no group for, and -- unlike every other rejection this
+          // switch used to carry -- the remaining blocker is a missing per-condition-name primitive-table
+          // mechanism, not an unconfirmed design question; see that case's own remarks.
           int requiredArgCount = shape.Encoding is CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords ? 2 : shape.HasOperand ? 1 : 0;
           if (line.Args.Count != requiredArgCount)
           {
