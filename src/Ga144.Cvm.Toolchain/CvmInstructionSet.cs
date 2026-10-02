@@ -231,6 +231,132 @@ public static class CvmInstructionSet
   public const string LinkMnemonic = "link";
   public const string UnlinkMnemonic = "unlink";
 
+  // ---- 2026-10-02: "CVM_pipeline" bit-pattern table, pasted whole by Stefan alongside a 23-node F18
+  // source listing (nodes 205-209/305-309/405-409/505-509/607/707/708). Per Stefan's own governing
+  // instruction once asked how far to take this: "do not sync the source yet (first finish the CVM
+  // before updating any NodeXXX... file) but rebuild the instruction set as far it is possible." So
+  // this section (and the Instructions rows/encodings it feeds, further below) rebuilds ONLY
+  // CvmInstructionSet/CvmAssemblyLanguage/CvmAssembler against that table -- no Node###Program.cs file
+  // (existing or one of the three still missing -- 206, 209, 309) is touched here.
+  //
+  // The table itself (reproduced verbatim, Stefan's own text):
+  //   1111|11
+  //   5432|1098|7654|3210|
+  //   ----+----+----+----+----------------------------
+  //   0000|0000|0000|0000| nop
+  //   000a|aaaa|aaaa|aaaa| scall
+  //   0010|0000|00ww|wwww| special {ink, unlink, ret}
+  //   0100|    |    |    | next16
+  //   0101|    |    |    | next32
+  //   0110|    |    |    | pop16
+  //   0111|    |    |    | pop32
+  //   1000|....|....|xxxx| rjmp {jump to address in register r}
+  //   1001|....|....|xxxx| rcall {call to address in register r}
+  //   1010|....|cccc|xxxx| cbr {conditional long branch, relative}
+  //   1011|oooo|oooo|oooo| sbr {short branch, relative}
+  //
+  //   11  |    |    |    | other
+  //   ----+----+----+----+----------------------------------------
+  //   1100|0www|wwww|weee| implied
+  //   1100|1   |iiii|xxxx| immediate
+  //   1101|0   |    |xxxx| unary {16 bit}
+  //   1101|1   |yyyy|xxxx| binary {16 bit}
+  //   1110|0   |    |xxxx| unary {32 bit}
+  //   1110|1   |yyyy|xxxx| binary {32 bit}
+  //   1111|0   |    |xxxx| unary {32 bit float}
+  //   1111|1   |yyyy|xxxx| binary {32 bit float}
+  //
+  //   a: absolute address
+  //   b: immediate instruction
+  //   c: binary instruction address {address in corresponing node}
+  //   d: unary instruction address {address in corresponing node}
+  //   e: node identifier
+  //   f: instruction address {address in corresponing node}
+  //   i: immediate unsigned value
+  //   o: signed offset
+  //   cond: condition
+  //   x: parameter1 binary: x = x op y
+  //   y: parameter2
+  //   .: unused bit
+  //
+  // Cross-checked against the LIVE (not merely commented) F18 source Stefan pasted alongside this
+  // table: node 505's d1/main dispatch cascade branches on exactly these same bit prefixes, in this
+  // same order (11*->other/stub, 1011*->d/branch, 1010*->d/conditional, 1001*->d/rcall, 1000*->
+  // d/rjump, 0111*->d/pop2, 0110*->d/pop1, 0101*->d/next2, 0100*->d/next1, 001*->d/special, 000*->
+  // d/call) -- strong, independent confirmation that nop/scall/special/next16/next32/pop16/pop32/
+  // rjmp/rcall/cbr/sbr are correctly identified and correctly ordered. Node 506 (the table's own
+  // "home") still only has this table as a COMMENT, not live dispatch code -- its real d/main is
+  // still the pre-existing trivial stub -- but it DOES have live word-level helpers (d/call, d/next1,
+  // d/next2, d/pop1, d/pop2, d/special, d/conditional, d/rcall/d/rjump, d/branch, 'ret/'link/'unlink,
+  // etc.) that corroborate several rows' own field widths (see each new mnemonic's own remarks below
+  // for exactly which).
+  //
+  // EVERY new mnemonic below is Id 187 or higher: 184-186 (ret/link/unlink) were already assigned the
+  // 2026-10-01 night before this table arrived, under the OLD (now superseded) assumption that their
+  // shared tag was 0xFC00 with the resolved node address shifted left by 3 -- see
+  // Node506BitPatternTableTagBits' and NodeResolvedAddressShiftByMnemonic's own remarks (IDE project)
+  // for the correction this table's own "special" row forces (tag 0x2000, UNshifted 6-bit field).
+  // ret/link/unlink's OWN Instructions rows (184-186, just below) do not change shape or Id at all --
+  // only their shared tag/shift, which (per this file's own long-standing convention) lives entirely
+  // on the IDE side, not here.
+  public const string Next16Mnemonic = "next16";
+  public const string Next32Mnemonic = "next32";
+  public const string Pop16Mnemonic = "pop16";
+  public const string Pop32Mnemonic = "pop32";
+  public const string RegisterJumpMnemonic = "rjmp";
+  public const string RegisterCallMnemonic = "rcall";
+  public const string ShortBranchMnemonic = "sbr";
+  // ConditionalBranchMnemonic ("cbr") REUSES the existing constant declared above (right after
+  // BranchMnemonic) -- that constant already carries CVM2's OLD, fully-retired cbr (former Id 7,
+  // EmbeddedSignedValue, tag 0xA800); this table's own cbr (new Id below) is a DIFFERENT shape in a
+  // DIFFERENT era, pure naming coincidence, exactly like RetMnemonic's own two unrelated "ret"s -- see
+  // this file's own class-level remarks on mnemonic STRINGS being freely reused across eras while only
+  // the numeric Id stays append-only. No new constant needed.
+  //
+  // FLAGGED, not confirmed -- genuinely ambiguous, left unresolved rather than silently decided:
+  // the table's own legend defines "c" as "binary instruction address {address in corresponing
+  // node}", not a plain numeric condition code -- i.e. cbr's own cccc field may be meant to SELECT
+  // (by address, resolved against some node's live compile) which comparison routine decides the
+  // branch, the same way "special"'s ww field selects a word in node 506, rather than carrying a
+  // literal 0-15 condition number the way CVM2's OLD cbr used to. Nothing in the live F18 source
+  // Stefan pasted shows which node (if any) such a table would live in, or confirms either reading.
+  // Implemented below as a plain embedded 4-bit value (no node resolution at all) purely so the
+  // table's own BIT LAYOUT (tag, field widths, trailing offset word) is captured and usable -- the
+  // field's real SEMANTICS are left for Stefan to confirm before anything depends on a particular
+  // interpretation.
+  //
+  // ---- end CVM_pipeline bit-pattern table mnemonics; see Instructions' own remarks further below for
+  // the new Ids (187-194) and ValueBitMask/Tag details, and TryDescribeSelfDecodingWord's own remarks
+  // for how next32/cbr's extra trailing word(s) are disassembled. ----
+
+  // ---- 2026-10-02: CVM_pipeline table's "other" row family (implied/immediate/unary/binary) -- tag
+  // RANGES ONLY, RESERVED, NOT IMPLEMENTED. FLAGGED, not confirmed: no concrete F18 mnemonic or node
+  // target is defined anywhere in the material Stefan pasted for any of the eight rows below, and the
+  // table's own bit layout for several of them is itself incomplete -- "implied"'s own w/e split
+  // (8-bit w at bits 10-3, a REAL 3-bit node-identifier e at bits 2-0, not fixed to 0 the way every
+  // other None-shaped mnemonic in this file, ret included, has always treated a trailing "eee") is
+  // confidently readable off the table text, but "immediate"'s own "iiii" field width/position and
+  // "unary"'s own instruction-selector field (legend: "d: unary instruction address") are left BLANK
+  // in the table itself ("1101|0   |    |xxxx|" -- the middle nibble is empty, not even dots), so
+  // there is nothing yet to encode beyond the fixed high bits. These eight constants exist purely so
+  // the high-bit tag ranges this table reserves are on record (and so nothing else in this file is
+  // ever accidentally assigned a tag that collides with one) -- none has an Instructions row, none has
+  // a mnemonic constant, and none is referenced by CvmAssembler/CvmAssemblyLanguage/
+  // TryDescribeSelfDecodingWord. Add the real rows once Stefan defines a concrete mnemonic and (where
+  // needed) node target for each.
+  public const int ReservedImpliedTag = 0xC000;
+  public const int ReservedImmediateTag = 0xC800;
+  public const int ReservedUnary16Tag = 0xD000;
+  public const int ReservedBinary16Tag = 0xD800;
+  public const int ReservedUnary32Tag = 0xE000;
+  public const int ReservedBinary32Tag = 0xE800;
+  public const int ReservedUnary32FloatTag = 0xF000;
+  public const int ReservedBinary32FloatTag = 0xF800;
+  // NOTE: ReservedUnary32FloatTag (0xF000) is bit-for-bit identical to LongCallTag (lcall's own tag,
+  // unchanged -- see that constant's own remarks for the full flag on this collision). Left exactly as
+  // computed from the table, not nudged aside, since nothing today defines a concrete "unary {32-bit
+  // float}" mnemonic to actually emit 0xF000 and collide with lcall in practice.
+
   // ---- 2026-09-30 (same day as the reset), the new VM's own "call" family: scall/lcall/call ----------
   // Per Stefan directly, right after giving the new VM's own instruction-word bit-pattern spec: "the next
   // instruction i want to define is 'call'. there is a short variant 'scall' and a long variant 'lcall'.
@@ -634,7 +760,7 @@ public static class CvmInstructionSet
 
   /// <summary>
   /// The new VM's own scall (2026-09-30): the widest word address it can directly encode into its own
-  /// opcode word -- 0x3FFF, i.e. 14 bits, per spec row "00aa|aaaa|aaaa|aaaa|" (see this file's own class-
+  /// opcode word -- per spec row "00aa|aaaa|aaaa|aaaa|" (see this file's own class-
   /// level remarks on the new VM's "call" family, right after <see cref="ConditionalBranchMnemonic"/>, for
   /// Stefan's exact wording and the full derivation). Structurally the same idea as CVM2's OLD
   /// <see cref="CallAddressMask"/> (also <see cref="CvmOperandEncoding.EmbeddedAddress"/>, also "the whole
@@ -644,8 +770,16 @@ public static class CvmInstructionSet
   /// hardcoded constant baked into every EmbeddedAddress consumer the way <see cref="CallAddressMask"/>
   /// used to be -- see <see cref="CvmOperandEncoding.EmbeddedAddress"/>'s own remarks for that
   /// generalization.
+  ///
+  /// NARROWED 2026-10-02, from 0x3FFF (14 bits) to 0x1FFF (13 bits): the "CVM_pipeline" bit-pattern
+  /// table Stefan pasted that day (see this file's own class-level remarks right after
+  /// <see cref="UnlinkMnemonic"/>) gives scall's row as "000a|aaaa|aaaa|aaaa|" -- THREE fixed leading
+  /// zero bits, not two, leaving a 13-bit address field. Independently corroborated by node 505's own
+  /// live d1/main dispatch, which only strips a leading "000" prefix (not "00") before falling to
+  /// d/call. This is a narrowing, not a reinterpretation -- every previously-valid scall address still
+  /// assembles and disassembles identically, since 13 bits was always a subset of the old 14-bit range.
   /// </summary>
-  public const int ShortCallAddressMask = 0x3FFF;
+  public const int ShortCallAddressMask = 0x1FFF;
 
   /// <summary>
   /// The narrowest word address <c>scall</c> can actually be used for: 1, not 0. CONFIRMED 2026-09-30
@@ -661,8 +795,9 @@ public static class CvmInstructionSet
   /// mnemonic treats address 0 as "does not fit scall" (exactly like a too-large address), always lowering
   /// to <c>lcall</c> instead -- <c>lcall</c> itself has no such restriction: its own tag word (0xF000) does
   /// not overlap 0x0000 at all, so <c>lcall 0</c> is a perfectly ordinary, valid way to call address 0.
-  /// <see cref="ShortCallAddressMask"/> itself is unchanged (still 0x3FFF) -- this is a separate, narrower
-  /// lower bound alongside it, not a replacement for it.
+  /// <see cref="ShortCallAddressMask"/> itself was separately narrowed to 0x1FFF 2026-10-02 (see that
+  /// constant's own remarks) -- this is a separate, narrower lower bound alongside it, not a replacement
+  /// for it, and is unaffected by that narrowing.
   /// </summary>
   public const int ShortCallMinimumAddress = 1;
 
@@ -675,6 +810,20 @@ public static class CvmInstructionSet
   /// no separate mask constant is needed the way <see cref="BranchTagMask"/>/<see cref="ConditionalBranchTagMask"/>
   /// exist alongside their own tags -- <see cref="CvmOperandEncoding.FixedOpcodeWithTrailingWord"/> always
   /// matches this tag with a plain exact <c>word == LongCallTag</c> check, never a masked one.
+  ///
+  /// RESOLVED 2026-10-02: the "CVM_pipeline" bit-pattern table Stefan pasted that day (see this
+  /// file's own class-level remarks right after <see cref="UnlinkMnemonic"/>) has NO row for lcall at
+  /// all, and this constant's own 0xF000 sits squarely inside that table's "unary {32-bit float}"
+  /// range (0xF000-0xF7FF) -- flagged at the time as an open question ("does lcall survive this
+  /// table, and under what tag?"). Stefan answered the SAME day: "ljmp and lcall must encode in a
+  /// similar way like 'ret and their address also taken from labels 'ljmp and 'lcall in node 507.
+  /// they are now special opcodes." So lcall DOES survive, but under the "special" tag (0x2000, the
+  /// same one ret/link/unlink/ljmp all share -- see <see cref="Instructions"/>' own remarks on Ids
+  /// 195/196), not this one -- the collision this constant's own remarks used to flag no longer has
+  /// anything live to collide. This constant itself is now referenced by NOTHING live at all (Id
+  /// 183, the only row that ever used it, is retired just below in <see cref="Instructions"/>) --
+  /// kept, unedited in VALUE, purely as that retired row's own historical record, per this file's
+  /// "do not remove any opcodes" convention.
   /// </summary>
   public const int LongCallTag = 0xF000;
 
@@ -2019,6 +2168,50 @@ public static class CvmInstructionSet
     /// method's own <c>nextWord</c>/<c>wordLength</c> parameters, added alongside this encoding.
     /// </summary>
     FixedOpcodeWithTrailingWord,
+
+    /// <summary>
+    /// ADDED 2026-10-02, for the "CVM_pipeline" bit-pattern table's own <c>next32</c> (see this file's
+    /// own class-level remarks right after <see cref="UnlinkMnemonic"/>, table row "0101|....|....|
+    /// ....| next32"). Exactly like <see cref="FixedOpcodeWithTrailingWord"/> -- a fixed, universally-
+    /// known literal <see cref="CvmInstructionShape.Tag"/> word needing no node/linker involvement at
+    /// all -- except TWO trailing operand words follow it instead of one, mirroring how
+    /// <see cref="TwoTrailingWords"/> already extends <see cref="TrailingWord"/> for a node-resolved
+    /// tag. <c>next32</c> itself fetches a 32-bit (two-word) literal, per its own name and its sibling
+    /// row <c>next16</c> (<see cref="FixedOpcodeWithTrailingWord"/>, one word) immediately above it in
+    /// the table -- both corroborated by node 506's own live d/next1 (one word) and d/next2 (two
+    /// words) helpers, which node 505's own d1/main dispatches to for exactly these two table rows.
+    /// <see cref="CvmInstructionShape.WordLength"/> is 3 for this shape (tag word + two operand words).
+    /// <see cref="TryDescribeSelfDecodingWord"/> needs a SECOND already-fetched word (beyond
+    /// <see cref="FixedOpcodeWithTrailingWord"/>'s own single <c>nextWord</c>) to fully describe an
+    /// instruction using this shape -- see that method's own <c>nextWord2</c> parameter, added
+    /// alongside this encoding.
+    /// </summary>
+    FixedOpcodeWithTwoTrailingWords,
+
+    /// <summary>
+    /// ADDED 2026-10-02, for the "CVM_pipeline" bit-pattern table's own <c>cbr</c> (see this file's own
+    /// class-level remarks right after <see cref="UnlinkMnemonic"/>, table row "1010|....|cccc|xxxx|
+    /// cbr {conditional long branch, relative}"). The instruction's FIRST word is a fixed
+    /// <see cref="CvmInstructionShape.Tag"/> OR'd with TWO independently-packed embedded unsigned
+    /// fields (like <see cref="EmbeddedUnsignedValuePair"/>'s own first word: a "cond" field in
+    /// <see cref="CvmInstructionShape.ValueBitMask"/>/<see cref="CvmInstructionShape.ValueBitShift"/>,
+    /// a register field in <see cref="CvmInstructionShape.SecondValueBitMask"/>/
+    /// <see cref="CvmInstructionShape.SecondValueBitShift"/>) -- but UNLIKE
+    /// <see cref="EmbeddedUnsignedValuePair"/>, a real trailing operand word follows: the branch's own
+    /// signed relative offset, resolved exactly like a <see cref="TrailingWord"/> mnemonic's trailing
+    /// operand (a literal or label both resolve the same way), needed because cbr is explicitly a
+    /// "long" branch (<see cref="ShortBranchMnemonic"/>'s own row, by contrast, embeds its offset
+    /// directly in the one word it has, with no trailing word at all -- that is what makes it
+    /// "short"). <see cref="CvmInstructionShape.WordLength"/> is 2 for this shape.
+    ///
+    /// FLAGGED, not confirmed -- see <see cref="ConditionalBranchMnemonic"/>'s own remarks (this
+    /// file's class-level remarks right after <see cref="UnlinkMnemonic"/>) for why the "cond" field's
+    /// real SEMANTICS (a plain numeric condition code vs. a node-resolved reference to a comparison
+    /// routine, per the table's own legend: "c: binary instruction address") are left unresolved --
+    /// only the BIT LAYOUT captured by this encoding is confident, cross-checked against node 505's own
+    /// live d1/main dispatch to d/conditional for the "1010" prefix.
+    /// </summary>
+    EmbeddedUnsignedValuePairWithTrailingWord,
   }
 
   /// <summary>
@@ -2123,7 +2316,20 @@ public static class CvmInstructionSet
     // that lowers to one of these two, exactly like "literal" lowers to lit/litr (see ShortCallMnemonic's
     // own remarks).
     new(Id: 182, ShortCallMnemonic, 1, CvmOperandEncoding.EmbeddedAddress, Tag: 0x0000, ValueBitMask: ShortCallAddressMask),
-    new(Id: 183, LongCallMnemonic, 2, CvmOperandEncoding.FixedOpcodeWithTrailingWord, Tag: LongCallTag),
+    // Id 183 (lcall, FixedOpcodeWithTrailingWord/LongCallTag) -- RETIRED 2026-10-02, per Stefan
+    // directly: "ljmp and lcall must encode in a similar way like 'ret and their address also taken
+    // from labels 'ljmp and 'lcall in node 507. they are now special opcodes." This SHAPE (a fixed,
+    // self-describing 0xF000 tag word with no live node involved, followed by a full trailing
+    // address word) is fully superseded by the new Id 195 row further below -- a different shape
+    // (node-507-resolved, tag 0x2000, not a fixed self-describing 0xF000) but, after a same-day
+    // correction (see Id 195's own remarks for the full story), the SAME CATEGORY as before:
+    // CvmOperandEncoding.TrailingWord, still 2 words, still a real address operand -- "call" still
+    // lowers to it with no loss of capability, just through a live node-507 compile now instead of a
+    // fixed constant. Commented out rather than deleted, per this file's own "do not remove any
+    // opcodes" convention -- Id 183 itself is never to be reused. LongCallTag (0xF000) is now
+    // referenced by nothing live at all (see its own remarks) -- kept purely as this row's
+    // historical record.
+    // new(Id: 183, LongCallMnemonic, 2, CvmOperandEncoding.FixedOpcodeWithTrailingWord, Tag: LongCallTag),
     // ADDED 2026-09-30 (same day, third new-VM opcode): Stefan placed a label 'ret in the new VM's node
     // 506 (the bit-pattern-table/dispatch node -- see Cvm.Node506Program's own remarks) for the "ret"
     // opcode, spec row "1111|11ff|ffff|feee| implied" (e = 0, always; f = the 7-bit address of 'ret in
@@ -2171,6 +2377,158 @@ public static class CvmInstructionSet
     // 'ret'." Same shape as ret exactly -- CvmOperandEncoding.None, no operand -- just a different
     // node-506 word to resolve against.
     new(Id: 186, UnlinkMnemonic, 1, CvmOperandEncoding.None),
+    //
+    // CORRECTED 2026-10-02, per the "CVM_pipeline" bit-pattern table Stefan pasted that day (see this
+    // file's own class-level remarks right after UnlinkMnemonic): ret/link/unlink's shared tag/shift,
+    // assumed above (and on the IDE side) to be 0xFC00 with the resolved node address shifted left by
+    // 3, is SUPERSEDED. The table's own "special" row -- "0010|0000|00ww|wwww| special {ink, unlink,
+    // ret}" -- gives a tag of 0x2000 (bits 15-12 = 0010, bits 11-6 fixed at 0) with an UNshifted 6-bit
+    // "ww wwww" field at bits 5-0 (mask 0x003F), not a 7-bit field at bits 9-3. This table also
+    // explicitly NAMES this row's own family after these three mnemonics ("special {ink, unlink,
+    // ret}" -- "ink" almost certainly a transcription of "link"), independently confirming they belong
+    // together, exactly as Stefan's own prior wording ("their opcode is like the opcode for 'ret'")
+    // already said. Neither row 184/185/186's own Id, mnemonic, WordLength, nor Encoding changes at
+    // all -- only the tag/shift pairing, which (per this file's own long-standing convention) has
+    // never lived here for a None/TrailingWord-shaped row; see
+    // Ga144.Evb.Ide.Services.CvmAssemblyLanguage.Node506BitPatternTableTagBits/
+    // NodeResolvedAddressShiftByMnemonic's own remarks for the actual correction. The original comment
+    // block above (just above Id 184) is left exactly as written, as the historical record of the
+    // first, now-superseded assumption -- not rewritten -- per this file's own "do not rewrite
+    // history" convention.
+    //
+    // ADDED 2026-10-02, Ids 187-194: the rest of the "CVM_pipeline" table's own low-level/short-form
+    // row family (next16/next32/pop16/pop32/rjmp/rcall/cbr/sbr) -- see this file's own class-level
+    // remarks right after UnlinkMnemonic for the table text, the derivation, and which parts are
+    // cross-checked against node 505's live dispatch vs. inferred/flagged. The four "other" row
+    // families below this table (implied/immediate/unary/binary, each split further into {16-bit,
+    // 32-bit, 32-bit float} for the latter three) are deliberately NOT given Instructions rows here:
+    // no concrete F18 mnemonic or node target is defined anywhere in the material Stefan pasted for
+    // any of them, several of the table's own field columns for them are blank/unspecified (not even
+    // "don't care" dots, just empty), and "implied" specifically has a real, non-zero node-identifier
+    // field (bits 2-0) that every earlier None-shaped mnemonic in this file (ret included) has always
+    // treated as fixed at 0 -- a genuinely new shape this file has no precedent for. Reserved tag
+    // constants for all eight (so future rows can slot in without hunting for free bit ranges) are
+    // declared just below this list, flagged the same way, with no Instructions entries of their own.
+    //
+    // next16 (Id 187): table row "0100|    |    |    | next16" -- bits 15-12 fixed "0100" (0x4000),
+    // the rest of the word entirely blank/unspecified in the table (not even dots), with the actual
+    // operand carried in ONE trailing word instead -- exactly CvmOperandEncoding.FixedOpcodeWithTrailingWord's
+    // own shape (see LongCallMnemonic's own row, Id 183, for the precedent; unlike lcall, next16 needs
+    // no node/linker involvement for ITS trailing operand either -- a plain literal/label). Cross-
+    // checked against node 505's own live d1/main dispatch, which strips exactly the "0100" prefix
+    // before falling to d/next1 -- node 506's own live d/next1 helper fetches exactly one trailing
+    // word (via node 507's own m/next relay), confirming the one-trailing-word shape.
+    new(Id: 187, Next16Mnemonic, 2, CvmOperandEncoding.FixedOpcodeWithTrailingWord, Tag: 0x4000),
+    // next32 (Id 188): table row "0101|    |    |    | next32" -- bits 15-12 fixed "0101" (0x5000),
+    // same blank remainder, but TWO trailing words (per its own "32" name, alongside next16's "16"
+    // immediately above it in the table) -- CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords, added
+    // alongside this row (see that enum case's own remarks). Cross-checked the same way as next16:
+    // node 505's d1/main strips "0101" to fall to d/next2, and node 506's own live d/next2 helper
+    // fetches two trailing words (via m/next called twice), confirming the two-trailing-word shape.
+    new(Id: 188, Next32Mnemonic, 3, CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords, Tag: 0x5000),
+    // pop16 (Id 189): table row "0110|    |    |    | pop16" -- bits 15-12 fixed "0110" (0x6000), and
+    // UNLIKE next16/next32, no trailing word at all here -- "pop" (as opposed to "next", which reads a
+    // literal operand FOLLOWING the opcode) discards data already on a stack, needing nothing more
+    // than the fixed opcode word itself: CvmOperandEncoding.FixedOpcode, same shape as nop. Cross-
+    // checked against node 505's own live d1/main, which strips "0110" to fall to d/pop1 -- node 506's
+    // own live d/pop1 helper takes no trailing-word argument, confirming no operand is assembled.
+    new(Id: 189, Pop16Mnemonic, 1, CvmOperandEncoding.FixedOpcode, Tag: 0x6000),
+    // pop32 (Id 190): table row "0111|    |    |    | pop32" -- bits 15-12 fixed "0111" (0x7000), same
+    // reasoning as pop16 (no trailing word, CvmOperandEncoding.FixedOpcode). Cross-checked against
+    // node 505's own live d1/main falling to d/pop2 for the "0111" prefix; node 506's own live d/pop2
+    // helper likewise takes no trailing-word argument.
+    new(Id: 190, Pop32Mnemonic, 1, CvmOperandEncoding.FixedOpcode, Tag: 0x7000),
+    // rjmp (Id 191): table row "1000|....|....|xxxx| rjmp {jump to address in register r}" -- bits
+    // 15-12 fixed "1000" (0x8000), bits 11-4 unused/don't-care ("...."), bits 3-0 a 4-bit register
+    // index ("x", per the table's own legend: "x: parameter1"). CvmOperandEncoding.EmbeddedUnsignedValue,
+    // fully self-describing (no node/linker involvement at all -- the register index is a plain
+    // literal operand, like node 511's own register-file ops). Cross-checked against node 505's own
+    // live d1/main, which strips "1000" to fall to d/rjump; node 506's own live d/rjump/d/rreg helpers
+    // corroborate a register-index operand (as opposed to an address), matching "jump to address in
+    // register r" verbatim.
+    new(Id: 191, RegisterJumpMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: 0x8000, ValueBitMask: 0x000F),
+    // rcall (Id 192): table row "1001|....|....|xxxx| rcall {call to address in register r}" -- same
+    // shape as rjmp, tag 0x9000 instead. Cross-checked against node 505's own live d1/main falling to
+    // d/rcall for the "1001" prefix.
+    new(Id: 192, RegisterCallMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValue, Tag: 0x9000, ValueBitMask: 0x000F),
+    // cbr (Id 193, REUSES the existing ConditionalBranchMnemonic ("cbr") constant -- see that
+    // constant's own remarks, this file's class-level remarks right after UnlinkMnemonic, for why no
+    // new name was needed and exactly which part of this shape is flagged rather than confirmed):
+    // table row "1010|....|cccc|xxxx| cbr {conditional long branch, relative}" -- bits 15-12 fixed
+    // "1010" (0xA000), bits 11-8 unused/don't-care, bits 7-4 a 4-bit "cond" field (mask 0x00F0, shift
+    // 4), bits 3-0 a 4-bit register field (mask 0x000F, shift 0), PLUS one trailing signed-offset word
+    // (CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord, added alongside this row -- see
+    // that enum case's own remarks for the full derivation and the flagged "cond" semantics). Cross-
+    // checked (bit layout and prefix only) against node 505's own live d1/main falling to
+    // d/conditional for the "1010" prefix.
+    new(Id: 193, ConditionalBranchMnemonic, 2, CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord, Tag: 0xA000, ValueBitMask: 0x00F0, ValueBitShift: 4, SecondValueBitMask: 0x000F),
+    // sbr (Id 194): table row "1011|oooo|oooo|oooo| sbr {short branch, relative}" -- bits 15-12 fixed
+    // "1011" (0xB000), bits 11-0 a 12-bit SIGNED relative offset ("o", per the table's own legend:
+    // "o: signed offset") embedded directly in the one word -- no trailing word at all, which is
+    // exactly what makes this branch "short" as opposed to cbr's own "long" one just above it in the
+    // table. CvmOperandEncoding.EmbeddedSignedValue, the same shape CVM2's OLD br/cbr used to use (see
+    // BranchTag's own remarks) -- fully self-describing, no node/linker involvement. Cross-checked
+    // against node 505's own live d1/main falling to d/branch for the "1011" prefix.
+    new(Id: 194, ShortBranchMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: 0xB000, ValueBitMask: 0x0FFF),
+    //
+    // ADDED 2026-10-02, Ids 195/196 -- per Stefan directly (a direct statement, not derived from the
+    // table text the way Ids 187-194 above were): "the address of 'ret, 'link and 'unlink label must
+    // be taken from node 507. ljmp and lcall must encode in a similar way like 'ret and their address
+    // also taken from labels 'ljmp and 'lcall in node 507. they are now special opcodes." Two things
+    // follow from this:
+    //
+    // (1) ret/link/unlink (Ids 184-186, just above -- unchanged here) are CORRECTED to resolve
+    // against node 507, not node 506 -- node 506 is still the table's own home (the "special" tag,
+    // 0x2000, still comes from node 506's own bit-pattern-table comment block), but the actual
+    // LABEL ADDRESSES these three resolve against live in node 507 instead. Per this file's own
+    // standing convention, a None/TrailingWord-shaped row carries no Tag/node of its own here at all
+    // -- that correction lives entirely on the IDE side; see
+    // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own NodeSymbolByMnemonic remarks for the actual
+    // fix (RetMnemonic/LinkMnemonic/UnlinkMnemonic's own NodeCoordinate changed from
+    // Node506Program.Coordinate to Node507Program.Coordinate).
+    //
+    // (2) lcall/ljmp JOIN this same "special" family (tag 0x2000) as two brand new rows. This
+    // SUPERSEDES lcall's OLD shape (Id 183, just above, now retired).
+    //
+    // SHAPE CORRECTED the same day, within hours: Stefan's own first wording ("encode in a similar
+    // way like 'ret") was initially taken to mean CvmOperandEncoding.None (no operand at all, exactly
+    // like ret/unlink) -- WRONG, per Stefan's own direct follow-up once this file's first attempt was
+    // shown to him: "the lcall and ljmp still have the address of the destination in the next word,
+    // so they still have 1 argument. fix that." Confirmed against the live node 507 source he then
+    // pasted:
+    //   : 'lcall ( - )        : 'ljmp ( - )             : 'ret ( - )
+    //     m/next                m/next a! ;               m/pop a! ;
+    //   : m/call ( adr - )
+    //     a m/push
+    //   : m/jump ( adr - )
+    //     a! ;
+    // 'lcall and 'ljmp BOTH call m/next FIRST (node 507's own "fetch the next word from memory and
+    // advance the instruction pointer" primitive -- the exact same primitive 'link already uses for
+    // its own trailing offset word) before doing anything else with the fetched value (adr) -- 'ret,
+    // by contrast, calls m/pop (pop the RETURN STACK, no memory fetch at all). So lcall/ljmp are
+    // CvmOperandEncoding.TrailingWord (2 words -- a node-507-resolved tag word, then one trailing
+    // operand word carrying the real far-call/far-jump target), shaped exactly like "link", NOT like
+    // "ret"/"unlink" -- "like 'ret" described only the SHARED TAG FAMILY (the "special" row, 0x2000),
+    // not literally ret's own own zero-operand shape. This also un-flags the "call" pseudo-mnemonic
+    // gap this file's own first attempt opened (see Id 183's own retirement remarks, just above) --
+    // "call" CAN still lower to lcall with a real address operand; see
+    // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own EncodeCallPseudoMnemonic remarks (and
+    // Ga144.Cvm.Toolchain.CvmAssembler's own pass-2 "call" case remarks) for how that lowering now
+    // resolves lcall's own tag through a live node-507 compile instead of a fixed, self-describing
+    // constant the way the OLD, retired Id 183 shape used to.
+    //
+    // d/main's own "special" dispatch in node 506 (not yet live -- see this file's own class-level
+    // remarks) independently corroborates the node-507 resolution for this whole family: node 505's
+    // own live d1/main source, pasted alongside this correction, falls to "d/save" for the "001*"
+    // prefix with the comment "// the encode address is from node 507" right there in Stefan's own
+    // F18 source.
+    //
+    // ljmp (LongJumpMnemonic, "ljmp") reuses CVM2's own old mnemonic STRING (Id 74 and, briefly, a
+    // node-407 entry further below -- both long retired) -- pure naming coincidence, same convention
+    // as ret's own two unrelated "ret"s. Neither lcall nor ljmp has ever had a "new VM"/CVM_pipeline
+    // row before this one; these are genuinely new Ids, not a repoint of an existing live row.
+    new(Id: 195, LongCallMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 196, LongJumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // ---------------------------------------------------------------------------------------------
     // new(Id: 1, PushLitMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // new(Id: 2, PushMnemonic, 1, CvmOperandEncoding.None),
@@ -2576,15 +2934,26 @@ public static class CvmInstructionSet
   /// behavior change for anything that came before it.
   ///
   /// <paramref name="nextWord"/> (ADDED 2026-09-30, same reason) is this word's own already-fetched
-  /// successor, needed ONLY to print a <see cref="CvmOperandEncoding.FixedOpcodeWithTrailingWord"/> shape's
-  /// real operand (lcall's own target address) -- this method decodes one word's own bit pattern in
-  /// isolation and has no memory/SRAM access of its own, so a caller walking a real program (see the IDE's
-  /// own Ga144.Evb.Ide.Services.CvmAssemblyLanguage.DisassemblePage0) must read that next word itself and
-  /// pass it in. Pass null (the default) when there is no next word to give (e.g. lcall's own tag word
-  /// happens to be the very last word in a truncated range) -- the mnemonic alone is still returned, just
-  /// without an operand.
+  /// successor, needed to print a <see cref="CvmOperandEncoding.FixedOpcodeWithTrailingWord"/> shape's
+  /// real operand (lcall's own target address, or next16's own literal -- see <paramref name="nextWord2"/>
+  /// for the cbr/next32 cases needing a further word still) -- this method decodes one word's own bit
+  /// pattern in isolation and has no memory/SRAM access of its own, so a caller walking a real program
+  /// (see the IDE's own Ga144.Evb.Ide.Services.CvmAssemblyLanguage.DisassemblePage0) must read that next
+  /// word itself and pass it in. Pass null (the default) when there is no next word to give (e.g. lcall's
+  /// own tag word happens to be the very last word in a truncated range) -- the mnemonic alone is still
+  /// returned, just without an operand.
+  ///
+  /// <paramref name="nextWord2"/> (ADDED 2026-10-02, alongside <see cref="CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords"/>
+  /// and <see cref="CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord"/> -- next32/cbr) is the
+  /// word AFTER <paramref name="nextWord"/>, needed only for a shape using one of those two encodings
+  /// (next32's own second 16 bits of its 32-bit literal; a second trailing word, were one ever added, for
+  /// cbr -- today cbr itself only consumes <paramref name="nextWord"/>, so this parameter is read by the
+  /// next32 loop alone for now). Same null-means-"not available" convention as <paramref name="nextWord"/>;
+  /// every pre-existing call site (today, exactly one real one outside this file --
+  /// Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own disassembler) needs no change at all, since this
+  /// parameter defaults to null and nothing before next32/cbr ever reads it.
   /// </summary>
-  public static string? TryDescribeSelfDecodingWord(int word, out int wordLength, int? wordAddress = null, int? nextWord = null)
+  public static string? TryDescribeSelfDecodingWord(int word, out int wordLength, int? wordAddress = null, int? nextWord = null, int? nextWord2 = null)
   {
     wordLength = 1;
 
@@ -2625,6 +2994,31 @@ public static class CvmInstructionSet
       return nextWord is int lcallTarget
           ? $"{fixedTagWithTrailingWordShape.Mnemonic} {FormatOperand(lcallTarget)}"
           : fixedTagWithTrailingWordShape.Mnemonic;
+    }
+
+    // ADDED 2026-10-02, for the "CVM_pipeline" table's own next32 (CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords
+    // -- see that enum case's own remarks). Same exact-tag loop pattern as the
+    // FixedOpcodeWithTrailingWord loop just above (next16/lcall), checked right after it -- grouping
+    // every EXACT-tag self-describing shape together, still well before the generalized,
+    // RANGE-based EmbeddedAddress loop below -- except TWO already-fetched words (nextWord, then
+    // nextWord2) are needed to print the full 32-bit literal, and either, both, or neither may be
+    // available to the caller; this prints as much as it has rather than requiring both.
+    foreach (CvmInstructionShape fixedTagWithTwoTrailingWordsShape in Instructions)
+    {
+      if (fixedTagWithTwoTrailingWordsShape.Encoding != CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords || word != fixedTagWithTwoTrailingWordsShape.Tag)
+      {
+        continue;
+      }
+
+      wordLength = 3;
+      if (nextWord is int next32High && nextWord2 is int next32Low)
+      {
+        return $"{fixedTagWithTwoTrailingWordsShape.Mnemonic} {FormatOperand(next32High)} {FormatOperand(next32Low)}";
+      }
+
+      return nextWord is int next32PartialOperand
+          ? $"{fixedTagWithTwoTrailingWordsShape.Mnemonic} {FormatOperand(next32PartialOperand)} ?"
+          : fixedTagWithTwoTrailingWordsShape.Mnemonic;
     }
 
     // ADDED 2026-09-30, for the new VM's own scall: CVM2's OLD call used to be a single hardcoded
@@ -2748,6 +3142,31 @@ public static class CvmInstructionSet
         int first = (word & shape.ValueBitMask) >> shape.ValueBitShift;
         int second = (word & shape.SecondValueBitMask) >> shape.SecondValueBitShift;
         return $"{shape.Mnemonic} {FormatOperand(first)} {FormatOperand(second)}";
+      }
+    }
+
+    // ADDED 2026-10-02, for the "CVM_pipeline" table's own cbr (CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord
+    // -- see that enum case's own remarks, and ConditionalBranchMnemonic's own remarks for the flagged,
+    // unconfirmed "cond" field semantics). Same tag-mask-excludes-both-fields matching as the
+    // EmbeddedUnsignedValuePair loop just above, except a trailing offset word follows the tag word --
+    // printed if the caller supplied one via nextWord, omitted otherwise, the same "print what's
+    // available" convention FixedOpcodeWithTrailingWord's own loop (lcall/next16) already uses.
+    foreach (CvmInstructionShape shape in Instructions)
+    {
+      if (shape.Encoding != CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord)
+      {
+        continue;
+      }
+
+      int tagMask = ~(shape.ValueBitMask | shape.SecondValueBitMask) & 0xFFFF;
+      if ((word & tagMask) == shape.Tag)
+      {
+        wordLength = 2;
+        int cond = (word & shape.ValueBitMask) >> shape.ValueBitShift;
+        int register = (word & shape.SecondValueBitMask) >> shape.SecondValueBitShift;
+        return nextWord is int cbrOffset
+            ? $"{shape.Mnemonic} {FormatOperand(cond)} {FormatOperand(register)} {FormatOperand(cbrOffset)}"
+            : $"{shape.Mnemonic} {FormatOperand(cond)} {FormatOperand(register)}";
       }
     }
 

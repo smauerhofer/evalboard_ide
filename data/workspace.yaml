@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-01T04:32:40.4372923
-      utcDateTime: 2026-10-01T04:32:40.4372923Z
-      localDateTime: 2026-10-01T06:32:40.4372923+02:00
-      date: 2026-10-01T00:00:00.0000000
-      day: 1
-      dayOfWeek: Thursday
-      dayOfYear: 274
-      hour: 4
-      millisecond: 437
-      microsecond: 292
-      nanosecond: 300
-      minute: 32
+      dateTime: 2026-10-02T11:04:39.8957119
+      utcDateTime: 2026-10-02T11:04:39.8957119Z
+      localDateTime: 2026-10-02T13:04:39.8957119+02:00
+      date: 2026-10-02T00:00:00.0000000
+      day: 2
+      dayOfWeek: Friday
+      dayOfYear: 275
+      hour: 11
+      millisecond: 895
+      microsecond: 711
+      nanosecond: 900
+      minute: 4
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 40
-      ticks: 639264259604372923
-      utcTicks: 639264259604372923
-      timeOfDay: 04:32:40.4372923
+      second: 39
+      ticks: 639265358798957119
+      utcTicks: 639265358798957119
+      timeOfDay: 11:04:39.8957119
       year: 2026
   portB: 
   portC:
@@ -65915,9 +65915,73 @@ projects:
       color: 
       postMortemEnabled: false
     - coordinate: 205
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: "( CVM_pipeline node 205.\n\ninstruction execution.\n\n\n)\n\r\n# down /b\r\n\r\nentry x2b/main\r\n\r\n# 0 org\r\n\n: x2b/main\n  @b\r\n  \n  x2b/main ;\n\r\n\r\n\r\n"
+      ramWords:
+      - 0x01700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -65926,12 +65990,76 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#7CDE95'
       postMortemEnabled: false
     - coordinate: 206
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: "( CVM_pipeline node 206.\n\ninstruction execution.\n\n\n)\n\r\n# down /b\r\n\r\nentry x2c/main\r\n\r\n# 0 org\r\n\n: x2c/main\n  @b\r\n  \n  x2c/main ;\n\r\n\r\n\r\n"
+      ramWords:
+      - 0x01700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -65940,12 +66068,76 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#7CDE7C'
       postMortemEnabled: false
     - coordinate: 207
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: "( CVM_pipeline node 207.\n\ninstruction execution.\n\n\n)\n\r\n# up /b\r\n\r\nentry x3a/main\r\n\r\n# 0 org\r\n\n: x3a/main\n  @b\r\n  \n  x3a/main ;\n\r\n\r\n\r\n"
+      ramWords:
+      - 0x01700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -65954,12 +66146,76 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#95DE7C'
       postMortemEnabled: false
     - coordinate: 208
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: "( CVM_pipeline node 208.\n\ninstruction execution.\n\n\n)\n\r\n# up /b\r\n\r\nentry x4a/main\r\n\r\n# 0 org\r\n\n: x4a/main\n  @b\r\n  \n  x4a/main ;\n\r\n\r\n\r\n"
+      ramWords:
+      - 0x01700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -65968,12 +66224,76 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#ADDE7C'
       postMortemEnabled: false
     - coordinate: 209
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: "( CVM_pipeline node 209.\n\ninstruction execution.\n\n\n)\n\r\n# up /b\r\n\r\nentry x4b/main\r\n\r\n# 0 org\r\n\n: x4b/main\n  @b\r\n  \n  x4b/main ;\n\r\n\r\n\r\n"
+      ramWords:
+      - 0x01700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -65982,7 +66302,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#C6DE7C'
       postMortemEnabled: false
     - coordinate: 210
       enabled: false
@@ -66167,9 +66487,73 @@ projects:
       color: 
       postMortemEnabled: false
     - coordinate: 305
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: "( CVM_pipeline node 305.\n\ninstruction execution.\n\n\n)\n\r\n# up /b\r\n\r\nentry x2a/main\r\n\r\n# 0 org\r\n\n: x2a/main\n  @b\r\n  \n  x2a/main ;\n\r\n\r\n\r\n"
+      ramWords:
+      - 0x01700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -66178,7 +66562,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#7CDEAD'
       postMortemEnabled: false
     - coordinate: 306
       enabled: true
@@ -66186,7 +66570,7 @@ projects:
         ( CVM_pipeline node 306.
 
 
-        instruction execute.
+        instruction execution.
 
 
         register fetch
@@ -66276,7 +66660,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#7CDEAD'
+      color: '#7CDE95'
       postMortemEnabled: false
     - coordinate: 307
       enabled: true
@@ -66301,7 +66685,71 @@ projects:
 
         : x3/main
           x3/main ;
-      ramWords: []
+      ramWords:
+      - 0x11400
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -66310,7 +66758,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#7CDE95'
+      color: '#95DE7C'
       postMortemEnabled: false
     - coordinate: 308
       enabled: true
@@ -66335,7 +66783,71 @@ projects:
 
         : x4/main
           x4/main ;
-      ramWords: []
+      ramWords:
+      - 0x11400
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -66344,12 +66856,76 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#7CDE7C'
+      color: '#C6DE7C'
       postMortemEnabled: false
     - coordinate: 309
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: "( CVM_pipeline node 209.\n\ninstruction execution.\n\n\n)\n\r\n# up /b\r\n\r\nentry x4c/main\r\n\r\n# 0 org\r\n\n: x4c/main\n  @b\r\n  \n  x4c/main ;\n\r\n\r\n\r\n"
+      ramWords:
+      - 0x01700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -66358,7 +66934,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#DEDE7C'
       postMortemEnabled: false
     - coordinate: 310
       enabled: false
@@ -66543,9 +67119,73 @@ projects:
       color: 
       postMortemEnabled: false
     - coordinate: 405
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: "( CVM_pipeline node 405.\n\ninstruction execution.\n\n\n)\n\r\n# down /b\r\n# left /a\r\n\r\nentry x1a/main\r\n\r\n# 0 org\r\n\n: x1a/main\n  @b >r ex\n  x1a/main ;\n\r\n  \r\n\r\n: x1a/direct16 ( )\r\n;\r\n\r\n: x1a/direct32 ( )\r\n;\r\n\r\n: x1a/other ( )\r\n;\r\n\r\n\r\n"
+      ramWords:
+      - 0x0085D
+      - 0x11400
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -66554,194 +67194,68 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#7CDEC6'
       postMortemEnabled: false
     - coordinate: 406
       enabled: true
-      sourceCode: >+
-        ( CVM_pipeline node 406.
-
-
-        instruction execute.
-
-
-        read register
-
-          read16-1:
-            in: [x1/read16-1] r
-
-          read32-2:
-            in: [x1/read32-2] r
-
-          immediate-with-register-16bit:
-            in: [x1/immediate-with-register-16bit] r w const
-
-          immediate-with-register-32bit:
-            in: [x1/immediate-with-register-32bit] r hi lo const
-
-
-        )
-
-        # 407 import
-
-
-        # down /b     // node 506
-
-        # up /a       // node 306
-
-
-        entry x1/main
-
-
-        # 0 org
-
-
-        : x1/wfocus ( - )
-          right b!
-          A[ r/focus_408 ]] lit !b !b
-          down b! ;
-
-        : x1/rfocus ( r - )
-          right b!
-          A[ r/focus_406 ]] lit !b !b
-        : x1/reg ( r - )
-          A[ @p a! ]] lit !b ;
-
-        : x1/defocus2 ( - ) leap
-
-        : x1/defocus ( - ) then
-          A[ ; ]] lit !b down b! ;
-
-
-        : x1/r@ ( - w )
-          A[ @+ !p ]] lit !b
-          @b ;
-
-        // : x1/r! ( w - )
-
-        //  A[ @p !+ ]] lit !b
-
-        //  !b ;
-
-
-
-
-        : x1/main
-          @b >r ex
-          x1/main ;
-
-        : x1/get ( w - ) !b ;
-
-
-        : x1/read16-2 ( w1 w2 ) leap
-
-        : x1/read16-1 ( w ) then
-          @b x1/rfocus x1/r@ x1/defocus ;
-
-        : x1/read32-2 ( lo1 hi1 lo2 hi2 ) leap
-
-        : x1/read32-1 ( lo hi ) then
-          @b 2* x1/rfocus x1/r@ x1/r@ x1/defocus ;
-
-        : x1/binary-16
-          @b !             // operation
-          x1/read16-2
-          ! !
-          @b !             // destination register
-        ;
-
-
-        : x1/binary-32
-          @b !             // operation
-          x1/read32-2
-          ! ! ! !
-          @b !             // destination register
-        ;
-
-
-        : x1/unary-16
-          @b !             // operation
-          x1/read16-1
-          !
-          @b !             // destination register
-        ;
-
-
-        : x1/unary-32
-          @b !             // operation
-          x1/read32-1
-          ! ! 
-          @b !             // destination register
-        ;
-
-
-        : x1/immediate-with-register-32bit
-          @b !             // operation
-          x1/read32-1
-          ! ! @b ! dup xor !
-          @b !             // destination register
-        ;
-
-
-
-
+      sourceCode: "( CVM_pipeline node 406.\n\ninstruction execution.\n\nread register.\ncondition evaluation.\r\n\r\ncond:\r\n\r\nlabel  | name   | description\r\n-------+--------+-----------------------------\r\n'==0   | ==0    | branch if r == 0\n'!=0   | !=0    | branch if r != 0\n'<0    | <0     | branch if r < 0\n'<=0   | <=0    | branch if r <= 0\n'>0    | >0     | branch if r > 0\n'>=0   | >=0    | branch if r >= 0\n'true  | true   | branch always\n'false | false  | branch never\n'even  | even   | branch if r is even\n'odd   | odd    | branch if r is odd\n\n)\n# 407 import\n\n# -dl- /b     // node 506\n# up /a       // node 306\n# -dl- /p\n\n\n# 0x02 org\n\r\n: x1/eq0 ( w - f )\r\n: '==0 .loc ( w - f )\r\n  if\r\n: x1/false ( w - 0 ) \r\n: 'false .loc ( w - f )\r\n  dup xor ;\r\n  then\r\n: x1/true ( w = 1 )\r\n: 'true .loc ( w - f )\r\n  drop 1 ;\r\n: x1/ne0 ( w - f )\r\n: '!=0 .loc ( w - f )\r\n  # x1/false until x1/true ;\r\n: '<=0 .loc ( w - f )\r\n  # x1/true until\r\n: '<0 .loc ( w - f )\r\n  0x8000 and x1/ne0 ;\r\n: '>0 .loc ( w - f )\r\n  # x1/false until\r\n: '>=0 .loc ( w - f )\r\n  0x8000 and x1/eq0 ;\r\n\r\n\r\n: x1/odd ( w - f )\r\n  1 and\r\n  x1/ne0 ;\r\n\r\n: x1/even ( w - f )\r\n  1 and\r\n  x1/eq0 ;\r\n\r\n: x1/defocus2 ( - ) leap\n: x1/defocus ( - ) then\n  A[ ; ]] lit !b\n: x1/back\n  # -dl- lit b! ;\n\n: x1/rfocus ( r - )\n  right b!\n  A[ r/focus_w ]] lit !b !b\n: x1/reg ( r - )\n  A[ @p a! ]] lit !b ;\n\n: x1/r@ ( - w )\n  A[ @+ !p ]] lit !b\n  @b ;\n\n: x1/main\n  @b >r ex\n  x1/main ;\n\n: x1/get ( w - ) !b ;\n\n: x1/read16-2 ( - w1 w2 ) leap\n: x1/read16-1 ( - w ) then\n  @b x1/rfocus x1/r@ x1/defocus ;\n\n: x1/read32-2 ( - lo1 hi1 lo2 hi2 ) leap\n: x1/read32-1 ( - lo hi ) then\n  @b 2* x1/rfocus x1/r@ x1/r@ x1/defocus ;\n\r\n: x1/cond ( op - f )\r\n  // receive opcode with xxcr\r\n  // c: condition\r\n  // r: register\r\n  // return x\r\n  //   x == 0: false\r\n  //   x != 0: true\r\n  dup 0xf and x1/rfocus\r\n  2/ 2/ 2/ 2/ 0xf and >r\r\n  x1/read16-1 x1/defocus ;\r\n  \r\n# 0 org\n\r\n: 'even .loc ( w - f )\r\n  x1/even ;\r\n : 'odd .loc ( w - f )\r\n  x1/odd ;\r\n\n\n"
       ramWords:
+      - 0x11413
+      - 0x11410
+      - 0x19404
+      - 0x24355
+      - 0x3BD55
+      - 0x00001
+      - 0x19403
+      - 0x11404
+      - 0x19404
+      - 0x040B2
+      - 0x08000
+      - 0x11406
+      - 0x19403
+      - 0x040B2
+      - 0x08000
+      - 0x11402
+      - 0x040B2
+      - 0x00001
+      - 0x11406
+      - 0x040B2
+      - 0x00001
+      - 0x11402
+      - 0x13417
+      - 0x05BB2
+      - 0x15555
+      - 0x04B55
+      - 0x00135
       - 0x04B12
       - 0x001D5
-      - 0x13422
-      - 0x09B12
-      - 0x00115
-      - 0x29555
-      - 0x04B12
-      - 0x001D5
-      - 0x1341A
+      - 0x13418
       - 0x09BB2
       - 0x05B55
       - 0x04AB2
-      - 0x1340D
-      - 0x05B12
-      - 0x15555
-      - 0x00115
-      - 0x29555
       - 0x05B05
       - 0x079B2
       - 0x0085D
-      - 0x11413
+      - 0x11423
       - 0x09555
-      - 0x13417
-      - 0x01606
-      - 0x13411
-      - 0x1140D
-      - 0x1341B
+      - 0x13427
+      - 0x0161B
+      - 0x13421
+      - 0x11417
+      - 0x1342B
       - 0x004B2
-      - 0x13406
-      - 0x13411
-      - 0x13411
-      - 0x1140D
-      - 0x01AB2
-      - 0x13416
-      - 0x0BA02
-      - 0x0B555
-      - 0x01AB2
-      - 0x1341A
-      - 0x0BA2A
-      - 0x0BF2D
-      - 0x01AB2
-      - 0x13417
-      - 0x0BF2D
-      - 0x01AB2
       - 0x1341B
-      - 0x0BA02
-      - 0x0B555
-      - 0x01AB2
+      - 0x13421
+      - 0x13421
+      - 0x11417
+      - 0x25DFA
+      - 0x0000F
       - 0x1341B
-      - 0x0BA02
-      - 0x0ADE2
-      - 0x0BF2D
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x307C2
+      - 0x31DFA
+      - 0x0000F
+      - 0x2F627
+      - 0x11417
       - 0x15555
       - 0x15555
       - 0x15555
@@ -66751,7 +67265,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x013
+        entryPoint: 0x135
         p: 0x000
         a: 0x000
         b: 0x000
@@ -66808,13 +67322,11 @@ projects:
         : r/focus ( port - ) dup b! >r ;
 
 
-        : r/focus_507 ( - ) down r/focus ;
+        : r/focus_n ( - ) # down lit r/focus ;
 
-        : r/focus_406 ( - ) right r/focus ;
+        : r/focus_w ( - ) # right lit r/focus ;
 
-        : r/focus_307 ( - ) up r/focus ;
-
-        : r/focus_408 ( - ) left r/focus ;
+        : r/focus_se ( - ) # --lu lit r/focus ;
 
 
         : r/@ @b a! @ !b ;
@@ -66886,9 +67398,7 @@ projects:
       - 0x05715
       - 0x001D5
       - 0x05715
-      - 0x00145
-      - 0x05715
-      - 0x00175
+      - 0x00165
       - 0x00A0A
       - 0x09555
       - 0x00A02
@@ -66905,10 +67415,10 @@ projects:
       - 0x3FFFF
       - 0x2C192
       - 0x0B555
-      - 0x0562A
+      - 0x05628
       - 0x00013
       - 0x3BB55
-      - 0x05626
+      - 0x05624
       - 0x00013
       - 0x09555
       - 0x04A1A
@@ -66923,6 +67433,8 @@ projects:
       - 0x00012
       - 0x09F3A
       - 0x0B555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x1A5
         p: 0x000
@@ -66956,7 +67468,71 @@ projects:
 
         : x5/main
           x5/main ;
-      ramWords: []
+      ramWords:
+      - 0x11400
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -66965,12 +67541,76 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#DEDE7C'
+      color: '#DEC67C'
       postMortemEnabled: false
     - coordinate: 409
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: "( CVM_pipeline node 409.\n\ninstruction execution.\n\n\n)\n\r\n# up /b\r\n\r\nentry x5a/main\r\n\r\n# 0 org\r\n\n: x5a/main\n  @b\r\n  \n  x5a/main ;\n\r\n\r\n\r\n"
+      ramWords:
+      - 0x01700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -66979,7 +67619,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#DEC67C'
       postMortemEnabled: false
     - coordinate: 410
       enabled: false
@@ -67165,7 +67805,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 505
       enabled: true
-      sourceCode: >
+      sourceCode: >+
         ( CVM_pipeline node 505.
 
 
@@ -67175,12 +67815,17 @@ projects:
 
         )
 
-        # 507 import
+        # 405 import
 
         # 506 import
 
+        # 507 import
+
+
 
         # left /b
+
+        # down /a
 
 
         entry d1/main
@@ -67189,140 +67834,178 @@ projects:
         # 0 org
 
 
-        : d1/main
-          # d1/main lit >r
-          A[ dup !p ]] lit !b @b dup
-          ( x x )
-          2* 2* . -if
+        : d1/continue2 ( w addr - )
+          !
+        : d1/continue1 ( addr - )
+          !
+        : d1/finish ( )
+          A[ ; ]] lit !b
+        : d1/main ( )
+          # d1/finish lit >r
+          @b dup
+          ( op x? )
+          2* if
+
             2* -if
+
+              // 1* 
               2* -if
-                2* -if
-                  2* -if
-                    2* -if
-                      // implied
-                      drop dup 7 and
-                      if // some other node
-                      then
-                      drop 2/ 2/ 2/ 0x3f and
-                      A[ @p >r ; ]] lit !b !b ;
-                    then
-                    // implied with next
-                      A[ d/implied-with-next ; ]] lit !b ;
-                  then
-                  // long branch/call
-                  2* -if
-                    2* -if
-                      // long branch always
-                      A[ d/long-branch-always ; ]] lit !b ;
-                    then
-                    // long branch if
-                    A[ d/long-branch-if ; ]] lit !b ;
-                  then
-                  // long call
-                  A[ d/long-call ; ]] lit !b ;
-                then
-                // unary
-                2* -if
-                  // unary32 bit
-                  A[ d/unary-32bit ; ]] lit !b ;
-                then
-                // unary16 bit
-                A[ d/unary-16bit ; ]] lit !b ;
+                // 11* other
+                # x1a/other lit d1/continue2 ;
               then
-              // binary
+
+              // 10*
               2* -if
-                // binary 32 bit
-                A[ d/binary-32bit ; ]] lit !b ;
+
+                // 101*
+                2* -if
+
+                  // 1011* short branch
+                  2* 2/ 2/ 2/ 2/ 2/ 2/ A[ @p d/branch ]] lit !b !b ;
+
+                then
+
+                // 1010* conditional long branch
+                drop A[ @p d/conditional ]] lit !b !b ;
+
+
               then
-              // binary 16 bit
-              A[ d/binary-16bit ; ]] lit !b ;
+
+              // 100*
+              2* -if
+
+                // 1001* register call
+                drop A[ @p d/rcall ]] lit !b !b ;
+
+              then
+
+              // 1000* register jump
+              drop A[ @p d/rjump ]] lit !b !b ;
+
             then
-            // immediate
+
+            // 0*
             2* -if
-              // immediate 32 bit
-              A[ d/immediate-with-register-32bit ; ]] lit !b ;
+
+              // 01* 
+              2* -if
+
+                // 010*
+                2* -if
+
+                  // 0111* pop32
+                  A[ d/pop2 ]] lit d1/direct32 ;
+
+                then
+                // 0110* pop 16
+                A[ d/pop1 ]] lit d1/direct16 ;
+
+              then
+
+              // 010*
+              2* -if
+
+                // 0101* next32
+                A[ d/next2 ]] lit d1/direct32 ;
+              then
+
+              // 0100* next16
+              A[ d/next1 ]] lit d1/direct16 ;
             then
-            // immediate 16 bit
-            A[ d/immediate-with-register-16bit ; ]] lit !b ;
-          then
-          // immediate branch/call
-          2* -if
+
+            // 00*
             2* -if
-              // branch always
-              A[ d/branch-always ; ]] lit !b ;
+
+              // 001* special
+              // the encode address is from node 507
+              drop A[ @p d/save ]] lit !b !b ;
             then
-            // branch if
-            A[ d/branch-if ; ]] lit !b ;
+
+            // 000* scall
+            drop A[ @p d/call ]] lit !b !b ;
           then
-          // short call
-          A[ d/short-call ; ]] lit !b ;
+          ;
+
+        : d1/postpone ( addr - )
+          A[ @p d/postpone ; ]] lit !b !b ;
+
+        : d1/direct16
+          # x1a/direct16 lit # d/pass1 lit
+        : d1/direct
+          A[ @p d1/postpone ; ]] lit
+          !b !b ! ;
+
+        : d1/direct32
+          # x1a/direct32 lit # d/pass2 lit
+          d1/direct ;
+
       ramWords:
-      - 0x04812
-      - 0x00000
-      - 0x259B2
-      - 0x09F92
-      - 0x364B2
-      - 0x1B42C
-      - 0x37227
-      - 0x37222
-      - 0x3721D
+      - 0x0A9B2
+      - 0x0A9B2
+      - 0x05BB2
+      - 0x15555
+      - 0x04803
+      - 0x00002
+      - 0x37333
+      - 0x3721C
+      - 0x3720B
+      - 0x05700
+      - 0x00004
       - 0x37215
-      - 0x37213
-      - 0x3AD12
-      - 0x00007
-      - 0x3F30E
-      - 0x3A7C2
-      - 0x31DFF
-      - 0x0003F
-      - 0x04855
-      - 0x09B55
-      - 0x05B55
-      - 0x11417
-      - 0x3721B
+      - 0x37212
+      - 0x367C2
+      - 0x307C2
+      - 0x31D22
+      - 0x0560C
+      - 0x09555
+      - 0x3BD22
+      - 0x05626
+      - 0x09555
       - 0x37219
-      - 0x05B55
-      - 0x11417
-      - 0x05B55
-      - 0x11417
-      - 0x05B55
-      - 0x1141C
-      - 0x37220
-      - 0x05B55
-      - 0x1141C
-      - 0x05B55
-      - 0x1141C
+      - 0x3BD22
+      - 0x0562D
+      - 0x09555
+      - 0x3BD22
+      - 0x05630
+      - 0x09555
+      - 0x3722C
       - 0x37225
-      - 0x05B55
-      - 0x1141C
-      - 0x05B55
-      - 0x1141C
-      - 0x3722A
-      - 0x05B55
-      - 0x1141C
-      - 0x05B55
-      - 0x1141C
-      - 0x37232
+      - 0x37222
+      - 0x049B2
+      - 0x13416
+      - 0x1143C
+      - 0x049B2
+      - 0x13417
+      - 0x11436
+      - 0x37229
+      - 0x049B2
+      - 0x13410
+      - 0x1143C
+      - 0x049B2
+      - 0x13411
+      - 0x11436
       - 0x37230
-      - 0x05B55
-      - 0x1141C
-      - 0x05B55
-      - 0x1141C
-      - 0x05B55
-      - 0x1141C
+      - 0x3BD22
+      - 0x05609
+      - 0x09555
+      - 0x3BD22
+      - 0x05604
+      - 0x09555
       - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x05B25
+      - 0x05724
+      - 0x05DB2
+      - 0x00002
+      - 0x0001A
+      - 0x05B22
+      - 0x05734
+      - 0x0B555
+      - 0x05D41
+      - 0x00003
+      - 0x00019
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x004
         p: 0x000
         a: 0x000
         b: 0x000
@@ -67333,237 +68016,66 @@ projects:
       postMortemEnabled: true
     - coordinate: 506
       enabled: true
-      sourceCode: >+
-        ( CVM_pipeline node 506.
-
-
-        instruction decode.
-
-
-        1111|11
-
-        5432|1098|7654|3210|
-
-        ----+----+----+----+----------------------------
-
-        0000|0000|0000|0000| nop
-
-        00aa|aaaa|aaaa|aaaa| short call
-
-        010o|oooo|oooo|rrrr| branch if r == 0
-
-        011o|oooo|oooo|oooo| branch always
-
-        100b|bbbb|iiii|rrrr| immediate with register {16 bit}
-
-        101b|bbbb|iiii|rrrr| immediate with register {32 bit}
-
-        1100|cccc|yyyy|xxxx| binary {16 bit}
-
-        1101|cccc|yyyy|xxxx| binary {32 bit}
-
-        1110|0ddd|dddd|xxxx| unary {16 bit}
-
-        1110|1ddd|dddd|xxxx| unary {32 bit}
-
-        1111|00..|....|....| long call
-
-        1111|010.|cond|rrrr| long branch if cond{r}
-
-        1111|011.|....|....| long branch always
-
-        1111|10ff|ffff|feee| implied with next
-
-        1111|11ff|ffff|feee| implied 
-
-
-        a: absolute address
-
-        b: immediate instruction
-
-        c: binary instruction address {address in corresponing node}
-
-        d: unary instruction address {address in corresponing node}
-
-        e: node identifier
-
-        f: instruction address  {address in corresponing node}
-
-        i: immediate unsigned value
-
-        o: signed offset
-
-        cond: condition
-
-        x: parameter1 binary: x = x op y
-
-        y: parameter2
-
-        .: unused bit
-
-
-
-        )
-
-        # 507 import
-
-        # 406 import
-
-
-        # right /b
-
-        # down /a
-
-
-        entry d/main
-
-
-        # 0 org
-
-
-        : d/main
-          @b if --l- then
-          A[ ; ]] lit !b
-          d/main ;
-
-        : d/save1 ( instr_addr w - )
-          A[ @p ]] lit !b !b
-        : d/save ( instr_addr - )
-          A[ @p m/exec_save ]] lit !b !b ;
-
-        : d/next ( - w )
-          A[ m/next ]] lit !b
-          A[ !p ]] lit !b @b ;
-
-        : d/r16 ( r - w )
-          A[ x1/read16-1 ]] lit ! 0xf and ! A[ x1/get ]] lit ! @ ;
-
-        : d/jump ( a - )
-          A[ m/jump ]] lit !b !b ;
-
-        : 'ret
-          # m/ret lit d/save ;
-        //  A[ m/ret ; ]] lit !b ;
-
-
-        : 'link
-          # m/link lit d/save ;
-
-        : 'unlink
-          # m/unlink lit d/save ;
-
-
-        : d/implied
-
-
-        : d/implied-with-next
-
-
-        : d/long-branch-always
-
-
-        : d/long-branch-if
-          d/r16
-          d/next
-          over if ; then
-          d/jump
-        ;
-
-
-        : d/long-call
-
-
-        : d/unary-32bit
-
-
-        : d/unary-16bit
-
-
-        : d/binary-32bit
-
-
-        : d/binary-16bit
-
-
-        : d/immediate-with-register-32bit
-
-
-        : d/immediate-with-register-16bit
-
-
-        : d/branch-always
-
-
-        : d/branch-if
-
-
-        : d/short-call ( code-addr - )
-          >r
-          # m/call lit
-          r>
-          d/save1 ;
-
-
-
+      sourceCode: "( CVM_pipeline node 506.\n\ninstruction decode.\n\n1111|11\n5432|1098|7654|3210|\n----+----+----+----+----------------------------\n0000|0000|0000|0000| nop\n000a|aaaa|aaaa|aaaa| scall\n0010|0000|00ww|wwww| special {ink, unlink, ret, lcall, ljmp}\n0100|    |    |    | next16\n0101|    |    |    | next32\n0110|    |    |    | pop16\n0111|    |    |    | pop32\n1000|....|....|xxxx| rjmp {jump to address in register r}\n1001|....|....|xxxx| rcall {call to address in register r}\n1010|....|cccc|xxxx| cbr {conditional long branch, relative}\n1011|oooo|oooo|oooo| sbr {short branch, relative}\n\n11  |    |    |    | other\n----+----+----+----+----------------------------------------\n1100|0www|wwww|weee| implied\n1100|1   |iiii|xxxx| immediate\n1101|0   |    |xxxx| unary {16 bit}\n1101|1   |yyyy|xxxx| binary {16 bit}\n1110|0   |    |xxxx| unary {32 bit}\n1110|1   |yyyy|xxxx| binary {32 bit}\n1111|0   |    |xxxx| unary {32 bit float}\n1111|1   |yyyy|xxxx| binary {32 bit float}\n\na: absolute address\nb: immediate instruction\nc: binary instruction address {address in corresponing node}\nd: unary instruction address {address in corresponing node}\ne: node identifier\nf: instruction address  {address in corresponing node}\ni: immediate unsigned value\no: signed offset\ncond: condition\nx: parameter1 binary: x = x op y\ny: parameter2\n.: unused bit\n\n)\r\n# 406 import\n# 507 import\n\n# right /b\n# left /a\n\nentry d/main\n\n# 0 org\n\n: d/main\n  @b ! --l- A[ ; ]] lit !b d/main ;\n\r\n\r\n: d/call ( a - )\n  >r # m/call lit r>\n: d/save1 ( instr_addr w - )\n  A[ @p ]] lit d/send1\n: d/save ( instr_addr - )\n  A[ @p m/exec_save ]] lit\n: d/send1 ( w command - )\n  !b !b ;\n\n: d/branch ( offset - )\n  A[ @p m/branch ]] lit d/send1 ;\n\n: d/jump ( a - )\n  A[ @p m/jump ]] lit d/send1 ;\r\n\n\r\n\n// : d/call ( a - )\r\n//  >r\n//  # m/call lit\n//  r>\n// : d/save1 ( instr_addr w - )\n//  A[ @p ]] lit !b !b\n// : d/save ( instr_addr - )\n//  A[ @p m/exec_save ]] lit !b !b ;\n\r\n\r\n// : d/branch ( offset - )\r\n//  A[ @p m/branch ]] lit !b !b ;\n\n// : d/jump ( a - )\n//   A[ @p m/jump ]] lit !b !b ;\n\n: d/next2 ( - w1 w2 ) leap\n: d/next1 ( - w ) then\n  A[ m/next ]] lit\n: d/get !b\n  A[ !p ]] lit !b @b ;\n\n: d/pop2 ( - w1 w2 ) leap\n: d/pop1 ( - w ) then\n  A[ m/pop ]] lit d/get ;\n\n: d/pass2 ( w1 w2 - ) leap\r\n: d/pass1 ( w - ) then\r\n  down b!\r\n  !b !b\r\n  right b!\r\n;\r\n\r\n: d/get1 ( - w )\r\n  down b!\r\n  A[ !p ]] lit !b @b\r\n  right b!\r\n;\n\n\r\n: d/postpone ( addr - )\r\n  r> over >r >r drop ;\r\n  \r\n: d/conditional ( op - )\n  A[ @p x1/cond ]] lit d/pass2\n  d/get1                     // flag\n  d/next1                    // flag offset\n  >r\n  if\n    r> d/branch ;\n  then\n  r> drop ;\r\n\r\n: d/rcall ( r - )\r\n  A[ @p m/call ]] lit d/rreg ;\r\n: d/rjump ( r - )\r\n  A[ @p m/jump ]] lit \r\n: d/rreg ( r m-op - w )\r\n  !b\r\n  down b!\r\n  # x1/read16-1 lit !b !b\r\n  # x1/get lit !b @b\r\n  right b!\r\n  !b ;\r\n\r\n\n\n\n"
       ramWords:
-      - 0x01302
+      - 0x01AB2
       - 0x13575
       - 0x05B40
       - 0x15555
-      - 0x05B22
-      - 0x049B2
-      - 0x05B25
-      - 0x0560C
-      - 0x05B12
-      - 0x1343B
-      - 0x0C9B2
-      - 0x09F55
-      - 0x05A12
-      - 0x13417
-      - 0x0000F
-      - 0x3FA12
-      - 0x13415
-      - 0x0BE55
-      - 0x05B25
-      - 0x1342E
-      - 0x05706
-      - 0x0002F
-      - 0x05706
-      - 0x00031
-      - 0x05706
-      - 0x00035
-      - 0x1340C
-      - 0x13408
-      - 0x2131E
-      - 0x15555
-      - 0x11412
       - 0x2FD9A
-      - 0x0002D
-      - 0x11404
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x0003B
+      - 0x049B2
+      - 0x049B2
+      - 0x1340B
+      - 0x049B2
+      - 0x05615
+      - 0x09B55
+      - 0x0570B
+      - 0x05605
+      - 0x0570B
+      - 0x0563C
+      - 0x13411
+      - 0x049B2
+      - 0x13400
+      - 0x09D22
+      - 0x0C9B2
+      - 0x01555
+      - 0x13417
+      - 0x05713
+      - 0x13418
+      - 0x1341A
+      - 0x04B22
+      - 0x00115
+      - 0x09DA5
+      - 0x001D5
+      - 0x04B12
+      - 0x00115
+      - 0x0C9B2
+      - 0x09F12
+      - 0x001D5
+      - 0x29555
+      - 0x26FBA
+      - 0x2E255
+      - 0x05619
+      - 0x05630
+      - 0x1341E
+      - 0x13411
+      - 0x2F32C
+      - 0x2770C
+      - 0x26255
+      - 0x049B2
+      - 0x0563B
+      - 0x11432
+      - 0x049B2
+      - 0x0563C
+      - 0x09DA7
+      - 0x00115
+      - 0x00027
+      - 0x09B12
+      - 0x00025
+      - 0x09F12
+      - 0x001D5
+      - 0x29B55
       - 0x15555
       - 0x15555
       - 0x15555
@@ -67621,6 +68133,9 @@ projects:
         # 0 org
 
 
+        : m/usend ( command - )
+          up b! !b ;
+
         : m/next ( - w )
           dup xor m/pc++
           ( 0 a )
@@ -67630,10 +68145,10 @@ projects:
 
         : m/pc++ ( - adr )
           1
-        : m/pc+ ( offset - adr )
+        : m/branch ( offset - adr )
           a dup >r . + 0xffff and a! r> ;
 
-        : m/unlink ( - )
+        : 'unlink ( - )
           1 A[ r/unlink ]] lit m/rsend @b
           ( 1 adr )
           m/read
@@ -67641,7 +68156,7 @@ projects:
           down b! !b ;
 
         : m/focus ( - )
-          A[ r/focus_507 ]] lit m/rsend ;
+          A[ r/focus_n ]] lit m/rsend ;
 
         : m/defocus ( - )
           A[ r/defocus ]] lit m/rsend ;
@@ -67650,26 +68165,67 @@ projects:
           >r m/focus
           ex m/defocus ;
 
+
         : m/pop ( - w )
           A[ r/pop ]] lit m/rsend
           1 @b
-          ( p 1 )
         : m/read ( p a - w )
-          up b!         // select node 607
-          A[ mem/rdup ]] lit !b
-          !b !b @b ;  
+          A[ mem/rdup ]] lit m/usend
+          !b !b @b ;
 
-
+        : 'push ( - )
+          m/next
         : m/push ( w - )
           A[ r/push ]] lit m/rsend
           1 @b
-          ( w p a )
         : m/write ( w p a - )
-          up b!         // select node 607
-          A[ mem/wrup ]] lit !b
-          !b !b !b ;  
+          A[ mem/wrup ]] lit m/usend
+          !b !b !b ;
 
-        : m/link ( - )
+        : m/nextinstr ( - )
+          m/pc++
+          A[ mem/rdupinstr ]] lit m/usend
+          !b @b
+          right b! !b
+          r---
+          --l- ;
+
+
+        // : m/pop ( - w )
+
+        //   A[ r/pop ]] lit m/rsend
+
+        //   1 @b
+
+        //   ( p 1 )
+
+        // : m/read ( p a - w )
+
+        //   up b!         // select node 607
+
+        //   A[ mem/rdup ]] lit !b
+
+        //   !b !b @b ;  
+
+
+        // : m/push ( w - )
+
+        // A[ r/push ]] lit m/rsend
+
+        //   1 @b
+
+        //   ( w p a )
+
+        // : m/write ( w p a - )
+
+        //   up b!         // select node 607
+
+        //   A[ mem/wrup ]] lit !b
+
+        //   !b !b !b ;  
+
+
+        : 'link ( - )
           m/next
           A[ r/link ]] lit m/rsend
           @b >r                      // receive save address
@@ -67678,24 +68234,40 @@ projects:
           1 r>                       // old FP, page, address
           m/write ;
 
-        : m/nextinstr  ( - )
-          ( fetch next instruction )
-          m/pc++
-          up b!         // select node 607
-          A[ mem/rdupinstr ]] lit !b
-          !b @b
-          ( opcode )
-          right b! !b
-          r---
-        ;
+        // : m/nextinstr  ( - )
+
+        //   ( fetch next instruction )
+
+        //   m/pc++
+
+        //   up b!         // select node 607
+
+        //   A[ mem/rdupinstr ]] lit !b
+
+        //   !b @b
+
+        //   ( opcode )
+
+        //   right b! !b   // send opcode to node 506
+
+        //   r---          // yield control to node 506
+
+        //   --l-          // yield control to node 508
+
+        // ;
 
 
+        : 'lcall ( - )
+          m/next
         : m/call ( adr - )
           a m/push
         : m/jump ( adr - )
           a! ;
 
-        : m/ret ( - )
+        : 'ljmp ( - )
+          m/next a! ;
+
+        : 'ret ( - )
           m/pop a! ;
 
 
@@ -67706,9 +68278,11 @@ projects:
 
 
       ramWords:
+      - 0x04B25
+      - 0x00145
       - 0x243B2
-      - 0x13403
-      - 0x1141C
+      - 0x13405
+      - 0x1141E
       - 0x049B2
       - 0x00001
       - 0x22DBA
@@ -67717,58 +68291,56 @@ projects:
       - 0x2AC55
       - 0x05DB2
       - 0x00001
-      - 0x1343C
-      - 0x1340F
+      - 0x1343A
+      - 0x13411
       - 0x009B2
-      - 0x1341C
+      - 0x1341E
       - 0x04B25
       - 0x00115
-      - 0x0570F
+      - 0x05711
       - 0x13416
-      - 0x0570F
+      - 0x05711
       - 0x13414
-      - 0x2F611
+      - 0x2F613
       - 0x17555
-      - 0x11413
-      - 0x0560F
-      - 0x13431
+      - 0x11415
+      - 0x05611
+      - 0x1342F
       - 0x05FB2
       - 0x00001
-      - 0x04B12
-      - 0x00145
+      - 0x05600
       - 0x13403
-      - 0x09B22
-      - 0x01555
-      - 0x0560F
-      - 0x1342E
+      - 0x09B05
+      - 0x13402
+      - 0x05611
+      - 0x1342C
       - 0x05FB2
       - 0x00001
-      - 0x04B12
-      - 0x00145
+      - 0x05600
       - 0x13415
-      - 0x09B22
-      - 0x09555
-      - 0x13400
-      - 0x0560F
-      - 0x13434
+      - 0x09B25
+      - 0x13405
+      - 0x05600
+      - 0x1340C
+      - 0x09F12
+      - 0x001D5
+      - 0x29BB2
+      - 0x135D5
+      - 0x11575
+      - 0x13402
+      - 0x05611
+      - 0x13432
       - 0x00822
       - 0x01D9A
       - 0x00001
-      - 0x11425
-      - 0x13403
-      - 0x04B12
-      - 0x00145
-      - 0x1340C
-      - 0x09B07
-      - 0x001D5
-      - 0x29BB2
-      - 0x115D5
-      - 0x23621
+      - 0x11426
+      - 0x13402
+      - 0x23622
       - 0x2B555
-      - 0x13418
+      - 0x13402
       - 0x2B555
-      - 0x15555
-      - 0x15555
+      - 0x1341A
+      - 0x2B555
       - 0x15555
       startup:
         entryPoint: 0x175
@@ -67778,7 +68350,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#DE957C'
+      color: '#D6ECF7'
       postMortemEnabled: true
     - coordinate: 508
       enabled: true
@@ -67801,14 +68373,14 @@ projects:
 
         # io /b
 
-        entry n508/main
+        entry x6/main
 
 
         : down-writing?  io b!  @b  0x2000 and ;
 
 
-        : n508/main
-          # n508/main lit >r
+        : x6/main
+          # x6/main lit >r
           down-writing? if
             -d-- ;
           then
@@ -67827,7 +68399,7 @@ projects:
       - 0x11515
       - 0x04B12
       - 0x00175
-      - 0x1341E
+      - 0x13431
       - 0x09555
       - 0x15555
       - 0x15555
@@ -67889,12 +68461,76 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: '#DEC67C'
+      color: '#DEAD7C'
       postMortemEnabled: true
     - coordinate: 509
-      enabled: false
-      sourceCode: ''
-      ramWords: []
+      enabled: true
+      sourceCode: "( CVM_pipeline node 509.\n\ninstruction execution.\n\n\n)\n\r\n# up /b\r\n\r\nentry x6a/main\r\n\r\n# 0 org\r\n\n: x6a/main\n  @b\r\n  \n  x6a/main ;\n\r\n\r\n\r\n"
+      ramWords:
+      - 0x01700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -67903,7 +68539,7 @@ projects:
         io: 0x00000
         returnStack: []
         parameterStack: []
-      color: 
+      color: '#DEAD7C'
       postMortemEnabled: false
     - coordinate: 510
       enabled: false
@@ -69078,9 +69714,13 @@ projects:
       source: >
         nop
 
-        test0:
+        nop
 
-        scall test1
+        nop
+
+        nop
+
+        nop
 
         nop
 
@@ -69090,21 +69730,11 @@ projects:
 
         nop
 
-        test1:
+        nop
 
-        link -1
+        nop
 
-        unlink
-
-        link -3
-
-        link -2
-
-        unlink
-
-        unlink
-
-        ret
+        nop
 
         nop
 

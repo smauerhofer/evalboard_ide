@@ -132,7 +132,7 @@ public partial class ChipWindow : Window
       Owner = this
     };
 
-    editor.Saved += async (_, _) => await OnNodeEditorSavedAsync(editorViewModel, editor);
+    editor.Saved += async (_, args) => await OnNodeEditorSavedAsync(editorViewModel, editor, args.CloseAfterSave);
     editor.Closed += (_, _) => _openNodeEditors.Remove(node.Model.Coordinate);
     _openNodeEditors[node.Model.Coordinate] = editor;
     editor.Show();
@@ -140,7 +140,12 @@ public partial class ChipWindow : Window
 
   // Same apply/refresh work the old "if (editor.ShowDialog() == true)" branch did -- just reached from
   // NodeEditorWindow's own Saved event now that the editor is non-modal, instead of a dialog result.
-  private async Task OnNodeEditorSavedAsync(NodeEditorViewModel editorViewModel, NodeEditorWindow editor)
+  //
+  // closeAfterSave (ADDED 2026-10-01, alongside splitting "Save node" into "Save"/"Save & Close" -- see
+  // NodeEditorWindow.Saved's own remarks): the apply/refresh work itself is identical either way --
+  // "Save" and "Save & Close" differ only in whether the editor closes once it's done, per
+  // NodeEditorSavedEventArgs.CloseAfterSave.
+  private async Task OnNodeEditorSavedAsync(NodeEditorViewModel editorViewModel, NodeEditorWindow editor, bool closeAfterSave)
   {
     var romChanged = editorViewModel.Apply();
     _viewModel.Project.NotifyProjectChanged();
@@ -165,7 +170,11 @@ public partial class ChipWindow : Window
     // Rebuild node presentation so configured-state and Kraken highlighting are refreshed.
     _viewModel.RefreshNodes();
     DrawKrakenPaths();
-    editor.Close();
+
+    if (closeAfterSave)
+    {
+      editor.Close();
+    }
   }
 
   private void OnCheckKrakenClick(object sender, RoutedEventArgs e)

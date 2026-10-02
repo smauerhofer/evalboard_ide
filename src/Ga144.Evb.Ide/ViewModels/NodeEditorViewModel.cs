@@ -37,6 +37,31 @@ public sealed class NodeEditorViewModel : ObservableObject
   private string _expandedRamSource = "Compile to view RAM source after macro expansion.";
   private string _expandedRomSource = "Compile to view ROM source after macro expansion.";
 
+  // ADDED 2026-10-01, for IsDirty below -- per Stefan: "if the node window, after I modified the
+  // source and press cancel, a popup dialog must open asking 'Do you want discard the
+  // modifications?'". A snapshot of every editable field, taken once at construction and re-taken
+  // at the end of a successful Apply() (see both call sites' own remarks) -- NOT the same thing as
+  // _originalRomSource/_originalRomWords just below, which exist purely to tell the OWNER whether
+  // the system-wide ROM library needs re-saving, and are deliberately never updated after Apply()
+  // (Apply's own "has ROM ever changed since this editor opened" return value would break if they
+  // were). This baseline instead answers a different question -- "is there anything in this editor
+  // right now that a Cancel would throw away" -- and DOES need to move forward past every save, so
+  // clicking "Save" and then Cancel with no further edits never re-prompts for nothing.
+  private bool _baselineEnabled;
+  private bool _baselinePostMortemEnabled;
+  private string? _baselineColor;
+  private string _baselineSourceCode = string.Empty;
+  private string _baselineRomSourceCode = string.Empty;
+  private string _baselineRamWordsText = string.Empty;
+  private string _baselineRomWordsText = string.Empty;
+  private string _baselineEntryPoint = string.Empty;
+  private string _baselineP = string.Empty;
+  private string _baselineA = string.Empty;
+  private string _baselineB = string.Empty;
+  private string _baselineIo = string.Empty;
+  private string _baselineReturnStackText = string.Empty;
+  private string _baselineParameterStackText = string.Empty;
+
   // Last successful compile of each dictionary, kept ONLY for their Symbols (the Label gutters --
   // see RamLabelGutterText/RomLabelGutterText) -- everything else this window shows already comes
   // from RamWordsText/RomWordsText/the listing strings above, updated in place on every compile. Not
@@ -94,6 +119,7 @@ public sealed class NodeEditorViewModel : ObservableObject
     _parameterStackText = Join(node.Startup.ParameterStack);
     _originalRomSource = _romSourceCode;
     _originalRomWords = _romWordsText;
+    CaptureBaseline();
     CompileCommand = new RelayCommand(Compile);
     CompileRomCommand = new RelayCommand(CompileRom);
     CopyRamMarkdownCommand = new RelayCommand(() => CopyImageMarkdown(
@@ -641,8 +667,66 @@ public sealed class NodeEditorViewModel : ObservableObject
     _romNode.SourceCode = RomSourceCode;
     _romNode.RomWords = Split(RomWordsText, 64);
 
-    return !string.Equals(_originalRomSource, RomSourceCode, StringComparison.Ordinal) ||
+    bool romChanged = !string.Equals(_originalRomSource, RomSourceCode, StringComparison.Ordinal) ||
            !string.Equals(_originalRomWords, RomWordsText, StringComparison.Ordinal);
+
+    // ADDED 2026-10-01: a successful Apply() (reached from either "Save" or "Save & Close" --
+    // NodeEditorWindow's own Saved event, see its remarks) just wrote every field below into
+    // Node/_romNode, so IsDirty's own baseline has to move forward past this point too -- otherwise
+    // clicking "Save" with the window left open, then Cancel with no further edits, would still
+    // (wrongly) prompt to discard changes that were already saved.
+    CaptureBaseline();
+
+    return romChanged;
+  }
+
+  /// <summary>
+  /// ADDED 2026-10-01, per Stefan: "if the node window, after I modified the source and press
+  /// cancel, a popup dialog must open asking 'Do you want discard the modifications?'". True when
+  /// anything in this editor differs from <see cref="CaptureBaseline"/>'s own last snapshot (taken
+  /// at construction, and again at the end of every successful <see cref="Apply"/>) -- i.e. there is
+  /// something a Cancel would actually throw away right now. <see cref="NodeEditorWindow"/>'s own
+  /// Cancel button (and its Escape-key shortcut) check this before prompting, so closing with
+  /// nothing unsaved needs no popup at all.
+  /// </summary>
+  public bool IsDirty =>
+      _enabled != _baselineEnabled ||
+      _postMortemEnabled != _baselinePostMortemEnabled ||
+      !string.Equals(_color, _baselineColor, StringComparison.Ordinal) ||
+      !string.Equals(_sourceCode, _baselineSourceCode, StringComparison.Ordinal) ||
+      !string.Equals(_romSourceCode, _baselineRomSourceCode, StringComparison.Ordinal) ||
+      !string.Equals(_ramWordsText, _baselineRamWordsText, StringComparison.Ordinal) ||
+      !string.Equals(_romWordsText, _baselineRomWordsText, StringComparison.Ordinal) ||
+      !string.Equals(_entryPoint, _baselineEntryPoint, StringComparison.Ordinal) ||
+      !string.Equals(_p, _baselineP, StringComparison.Ordinal) ||
+      !string.Equals(_a, _baselineA, StringComparison.Ordinal) ||
+      !string.Equals(_b, _baselineB, StringComparison.Ordinal) ||
+      !string.Equals(_io, _baselineIo, StringComparison.Ordinal) ||
+      !string.Equals(_returnStackText, _baselineReturnStackText, StringComparison.Ordinal) ||
+      !string.Equals(_parameterStackText, _baselineParameterStackText, StringComparison.Ordinal);
+
+  /// <summary>See <see cref="IsDirty"/>'s own remarks for why this snapshot exists and the two
+  /// moments it is taken. Reads the private backing fields directly (not the public properties) --
+  /// both are always in sync for a plain pass-through property like these, and going through the
+  /// fields avoids any risk of a property getter's own side effects (there are none today, but
+  /// Color's setter already shows this class is willing to add some) being mistaken for part of
+  /// taking a snapshot.</summary>
+  private void CaptureBaseline()
+  {
+    _baselineEnabled = _enabled;
+    _baselinePostMortemEnabled = _postMortemEnabled;
+    _baselineColor = _color;
+    _baselineSourceCode = _sourceCode;
+    _baselineRomSourceCode = _romSourceCode;
+    _baselineRamWordsText = _ramWordsText;
+    _baselineRomWordsText = _romWordsText;
+    _baselineEntryPoint = _entryPoint;
+    _baselineP = _p;
+    _baselineA = _a;
+    _baselineB = _b;
+    _baselineIo = _io;
+    _baselineReturnStackText = _returnStackText;
+    _baselineParameterStackText = _parameterStackText;
   }
 
   /// <summary>

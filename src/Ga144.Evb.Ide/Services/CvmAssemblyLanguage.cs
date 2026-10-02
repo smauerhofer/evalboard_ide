@@ -261,7 +261,21 @@ namespace Ga144.Evb.Ide.Services;
 /// memory inspector -- node 306's OLD, now-deleted six-op self-describing family used to be fully
 /// shadowed there by the now-retired, now-deleted <c>slit</c>'s own tag (see
 /// <see cref="CvmInstructionSet"/>'s own remarks on the 2026-09-09 CVM1-opcode purge); with
-/// <c>slit</c> gone, that collision is resolved too. <see cref="Assemble"/> mirrors that same dual
+/// <c>slit</c> gone, that collision is resolved too.
+///
+/// JOINED 2026-10-02 by the "CVM_pipeline" table's own <c>nop</c>/<c>scall</c>/<c>next16</c>/
+/// <c>next32</c>/<c>pop16</c>/<c>pop32</c>/<c>rjmp</c>/<c>rcall</c>/<c>sbr</c>/<c>cbr</c> -- every one
+/// of these is ALSO self-describing (<see cref="CvmInstructionSet.CvmOperandEncoding.FixedOpcode"/>/
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord"/>/
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords"/>/
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>/
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>/
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord"/>), so
+/// none needs an F18 symbol either -- but <c>cbr</c> specifically can only be DECODED this way, not
+/// yet ASSEMBLED (see <see cref="Assemble"/>'s own remarks on why it is explicitly rejected rather
+/// than guessed at).
+///
+/// <see cref="Assemble"/> mirrors that same dual
 /// dispatch on the OTHER direction --
 /// hand-typed CVM asm source that uses <c>call</c>/<c>br</c>/<c>cbr</c>/node 606's or node
 /// 306's ops is encoded directly from <see cref="CvmInstructionSet"/> and the operand alone, bypassing
@@ -377,17 +391,26 @@ internal static class CvmAssemblyLanguage
   // role) -- names a 'ret word for the "ret" opcode, spec row "1111|11ff|ffff|feee| implied" per
   // Stefan (e = 0, always; f = the 7-bit address of 'ret in node 506) -- see
   // CvmInstructionSet.Instructions' own remarks on RetMnemonic's new Id 184 for the full derivation.
-  // Top 6 bits fixed at 1 (bits 15-10): as a plain 16-bit tag word (address bits zeroed) this is
-  // 0xFC00. UNLIKE every other tag constant in this file, the resolved node address is not ORed in
-  // at bit 0 -- it occupies bits 9-3, with the bottom 3 bits ("eee") forced to 0 -- so every mnemonic
-  // in this family also needs an entry in NodeResolvedAddressShiftByMnemonic (below) to left-shift
+  // Top 6 bits fixed at 1 (bits 15-10): as a plain 16-bit tag word (address bits zeroed) this was
+  // 0xFC00. UNLIKE every other tag constant in this file, the resolved node address was not ORed in
+  // at bit 0 -- it occupied bits 9-3, with the bottom 3 bits ("eee") forced to 0 -- so every mnemonic
+  // in this family also needed an entry in NodeResolvedAddressShiftByMnemonic (below) to left-shift
   // the resolved address by 3 before combining it with this tag.
   //
   // RENAMED 2026-10-01 from "Node506RetTagBits": per Stefan, link/unlink's own opcodes are "like the
   // opcode for ret" -- the exact same tag/shift, just a different word in node 506 -- so this is the
   // whole node-506 bit-pattern-table family's shared tag, not ret's alone. See
   // CvmInstructionSet.Instructions' own remarks on Ids 185/186 for link/unlink's own derivation.
-  private const int Node506BitPatternTableTagBits = 0xFC00;
+  //
+  // CORRECTED 2026-10-02, per the full "CVM_pipeline" bit-pattern table Stefan pasted that day (see
+  // CvmInstructionSet's own class-level remarks right after UnlinkMnemonic): the table's own "special"
+  // row -- "0010|0000|00ww|wwww| special {ink, unlink, ret}" -- gives tag 0x2000 (bits 15-12 = 0010,
+  // bits 11-6 fixed at 0), with an UNSHIFTED 6-bit field at bits 5-0 (mask 0x003F), not the previously
+  // assumed 0xFC00/7-bit-field-at-bits-9-3/shift-3. Everything above this paragraph describes that
+  // first, now-superseded assumption and is left as written (not rewritten) per this file's own "do
+  // not rewrite history" convention -- see NodeResolvedAddressShiftByMnemonic's own remarks for the
+  // matching shift correction.
+  private const int Node506BitPatternTableTagBits = 0x2000;
 
   // CVM2's node 508 'gld/'gst tag (2026-09-04, renamed 2026-09-09 from 'ldg'/'stg -- see
   // CvmInstructionSet.LoadGlobalMnemonic's own remarks), per Stefan's node 508 source
@@ -597,13 +620,27 @@ internal static class CvmAssemblyLanguage
         // as the historical record of CVM2's OLD node-507 "ret" (Node507Cvm2LocalExecuteTagBits,
         // 0x8800 | address), which shares nothing with the new entry below except the mnemonic string.
         // [RetMnemonic] = (Node507Program.Coordinate, "'ret", Node507Cvm2LocalExecuteTagBits),
-        [RetMnemonic] = (Node506Program.Coordinate, "'ret", Node506BitPatternTableTagBits),
+        //
+        // CORRECTED 2026-10-02, per Stefan directly: "the address of 'ret, 'link and 'unlink label
+        // must be taken from node 507." Node506BitPatternTableTagBits' own tag (0x2000) is UNCHANGED
+        // -- node 506 is still the table's own home -- but the actual LABEL this resolves against
+        // (and therefore the live compile this is resolved against) moves from node 506 to node 507.
+        // Likely architectural picture (not itself stated by Stefan, so flagged as inference): node
+        // 506 holds the dispatch/table logic, while node 507 holds the actual addressable word for
+        // each of these; node 506's own "special" dispatch presumably relays to node 507 the same
+        // way CVM2's OLD call/lcall/ljmp dispatch used to relay between nodes (see
+        // Node407LongCallTagBits' own remarks for that precedent). Joined by lcall/ljmp (just below)
+        // under the exact same correction, per the same sentence.
+        [RetMnemonic] = (Node507Program.Coordinate, "'ret", Node506BitPatternTableTagBits),
         // LinkMnemonic ("link")/UnlinkMnemonic ("unlink") -- ADDED 2026-10-01, alongside ret in node
         // 506's bit-pattern-table family (see Node506BitPatternTableTagBits' own remarks and
         // CvmInstructionSet.Instructions' own remarks on Ids 185/186). Brand new mnemonic names, no
         // OLD CVM1/CVM2 entry to comment out first (unlike ret just above).
-        [CvmInstructionSet.LinkMnemonic] = (Node506Program.Coordinate, "'link", Node506BitPatternTableTagBits),
-        [CvmInstructionSet.UnlinkMnemonic] = (Node506Program.Coordinate, "'unlink", Node506BitPatternTableTagBits),
+        //
+        // CORRECTED 2026-10-02, same as RetMnemonic just above and for the same reason: NodeCoordinate
+        // moves from node 506 to node 507; Node506BitPatternTableTagBits' own tag is unchanged.
+        [CvmInstructionSet.LinkMnemonic] = (Node507Program.Coordinate, "'link", Node506BitPatternTableTagBits),
+        [CvmInstructionSet.UnlinkMnemonic] = (Node507Program.Coordinate, "'unlink", Node506BitPatternTableTagBits),
         [CvmInstructionSet.HaltMnemonic] = (Node507Program.Coordinate, "'halt", Node507Cvm2LocalExecuteTagBits),
         // tjmp (2026-09-09, "'tjmp is in node 507") -- node 507's own table-jump primitive, reached the
         // SAME "1000_1???" local-execute tag family as the six above (Node507Cvm2LocalExecuteTagBits) --
@@ -621,8 +658,30 @@ internal static class CvmAssemblyLanguage
         // these live on a DIFFERENT node than CVM2's CPU (507) -- BuildDecodeTable/BuildEncodeTable
         // already resolve each mnemonic against its own node independently, so this is just another
         // entry, not a special case.
-        [CvmInstructionSet.LongCallMnemonic] = (Node407Program.Coordinate, "'lcall", Node407LongCallTagBits),
-        [CvmInstructionSet.LongJumpMnemonic] = (Node407Program.Coordinate, "'ljmp", Node407LongCallTagBits),
+        //
+        // RETIRED 2026-10-02, SAME REASON as RetMnemonic's own OLD CVM2 entry above (a Dictionary
+        // literal cannot hold two entries for the same key): per Stefan, "ljmp and lcall must encode
+        // in a similar way like 'ret and their address also taken from labels 'ljmp and 'lcall in
+        // node 507. they are now special opcodes." That is a brand new, unrelated shape (the new
+        // Ids 195/196, CvmOperandEncoding.None, node 507, tag Node506BitPatternTableTagBits) replacing
+        // this CVM2-era one (node 407, tag 0xC000) -- kept here as a comment, per "do not remove any
+        // opcodes", as the historical record; the live entries are just below.
+        // [CvmInstructionSet.LongCallMnemonic] = (Node407Program.Coordinate, "'lcall", Node407LongCallTagBits),
+        // [CvmInstructionSet.LongJumpMnemonic] = (Node407Program.Coordinate, "'ljmp", Node407LongCallTagBits),
+        //
+        // NEW 2026-10-02: lcall/ljmp join ret/link/unlink in node 507's own "special" family (Ids
+        // 195/196 -- see CvmInstructionSet.Instructions' own remarks on those Ids for Stefan's exact
+        // wording and the same-day shape correction). Same tag, same node, same shift (0 -- see
+        // NodeResolvedAddressShiftByMnemonic's own remarks) as ret/link/unlink; CvmOperandEncoding.
+        // TrailingWord (like link, NOT like ret/unlink -- confirmed against node 507's own live
+        // 'lcall/'ljmp source, both of which call m/next, node 507's "fetch the next word from
+        // memory" primitive, before doing anything else) means each DOES take a real trailing operand
+        // word: the actual far-call/far-jump target address. "call" (EncodeCallPseudoMnemonic's own
+        // remarks) lowers to lcall through this entry exactly like any other node-resolved tagged
+        // mnemonic -- the live-resolved opcode word comes from BuildEncodeTable via this very entry,
+        // not a fixed constant the way the OLD, retired Id 183 shape used to supply one directly.
+        [CvmInstructionSet.LongCallMnemonic] = (Node507Program.Coordinate, "'lcall", Node506BitPatternTableTagBits),
+        [CvmInstructionSet.LongJumpMnemonic] = (Node507Program.Coordinate, "'ljmp", Node506BitPatternTableTagBits),
 
         // Node 407's long-branch op (added 2026-09-06, "more opcodes to node 407 added") -- reached
         // through node 407's own SAME "1100" n/main branch as 'lcall/'ljmp above, so it shares the SAME
@@ -960,13 +1019,28 @@ internal static class CvmAssemblyLanguage
   /// dictionary gets shift 0, so every pre-existing None-shaped mnemonic's behavior is unchanged.
   /// ADDED 2026-10-01: link/unlink (Ids 185/186) join ret in node 506's bit-pattern-table family and
   /// need the same shift of 3.
+  ///
+  /// CORRECTED 2026-10-02, to 0 for all three: the full "CVM_pipeline" bit-pattern table (see
+  /// CvmInstructionSet's own class-level remarks right after UnlinkMnemonic, and
+  /// Node506BitPatternTableTagBits' own remarks just above) shows the "special" row's own address
+  /// field sitting at bits 5-0, UNshifted -- the plain "tag | resolvedAddress" formula every
+  /// pre-existing None-shaped mnemonic already used, before ret ever introduced this dictionary.
+  /// Entries are kept here (set to 0) rather than removed outright, purely as the audit trail of which
+  /// mnemonics were once thought to need a non-zero shift -- functionally identical to removing them,
+  /// since a mnemonic absent from this dictionary already defaults to shift 0.
   /// </summary>
   private static readonly IReadOnlyDictionary<string, int> NodeResolvedAddressShiftByMnemonic =
       new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
       {
-        [CvmInstructionSet.RetMnemonic] = 3,
-        [CvmInstructionSet.LinkMnemonic] = 3,
-        [CvmInstructionSet.UnlinkMnemonic] = 3,
+        [CvmInstructionSet.RetMnemonic] = 0,
+        [CvmInstructionSet.LinkMnemonic] = 0,
+        [CvmInstructionSet.UnlinkMnemonic] = 0,
+        // ADDED 2026-10-02: lcall/ljmp (Ids 195/196) join this same "special" family -- see
+        // NodeSymbolByMnemonic's own remarks on these two mnemonics for the full derivation. Listed
+        // here, at shift 0, for the same audit-trail reason the other three are (a mnemonic absent
+        // from this dictionary already defaults to 0, so this is not functionally required).
+        [CvmInstructionSet.LongCallMnemonic] = 0,
+        [CvmInstructionSet.LongJumpMnemonic] = 0,
       };
 
   // EMPTY as of 2026-09-30, NO LONGER EMPTY same day (see NodeSymbolByMnemonic's own header note
@@ -1407,7 +1481,7 @@ internal static class CvmAssemblyLanguage
       // the distinction it needs to decide "always lcall" vs. "try to fit scall" (see its own remarks).
       if (string.Equals(instruction.Mnemonic, CvmInstructionSet.CallMnemonic, StringComparison.OrdinalIgnoreCase))
       {
-        (List<int>? callWords, string? callError) = EncodeCallPseudoMnemonic(instruction, line + 1);
+        (List<int>? callWords, string? callError) = EncodeCallPseudoMnemonic(instruction, encodeTable, compiledRam, line + 1);
         if (callWords is null)
         {
           return (null, null, callError);
@@ -1417,8 +1491,28 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
+      // ADDED 2026-10-02, for the "CVM_pipeline" table's own cbr (CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord
+      // -- see that enum case's own remarks, and CvmInstructionSet.ConditionalBranchMnemonic's own
+      // remarks for why this shape's bit LAYOUT is confident but its field SEMANTICS are flagged).
+      // Intercepted here, explicitly, rather than being let through to the generic self-describing
+      // dispatch just below: this mnemonic needs THREE operands (cond, register, offset), but
+      // CvmAsmInstruction (this file's own hand-typed-source grammar) supports at most two -- Operand/
+      // Operand2 -- and Stefan has not specified cbr's own assembler-level syntax (e.g. whether cond
+      // and register are really two separate typed numbers, or one combined token) to justify widening
+      // that grammar yet. Rather than silently truncate an operand, misparse, or (worse) fall through
+      // to this method's own "unimplemented opcode" nop-substitution (which would make "cbr ..." in
+      // hand-typed source quietly assemble as a no-op, a far more dangerous silent failure), this fails
+      // loudly and explains exactly why. Disassembly (TryDescribeSelfDecodingWord) is unaffected --
+      // reading an already-encoded cbr word back out needs no grammar decision at all.
+      if (string.Equals(instruction.Mnemonic, CvmInstructionSet.ConditionalBranchMnemonic, StringComparison.OrdinalIgnoreCase) &&
+          CvmInstructionSet.TryGetShape(instruction.Mnemonic) is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord })
+      {
+        return (null, null, $"line {line + 1}: \"cbr\" (the new CVM_pipeline opcode, not CVM2's old one) is not yet assemblable from hand-typed source here -- " +
+            "it needs a 3-operand syntax (condition, register, offset) this grammar doesn't support yet, and its condition field's own real meaning is still unconfirmed; ask Stefan before wiring this up.");
+      }
+
       CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
-      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord })
+      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords })
       {
         (List<int>? selfDescribingWords, string? selfDescribingError) = EncodeSelfDescribingWord(selfDescribingShape, instruction.Operand, instruction.Operand2, line + 1);
         if (selfDescribingWords is null)
@@ -1655,6 +1749,14 @@ internal static class CvmAssemblyLanguage
   /// "OperandLabel is not null" branch just below is a defensive fallback for a hypothetical caller that
   /// bypasses that pass, not something the real call path through <see cref="CollectLabelAddresses"/> ever
   /// actually reaches today.
+  ///
+  /// <c>lcall</c>'s own WordLength briefly (2026-10-02, for a few hours) read 1 here under a mistaken
+  /// "encodes like 'ret, no operand" assumption -- CORRECTED THE SAME DAY once Stefan pointed at node
+  /// 507's own live source ("the lcall and ljmp still have the address of the destination in the next
+  /// word, so they still have 1 argument. fix that."): <c>lcall</c>/<c>ljmp</c> are
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/> (2 words), exactly like
+  /// <c>link</c>, so this "2 words for the lcall case" answer is accurate again -- see
+  /// <see cref="CvmInstructionSet.Instructions"/>' own remarks on Ids 195/196 for the fix.
   /// </summary>
   private static int GetWordLength(
       CvmAsmInstruction instruction,
@@ -1683,8 +1785,12 @@ internal static class CvmAssemblyLanguage
       return instruction.Operand is int callValue && FitsShortCallRange(callValue) ? 1 : 2;
     }
 
+    // ADDED 2026-10-02: FixedOpcodeWithTwoTrailingWords (next32) joins this generic, fixed-WordLength
+    // group. EmbeddedUnsignedValuePairWithTrailingWord (cbr) is deliberately left OUT of this list --
+    // Assemble's own explicit cbr interception (see its own remarks) fails that mnemonic outright
+    // before word-length sizing would ever matter, so a wrong answer here could never actually ship.
     CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(mnemonic);
-    if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord })
+    if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords })
     {
       return selfDescribingShape.WordLength;
     }
@@ -1799,7 +1905,15 @@ internal static class CvmAssemblyLanguage
   /// not including <paramref name="endAddressExclusive"/>, into CVM assembly language mnemonics
   /// resolved against <paramref name="compiledRam"/>, plus direct bit-pattern rules for
   /// <c>call</c>/<c>br</c>/<c>cbr</c> (<see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/>) --
-  /// the now-retired <c>slit</c> used to belong here too -- that need no compile/symbol at all. This MUST be a stateful scan starting at 0, never an
+  /// the now-retired <c>slit</c> used to belong here too -- that need no compile/symbol at all. JOINED
+  /// 2026-10-02 by the "CVM_pipeline" table's own <c>nop</c>/<c>scall</c>/<c>next16</c>/<c>next32</c>/
+  /// <c>pop16</c>/<c>pop32</c>/<c>rjmp</c>/<c>rcall</c>/<c>sbr</c> -- all self-describing the same way,
+  /// so <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> picks them up automatically with no
+  /// change needed here beyond the <c>nextWord2</c> lookahead this method now also reads (for
+  /// <c>next32</c>'s own second trailing word -- see that parameter's own remarks); the new table's own
+  /// <c>cbr</c> is deliberately NOT assemblable yet (see <see cref="Assemble"/>'s own remarks) but DOES
+  /// still disassemble correctly through this same path, reading being a strictly easier problem than
+  /// writing here. This MUST be a stateful scan starting at 0, never an
   /// independent per-word decode: pushlit is followed by a literal operand word that would otherwise be
   /// mistaken for its own opcode if a word were decoded in isolation.
   ///
@@ -1843,8 +1957,12 @@ internal static class CvmAssemblyLanguage
       // a next word in range -- needed purely so TryDescribeSelfDecodingWord can print lcall's own real
       // operand rather than just its bare tag-word mnemonic; wordLength (also new) tells this loop
       // whether it just consumed one word (every earlier self-describing shape) or two (lcall).
+      // nextWord2 (ADDED 2026-10-02, alongside "next32") is a SECOND word of lookahead, same
+      // in-range-or-null convention, needed only so next32's own full 32-bit literal prints both
+      // halves rather than just the first.
       int? nextWord = address + 1 < endAddressExclusive ? sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1)) : null;
-      string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word, out int selfDescribingWordLength, wordAddress: address, nextWord: nextWord);
+      int? nextWord2 = address + 2 < endAddressExclusive ? sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 2)) : null;
+      string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word, out int selfDescribingWordLength, wordAddress: address, nextWord: nextWord, nextWord2: nextWord2);
       if (selfDescribing is not null)
       {
         notes[address] = selfDescribing;
@@ -2069,6 +2187,23 @@ internal static class CvmAssemblyLanguage
       return ([shape.Tag, lcallTarget & CvmWordCodec.WordMask], null);
     }
 
+    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords)
+    {
+      // ADDED 2026-10-02, for the "CVM_pipeline" table's own next32 -- see
+      // CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords' own remarks. shape.Tag is already fully
+      // known (no node, no relocation, same as next16/lcall just above), but TWO trailing operand
+      // words follow instead of one. Syntax mirrors litm/lit2's own two-separate-words convention
+      // (see this file's own remarks on CvmOperandEncoding.TwoTrailingWords): "next32 0x1234 0x5678",
+      // not a single 32-bit value split in half -- each word resolves independently, exactly like
+      // litm/lit2's own Operand/Operand2.
+      if (operand is not int next32First || operand2 is not int next32Second)
+      {
+        return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" requires two operands, e.g. \"{shape.Mnemonic} 0x1234 0x5678\".");
+      }
+
+      return ([shape.Tag, next32First & CvmWordCodec.WordMask, next32Second & CvmWordCodec.WordMask], null);
+    }
+
     if (operand is not int value)
     {
       return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" requires a literal operand, e.g. \"{shape.Mnemonic} 1\".");
@@ -2151,8 +2286,26 @@ internal static class CvmAssemblyLanguage
   /// that exact question FOR label-targeted "call" lines before this ever runs, this method simply checks
   /// the same <see cref="FitsShortCallRange"/> test against the final resolved value, literal or label
   /// alike -- <paramref name="instruction"/>.OperandLabel no longer needs to be consulted here at all.
+  ///
+  /// <b>CHANGED 2026-10-02</b>, alongside lcall's own reshaping into a node-507-resolved
+  /// <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/> mnemonic (see
+  /// <see cref="CvmInstructionSet.Instructions"/>' own remarks on Ids 195/196): the lcall branch can no
+  /// longer just read <c>shape.Tag</c> directly (lcall's old, retired shape's tag was a fixed, universally-
+  /// known constant needing no live compile at all) -- it now needs <paramref name="encodeTable"/>, the
+  /// SAME per-mnemonic resolved-opcode table every ordinary tagged mnemonic resolves through (built by
+  /// <see cref="BuildEncodeTable"/> from <paramref name="compiledRam"/>), to find lcall's own real,
+  /// node-507-resolved tag word. If lcall isn't wired to anything today (a mnemonic with no
+  /// <see cref="NodeSymbolByMnemonic"/> entry at all), or node 507's current compile simply doesn't define
+  /// <c>'lcall</c> this run, this fails with a specific, loud diagnosis (<see cref="DiagnoseUnresolvedWiredMnemonic"/>)
+  /// rather than the generic unresolved-opcode nop-substitution <see cref="Assemble"/>'s own main loop
+  /// uses elsewhere -- "call" redirects control flow, so silently turning a far call into a no-op would be
+  /// a far more dangerous failure mode than it is for most other opcodes.
   /// </summary>
-  private static (List<int>? Words, string? Error) EncodeCallPseudoMnemonic(CvmAsmInstruction instruction, int lineNumber)
+  private static (List<int>? Words, string? Error) EncodeCallPseudoMnemonic(
+      CvmAsmInstruction instruction,
+      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable,
+      IReadOnlyDictionary<int, F18CompileResult> compiledRam,
+      int lineNumber)
   {
     if (instruction.Operand is not int value)
     {
@@ -2160,7 +2313,6 @@ internal static class CvmAssemblyLanguage
     }
 
     CvmInstructionSet.CvmInstructionShape shortCallShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.ShortCallMnemonic)!;
-    CvmInstructionSet.CvmInstructionShape longCallShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LongCallMnemonic)!;
 
     if (FitsShortCallRange(value))
     {
@@ -2170,7 +2322,19 @@ internal static class CvmAssemblyLanguage
       return ([shortCallShape.Tag | (value & shortCallShape.ValueBitMask)], null);
     }
 
-    return ([longCallShape.Tag, value & CvmWordCodec.WordMask], null);
+    // Too big for scall (or not a plain literal at all) -- lowers to lcall, exactly as before
+    // 2026-10-02's brief, since-corrected detour (see this method's own class-level remarks): lcall
+    // is node-507-resolved now, so its real tag word comes from encodeTable, the same lookup every
+    // ordinary tagged mnemonic uses, not a fixed constant.
+    if (!encodeTable.TryGetValue(CvmInstructionSet.LongCallMnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) lcallEntry))
+    {
+      string? wiredDiagnosis = DiagnoseUnresolvedWiredMnemonic(CvmInstructionSet.LongCallMnemonic, compiledRam);
+      return (null, wiredDiagnosis is not null
+          ? $"line {lineNumber}: \"call\" cannot reach {CvmInstructionSet.FormatOperand(value)} -- it does not fit \"scall\"'s own range, and \"lcall\" {wiredDiagnosis}"
+          : $"line {lineNumber}: \"call\" cannot reach {CvmInstructionSet.FormatOperand(value)} -- it does not fit \"scall\"'s own range, and \"lcall\" has no defined opcode yet.");
+    }
+
+    return ([lcallEntry.Opcode, value & CvmWordCodec.WordMask], null);
   }
 
   /// <summary>

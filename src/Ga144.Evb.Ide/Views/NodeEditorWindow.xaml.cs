@@ -5,6 +5,17 @@ using System.Windows.Input;
 
 namespace Ga144.Evb.Ide.Views;
 
+/// <summary>
+/// ADDED 2026-10-01, alongside splitting the old single "Save node" button into "Save" and "Save &amp;
+/// Close" -- see <see cref="NodeEditorWindow.Saved"/>'s own remarks. Both buttons raise the same event;
+/// this is the one piece of information the owner needs to tell them apart: whether to close the editor
+/// once the save itself is done.
+/// </summary>
+public sealed class NodeEditorSavedEventArgs(bool closeAfterSave) : EventArgs
+{
+  public bool CloseAfterSave { get; } = closeAfterSave;
+}
+
 public partial class NodeEditorWindow : Window
 {
   private readonly NodeEditorViewModel _viewModel;
@@ -21,14 +32,22 @@ public partial class NodeEditorWindow : Window
   }
 
   /// <summary>
-  /// Raised when "Save node" is clicked. Non-modal (this window is opened with <c>Show()</c>, not
-  /// <c>ShowDialog()</c> -- see ChipWindow.OnNodeClick's own remarks), so there is no DialogResult for
-  /// the owner to read back after the fact: the owner subscribes to this instead, does the actual
-  /// apply/refresh work (NodeEditorViewModel.Apply, saving the ROM library, redrawing the chip), and
-  /// closes this window itself once that is done -- exactly the same division of labor the old
-  /// ShowDialog()==true branch had, just event-driven instead of return-value-driven.
+  /// Raised when "Save" or "Save &amp; Close" is clicked. Non-modal (this window is opened with
+  /// <c>Show()</c>, not <c>ShowDialog()</c> -- see ChipWindow.OnNodeClick's own remarks), so there is no
+  /// DialogResult for the owner to read back after the fact: the owner subscribes to this instead, does
+  /// the actual apply/refresh work (NodeEditorViewModel.Apply, saving the ROM library, redrawing the
+  /// chip), and closes this window itself -- but ONLY when <see cref="NodeEditorSavedEventArgs.CloseAfterSave"/>
+  /// says to.
+  ///
+  /// SPLIT 2026-10-01, per Stefan: "'Save node' must be renamed to 'Save' and must not close the node
+  /// window, just save the changes. A new button 'Save &amp; Close' must be placed right to 'Save' which
+  /// saves all the changes and closes the node window." Before this, a single "Save node" button always
+  /// implied close-after-save (the exact same division of labor the old ShowDialog()==true branch had,
+  /// just event-driven instead of return-value-driven) -- "Save &amp; Close" (<see cref="OnSaveAndCloseClick"/>)
+  /// keeps that old behavior; "Save" (<see cref="OnSaveClick"/>) is new, and leaves the window open so
+  /// editing can continue immediately after a save.
   /// </summary>
-  public event EventHandler? Saved;
+  public event EventHandler<NodeEditorSavedEventArgs>? Saved;
 
   private void OnDiagnosticsRequested(string header, string diagnostics)
   {
@@ -108,26 +127,65 @@ public partial class NodeEditorWindow : Window
     }
   }
 
+  /// <summary>Saves without closing -- see <see cref="Saved"/>'s own remarks on the 2026-10-01 split.</summary>
   private void OnSaveClick(object sender, RoutedEventArgs e)
   {
-    Saved?.Invoke(this, EventArgs.Empty);
+    Saved?.Invoke(this, new NodeEditorSavedEventArgs(closeAfterSave: false));
+  }
+
+  /// <summary>Saves and closes -- the old "Save node" behavior. See <see cref="Saved"/>'s own remarks.</summary>
+  private void OnSaveAndCloseClick(object sender, RoutedEventArgs e)
+  {
+    Saved?.Invoke(this, new NodeEditorSavedEventArgs(closeAfterSave: true));
   }
 
   private void OnCancelClick(object sender, RoutedEventArgs e)
   {
-    Close();
+    TryCancel();
   }
 
   // Preserves the old IsCancel="True" Escape-to-close convenience now that this window is non-modal
   // (IsCancel itself only works on a window shown via ShowDialog -- it sets DialogResult, which throws
-  // on a Show()-opened window).
+  // on a Show()-opened window). Routed through TryCancel (not a bare Close()) so Escape gets the exact
+  // same discard-confirmation Cancel does -- see TryCancel's own remarks; otherwise Escape would be a
+  // silent back door around the prompt Cancel itself now shows.
   private void OnPreviewKeyDown(object sender, KeyEventArgs e)
   {
     if (e.Key == Key.Escape)
     {
-      Close();
+      TryCancel();
       e.Handled = true;
     }
+  }
+
+  /// <summary>
+  /// ADDED 2026-10-01, per Stefan: "if the node window, after I modified the source and press cancel, a
+  /// popup dialog must open asking 'Do you want discard the modifications?' with the option 'Yes' and
+  /// 'No'." "Yes" discards whatever is only sitting in the editor's own fields right now (nothing this
+  /// session has done since the last Save/Save &amp; Close, if any -- see
+  /// <see cref="NodeEditorViewModel.IsDirty"/>'s own remarks) and closes the window; "No" leaves the
+  /// window open with every edit untouched. Skips the prompt entirely when
+  /// <see cref="NodeEditorViewModel.IsDirty"/> is false -- there is nothing to discard, so Cancel/Escape
+  /// just close immediately, exactly as they always did.
+  /// </summary>
+  private void TryCancel()
+  {
+    if (_viewModel.IsDirty)
+    {
+      MessageBoxResult result = MessageBox.Show(
+          this,
+          "Do you want discard the modifications?",
+          "Cancel",
+          MessageBoxButton.YesNo,
+          MessageBoxImage.Question);
+
+      if (result != MessageBoxResult.Yes)
+      {
+        return;
+      }
+    }
+
+    Close();
   }
 
   // Clears this node's own color override so it goes back to following the project's default.
