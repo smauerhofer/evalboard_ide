@@ -3262,6 +3262,52 @@ public static class CvmInstructionSet
   }
 
   /// <summary>
+  /// ADDED 2026-10-03: recognises <c>rN</c> as the 16-bit register operand of a word that is NOT a
+  /// <see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/> row -- today only <c>if</c> ("if r0 ==0
+  /// loop"). Same rules as <see cref="TryParseRegisterOperand"/>: returns false when
+  /// <paramref name="text"/> is not shaped like a register token (a plain number is then handled by the
+  /// caller as before); true with a non-null <paramref name="error"/> for <c>dN</c> (double registers
+  /// belong to dpop/dpush) or an index above <paramref name="maxIndex"/>.
+  /// </summary>
+  public static bool TryParseSingleRegisterToken(string mnemonic, string text, int maxIndex, out int index, out string? error)
+  {
+    index = 0;
+    error = null;
+    if (text.Length < 2)
+    {
+      return false;
+    }
+
+    char prefix = char.ToLowerInvariant(text[0]);
+    if (prefix != 'r' && prefix != 'd')
+    {
+      return false;
+    }
+
+    for (int position = 1; position < text.Length; position++)
+    {
+      if (text[position] < '0' || text[position] > '9')
+      {
+        return false;
+      }
+    }
+
+    if (prefix == 'd')
+    {
+      error = $"\"{mnemonic}\" works on a 16-bit register -- write r0..r{maxIndex} (e.g. \"{mnemonic} r1 ...\"), not \"{text}\": d0..d15 are the double registers of dpop/dpush.";
+      return true;
+    }
+
+    if (!int.TryParse(text.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out index) || index > maxIndex)
+    {
+      index = 0;
+      error = $"\"{text}\" is out of range for \"{mnemonic}\" -- expected r0..r{maxIndex}.";
+    }
+
+    return true;
+  }
+
+  /// <summary>
   /// ADDED 2026-10-03: renders a register operand the way the assemblers read it -- <c>d1</c> for
   /// <c>dpop</c>/<c>dpush</c>, <c>r1</c> for every other register word -- so the disassembly can be fed
   /// back to the assembler unchanged.
@@ -3333,7 +3379,7 @@ public static class CvmInstructionSet
   /// Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own disassembler) needs no change at all, since this
   /// parameter defaults to null and nothing before next32/cbr ever reads it.
   /// </summary>
-  public static string? TryDescribeSelfDecodingWord(int word, out int wordLength, int? wordAddress = null, int? nextWord = null, int? nextWord2 = null)
+  public static string? TryDescribeSelfDecodingWord(int word, out int wordLength, int? wordAddress = null, int? nextWord = null, int? nextWord2 = null, Func<int, string?>? ifConditionName = null)
   {
     wordLength = 1;
 
@@ -3556,10 +3602,8 @@ public static class CvmInstructionSet
     // omitted otherwise, the same "print what's available" convention FixedOpcodeWithTrailingWord's own
     // loop (lcall/next16) already uses. Operand order printed here (register, then cond) matches
     // Stefan's own confirmed "if <reg> <cond>" syntax -- NOT the cond/register order this shape's own
-    // ValueBitMask/SecondValueBitMask happen to be declared in. "cond" is still printed as a raw 0-15
-    // number, not yet resolved back to one of node 406's ten named conditions (==0/!=0/.../even/odd) --
-    // that reverse lookup is part of the still-open work IfMnemonic's own remarks describe, not
-    // implemented here.
+    // ValueBitMask/SecondValueBitMask happen to be declared in. (Since 2026-10-03 "cond" is resolved back
+    // to its name through the ifConditionName callback -- see the comment inside the loop.)
     foreach (CvmInstructionShape shape in Instructions)
     {
       if (shape.Encoding != CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord)
@@ -3573,9 +3617,28 @@ public static class CvmInstructionSet
         wordLength = 2;
         int cond = (word & shape.ValueBitMask) >> shape.ValueBitShift;
         int register = (word & shape.SecondValueBitMask) >> shape.SecondValueBitShift;
-        return nextWord is int ifOffset
-            ? $"{shape.Mnemonic} {FormatOperand(register)} {FormatOperand(cond)} {FormatOperand(ifOffset)}"
-            : $"{shape.Mnemonic} {FormatOperand(register)} {FormatOperand(cond)}";
+
+        // CHANGED 2026-10-03, per Stefan (hardware trace showed "if 0x0000 (0) 0x0002 (2) 0x0002 (2)"):
+        // listed the way it is written -- "if r0 ==0 then +2 -> 0x0016". The condition NAME comes from the
+        // caller's ifConditionName lookup (the caller has node 406's live compile; this class does not);
+        // without one, or when no condition word sits at that address, "cond#N" is printed instead.
+        // The offset is the raw signed trailing word (printed with its sign so it can be typed back in
+        // as a literal), the "->" part is the resolved absolute target: opcode address + WordLength +
+        // offset (hardware-confirmed 2026-10-03: the offset is relative to the word after the offset
+        // word), printed only when the caller supplied wordAddress.
+        string conditionText = ifConditionName?.Invoke(cond) ?? $"cond#{cond}";
+        string ifText = $"{shape.Mnemonic} r{register} {conditionText}";
+        if (nextWord is int ifOffset)
+        {
+          int signedOffset = (ifOffset & 0x8000) != 0 ? (ifOffset & 0xFFFF) - 0x10000 : ifOffset & 0xFFFF;
+          ifText += $" then {(signedOffset < 0 ? "-" : "+")}{Math.Abs(signedOffset)}";
+          if (wordAddress is int ifAddress)
+          {
+            ifText += $" -> 0x{(ifAddress + shape.WordLength + signedOffset) & 0xFFFF:X4}";
+          }
+        }
+
+        return ifText;
       }
     }
 

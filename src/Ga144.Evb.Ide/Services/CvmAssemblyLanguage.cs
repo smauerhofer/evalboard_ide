@@ -2520,6 +2520,29 @@ internal static class CvmAssemblyLanguage
   {
     IReadOnlyDictionary<int, (string Mnemonic, int WordLength, int? EmbeddedOperand)> decodeTable = BuildDecodeTable(compiledRam);
     var notes = new Dictionary<int, string>();
+
+    // ADDED 2026-10-03: maps an "if" word's condition field (an address in node 406) back to its name
+    // ("==0", "even", ...) so the listing reads "if r0 ==0 then +2 -> 0x0016". Null (so the listing falls
+    // back to "cond#N") when node 406 did not compile this run or no condition word sits at that address.
+    string? ifConditionName(int conditionAddress)
+    {
+      if (!compiledRam.TryGetValue(Node406Program.Coordinate, out F18CompileResult? node406Compile))
+      {
+        return null;
+      }
+
+      foreach ((string conditionName, string conditionSymbol) in IfConditionSymbolByName)
+      {
+        if (node406Compile.Symbols.TryGetValue(conditionSymbol, out F18ExportedSymbol? conditionExport) &&
+            (conditionExport.Value & CvmWordCodec.WordMask) == conditionAddress)
+        {
+          return conditionName;
+        }
+      }
+
+      return null;
+    }
+
     int address = 0;
     while (address < endAddressExclusive)
     {
@@ -2544,7 +2567,7 @@ internal static class CvmAssemblyLanguage
       // halves rather than just the first.
       int? nextWord = address + 1 < endAddressExclusive ? sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1)) : null;
       int? nextWord2 = address + 2 < endAddressExclusive ? sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 2)) : null;
-      string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word, out int selfDescribingWordLength, wordAddress: address, nextWord: nextWord, nextWord2: nextWord2);
+      string? selfDescribing = CvmInstructionSet.TryDescribeSelfDecodingWord(word, out int selfDescribingWordLength, wordAddress: address, nextWord: nextWord, nextWord2: nextWord2, ifConditionName: ifConditionName);
       if (selfDescribing is not null)
       {
         notes[address] = selfDescribing;
@@ -2980,11 +3003,31 @@ internal static class CvmAssemblyLanguage
       // is NOT run through TryParseOperand at all; the target (third operand) may be a literal number or
       // a label, exactly like the existing Operand/OperandLabel pair's own convention, just carried in
       // Operand3/OperandLabel3 since Operand/OperandLabel are already the register's own slot here.
+      // 2026-10-03: an optional "then" before the target reads better -- "if r0 ==0 then test2" -- and is
+      // dropped here, so everything below sees the plain four-token form. (A label that is itself called
+      // "then" still works in the four-token form: "if r0 ==0 then".)
+      if (parts.Length == 5 &&
+          string.Equals(parts[0], CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase) &&
+          string.Equals(parts[3], "then", StringComparison.OrdinalIgnoreCase))
+      {
+        parts = [parts[0], parts[1], parts[2], parts[4]];
+      }
+
       if (parts.Length == 4 && string.Equals(parts[0], CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase))
       {
-        if (!TryParseOperand(parts[1], out int ifRegister))
+        // 2026-10-03: the register is written "r0".."r15" ("if r0 ==0 test2"); a plain number 0-15 is still
+        // accepted. "d0".."d15" are rejected (16-bit compare) -- see CvmInstructionSet.TryParseSingleRegisterToken.
+        int ifRegister;
+        if (CvmInstructionSet.TryParseSingleRegisterToken(CvmInstructionSet.IfMnemonic, parts[1], 0x000F, out ifRegister, out string? ifRegisterError))
         {
-          return (null, $"line {lineNumber + 1}: \"if\" requires a literal register number (0-15) as its first operand, e.g. \"if 0 ==0 loop\" -- got \"{parts[1]}\".");
+          if (ifRegisterError is not null)
+          {
+            return (null, $"line {lineNumber + 1}: {ifRegisterError}");
+          }
+        }
+        else if (!TryParseOperand(parts[1], out ifRegister))
+        {
+          return (null, $"line {lineNumber + 1}: \"if\" requires a register (r0-r15, or a plain number 0-15) as its first operand, e.g. \"if r0 ==0 loop\" -- got \"{parts[1]}\".");
         }
 
         string conditionName = parts[2];

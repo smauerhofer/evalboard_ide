@@ -487,9 +487,20 @@ public static class CvmAssembler
             CvmInstructionSet.CvmInstructionShape ifShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.IfMnemonic)!;
             CvmSection ifSection = objectFile.GetOrAddSection(section);
 
-            if (!TryParseNumericLiteral(line.Args[0], out int ifRegister) || ifRegister < 0 || ifRegister > ifShape.SecondValueBitMask)
+            // 2026-10-03: "if r0, ==0, loop" -- the register may be written rN (CvmInstructionSet.
+            // TryParseSingleRegisterToken) or as a plain number.
+            int ifRegister;
+            if (CvmInstructionSet.TryParseSingleRegisterToken(CvmInstructionSet.IfMnemonic, line.Args[0], ifShape.SecondValueBitMask, out ifRegister, out string? ifRegisterTokenError))
             {
-              errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register index for \"if\" -- expected 0..{ifShape.SecondValueBitMask} (r0-r15 only, per Stefan directly), e.g. \"if 0, ==0, loop\".");
+              if (ifRegisterTokenError is not null)
+              {
+                errors.Add($"line {line.LineNumber}: {ifRegisterTokenError}");
+                ifRegister = 0;
+              }
+            }
+            else if (!TryParseNumericLiteral(line.Args[0], out ifRegister) || ifRegister < 0 || ifRegister > ifShape.SecondValueBitMask)
+            {
+              errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register for \"if\" -- expected r0..r{ifShape.SecondValueBitMask} (or a plain number 0..{ifShape.SecondValueBitMask}; r0-r15 only, per Stefan directly), e.g. \"if r0, ==0, loop\".");
               ifRegister = 0; // keep going -- pass 1 already fixed this instruction's own 2-word size and every later label's address against it; emitting a wrong-but-correctly-SIZED word here (same resilience convention the generic NodeResolvedEmbeddedValue branch below already uses for an out-of-range register) keeps the rest of the file's layout intact even though this run will fail overall.
             }
 
@@ -1225,10 +1236,60 @@ public static class CvmAssembler
           ? []
           : [.. argsText.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)];
 
+      if (string.Equals(keyword, CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase))
+      {
+        args = NormalizeIfArguments(args);
+      }
+
       lines.Add(new ParsedLine(lineNumber, label, keyword, args));
     }
 
     return (lines, null);
+  }
+
+  /// <summary>
+  /// ADDED 2026-10-03: <c>if</c> accepts an optional <c>then</c> before its target, for readability --
+  /// <c>if r0, ==0, then test2</c>, <c>if r0, ==0 then test2</c> or the all-space form
+  /// <c>if r0 ==0 then test2</c> -- and the word is dropped here, so every later check sees the plain
+  /// three operands (register, condition, target). The existing comma form without <c>then</c> is
+  /// unchanged; a label that is itself named "then" still works as the last operand.
+  /// </summary>
+  private static List<string> NormalizeIfArguments(List<string> args)
+  {
+    static string[] Words(string text) => text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+
+    if (args.Count == 1)
+    {
+      string[] words = Words(args[0]);
+      if (words.Length == 4 && string.Equals(words[2], "then", StringComparison.OrdinalIgnoreCase))
+      {
+        return [words[0], words[1], words[3]];
+      }
+
+      return words.Length == 3 ? new List<string> { words[0], words[1], words[2] } : args;
+    }
+
+    if (args.Count == 2)
+    {
+      string[] words = Words(args[1]);
+      if (words.Length == 3 && string.Equals(words[1], "then", StringComparison.OrdinalIgnoreCase))
+      {
+        return [args[0], words[0], words[2]];
+      }
+
+      return args;
+    }
+
+    if (args.Count == 3)
+    {
+      string[] words = Words(args[2]);
+      if (words.Length == 2 && string.Equals(words[0], "then", StringComparison.OrdinalIgnoreCase))
+      {
+        return [args[0], args[1], words[1]];
+      }
+    }
+
+    return args;
   }
 
   /// <summary>
