@@ -292,6 +292,18 @@ public static class CvmInstructionSet
   // assembler only encodes the word. Not yet verified on hardware.
   public const string CondMnemonic = "cond";
 
+  // SlitMnemonic ("slit") -- BACK 2026-10-03, per Stefan directly: "'slit' is back", table row
+  //   1001|1iii|iiii|iiii| 506 | slit { push 11-bit signed literal on stack }
+  // Bits 15-11 are the fixed "10011" (tag 0x9800), bits 10-0 an 11-bit SIGNED literal (-1024..1023) embedded
+  // in the one word -- no trailing word, no node/linker involvement (CvmOperandEncoding.EmbeddedSignedValue,
+  // self-describing). It sits directly next to cond (1001|0000|cccc|xxxx): cond is 0x90xx, slit is
+  // 0x98xx-0x9FFF, no overlap. This is a NEW row with a NEW Id (214), not a revival of the old slit's Id 8
+  // (CVM2's 1101-class, 12-bit slit, retired 2026-09-09 and deleted outright) -- that Id stays retired.
+  // Source syntax: "slit <value>", e.g. "slit 5", "slit -1", "slit 0x3FF"; the IDE assembler also accepts a
+  // label (its absolute address, range-checked), exactly like the old slit did. The value is pushed
+  // sign-extended per node 506; this toolchain only encodes the word. Not yet verified on hardware.
+  public const string SlitMnemonic = "slit";
+
   // CondPrimitiveNamePrefix -- the linker-assembler counterpart of IfPrimitiveNamePrefix: "cond.eq0" etc. are
   // synthetic CvmPrimitiveTable keys holding the complete base word (0x9000 | resolved-cond<<4, register 0),
   // built by Ga144.Evb.Ide.Services.CvmAssemblyLanguage.BuildIfConditionEncodeTable next to the "if." ones.
@@ -2696,6 +2708,11 @@ public static class CvmInstructionSet
     // intercept CondMnemonic by name before their generic pair handling (see Assemble/EncodeCondInstruction
     // and CvmAssembler's own "case CondMnemonic"). Fresh Id: 213 had never been used.
     new(Id: 213, CondMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: 0x9000, ValueBitMask: 0x00F0, ValueBitShift: 4, SecondValueBitMask: 0x000F),
+    // slit (Id 214, NEW 2026-10-03): table row "1001|1iii|iiii|iiii| 506 | slit {push 11-bit signed literal on
+    // stack}" -- Tag 0x9800, ValueBitMask 0x07FF (11 bits, signed: -1024..1023), WordLength 1, no trailing
+    // word. Fully self-describing (EmbeddedSignedValue), so both assemblers need no code of their own for it.
+    // Fresh Id: 214 had never been used; the old slit's Id 8 stays retired.
+    new(Id: 214, SlitMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: 0x9800, ValueBitMask: 0x07FF),
     // sbr (Id 194): table row "1011|oooo|oooo|oooo| sbr {short branch, relative}" -- bits 15-12 fixed
     // "1011" (0xB000), bits 11-0 a 12-bit SIGNED relative offset ("o", per the table's own legend:
     // "o: signed offset") embedded directly in the one word -- no trailing word at all, which is
@@ -3523,7 +3540,9 @@ public static class CvmInstructionSet
       if ((word & signedTagMask) == signedShape.Tag)
       {
         int signedOffset = DecodeSignedField(word, signedShape.ValueBitMask);
-        return $"{signedShape.Mnemonic} {FormatOperand(signedOffset)}{DescribeBranchTarget(wordAddress, signedOffset)}";
+        // slit's value is a literal, not a branch offset -- no "-> target" suffix for it.
+        string branchTarget = string.Equals(signedShape.Mnemonic, SlitMnemonic, StringComparison.Ordinal) ? string.Empty : DescribeBranchTarget(wordAddress, signedOffset);
+        return $"{signedShape.Mnemonic} {FormatOperand(signedOffset)}{branchTarget}";
       }
     }
 
