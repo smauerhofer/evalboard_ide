@@ -58,6 +58,50 @@ internal static class F18Tokenizer
         continue;
       }
 
+      if (current == '/' && index + 1 < source.Length && source[index + 1] == '*')
+      {
+        var blockStartLine = line;
+        var blockStartColumn = column;
+
+        // ADDED 2026-10-02, per Stefan directly asking for C-style "/* ... */" block
+        // comments -- ADDITIONAL to (not replacing) this tokenizer's existing Forth
+        // "( ... )" comment just above and its "\"/"//" line comments just below. Unlike
+        // either of those, a "/* ... */" comment can span multiple lines: Advance() still
+        // runs on every character consumed here (including '\n'), so line/column tracking
+        // for whatever follows the comment -- a token, or an "unterminated" diagnostic for
+        // some LATER construct -- stays correct even across a multi-line comment. Like the
+        // "( ... )" comment above, a "/*"..."*/" pair does not nest -- only the next "*/"
+        // closes it, regardless of any "/*" encountered while scanning its own body.
+        Advance(current, ref index, ref line, ref column); // '/'
+        Advance(source[index], ref index, ref line, ref column); // '*'
+
+        var blockClosed = false;
+        while (index < source.Length)
+        {
+          current = source[index];
+          if (current == '*' && index + 1 < source.Length && source[index + 1] == '/')
+          {
+            Advance(current, ref index, ref line, ref column); // '*'
+            Advance(source[index], ref index, ref line, ref column); // '/'
+            blockClosed = true;
+            break;
+          }
+
+          Advance(current, ref index, ref line, ref column);
+        }
+
+        if (!blockClosed)
+        {
+          diagnostics.Add(new F18Diagnostic(
+              F18DiagnosticSeverity.Error,
+              "F18T003",
+              "Unterminated \"/*\" block comment.",
+              new F18SourceLocation(blockStartLine, blockStartColumn)));
+        }
+
+        continue;
+      }
+
       if (current == '\\' ||
           (current == '/' && index + 1 < source.Length && source[index + 1] == '/'))
       {
@@ -116,6 +160,16 @@ internal static class F18Tokenizer
         }
 
         if (current == '/' && index + 1 < source.Length && source[index + 1] == '/')
+        {
+          break;
+        }
+
+        // ADDED 2026-10-02, alongside the new "/* ... */" block-comment handling above --
+        // without this, a token glued directly to a block comment with no separating
+        // whitespace (e.g. "foo/*note*/") would swallow the "/*" into the word itself
+        // instead of ending the word there, the same reason the "//" check just above
+        // already exists for the line-comment case.
+        if (current == '/' && index + 1 < source.Length && source[index + 1] == '*')
         {
           break;
         }

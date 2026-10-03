@@ -30,39 +30,6 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-02T16:55:59.1393121
-      utcDateTime: 2026-10-02T16:55:59.1393121Z
-      localDateTime: 2026-10-02T18:55:59.1393121+02:00
-      date: 2026-10-02T00:00:00.0000000
-      day: 2
-      dayOfWeek: Friday
-      dayOfYear: 275
-      hour: 16
-      millisecond: 139
-      microsecond: 312
-      nanosecond: 100
-      minute: 55
-      month: 10
-      offset: 00:00:00
-      totalOffsetMinutes: 0
-      second: 59
-      ticks: 639265569591393121
-      utcTicks: 639265569591393121
-      timeOfDay: 16:55:59.1393121
-      year: 2026
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -83,6 +50,19 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -67447,23 +67427,23 @@ projects:
         A: selected register
 
 
-        r[0], r[1], r[2] .. r[19] 20 x 16-bit register
+        r0, r1, r2 .. r23 : 24 x 16-bit register
 
-        r[0], r[2], r[4] .. r[9]  10 x 32-bit register
+        d0, d1, d2 .. d11 : 12 x 32-bit register
 
 
 
-        r[18] : frame pointer
+        r22 : frame pointer
 
-        r[19] : stack pointer
+        r23 : stack pointer
 
 
         )
 
 
-        # 18 const fp
+        # 22 const fp
 
-        # 19 const sp
+        # 23 const sp
 
 
         # 0 org
@@ -67473,56 +67453,56 @@ projects:
 
         [
           0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
-          0 , 0 , 0 , 0xffff , 
+          0 , 0 , 0 , 0 , 0 , 0 , 0 ,  0xffff , 
         ]
 
 
         : r/defocus ( port - ) rdlu ;
 
 
+        : r/focus_nw ( r - ) a! # rd-- lit
+
         : r/focus ( port - ) dup b! >r ;
 
-
-        : r/focus_n ( - ) # down lit r/focus ;
-
-        : r/focus_w ( - ) # right lit r/focus ;
-
-        : r/focus_se ( - ) # --lu lit r/focus ;
+        : r/focus_se ( r - ) a! # --lu lit r/focus ;
 
 
-        : r/@ @b a! @ !b ;
+        : r/r@ ( r ) a! @ !b ;
 
-        : r/! @b a! @b ! ;
+        : r/r! ( w ) @b ( w r ) a! ! ;
 
 
-        : r/2@ @b a! @+ !b @+ !b ;
+        : r/d@ ( d ) 2* a! @+ !b @+ !b ;
 
-        : r/2! @b a! @b !+ @b !+ ;
+        : r/d! ( hi ) @b @b ( hi lo d ) 2* a! !+ !+ ;
 
+
+        : r/clipped+ ( a b - c )
+          + 0xffff and ;
+
+        : r/add ( - old new )
+          @b            // register
+          @b            // offset
+        : r/save_add ( reg offset - old new )
+          >r a! @ dup r> r/clipped+ dup ! ;
 
         : r/++ ( reg - old new )
-          a! @ dup 1 . + dup ! ;
+          1 r/save_add ;
 
         : r/-- ( reg - old new )
-          a! @ dup -1 . + dup ! ;
+          -1 r/save_add ;
 
         : r/push ( { ,adr } ) sp r/-- drop !b ;
 
         : r/pop  ( { ,adr } ) sp r/++ !b ;
 
 
-        // : r/link ( { 'offset ,old-fp } )
-
-        //  fp a! 
-
-        //  a >r @+ @ dup @b . + 0xffff and ! r> a! ! !b ;
-
 
         : r/link ( receives offset; sends old-fp, save-address )
           fp a! @+                   // old FP
           @ dup !b                   // old FP, old SP; send address
           fp a! dup !+               // FP = old SP
-          @b . + 0xffff and          // SP = old SP + offset
+          @b r/clipped+              // SP = old SP + offset
           !
           !b                         // old FP
           ;
@@ -67551,50 +67531,50 @@ projects:
       - 0x00000
       - 0x00000
       - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
       - 0x0FFFF
       - 0x115A5
+      - 0x2BDB2
+      - 0x00195
       - 0x24BBD
-      - 0x05715
-      - 0x00115
-      - 0x05715
-      - 0x001D5
-      - 0x05715
+      - 0x2BD43
       - 0x00165
-      - 0x00A0A
-      - 0x09555
-      - 0x00A02
-      - 0x0B555
-      - 0x00A1A
+      - 0x2BE25
+      - 0x00A2D
+      - 0x36A1A
       - 0x09C25
-      - 0x00A02
-      - 0x0FF3D
-      - 0x2BE97
+      - 0x01FDA
+      - 0x2B83D
+      - 0x3DDFD
+      - 0x0FFFF
+      - 0x01FB2
+      - 0x2EA0B
+      - 0x27624
+      - 0x25A55
+      - 0x05727
       - 0x00001
-      - 0x2C192
-      - 0x0B555
-      - 0x2BE97
+      - 0x05727
       - 0x3FFFF
-      - 0x2C192
-      - 0x0B555
-      - 0x05628
-      - 0x00013
+      - 0x0562C
+      - 0x00017
       - 0x3BB55
-      - 0x05624
-      - 0x00013
+      - 0x0562A
+      - 0x00017
       - 0x09555
       - 0x04A1A
-      - 0x00012
+      - 0x00016
       - 0x02D27
-      - 0x00012
+      - 0x00016
       - 0x2AD3A
-      - 0x009F7
-      - 0x0FFFF
-      - 0x3FA25
+      - 0x01624
+      - 0x0BB55
       - 0x04A0B
-      - 0x00012
+      - 0x00016
       - 0x09F3A
       - 0x0B555
-      - 0x15555
       - 0x15555
       startup:
         entryPoint: 0x1A5
@@ -68286,48 +68266,22 @@ projects:
 
         ----+----+----+----+------+----------------------------
 
-        0000|0000|0000|0000|      | nop
+        0000|0000|0000|0000| 508  | nop
 
-        000a|aaaa|aaaa|aaaa|      | scall
+        000w|wwww|wsss|xxxx| 508  | special 508 with optional register
 
-        0010|0000|00ww|wwww|      | special {link, unlink, ret, lcall, ljmp}
+        001w|wwww|wsss|xxxx| 508  | special 508 with optional register with focus
 
-        0100|....|....|xxxx|      | next16. load 16 bit literal into register. example, "lit r0"
+        01oo|oooo|oooo|oooo| 508  | br {short branch, relative}
 
-        0101|....|....|xxxx|      | next32. load 32 bit literal into register. example, "lit d0"
+        100.|....|cccc|xxxx| 506  | if {conditional long branch, relative}
 
-        0110|....|....|xxxx|      | pop16. pop 16 bit value from stack into register. example, "pop r0"
+        101.|00ww|wwww|xxxx| 506  | special 506 with optional register
 
-        0111|....|....|xxxx|      | pop32. pop 32 bit value from stack into register. example, "pop d0"
+        110 |    |    |    | 506  | 16-bit operation
 
-        1000|....|....|xxxx|      | rjmp {jump to address in register r}
+        111 |    |    |    | 506  | 32-bit operation
 
-        1001|....|....|xxxx|      | rcall {call to address in register r}
-
-        1010|....|cccc|xxxx|      | if {conditional long branch, relative}
-
-        1011|oooo|oooo|oooo|      | sbr {short branch, relative}
-
-
-        11  |    |    |    | other
-
-        ----+----+----+----+----------------------------------------
-
-        1100|000w|wwww|weee| implied
-
-        1100|1000|iiii|xxxx| immediate
-
-        1101|0   |    |xxxx| unary {16 bit}
-
-        1101|1   |yyyy|xxxx| binary {16 bit}
-
-        1110|0   |    |xxxx| unary {32 bit}
-
-        1110|1   |yyyy|xxxx| binary {32 bit}
-
-        1111|0   |    |xxxx| unary {32 bit float}
-
-        1111|1   |yyyy|xxxx| binary {32 bit float}
 
 
         a: absolute address
@@ -68345,6 +68299,10 @@ projects:
         i: immediate unsigned value
 
         o: signed offset
+
+        s: size
+
+        w: word address
 
         cond: condition
 
@@ -68372,6 +68330,151 @@ projects:
 
 
         # 0 org
+
+
+        : m/msend ( w - ) // memory send
+          up b! !b ;
+
+        : m/unlink ( - )
+          1 A[ r/unlink ]] lit m/rsend @b
+          ( 1 adr )
+          m/read
+        : m/rsend ( w - ) // register send
+          down b! !b ;
+
+        : m/nextinstr ( - )
+          # m/nextinstr lit >r
+          m/pc++
+          A[ mem/rdupinstr ]] lit m/msend !b @b
+          dup 2* 2* . -if
+            r---                // bit 15 = 1 → node 506
+            dup xor inv         // -1 marker for write RAM test
+          then
+          --l- ;               // bit 15 = 0 → node 508
+
+
+        : m/pc++ ( - adr )
+          1
+        : m/branch ( offset - adr )
+          a dup >r . + 0xffff and a! r> ;
+
+        : m/dnext ( - lo hi ) leap
+
+        : m/next ( - w ) then
+          dup xor m/pc++
+          ( 0 a )
+        : m/read ( p a - w )
+          A[ mem/rdup ]] lit m/msend !b !b @b ;
+
+        : m/dpop ( - lo hi ) leap
+
+        : m/pop ( - w ) then
+          A[ r/pop ]] lit m/rsend
+          1 @b m/read ;
+
+
+        : m/dpush ( lo hi - ) leap
+
+        : m/push ( w - ) then
+          A[ r/push ]] lit m/rsend
+          1 @b
+        : m/write ( w p a - )
+          A[ mem/wrup ]] lit m/msend
+          !b !b !b ;
+
+        : m/link ( - )
+          m/next
+          A[ r/link ]] lit m/rsend
+          @b >r                      // receive save address
+          !b                         // send offset
+          @b                         // receive old FP
+          1 r>                       // old FP, page, address
+          m/write ;
+
+        : m/r@ ( r - w )
+           A[ @p r/r@ ]] lit !b @b
+        ;
+
+
+        : m/d@ ( d - lo hi )
+          A[ r/d@ ]] lit !b @b @b
+        ;
+
+
+        /*
+
+        : m/r! ( r w - )
+          A[ r/r! ]] lit !b !b !b
+        ;
+
+
+        : m/d! ( lo hi d - )
+          A[ r/d! ]] lit !b !b !b !b
+        ;
+
+        */
+
+
+        : m/r! ( r w - )
+          A[ r/r! ]] lit !b m/send2 ;
+
+        : m/d! ( lo hi d - )
+          A[ r/d! ]] lit !b !b
+        : m/send2 ( w1 w2 - )
+          !b !b ;
+
+        /*
+
+
+        // : m/focus ( - )
+
+        //  A[ r/focus_n ]] lit m/rsend ;
+
+
+        // : m/defocus ( - )
+
+        //  A[ r/defocus ]] lit m/rsend ;
+
+
+        : 'lcall ( - )
+          m/next
+        : m/call ( adr - )
+          a m/push
+        : m/jump ( adr - )
+          a! ;
+
+        : 'ljmp ( - )
+          m/next a! ;
+
+        : 'ret ( - )
+          m/pop a! ;
+
+        : m/r@ ( r instr - w )
+          m/rsend !b
+        ;
+
+
+        /* this is the new C-style comment
+
+
+        : m/r@ ( r - w )
+           m/focus A[ @p r/r@ ]] lit !b @b
+        ;
+
+
+        : m/d@ ( d - lo hi )
+          A[ r/d@ ]] lit m/focus 2* !b @b @b
+        ;
+
+
+        : m/r! ( w r - )
+          A[ r/r! ]] lit m/focus !b !b
+        ;
+
+
+        : m/d! ( lo hi d - )
+          A[ r/d! ]] lit m/focus 2* !b !b !b
+        ;
 
 
         : m/usend ( command - )
@@ -68476,7 +68579,7 @@ projects:
         : 'ret ( - )
           m/pop a! ;
 
-
+        */
 
 
 
@@ -68486,67 +68589,67 @@ projects:
       ramWords:
       - 0x04B25
       - 0x00145
-      - 0x243B2
-      - 0x13405
-      - 0x1141E
+      - 0x05D4E
+      - 0x00001
+      - 0x1343B
+      - 0x0161C
+      - 0x04B25
+      - 0x00115
+      - 0x048B2
+      - 0x00008
+      - 0x13413
+      - 0x05600
+      - 0x1340C
+      - 0x09F92
+      - 0x364B2
+      - 0x1B412
+      - 0x135D5
+      - 0x243CA
+      - 0x11575
       - 0x049B2
       - 0x00001
       - 0x22DBA
       - 0x3DDFA
       - 0x0FFFF
       - 0x2AC55
-      - 0x05DB2
-      - 0x00001
-      - 0x1343A
-      - 0x13411
-      - 0x009B2
-      - 0x1341E
-      - 0x04B25
-      - 0x00115
-      - 0x05711
-      - 0x13416
-      - 0x05711
-      - 0x13414
-      - 0x2F613
-      - 0x17555
-      - 0x11415
-      - 0x05611
-      - 0x1342F
-      - 0x05FB2
-      - 0x00001
+      - 0x1341A
+      - 0x243B2
+      - 0x13413
       - 0x05600
       - 0x13403
       - 0x09B05
-      - 0x13402
-      - 0x05611
-      - 0x1342C
+      - 0x13420
+      - 0x05606
+      - 0x13431
+      - 0x05FB2
+      - 0x00001
+      - 0x1141C
+      - 0x13426
+      - 0x05606
+      - 0x1342E
       - 0x05FB2
       - 0x00001
       - 0x05600
       - 0x13415
       - 0x09B25
-      - 0x13405
-      - 0x05600
-      - 0x1340C
-      - 0x09F12
-      - 0x001D5
-      - 0x29BB2
-      - 0x135D5
-      - 0x11575
-      - 0x13402
-      - 0x05611
-      - 0x13432
+      - 0x1341A
+      - 0x05606
+      - 0x13434
       - 0x00822
       - 0x01D9A
       - 0x00001
-      - 0x11426
-      - 0x13402
-      - 0x23622
-      - 0x2B555
-      - 0x13402
-      - 0x2B555
-      - 0x1341A
-      - 0x2B555
+      - 0x1142A
+      - 0x05B05
+      - 0x0561E
+      - 0x05B02
+      - 0x13420
+      - 0x01555
+      - 0x05B45
+      - 0x1341F
+      - 0x05B22
+      - 0x13422
+      - 0x09B55
+      - 0x15555
       - 0x15555
       startup:
         entryPoint: 0x175
@@ -68560,7 +68663,7 @@ projects:
       postMortemEnabled: true
     - coordinate: 508
       enabled: true
-      sourceCode: >
+      sourceCode: >+
         ( CVM_pipeline node 508.
 
 
@@ -68574,80 +68677,163 @@ projects:
 
         # 507 import
 
+        # 407 import
 
-        # 0 org
 
-        # io /b
+        # left /b
+
+        # right /a
 
         entry x6/main
 
 
-        : down-writing?  io b!  @b  0x2000 and ;
+        # 4 org // shift origin for jump target fit
 
+
+        : down-writing?  io b!  @b  0x2000 and ;   
+
+
+        : x6/finish left b! A[ m/nextinstr ]] lit !b
 
         : x6/main
-          # x6/main lit >r
-          down-writing? if
-            -d-- ;
-          then
+          # x6/finish lit >r
           // execute next instruction
-          left b!
-          A[ m/nextinstr ]] lit !b
+          A[ !p !p ]] lit !b @b
+          ( sop )
+          -if // cleanup
+            @b
+            down-writing? if
+              -d-- ;
+            then
+        : x6/nop
+            ;
+          then
+          2* -if // 01 br
+            @b drop
+            2* 2/ 2/ 2/ 2/
+            A[ @p m/branch ]] lit !b !b ;
+          then // 00
+          2* -if // 001 special with focus
+            @b dup 0xf and
+            ( sop op r )
+            over 2/ 2/ 2/ 2/
+            dup 7 and dup >r !    // size-1
+            2/ 2/ 2/ 0x3f and !   // offset
+            ( r ) // A: offset
+            // focus with sending r
+            A[ @p r/focus_nw ]] lit !b !b
+            // transfer
+            begin @ !b unext
+            // defocus
+            A[ r/defocus ]] lit !b ;
+          then // special without focus
+            @b dup 0xf and A[ @p ]] lit !b !b  // send register
+            2/ 2/ 2/ 2/
+            dup 7 and dup >r !        // size-1
+            2/ 2/ 2/
+            !                         // offset
+            begin @ !b unext ;        // transfer
+
+        /*
+
+        : x6/focus ( w - )
+          A[ @p r/focus_n ]] lit
+        : x6/focus2 ( w instr - )
+          A[ @p m/rsend ]] lit !b !b !b ;
+
+        : x6/defocus ( ? - )
+          A[ @p r/defocus ]] lit x6/focus2 
         ;
+
+
+        : 'rpush ( r )
+          A[ m/focus ]] lit !b
+          A[ m/defocus ]] lit !b
+        ;
+
+
+
+
+        : x6/r@ ( r - )
+          A[ @p m/focus ]] lit !b !b
+          // 507: ( r )
+          A[ @p !b !b ]] lit !b A[ r/r@ ]] lit !b
+          A[ r/r@ ]] lit m/focus !b @b
+        ;
+
+
+        : x6/d@ ( d - lo hi )
+          A[ r/d@ ]] lit m/focus 2* !b @b @b
+        ;
+
+
+        : x6/r! ( w r - )
+          A[ r/r! ]] lit m/focus !b !b
+        ;
+
+
+        : x6/d! ( lo hi d - )
+          A[ r/d! ]] lit m/focus 2* !b !b !b
+        ;
+
+        */
+
+
+
       ramWords:
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x04B07
       - 0x0015D
       - 0x02000
       - 0x3F555
-      - 0x04848
-      - 0x00004
-      - 0x19408
-      - 0x11515
       - 0x04B12
       - 0x00175
-      - 0x13431
+      - 0x13408
+      - 0x089B2
+      - 0x04812
+      - 0x00008
+      - 0x0D9B2
+      - 0x09F6C
+      - 0x01604
+      - 0x19413
+      - 0x11515
+      - 0x15555
+      - 0x3721A
+      - 0x002DA
+      - 0x307C2
+      - 0x31D22
+      - 0x05615
       - 0x09555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x3722A
+      - 0x00D12
+      - 0x0000F
+      - 0x3EFC2
+      - 0x307C3
+      - 0x04092
+      - 0x00007
+      - 0x2FAC2
+      - 0x30712
+      - 0x0003F
+      - 0x3FA12
+      - 0x05619
+      - 0x09BB2
+      - 0x03B77
+      - 0x13418
+      - 0x09555
+      - 0x00D12
+      - 0x0000F
+      - 0x3FD22
+      - 0x049B2
+      - 0x087C2
+      - 0x30797
+      - 0x00007
+      - 0x3EDBA
+      - 0x0A7C2
+      - 0x31AB2
+      - 0x03B75
       - 0x15555
       - 0x15555
       - 0x15555
@@ -68660,7 +68846,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x004
+        entryPoint: 0x00C
         p: 0x000
         a: 0x000
         b: 0x000
@@ -68671,51 +68857,172 @@ projects:
       postMortemEnabled: true
     - coordinate: 509
       enabled: true
-      sourceCode: "( CVM_pipeline node 509.\n\ninstruction execution.\n\n\n)\n\r\n# up /b\r\n\r\nentry x6a/main\r\n\r\n# 0 org\r\n\n: x6a/main\n  @b\r\n  \n  x6a/main ;\n\r\n\r\n\r\n"
+      sourceCode: >+
+        ( CVM_pipeline node 509.
+
+
+        instruction execution.
+
+
+
+        )
+
+        # 507 import
+
+        # 407 import
+
+
+        # right /b
+
+
+        entry x6a/main
+
+
+        # 0 org
+
+
+        : 'nop // do nothing
+          // 1 without focus
+          A[ nop ]] ,
+
+        : 'ret // return from call
+          // 2 with focus
+          A[ m/pop ]] ,
+          A[ a! ]] ,
+
+        : 'call // call to address in next word
+          // 3 with focus
+          A[ m/next ]] ,
+          A[ a m/push ]] ,
+          A[ a! ]] ,
+
+        : 'jmp // jump to address in next word
+          // 2 without focus
+          A[ m/next ]] ,
+          A[ a! ]] ,
+
+        : 'link // create new stack frame with offset in next word
+          // 1 with focus
+          A[ m/link ]] ,
+
+        : 'unlink // destroy current stack frame
+          // 1 with focus
+          A[ m/unlink ]] ,
+
+        : 'pop // pop 16-bit value from stack and stores it in a register ( w - )
+          // 2 with focus
+          A[ m/pop ]] ,
+          A[ m/r! ]] ,
+
+        : 'dpop // pop 32-bit value from stack and stores it in a double register ( lo hi - )
+          // 2 with focus
+          A[ m/dpop ]] ,
+          A[ m/d! ]] ,
+
+        : 'push // read 16-bit value from register and push it on the stack ( - w )
+          // 2 with focus
+          A[ m/r@ ]] ,
+          A[ m/push ]] ,
+
+        : 'dpush // read 32-bit value from double register and push it on the stack ( - lo hi )
+          // 2 with focus
+          A[ m/d@ ]] ,
+          A[ m/dpush ]] ,
+
+        : 'popi // pop 16-bit value from stack and stores it in a register indirect. register # is on the stack ( w r - )
+          // 2 with focus
+          A[ m/dpop ]] ,
+          A[ over m/r! ]] ,
+
+        : 'dpopi // pop 32-bit value from stack and stores it in a register indirect. register # is on the stack ( lo hi d - )
+          // 3 with focus
+          A[ m/pop ]] ,
+          A[ >r m/dpop ]] ,
+          A[ r> m/d! ]] ,
+
+        : 'pushi // read 16-bit value from register indirect and push it on the stack ( r - w )
+          // 3 with focus
+          A[ m/pop ]] ,
+          A[ m/r@ ]] ,
+          A[ m/push ]] ,
+
+        : 'dpushi // read 32-bit value from register indirect and push it on the stack ( r - lo hi )
+          // 3 with focus
+          A[ m/pop ]] ,
+          A[ m/r@ ]] ,
+          A[ m/push ]] ,
+
+        : 'rinc // increment
+          // 3 with focus
+          A[ @p m/rsend ]] , A[ @p r/++ ]] ,
+          A[ m/rsend ]] ,
+
+        : 'rdec // increment
+          // 3 with focus
+          A[ @p m/rsend ]] , A[ @p r/-- ]] ,
+          A[ !b ]] ,
+
+        : 'radd // add value to register ( offset - )
+          // 4 with focus
+          A[ @p m/rsend ]] , A[ @p r/add ]] ,
+          A[ !b m/pop ]] ,
+          A[ m/rsend ]] ,
+
+
+
+
+        : x6a/main
+          @b >r
+          @b a!
+          begin @+ !b unext
+          x6a/main ;
+
+
+
       ramWords:
-      - 0x01700
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x2C9B2
+      - 0x13421
+      - 0x2A9B2
+      - 0x1341B
+      - 0x23627
+      - 0x2A9B2
+      - 0x1341B
+      - 0x2A9B2
+      - 0x1342E
+      - 0x13402
+      - 0x13421
+      - 0x1343A
+      - 0x13420
+      - 0x1343D
+      - 0x13435
+      - 0x13427
+      - 0x13437
+      - 0x13426
+      - 0x13420
+      - 0x2163A
+      - 0x13421
+      - 0x2F620
+      - 0x2763D
+      - 0x13421
+      - 0x13435
+      - 0x13427
+      - 0x13421
+      - 0x13435
+      - 0x13427
+      - 0x05608
+      - 0x0562A
+      - 0x13408
+      - 0x05608
+      - 0x0562C
+      - 0x089B2
+      - 0x05608
+      - 0x05626
+      - 0x09621
+      - 0x13408
+      - 0x00802
+      - 0x2A9B2
+      - 0x07B72
+      - 0x11427
       - 0x15555
       - 0x15555
       - 0x15555
@@ -68738,7 +69045,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x027
         p: 0x000
         a: 0x000
         b: 0x000

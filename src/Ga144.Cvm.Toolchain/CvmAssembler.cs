@@ -151,7 +151,14 @@ public static class CvmAssembler
   public static (CvmObjectFile? Object, IReadOnlyList<string> Errors) Assemble(string source)
   {
     var errors = new List<string>();
-    List<ParsedLine> lines = Parse(source);
+    (List<ParsedLine>? parsedLines, string? parseError) = Parse(source);
+    if (parsedLines is null)
+    {
+      errors.Add(parseError!);
+      return (null, errors);
+    }
+
+    List<ParsedLine> lines = parsedLines;
 
     // Pass 1: layout -- section membership, label offsets, and the export/import name sets. No
     // operand identifier is resolved here; only syntax (operand counts, identifier shape) is checked.
@@ -1189,10 +1196,20 @@ public static class CvmAssembler
 
   private sealed record ParsedLine(int LineNumber, string? Label, string? Directive, IReadOnlyList<string> Args);
 
-  private static List<ParsedLine> Parse(string source)
+  private static (List<ParsedLine>? Lines, string? Error) Parse(string source)
   {
+    // ADDED 2026-10-02, per Stefan directly asking for C-style "/* ... */" block comments, additional
+    // to (not replacing) the ";"/"//" line comments StripComment already strips per-line below -- see
+    // StripBlockComments' own remarks for why this has to run as a separate, whole-source pre-pass
+    // BEFORE the line split just below, rather than folding into StripComment itself.
+    (string? sourceWithoutBlockComments, string? blockCommentError) = StripBlockComments(source.Replace("\r\n", "\n"));
+    if (sourceWithoutBlockComments is null)
+    {
+      return (null, blockCommentError);
+    }
+
     var lines = new List<ParsedLine>();
-    string[] rawLines = source.Replace("\r\n", "\n").Split('\n');
+    string[] rawLines = sourceWithoutBlockComments.Split('\n');
     for (int index = 0; index < rawLines.Length; index++)
     {
       int lineNumber = index + 1;
@@ -1226,7 +1243,91 @@ public static class CvmAssembler
       lines.Add(new ParsedLine(lineNumber, label, keyword, args));
     }
 
-    return lines;
+    return (lines, null);
+  }
+
+  /// <summary>
+  /// ADDED 2026-10-02, per Stefan directly asking for C-style <c>/* ... */</c> block comments,
+  /// ADDITIONAL to (not replacing) the <c>;</c>/<c>//</c> line comments <see cref="StripComment"/>
+  /// already strips -- that method is left completely unchanged, and is still what handles those two.
+  /// A block comment can span multiple lines, which <see cref="StripComment"/>'s own per-line design
+  /// (<see cref="Parse"/> splits the source into lines FIRST, then strips each line independently)
+  /// cannot express at all, so this runs as a separate pre-pass over the WHOLE source text, before it
+  /// is ever split into lines -- <see cref="Parse"/> calls this first and only then splits the result.
+  ///
+  /// Every character inside a <c>/* ... */</c> span is dropped, including the delimiters themselves,
+  /// EXCEPT a newline, which is always preserved verbatim. That is what keeps every line number
+  /// <see cref="Parse"/>/<see cref="Assemble"/> report in their own error messages accurate across a
+  /// multi-line comment, exactly as if the commented-out lines were still there, just empty. A closed
+  /// comment is replaced by a single space rather than nothing at all, so two tokens written adjacent
+  /// to a comment with no surrounding whitespace (e.g. <c>"x/*note*/y"</c>) still tokenize as two
+  /// separate words instead of silently fusing into one -- the same convention a C preprocessor uses.
+  ///
+  /// An unterminated comment (no matching <c>*/</c> before the source ends) is a hard parse error,
+  /// reported against the LINE the <c>/*</c> itself started on, not the end of the file, since that is
+  /// where a person fixing it needs to look -- surfaced through <see cref="Parse"/>'s own new
+  /// <c>Error</c> return value, exactly like every other parse/assemble failure in this class.
+  ///
+  /// A <c>/*</c> or <c>*/</c> appearing inside an already-recognized <c>;</c>/<c>//</c> line comment is
+  /// NOT specially handled here -- by design, this runs BEFORE <see cref="StripComment"/>'s own
+  /// per-line stripping, so a stray <c>/*</c> after a <c>;</c>/<c>//</c> still opens a real block
+  /// comment (and a lone <c>*/</c> with no preceding <c>/*</c> is simply ordinary text, left untouched,
+  /// same as any other character outside a recognized comment). Stefan's own source has not been seen
+  /// to mix the two this way; if that ever matters, a fix belongs here, not in
+  /// <see cref="StripComment"/>.
+  /// </summary>
+  private static (string? Result, string? Error) StripBlockComments(string source)
+  {
+    var output = new System.Text.StringBuilder(source.Length);
+    int line = 1;
+    int i = 0;
+    while (i < source.Length)
+    {
+      char c = source[i];
+      if (c == '/' && i + 1 < source.Length && source[i + 1] == '*')
+      {
+        int startLine = line;
+        i += 2;
+        bool closed = false;
+        while (i < source.Length)
+        {
+          if (source[i] == '\n')
+          {
+            output.Append('\n');
+            line++;
+            i++;
+            continue;
+          }
+
+          if (source[i] == '*' && i + 1 < source.Length && source[i + 1] == '/')
+          {
+            i += 2;
+            closed = true;
+            break;
+          }
+
+          i++;
+        }
+
+        if (!closed)
+        {
+          return (null, $"line {startLine}: unterminated \"/*\" comment -- no matching \"*/\" found before the end of the file.");
+        }
+
+        output.Append(' ');
+        continue;
+      }
+
+      output.Append(c);
+      if (c == '\n')
+      {
+        line++;
+      }
+
+      i++;
+    }
+
+    return (output.ToString(), null);
   }
 
   private static string StripComment(string line)

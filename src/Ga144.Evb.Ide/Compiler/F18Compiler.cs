@@ -24,6 +24,18 @@ public sealed class F18Compiler
   private readonly List<F18Diagnostic> _diagnostics = [];
   private readonly List<SymbolRelocation> _symbolRelocations = [];
 
+  // ADDED 2026-10-03 (forward-reference packing, see EmitSymbolControl): ordinals of
+  // forward named-reference sites (the Nth forward 'name'/'name ;'/'call name'/'jump name'
+  // emitted in a pass) that an earlier layout pass found NOT reachable through the narrow
+  // slot 1/2 field they were packed into. Those sites are emitted force-aligned (slot 0,
+  // full 10-bit field) on the next pass. The set only ever grows, which is what makes the
+  // retry loop in Compile terminate. It survives Reset() on purpose -- it is the one piece
+  // of state carried from one layout pass to the next -- and is cleared by Compile itself.
+  private readonly HashSet<int> _alignedForwardSites = [];
+  private int _forwardSiteCounter;
+  private bool _layoutRetryNeeded;
+  private bool _alignAllForwardSites;
+
   private MemoryBuilder? _builder;
   private F18CompileTimeInterpreter? _interpreter;
   private IReadOnlyList<F18Token> _tokens = [];
@@ -42,7 +54,44 @@ public sealed class F18Compiler
   private IReadOnlyList<int>? _initialReturnStack;
   private F18CompilerOptions _options = F18CompilerOptions.ForRam();
 
+  // Upper bound on layout passes. Every retry adds at least one NEW site to
+  // _alignedForwardSites, so the loop below is already bounded by the number of forward
+  // references in the source; this cap is only a backstop (see the fallback pass below).
+  private const int MaxLayoutPasses = 256;
+
   public F18CompileResult Compile(string source, F18CompilerOptions? options = null)
+  {
+    // ADDED 2026-10-03: a forward reference to a word defined LATER ('m/send2' used in
+    // 'm/r!' before ': m/send2' appears) can only be packed into a free slot 1/2 of the
+    // current instruction word if its narrow 8-/3-bit address field reaches the target,
+    // and the target address is not known until the whole source has been laid out --
+    // which itself depends on whether that transfer was packed. So this is solved like
+    // branch relaxation in an assembler: lay the whole source out OPTIMISTICALLY (every
+    // forward reference packed into whatever slot is free), then check each packed site
+    // against the final addresses; any site that cannot reach is marked force-aligned
+    // and the source is laid out again. Sites only ever move from packed to aligned
+    // (never back), so this terminates, and the layout returned is one in which every
+    // packed site was verified reachable. With PackControlTransfers off, or when no
+    // forward reference needs demoting, this is exactly one pass -- as before.
+    _alignedForwardSites.Clear();
+    _alignAllForwardSites = false;
+
+    for (int pass = 0; pass < MaxLayoutPasses; pass++)
+    {
+      F18CompileResult result = CompileOnce(source, options);
+      if (!_layoutRetryNeeded)
+      {
+        return result;
+      }
+    }
+
+    // Backstop only (not expected to be reachable): give up optimizing and lay every
+    // forward reference out force-aligned, which can never ask for another retry.
+    _alignAllForwardSites = true;
+    return CompileOnce(source, options);
+  }
+
+  private F18CompileResult CompileOnce(string source, F18CompilerOptions? options)
   {
     _options = options ?? F18CompilerOptions.ForRam();
     Reset();
@@ -206,6 +255,8 @@ public sealed class F18Compiler
     }
 
     _symbolRelocations.Clear();
+    _forwardSiteCounter = 0;
+    _layoutRetryNeeded = false;
     _tokens = [];
     _tokenIndex = 0;
     _inDefinition = false;
@@ -2026,10 +2077,42 @@ public sealed class F18Compiler
     }
   }
 
+  // Emit a transfer to a name that is not defined yet (a forward reference).
+  //
+  // CHANGED 2026-10-03: this used to ALWAYS emit a force-aligned slot-0 word (the
+  // transfer alone in a fresh word, rest of the current word padded with nops), because
+  // the destination -- and therefore whether the 8-bit (slot 1) / 3-bit (slot 2) address
+  // field could reach it -- is not known yet. That cost a whole extra word per forward
+  // tail call / call: e.g. 'A[ r/r! ]] lit !b m/send2 ;' compiled to
+  // '@p !b nop nop | literal | jump m/send2' (3 words) although '@p !b jump m/send2 |
+  // literal' (2 words, the jump packed into slot 2 behind the '@p'/'!b') reaches the
+  // target just as well. Backward references already packed (EmitKnownControl), as do
+  // the compiler's own forward 'if'/'ahead'/'leap' (EmitForwardPlaceholder).
+  //
+  // Now: when PackControlTransfers is on, the transfer is packed greedily into the
+  // current word's next free slot, exactly like 'if'/'ahead' do, and
+  // ResolveSymbolRelocations verifies reachability once the real address is known. A
+  // site that does NOT reach is not an error here (unlike a forward 'if', where the user
+  // must realign the source by hand): it is marked force-aligned and Compile lays the
+  // source out again, so the unpackable case degrades to the previous behavior instead of
+  // failing. 'site' is this reference's ordinal among forward references in this pass,
+  // the stable key that survives the re-layout (token positions would not: f18var splices
+  // synthetic tokens in).
   private void EmitSymbolControl(byte opcode, F18Token target)
   {
+    int site = _forwardSiteCounter++;
+
+    if (_options.PackControlTransfers &&
+        !_alignAllForwardSites &&
+        !_alignedForwardSites.Contains(site))
+    {
+      var packedAddress = Builder.EmitPackedControlPlaceholder(opcode, target, out int slot, out int literalCount);
+      _symbolRelocations.Add(new SymbolRelocation(packedAddress, opcode, target.Text, target, site, true, slot, literalCount));
+      return;
+    }
+
     var memoryAddress = Builder.EmitControlPlaceholder(opcode, target);
-    _symbolRelocations.Add(new SymbolRelocation(memoryAddress, opcode, target.Text, target));
+    _symbolRelocations.Add(new SymbolRelocation(memoryAddress, opcode, target.Text, target, site, false, 0, 0));
   }
 
   private void ResolveSymbolRelocations()
@@ -2039,18 +2122,38 @@ public sealed class F18Compiler
       if (_symbols.TryGetValue(relocation.Symbol, out var localSymbol) &&
           localSymbol.Kind == F18ExportKind.Word)
       {
-        Builder.PatchControl(relocation.MemoryAddress, relocation.Opcode, localSymbol.Value, relocation.Token);
+        PatchSymbolRelocation(relocation, localSymbol.Value);
         continue;
       }
 
       if (_externalSymbols.TryGetValue(relocation.Symbol, out var externalSymbol) &&
           externalSymbol.Kind == F18ExportKind.Word)
       {
-        Builder.PatchControl(relocation.MemoryAddress, relocation.Opcode, externalSymbol.Value, relocation.Token);
+        PatchSymbolRelocation(relocation, externalSymbol.Value);
         continue;
       }
 
       AddError("F18C030", $"Unknown callable word '{relocation.Symbol}'. Imports must precede their first use; labels are numeric values, not implicit calls.", relocation.Token.Location);
+    }
+  }
+
+  // Patch one forward named reference. A force-aligned site always fits (slot 0 reaches
+  // the whole node). A greedily packed site may not: if its slot field cannot reach the
+  // now-known destination, mark the site force-aligned and request another layout pass
+  // (see Compile) rather than reporting an error -- this pass's image is discarded.
+  private void PatchSymbolRelocation(SymbolRelocation relocation, int destination)
+  {
+    if (!relocation.Packed)
+    {
+      Builder.PatchControl(relocation.MemoryAddress, relocation.Opcode, destination, relocation.Token);
+      return;
+    }
+
+    if (!Builder.TryPatchPackedControl(
+            relocation.MemoryAddress, relocation.Slot, relocation.LiteralCount, destination, relocation.Token))
+    {
+      _alignedForwardSites.Add(relocation.Site);
+      _layoutRetryNeeded = true;
     }
   }
 
@@ -2356,7 +2459,20 @@ public sealed class F18Compiler
   private void AddInfo(string code, string message, F18SourceLocation location) =>
       _diagnostics.Add(new F18Diagnostic(F18DiagnosticSeverity.Info, code, message, location));
 
-  private sealed record SymbolRelocation(int MemoryAddress, byte Opcode, string Symbol, F18Token Token);
+  // 'Site'/'Packed'/'Slot'/'LiteralCount' (added 2026-10-03): the forward reference's
+  // ordinal in this pass, whether it was packed into a free slot (vs. force-aligned into
+  // its own slot-0 word), and -- when packed -- the slot it occupies and how many '@p'
+  // literals in the same word advance P past it (the reachability base, see
+  // EmitPackedControlPlaceholder).
+  private sealed record SymbolRelocation(
+      int MemoryAddress,
+      byte Opcode,
+      string Symbol,
+      F18Token Token,
+      int Site,
+      bool Packed,
+      int Slot,
+      int LiteralCount);
 
   private enum ControlKind
   {
@@ -2682,6 +2798,45 @@ public sealed class F18Compiler
       var mask = (1 << F18InstructionSet.AddressFieldWidth(slot)) - 1;
       var patched = (_memory[index]!.Value & ~mask) | (destination & mask);
       _memory[index] = patched & F18InstructionSet.WordMask;
+    }
+
+    // ADDED 2026-10-03: the non-reporting sibling of PatchPackedControl, for a forward
+    // reference to a NAMED word (see F18Compiler.EmitSymbolControl). Same reachability
+    // test and same field patch, but an unreachable slot 1/2 field is not an error --
+    // it returns false, writes nothing, and reports nothing, so the caller can mark the
+    // site force-aligned and lay the source out again. Returns true when the transfer
+    // was patched; also true (after reporting F18M002, exactly as PatchPackedControl
+    // does) when memoryAddress is not a patchable word at all, since a retry could not
+    // change that.
+    public bool TryPatchPackedControl(int memoryAddress, int slot, int literalCount, int destination, F18Token token)
+    {
+      var index = ToPhysicalIndex(memoryAddress);
+      if (index < 0 || !_memory[index].HasValue)
+      {
+        ReportError(
+            "F18M002",
+            $"Cannot patch control transfer at {_memoryName} address 0x{memoryAddress:X3}.",
+            token);
+        return true;
+      }
+
+      // Same base as PatchPackedControl: the wrapped address after this word, advanced
+      // once more past each inline '@p' literal in the same word.
+      var nextP = NextAddress(memoryAddress);
+      for (var i = 0; i < literalCount; i++)
+      {
+        nextP = NextAddress(nextP);
+      }
+
+      if (!F18InstructionSet.ControlFitsSlot(slot, nextP, destination, _memory.Length))
+      {
+        return false;
+      }
+
+      var mask = (1 << F18InstructionSet.AddressFieldWidth(slot)) - 1;
+      var patched = (_memory[index]!.Value & ~mask) | (destination & mask);
+      _memory[index] = patched & F18InstructionSet.WordMask;
+      return true;
     }
 
     public void Align()
