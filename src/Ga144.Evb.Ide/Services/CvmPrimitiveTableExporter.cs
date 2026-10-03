@@ -30,17 +30,24 @@ namespace Ga144.Evb.Ide.Services;
 /// only <see cref="CvmNodeMesh.StandaloneCoordinates"/> needs a new entry if an entirely new NODE joins
 /// the mesh (an even rarer event than a mnemonic changing within an existing node).
 ///
-/// <b>What gets exported, and why not everything in the encode table does:</b> only entries with
-/// <c>OperandIsEmbedded == false</c> -- i.e. <see cref="CvmInstructionSet.CvmOperandEncoding.None"/> and
-/// <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/> mnemonics -- are the ones
-/// <see cref="CvmAssembler"/> actually leaves as an external symbol with a
-/// <see cref="CvmRelocationType.CvmOpcode"/> relocation for a linker to resolve (see that assembler's
-/// own remarks); everything else (<c>EmbeddedAddress</c>, <c>EmbeddedSignedValue</c>,
-/// <c>EmbeddedUnsignedValue</c>) assembles to a complete, self-describing word with no relocation at
-/// all, so a primitive-table entry for one would never be looked up. Node 511's four
-/// <c>NodeResolvedEmbeddedValue</c> mnemonics (<c>rld</c>/<c>rst</c>/<c>rpop</c>/<c>rpush</c>) are
-/// excluded the same way (they also have <c>OperandIsEmbedded == true</c>) -- consistent with
-/// <see cref="CvmAssembler"/> itself refusing to assemble them at all today (see its own remarks).
+/// <b>What gets exported:</b> every entry of <see cref="CvmAssemblyLanguage.BuildEncodeTable"/> that
+/// <see cref="CvmAssembler"/> leaves as an external symbol with a <see cref="CvmRelocationType.CvmOpcode"/>
+/// relocation for a linker to resolve (see that assembler's own remarks): <see cref="CvmInstructionSet.CvmOperandEncoding.None"/>,
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/> and -- since 2026-10-03 --
+/// <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/> mnemonics. Everything else
+/// (<c>EmbeddedAddress</c>, <c>EmbeddedSignedValue</c>, <c>EmbeddedUnsignedValue</c>) assembles to a
+/// complete, self-describing word with no relocation at all, so such a mnemonic is never in the encode
+/// table to begin with.
+///
+/// <b>CHANGED 2026-10-03 (CVM redesign):</b> entries with <c>OperandIsEmbedded == true</c> used to be
+/// skipped here, on the theory that <see cref="CvmAssembler"/> refused to assemble the
+/// <c>NodeResolvedEmbeddedValue</c> family. That theory was already out of date (the assembler's generic
+/// default case emits a CvmOpcode relocation whose <see cref="CvmRelocation.EmbeddedValue"/> carries the
+/// register index, which <c>CvmLinker</c> ORs into the resolved word), and it became wrong in practice
+/// with the redesigned VM, where seven of node 509's special words (<c>pop</c>/<c>push</c>/<c>dpop</c>/
+/// <c>dpush</c>/<c>rinc</c>/<c>rdec</c>/<c>radd</c>) take a register operand exactly this way. For such an
+/// entry <c>Opcode</c> is the BASE word (register field 0), which is precisely what the linker expects to
+/// OR the embedded value onto -- so they are exported like any other.
 ///
 /// <b>ADDED 2026-10-02: a second, separate source feeds this table too.</b> <c>if</c>'s own "cond"
 /// field resolves one node-406 symbol per NAMED CONDITION VALUE, not per mnemonic, so it never
@@ -105,17 +112,12 @@ public static class CvmPrimitiveTableExporter
     // ("CS0030: Cannot convert ... 6 elements ... to ... 5 elements"), surfaced by Stefan's own build
     // right after the 2026-09-30 CVM reset even though this exporter itself was not touched by that
     // reset. Switched to `var` so this loop tracks BuildEncodeTable's own return shape automatically --
-    // only `Opcode`/`OperandIsEmbedded` are ever read here, so there is nothing this file needs to name
+    // only `Opcode` is read here (since 2026-10-03; `OperandIsEmbedded` used to be too), so there is nothing this file needs to name
     // explicitly, and any future change to that tuple's shape can no longer break this file again.
     foreach (var pair in encodeTable)
     {
-      if (pair.Value.OperandIsEmbedded)
-      {
-        // Node 511's rld/rst/rpop/rpush -- not something CvmRelocationType.CvmOpcode can express (see
-        // this class's own remarks); CvmAssembler itself never emits a relocation asking for one.
-        continue;
-      }
-
+      // (2026-10-03: embedded-operand entries are exported too -- Opcode is their BASE word, see this
+      // class's own remarks; they used to be skipped here.)
       entries[pair.Key] = pair.Value.Opcode;
     }
 

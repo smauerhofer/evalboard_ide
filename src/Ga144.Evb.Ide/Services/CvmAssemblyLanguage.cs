@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
 using Ga144.Cvm.Toolchain;
 using Ga144.Evb.Ide.Compiler;
 using Ga144.Evb.Ide.Cvm;
@@ -413,6 +415,55 @@ internal static class CvmAssemblyLanguage
   // matching shift correction.
   private const int Node506BitPatternTableTagBits = 0x2000;
 
+  // ---- ADDED 2026-10-03 (CVM REDESIGN): the node-509 special-word table ---------------------------------
+  // Per Stefan directly: "I redesigned the CVM a little. there are now more CVM words available, thanks
+  // to the table in node 509." Node 507's header now carries this bit-pattern table:
+  //
+  //   0000|0000|0000|0000| nop
+  //   000w|wwww|wsss|xxxx| special 508 with optional register
+  //   001w|wwww|wsss|xxxx| special 508 with optional register with focus
+  //   01oo|oooo|oooo|oooo| br {short branch, relative}
+  //   100.|....|cccc|xxxx| if {conditional long branch, relative}
+  //   101.|00ww|wwww|xxxx| special 506 with optional register
+  //   110 |    |    |    | 16-bit operation
+  //   111 |    |    |    | 32-bit operation
+  //
+  // and node 508's own x6/unpack decodes the two "special 508" rows exactly as that table reads:
+  //   dup 0xf and            -> x, the 4-bit register (bits 3-0, sent to node 407 for "with focus")
+  //   over 2/ 2/ 2/ 2/       -> op >> 4
+  //   dup 7 and dup !        -> "send size-1": s = bits 6-4, sent as the word count minus one
+  //   2/ 2/ 2/ 0x3f and !    -> "send handler offset": w = bits 12-7, the 6-bit address in node 509
+  // after which node 509's own x6a/main (@b >r @b a! begin @+ !b unext) streams s+1 words starting at
+  // node-509 address w (the "'name" entries of its table) onward. So every "special 508" opcode is
+  //
+  //     tag | (address of its 'name label in node 509 << 7) | ((words in the entry - 1) << 4) | x
+  //
+  // with focus bit 13 (0x2000) set when node 508 must first send r/focus_nw/x to node 407, clear when not.
+  //
+  // CORRECTED 2026-10-03, per Stefan directly: "the offsets are the labels defined in the node 509. there
+  // is a comment in the next line of a comment that specify the size of the instruction, which must also
+  // be encoded, and the focus bit 13." BOTH the size field "sss" and the focus bit are therefore READ
+  // FROM THE COMMENT in node 509's source, on the line right after each 'name label line:
+  //
+  //     : 'call // call to address in next word
+  //       // 3 with focus
+  //
+  // "// <N> with focus" / "// <N> without focus" -- N is the number of words in the entry (encoded as
+  // N - 1 in bits 6-4), "with focus" sets bit 13. (An earlier version of this wiring hardcoded focus per
+  // mnemonic and derived N from the distance to the next label; that is gone -- the comment is the single
+  // source of truth, exactly as Stefan described it.) See TryReadNode509SpecialComment. A label without
+  // that comment line, or a comment that does not parse, makes the word fail to resolve with a precise
+  // diagnosis -- never a guessed size or focus.
+  //
+  // The tag stored per mnemonic in NodeSymbolByMnemonic is therefore just the base 0x0000
+  // (Node509SpecialBaseTagBits); the focus bit (Node509SpecialFocusBit, 0x2000) is OR'd in per word.
+  private const int Node509SpecialBaseTagBits = 0x0000;
+  private const int Node509SpecialFocusBit = 0x2000;
+  private const int Node509SpecialAddressShift = 7;
+  private const int Node509SpecialAddressFieldBitMask = 0x1F80;
+  private const int Node509SpecialSizeFieldShift = 4;
+  private const int Node509SpecialSizeFieldBitMask = 0x0070;
+
   // CVM2's node 508 'gld/'gst tag (2026-09-04, renamed 2026-09-09 from 'ldg'/'stg -- see
   // CvmInstructionSet.LoadGlobalMnemonic's own remarks), per Stefan's node 508 source
   // (Cvm.Node508Program): its
@@ -619,7 +670,10 @@ internal static class CvmAssemblyLanguage
         // operand) -- kept here as a comment, per "do not remove any opcodes", as the historical
         // record; the live entry is just below, alongside lcall/ljmp/ret/link/unlink's own.
         // [PushMnemonic] = (Node507Program.Coordinate, "'push", Node507Cvm2LocalExecuteTagBits),
-        [PopMnemonic] = (Node507Program.Coordinate, "'pop", Node507Cvm2LocalExecuteTagBits),
+        // [PopMnemonic] = (Node507Program.Coordinate, "'pop", Node507Cvm2LocalExecuteTagBits),
+        // (CVM2's OLD inert "pop" entry -- commented out 2026-10-03 for the same Dictionary-key reason as
+        // RetMnemonic/PushMnemonic: the redesigned VM's own "pop" is a live entry further below, resolved
+        // against node 509's special table.)
         // RetMnemonic ("ret") -- REPOINTED 2026-09-30 (new VM reset) from CVM2's node 507 to the new
         // VM's node 506 -- see CvmInstructionSet.Instructions' own remarks on RetMnemonic's new Id 184
         // for the full derivation. The OLD CVM2 entry is commented out just below (not merely left
@@ -641,7 +695,11 @@ internal static class CvmAssemblyLanguage
         // way CVM2's OLD call/lcall/ljmp dispatch used to relay between nodes (see
         // Node407LongCallTagBits' own remarks for that precedent). Joined by lcall/ljmp (just below)
         // under the exact same correction, per the same sentence.
-        [RetMnemonic] = (Node507Program.Coordinate, "'ret", Node506BitPatternTableTagBits),
+        // [RetMnemonic] = (Node507Program.Coordinate, "'ret", Node506BitPatternTableTagBits),
+        // SUPERSEDED 2026-10-03 (CVM redesign): node 507's 'ret/'link/'unlink/'lcall/'ljmp/'push moved out
+        // of node 507 (its source keeps them only inside a /* ... */ comment) into node 509's special-word
+        // table -- see the live [RetMnemonic]/[LinkMnemonic]/[UnlinkMnemonic] entries in the node-509 block
+        // below, and the node-509 special-word remarks at Node509SpecialBaseTagBits.
         // LinkMnemonic ("link")/UnlinkMnemonic ("unlink") -- ADDED 2026-10-01, alongside ret in node
         // 506's bit-pattern-table family (see Node506BitPatternTableTagBits' own remarks and
         // CvmInstructionSet.Instructions' own remarks on Ids 185/186). Brand new mnemonic names, no
@@ -649,8 +707,8 @@ internal static class CvmAssemblyLanguage
         //
         // CORRECTED 2026-10-02, same as RetMnemonic just above and for the same reason: NodeCoordinate
         // moves from node 506 to node 507; Node506BitPatternTableTagBits' own tag is unchanged.
-        [CvmInstructionSet.LinkMnemonic] = (Node507Program.Coordinate, "'link", Node506BitPatternTableTagBits),
-        [CvmInstructionSet.UnlinkMnemonic] = (Node507Program.Coordinate, "'unlink", Node506BitPatternTableTagBits),
+        // [CvmInstructionSet.LinkMnemonic] = (Node507Program.Coordinate, "'link", Node506BitPatternTableTagBits),
+        // [CvmInstructionSet.UnlinkMnemonic] = (Node507Program.Coordinate, "'unlink", Node506BitPatternTableTagBits),
         [CvmInstructionSet.HaltMnemonic] = (Node507Program.Coordinate, "'halt", Node507Cvm2LocalExecuteTagBits),
         // tjmp (2026-09-09, "'tjmp is in node 507") -- node 507's own table-jump primitive, reached the
         // SAME "1000_1???" local-execute tag family as the six above (Node507Cvm2LocalExecuteTagBits) --
@@ -690,8 +748,10 @@ internal static class CvmAssemblyLanguage
         // remarks) lowers to lcall through this entry exactly like any other node-resolved tagged
         // mnemonic -- the live-resolved opcode word comes from BuildEncodeTable via this very entry,
         // not a fixed constant the way the OLD, retired Id 183 shape used to supply one directly.
-        [CvmInstructionSet.LongCallMnemonic] = (Node507Program.Coordinate, "'lcall", Node506BitPatternTableTagBits),
-        [CvmInstructionSet.LongJumpMnemonic] = (Node507Program.Coordinate, "'ljmp", Node506BitPatternTableTagBits),
+        // [CvmInstructionSet.LongCallMnemonic] = (Node507Program.Coordinate, "'lcall", Node506BitPatternTableTagBits),
+        // [CvmInstructionSet.LongJumpMnemonic] = (Node507Program.Coordinate, "'ljmp", Node506BitPatternTableTagBits),
+        // (lcall/ljmp RETIRED 2026-10-03 -- replaced by call/jmp, see the node-509 block below and
+        // CvmInstructionSet.Instructions' own remarks on Ids 195-199.)
         // NEW 2026-10-02, same day: 'push joins lcall/ljmp/ret/link/unlink in node 507's own "special"
         // family (Id 197 -- see CvmInstructionSet.Instructions' own remarks on that Id for Stefan's
         // exact wording and the node-507 source confirming the shape). Same tag, same node, same
@@ -700,7 +760,46 @@ internal static class CvmAssemblyLanguage
         // operand word: the literal value 'push writes onto the return stack. Supersedes the OLD
         // CVM2-era [PushMnemonic] entry just above (commented out there, per "do not remove any
         // opcodes").
-        [PushMnemonic] = (Node507Program.Coordinate, "'push", Node506BitPatternTableTagBits),
+        // [PushMnemonic] = (Node507Program.Coordinate, "'push", Node506BitPatternTableTagBits),
+        // (RETIRED 2026-10-03: the old "push the next word" is gone; the redesigned VM's "push" pushes a
+        // REGISTER and lives in the node-509 block below -- CvmInstructionSet.Instructions' Ids 197/202.)
+        //
+        // ==== ADDED 2026-10-03 (CVM REDESIGN): node 509's special-word table ================================
+        // Every entry below resolves against node 509's OWN compile (Node509Program.Coordinate) to its own
+        // tick-labeled word, and carries Node509SpecialBaseTagBits (0x0000). The FOCUS bit (0x2000) and the
+        // SIZE field (bits 6-4) are NOT in the tag: both are read per word from the "// N with focus" /
+        // "// N without focus" comment on the line under that label in Stefan's node 509 source (see
+        // TryReadNode509SpecialComment). ADDRESS SHIFT (7), the size field and the focus bit are applied
+        // by BuildDecodeTable/BuildEncodeTable through TryResolveNode509SpecialOpcode.
+        //
+        // NOTE: Node509Program.cs is still the OLD (pre-redesign) node 509 source -- per Stefan's standing
+        // instruction ("do not sync the source yet (first finish the CVM before updating any NodeXXX...
+        // file)"), none of the Node###Program.cs files were touched. Until Node509Program is synced to
+        // the redesigned source, none of these labels exist in its compile, so every mnemonic below fails
+        // to resolve with DiagnoseUnresolvedWiredMnemonic's own loud "wired but unresolved" diagnosis
+        // rather than silently assembling to a wrong word. Expected, prepared-but-not-yet-functional
+        // wiring, same state ret/link/unlink/lcall/ljmp/push were in before node 507 was caught up.
+        [RetMnemonic] = (Node509Program.Coordinate, "'ret", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.CallMnemonic] = (Node509Program.Coordinate, "'call", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.JmpMnemonic] = (Node509Program.Coordinate, "'jmp", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.LinkMnemonic] = (Node509Program.Coordinate, "'link", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.UnlinkMnemonic] = (Node509Program.Coordinate, "'unlink", Node509SpecialBaseTagBits),
+        // 2026-10-03 (node 509 follow-up): register words carry an 'r' or 'd' prefix -- 'rpop/'rpush/
+        // 'rpopi/'rpushi (16-bit register), 'dpop/'dpush/'dpopi/'dpushi (32-bit double register) -- and
+        // 'push now means "push the next 16-bit word" (plus new 'push2, next 32-bit value).
+        [CvmInstructionSet.RegisterPopMnemonic] = (Node509Program.Coordinate, "'rpop", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.DoublePopMnemonic] = (Node509Program.Coordinate, "'dpop", Node509SpecialBaseTagBits),
+        [PushMnemonic] = (Node509Program.Coordinate, "'push", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.Push2Mnemonic] = (Node509Program.Coordinate, "'push2", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.RegisterPushMnemonic] = (Node509Program.Coordinate, "'rpush", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.DoublePushMnemonic] = (Node509Program.Coordinate, "'dpush", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.RegisterPopIndirectMnemonic] = (Node509Program.Coordinate, "'rpopi", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.DoublePopIndirectMnemonic] = (Node509Program.Coordinate, "'dpopi", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.RegisterPushIndirectMnemonic] = (Node509Program.Coordinate, "'rpushi", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.DoublePushIndirectMnemonic] = (Node509Program.Coordinate, "'dpushi", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.RegisterIncrementMnemonic] = (Node509Program.Coordinate, "'rinc", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.RegisterDecrementMnemonic] = (Node509Program.Coordinate, "'rdec", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.RegisterAddMnemonic] = (Node509Program.Coordinate, "'radd", Node509SpecialBaseTagBits),
 
         // Node 407's long-branch op (added 2026-09-06, "more opcodes to node 407 added") -- reached
         // through node 407's own SAME "1100" n/main branch as 'lcall/'ljmp above, so it shares the SAME
@@ -1051,19 +1150,189 @@ internal static class CvmAssemblyLanguage
   private static readonly IReadOnlyDictionary<string, int> NodeResolvedAddressShiftByMnemonic =
       new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
       {
-        [CvmInstructionSet.RetMnemonic] = 0,
-        [CvmInstructionSet.LinkMnemonic] = 0,
-        [CvmInstructionSet.UnlinkMnemonic] = 0,
-        // ADDED 2026-10-02: lcall/ljmp (Ids 195/196) join this same "special" family -- see
-        // NodeSymbolByMnemonic's own remarks on these two mnemonics for the full derivation. Listed
-        // here, at shift 0, for the same audit-trail reason the other three are (a mnemonic absent
-        // from this dictionary already defaults to 0, so this is not functionally required).
-        [CvmInstructionSet.LongCallMnemonic] = 0,
-        [CvmInstructionSet.LongJumpMnemonic] = 0,
-        // ADDED 2026-10-02, same day: push (Id 197) joins the same "special" family at shift 0 -- see
-        // NodeSymbolByMnemonic's own remarks on PushMnemonic for the full derivation.
-        [PushMnemonic] = 0,
+        // ---- REDESIGNED 2026-10-03 (CVM redesign) --------------------------------------------------
+        // The node-507 "special" family (ret/link/unlink at 0, lcall/ljmp at 0, push at 0 -- all shift 0,
+        // added 2026-10-01/02, see the comments retained just below) is SUPERSEDED by node 509's special-
+        // word table, whose address field ("wwwwww") sits at bits 12-7: shift 7
+        // (Node509SpecialAddressShift). The mnemonics keep their entries, now at 7 -- the same mnemonic
+        // strings, a different node/tag/shift (see NodeSymbolByMnemonic's own node-509 block). The
+        // old entries are kept as comments, per "do not remove any opcodes":
+        //   [RetMnemonic] = 0, [LinkMnemonic] = 0, [UnlinkMnemonic] = 0,
+        //   [LongCallMnemonic] = 0, [LongJumpMnemonic] = 0, [PushMnemonic] = 0,
+        // NOTE: BuildDecodeTable/BuildEncodeTable do NOT read this dictionary for the node-509 special
+        // family any more -- they route those mnemonics through TryResolveNode509SpecialOpcode, which
+        // applies Node509SpecialAddressShift itself and also fills in the size field this dictionary has
+        // no way to express. The entries below are listed for the audit trail (and so a future reader
+        // grepping for a mnemonic here still finds it), not because anything consults them.
+        [CvmInstructionSet.RetMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.CallMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.JmpMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.LinkMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.UnlinkMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.RegisterPopMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.DoublePopMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.PushMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.Push2Mnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.RegisterPushMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.DoublePushMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.RegisterPopIndirectMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.DoublePopIndirectMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.RegisterPushIndirectMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.DoublePushIndirectMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.RegisterIncrementMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.RegisterDecrementMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.RegisterAddMnemonic] = Node509SpecialAddressShift,
       };
+
+  /// <summary>
+  /// ADDED 2026-10-03 (CVM redesign). True when a <see cref="NodeSymbolByMnemonic"/> entry belongs to node
+  /// 509's special-word table: resolved against node 509 AND carrying the base tag
+  /// <see cref="Node509SpecialBaseTagBits"/> (0x0000 -- the focus bit is added per word from the comment
+  /// under the label, see <see cref="TryReadNode509SpecialComment"/>). Node 509's other (retired, inert)
+  /// mnemonic entries use <see cref="Node509UnaryArithmeticTagBits"/> and so never match.
+  /// </summary>
+  private static bool IsNode509SpecialWord(int nodeCoordinate, int tag) =>
+      nodeCoordinate == Node509Program.Coordinate && tag == Node509SpecialBaseTagBits;
+
+  /// <summary>
+  /// ADDED 2026-10-03 (CVM redesign), per Stefan: <i>"there is a comment in the next line [of the label]
+  /// that specify the size of the instruction, which must also be encoded, and the focus bit 13."</i>
+  /// Finds the label line <c>: 'name ...</c> for <paramref name="symbolName"/> in node 509's (macro-
+  /// expanded) source and parses the first non-blank line after it, which must read
+  /// <c>// N with focus</c> or <c>// N without focus</c>: <paramref name="words"/> = N (the entry's length
+  /// in words, encoded as N - 1 in bits 6-4) and <paramref name="focus"/> = whether bit 13 is set.
+  /// <c>/* ... */</c> block comments are blanked out first (newlines kept), so a retired block of old code
+  /// in the source can never be mistaken for the table. Returns false with a <paramref name="reason"/>
+  /// when the label line or its comment cannot be found/parsed -- never a guessed size or focus.
+  /// </summary>
+  private static bool TryReadNode509SpecialComment(string expandedSource, string symbolName, out int words, out bool focus, out string? reason)
+  {
+    words = 0;
+    focus = false;
+    reason = null;
+
+    if (string.IsNullOrEmpty(expandedSource))
+    {
+      reason = "node 509's compile did not keep its expanded source text, so the \"// N with(out) focus\" comment under the label cannot be read.";
+      return false;
+    }
+
+    // Blank out /* ... */ blocks (keep newlines, so line structure survives); leave // comments alone,
+    // since those are exactly what is being read -- a "/*" inside a // comment is not a block start.
+    StringBuilder cleaned = new(expandedSource.Length);
+    int index = 0;
+    while (index < expandedSource.Length)
+    {
+      char c = expandedSource[index];
+      if (c == '/' && index + 1 < expandedSource.Length && expandedSource[index + 1] == '/')
+      {
+        while (index < expandedSource.Length && expandedSource[index] != '\n')
+        {
+          cleaned.Append(expandedSource[index]);
+          index++;
+        }
+
+        continue;
+      }
+
+      if (c == '/' && index + 1 < expandedSource.Length && expandedSource[index + 1] == '*')
+      {
+        int end = expandedSource.IndexOf("*/", index + 2, StringComparison.Ordinal);
+        int stop = end < 0 ? expandedSource.Length : end + 2;
+        for (int k = index; k < stop; k++)
+        {
+          cleaned.Append(expandedSource[k] == '\n' ? '\n' : ' ');
+        }
+
+        index = stop;
+        continue;
+      }
+
+      cleaned.Append(c);
+      index++;
+    }
+
+    string[] lines = cleaned.ToString().Split('\n');
+    Regex labelLine = new($@"^\s*:\s*{Regex.Escape(symbolName)}(\s|$)", RegexOptions.CultureInvariant);
+    Regex commentLine = new(@"^\s*//\s*(\d+)\s+(with|without)\s+focus\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
+    {
+      if (!labelLine.IsMatch(lines[lineIndex]))
+      {
+        continue;
+      }
+
+      int next = lineIndex + 1;
+      while (next < lines.Length && lines[next].Trim().Length == 0)
+      {
+        next++;
+      }
+
+      if (next >= lines.Length)
+      {
+        reason = $"\"{symbolName}\" is the last line of node 509's source -- there is no \"// N with(out) focus\" comment line under it.";
+        return false;
+      }
+
+      Match match = commentLine.Match(lines[next]);
+      if (!match.Success)
+      {
+        reason = $"the line under \"{symbolName}\" in node 509's source reads \"{lines[next].Trim()}\", expected a comment \"// N with focus\" or \"// N without focus\" (N = number of words in the entry).";
+        return false;
+      }
+
+      words = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
+      focus = string.Equals(match.Groups[2].Value, "with", StringComparison.OrdinalIgnoreCase);
+      return true;
+    }
+
+    reason = $"no label line \": {symbolName}\" was found in node 509's expanded source.";
+    return false;
+  }
+
+  /// <summary>
+  /// ADDED 2026-10-03 (CVM redesign). Computes the opcode word (register field still 0) of one node-509
+  /// special word: <c>focus(0x2000) | (address &lt;&lt; 7) | ((words - 1) &lt;&lt; 4)</c>, where
+  /// <c>address</c> is the word address of the entry's <c>'name</c> label in node 509's compile and
+  /// <c>words</c> and <c>focus</c> come from the <c>// N with(out) focus</c> comment under the label
+  /// (<see cref="TryReadNode509SpecialComment"/>) -- the single source of truth for both.
+  ///
+  /// Returns false, with a human-readable <paramref name="reason"/>, when the word cannot be represented:
+  /// the address does not fit the 6-bit field (node 509's table must live in its first 64 words), the
+  /// comment is missing or unreadable, or N is outside 1..8 (the 3-bit size field holds N - 1). Never
+  /// guesses -- an unresolvable entry is omitted, same graceful convention every other mnemonic that
+  /// fails to resolve already follows (DiagnoseUnresolvedWiredMnemonic then says why).
+  /// </summary>
+  private static bool TryResolveNode509SpecialOpcode(int tag, F18CompileResult compile, F18ExportedSymbol symbol, out int opcode, out string? reason)
+  {
+    opcode = 0;
+    reason = null;
+
+    int address = symbol.Value & CvmWordCodec.WordMask;
+    int maxAddress = Node509SpecialAddressFieldBitMask >> Node509SpecialAddressShift;
+    if (address < 0 || address > maxAddress)
+    {
+      reason = $"\"{symbol.Name}\" resolved to node 509 address 0x{address:X}, outside the 6-bit word-address field of the special-word encoding (0x0-0x{maxAddress:X}) -- node 509's table must sit in its first {maxAddress + 1} words.";
+      return false;
+    }
+
+    if (!TryReadNode509SpecialComment(compile.ExpandedSource, symbol.Name, out int words, out bool focus, out string? commentReason))
+    {
+      reason = commentReason;
+      return false;
+    }
+
+    int maxWords = (Node509SpecialSizeFieldBitMask >> Node509SpecialSizeFieldShift) + 1;
+    if (words < 1 || words > maxWords)
+    {
+      reason = $"the comment under \"{symbol.Name}\" in node 509's source says {words} word(s), but the 3-bit size field only holds 1..{maxWords}.";
+      return false;
+    }
+
+    opcode = tag | (focus ? Node509SpecialFocusBit : 0) | (address << Node509SpecialAddressShift) | ((words - 1) << Node509SpecialSizeFieldShift);
+    return true;
+  }
 
   /// <summary>
   /// ADDED 2026-10-02, for <c>if</c> (CvmInstructionSet.IfMnemonic, renamed from <c>cbr</c> the same
@@ -1237,6 +1506,33 @@ internal static class CvmAssemblyLanguage
       // 0x8000 for every mnemonic.
       int resolvedAddress = symbol.Value & CvmWordCodec.WordMask;
 
+      // ADDED 2026-10-03 (CVM redesign): node 509's special-word table has its own opcode formula (tag |
+      // address << 7 | size << 4 | register) -- see TryResolveNode509SpecialOpcode. A word that takes a
+      // register operand ("x", bits 3-0) gets 16 decode entries, one per register value, exactly like
+      // node 511's old register-file ops did below; a word without one decodes only with x = 0 (a
+      // non-zero x on e.g. "ret" is not what this assembler emits, so it is not claimed here).
+      if (IsNode509SpecialWord(nodeCoordinate, tag))
+      {
+        if (!TryResolveNode509SpecialOpcode(tag, compile, symbol, out int specialOpcode, out _))
+        {
+          continue;
+        }
+
+        if (encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
+        {
+          for (int register = 0; register <= CvmInstructionSet.SpecialRegisterFieldBitMask; register++)
+          {
+            table[specialOpcode | register] = (mnemonic, wordLength, register);
+          }
+        }
+        else
+        {
+          table[specialOpcode] = (mnemonic, wordLength, null);
+        }
+
+        continue;
+      }
+
       if (encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
       {
         // Node 511's rld/rst/rpop/rpush and (since 2026-09-09) node 308's dpop/dpush/dinc/ddec/dadd/dor --
@@ -1313,6 +1609,24 @@ internal static class CvmAssemblyLanguage
       // class the mnemonic belongs to -- see NodeSymbolByMnemonic's own remarks -- never a flat
       // 0x8000 for every mnemonic.
       int resolvedAddress = symbol.Value & CvmWordCodec.WordMask;
+
+      // ADDED 2026-10-03 (CVM redesign): node 509's special-word table -- see BuildDecodeTable's own
+      // remarks on the same branch, and TryResolveNode509SpecialOpcode for the formula. For a register-
+      // taking word the entry's Opcode is the BASE word (register 0); the register ("x", bits 3-0, mask
+      // CvmInstructionSet.SpecialRegisterFieldBitMask, shift 0) is OR'd in by Assemble once it knows the
+      // operand -- the same embedded-operand mechanism node 511's old ops used.
+      if (IsNode509SpecialWord(nodeCoordinate, tag))
+      {
+        if (!TryResolveNode509SpecialOpcode(tag, compile, symbol, out int specialOpcode, out _))
+        {
+          continue;
+        }
+
+        table[mnemonic] = encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue
+            ? (specialOpcode, wordLength, true, true, CvmInstructionSet.SpecialRegisterFieldBitMask, 0)
+            : (specialOpcode, wordLength, hasOperand, false, 0, 0);
+        continue;
+      }
 
       if (encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
       {
@@ -1468,6 +1782,15 @@ internal static class CvmAssemblyLanguage
       return $"is implemented on node {wiring.NodeCoordinate:000}, but that node's CURRENT source does not define \"{wiring.SymbolName}\" -- it may have been renamed or removed.";
     }
 
+    // ADDED 2026-10-03 (CVM redesign): node 509's special-word table can fail AFTER its label resolved --
+    // the address may not fit the 6-bit field, or the comment under the label (size / focus) may be
+    // missing, unparsable or out of range. TryResolveNode509SpecialOpcode already says exactly why.
+    if (IsNode509SpecialWord(wiring.NodeCoordinate, wiring.Tag) &&
+        !TryResolveNode509SpecialOpcode(wiring.Tag, compile, symbol, out _, out string? specialReason))
+    {
+      return $"is implemented on node {wiring.NodeCoordinate:000}'s special-word table, but cannot be encoded: {specialReason}";
+    }
+
     if (NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask, int RegisterFieldShift) layout))
     {
       int resolvedAddress = symbol.Value & CvmWordCodec.WordMask;
@@ -1584,6 +1907,11 @@ internal static class CvmAssemblyLanguage
         return (null, null, $"line {line + 1}: \"literal\" does not support a label operand -- its word count depends on the value, which must be known up front; supply a literal number instead, or use \"litr\" directly for a label's own address.");
       }
 
+      if (instruction.OperandLabel is not null && string.Equals(instruction.Mnemonic, CvmInstructionSet.Push2Mnemonic, StringComparison.OrdinalIgnoreCase))
+      {
+        return (null, null, $"line {line + 1}: \"push2\" does not support a label operand -- it takes a 32-bit number (\"push2 x\") or two 16-bit numbers (\"push2 x y\"); use \"push\" for a label's own 16-bit address.");
+      }
+
       if (instruction.OperandLabel is not null)
       {
         (int? resolvedOperand, string? resolveError) = ResolveOperandLabel(instruction, words.Count, labelAddresses, line + 1);
@@ -1612,29 +1940,13 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
-      // "call" (2026-09-30, alongside the new VM's own "scall"/"lcall") -- intercepted here, right after
-      // "literal", for the same fundamental reason: it is a pure assembler-level pseudo-mnemonic with no
-      // CvmInstructionSet shape or NodeSymbolByMnemonic entry of its own (see
-      // CvmInstructionSet.ShortCallMnemonic's own class-level remarks for the full derivation). Unlike
-      // "literal", it runs AFTER the generic OperandLabel resolution just above, not before -- a label
-      // operand is a perfectly normal, expected way to use "call" (calling a named subroutine is its whole
-      // point), so it is resolved to a plain absolute address here exactly like "call"'s own OLD
-      // EmbeddedAddress shape (and pushlit's trailing word) already resolve one, via ResolveOperandLabel's
-      // own default branch. instruction.OperandLabel itself survives that resolution untouched (only
-      // Operand is replaced), so EncodeCallPseudoMnemonic can still tell "this came from a label" apart
-      // from "this was typed as a literal number" purely from whether OperandLabel is still set -- exactly
-      // the distinction it needs to decide "always lcall" vs. "try to fit scall" (see its own remarks).
-      if (string.Equals(instruction.Mnemonic, CvmInstructionSet.CallMnemonic, StringComparison.OrdinalIgnoreCase))
-      {
-        (List<int>? callWords, string? callError) = EncodeCallPseudoMnemonic(instruction, encodeTable, compiledRam, line + 1);
-        if (callWords is null)
-        {
-          return (null, null, callError);
-        }
-
-        words.AddRange(callWords);
-        continue;
-      }
+      // "call" -- RETIRED as an assembler-level pseudo-mnemonic 2026-10-03 (CVM redesign). It used to be
+      // intercepted here and lowered to scall (one word) or lcall (two words) depending on whether the
+      // address fit; both are gone, and "call" is now an ordinary node-509-resolved TrailingWord opcode
+      // (CvmInstructionSet Id 198: one opcode word, then the address word) that falls through to the
+      // generic tagged-mnemonic path at the bottom of this loop like link/jmp do. A label operand was
+      // already resolved to its absolute address by the generic OperandLabel step above, exactly as it
+      // is for every other trailing-word mnemonic.
 
       // ADDED 2026-10-02, for the "CVM_pipeline" table's own cbr, RENAMED the same day to if
       // (CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord -- see that enum
@@ -1709,6 +2021,25 @@ internal static class CvmAssemblyLanguage
         return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" is not a known CVM asm mnemonic.");
       }
 
+      // ADDED 2026-10-03: push2 has TWO operand forms, both always 3 memory words (opcode, hi, lo):
+      //   push2 x     -- x is ONE 32-bit number, encoded hi-lo
+      //   push2 x y   -- x and y are two 16-bit numbers, x = hi, y = lo
+      // See EncodePush2Operands. Intercepted before the generic operand checks below, which assume a fixed
+      // operand count per mnemonic.
+      if (string.Equals(instruction.Mnemonic, CvmInstructionSet.Push2Mnemonic, StringComparison.OrdinalIgnoreCase))
+      {
+        (int Hi, int Lo, string? Error) push2Operands = EncodePush2Operands(instruction, line + 1);
+        if (push2Operands.Error is not null)
+        {
+          return (null, null, push2Operands.Error);
+        }
+
+        words.Add(entry.Opcode);
+        words.Add(push2Operands.Hi);
+        words.Add(push2Operands.Lo);
+        continue;
+      }
+
       if (entry.HasOperand && instruction.Operand is null)
       {
         return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" requires an operand, e.g. \"{instruction.Mnemonic} 0x1234\".");
@@ -1770,96 +2101,75 @@ internal static class CvmAssemblyLanguage
   /// mnemonic is asking for it. Label names are matched case-insensitively, like every mnemonic in
   /// this file.
   ///
-  /// <b>ADDED 2026-09-30 -- an optimistic, iterative sizing pass for "call" targeting a LABEL.</b> Per
-  /// Stefan directly, right after "call"/"scall"/"lcall" were first wired up: "can you use a more
-  /// optimistic smart iterator for sizing pass?" -- this assembler, unlike
-  /// <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/>, resolves every label to a real, final address itself
-  /// (no separate link step, no relocations -- see this file's own remarks on why the two assemblers
-  /// differ here), so it really CAN know whether a label-targeted "call" would fit scall, once the rest of
-  /// the layout is known. The wrinkle is circular: "call"'s own word count affects every LATER label's
-  /// address, but whether "call" fits scall depends on its OWN target label's address, which this very
-  /// walk is computing. Resolved by starting OPTIMISTIC (guess every label-targeted "call" as the short
-  /// form, scall, 1 word) and iterating: lay out the whole program under the current guesses, then check
-  /// each optimistically-short "call" against the address that layout just gave its own target label --
-  /// grow any that don't actually fit (or that resolve to address 0 -- <see cref="FitsShortCallRange"/>'s
-  /// own remarks: "scall 0 does not exist"), and redo the walk. A guess only ever grows (1 -> 2), never
-  /// shrinks back, because growing an EARLIER call can only push LATER addresses up, never down -- so once
-  /// a call's own target address has grown past scall's range it can never come back into range on a later
-  /// round. That makes this provably terminating (each round either grows at least one call or is the
-  /// final, stable one; at most one call per line to grow) and gives the smallest correct sizing this
-  /// assembler can produce without ever building on a wrong guess. A "call" with a LITERAL operand, or with
-  /// no operand at all, is unaffected -- <see cref="GetWordLength"/> already sizes those directly, with no
-  /// guessing needed, and is used as-is for every line this pass doesn't override.
+  /// <b>RETIRED 2026-10-03 (CVM redesign): the optimistic, iterative sizing pass for "call" targeting a
+  /// label</b> (added 2026-09-30, per Stefan: "can you use a more optimistic smart iterator for sizing
+  /// pass?") existed only to choose between scall (1 word) and lcall (2 words) for a label whose address
+  /// depended on this very walk. With "call" now a plain two-word node-509 opcode there is nothing left to
+  /// guess, so this is a single pass again. (Should a future opcode ever need variable sizing, the
+  /// iterate-until-stable scheme -- grow-only guesses, provably terminating -- is the way to do it; see
+  /// the project doc claude/cvm-pipeline-instruction-set-rebuild.md for the original description.)
   /// </summary>
   private static (IReadOnlyDictionary<string, int>? Labels, string? Error) CollectLabelAddresses(
       IReadOnlyList<CvmAsmInstruction> instructions,
       IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable)
   {
-    // Seed one optimistic guess (1 word, scall) per "call" line with a LABEL operand -- the only kind of
-    // line whose own word count this pass ever needs to revise. A literal or missing operand is sized
-    // directly by GetWordLength below, unconditionally, on every round -- it never depends on anything
-    // this loop computes.
-    var callWordLengthGuess = new Dictionary<int, int>();
+    // (2026-10-03, CVM redesign: the optimistic scall/lcall sizing iteration that used to live here is
+    // gone together with scall/lcall and the "call" pseudo-mnemonic -- every mnemonic's word length is
+    // now fixed by GetWordLength alone, except "literal" whose own length depends on a literal operand
+    // that is already known, so a single pass assigns every label its final address.)
+    var labels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+    int address = 0;
     for (int line = 0; line < instructions.Count; line++)
     {
-      if (instructions[line].OperandLabel is not null && string.Equals(instructions[line].Mnemonic, CvmInstructionSet.CallMnemonic, StringComparison.OrdinalIgnoreCase))
+      CvmAsmInstruction instruction = instructions[line];
+      if (instruction.Label is not null && !labels.TryAdd(instruction.Label, address))
       {
-        callWordLengthGuess[line] = 1;
+        return (null, $"line {line + 1}: label \"{instruction.Label}\" is already defined.");
+      }
+
+      if (instruction.Mnemonic.Length > 0)
+      {
+        address += GetWordLength(instruction, encodeTable);
       }
     }
 
-    Dictionary<string, int> labels;
-    int roundGuard = 0;
-    while (true)
+    return (labels, null);
+  }
+
+  /// <summary>
+  /// ADDED 2026-10-03, per Stefan: <c>push2</c> is assembled in two different ways.
+  /// <list type="number">
+  /// <item><description>One operand, <c>push2 x</c>: <c>x</c> is a single 32-bit number (signed or unsigned,
+  /// -2147483648..4294967295), encoded hi-lo -- the high 16 bits as the first trailing word, the low 16 bits
+  /// as the second.</description></item>
+  /// <item><description>Two operands, <c>push2 x y</c>: two 16-bit numbers (-32768..65535 each), <c>x</c> =
+  /// hi (first trailing word), <c>y</c> = lo (second).</description></item>
+  /// </list>
+  /// Both forms occupy the same three memory words (opcode, hi, lo), so word counting needs no change.
+  /// A label operand is rejected by the caller. Never masks silently: an out-of-range 16-bit value is an error.
+  /// </summary>
+  private static (int Hi, int Lo, string? Error) EncodePush2Operands(CvmAsmInstruction instruction, int lineNumber)
+  {
+    if (instruction.Operand is null)
     {
-      labels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-      int address = 0;
-      for (int line = 0; line < instructions.Count; line++)
+      return (0, 0, $"line {lineNumber}: \"push2\" requires one 32-bit operand (\"push2 0x12345678\") or two 16-bit operands (\"push2 0x1234 0x5678\").");
+    }
+
+    if (instruction.Operand2 is null)
+    {
+      uint value = unchecked((uint)instruction.Operand.Value);
+      return ((int)(value >> 16), (int)(value & 0xFFFF), null);
+    }
+
+    foreach (int part in new[] { instruction.Operand.Value, instruction.Operand2.Value })
+    {
+      if (part < -0x8000 || part > 0xFFFF)
       {
-        CvmAsmInstruction instruction = instructions[line];
-        if (instruction.Label is not null && !labels.TryAdd(instruction.Label, address))
-        {
-          return (null, $"line {line + 1}: label \"{instruction.Label}\" is already defined.");
-        }
-
-        if (instruction.Mnemonic.Length > 0)
-        {
-          address += callWordLengthGuess.TryGetValue(line, out int guessedLength) ? guessedLength : GetWordLength(instruction, encodeTable);
-        }
-      }
-
-      // Re-check every still-optimistic ("short") guess against the layout this round just produced --
-      // an undefined label (pass 2's own concern, per this method's own remarks) also fails the fit check
-      // below and simply grows to lcall here; the real "undefined label" error still comes from pass 2.
-      bool grewAny = false;
-      foreach (int line in callWordLengthGuess.Keys.ToList())
-      {
-        if (callWordLengthGuess[line] != 1)
-        {
-          continue;
-        }
-
-        string targetLabel = instructions[line].OperandLabel!;
-        if (!labels.TryGetValue(targetLabel, out int targetAddress) || !FitsShortCallRange(targetAddress))
-        {
-          callWordLengthGuess[line] = 2;
-          grewAny = true;
-        }
-      }
-
-      if (!grewAny)
-      {
-        return (labels, null);
-      }
-
-      // Mathematically unreachable (each round that changes anything grows at least one line, and there
-      // are at most callWordLengthGuess.Count of those to grow, ever) -- guarded anyway rather than ever
-      // risking an infinite loop on a future change to this method.
-      if (++roundGuard > instructions.Count + 2)
-      {
-        return (null, "internal error: \"call\" sizing did not converge -- please report this.");
+        return (0, 0, $"line {lineNumber}: {part} does not fit in a 16-bit word -- \"push2 x y\" takes two 16-bit numbers (-32768..65535); use \"push2 x\" with one 32-bit number instead.");
       }
     }
+
+    return (instruction.Operand.Value & CvmWordCodec.WordMask, instruction.Operand2.Value & CvmWordCodec.WordMask, null);
   }
 
   /// <summary>
@@ -1890,24 +2200,8 @@ internal static class CvmAssemblyLanguage
   /// address past it is ever used, so the guess here never needs to be exact for a SUCCESSFUL assembly,
   /// only safe for a failing one.
   ///
-  /// <c>"call"</c> (2026-09-30, alongside the new VM's own <c>scall</c>/<c>lcall</c>) is also variable-
-  /// length, but unlike <c>"literal"</c> it DOES support a label operand: a LITERAL operand gets the real
-  /// scall/lcall fitting check right here (<see cref="FitsShortCallRange"/> -- NOT just "0x3FFF or under":
-  /// Stefan later confirmed, same day, "scall 0 does not exist. 'nop' has precedence."), while a LABEL
-  /// operand's own fitting decision is made by <see cref="CollectLabelAddresses"/>'s own iterative
-  /// optimistic sizing pass instead (added 2026-09-30, per Stefan: "can you use a more optimistic smart
-  /// iterator for sizing pass?") -- that pass calls this method only for lines it ISN'T overriding, so the
-  /// "OperandLabel is not null" branch just below is a defensive fallback for a hypothetical caller that
-  /// bypasses that pass, not something the real call path through <see cref="CollectLabelAddresses"/> ever
-  /// actually reaches today.
-  ///
-  /// <c>lcall</c>'s own WordLength briefly (2026-10-02, for a few hours) read 1 here under a mistaken
-  /// "encodes like 'ret, no operand" assumption -- CORRECTED THE SAME DAY once Stefan pointed at node
-  /// 507's own live source ("the lcall and ljmp still have the address of the destination in the next
-  /// word, so they still have 1 argument. fix that."): <c>lcall</c>/<c>ljmp</c> are
-  /// <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/> (2 words), exactly like
-  /// <c>link</c>, so this "2 words for the lcall case" answer is accurate again -- see
-  /// <see cref="CvmInstructionSet.Instructions"/>' own remarks on Ids 195/196 for the fix.
+  /// <c>"call"</c> was variable-length too (scall/lcall, 2026-09-30) until the 2026-10-03 CVM redesign
+  /// retired both and made it an ordinary fixed-length (2 words) node-509 opcode.
   /// </summary>
   private static int GetWordLength(
       CvmAsmInstruction instruction,
@@ -1919,22 +2213,8 @@ internal static class CvmAssemblyLanguage
       return instruction.Operand is int value && FitsLitRange(value) ? 1 : 2;
     }
 
-    // "call" (2026-09-30) -- also variable-length by design, exactly like "literal" just above, but for
-    // the OPPOSITE reason regarding a label operand: "literal" refuses one outright, while "call" is
-    // expected to routinely take one (calling a named subroutine is its whole point). A literal operand is
-    // sized directly, right here, via FitsShortCallRange. A label operand's real fitting decision is made
-    // by CollectLabelAddresses's own iterative pass instead (see this method's own class-level remarks) --
-    // the "always 2" answer just below is only ever reached as a defensive fallback, never on the real
-    // CollectLabelAddresses call path.
-    if (string.Equals(mnemonic, CvmInstructionSet.CallMnemonic, StringComparison.OrdinalIgnoreCase))
-    {
-      if (instruction.OperandLabel is not null)
-      {
-        return 2;
-      }
-
-      return instruction.Operand is int callValue && FitsShortCallRange(callValue) ? 1 : 2;
-    }
+    // ("call" used to be variable-length here -- scall/lcall -- until 2026-10-03; it is now a fixed
+    // two-word tagged mnemonic and sized by the encode-table lookup at the bottom like every other one.)
 
     // ADDED 2026-10-02: FixedOpcodeWithTwoTrailingWords (next32) joins this generic, fixed-WordLength
     // group. EmbeddedUnsignedValuePairWithTrailingWord (if, renamed from cbr the same day) JOINED this
@@ -2000,9 +2280,11 @@ internal static class CvmAssemblyLanguage
       // the exact max value depends on which mnemonic's own field layout applies (see
       // NodeResolvedEmbeddedValueFieldLayoutByMnemonic's own remarks), so it is looked up per mnemonic
       // rather than assumed to always be node 511's own 5-bit range.
+      // (2026-10-03: a mnemonic with no entry in that dictionary -- node 509's special words -- reads its
+      // own register range straight off its shape's ValueBitMask instead of falling back to node 511's.)
       int maxRegister = NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(instruction.Mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask, int RegisterFieldShift) layout)
           ? layout.RegisterFieldBitMask
-          : CvmInstructionSet.Node511RegisterFieldBitMask;
+          : shape.ValueBitMask != 0 ? shape.ValueBitMask >> shape.ValueBitShift : CvmInstructionSet.Node511RegisterFieldBitMask;
       return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" does not support a label operand -- its value is a register index, not an address; supply a literal 0..{maxRegister} value instead.");
     }
 
@@ -2318,20 +2600,9 @@ internal static class CvmAssemblyLanguage
     return value >= minValue && value <= maxValue;
   }
 
-  /// <summary>
-  /// True when <paramref name="value"/> fits <c>scall</c>'s actually-usable address range -- 1..
-  /// <see cref="CvmInstructionSet.ShortCallAddressMask"/>, NOT 0..<see cref="CvmInstructionSet.ShortCallAddressMask"/>.
-  /// Address 0 is excluded on purpose: CONFIRMED 2026-09-30 per Stefan directly ("scall 0 does not exist.
-  /// 'nop' has precedence."), because the word <c>scall 0</c> would produce (0x0000) is bit-for-bit
-  /// identical to <c>nop</c>'s own encoding, and <c>nop</c> wins that overlap. Shared by every "call"-family
-  /// caller in this file -- <see cref="CollectLabelAddresses"/>'s iterative sizing pass, <see cref="GetWordLength"/>,
-  /// and <see cref="EncodeCallPseudoMnemonic"/> -- so none of them can ever disagree on whether a given
-  /// resolved address needs one word (<c>scall</c>) or two (<c>lcall</c>). Mirrors <see cref="FitsLitRange"/>'s
-  /// own precedent of a small private per-file duplicate rather than sharing code with <c>CvmAssembler.cs</c>'s
-  /// own copy of the same test.
-  /// </summary>
-  private static bool FitsShortCallRange(int value) =>
-      value >= CvmInstructionSet.ShortCallMinimumAddress && value <= CvmInstructionSet.ShortCallAddressMask;
+  // FitsShortCallRange -- DELETED 2026-10-03 together with scall/lcall and the "call" pseudo-mnemonic
+  // (CVM redesign): "scall 0 does not exist, 'nop' has precedence" (Stefan, 2026-09-30) is moot now that no
+  // bare-address call word exists. The same small private per-file duplicate in CvmAssembler.cs went too.
 
   /// <summary>
   /// Encodes the <c>"literal"</c> pseudo-mnemonic (2026-09-27, per Stefan: "change opcode 'literal' so
@@ -2546,74 +2817,8 @@ internal static class CvmAssemblyLanguage
     return ([shape.Tag | (value & shape.ValueBitMask)], null);
   }
 
-  /// <summary>
-  /// Encodes the <c>"call"</c> pseudo-mnemonic (2026-09-30, alongside the new VM's own <c>scall</c>/
-  /// <c>lcall</c>, per Stefan: "'call' should try to fit the address into a 'scall' and use 'lcall' if the
-  /// address does not fit. if an address is unknown at compile time, e.g. an external symbol, 'call' will
-  /// always use 'lcall'.") -- see <see cref="CvmInstructionSet.ShortCallMnemonic"/>'s own class-level
-  /// remarks for the full derivation.
-  ///
-  /// <b>CORRECTED 2026-09-30 (same day), alongside <see cref="CollectLabelAddresses"/>'s own new iterative
-  /// sizing pass ("can you use a more optimistic smart iterator for sizing pass?").</b> This method MUST
-  /// reproduce the exact same scall-fits test <see cref="CollectLabelAddresses"/> already converged on for
-  /// this exact line -- a mismatch here would mean pass 1 laid out every LATER label under one word count
-  /// for this "call" while pass 2 actually emits a different one, silently shifting every one of those
-  /// later labels' own real addresses out from under the layout pass 1 already committed to. Earlier
-  /// (before the iterative pass existed), a label operand always meant lcall unconditionally, since sizing
-  /// had to happen before any label was resolved -- now that <see cref="CollectLabelAddresses"/> resolves
-  /// that exact question FOR label-targeted "call" lines before this ever runs, this method simply checks
-  /// the same <see cref="FitsShortCallRange"/> test against the final resolved value, literal or label
-  /// alike -- <paramref name="instruction"/>.OperandLabel no longer needs to be consulted here at all.
-  ///
-  /// <b>CHANGED 2026-10-02</b>, alongside lcall's own reshaping into a node-507-resolved
-  /// <see cref="CvmInstructionSet.CvmOperandEncoding.TrailingWord"/> mnemonic (see
-  /// <see cref="CvmInstructionSet.Instructions"/>' own remarks on Ids 195/196): the lcall branch can no
-  /// longer just read <c>shape.Tag</c> directly (lcall's old, retired shape's tag was a fixed, universally-
-  /// known constant needing no live compile at all) -- it now needs <paramref name="encodeTable"/>, the
-  /// SAME per-mnemonic resolved-opcode table every ordinary tagged mnemonic resolves through (built by
-  /// <see cref="BuildEncodeTable"/> from <paramref name="compiledRam"/>), to find lcall's own real,
-  /// node-507-resolved tag word. If lcall isn't wired to anything today (a mnemonic with no
-  /// <see cref="NodeSymbolByMnemonic"/> entry at all), or node 507's current compile simply doesn't define
-  /// <c>'lcall</c> this run, this fails with a specific, loud diagnosis (<see cref="DiagnoseUnresolvedWiredMnemonic"/>)
-  /// rather than the generic unresolved-opcode nop-substitution <see cref="Assemble"/>'s own main loop
-  /// uses elsewhere -- "call" redirects control flow, so silently turning a far call into a no-op would be
-  /// a far more dangerous failure mode than it is for most other opcodes.
-  /// </summary>
-  private static (List<int>? Words, string? Error) EncodeCallPseudoMnemonic(
-      CvmAsmInstruction instruction,
-      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable,
-      IReadOnlyDictionary<int, F18CompileResult> compiledRam,
-      int lineNumber)
-  {
-    if (instruction.Operand is not int value)
-    {
-      return (null, $"line {lineNumber}: \"call\" requires an operand, e.g. \"call 0x1234\" or \"call loop\".");
-    }
-
-    CvmInstructionSet.CvmInstructionShape shortCallShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.ShortCallMnemonic)!;
-
-    if (FitsShortCallRange(value))
-    {
-      // DEFENSIVE, added 2026-09-30 during review: mirrors EncodeSelfDescribingWord's own equivalent
-      // "| shape.Tag" -- a no-op today (scall's Tag is 0x0000) but keeps this in lockstep with that
-      // method's encoding should scall's Tag ever become nonzero.
-      return ([shortCallShape.Tag | (value & shortCallShape.ValueBitMask)], null);
-    }
-
-    // Too big for scall (or not a plain literal at all) -- lowers to lcall, exactly as before
-    // 2026-10-02's brief, since-corrected detour (see this method's own class-level remarks): lcall
-    // is node-507-resolved now, so its real tag word comes from encodeTable, the same lookup every
-    // ordinary tagged mnemonic uses, not a fixed constant.
-    if (!encodeTable.TryGetValue(CvmInstructionSet.LongCallMnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) lcallEntry))
-    {
-      string? wiredDiagnosis = DiagnoseUnresolvedWiredMnemonic(CvmInstructionSet.LongCallMnemonic, compiledRam);
-      return (null, wiredDiagnosis is not null
-          ? $"line {lineNumber}: \"call\" cannot reach {CvmInstructionSet.FormatOperand(value)} -- it does not fit \"scall\"'s own range, and \"lcall\" {wiredDiagnosis}"
-          : $"line {lineNumber}: \"call\" cannot reach {CvmInstructionSet.FormatOperand(value)} -- it does not fit \"scall\"'s own range, and \"lcall\" has no defined opcode yet.");
-    }
-
-    return ([lcallEntry.Opcode, value & CvmWordCodec.WordMask], null);
-  }
+  // EncodeCallPseudoMnemonic -- DELETED 2026-10-03 (CVM redesign): "call" no longer lowers to scall/lcall; it
+  // is a real two-word node-509 opcode handled by the generic tagged path in Assemble.
 
   /// <summary>
   /// Parses CVM assembly source text into <see cref="CvmAsmInstruction"/>s ready for
@@ -2690,6 +2895,18 @@ internal static class CvmAssemblyLanguage
         if (TryParseOperand(parts[1], out int operand))
         {
           instructions.Add(new CvmAsmInstruction(parts[0], operand, label));
+          continue;
+        }
+
+        // ADDED 2026-10-03: "push2 x" with ONE operand takes a single 32-bit number (see
+        // EncodePush2Operands). TryParseOperand above only reaches int.MaxValue in decimal, so a decimal
+        // value in 2^31..2^32-1 needs this wider parse; the result is stored in Operand as the SAME 32 bits
+        // reinterpreted as an int (EncodePush2Operands reads it back as unsigned). Only push2 gets this --
+        // every other mnemonic keeps its plain int range.
+        if (string.Equals(parts[0], CvmInstructionSet.Push2Mnemonic, StringComparison.OrdinalIgnoreCase) &&
+            TryParsePush2WideOperand(parts[1], out int wideOperand))
+        {
+          instructions.Add(new CvmAsmInstruction(parts[0], wideOperand, label));
           continue;
         }
 
@@ -2919,5 +3136,38 @@ internal static class CvmAssemblyLanguage
     }
 
     return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+  }
+
+  /// <summary>
+  /// ADDED 2026-10-03, for the one-operand form of <c>push2</c> only: parses a decimal or "0x" hex literal
+  /// (optional leading '-') that must fit 32 bits as either a signed or an unsigned number
+  /// (-2147483648..4294967295) and returns its 32 bits reinterpreted as an <see cref="int"/>.
+  /// </summary>
+  private static bool TryParsePush2WideOperand(string text, out int value)
+  {
+    value = 0;
+    bool negative = text.StartsWith('-');
+    string body = negative ? text[1..] : text;
+    long magnitude;
+    if (body.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+    {
+      if (!long.TryParse(body.AsSpan(2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out magnitude))
+      {
+        return false;
+      }
+    }
+    else if (!long.TryParse(body, NumberStyles.None, CultureInfo.InvariantCulture, out magnitude))
+    {
+      return false;
+    }
+
+    long signedValue = negative ? -magnitude : magnitude;
+    if (signedValue < int.MinValue || signedValue > uint.MaxValue)
+    {
+      return false;
+    }
+
+    value = unchecked((int)(uint)signedValue);
+    return true;
   }
 }

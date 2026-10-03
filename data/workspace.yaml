@@ -30,6 +30,39 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
+      dateTime: 2026-10-03T11:18:04.5817423
+      utcDateTime: 2026-10-03T11:18:04.5817423Z
+      localDateTime: 2026-10-03T13:18:04.5817423+02:00
+      date: 2026-10-03T00:00:00.0000000
+      day: 3
+      dayOfWeek: Saturday
+      dayOfYear: 276
+      hour: 11
+      millisecond: 581
+      microsecond: 742
+      nanosecond: 300
+      minute: 18
+      month: 10
+      offset: 00:00:00
+      totalOffsetMinutes: 0
+      second: 4
+      ticks: 639266230845817423
+      utcTicks: 639266230845817423
+      timeOfDay: 11:18:04.5817423
+      year: 2026
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -50,19 +83,6 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -66812,7 +66832,7 @@ projects:
           @b
           ( r w )
           up b!
-          A[ r/! ]] lit b! >r b! r> b!
+          A[ r/r! ]] lit b! >r b! r> b!
         : x3/finish
           A[ r/defocus ; ]] lit b!
           down b! ;
@@ -66821,7 +66841,7 @@ projects:
           @b @b
           ( r hi lo )
           up b!
-          A[ r/2! ]] lit b! >r >r b! r> b! r> b!
+          A[ r/d! ]] lit b! >r >r b! r> b! r> b!
           x3/finish ;
 
 
@@ -66829,11 +66849,11 @@ projects:
       ramWords:
       - 0x01DA7
       - 0x00145
-      - 0x1341E
+      - 0x1341F
       - 0x288A2
       - 0x26BB2
       - 0x04B12
-      - 0x11414
+      - 0x11418
       - 0x00115
       - 0x29555
       - 0x01F12
@@ -67339,7 +67359,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 406
       enabled: true
-      sourceCode: "( CVM_pipeline node 406.\n\ninstruction execution.\n\nread register.\ncondition evaluation.\r\n\r\ncond:\r\n\r\nlabel  | name   | description\r\n-------+--------+-----------------------------\r\n'==0   | ==0    | return true if r == 0\n'!=0   | !=0    | return true if r != 0\n'<0    | <0     | return true if r < 0\n'<=0   | <=0    | return true if r <= 0\n'>0    | >0     | return true if r > 0\n'>=0   | >=0    | return true if r >= 0\n'true  | true   | return true always\n'false | false  | return true never\n'even  | even   | return true if r is even\n'odd   | odd    | return true if r is odd\n\n)\n# 407 import\n\n# -dlu /b     // node 506\n# up /a       // node 306\n# -dlu /p\n\n\n# 0x02 org\n\r\n: x1/eq0 ( w - f )\r\n: '==0 .loc ( w - f )\r\n  if\r\n: x1/false ( w - 0 ) \r\n: 'false .loc ( w - f )\r\n  dup xor ;\r\n  then\r\n: x1/true ( w = 1 )\r\n: 'true .loc ( w - f )\r\n  drop 1 ;\r\n: x1/ne0 ( w - f )\r\n: '!=0 .loc ( w - f )\r\n  # x1/false until x1/true ;\r\n: '<=0 .loc ( w - f )\r\n  # x1/true until\r\n: '<0 .loc ( w - f )\r\n  0x8000 and x1/ne0 ;\r\n: '>0 .loc ( w - f )\r\n  # x1/false until\r\n: '>=0 .loc ( w - f )\r\n  0x8000 and x1/eq0 ;\r\n\r\n\r\n: x1/odd ( w - f )\r\n  1 and\r\n  x1/ne0 ;\r\n\r\n: x1/even ( w - f )\r\n  1 and\r\n  x1/eq0 ;\r\n\r\n// : x1/defocus2 ( - ) leap\n: x1/defocus ( - ) // then\n  A[ ; ]] lit !b\n: x1/back\n  # -dl- lit b! ;\n\n: x1/rfocus ( r - )\n  right b!\n  A[ r/focus_w ]] lit !b\n: x1/reg ( r - )\n  A[ @p a! ]] lit !b !b ;\n\n: x1/r@2 ( - lo hi ) leap\n: x1/r@ ( - w ) then\n  A[ @+ !p ]] lit !b\n  @b ;\n\n: x1/main\n  @b >r ex\n  x1/main ;\n\n: x1/get ( w - ) !b ;\n\n: x1/read16-2 ( - w1 w2 ) leap\n: x1/read16-1 ( - w ) then\n  @b x1/rfocus x1/r@ x1/defocus ;\n\n: x1/read32-2 ( - lo1 hi1 lo2 hi2 ) leap\n: x1/read32-1 ( - lo hi ) then\n  @b 2* x1/rfocus x1/r@ x1/r@ x1/defocus ;\n\r\n: x1/cond ( op - f )\r\n  // receive opcode with xxcr\r\n  // c: condition\r\n  // r: register\r\n  // return x\r\n  //   x == 0: false\r\n  //   x != 0: true\r\n  dup 0xf and x1/rfocus\r\n  2/ 2/ 2/ 2/ 0xf and >r\r\n  x1/r@ x1/defocus ;\r\n\r\n: x1/pass (  ) // pass register control to node 307 or 408\r\n  right b!\n  A[ r/focus_se ; ]] lit !b\r\n;\n  \r\n# 0 org\n\r\n: 'even .loc ( w - f )\r\n  x1/even ;\r\n : 'odd .loc ( w - f )\r\n  x1/odd ;\r\n\n\n"
+      sourceCode: "( CVM_pipeline node 406.\n\ninstruction execution.\n\nread register.\ncondition evaluation.\r\n\r\ncond:\r\n\r\nlabel  | name   | description\r\n-------+--------+-----------------------------\r\n'==0   | ==0    | return true if r == 0\n'!=0   | !=0    | return true if r != 0\n'<0    | <0     | return true if r < 0\n'<=0   | <=0    | return true if r <= 0\n'>0    | >0     | return true if r > 0\n'>=0   | >=0    | return true if r >= 0\n'true  | true   | return true always\n'false | false  | return true never\n'even  | even   | return true if r is even\n'odd   | odd    | return true if r is odd\n\n)\n# 407 import\n\n# -dlu /b     // node 506\n# up /a       // node 306\n# -dlu /p\n\n\n# 0x02 org\n\r\n: x1/eq0 ( w - f )\r\n: '==0 .loc ( w - f )\r\n  if\r\n: x1/false ( w - 0 ) \r\n: 'false .loc ( w - f )\r\n  dup xor ;\r\n  then\r\n: x1/true ( w = 1 )\r\n: 'true .loc ( w - f )\r\n  drop 1 ;\r\n: x1/ne0 ( w - f )\r\n: '!=0 .loc ( w - f )\r\n  # x1/false until x1/true ;\r\n: '<=0 .loc ( w - f )\r\n  # x1/true until\r\n: '<0 .loc ( w - f )\r\n  0x8000 and x1/ne0 ;\r\n: '>0 .loc ( w - f )\r\n  # x1/false until\r\n: '>=0 .loc ( w - f )\r\n  0x8000 and x1/eq0 ;\r\n\r\n\r\n: x1/odd ( w - f )\r\n  1 and\r\n  x1/ne0 ;\r\n\r\n: x1/even ( w - f )\r\n  1 and\r\n  x1/eq0 ;\r\n\r\n// : x1/defocus2 ( - ) leap\n: x1/defocus ( - ) // then\n  A[ ; ]] lit !b\n: x1/back\n  # -dl- lit b! ;\n\n: x1/rfocus ( r - )\n  right b!\n  A[ r/focus_nw ]] lit !b\n: x1/reg ( r - )\n  A[ @p a! ]] lit !b !b ;\n\n: x1/r@2 ( - lo hi ) leap\n: x1/r@ ( - w ) then\n  A[ @+ !p ]] lit !b\n  @b ;\n\n: x1/main\n  @b >r ex\n  x1/main ;\n\n: x1/get ( w - ) !b ;\n\n: x1/read16-2 ( - w1 w2 ) leap\n: x1/read16-1 ( - w ) then\n  @b x1/rfocus x1/r@ x1/defocus ;\n\n: x1/read32-2 ( - lo1 hi1 lo2 hi2 ) leap\n: x1/read32-1 ( - lo hi ) then\n  @b 2* x1/rfocus x1/r@ x1/r@ x1/defocus ;\n\r\n: x1/cond ( op - f )\r\n  // receive opcode with xxcr\r\n  // c: condition\r\n  // r: register\r\n  // return x\r\n  //   x == 0: false\r\n  //   x != 0: true\r\n  dup 0xf and x1/rfocus\r\n  2/ 2/ 2/ 2/ 0xf and >r\r\n  x1/r@ x1/defocus ;\r\n\r\n: x1/pass (  ) // pass register control to node 307 or 408\r\n  right b!\n  A[ r/focus_se ; ]] lit !b\r\n;\n  \r\n# 0 org\n\r\n: 'even .loc ( w - f )\r\n  x1/even ;\r\n : 'odd .loc ( w - f )\r\n  x1/odd ;\r\n\n\n"
       ramWords:
       - 0x11413
       - 0x11410
@@ -67369,7 +67389,7 @@ projects:
       - 0x00135
       - 0x04B12
       - 0x001D5
-      - 0x13418
+      - 0x13419
       - 0x089B2
       - 0x05B25
       - 0x04AB2
@@ -67399,7 +67419,7 @@ projects:
       - 0x11416
       - 0x04B12
       - 0x001D5
-      - 0x1141A
+      - 0x1141C
       - 0x09555
       - 0x15555
       - 0x15555
@@ -67946,7 +67966,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 505
       enabled: true
-      sourceCode: >+
+      sourceCode: >
         ( CVM_pipeline node 505.
 
 
@@ -67983,89 +68003,9 @@ projects:
           A[ ; ]] lit !b
         : d1/main ( )
           # d1/finish lit >r
-          @b dup
-          ( op x? )
-          2* if
 
-            2* -if
-
-              // 1* 
-              2* -if
-                // 11* other
-                # x1a/other lit d1/continue2 ;
-              then
-
-              // 10*
-              2* -if
-
-                // 101*
-                2* -if
-
-                  // 1011* short branch
-                  2* 2/ 2/ 2/ 2/ 2/ 2/ A[ @p d/branch ]] lit !b !b ;
-
-                then
-
-                // 1010* conditional long branch
-                drop A[ @p d/conditional ]] lit !b !b ;
-
-
-              then
-
-              // 100*
-              2* -if
-
-                // 1001* register call
-                drop A[ @p d/rcall ]] lit !b !b ;
-
-              then
-
-              // 1000* register jump
-              drop A[ @p d/rjump ]] lit !b !b ;
-
-            then
-
-            // 0*
-            2* -if
-
-              // 01* 
-              2* -if
-
-                // 010*
-                2* -if
-
-                  // 0111* pop32
-                  A[ d/pop2 ]] lit d1/direct32 ;
-
-                then
-                // 0110* pop 16
-                A[ d/pop1 ]] lit d1/direct16 ;
-
-              then
-
-              // 010*
-              2* -if
-
-                // 0101* next32
-                A[ d/next2 ]] lit d1/direct32 ;
-              then
-
-              // 0100* next16
-              A[ d/next1 ]] lit d1/direct16 ;
-            then
-
-            // 00*
-            2* -if
-
-              // 001* special
-              // the encode address is from node 507
-              A[ @p d/save ]] lit !b !b !b ;
-            then
-
-            // 000* scall
-            drop A[ @p d/call ]] lit !b !b ;
-          then
           ;
+        /*
 
         : d1/postpone ( addr - )
           A[ @p d/postpone ; ]] lit !b !b ;
@@ -68079,7 +68019,7 @@ projects:
         : d1/direct32
           # x1a/direct32 lit # d/pass2 lit
           d1/direct ;
-
+        */
       ramWords:
       - 0x0A9B2
       - 0x0A9B2
@@ -68154,75 +68094,75 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEDE'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 506
       enabled: true
-      sourceCode: "( CVM_pipeline node 506.\n\ninstruction decode.\n\n\r\n\n\n)\r\n# 406 import\n# 507 import\n\n# right /b\n# left /a\n\nentry d/main\n\n# 0 org\n\n: d/main\n  @b ! --l- A[ ; ]] lit !b d/main ;\n\r\n\r\n: d/call ( a - )\n  >r # m/call lit r>\n: d/save1 ( instr_addr w - )\n  A[ @p ]] lit !b !b ;\n\r\n: d/save ( instr_addr - )\n  A[ @p m/exec_save ]] lit\n  ( w command - )\n  !b !b ;\n\n: d/branch ( offset - )\n  A[ @p m/branch ]] lit !b !b ;\n\n: d/jump ( a - )\n  A[ @p m/jump ]] lit !b !b ;\r\n\n\r\n\n\n: d/next2 ( - w1 w2 ) leap\n: d/next1 ( - w ) then\n  A[ m/next ]] lit\n: d/get !b\n  A[ !p ]] lit !b @b ;\n\n: d/pop2 ( - w1 w2 ) leap\n: d/pop1 ( - w ) then\n  A[ m/pop ]] lit d/get ;\n\n: d/pass2 ( w1 w2 - ) leap\r\n: d/pass1 ( w - ) then\r\n  down b!\r\n  !b !b\r\n  right b!\r\n;\r\n\r\n: d/get1 ( - w )\r\n  down b!\r\n  A[ !p ]] lit !b @b\r\n  right b!\r\n;\n\r\n: d/special ( sop - )\r\n  2* if // push\r\n    @ dup 0x3f and d/save\r\n    2/ 2/ 2/ 2/ 2/ 2/ !b ;\r\n  then\r\n  // special\r\n  @ d/save ;\n\r\n: d/postpone ( addr - )\r\n  r> over >r >r drop ;\r\n  \r\n: d/conditional ( op - )\n  A[ @p x1/cond ]] lit d/pass2\n  d/get1                     // flag\n  d/next1                    // flag offset\n  >r\n  if\n    r> drop ;\n  then\n  r> d/branch ;\r\n\r\n: d/rcall ( r - )\r\n  A[ @p m/call ]] lit d/rreg ;\r\n: d/rjump ( r - )\r\n  A[ @p m/jump ]] lit \r\n: d/rreg ( r m-op - w )\r\n  !b\r\n  down b!\r\n  # x1/read16-1 lit !b !b\r\n  # x1/get lit !b @b\r\n  right b!\r\n  !b ;\r\n\r\n\n\n\n"
+      sourceCode: "( CVM_pipeline node 506.\n\ninstruction decode.\n\n\r\n\n\n)\r\n# 406 import\n# 507 import\n\n# right /b\n# left /a\n\nentry d/main\n\n# 0 org\n\n: d/main\n  @b ! --l- A[ ; ]] lit !b d/main ;\n\r\n/*\r\n: d/call ( a - )\n  >r # m/call lit r>\n: d/save1 ( instr_addr w - )\n  A[ @p ]] lit !b !b ;\n\r\n: d/save ( instr_addr - )\n  A[ @p m/exec_save ]] lit\n  ( w command - )\n  !b !b ;\n\n: d/branch ( offset - )\n  A[ @p m/branch ]] lit !b !b ;\n\n: d/jump ( a - )\n  A[ @p m/jump ]] lit !b !b ;\r\n\n\r\n\n\n: d/next2 ( - w1 w2 ) leap\n: d/next1 ( - w ) then\n  A[ m/next ]] lit\n: d/get !b\n  A[ !p ]] lit !b @b ;\n\n: d/pop2 ( - w1 w2 ) leap\n: d/pop1 ( - w ) then\n  A[ m/pop ]] lit d/get ;\n\n: d/pass2 ( w1 w2 - ) leap\r\n: d/pass1 ( w - ) then\r\n  down b!\r\n  !b !b\r\n  right b!\r\n;\r\n\r\n: d/get1 ( - w )\r\n  down b!\r\n  A[ !p ]] lit !b @b\r\n  right b!\r\n;\n\r\n: d/special ( sop - )\r\n  2* if // push\r\n    @ dup 0x3f and d/save\r\n    2/ 2/ 2/ 2/ 2/ 2/ !b ;\r\n  then\r\n  // special\r\n  @ d/save ;\n\r\n: d/postpone ( addr - )\r\n  r> over >r >r drop ;\r\n  \r\n: d/conditional ( op - )\n  A[ @p x1/cond ]] lit d/pass2\n  d/get1                     // flag\n  d/next1                    // flag offset\n  >r\n  if\n    r> drop ;\n  then\n  r> d/branch ;\r\n\r\n: d/rcall ( r - )\r\n  A[ @p m/call ]] lit d/rreg ;\r\n: d/rjump ( r - )\r\n  A[ @p m/jump ]] lit \r\n: d/rreg ( r m-op - w )\r\n  !b\r\n  down b!\r\n  # x1/read16-1 lit !b !b\r\n  # x1/get lit !b @b\r\n  right b!\r\n  !b ;\r\n*/\r\n\n\n\n"
       ramWords:
       - 0x01AB2
       - 0x13575
       - 0x05B40
       - 0x15555
-      - 0x2FD9A
-      - 0x00039
-      - 0x05B25
-      - 0x049B2
-      - 0x05B25
-      - 0x05617
-      - 0x05B25
-      - 0x05607
-      - 0x05B25
-      - 0x0563A
-      - 0x1340F
-      - 0x049B2
-      - 0x13402
-      - 0x09D22
-      - 0x0C9B2
-      - 0x01555
-      - 0x13415
-      - 0x05711
-      - 0x1341A
-      - 0x13418
-      - 0x04B22
-      - 0x00115
-      - 0x09DA5
-      - 0x001D5
-      - 0x04B12
-      - 0x00115
-      - 0x0C9B2
-      - 0x09F12
-      - 0x001D5
-      - 0x29555
-      - 0x37329
-      - 0x02D12
-      - 0x0003F
-      - 0x3F608
-      - 0x307C2
-      - 0x307C2
-      - 0x09555
-      - 0x03708
-      - 0x26FBA
-      - 0x2E255
-      - 0x05617
-      - 0x05630
-      - 0x1341C
-      - 0x1340F
-      - 0x2F332
-      - 0x26255
-      - 0x2770A
-      - 0x049B2
-      - 0x05639
-      - 0x11438
-      - 0x049B2
-      - 0x0563A
-      - 0x09DA7
-      - 0x00115
-      - 0x00027
-      - 0x09B12
-      - 0x00025
-      - 0x09F12
-      - 0x001D5
-      - 0x29B55
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x000
         p: 0x000
@@ -68232,7 +68172,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEDE'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 507
       enabled: true
       sourceCode: >+
@@ -68313,11 +68253,8 @@ projects:
         .: unused bit
 
 
-
-
-
-
         )
+
 
         # 607 import
 
@@ -68376,6 +68313,8 @@ projects:
         : m/dpush ( lo hi - ) leap
 
         : m/push ( w - ) then
+
+        // : brk brk ;
           A[ r/push ]] lit m/rsend
           1 @b
         : m/write ( w p a - )
@@ -68684,13 +68623,26 @@ projects:
 
         # right /a
 
-        entry x6/main
+        entry x6/finish
 
 
-        # 4 org // shift origin for jump target fit
+        # 3 org // shift origin for jump target fit
 
 
         : down-writing?  io b!  @b  0x2000 and ;   
+
+
+        : x6/unpack ( op - op r count )
+          dup 0xf and
+          over 2/ 2/ 2/ 2/
+          dup 7 and dup !           // send size-1
+          >r
+          2/ 2/ 2/ 0x3f and !      // send handler offset
+          r> 
+        // : brk brk ;
+
+        ;
+
 
 
         : x6/finish left b! A[ m/nextinstr ]] lit !b
@@ -68713,70 +68665,31 @@ projects:
             2* 2/ 2/ 2/ 2/
             A[ @p m/branch ]] lit !b !b ;
           then // 00
-          2* -if // 001 special with focus
-            @b dup 0xf and
-            ( sop op r )
-            over 2/ 2/ 2/ 2/
-            dup 7 and dup >r !    // size-1
-            2/ 2/ 2/ 0x3f and !   // offset
-            ( r ) // A: offset
-            // focus with sending r
-            A[ @p r/focus_nw ]] lit !b !b
-            // transfer
+          2* -if                   // special with focus
+            @b x6/unpack >r
+            // Node 507 forwards the focus instruction to node 407
+            A[ @p m/rsend ]] lit !b
+            A[ @p r/focus_nw ]] lit !b
+
+            // Node 507 forwards the register argument
+            A[ @p !b ]] lit !b
+            !b
+
+            // Execute the table on node 507
             begin @ !b unext
-            // defocus
+
+            // Node 507 forwards defocus to node 407
+            A[ @p m/rsend ]] lit !b
             A[ r/defocus ]] lit !b ;
-          then // special without focus
-            @b dup 0xf and A[ @p ]] lit !b !b  // send register
-            2/ 2/ 2/ 2/
-            dup 7 and dup >r !        // size-1
-            2/ 2/ 2/
-            !                         // offset
-            begin @ !b unext ;        // transfer
+          then                     // special without focus
+            @b x6/unpack >r
+            A[ @p ]] lit !b !b
+            begin @
+        // : brk brk ;
 
-        /*
-
-        : x6/focus ( w - )
-          A[ @p r/focus_n ]] lit
-        : x6/focus2 ( w instr - )
-          A[ @p m/rsend ]] lit !b !b !b ;
-
-        : x6/defocus ( ? - )
-          A[ @p r/defocus ]] lit x6/focus2 
-        ;
+        !b unext ;
 
 
-        : 'rpush ( r )
-          A[ m/focus ]] lit !b
-          A[ m/defocus ]] lit !b
-        ;
-
-
-
-
-        : x6/r@ ( r - )
-          A[ @p m/focus ]] lit !b !b
-          // 507: ( r )
-          A[ @p !b !b ]] lit !b A[ r/r@ ]] lit !b
-          A[ r/r@ ]] lit m/focus !b @b
-        ;
-
-
-        : x6/d@ ( d - lo hi )
-          A[ r/d@ ]] lit m/focus 2* !b @b @b
-        ;
-
-
-        : x6/r! ( w r - )
-          A[ r/r! ]] lit m/focus !b !b
-        ;
-
-
-        : x6/d! ( lo hi d - )
-          A[ r/d! ]] lit m/focus 2* !b !b !b
-        ;
-
-        */
 
 
 
@@ -68784,55 +68697,54 @@ projects:
       - 0x15555
       - 0x15555
       - 0x15555
-      - 0x15555
       - 0x04B07
       - 0x0015D
       - 0x02000
       - 0x3F555
+      - 0x25DFA
+      - 0x0000F
+      - 0x207C2
+      - 0x30797
+      - 0x00007
+      - 0x3ED2A
+      - 0x2E7C2
+      - 0x31DFA
+      - 0x0003F
+      - 0x0AC55
       - 0x04B12
       - 0x00175
       - 0x13408
       - 0x089B2
       - 0x04812
-      - 0x00008
+      - 0x00011
       - 0x0D9B2
-      - 0x09F6C
-      - 0x01604
-      - 0x19413
+      - 0x09F6D
+      - 0x01603
+      - 0x1941C
       - 0x11515
       - 0x15555
-      - 0x3721A
+      - 0x37223
       - 0x002DA
       - 0x307C2
       - 0x31D22
       - 0x05615
       - 0x09555
-      - 0x3722A
-      - 0x00D12
-      - 0x0000F
-      - 0x3EFC2
-      - 0x307C3
-      - 0x04092
-      - 0x00007
-      - 0x2FAC2
-      - 0x30712
-      - 0x0003F
-      - 0x3FA12
+      - 0x3722F
+      - 0x01607
+      - 0x2FD27
+      - 0x05606
       - 0x05619
-      - 0x09BB2
+      - 0x09D22
+      - 0x05BB2
+      - 0x089B2
       - 0x03B77
+      - 0x05606
+      - 0x09D25
       - 0x13418
-      - 0x09555
-      - 0x00D12
-      - 0x0000F
-      - 0x3FD22
+      - 0x01607
+      - 0x2FD22
       - 0x049B2
-      - 0x087C2
-      - 0x30797
-      - 0x00007
-      - 0x3EDBA
-      - 0x0A7C2
-      - 0x31AB2
+      - 0x089B2
       - 0x03B75
       - 0x15555
       - 0x15555
@@ -68845,8 +68757,9 @@ projects:
       - 0x15555
       - 0x15555
       - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x00C
+        entryPoint: 0x011
         p: 0x000
         a: 0x000
         b: 0x000
@@ -68909,7 +68822,17 @@ projects:
           // 1 with focus
           A[ m/unlink ]] ,
 
-        : 'pop // pop 16-bit value from stack and stores it in a register ( w - )
+        : 'push2 // read next 32-bit value and push it on the stack ( - lo hi ). sequence in memory: opcode(push2) hi lo
+          // 4 with focus
+          A[ m/next ]] ,
+          A[ m/push ]] ,
+
+        : 'push // read next 16-bit value and push it on the stack ( - w )
+          // 2 with focus
+          A[ m/next ]] ,
+          A[ m/push ]] ,
+
+        : 'rpop // pop 16-bit value from stack and stores it in a register ( w - )
           // 2 with focus
           A[ m/pop ]] ,
           A[ m/r! ]] ,
@@ -68919,7 +68842,7 @@ projects:
           A[ m/dpop ]] ,
           A[ m/d! ]] ,
 
-        : 'push // read 16-bit value from register and push it on the stack ( - w )
+        : 'rpush // read 16-bit value from register and push it on the stack ( - w )
           // 2 with focus
           A[ m/r@ ]] ,
           A[ m/push ]] ,
@@ -68929,7 +68852,7 @@ projects:
           A[ m/d@ ]] ,
           A[ m/dpush ]] ,
 
-        : 'popi // pop 16-bit value from stack and stores it in a register indirect. register # is on the stack ( w r - )
+        : 'rpopi // pop 16-bit value from stack and stores it in a register indirect. register # is on the stack ( w r - )
           // 2 with focus
           A[ m/dpop ]] ,
           A[ over m/r! ]] ,
@@ -68940,7 +68863,7 @@ projects:
           A[ >r m/dpop ]] ,
           A[ r> m/d! ]] ,
 
-        : 'pushi // read 16-bit value from register indirect and push it on the stack ( r - w )
+        : 'rpushi // read 16-bit value from register indirect and push it on the stack ( r - w )
           // 3 with focus
           A[ m/pop ]] ,
           A[ m/r@ ]] ,
@@ -68949,15 +68872,15 @@ projects:
         : 'dpushi // read 32-bit value from register indirect and push it on the stack ( r - lo hi )
           // 3 with focus
           A[ m/pop ]] ,
-          A[ m/r@ ]] ,
-          A[ m/push ]] ,
+          A[ m/d@ ]] ,
+          A[ m/dpush ]] ,
 
-        : 'rinc // increment
+        : 'rinc // increment register
           // 3 with focus
           A[ @p m/rsend ]] , A[ @p r/++ ]] ,
           A[ m/rsend ]] ,
 
-        : 'rdec // increment
+        : 'rdec // decrement register
           // 3 with focus
           A[ @p m/rsend ]] , A[ @p r/-- ]] ,
           A[ !b ]] ,
@@ -68981,52 +68904,52 @@ projects:
 
       ramWords:
       - 0x2C9B2
-      - 0x13421
-      - 0x2A9B2
-      - 0x1341B
-      - 0x23627
-      - 0x2A9B2
-      - 0x1341B
-      - 0x2A9B2
-      - 0x1342E
-      - 0x13402
-      - 0x13421
-      - 0x1343A
       - 0x13420
-      - 0x1343D
-      - 0x13435
-      - 0x13427
-      - 0x13437
+      - 0x2A9B2
+      - 0x1341A
+      - 0x23626
+      - 0x2A9B2
+      - 0x1341A
+      - 0x2A9B2
+      - 0x1342D
+      - 0x13402
+      - 0x1341A
+      - 0x13426
+      - 0x1341A
       - 0x13426
       - 0x13420
-      - 0x2163A
-      - 0x13421
-      - 0x2F620
-      - 0x2763D
-      - 0x13421
-      - 0x13435
-      - 0x13427
-      - 0x13421
-      - 0x13435
-      - 0x13427
-      - 0x05608
+      - 0x13439
+      - 0x1341F
+      - 0x1343B
+      - 0x13434
+      - 0x13426
+      - 0x13436
+      - 0x13425
+      - 0x1341F
+      - 0x21639
+      - 0x13420
+      - 0x2F61F
+      - 0x2763B
+      - 0x13420
+      - 0x13434
+      - 0x13426
+      - 0x13420
+      - 0x13436
+      - 0x13425
+      - 0x05606
       - 0x0562A
-      - 0x13408
-      - 0x05608
+      - 0x13406
+      - 0x05606
       - 0x0562C
       - 0x089B2
-      - 0x05608
+      - 0x05606
       - 0x05626
-      - 0x09621
-      - 0x13408
+      - 0x09620
+      - 0x13406
       - 0x00802
       - 0x2A9B2
       - 0x07B72
-      - 0x11427
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1142B
       - 0x15555
       - 0x15555
       - 0x15555
@@ -69045,7 +68968,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x027
+        entryPoint: 0x02B
         p: 0x000
         a: 0x000
         b: 0x000
@@ -70225,21 +70148,21 @@ projects:
         ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/cbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)
     - name: test
       source: >
+        jmp test1
+
         nop
+
+        nop
+
+        nop
+
+        test1:
+
+        link -3
+
+        unlink
 
         push 0x1234
-
-        pop r1
-
-        nop
-
-        nop
-
-        nop
-
-        nop
-
-        nop
 
         nop
 
