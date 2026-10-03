@@ -279,6 +279,32 @@ public static class CvmInstructionSet
   // x1/ names exactly.
   public const string IfPrimitiveNamePrefix = "if.";
 
+  // CondMnemonic ("cond") -- ADDED 2026-10-03, per Stefan directly: "there is a new opcode 'cond' that pushes
+  // the result of a condition onto the stack", table row
+  //   1001|0000|cccc|xxxx| 506 | cond { condition calculation and push result on stack }
+  // i.e. the sibling of "if" (1000|0000|cccc|xxxx) -- same "cccc" field (bits 7-4, the node-406 condition
+  // word's address) and same "xxxx" field (bits 3-0, the register), but ONE word only (no trailing offset
+  // word, nothing is branched to) -- the condition is evaluated on the register and the boolean RESULT is
+  // pushed onto the stack instead. Syntax (Stefan): "cond <reg> <cond>", e.g. "cond r0 ==0" (register
+  // first, then the condition, like "if"; space-separated in the IDE assembler, comma-separated in
+  // CvmAssembler: "cond r0, ==0"). The ten condition names are exactly "if"'s (IfConditionPrimitiveKeyByName).
+  // What exact value is pushed (0/1? 0/-1? 32-bit?) is node 506's business and is NOT asserted here -- the
+  // assembler only encodes the word. Not yet verified on hardware.
+  public const string CondMnemonic = "cond";
+
+  // CondPrimitiveNamePrefix -- the linker-assembler counterpart of IfPrimitiveNamePrefix: "cond.eq0" etc. are
+  // synthetic CvmPrimitiveTable keys holding the complete base word (0x9000 | resolved-cond<<4, register 0),
+  // built by Ga144.Evb.Ide.Services.CvmAssemblyLanguage.BuildIfConditionEncodeTable next to the "if." ones.
+  public const string CondPrimitiveNamePrefix = "cond.";
+
+  // IsRegisterlessCondition -- ADDED 2026-10-03, per Stefan: the conditions "true" and "false" never look at a
+  // register, so "if" and "cond" need no register operand for them -- "cond true", "if true then label1" -- and
+  // the register field is encoded as 0. (An explicit register is still accepted, but only r0/0.)
+  public static bool IsRegisterlessCondition(string? conditionName) =>
+      conditionName is not null &&
+      (string.Equals(conditionName, "true", StringComparison.OrdinalIgnoreCase) ||
+       string.Equals(conditionName, "false", StringComparison.OrdinalIgnoreCase));
+
   public static readonly IReadOnlyDictionary<string, string> IfConditionPrimitiveKeyByName =
       new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
       {
@@ -2662,6 +2688,14 @@ public static class CvmInstructionSet
     // they always were, still followed by one trailing offset word. Same Id, mnemonic, shape and field
     // masks; only Tag moved 0xA000 -> 0x8000 (0xA000 is now the "special 506" row, 101.|00ww|wwww|xxxx).
     new(Id: 193, IfMnemonic, 2, CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord, Tag: 0x8000, ValueBitMask: 0x00F0, ValueBitShift: 4, SecondValueBitMask: 0x000F),
+    // cond (Id 213, NEW 2026-10-03): table row "1001|0000|cccc|xxxx| 506 | cond { condition calculation and push
+    // result on stack }". Same field layout as "if" just above (cond field = node-406 condition word address in
+    // bits 7-4, register in bits 3-0) but NO trailing word -- WordLength 1. Declared as an
+    // EmbeddedUnsignedValuePair purely so the generic length/describe plumbing treats it as a plain one-word
+    // shape; the operands are NOT plain numbers (register token + node-406 condition NAME), so both assemblers
+    // intercept CondMnemonic by name before their generic pair handling (see Assemble/EncodeCondInstruction
+    // and CvmAssembler's own "case CondMnemonic"). Fresh Id: 213 had never been used.
+    new(Id: 213, CondMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: 0x9000, ValueBitMask: 0x00F0, ValueBitShift: 4, SecondValueBitMask: 0x000F),
     // sbr (Id 194): table row "1011|oooo|oooo|oooo| sbr {short branch, relative}" -- bits 15-12 fixed
     // "1011" (0xB000), bits 11-0 a 12-bit SIGNED relative offset ("o", per the table's own legend:
     // "o: signed offset") embedded directly in the one word -- no trailing word at all, which is
@@ -3590,6 +3624,19 @@ public static class CvmInstructionSet
       {
         int first = (word & shape.ValueBitMask) >> shape.ValueBitShift;
         int second = (word & shape.SecondValueBitMask) >> shape.SecondValueBitShift;
+
+        // ADDED 2026-10-03: "cond" is listed the way it is written -- "cond r0 ==0" (register first, then
+        // the condition NAME resolved through the caller's ifConditionName lookup, "cond#N" if unknown).
+        if (string.Equals(shape.Mnemonic, CondMnemonic, StringComparison.Ordinal))
+        {
+          string condText = ifConditionName?.Invoke(first) ?? $"cond#{first}";
+
+          // "true"/"false" take no register (Stefan, 2026-10-03): listed as "cond true" when the register is 0.
+          return IsRegisterlessCondition(condText) && second == 0
+              ? $"{shape.Mnemonic} {condText}"
+              : $"{shape.Mnemonic} r{second} {condText}";
+        }
+
         return $"{shape.Mnemonic} {FormatOperand(first)} {FormatOperand(second)}";
       }
     }
@@ -3627,7 +3674,9 @@ public static class CvmInstructionSet
         // offset (hardware-confirmed 2026-10-03: the offset is relative to the word after the offset
         // word), printed only when the caller supplied wordAddress.
         string conditionText = ifConditionName?.Invoke(cond) ?? $"cond#{cond}";
-        string ifText = $"{shape.Mnemonic} r{register} {conditionText}";
+        string ifText = IsRegisterlessCondition(conditionText) && register == 0
+            ? $"{shape.Mnemonic} {conditionText}"
+            : $"{shape.Mnemonic} r{register} {conditionText}";
         if (nextWord is int ifOffset)
         {
           int signedOffset = (ifOffset & 0x8000) != 0 ? (ifOffset & 0xFFFF) - 0x10000 : ifOffset & 0xFFFF;

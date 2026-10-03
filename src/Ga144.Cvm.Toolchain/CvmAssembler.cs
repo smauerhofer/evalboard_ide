@@ -324,6 +324,30 @@ public static class CvmAssembler
             break;
           }
 
+        // ADDED 2026-10-03, per Stefan: "cond <reg> <cond>" (CvmInstructionSet.CondMnemonic) -- the one-word
+        // sibling of "if" (no trailing offset word): evaluates the condition on the register and pushes the
+        // result onto the stack. Two operands, comma-separated like everything else in this assembler:
+        // "cond r0, ==0". The condition resolves through the same ten synthetic primitive-table entries as
+        // "if", under the "cond." prefix (CvmInstructionSet.CondPrimitiveNamePrefix).
+        case CvmInstructionSet.CondMnemonic:
+          {
+            if (line.Args.Count != 2)
+            {
+              errors.Add($"line {line.LineNumber}: \"cond\" requires exactly two operands (register, condition), e.g. \"cond r0, ==0\".");
+              break;
+            }
+
+            if (!CvmInstructionSet.IfConditionPrimitiveKeyByName.ContainsKey(line.Args[1]))
+            {
+              string validCondConditionNames = string.Join(", ", CvmInstructionSet.IfConditionPrimitiveKeyByName.Keys);
+              errors.Add($"line {line.LineNumber}: \"cond\" does not recognize condition \"{line.Args[1]}\" -- valid conditions are: {validCondConditionNames}.");
+              break;
+            }
+
+            sectionCursors[section] += 1; // this shape's own fixed WordLength -- one word, no trailing word.
+            break;
+          }
+
         default:
           CvmInstructionSet.CvmInstructionShape? shape = CvmInstructionSet.TryGetShape(line.Directive);
           if (shape is null)
@@ -508,6 +532,12 @@ public static class CvmAssembler
             // here -- unlike the register check just above, there is no sensible default base word to
             // substitute for an unknown condition (which of ten would it be?), so this is asserted, not
             // defended against a second time.
+            if (CvmInstructionSet.IsRegisterlessCondition(line.Args[1]) && ifRegister != 0)
+            {
+              errors.Add($"line {line.LineNumber}: \"if {line.Args[1]}\" takes no register -- write \"if {line.Args[1]} then label\" (the register field is encoded as 0), not \"{line.Args[0]}\".");
+              ifRegister = 0;
+            }
+
             string ifConditionKey = CvmInstructionSet.IfConditionPrimitiveKeyByName[line.Args[1]];
             string ifPrimitiveName = CvmInstructionSet.IfPrimitiveNamePrefix + ifConditionKey;
 
@@ -535,6 +565,53 @@ public static class CvmAssembler
             // EmitIfTargetWord's own remarks for why this needs its own method rather than reusing
             // EmitEmbeddedSignedValue or EmitOperandWord as-is.
             EmitIfTargetWord(objectFile, section, line.Args[2], line.LineNumber, ifOpcodeOffset, labelOffsets, imported, errors);
+            break;
+          }
+
+        case CvmInstructionSet.CondMnemonic:
+          {
+            // See pass 1's own "cond" remarks. Written out directly (like "if" just above) rather than going
+            // through the generic default case, because the second operand is a condition NAME. Same
+            // CvmOpcode-relocation mechanism as "if": the linker supplies 0x9000 | cond<<4 from the synthetic
+            // "cond.<key>" primitive-table entry, EmbeddedValue carries the literal register.
+            CvmInstructionSet.CvmInstructionShape condShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.CondMnemonic)!;
+            CvmSection condSection = objectFile.GetOrAddSection(section);
+
+            int condRegister;
+            if (CvmInstructionSet.TryParseSingleRegisterToken(CvmInstructionSet.CondMnemonic, line.Args[0], condShape.SecondValueBitMask, out condRegister, out string? condRegisterTokenError))
+            {
+              if (condRegisterTokenError is not null)
+              {
+                errors.Add($"line {line.LineNumber}: {condRegisterTokenError}");
+                condRegister = 0;
+              }
+            }
+            else if (!TryParseNumericLiteral(line.Args[0], out condRegister) || condRegister < 0 || condRegister > condShape.SecondValueBitMask)
+            {
+              errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register for \"cond\" -- expected r0..r{condShape.SecondValueBitMask} (or a plain number 0..{condShape.SecondValueBitMask}), e.g. \"cond r0, ==0\".");
+              condRegister = 0; // keep going -- pass 1 already fixed this instruction's own size; a wrong-but-correctly-SIZED word keeps the layout intact (this run fails overall anyway).
+            }
+
+            // Pass 1 already rejected an unrecognized condition name, so this lookup cannot fail here.
+            if (CvmInstructionSet.IsRegisterlessCondition(line.Args[1]) && condRegister != 0)
+            {
+              errors.Add($"line {line.LineNumber}: \"cond {line.Args[1]}\" takes no register -- write \"cond {line.Args[1]}\" (the register field is encoded as 0), not \"{line.Args[0]}\".");
+              condRegister = 0;
+            }
+
+            string condPrimitiveName = CvmInstructionSet.CondPrimitiveNamePrefix + CvmInstructionSet.IfConditionPrimitiveKeyByName[line.Args[1]];
+
+            int condOpcodeOffset = condSection.Words.Count;
+            condSection.Words.Add(0x8000 | condShape.Id); // same 0x8000|Id self-describing placeholder convention as "if" -- the linker supplies the real word.
+            externalSymbols.Add(condPrimitiveName);
+            objectFile.Relocations.Add(new CvmRelocation
+            {
+              SectionName = section,
+              WordOffset = condOpcodeOffset,
+              SymbolName = condPrimitiveName,
+              Type = CvmRelocationType.CvmOpcode,
+              EmbeddedValue = condRegister & condShape.SecondValueBitMask,
+            });
             break;
           }
 
@@ -1235,6 +1312,31 @@ public static class CvmAssembler
       List<string> args = argsText.Length == 0
           ? []
           : [.. argsText.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)];
+
+      // ADDED 2026-10-03, per Stefan: "true"/"false" need no register -- "if true then label1", "if true, label1",
+      // "cond true". An implicit "r0" is inserted so every later check sees the normal register-first form
+      // (the register field is encoded as 0).
+      if (string.Equals(keyword, CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase) && argsText.Length > 0)
+      {
+        string firstWord = argsText.Split(new[] { ',', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)[0];
+        if (CvmInstructionSet.IsRegisterlessCondition(firstWord))
+        {
+          string implicitRegisterText = (argsText.Contains(',') ? "r0, " : "r0 ") + argsText;
+          if (implicitRegisterText.Contains(','))
+          {
+            args = new List<string>(implicitRegisterText.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+          }
+          else
+          {
+            args = new List<string> { implicitRegisterText };
+          }
+        }
+      }
+      else if (string.Equals(keyword, CvmInstructionSet.CondMnemonic, StringComparison.OrdinalIgnoreCase) &&
+               args.Count == 1 && CvmInstructionSet.IsRegisterlessCondition(args[0]))
+      {
+        args = new List<string> { "r0", args[0] };
+      }
 
       if (string.Equals(keyword, CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase))
       {

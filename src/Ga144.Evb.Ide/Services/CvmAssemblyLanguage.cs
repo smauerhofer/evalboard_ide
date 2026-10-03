@@ -1713,6 +1713,7 @@ internal static class CvmAssemblyLanguage
       return table;
     }
 
+    CvmInstructionSet.CvmInstructionShape? condShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.CondMnemonic);
     int maxCond = ifShape.ValueBitMask >> ifShape.ValueBitShift;
     foreach ((string conditionName, string symbolName) in IfConditionSymbolByName)
     {
@@ -1733,6 +1734,14 @@ internal static class CvmAssemblyLanguage
       }
 
       table[CvmInstructionSet.IfPrimitiveNamePrefix + key] = ifShape.Tag | ((resolvedCond << ifShape.ValueBitShift) & ifShape.ValueBitMask);
+
+      // ADDED 2026-10-03: "cond" (CvmInstructionSet.CondMnemonic) shares if's own ten node-406 condition words
+      // and the same cccc/xxxx field layout, so its ten synthetic keys ("cond.eq0", ...) are computed from the
+      // very same resolvedCond, just with cond's own tag (0x9000).
+      if (condShape is not null)
+      {
+        table[CvmInstructionSet.CondPrimitiveNamePrefix + key] = condShape.Tag | ((resolvedCond << condShape.ValueBitShift) & condShape.ValueBitMask);
+      }
     }
 
     return table;
@@ -1983,6 +1992,23 @@ internal static class CvmAssemblyLanguage
         }
 
         words.AddRange(ifWords);
+        continue;
+      }
+
+      // ADDED 2026-10-03, for "cond <reg> <cond>" (CvmInstructionSet.CondMnemonic): one word, the register plus
+      // the node-406 condition word's address -- exactly "if" minus the trailing offset word. Intercepted by
+      // name before the generic pair dispatch below, because its second operand is a condition NAME, not a
+      // number (see EncodeCondInstruction).
+      if (string.Equals(instruction.Mnemonic, CvmInstructionSet.CondMnemonic, StringComparison.OrdinalIgnoreCase) &&
+          CvmInstructionSet.TryGetShape(instruction.Mnemonic) is { } condShape)
+      {
+        (int? condWord, string? condError) = EncodeCondInstruction(instruction, condShape, compiledRam, line + 1);
+        if (condWord is null)
+        {
+          return (null, null, condError);
+        }
+
+        words.Add(condWord.Value);
         continue;
       }
 
@@ -2406,6 +2432,11 @@ internal static class CvmAssemblyLanguage
       return (null, $"line {lineNumber}: \"if\"'s condition \"{instruction.ConditionName}\" is implemented on node {Node406Program.Coordinate:000}, but that node's CURRENT source does not define \"{conditionSymbol}\" -- node 406 is still 2026-09-30's older \"read register\" stub, not yet synced to the condition-word content this needs.");
     }
 
+    if (CvmInstructionSet.IsRegisterlessCondition(instruction.ConditionName) && register != 0)
+    {
+      return (null, $"line {lineNumber}: \"if {instruction.ConditionName}\" takes no register -- write \"if {instruction.ConditionName} then label\" (the register field is encoded as 0), not r{register}.");
+    }
+
     int resolvedCond = symbol.Value & CvmWordCodec.WordMask;
     int maxCond = ifShape.ValueBitMask >> ifShape.ValueBitShift;
     if (resolvedCond < 0 || resolvedCond > maxCond)
@@ -2439,6 +2470,62 @@ internal static class CvmAssemblyLanguage
 
     int opcodeWord = ifShape.Tag | ((resolvedCond << ifShape.ValueBitShift) & ifShape.ValueBitMask) | ((register << ifShape.SecondValueBitShift) & ifShape.SecondValueBitMask);
     return ([opcodeWord, offset & CvmWordCodec.WordMask], null);
+  }
+
+  /// <summary>
+  /// ADDED 2026-10-03, for <c>cond &lt;reg&gt; &lt;cond&gt;</c> (<see cref="CvmInstructionSet.CondMnemonic"/>): the
+  /// one-word sibling of <see cref="EncodeIfInstruction"/> -- table row <c>1001|0000|cccc|xxxx| 506</c>. The
+  /// register (bits 3-0) arrives already parsed by <see cref="ParseSource"/> (<c>rN</c> or a plain 0..15
+  /// number); the condition NAME resolves against node 406's live compile through
+  /// <see cref="IfConditionSymbolByName"/> -- the very same ten words <c>if</c> uses -- to the 4-bit "cccc"
+  /// field. Result: <c>0x9000 | (condAddress &lt;&lt; 4) | register</c>. No trailing word, no branch target.
+  /// </summary>
+  private static (int? Word, string? Error) EncodeCondInstruction(
+      CvmAsmInstruction instruction,
+      CvmInstructionSet.CvmInstructionShape condShape,
+      IReadOnlyDictionary<int, F18CompileResult> compiledRam,
+      int lineNumber)
+  {
+    if (instruction.Operand is not int register)
+    {
+      return (null, $"line {lineNumber}: \"cond\" requires a register operand, e.g. \"cond r0 ==0\".");
+    }
+
+    int maxRegister = condShape.SecondValueBitMask >> condShape.SecondValueBitShift;
+    if (register < 0 || register > maxRegister)
+    {
+      return (null, $"line {lineNumber}: \"cond\" register {register} does not fit its 4-bit register field (0..{maxRegister} -- r0-r15 only).");
+    }
+
+    if (instruction.ConditionName is null || !IfConditionSymbolByName.TryGetValue(instruction.ConditionName, out string? conditionSymbol))
+    {
+      string validNames = string.Join(", ", IfConditionSymbolByName.Keys);
+      return (null, $"line {lineNumber}: \"cond\" does not recognize condition \"{instruction.ConditionName}\" -- valid conditions are: {validNames}.");
+    }
+
+    if (!compiledRam.TryGetValue(Node406Program.Coordinate, out F18CompileResult? compile))
+    {
+      return (null, $"line {lineNumber}: \"cond\"'s condition \"{instruction.ConditionName}\" is implemented on node {Node406Program.Coordinate:000}, but node {Node406Program.Coordinate:000} did not compile (or wasn't included) this run -- fix/save it in the Node Editor, then re-assemble.");
+    }
+
+    if (!compile.Symbols.TryGetValue(conditionSymbol, out F18ExportedSymbol? symbol))
+    {
+      return (null, $"line {lineNumber}: \"cond\"'s condition \"{instruction.ConditionName}\" is implemented on node {Node406Program.Coordinate:000}, but that node's CURRENT source does not define \"{conditionSymbol}\".");
+    }
+
+    if (CvmInstructionSet.IsRegisterlessCondition(instruction.ConditionName) && register != 0)
+    {
+      return (null, $"line {lineNumber}: \"cond {instruction.ConditionName}\" takes no register -- write \"cond {instruction.ConditionName}\" (the register field is encoded as 0), not r{register}.");
+    }
+
+    int resolvedCond = symbol.Value & CvmWordCodec.WordMask;
+    int maxCond = condShape.ValueBitMask >> condShape.ValueBitShift;
+    if (resolvedCond < 0 || resolvedCond > maxCond)
+    {
+      return (null, $"line {lineNumber}: \"cond\"'s condition \"{instruction.ConditionName}\" resolved to node {Node406Program.Coordinate:000} address 0x{resolvedCond:X}, which does not fit this shape's own 4-bit \"cond\" field (0x0-0x{maxCond:X}) -- node 406's source has likely grown too large, or \"{conditionSymbol}\" moved.");
+    }
+
+    return (condShape.Tag | ((resolvedCond << condShape.ValueBitShift) & condShape.ValueBitMask) | ((register << condShape.SecondValueBitShift) & condShape.SecondValueBitMask), null);
   }
 
   /// <summary>
@@ -2935,6 +3022,16 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
+      // ADDED 2026-10-03, per Stefan: "true"/"false" need no register -- "cond true" (register encoded as 0).
+      // Must come before the generic two-token rule below, which would read "true" as an undefined label.
+      if (parts.Length == 2 &&
+          string.Equals(parts[0], CvmInstructionSet.CondMnemonic, StringComparison.OrdinalIgnoreCase) &&
+          CvmInstructionSet.IsRegisterlessCondition(parts[1]))
+      {
+        instructions.Add(new CvmAsmInstruction(parts[0], 0, label, ConditionName: parts[1]));
+        continue;
+      }
+
       if (parts.Length == 2)
       {
         // ADDED 2026-10-03: register words take "rN" (16-bit register) or "dN" (double register,
@@ -2979,6 +3076,29 @@ internal static class CvmAssemblyLanguage
         }
       }
 
+      // ADDED 2026-10-03, for "cond <reg> <cond>" (CvmInstructionSet.CondMnemonic): e.g. "cond r0 ==0". The
+      // register is "r0".."r15" (or a plain number 0-15, "d" tokens rejected -- 16-bit compare, same as "if"),
+      // the condition is a NAME, never a number, so it is NOT run through TryParseOperand. Checked before the
+      // numeric two-operand branch below, which would otherwise never match (the condition isn't numeric).
+      if (parts.Length == 3 && string.Equals(parts[0], CvmInstructionSet.CondMnemonic, StringComparison.OrdinalIgnoreCase))
+      {
+        int condRegister;
+        if (CvmInstructionSet.TryParseSingleRegisterToken(CvmInstructionSet.CondMnemonic, parts[1], 0x000F, out condRegister, out string? condRegisterError))
+        {
+          if (condRegisterError is not null)
+          {
+            return (null, $"line {lineNumber + 1}: {condRegisterError}");
+          }
+        }
+        else if (!TryParseOperand(parts[1], out condRegister))
+        {
+          return (null, $"line {lineNumber + 1}: \"cond\" requires a register (r0-r15, or a plain number 0-15) as its first operand, e.g. \"cond r0 ==0\" -- got \"{parts[1]}\".");
+        }
+
+        instructions.Add(new CvmAsmInstruction(parts[0], condRegister, label, ConditionName: parts[2]));
+        continue;
+      }
+
       if (parts.Length == 3 && TryParseOperand(parts[1], out int firstOperand) && TryParseOperand(parts[2], out int secondOperand))
       {
         // Node 306's binary floating-point ops (2026-09-16; ten of the twelve as of the 2026-09-21
@@ -3006,6 +3126,15 @@ internal static class CvmAssemblyLanguage
       // 2026-10-03: an optional "then" before the target reads better -- "if r0 ==0 then test2" -- and is
       // dropped here, so everything below sees the plain four-token form. (A label that is itself called
       // "then" still works in the four-token form: "if r0 ==0 then".)
+      // ADDED 2026-10-03, per Stefan: "true"/"false" need no register -- "if true then label1" / "if true label1".
+      // An implicit "r0" is inserted so everything below sees the normal register-first form (register = 0).
+      if ((parts.Length == 3 || parts.Length == 4) &&
+          string.Equals(parts[0], CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase) &&
+          CvmInstructionSet.IsRegisterlessCondition(parts[1]))
+      {
+        parts = [parts[0], "r0", .. parts[1..]];
+      }
+
       if (parts.Length == 5 &&
           string.Equals(parts[0], CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase) &&
           string.Equals(parts[3], "then", StringComparison.OrdinalIgnoreCase))

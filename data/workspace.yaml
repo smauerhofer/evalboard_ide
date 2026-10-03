@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-03T18:17:09.4199105
-      utcDateTime: 2026-10-03T18:17:09.4199105Z
-      localDateTime: 2026-10-03T20:17:09.4199105+02:00
+      dateTime: 2026-10-03T20:27:22.0948235
+      utcDateTime: 2026-10-03T20:27:22.0948235Z
+      localDateTime: 2026-10-03T22:27:22.0948235+02:00
       date: 2026-10-03T00:00:00.0000000
       day: 3
       dayOfWeek: Saturday
       dayOfYear: 276
-      hour: 18
-      millisecond: 419
-      microsecond: 910
+      hour: 20
+      millisecond: 94
+      microsecond: 823
       nanosecond: 500
-      minute: 17
+      minute: 27
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 9
-      ticks: 639266482294199105
-      utcTicks: 639266482294199105
-      timeOfDay: 18:17:09.4199105
+      second: 22
+      ticks: 639266560420948235
+      utcTicks: 639266560420948235
+      timeOfDay: 20:27:22.0948235
       year: 2026
   portB: 
   portC:
@@ -68426,7 +68426,7 @@ projects:
           @b >r                      // receive save address
           !b                         // send offset
           @b                         // receive old FP
-          r> 1                       // old FP, page, address
+          r> 1                       // old FP, address, page
           m/write ;
 
         : m/r@ ( r - w )
@@ -68445,163 +68445,7 @@ projects:
         : m/d! ( lo hi d - )
           A[ @p r/d! ]] lit m/rsend !b !b !b ;
 
-        /*
 
-
-        // : m/focus ( - )
-
-        //  A[ r/focus_n ]] lit m/rsend ;
-
-
-        // : m/defocus ( - )
-
-        //  A[ r/defocus ]] lit m/rsend ;
-
-
-        : 'lcall ( - )
-          m/next
-        : m/call ( adr - )
-          a m/push
-        : m/jump ( adr - )
-          a! ;
-
-        : 'ljmp ( - )
-          m/next a! ;
-
-        : 'ret ( - )
-          m/pop a! ;
-
-        : m/r@ ( r instr - w )
-          m/rsend !b
-        ;
-
-
-        /* this is the new C-style comment
-
-
-        : m/r@ ( r - w )
-           m/focus A[ @p r/r@ ]] lit !b @b
-        ;
-
-
-        : m/d@ ( d - lo hi )
-          A[ r/d@ ]] lit m/focus 2* !b @b @b
-        ;
-
-
-        : m/r! ( w r - )
-          A[ r/r! ]] lit m/focus !b !b
-        ;
-
-
-        : m/d! ( lo hi d - )
-          A[ r/d! ]] lit m/focus 2* !b !b !b
-        ;
-
-
-        : m/usend ( command - )
-          up b! !b ;
-
-        : m/next ( - w )
-          dup xor m/pc++
-          ( 0 a )
-          m/read
-        ;
-
-
-        : m/pc++ ( - adr )
-          1
-        : m/branch ( offset - adr )
-          a dup >r . + 0xffff and a! r> ;
-
-        : 'unlink ( - )
-          1 A[ r/unlink ]] lit m/rsend @b
-          ( 1 adr )
-          m/read
-        : m/rsend ( w - )
-          down b! !b ;
-
-        : m/focus ( - )
-          A[ r/focus_n ]] lit m/rsend ;
-
-        : m/defocus ( - )
-          A[ r/defocus ]] lit m/rsend ;
-
-        : m/exec_save ( instr_addr - )
-          >r m/focus
-          ex m/defocus ;
-
-
-        : m/pop ( - w )
-          A[ r/pop ]] lit m/rsend
-          1 @b
-        : m/read ( p a - w )
-          A[ mem/rdup ]] lit m/usend
-          !b !b @b ;
-
-        : 'push ( - )
-          m/next
-        : m/push ( w - )
-          A[ r/push ]] lit m/rsend
-          1 @b
-        : m/write ( w p a - )
-          A[ mem/wrup ]] lit m/usend
-          !b !b !b ;
-
-        : m/nextinstr ( - )
-          m/pc++
-          A[ mem/rdupinstr ]] lit m/usend
-          !b @b
-          right b! !b
-          r---
-          --l- ;
-
-        : 'link ( - )
-          m/next
-          A[ r/link ]] lit m/rsend
-          @b >r                      // receive save address
-          !b                         // send offset
-          @b                         // receive old FP
-          1 r>                       // old FP, page, address
-          m/write ;
-
-        // : m/nextinstr  ( - )
-
-        //   ( fetch next instruction )
-
-        //   m/pc++
-
-        //   up b!         // select node 607
-
-        //   A[ mem/rdupinstr ]] lit !b
-
-        //   !b @b
-
-        //   ( opcode )
-
-        //   right b! !b   // send opcode to node 506
-
-        //   r---          // yield control to node 506
-
-        //   --l-          // yield control to node 508
-
-        // ;
-
-
-        : 'lcall ( - )
-          m/next
-        : m/call ( adr - )
-          a m/push
-        : m/jump ( adr - )
-          a! ;
-
-        : 'ljmp ( - )
-          m/next a! ;
-
-        : 'ret ( - )
-          m/pop a! ;
-
-        */
 
 
 
@@ -70285,6 +70129,12 @@ projects:
         nop
 
         test2:
+
+        cond r0 ==0
+
+        cond r0 !=0
+
+        cond true
 
         nop
 
