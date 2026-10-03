@@ -709,7 +709,6 @@ internal static class CvmAssemblyLanguage
         // moves from node 506 to node 507; Node506BitPatternTableTagBits' own tag is unchanged.
         // [CvmInstructionSet.LinkMnemonic] = (Node507Program.Coordinate, "'link", Node506BitPatternTableTagBits),
         // [CvmInstructionSet.UnlinkMnemonic] = (Node507Program.Coordinate, "'unlink", Node506BitPatternTableTagBits),
-        [CvmInstructionSet.HaltMnemonic] = (Node507Program.Coordinate, "'halt", Node507Cvm2LocalExecuteTagBits),
         // tjmp (2026-09-09, "'tjmp is in node 507") -- node 507's own table-jump primitive, reached the
         // SAME "1000_1???" local-execute tag family as the six above (Node507Cvm2LocalExecuteTagBits) --
         // see CvmInstructionSet.TableJumpMnemonic's own remarks.
@@ -800,6 +799,8 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.RegisterIncrementMnemonic] = (Node509Program.Coordinate, "'rinc", Node509SpecialBaseTagBits),
         [CvmInstructionSet.RegisterDecrementMnemonic] = (Node509Program.Coordinate, "'rdec", Node509SpecialBaseTagBits),
         [CvmInstructionSet.RegisterAddMnemonic] = (Node509Program.Coordinate, "'radd", Node509SpecialBaseTagBits),
+        // 'halt (2026-10-03): "stop execution until reset or interrupt" -- table entry 2 words, WITHOUT focus.
+        [CvmInstructionSet.HaltMnemonic] = (Node509Program.Coordinate, "'halt", Node509SpecialBaseTagBits),
 
         // Node 407's long-branch op (added 2026-09-06, "more opcodes to node 407 added") -- reached
         // through node 407's own SAME "1100" n/main branch as 'lcall/'ljmp above, so it shares the SAME
@@ -961,16 +962,23 @@ internal static class CvmAssemblyLanguage
         // Stefan's own new source (reg/ld/reg/st/reg/po/reg/pu) -- a departure from the usual "only a
         // leading ' makes a CVM opcode" naming rule, called out in Cvm.Node510Program's own remarks rather
         // than silently normalized here.
-        [CvmInstructionSet.LoadRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/ld", Node510RegisterAccessTag),
-        [CvmInstructionSet.StoreRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/st", Node510RegisterAccessTag),
-        [CvmInstructionSet.PopRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/po", Node510RegisterAccessTag),
-        [CvmInstructionSet.PushRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/pu", Node510RegisterAccessTag),
+        // RETIRED 2026-10-03 (node-509 redesign), per Stefan: "node 510 is no longer part of the CVM." The seven
+        // node-510 register-access entries below are commented out, not deleted ("do not remove any
+        // opcodes"). Besides being dead, two of them (rpop/rpush) COLLIDED with the live node-509 words
+        // 'rpop/'rpush defined above: an index-initializer entry later in the literal silently replaces an
+        // earlier one, so "rpush" resolved to node 510's "reg/pu" and assembling it failed with "node 510's
+        // source does not define reg/pu". The register words are now node 509's 'rpop/'rpush/'dpop/'dpush/
+        // 'rpopi/... (see the node-509 block above); rld/rst/rclr/rpo2/rpu2 have no node-509 equivalent.
+        // [CvmInstructionSet.LoadRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/ld", Node510RegisterAccessTag),
+        // [CvmInstructionSet.StoreRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/st", Node510RegisterAccessTag),
+        // [CvmInstructionSet.PopRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/po", Node510RegisterAccessTag),
+        // [CvmInstructionSet.PushRegisterFileMnemonic] = (Node510Program.Coordinate, "reg/pu", Node510RegisterAccessTag),
         // Three genuinely new ops from the same family (2026-09-27) -- see
         // CvmInstructionSet.RegisterClearMnemonic's own remarks. "rlit" is deliberately not wired here --
         // see CvmInstructionSet.RegisterSetMnemonic's own remarks for why.
-        [CvmInstructionSet.RegisterClearMnemonic] = (Node510Program.Coordinate, "reg/clr", Node510RegisterAccessTag),
-        [CvmInstructionSet.RegisterPopPairMnemonic] = (Node510Program.Coordinate, "reg/po2", Node510RegisterAccessTag),
-        [CvmInstructionSet.RegisterPushPairMnemonic] = (Node510Program.Coordinate, "reg/pu2", Node510RegisterAccessTag),
+        // [CvmInstructionSet.RegisterClearMnemonic] = (Node510Program.Coordinate, "reg/clr", Node510RegisterAccessTag),
+        // [CvmInstructionSet.RegisterPopPairMnemonic] = (Node510Program.Coordinate, "reg/po2", Node510RegisterAccessTag),
+        // [CvmInstructionSet.RegisterPushPairMnemonic] = (Node510Program.Coordinate, "reg/pu2", Node510RegisterAccessTag),
 
         // Node 306's CURRENT six ops (2026-09-09, second pass of the opcode/assembler-vs-node
         // reconciliation audit against Stefan's own workspace.yaml export) -- tick-prefixed, node-
@@ -1077,17 +1085,20 @@ internal static class CvmAssemblyLanguage
   private static readonly IReadOnlyDictionary<string, (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask, int RegisterFieldShift)> NodeResolvedEmbeddedValueFieldLayoutByMnemonic =
       new Dictionary<string, (int, int, int, int, int)>(StringComparer.OrdinalIgnoreCase)
       {
+        // RETIRED 2026-10-03: node 510 is no longer part of the CVM, so its seven register-access layouts
+        // below are commented out (kept per "do not remove any opcodes"). The node-509 register words need no
+        // entry here -- they are encoded by TryResolveNode509SpecialOpcode.
         // REPOINTED 2026-09-27 from node 511's OLD 5-bit/5-bit layout (Node511FunctionField*/
         // Node511RegisterFieldBitMask, kept for historical reference in CvmInstructionSet) to the new
         // "extended register access" node's 6-bit/3-bit one -- the FIRST family in this dictionary whose
         // own register field needs a real RegisterFieldShift (4), since it no longer sits at bit 0.
-        [CvmInstructionSet.LoadRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
-        [CvmInstructionSet.StoreRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
-        [CvmInstructionSet.PopRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
-        [CvmInstructionSet.PushRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
-        [CvmInstructionSet.RegisterClearMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
-        [CvmInstructionSet.RegisterPopPairMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
-        [CvmInstructionSet.RegisterPushPairMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        // [CvmInstructionSet.LoadRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        // [CvmInstructionSet.StoreRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        // [CvmInstructionSet.PopRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        // [CvmInstructionSet.PushRegisterFileMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        // [CvmInstructionSet.RegisterClearMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        // [CvmInstructionSet.RegisterPopPairMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
+        // [CvmInstructionSet.RegisterPushPairMnemonic] = (CvmInstructionSet.RegisterAccessFunctionFieldBitMask, CvmInstructionSet.RegisterAccessFunctionFieldShift, CvmInstructionSet.RegisterAccessFunctionFieldBaseAddress, CvmInstructionSet.RegisterAccessRegisterFieldBitMask, CvmInstructionSet.RegisterAccessRegisterFieldShift),
         // REMOVED OUTRIGHT, 2026-09-15: node 308's old dpop/dpush/dinc/ddec/dadd/dor field-layout entries
         // (Node308FunctionFieldBitMask/Shift/BaseAddress/RegisterFieldBitMask) -- see CvmInstructionSet's
         // own removal note above FloatingPointRegisterFieldBitMask for why (Stefan's own direct
@@ -1182,6 +1193,7 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.RegisterIncrementMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.RegisterDecrementMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.RegisterAddMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.HaltMnemonic] = Node509SpecialAddressShift,
       };
 
   /// <summary>
@@ -2018,6 +2030,16 @@ internal static class CvmAssemblyLanguage
 
         // A mnemonic that isn't a recognized CVM opcode at all -- a typo, not "not implemented yet" --
         // still fails outright rather than silently becoming a nop.
+        // ADDED 2026-10-03, per Stefan: "All labels in node 509 that begin with an ' are opcodes like ret
+        // or call. all opcodes in node 509 must be integrated into the CVM language." A mnemonic that
+        // node 509 defines as 'name but that has no CvmInstructionSet row yet is a missing integration, not
+        // a typo -- say so, so a new node-509 opcode is noticed the first time somebody writes it.
+        if (compiledRam.TryGetValue(Node509Program.Coordinate, out F18CompileResult? node509Compile) &&
+            node509Compile.Symbols.ContainsKey("'" + instruction.Mnemonic))
+        {
+          return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" is an opcode of node 509 (label '{instruction.Mnemonic}) but has no row in CvmInstructionSet.Instructions / NodeSymbolByMnemonic yet -- it still needs to be integrated into the CVM language.");
+        }
+
         return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" is not a known CVM asm mnemonic.");
       }
 
@@ -2537,7 +2559,7 @@ internal static class CvmAssemblyLanguage
           // Node 511's four ops only: the operand already lives in the word's own low bits (that's how
           // this exact dictionary entry was found at all -- see BuildDecodeTable's own remarks), never a
           // trailing word, so there's no second word to read here.
-          notes[address] = $"{instruction.Mnemonic} {CvmInstructionSet.FormatOperand(embeddedOperand)}";
+          notes[address] = $"{instruction.Mnemonic} {CvmInstructionSet.FormatRegisterOperand(instruction.Mnemonic, embeddedOperand)}";
           address += instruction.WordLength;
           continue;
         }
@@ -2892,6 +2914,21 @@ internal static class CvmAssemblyLanguage
 
       if (parts.Length == 2)
       {
+        // ADDED 2026-10-03: register words take "rN" (16-bit register) or "dN" (double register,
+        // dpop/dpush) -- see CvmInstructionSet.TryParseRegisterOperand. Checked BEFORE the label rule
+        // below, since "d1" is also a valid identifier and used to be reported as an undefined label.
+        if (CvmInstructionSet.TryGetShape(parts[0]) is { } registerShape &&
+            CvmInstructionSet.TryParseRegisterOperand(registerShape, parts[1], out int registerToken, out string? registerError))
+        {
+          if (registerError is not null)
+          {
+            return (null, $"line {lineNumber + 1}: {registerError}");
+          }
+
+          instructions.Add(new CvmAsmInstruction(parts[0], registerToken, label));
+          continue;
+        }
+
         if (TryParseOperand(parts[1], out int operand))
         {
           instructions.Add(new CvmAsmInstruction(parts[0], operand, label));

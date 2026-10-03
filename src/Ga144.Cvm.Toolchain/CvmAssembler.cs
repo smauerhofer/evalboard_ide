@@ -681,9 +681,21 @@ public static class CvmAssembler
           int embeddedRegisterValue = 0;
           if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue)
           {
-            if (!TryParseNumericLiteral(line.Args[0], out int registerIndex) || registerIndex < 0 || registerIndex > shape.ValueBitMask)
+            // ADDED 2026-10-03: "rN" (16-bit register) / "dN" (double register, dpop/dpush) are accepted
+            // alongside a plain number -- see CvmInstructionSet.TryParseRegisterOperand.
+            int registerIndex;
+            if (CvmInstructionSet.TryParseRegisterOperand(shape, line.Args[0], out registerIndex, out string? registerTokenError))
             {
-              errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register index for \"{shape.Mnemonic}\" -- expected 0..{shape.ValueBitMask}, e.g. \"{shape.Mnemonic} 0\".");
+              if (registerTokenError is not null)
+              {
+                errors.Add($"line {line.LineNumber}: {registerTokenError}");
+                registerIndex = 0;
+              }
+            }
+            else if (!TryParseNumericLiteral(line.Args[0], out registerIndex) || registerIndex < 0 || registerIndex > shape.ValueBitMask)
+            {
+              string exampleToken = CvmInstructionSet.IsDoubleRegisterMnemonic(shape.Mnemonic) ? "d1" : "r1";
+              errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register for \"{shape.Mnemonic}\" -- expected {exampleToken[0]}0..{exampleToken[0]}{shape.ValueBitMask} (or a plain number 0..{shape.ValueBitMask}), e.g. \"{shape.Mnemonic} {exampleToken}\".");
               registerIndex = 0;
             }
 

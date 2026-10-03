@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-03T11:18:04.5817423
-      utcDateTime: 2026-10-03T11:18:04.5817423Z
-      localDateTime: 2026-10-03T13:18:04.5817423+02:00
+      dateTime: 2026-10-03T12:25:50.4895674
+      utcDateTime: 2026-10-03T12:25:50.4895674Z
+      localDateTime: 2026-10-03T14:25:50.4895674+02:00
       date: 2026-10-03T00:00:00.0000000
       day: 3
       dayOfWeek: Saturday
       dayOfYear: 276
-      hour: 11
-      millisecond: 581
-      microsecond: 742
-      nanosecond: 300
-      minute: 18
+      hour: 12
+      millisecond: 489
+      microsecond: 567
+      nanosecond: 400
+      minute: 25
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 4
-      ticks: 639266230845817423
-      utcTicks: 639266230845817423
-      timeOfDay: 11:18:04.5817423
+      second: 50
+      ticks: 639266271504895674
+      utcTicks: 639266271504895674
+      timeOfDay: 12:25:50.4895674
       year: 2026
   portB: 
   portC:
@@ -68331,36 +68331,20 @@ projects:
           m/write ;
 
         : m/r@ ( r - w )
-           A[ @p r/r@ ]] lit !b @b
+           A[ @p r/r@ ]] lit m/rsend !b @b
         ;
 
 
         : m/d@ ( d - lo hi )
-          A[ r/d@ ]] lit !b @b @b
+          A[ @p r/d@ ]] lit m/rsend !b @b @b
         ;
-
-
-        /*
-
-        : m/r! ( r w - )
-          A[ r/r! ]] lit !b !b !b
-        ;
-
-
-        : m/d! ( lo hi d - )
-          A[ r/d! ]] lit !b !b !b !b
-        ;
-
-        */
 
 
         : m/r! ( r w - )
-          A[ r/r! ]] lit !b m/send2 ;
+          A[ @p r/r! ]] lit m/rsend !b !b ;
 
         : m/d! ( lo hi d - )
-          A[ r/d! ]] lit !b !b
-        : m/send2 ( w1 w2 - )
-          !b !b ;
+          A[ @p r/d! ]] lit m/rsend !b !b !b ;
 
         /*
 
@@ -68578,18 +68562,18 @@ projects:
       - 0x01D9A
       - 0x00001
       - 0x1142A
-      - 0x05B05
+      - 0x05606
       - 0x0561E
-      - 0x05B02
-      - 0x13420
-      - 0x01555
-      - 0x05B45
-      - 0x1341F
-      - 0x05B22
-      - 0x13422
+      - 0x09F55
+      - 0x05606
+      - 0x05620
+      - 0x09F05
+      - 0x05606
+      - 0x0561F
       - 0x09B55
-      - 0x15555
-      - 0x15555
+      - 0x05606
+      - 0x05622
+      - 0x09B25
       startup:
         entryPoint: 0x175
         p: 0x000
@@ -68666,14 +68650,14 @@ projects:
             A[ @p m/branch ]] lit !b !b ;
           then // 00
           2* -if                   // special with focus
-            @b x6/unpack >r
+            @b x6/unpack >r dup 
             // Node 507 forwards the focus instruction to node 407
             A[ @p m/rsend ]] lit !b
             A[ @p r/focus_nw ]] lit !b
 
-            // Node 507 forwards the register argument
-            A[ @p !b ]] lit !b
-            !b
+            // Node 507 forwards the register argument twice
+            A[ @p !b @p ]] lit !b
+            !b !b
 
             // Execute the table on node 507
             begin @ !b unext
@@ -68731,12 +68715,12 @@ projects:
       - 0x09555
       - 0x3722F
       - 0x01607
-      - 0x2FD27
+      - 0x2ED12
       - 0x05606
+      - 0x09D27
       - 0x05619
-      - 0x09D22
-      - 0x05BB2
-      - 0x089B2
+      - 0x05B12
+      - 0x09B22
       - 0x03B77
       - 0x05606
       - 0x09D25
@@ -68779,6 +68763,8 @@ projects:
 
 
         )
+
+        # 607 import
 
         # 507 import
 
@@ -68891,8 +68877,9 @@ projects:
           A[ !b m/pop ]] ,
           A[ m/rsend ]] ,
 
-
-
+        : 'halt // stop execution until reset or interrupt
+          // 2 without focus
+          A[ @p m/msend ]] , A[ mem/halt ]] ,
 
         : x6a/main
           @b >r
@@ -68918,23 +68905,23 @@ projects:
       - 0x1341A
       - 0x13426
       - 0x13420
-      - 0x13439
+      - 0x1343A
       - 0x1341F
-      - 0x1343B
+      - 0x1343D
       - 0x13434
       - 0x13426
-      - 0x13436
+      - 0x13437
       - 0x13425
       - 0x1341F
-      - 0x21639
+      - 0x2163A
       - 0x13420
       - 0x2F61F
-      - 0x2763B
+      - 0x2763D
       - 0x13420
       - 0x13434
       - 0x13426
       - 0x13420
-      - 0x13436
+      - 0x13437
       - 0x13425
       - 0x05606
       - 0x0562A
@@ -68946,12 +68933,12 @@ projects:
       - 0x05626
       - 0x09620
       - 0x13406
+      - 0x05600
+      - 0x1341E
       - 0x00802
       - 0x2A9B2
       - 0x07B72
-      - 0x1142B
-      - 0x15555
-      - 0x15555
+      - 0x1142D
       - 0x15555
       - 0x15555
       - 0x15555
@@ -68968,7 +68955,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x02B
+        entryPoint: 0x02D
         p: 0x000
         a: 0x000
         b: 0x000
@@ -70164,13 +70151,19 @@ projects:
 
         push 0x1234
 
-        nop
+        push 0x5678
 
-        nop
+        dpop d1
 
-        nop
+        rpush r3
 
-        nop
+        rpush r2
+
+        rpop r4
+
+        rpop r5
+
+        dpush d2
 
         nop
 

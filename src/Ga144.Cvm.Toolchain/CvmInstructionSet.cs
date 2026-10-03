@@ -2932,7 +2932,11 @@ public static class CvmInstructionSet
     // only against CVM1's old node 407. DELETED OUTRIGHT 2026-09-09 (same purge) once
     // CvmDebuggerDefaultProgram's own smoke test was rewritten to drop this whole block -- see this
     // file's own remarks above. Never reuse Ids 65-71.
-    // new(Id: 72, HaltMnemonic, 1, CvmOperandEncoding.None),
+    // halt (Id 72): the OLD CVM2 node-507 'halt is forgotten -- per Stefan 2026-10-03, "forget the old node 507
+    // 'halt, replace it with the new node 509 'halt". Id 72 is now node 509's 'halt: "stop execution until reset
+    // or interrupt" (table entry 2 words, without focus; it sends mem/halt to the memory node). No operand,
+    // one memory word; wired in CvmAssemblyLanguage's node-509 block.
+    new(Id: 72, HaltMnemonic, 1, CvmOperandEncoding.None),
     // new(Id: 73, LongCallMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // new(Id: 74, LongJumpMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // new(Id: 75, LoadGlobalMnemonic, 2, CvmOperandEncoding.TrailingWord),
@@ -3193,6 +3197,77 @@ public static class CvmInstructionSet
   /// conventions in the same column.
   /// </summary>
   public static string FormatOperand(int value) => $"0x{value & 0xFFFF:X4} ({value})";
+
+  /// <summary>
+  /// ADDED 2026-10-03: true for the node-509 words that work on a 32-bit DOUBLE register (<c>dpop</c>,
+  /// <c>dpush</c>) -- their register operand is written <c>d0..d15</c>, never <c>r</c>: for 32-bit
+  /// operations the register number is doubled (d1 = r2 lo / r3 hi), so "dpop r1" would read as the
+  /// wrong pair. The word's own x field still just carries the number (d1 -> x = 1).
+  /// </summary>
+  public static bool IsDoubleRegisterMnemonic(string mnemonic) =>
+      string.Equals(mnemonic, DoublePopMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoublePushMnemonic, StringComparison.OrdinalIgnoreCase);
+
+  /// <summary>
+  /// ADDED 2026-10-03: recognises a register token as the operand of a
+  /// <see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/> word -- <c>rN</c> for the 16-bit register
+  /// words (rpop/rpush/rinc/rdec/radd), <c>dN</c> for the double-register words (dpop/dpush, see
+  /// <see cref="IsDoubleRegisterMnemonic"/>) -- and returns its number. Returns false when
+  /// <paramref name="text"/> is not shaped like a register token at all (a plain number or any other
+  /// name -- the caller handles those as before). Returns true with a non-null <paramref name="error"/>
+  /// when it IS a register token but wrong for this mnemonic ("dpop r1", "rpop d1") or out of range
+  /// (the x field holds 0..15). Plain numbers stay accepted by the callers for the same mnemonics.
+  /// </summary>
+  public static bool TryParseRegisterOperand(CvmInstructionShape shape, string text, out int index, out string? error)
+  {
+    index = 0;
+    error = null;
+    if (shape.Encoding != CvmOperandEncoding.NodeResolvedEmbeddedValue || text.Length < 2)
+    {
+      return false;
+    }
+
+    char prefix = char.ToLowerInvariant(text[0]);
+    if (prefix != 'r' && prefix != 'd')
+    {
+      return false;
+    }
+
+    for (int position = 1; position < text.Length; position++)
+    {
+      if (text[position] < '0' || text[position] > '9')
+      {
+        return false;
+      }
+    }
+
+    bool isDouble = IsDoubleRegisterMnemonic(shape.Mnemonic);
+    char expectedPrefix = isDouble ? 'd' : 'r';
+    int maxIndex = shape.ValueBitMask >> shape.ValueBitShift;
+    if (prefix != expectedPrefix)
+    {
+      error = isDouble
+          ? $"\"{shape.Mnemonic}\" works on a double register -- write d0..d{maxIndex} (e.g. \"{shape.Mnemonic} d1\"), not \"{text}\": for 32-bit operations the register number is doubled (d1 = r2/r3), so an r-name would be misleading."
+          : $"\"{shape.Mnemonic}\" works on a 16-bit register -- write r0..r{maxIndex} (e.g. \"{shape.Mnemonic} r1\"), not \"{text}\": d0..d{maxIndex} are the double registers of dpop/dpush.";
+      return true;
+    }
+
+    if (!int.TryParse(text.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out index) || index > maxIndex)
+    {
+      index = 0;
+      error = $"\"{text}\" is out of range for \"{shape.Mnemonic}\" -- expected {expectedPrefix}0..{expectedPrefix}{maxIndex}.";
+    }
+
+    return true;
+  }
+
+  /// <summary>
+  /// ADDED 2026-10-03: renders a register operand the way the assemblers read it -- <c>d1</c> for
+  /// <c>dpop</c>/<c>dpush</c>, <c>r1</c> for every other register word -- so the disassembly can be fed
+  /// back to the assembler unchanged.
+  /// </summary>
+  public static string FormatRegisterOperand(string mnemonic, int index) =>
+      $"{(IsDoubleRegisterMnemonic(mnemonic) ? 'd' : 'r')}{index}";
 
   /// <summary>
   /// ADDED 2026-09-09, alongside <see cref="TryDescribeSelfDecodingWord"/>'s new <c>wordAddress</c>
