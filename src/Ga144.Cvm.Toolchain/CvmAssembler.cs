@@ -397,12 +397,12 @@ public static class CvmAssembler
           }
 
           // 2026-10-04 (second version): "dlit" takes a register plus EITHER one 32-bit literal ("dlit d1, 0x12345678")
-          // OR two 16-bit literals, hi then lo ("dlit d1, 0x1234, 0x5678") -- always three memory words.
+          // OR two 16-bit literals in memory order, lo then hi ("dlit d1, 0x5678, 0x1234") -- always three memory words.
           if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
           {
             if (line.Args.Count is not (2 or 3))
             {
-              errors.Add($"line {line.LineNumber}: \"dlit\" takes a register and one 32-bit operand (\"dlit d1 0x12345678\") or two 16-bit operands, hi then lo (\"dlit d1 0x1234 0x5678\").");
+              errors.Add($"line {line.LineNumber}: \"dlit\" takes a register and one 32-bit operand (\"dlit d1 0x12345678\") or two 16-bit operands, lo then hi (\"dlit d1 0x5678 0x1234\").");
               break;
             }
 
@@ -413,7 +413,7 @@ public static class CvmAssembler
           // ADDED 2026-10-04: rlit/dlit take TWO operands (register, literal) although their shape is
           // NodeResolvedEmbeddedValue: "rlit r1, 0x1234", "dlit d1, 0x12345678".
           bool isRegisterLiteral = shape.Mnemonic is CvmInstructionSet.RegisterLiteralMnemonic or CvmInstructionSet.DoubleLiteralMnemonic;
-          int requiredArgCount = isRegisterLiteral || shape.Encoding is CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords ? 2 : shape.HasOperand ? 1 : 0;
+          int requiredArgCount = isRegisterLiteral || CvmInstructionSet.IsBinaryRegisterOperation(shape) || shape.Encoding is CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords ? 2 : shape.HasOperand ? 1 : 0;
           if (line.Args.Count != requiredArgCount)
           {
             errors.Add(requiredArgCount switch
@@ -815,6 +815,30 @@ public static class CvmAssembler
             // relocation's own EmbeddedValue straight into the resolved base word -- see CvmLinker.cs's
             // own CvmOpcode case, unchanged by this addition since the shift is already applied here.
             embeddedRegisterValue = registerIndex << shape.ValueBitShift;
+
+            // ADDED 2026-10-04: the node-306 BINARY 16-bit operations ("add r1 r2": x = x op y) carry a SECOND register
+            // ("y", SecondValueBitMask, bits 7-4 -- see CvmInstructionSet.PackBytesMnemonic's remarks), written as the
+            // second operand and OR'd in next to the first.
+            if (CvmInstructionSet.IsBinaryRegisterOperation(shape))
+            {
+              int secondMaxIndex = shape.SecondValueBitMask >> shape.SecondValueBitShift;
+              int secondIndex;
+              if (CvmInstructionSet.TryParseRegisterOperand(shape, line.Args[1], secondMaxIndex, out secondIndex, out string? secondTokenError))
+              {
+                if (secondTokenError is not null)
+                {
+                  errors.Add($"line {line.LineNumber}: {secondTokenError}");
+                  secondIndex = 0;
+                }
+              }
+              else if (!TryParseNumericLiteral(line.Args[1], out secondIndex) || secondIndex < 0 || secondIndex > secondMaxIndex)
+              {
+                errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" is not a valid register for \"{shape.Mnemonic}\" -- expected r0..r{secondMaxIndex} (or a plain number 0..{secondMaxIndex}), e.g. \"{shape.Mnemonic} r1 r2\".");
+                secondIndex = 0;
+              }
+
+              embeddedRegisterValue |= secondIndex << shape.SecondValueBitShift;
+            }
           }
 
           int opcodeOffset = codeSection.Words.Count;
@@ -843,13 +867,17 @@ public static class CvmAssembler
           }
           else if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
           {
-            // ADDED 2026-10-04: dlit -- one 32-bit number, stored LOW word first, then HIGH (node 509's
-            // m/dnext reads "lo hi"; push2 is the other way round). With TWO value operands ("dlit d1, hi, lo",
-            // two 16-bit numbers or labels, hi written first like push2) the memory order is still lo, hi.
+            // ADDED 2026-10-04, CORRECTED the same day: dlit memory layout is opcode, LO, HI (node 509's m/dnext reads
+            // "lo hi"; push2 is the other way round because it pushes each word immediately, so lo must go last).
+            // One 32-bit operand: emit value & 0xFFFF, then value >> 16. TWO 16-bit operands (numbers or labels) are
+            // written in MEMORY order, "dlit d5 lo hi" -- e.g. "dlit d5 0xCDEF 0x0123" = 0x0123CDEF (memory CDEF,
+            // 0123, so r10 = CDEF) and "dlit d10 0x0100 2" = pointer 2:0100 (memory 0100, 0002). (An earlier version
+            // of this case took the two operands as hi, lo and swapped them; Stefan's regression showed that
+            // gave r10 = 0123 instead of CDEF.)
             if (line.Args.Count == 3)
             {
-              EmitOperandWord(objectFile, section, line.Args[2], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
               EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+              EmitOperandWord(objectFile, section, line.Args[2], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
             }
             else if (TryParsePush2WideLiteral(line.Args[1], out uint dlitValue))
             {

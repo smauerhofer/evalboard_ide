@@ -532,6 +532,18 @@ internal static class CvmAssemblyLanguage
   // 'gld's/'gst's own ADDRESSES on node 508 moved (resolved dynamically below, not re-derived here).
   private const int Node508LoadStoreGlobalTagBits = 0xA000;
 
+  // Node 306's 16-bit register operations (2026-10-04, Stefan's table rows "1100|wwww|wwww|xxxx| unary 16-bit operation
+  // {w = address in node 306}" and "1101|wwww|yyyy|xxxx| binary 16-bit operation {w = address in node 306}"). Unary:
+  // opcode = 0xC000 | w << 4 | x (w = 8-bit node-306 address, x = register). Binary: 0xD000 | w << 8 | y << 4 | x (w = 4-bit
+  // address, so these words must sit at node-306 addresses 0..15 -- 'or 'and 'xor 'sub 'add 'packbytes do today).
+  // See CvmInstructionSet.PackBytesMnemonic's remarks.
+  private const int Node306UnaryOperationTagBits = 0xC000;
+  private const int Node306BinaryOperationTagBits = 0xD000;
+  private const int Node306UnaryFunctionFieldBitMask = 0x0FF0;
+  private const int Node306UnaryFunctionFieldShift = 4;
+  private const int Node306BinaryFunctionFieldBitMask = 0x0F00;
+  private const int Node306BinaryFunctionFieldShift = 8;
+
   // CVM2's node 509 unary-arithmetic tag (2026-09-05), per Stefan's node 509 source
   // (Cvm.Node509Program): its own u/main dispatch cascade falls through to its own remote-fetch-then-
   // "ex" tail (jump to whatever address is in R) once the fetched CVM opcode word's top 6 bits read
@@ -897,10 +909,10 @@ internal static class CvmAssemblyLanguage
         // three of node 507's old, permanently-orphaned ALU-op mnemonics; 'neg is genuinely new (does
         // NOT repoint the separately-orphaned "negate" below -- different spelling, taken literally).
         // See Node509Program's own remarks for the full derivation.
-        [CvmInstructionSet.InvertMnemonic] = (Node509Program.Coordinate, "'inv", Node509UnaryArithmeticTagBits),
-        [CvmInstructionSet.IncrementMnemonic] = (Node509Program.Coordinate, "'inc", Node509UnaryArithmeticTagBits),
-        [CvmInstructionSet.DecrementMnemonic] = (Node509Program.Coordinate, "'dec", Node509UnaryArithmeticTagBits),
-        [CvmInstructionSet.NegMnemonic] = (Node509Program.Coordinate, "'neg", Node509UnaryArithmeticTagBits),
+        [CvmInstructionSet.InvertMnemonic] = (Node306Program.Coordinate, "'inv", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.IncrementMnemonic] = (Node306Program.Coordinate, "'inc", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.DecrementMnemonic] = (Node306Program.Coordinate, "'dec", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.NegMnemonic] = (Node306Program.Coordinate, "'neg", Node306UnaryOperationTagBits),
         // Node 509's tenth/eleventh ops (2026-09-05, "I added 2 new opcodes to node 509. add them also
         // to the language") -- both genuinely new, same tag, same live compile as the rest of node 509.
         [CvmInstructionSet.ParityMnemonic] = (Node509Program.Coordinate, "'parity", Node509UnaryArithmeticTagBits),
@@ -916,17 +928,17 @@ internal static class CvmAssemblyLanguage
         // word, Node406BinaryConstantTagBits) -- both pointing at the SAME F18 symbol on node 406, per
         // Stefan's own naming rule ("for opcode with constant parameter, add a i to the mnemonic. so
         // 'add' becomes 'addi'"). See Node406Program's own remarks for the full derivation.
-        [CvmInstructionSet.AddMnemonic] = (Node406Program.Coordinate, "'add", Node406BinaryStackTagBits),
+        [CvmInstructionSet.AddMnemonic] = (Node306Program.Coordinate, "'add", Node306BinaryOperationTagBits),
         [CvmInstructionSet.AddConstantMnemonic] = (Node406Program.Coordinate, "'add", Node406BinaryConstantTagBits),
-        [CvmInstructionSet.SubtractMnemonic] = (Node406Program.Coordinate, "'sub", Node406BinaryStackTagBits),
+        [CvmInstructionSet.SubtractMnemonic] = (Node306Program.Coordinate, "'sub", Node306BinaryOperationTagBits),
         [CvmInstructionSet.SubtractConstantMnemonic] = (Node406Program.Coordinate, "'sub", Node406BinaryConstantTagBits),
         [CvmInstructionSet.ReverseSubtractMnemonic] = (Node406Program.Coordinate, "'rsb", Node406BinaryStackTagBits),
         [CvmInstructionSet.ReverseSubtractConstantMnemonic] = (Node406Program.Coordinate, "'rsb", Node406BinaryConstantTagBits),
-        [CvmInstructionSet.AndMnemonic] = (Node406Program.Coordinate, "'and", Node406BinaryStackTagBits),
+        [CvmInstructionSet.AndMnemonic] = (Node306Program.Coordinate, "'and", Node306BinaryOperationTagBits),
         [CvmInstructionSet.AndConstantMnemonic] = (Node406Program.Coordinate, "'and", Node406BinaryConstantTagBits),
-        [CvmInstructionSet.XorMnemonic] = (Node406Program.Coordinate, "'xor", Node406BinaryStackTagBits),
+        [CvmInstructionSet.XorMnemonic] = (Node306Program.Coordinate, "'xor", Node306BinaryOperationTagBits),
         [CvmInstructionSet.XorConstantMnemonic] = (Node406Program.Coordinate, "'xor", Node406BinaryConstantTagBits),
-        [CvmInstructionSet.OrMnemonic] = (Node406Program.Coordinate, "'or", Node406BinaryStackTagBits),
+        [CvmInstructionSet.OrMnemonic] = (Node306Program.Coordinate, "'or", Node306BinaryOperationTagBits),
         [CvmInstructionSet.OrConstantMnemonic] = (Node406Program.Coordinate, "'or", Node406BinaryConstantTagBits),
         [CvmInstructionSet.ReverseShiftLeftMnemonic] = (Node406Program.Coordinate, "'rsl", Node406BinaryStackTagBits),
         [CvmInstructionSet.ReverseShiftLeftConstantMnemonic] = (Node406Program.Coordinate, "'rsl", Node406BinaryConstantTagBits),
@@ -989,11 +1001,24 @@ internal static class CvmAssemblyLanguage
         // StoreTMnemonic no longer exist as constants, so these four entries are removed along with them.
         // See CvmInstructionSet's own remarks on the 2026-09-09 CVM1-opcode purge.
         // Repointed to node 509 (2026-09-05) -- see the node 509 block above for the full explanation.
-        [CvmInstructionSet.MultiplyByTwoMnemonic] = (Node509Program.Coordinate, "'mul2", Node509UnaryArithmeticTagBits),
-        [CvmInstructionSet.UnsignedDivideByTwoMnemonic] = (Node509Program.Coordinate, "'udiv2", Node509UnaryArithmeticTagBits),
-        [CvmInstructionSet.DivideByTwoMnemonic] = (Node509Program.Coordinate, "'div2", Node509UnaryArithmeticTagBits),
-        [CvmInstructionSet.AbsoluteValueMnemonic] = (Node509Program.Coordinate, "'abs", Node509UnaryArithmeticTagBits),
+        [CvmInstructionSet.MultiplyByTwoMnemonic] = (Node306Program.Coordinate, "'mul2", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.UnsignedDivideByTwoMnemonic] = (Node306Program.Coordinate, "'udiv2", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.DivideByTwoMnemonic] = (Node306Program.Coordinate, "'div2", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.AbsoluteValueMnemonic] = (Node306Program.Coordinate, "'abs", Node306UnaryOperationTagBits),
         [CvmInstructionSet.BitCountMnemonic] = (Node509Program.Coordinate, "'bitcnt", Node509UnaryArithmeticTagBits),
+        // ---- node 306's 16-bit register operations (2026-10-04): the entries above for add/sub/and/xor/or (binary) and
+        // inv/inc/dec/neg/mul2/udiv2/div2/abs (unary) were REPOINTED here from their retired node-406/509 homes; these
+        // are the genuinely new words. "bitcount" is the new 'bitcount word -- NOT the retired "bitcnt" just above.
+        [CvmInstructionSet.PackBytesMnemonic] = (Node306Program.Coordinate, "'packbytes", Node306BinaryOperationTagBits),
+        [CvmInstructionSet.Mask15Mnemonic] = (Node306Program.Coordinate, "'mask15", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.Invert15Mnemonic] = (Node306Program.Coordinate, "'inv15", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.BoolMnemonic] = (Node306Program.Coordinate, "'bool", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.ClearLowestBitMnemonic] = (Node306Program.Coordinate, "'clearlow", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.LowestBitMnemonic] = (Node306Program.Coordinate, "'lowbit", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.BitCountOperationMnemonic] = (Node306Program.Coordinate, "'bitcount", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.HighByteMnemonic] = (Node306Program.Coordinate, "'highbyte", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.LowByteMnemonic] = (Node306Program.Coordinate, "'lowbyte", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.ByteSwapMnemonic] = (Node306Program.Coordinate, "'byteswap", Node306UnaryOperationTagBits),
         // Node 511's register file (2026-09-07) -- UN-RETIRED 2026-09-09 (workspace.yaml wins, per
         // Stefan's own explicit ruling): node 511's AUTHORITATIVE current source (its own simpler,
         // direct-field-extraction r/main, restored from workspace.yaml) once again names 'rld/'rst/'rpop/
@@ -1169,6 +1194,31 @@ internal static class CvmAssemblyLanguage
         // general shape node 306's OLD 'fpop used to use too (now retired, see the removal note above).
         // arinc2/ardec2 (2026-09-15, "I gave up the 7th register for 2 new opcodes") share this exact
         // same layout.
+        // Node 306's 16-bit register operations (2026-10-04): the function field is the node-306 word address (8 bits at
+        // bits 11-4 for unary, 4 bits at bits 11-8 for binary); the register field(s) are x (bits 3-0) and, for binary, y (bits 7-4).
+        [CvmInstructionSet.InvertMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.IncrementMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.DecrementMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.NegMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.MultiplyByTwoMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.UnsignedDivideByTwoMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.DivideByTwoMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.AbsoluteValueMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.Mask15Mnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.Invert15Mnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.BoolMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.ClearLowestBitMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.LowestBitMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.BitCountOperationMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.HighByteMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.LowByteMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.ByteSwapMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.AddMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.SubtractMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.AndMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.XorMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.OrMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.PackBytesMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
         [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),

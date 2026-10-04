@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-04T08:25:03.8468110
-      utcDateTime: 2026-10-04T08:25:03.8468110Z
-      localDateTime: 2026-10-04T10:25:03.8468110+02:00
+      dateTime: 2026-10-04T08:57:22.1907850
+      utcDateTime: 2026-10-04T08:57:22.1907850Z
+      localDateTime: 2026-10-04T10:57:22.1907850+02:00
       date: 2026-10-04T00:00:00.0000000
       day: 4
       dayOfWeek: Sunday
       dayOfYear: 277
       hour: 8
-      millisecond: 846
-      microsecond: 811
+      millisecond: 190
+      microsecond: 785
       nanosecond: 0
-      minute: 25
+      minute: 57
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 3
-      ticks: 639266991038468110
-      utcTicks: 639266991038468110
-      timeOfDay: 08:25:03.8468110
+      second: 22
+      ticks: 639267010421907850
+      utcTicks: 639267010421907850
+      timeOfDay: 08:57:22.1907850
       year: 2026
   portB: 
   portC:
@@ -65931,35 +65931,30 @@ projects:
 
         # down /b
 
+        # down /p
 
-        entry x2b/main
+        # left /a
+
+
+        // entry x2b/main
 
 
         # 0 org
 
 
-        : x2b/main
-          down b!
-          @b >r @b
-          ( op / addr )
-        ;
-
-
-        : x2b/write16 ( op -  )
-          left b!
-          # x2c/write16 lit !b !b
-          x2b/main
+        : x2b/rwrite16 ( r -  )
+          A[ @p x2c/rwrite16 ]] lit ! !
         ;
 
 
       ramWords:
-      - 0x04B02
-      - 0x00115
-      - 0x2FF55
-      - 0x04B12
-      - 0x00175
-      - 0x00001
-      - 0x09B40
+      - 0x05A2D
+      - 0x05600
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -66018,7 +66013,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x115
         p: 0x000
         a: 0x000
         b: 0x000
@@ -66029,10 +66024,39 @@ projects:
       postMortemEnabled: false
     - coordinate: 206
       enabled: true
-      sourceCode: "( CVM_pipeline node 206.\n\ninstruction execution.\n\n\n)\n\r\n# down /b\r\n\r\nentry x2c/main\r\n\r\n# 0 org\r\n\n: x2c/main\n  @b\r\n  \n  x2c/main ;\n\r\n: x2c/write16 ( op -  )\r\n  left b!\r\n\r\n  x2c/main\n;\n\r\n\r\n"
+      sourceCode: >+
+        ( CVM_pipeline node 206.
+
+
+        instruction execution.
+
+
+
+        )
+
+
+        # 207 import
+
+
+        # left /b
+
+        # left /p
+
+        # right /a
+
+
+        # 0 org
+
+
+
+        : x2c/rwrite16 ( op -  )
+          A[ @p x3a/rwrite16 ]] lit ! !
+        ;
+
+
       ramWords:
-      - 0x01700
-      - 0x15555
+      - 0x05A2D
+      - 0x05600
       - 0x15555
       - 0x15555
       - 0x15555
@@ -66096,7 +66120,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x175
         p: 0x000
         a: 0x000
         b: 0x000
@@ -66120,39 +66144,33 @@ projects:
         # 307 import
 
 
-        # up /b
+        # right /b
 
+        # right /p
 
-        entry x3a/main
+        # down /a
+
 
 
         # 0 org
 
 
-        : x3a/main
-          left b!
-          @b >r @b
-          ( op / addr )
-        ;
 
+        : x3a/rwrite16 ( r -  )
 
-        : x3a/write16 ( op -  )
-          down b!
-          A[ @p x3/store16 ]] lit !b 0x0f and !b
-          x3a/main
         ;
 
 
       ramWords:
-      - 0x04B02
-      - 0x00175
-      - 0x2FF55
-      - 0x04B12
-      - 0x00115
-      - 0x05600
-      - 0x09DFA
-      - 0x0000F
-      - 0x09700
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -66209,7 +66227,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x1D5
         p: 0x000
         a: 0x000
         b: 0x000
@@ -66570,10 +66588,15 @@ projects:
 
         # 205 import
 
+        # 306 import
+
+
 
         # up /b
 
         # ---u /p
+
+        # left /a
 
 
         // entry x2a/main
@@ -66582,17 +66605,62 @@ projects:
         # 0 org
 
 
-        : x2a/special32 ( sop )
+        : x2a/specialdirect ( op )
 
         ;
 
 
+        : x2a/special16read ( op )
+
+        ;
+
+
+        : x2a/special16write ( op )
+
+        ;
+
+
+        : x2a/special ( op )
+
+        ;
+
+
+        : x2a/unary16 ( op )
+          A[ @p x2/unary16 ]] lit !
+          dup 2/ 2/ 2/ 2/ 3f and !
+          0x0f and
+          ( r )
+        ;
+
+
+        : x2a/binary16 ( op )
+
+        ;
+
+
+
+        : x2a/unary32 ( op )
+
+        ;
+
+
+        : x2a/binary32 ( op )
+
+        ;
+
+
+        : x2a/float32 ( op )
+
+        ;
+
+
+
       ramWords:
-      - 0x04B02
-      - 0x00145
-      - 0x2FF02
-      - 0x17555
-      - 0x11400
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -66653,7 +66721,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x145
         p: 0x000
         a: 0x000
         b: 0x000
@@ -66668,10 +66736,7 @@ projects:
         ( CVM_pipeline node 306.
 
 
-        instruction execution.
-
-
-        register fetch
+        16-bit unary & binary operation.
 
 
         )
@@ -66679,7 +66744,7 @@ projects:
 
         // entry x2/main
 
-        # -dl- /p
+        # --l- /p
 
         # up /b
 
@@ -66689,6 +66754,122 @@ projects:
         # 0 org
 
 
+        : 'or ( w1 w2 - w' ) >r inv r> inv and inv ;
+
+        : 'and ( w1 w2 - w' ) and ;
+
+        : 'xor ( w1 w2 - w' ) xor ;
+
+        : 'sub ( w1 w2 - w' ) 'neg
+
+        : 'add ( w1 w2 - w' ) + ;
+
+        : 'packbytes ( lo hi - w )
+          >r 'lowbyte r>
+        : x2/pack ( lo8 hi - w )
+          2* 2* 2* 2* 2* 2* 2* 2*
+          xor
+        ;
+
+
+        : 'div2 ( w - w' )
+          2* 2* 2/ 2/ 2/
+        ;
+
+
+
+        : 'inv ( w - w' )
+          inv
+        ;
+
+
+        : 'neg ( w - w' )
+          inv
+          'inc
+        ;
+
+
+        : 'inc ( w - w' )
+          1 'add
+        ;
+
+
+        : 'dec ( w - w' )
+          -1 'add
+        ;
+
+
+        : 'mul2 ( w - w' )
+          2*
+        ;
+
+
+        : 'udiv2 ( w - w' )
+          2/
+        ;
+
+
+        : 'mask15 ( w - w ) // removes bit 15
+          0x7fff and
+        ;
+
+
+        : 'inv15 ( w - w ) // inverts bit 15
+          0x8000 xor
+        ;
+
+
+        : 'abs ( w - magnitude )
+          dup 2* 2* . -if
+            drop 'neg ;
+          then
+          drop
+        ;
+
+
+        : 'bool ( w - f ) // normalize to 0 or 1
+          if
+            drop 1 ;
+          then
+        ;
+
+
+        : 'clearlow ( w - w' ) // clear lowest set bit
+          dup -1 . + and
+        ;
+
+
+        : 'lowbit ( w - mask ) // isolate lowest set bit
+          dup inv 1 . + and
+        ;
+
+
+        : 'bitcount ( w - 0 cnt )
+          dup >r dup dup xor a! . ahead
+          begin
+            @+ drop
+            r> and dup >r 
+            [ swap ]
+            then
+          next
+          a
+          right a!
+        ;
+
+
+        : 'highbyte ( w - byte )
+          2/ 2/ 2/ 2/ 2/ 2/ 2/ 2/
+        : 'lowbyte ( w - byte )
+          0xff and
+        ;
+
+
+        : 'byteswap ( w - w' )
+          dup >r 'highbyte r> x2/pack
+        ;
+
+
+
         : x2/pass4 leap
 
         : x2/pass2 then leap
@@ -66696,76 +66877,89 @@ projects:
         : x2/pass1 then @b ! ;
 
 
+        : x2/binary16 ( addr - )
+          >r @b x2/operand ;
+
+        : x2/unary16 ( addr - )
+          >r
+        : x2/operand
+          @b
+          ex
+          0xffff and
+          !
+        ;
+
+
 
 
 
       ramWords:
-      - 0x13401
-      - 0x13402
+      - 0x2E69A
+      - 0x320CD
+      - 0x3F555
+      - 0x39555
+      - 0x1340E
+      - 0x3D555
+      - 0x2F632
+      - 0x269B2
+      - 0x364DA
+      - 0x364DA
+      - 0x364E5
+      - 0x364C2
+      - 0x30755
+      - 0x33555
+      - 0x3370F
+      - 0x05705
+      - 0x00001
+      - 0x05705
+      - 0x3FFFF
+      - 0x37555
+      - 0x31555
+      - 0x04055
+      - 0x07FFF
+      - 0x04355
+      - 0x08000
+      - 0x244DA
+      - 0x1B41C
+      - 0x3B70E
+      - 0x3B555
+      - 0x19420
+      - 0x3BD55
+      - 0x00001
+      - 0x15555
+      - 0x25DB0
+      - 0x3FFFF
+      - 0x3F555
+      - 0x24612
+      - 0x00001
+      - 0x3C055
+      - 0x24893
+      - 0x38AB2
+      - 0x1142C
+      - 0x0629A
+      - 0x3EDBA
+      - 0x1F42A
+      - 0x23DAD
+      - 0x001D5
+      - 0x307C2
+      - 0x307C2
+      - 0x307B2
+      - 0x04055
+      - 0x000FF
+      - 0x248B2
+      - 0x1342F
+      - 0x27708
+      - 0x13438
+      - 0x13439
       - 0x01A55
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x2FF44
+      - 0x2E9B2
+      - 0x01455
+      - 0x0402D
+      - 0x0FFFF
       - 0x15555
       startup:
-        entryPoint: 0x135
+        entryPoint: 0x175
         p: 0x000
         a: 0x000
         b: 0x000
@@ -67292,20 +67486,41 @@ projects:
         # 0 org
 
 
-        : x1a/special16read ( op )
+        : x1a/continue ( op instr - op )
+          down b! !b dup !b
+        ;
+
+
+        : x1a/finish ( - )
+          up b! !b // return stimulus
+        ;
+
+
+        : x1a/specialdirect ( op - )
+          A[ @p x2a/specialdirect ]] lit x1a/continue
           !
           !b // return stimulus
         ;
 
 
-        : x1a/special16write ( op )
+
+        : x1a/special16read ( op - )
+          A[ @p x2a/special16read ]] lit x1a/continue
+          !
+          !b // return stimulus
+        ;
+
+
+        : x1a/special16write ( op - )
+          A[ @p x2a/special16write ]] lit x1a/continue
           !
           !b // return stimulus
         ;
 
 
 
-        : x1a/special ( op )
+        : x1a/special ( op - )
+          A[ @p x2a/special ]] lit x1a/continue
           @b // read op
           !
           !b // return stimulus
@@ -67313,35 +67528,8 @@ projects:
 
 
 
-        : x1a/unary16 ( op )
-
-          @b // read op
-          !
-          !b // return stimulus
-
-        ;
-
-
-        : x1a/binary16 ( op )
-
-          @b // read op
-          !
-          !b // return stimulus
-
-        ;
-
-
-
-        : x1a/unary32 ( op )
-
-          @b // read op
-          !
-          !b // return stimulus
-
-        ;
-
-
-        : x1a/binary32 ( op )
+        : x1a/unary16 ( op - )
+          A[ @p x2a/unary16 ]] lit x1a/continue
 
           @b // read op
           !
@@ -67350,7 +67538,39 @@ projects:
         ;
 
 
-        : x1a/float32 ( op )
+        : x1a/binary16 ( op - )
+          A[ @p x2a/binary16 ]] lit x1a/continue
+
+          @b // read op
+          !
+          !b // return stimulus
+
+        ;
+
+
+
+        : x1a/unary32 ( op - )
+          A[ @p x2a/unary32 ]] lit x1a/continue
+
+          @b // read op
+          !
+          !b // return stimulus
+
+        ;
+
+
+        : x1a/binary32 ( op - )
+          A[ @p x2a/binary32 ]] lit x1a/continue
+
+          @b // read op
+          !
+          !b // return stimulus
+
+        ;
+
+
+        : x1a/float32 ( op - )
+          A[ @p x2a/float32 ]] lit x1a/continue
 
           @b // read op
           !
@@ -67361,38 +67581,38 @@ projects:
 
 
       ramWords:
+      - 0x04B23
+      - 0x00115
+      - 0x09555
+      - 0x04B25
+      - 0x00145
+      - 0x05600
+      - 0x05600
       - 0x0BB55
+      - 0x05600
+      - 0x05601
       - 0x0BB55
+      - 0x05600
+      - 0x05602
+      - 0x0BB55
+      - 0x05600
+      - 0x05603
       - 0x01A25
+      - 0x05600
+      - 0x05604
       - 0x01A25
+      - 0x05600
+      - 0x05605
       - 0x01A25
+      - 0x05600
+      - 0x05606
       - 0x01A25
+      - 0x05600
+      - 0x05607
       - 0x01A25
+      - 0x05600
+      - 0x05608
       - 0x01A25
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -68072,42 +68292,59 @@ projects:
 
 
         : d1/special ( sop )
-          2* -if // 1011* 32-bit special
+          2* -if // 1011*
+
+            // 32-bit special without register
             A[ @p x1a/special ]] lit ! @b !
             @ // wait for stimulus
             !b ; // return stimulus
+
           then // 1010* 16-bit special
-          2* -if // 10101* 16-bit special write
+          2* -if // 10101*
+
+            // 16-bit special write (input)
             A[ @p x1a/special16write ]] lit ! @b !
             @ // wait for stimulus
             !b ; // return stimulus
-          then // 10100* 16-bit special read
+          then
+
+          // 10100* 16-bit special read (output)
           A[ @p x1a/special16read ]] lit ! @b !
           @ // wait for stimulus
           !b ; // return stimulus
 
 
         : d1/op16 ( sop )
-          2* -if // 1101* 16-bit binary
+          2* -if // 1101*
+
+            // 16-bit binary
             A[ @p x1a/binary16 ]] lit ! @b !
             @ // wait for stimulus
             !b ; // return stimulus
-          then // 1100* 16-bit unary
+          then // 1100*
+
+          // 16-bit unary
           A[ @p x1a/unary16 ]] lit ! @b !
           @ // wait for stimulus
           !b ; // return stimulus
 
         : d1/op32 ( sop )
           2* -if // 1111* 32-bit binary
-            2* -if // 11111* 32-bit binary float
+            2* -if // 11111*
+
+              // 32-bit binary float
               A[ @p x1a/float32 ]] lit ! @b !
               @ // wait for stimulus
               !b ; // return stimulus
-            then // 11110* 32-bit binary
+            then // 11110*
+
+            // 32-bit binary
             A[ @p x1a/binary32 ]] lit ! @b !
             @ // wait for stimulus
             !b ; // return stimulus
-          then // 1110* 32-bit unary
+          then // 1110*
+
+          // 32-bit unary
           A[ @p x1a/unary32 ]] lit ! @b !
           @ // wait for stimulus
           !b ; // return stimulus
@@ -68116,32 +68353,32 @@ projects:
       ramWords:
       - 0x37204
       - 0x05A02
-      - 0x05602
+      - 0x05603
       - 0x0BE25
       - 0x37208
       - 0x05A02
-      - 0x05601
+      - 0x05602
       - 0x0BE25
       - 0x05A02
-      - 0x05600
+      - 0x05601
       - 0x0BE25
       - 0x3720F
       - 0x05A02
-      - 0x05604
+      - 0x05605
       - 0x0BE25
       - 0x05A02
-      - 0x05603
+      - 0x05604
       - 0x0BE25
       - 0x3721A
       - 0x37217
+      - 0x05A02
+      - 0x05608
+      - 0x0BE25
       - 0x05A02
       - 0x05607
       - 0x0BE25
       - 0x05A02
       - 0x05606
-      - 0x0BE25
-      - 0x05A02
-      - 0x05605
       - 0x0BE25
       - 0x15555
       - 0x15555
@@ -68243,31 +68480,42 @@ projects:
           ( sop )
           2* -if // 11*
 
-            2* -if // 111* // 32-bit operation
+            2* -if // 111*
 
+              // 32-bit operation
               A[ @p d1/op32 ]] lit d/op ;
 
-            then // 110* // 16-bit operation
+            then // 110*
 
+            // 16-bit operation
             A[ @p d1/op16 ]] lit d/op ;
 
           then // 10*
 
-          2* -if // 101* // special operation
+          2* -if // 101*
 
+            // special operation
             A[ @p d1/special ]] lit d/op ;
 
-          then // 100* // conditional branch
+          then // 100*
+
+          // conditional branch
           ( sop )
           2* -if // 1001*
-            2* -if // 10011* short literal
+            2* -if // 10011*
+
+              // short literal
               @b drop
               2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
               A[ @p m/push ]] lit !b !b ;
-            then // 10010* cond
+            then // 10010*
+
+            // cond
             d/cond@
             A[ @p m/push ]] lit !b !b ;
           then // 1000*
+
+          // if
           d/cond@
           if
             // true
@@ -68414,11 +68662,11 @@ projects:
 
         1011|wwww|wwww|weee| 506  | special 506 without register
 
-        1100|wwww|wwee|xxxx| 506  | unary 16-bit operation
+        1100|wwww|wwww|xxxx| 506  | unary 16-bit operation {w = address in node 306}
 
-        1101|pppp|yyyy|xxxx| 506  | binary 16-bit operation
+        1101|wwww|yyyy|xxxx| 506  | binary 16-bit operation {w = address in node 306}
 
-        1110|wwww|wwee|xxxx| 506  | unary 32-bit operation
+        1110|wwww|wwww|xxxx| 506  | unary 32-bit operation
 
         1111|0ppp|yyyy|xxxx| 506  | binary 32-bit integer operation
 
@@ -68914,11 +69162,12 @@ projects:
           A[ @p m/rsend ]] , A[ @p r/-- ]] ,
           A[ !b ]] ,
 
-        : 'radd // add value to register ( offset - )
+        : 'radd // add VM stack offset to register ( offset - )
           // 4 with focus
-          A[ @p m/rsend ]] , A[ @p r/add ]] ,
-          A[ !b m/pop ]] ,
-          A[ m/rsend ]] ,
+          A[ >r m/pop ]] ,
+          A[ @p m/rsend ]] ,
+          A[ r/add ]] ,
+          A[ r> !b !b ]] ,
 
         : 'halt // stop execution until reset or interrupt
           // 2 without focus
@@ -69006,10 +69255,10 @@ projects:
       - 0x05614
       - 0x0562C
       - 0x089B2
+      - 0x2F61D
       - 0x05614
-      - 0x05626
-      - 0x0961D
-      - 0x13414
+      - 0x13426
+      - 0x27B22
       - 0x0560A
       - 0x1341E
       - 0x13435
@@ -70367,7 +70616,9 @@ projects:
         nop
 
 
-        // Nested frames; SP must return to 0xffff.
+        // Nested frames.
+
+        // After unlink: FP = 0, SP = 0xffff.
 
         link -3
 
@@ -70382,7 +70633,7 @@ projects:
         unlink
 
 
-        // Immediate push and scalar register transfers.
+        // Scalar transfers through the VM stack.
 
         push 0x1234
 
@@ -70393,21 +70644,23 @@ projects:
         rpop r1
 
 
-        // Immediate double push: hi, lo.
+        // Double literal: push hi first, lo last.
+
+        // d1 = 0x56789abc.
 
         push2 0x5678 0x9ABC
 
         dpop d1
 
 
-        // Double register transfers.
+        // Copy d1 to d2 through the VM stack.
 
         dpush d1
 
         dpop d2
 
 
-        // Indirect scalar register write: value, register number.
+        // Indirect scalar store: VM stack ( value register-index ).
 
         push 0xBEEF
 
@@ -70416,7 +70669,7 @@ projects:
         rpopi
 
 
-        // Indirect scalar register read.
+        // Indirect scalar read.
 
         push 6
 
@@ -70425,7 +70678,7 @@ projects:
         rpop r12
 
 
-        // Indirect double register write: hi, lo, double index.
+        // Indirect double store: VM stack ( hi lo double-index ).
 
         push2 0x1357 0x2468
 
@@ -70434,7 +70687,7 @@ projects:
         dpopi
 
 
-        // Indirect double register read.
+        // Indirect double read and copy to d4.
 
         push 3
 
@@ -70443,14 +70696,18 @@ projects:
         dpop d4
 
 
-        // Direct literal loads.
+        // Direct register literals; no VM stack effect.
+
+        // dlit instruction-memory order: lo, hi.
 
         rlit r10 0xABCD
 
         dlit d5 0xCDEF 0x0123
 
 
-        // Increment, decrement, and addition of a VM stack value.
+        // Arithmetic: final r8 = 7.
+
+        // This overwrites d4's low word.
 
         rlit r8 10
 
@@ -70463,7 +70720,7 @@ projects:
         radd r8
 
 
-        // Discard only the top VM stack word.
+        // Discard the top VM stack word.
 
         push 0x1111
 
@@ -70474,9 +70731,9 @@ projects:
         rpop r13
 
 
-        // Duplicate a VM stack word.
+        // Duplicate the top VM stack word.
 
-        // Remove this section if dup has not been added.
+        // At this point r14 = r15 = 0x3333.
 
         push 0x3333
 
@@ -70487,54 +70744,137 @@ projects:
         rpop r15
 
 
-        // Memory pointer: lo = address, hi = page.
+        rpush r14
 
-        dlit d10 0x0100 2
+        drop
+
+        rpush r15
+
+        drop
+
+
+        // Reuse d7 (r14/r15) as a pointer.
+
+        // lo = address, hi = page.
+
+        dlit d7 0x0100 2
 
         push 0xCAFE
 
-        dstore d10
+        dstore d7
 
-        dfetch d10
+        dfetch d7
 
         rpop r9
 
 
-        // Direct call and return.
+        // Direct call; return address uses the VM stack.
 
         call direct_sub
 
 
-        // Register call and return.
+        // Reuse r14 for an indirect call target.
 
-        rlit r16 indirect_sub
+        rlit r14 indirect_sub
 
-        rcall r16
+        rcall r14
 
 
-        // Register jump: the poison assignment must be skipped.
+        // Reuse r15 for an indirect jump target.
 
-        rlit r17 after_rjmp
+        // The poison assignment must be skipped.
 
-        rjmp r17
+        rlit r15 after_rjmp
 
-        rlit r18 0xDEAD
+        rjmp r15
+
+        rlit r6 0xDEAD
 
 
         after_rjmp:
 
-        // Completion signature.
+        // Completion signature; overwrites d3's high word.
 
-        rlit r19 0x600D
+        rlit r7 0x600D
+
+
+        inspect:
+
+        rpush r0
+
+        drop
+
+        rpush r1
+
+        drop
+
+        rpush r2
+
+        drop
+
+        rpush r3
+
+        drop
+
+        rpush r4
+
+        drop
+
+        rpush r5
+
+        drop
+
+        rpush r6
+
+        drop
+
+        rpush r7
+
+        drop
+
+        rpush r8
+
+        drop
+
+        rpush r9
+
+        drop
+
+        rpush r10
+
+        drop
+
+        rpush r11
+
+        drop
+
+        rpush r12
+
+        drop
+
+        rpush r13
+
+        drop
+
+        rpush r14
+
+        drop
+
+        rpush r15
+
+        drop
+
+
+        halt
 
         halt
 
 
-        // A returning subroutine with its own frame.
-
         direct_sub:
 
         link -2
+
+        // Overwrites d5's high word.
 
         rlit r11 0x1111
 
@@ -70543,15 +70883,15 @@ projects:
         ret
 
 
-        // A second returning subroutine with nested frames.
-
         indirect_sub:
 
         link -3
 
         link -1
 
-        rlit r18 0x2222
+        // Overwrites d3's low word.
+
+        rlit r6 0x2222
 
         unlink
 

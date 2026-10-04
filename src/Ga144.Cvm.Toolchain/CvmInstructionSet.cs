@@ -768,6 +768,48 @@ public static class CvmInstructionSet
   public const string DropMnemonic = "drop";
   public const string DupMnemonic = "dup";
 
+  // ---- node 306's 16-bit unary and binary register operations (2026-10-04) ----------------------------------------
+  // Stefan: table rows "1100|wwww|wwww|xxxx| 506 | unary 16-bit operation {w = address in node 306}" and
+  // "1101|wwww|yyyy|xxxx| 506 | binary 16-bit operation {w = address in node 306}" ("x: parameter1, binary: x = x op y;
+  // y: parameter2"), delivered with node 306's source. The mnemonic is the tick name minus the tick; the operands are
+  // 16-bit registers: UNARY "inc r3" (x = op x), BINARY "add r1 r2" (x = x op y, e.g. "sub r1 r2" = r1 - r2).
+  //   binary (w is only 4 bits, so the word must sit at node-306 address 0..15):
+  //     'or 'and 'xor 'sub 'add 'packbytes ( lo hi - w )
+  //   unary (w is 8 bits): 'div2 'inv 'neg 'inc 'dec 'mul2 'udiv2 'mask15 'inv15 'abs 'bool 'clearlow 'lowbit
+  //     'bitcount 'highbyte 'lowbyte 'byteswap
+  // Opcode = tag | w << 4 | x (unary, tag 0xC000, w at bits 11-4) or tag | w << 8 | y << 4 | x (binary, tag 0xD000, w at
+  // bits 11-8). add/sub/and/xor/or/inv/inc/dec/neg/mul2/udiv2/div2/abs reuse the old (retired, CVM1/CVM2-era) mnemonic
+  // constants and strings with fresh Ids; "bitcount" is a NEW word, distinct from the retired "bitcnt".
+  public const string PackBytesMnemonic = "packbytes";
+  public const string Mask15Mnemonic = "mask15";
+  public const string Invert15Mnemonic = "inv15";
+  public const string BoolMnemonic = "bool";
+  public const string ClearLowestBitMnemonic = "clearlow";
+  public const string LowestBitMnemonic = "lowbit";
+  public const string BitCountOperationMnemonic = "bitcount";
+  public const string HighByteMnemonic = "highbyte";
+  public const string LowByteMnemonic = "lowbyte";
+  public const string ByteSwapMnemonic = "byteswap";
+
+  /// <summary>First register ("x", the destination and first operand) of a node-306 16-bit operation: bits 3-0.</summary>
+  public const int Operation16FirstRegisterBitMask = 0x000F;
+
+  /// <summary>Second register ("y") of a node-306 BINARY 16-bit operation: bits 7-4.</summary>
+  public const int Operation16SecondRegisterBitMask = 0x00F0;
+
+  public const int Operation16SecondRegisterBitShift = 4;
+
+  /// <summary>
+  /// True for the node-306 BINARY 16-bit operations (<c>add r1 r2</c>): a <see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/>
+  /// row that also carries a second register field (<see cref="CvmInstructionShape.SecondValueBitMask"/>).
+  /// </summary>
+  public static bool IsBinaryRegisterOperation(CvmInstructionShape shape) =>
+      shape.Encoding == CvmOperandEncoding.NodeResolvedEmbeddedValue && shape.SecondValueBitMask != 0;
+
+  /// <summary>Same test by mnemonic (false for an unknown mnemonic).</summary>
+  public static bool IsBinaryRegisterOperation(string mnemonic) =>
+      TryGetShape(mnemonic) is CvmInstructionShape shape && IsBinaryRegisterOperation(shape);
+
   // 'tjmp, node 507's own table-jump primitive -- always present in node 507's source ("'tjmp .loc
   // (rso-rs) a . + a!", identical body to node 507's own internal m/branch), but left unwired as a CVM
   // mnemonic until Stefan confirmed its location 2026-09-09 ("'tjmp is in node 507"). Shaped exactly like
@@ -2750,6 +2792,32 @@ public static class CvmInstructionSet
     new(Id: 220, RegisterCallMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 221, DropMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 222, DupMnemonic, 1, CvmOperandEncoding.None),
+    // ---- node 306's 16-bit register operations (2026-10-04; see PackBytesMnemonic's remarks). NodeResolvedEmbeddedValue:
+    // the live-resolved base word (node-306 address) plus the register field(s) OR'd in. Binary rows carry the second
+    // register ("y", bits 7-4) in SecondValueBitMask/SecondValueBitShift. Fresh Ids 223-245.
+    new(Id: 223, OrMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 224, AndMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 225, XorMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 226, SubtractMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 227, AddMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 228, PackBytesMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 229, DivideByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 230, InvertMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 231, NegMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 232, IncrementMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 233, DecrementMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 234, MultiplyByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 235, UnsignedDivideByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 236, Mask15Mnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 237, Invert15Mnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 238, AbsoluteValueMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 239, BoolMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 240, ClearLowestBitMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 241, LowestBitMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 242, BitCountOperationMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 243, HighByteMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 244, LowByteMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    new(Id: 245, ByteSwapMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
     // sbr (Id 194): table row "1011|oooo|oooo|oooo| sbr {short branch, relative}" -- bits 15-12 fixed
     // "1011" (0xB000), bits 11-0 a 12-bit SIGNED relative offset ("o", per the table's own legend:
     // "o: signed offset") embedded directly in the one word -- no trailing word at all, which is
@@ -3309,7 +3377,15 @@ public static class CvmInstructionSet
   /// when it IS a register token but wrong for this mnemonic ("dpop r1", "rpop d1") or out of range
   /// (the x field holds 0..15). Plain numbers stay accepted by the callers for the same mnemonics.
   /// </summary>
-  public static bool TryParseRegisterOperand(CvmInstructionShape shape, string text, out int index, out string? error)
+  public static bool TryParseRegisterOperand(CvmInstructionShape shape, string text, out int index, out string? error) =>
+      TryParseRegisterOperand(shape, text, shape.ValueBitMask >> shape.ValueBitShift, out index, out error);
+
+  /// <summary>
+  /// Same as the overload above with an explicit <paramref name="maxIndex"/> -- used for the SECOND register of a binary
+  /// node-306 operation (<see cref="IsBinaryRegisterOperation(CvmInstructionShape)"/>), whose field is
+  /// <see cref="CvmInstructionShape.SecondValueBitMask"/> rather than <see cref="CvmInstructionShape.ValueBitMask"/>.
+  /// </summary>
+  public static bool TryParseRegisterOperand(CvmInstructionShape shape, string text, int maxIndex, out int index, out string? error)
   {
     index = 0;
     error = null;
@@ -3334,7 +3410,6 @@ public static class CvmInstructionSet
 
     bool isDouble = IsDoubleRegisterMnemonic(shape.Mnemonic);
     char expectedPrefix = isDouble ? 'd' : 'r';
-    int maxIndex = shape.ValueBitMask >> shape.ValueBitShift;
     if (prefix != expectedPrefix)
     {
       error = isDouble
@@ -3404,7 +3479,9 @@ public static class CvmInstructionSet
   /// back to the assembler unchanged.
   /// </summary>
   public static string FormatRegisterOperand(string mnemonic, int index) =>
-      $"{(IsDoubleRegisterMnemonic(mnemonic) ? 'd' : 'r')}{index}";
+      IsBinaryRegisterOperation(mnemonic)
+          ? $"r{index & Operation16FirstRegisterBitMask} r{(index & Operation16SecondRegisterBitMask) >> Operation16SecondRegisterBitShift}"
+          : $"{(IsDoubleRegisterMnemonic(mnemonic) ? 'd' : 'r')}{index}";
 
   /// <summary>
   /// ADDED 2026-09-09, alongside <see cref="TryDescribeSelfDecodingWord"/>'s new <c>wordAddress</c>
