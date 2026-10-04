@@ -2570,9 +2570,21 @@ internal static class CvmAssemblyLanguage
     int opcodeWord = entry.Opcode | ((register & entry.EmbeddedValueMask) << entry.EmbeddedValueShift);
     if (isDouble)
     {
+      if (instruction.Operand2 is int dlitHighHalf && instruction.Operand3 is int dlitLowHalf)
+      {
+        // Two-operand form: "dlit d5 hi lo" -- two 16-bit numbers, hi first as written; memory still holds
+        // the LOW word first (node 509's m/dnext reads lo, hi).
+        if (dlitHighHalf < -0x8000 || dlitHighHalf > CvmWordCodec.WordMask || dlitLowHalf < -0x8000 || dlitLowHalf > CvmWordCodec.WordMask)
+        {
+          return (null, $"line {lineNumber}: \"dlit d1 hi lo\" needs two 16-bit numbers (-32768..65535) -- got {dlitHighHalf} and {dlitLowHalf}; use one operand for a 32-bit value.");
+        }
+
+        return ([opcodeWord, dlitLowHalf & CvmWordCodec.WordMask, dlitHighHalf & CvmWordCodec.WordMask], null);
+      }
+
       if (instruction.Operand2 is not int wide)
       {
-        return (null, $"line {lineNumber}: \"dlit\" requires a register and one 32-bit literal, e.g. \"{example}\".");
+        return (null, $"line {lineNumber}: \"dlit\" requires a register and one 32-bit literal (\"{example}\") or two 16-bit literals, hi then lo (\"dlit d1 0x1234 0x5678\").");
       }
 
       uint value = unchecked((uint)wide);
@@ -3228,7 +3240,10 @@ internal static class CvmAssemblyLanguage
       // the register token comes first ("rlit r1 1234", "dlit d1 0x12345678"), then the literal. rlit's value is a
       // 16-bit number (-32768..65535) or a label (its absolute word address); dlit's is one 32-bit number
       // (-2147483648..4294967295, no label), stored in Operand2 as the same 32 bits reinterpreted as an int.
-      if (parts.Length == 3 &&
+      // 2026-10-04 (second version): "dlit" ALSO accepts two 16-bit operands, hi then lo -- "dlit d5 0xCDEF 0x0123"
+      // (four tokens) -- exactly like push2's two forms. hi goes in Operand2, lo in Operand3.
+      if ((parts.Length == 3 ||
+           (parts.Length == 4 && string.Equals(parts[0], CvmInstructionSet.DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase))) &&
           (string.Equals(parts[0], CvmInstructionSet.RegisterLiteralMnemonic, StringComparison.OrdinalIgnoreCase) ||
            string.Equals(parts[0], CvmInstructionSet.DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase)) &&
           CvmInstructionSet.TryGetShape(parts[0]) is { } literalShape)
@@ -3249,6 +3264,17 @@ internal static class CvmAssemblyLanguage
 
         if (CvmInstructionSet.IsDoubleRegisterMnemonic(parts[0]))
         {
+          if (parts.Length == 4)
+          {
+            if (!TryParseOperand(parts[2], out int dlitHi) || !TryParseOperand(parts[3], out int dlitLo))
+            {
+              return (null, $"line {lineNumber + 1}: \"dlit d1 hi lo\" needs two 16-bit numbers (decimal or 0x hex) -- got \"{parts[2]}\" \"{parts[3]}\".");
+            }
+
+            instructions.Add(new CvmAsmInstruction(parts[0], literalRegister, label, Operand2: dlitHi, Operand3: dlitLo));
+            continue;
+          }
+
           if (!TryParsePush2WideOperand(parts[2], out int wideLiteral))
           {
             return (null, $"line {lineNumber + 1}: \"dlit\"'s second operand must be one 32-bit number (-2147483648..4294967295, decimal or 0x hex) -- got \"{parts[2]}\".");

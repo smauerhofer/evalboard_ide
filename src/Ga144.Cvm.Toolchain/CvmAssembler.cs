@@ -392,6 +392,20 @@ public static class CvmAssembler
             break;
           }
 
+          // 2026-10-04 (second version): "dlit" takes a register plus EITHER one 32-bit literal ("dlit d1, 0x12345678")
+          // OR two 16-bit literals, hi then lo ("dlit d1, 0x1234, 0x5678") -- always three memory words.
+          if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
+          {
+            if (line.Args.Count is not (2 or 3))
+            {
+              errors.Add($"line {line.LineNumber}: \"dlit\" takes a register and one 32-bit operand (\"dlit d1, 0x12345678\") or two 16-bit operands, hi then lo (\"dlit d1, 0x1234, 0x5678\").");
+              break;
+            }
+
+            sectionCursors[section] += shape.WordLength;
+            break;
+          }
+
           // ADDED 2026-10-04: rlit/dlit take TWO operands (register, literal) although their shape is
           // NodeResolvedEmbeddedValue: "rlit r1, 0x1234", "dlit d1, 0x12345678".
           bool isRegisterLiteral = shape.Mnemonic is CvmInstructionSet.RegisterLiteralMnemonic or CvmInstructionSet.DoubleLiteralMnemonic;
@@ -826,8 +840,14 @@ public static class CvmAssembler
           else if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
           {
             // ADDED 2026-10-04: dlit -- one 32-bit number, stored LOW word first, then HIGH (node 509's
-            // m/dnext reads "lo hi"; push2 is the other way round). Literal only, no label.
-            if (TryParsePush2WideLiteral(line.Args[1], out uint dlitValue))
+            // m/dnext reads "lo hi"; push2 is the other way round). With TWO value operands ("dlit d1, hi, lo",
+            // two 16-bit numbers or labels, hi written first like push2) the memory order is still lo, hi.
+            if (line.Args.Count == 3)
+            {
+              EmitOperandWord(objectFile, section, line.Args[2], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+              EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+            }
+            else if (TryParsePush2WideLiteral(line.Args[1], out uint dlitValue))
             {
               codeSection.Words.Add((int)(dlitValue & 0xFFFF));
               codeSection.Words.Add((int)(dlitValue >> 16));
