@@ -774,13 +774,20 @@ public static class CvmInstructionSet
   // y: parameter2"), delivered with node 306's source. The mnemonic is the tick name minus the tick; the operands are
   // 16-bit registers: UNARY "inc r3" (x = op x), BINARY "add r1 r2" (x = x op y, e.g. "sub r1 r2" = r1 - r2).
   //   binary (w is only 4 bits, so the word must sit at node-306 address 0..15):
-  //     'or 'and 'xor 'sub 'add 'packbytes ( lo hi - w )
+  //     'or 'and 'xor 'sub 'add 'mov 'packbytes ( lo hi - w )
   //   unary (w is 8 bits): 'div2 'inv 'neg 'inc 'dec 'mul2 'udiv2 'mask15 'inv15 'abs 'bool 'clearlow 'lowbit
   //     'bitcount 'highbyte 'lowbyte 'byteswap
   // Opcode = tag | w << 4 | x (unary, tag 0xC000, w at bits 11-4) or tag | w << 8 | y << 4 | x (binary, tag 0xD000, w at
   // bits 11-8). add/sub/and/xor/or/inv/inc/dec/neg/mul2/udiv2/div2/abs reuse the old (retired, CVM1/CVM2-era) mnemonic
   // constants and strings with fresh Ids; "bitcount" is a NEW word, distinct from the retired "bitcnt".
   public const string PackBytesMnemonic = "packbytes";
+
+  /// <summary>
+  /// <c>mov rX rY</c> -- <c>x = y</c>, a 16-bit register-to-register move. Node 306's <c>'mov ( w1 w2 - w1 w2 )</c> has an
+  /// empty body, so node 306's operand loop (which sends back the top of stack, i.e. y) stores y into x (Stefan, 2026-10-04).
+  /// A BINARY word like add/sub: its node-306 address must be 0..15.
+  /// </summary>
+  public const string MoveRegisterMnemonic = "mov";
   public const string Mask15Mnemonic = "mask15";
   public const string Invert15Mnemonic = "inv15";
   public const string BoolMnemonic = "bool";
@@ -2794,12 +2801,13 @@ public static class CvmInstructionSet
     new(Id: 222, DupMnemonic, 1, CvmOperandEncoding.None),
     // ---- node 306's 16-bit register operations (2026-10-04; see PackBytesMnemonic's remarks). NodeResolvedEmbeddedValue:
     // the live-resolved base word (node-306 address) plus the register field(s) OR'd in. Binary rows carry the second
-    // register ("y", bits 7-4) in SecondValueBitMask/SecondValueBitShift. Fresh Ids 223-245.
+    // register ("y", bits 7-4) in SecondValueBitMask/SecondValueBitShift. Fresh Ids 223-246 (246 = mov, added last).
     new(Id: 223, OrMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 224, AndMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 225, XorMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 226, SubtractMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 227, AddMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 246, MoveRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 228, PackBytesMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 229, DivideByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
     new(Id: 230, InvertMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),

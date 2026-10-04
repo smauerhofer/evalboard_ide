@@ -497,7 +497,10 @@ internal static class CvmAssemblyLanguage
   // The tag stored per mnemonic in NodeSymbolByMnemonic is therefore just the base 0x0000
   // (Node509SpecialBaseTagBits); the focus bit (Node509SpecialFocusBit, 0x2000) is OR'd in per word.
   private const int Node509SpecialBaseTagBits = 0x0000;
-  private const int Node509SpecialFocusBit = 0x2000;
+  // REMOVED 2026-10-04, per Stefan: "there is no more focus bit for microcode opcodes." The former focus bit 13
+  // (Node509SpecialFocusBit, 0x2000) is gone: node 509's comment under each label is now "// size N." (a legacy
+  // "// N with(out) focus" comment is still READ for its N, but its focus part is ignored and bit 13 is never set).
+  // Opcode = address << 6 | (N - 1) << 4 | x -- every special word is now below 0x1000 (e.g. ret 0x0050, call 0x00E0).
   // CHANGED 2026-10-04, per Stefan: "the number of size bits is reduced from 3 to 2 because the max size of a
   // command in node 509 is 4." The size field "ss" is now bits 5-4 (mask 0x0030, N - 1 in 0..3 = N 1..4) and
   // the 6-bit address field "wwwwww" moved down one bit with it, to bits 11-6 (mask 0x0FC0, shift 6). Bit 12
@@ -535,7 +538,7 @@ internal static class CvmAssemblyLanguage
   // Node 306's 16-bit register operations (2026-10-04, Stefan's table rows "1100|wwww|wwww|xxxx| unary 16-bit operation
   // {w = address in node 306}" and "1101|wwww|yyyy|xxxx| binary 16-bit operation {w = address in node 306}"). Unary:
   // opcode = 0xC000 | w << 4 | x (w = 8-bit node-306 address, x = register). Binary: 0xD000 | w << 8 | y << 4 | x (w = 4-bit
-  // address, so these words must sit at node-306 addresses 0..15 -- 'or 'and 'xor 'sub 'add 'packbytes do today).
+  // address, so these words must sit at node-306 addresses 0..15 -- 'or 'and 'xor 'sub 'add 'mov 'packbytes do today).
   // See CvmInstructionSet.PackBytesMnemonic's remarks.
   private const int Node306UnaryOperationTagBits = 0xC000;
   private const int Node306BinaryOperationTagBits = 0xD000;
@@ -1010,6 +1013,7 @@ internal static class CvmAssemblyLanguage
         // inv/inc/dec/neg/mul2/udiv2/div2/abs (unary) were REPOINTED here from their retired node-406/509 homes; these
         // are the genuinely new words. "bitcount" is the new 'bitcount word -- NOT the retired "bitcnt" just above.
         [CvmInstructionSet.PackBytesMnemonic] = (Node306Program.Coordinate, "'packbytes", Node306BinaryOperationTagBits),
+        [CvmInstructionSet.MoveRegisterMnemonic] = (Node306Program.Coordinate, "'mov", Node306BinaryOperationTagBits),
         [CvmInstructionSet.Mask15Mnemonic] = (Node306Program.Coordinate, "'mask15", Node306UnaryOperationTagBits),
         [CvmInstructionSet.Invert15Mnemonic] = (Node306Program.Coordinate, "'inv15", Node306UnaryOperationTagBits),
         [CvmInstructionSet.BoolMnemonic] = (Node306Program.Coordinate, "'bool", Node306UnaryOperationTagBits),
@@ -1219,6 +1223,7 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.XorMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.OrMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.PackBytesMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.MoveRegisterMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
         [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
@@ -1314,21 +1319,20 @@ internal static class CvmAssemblyLanguage
   /// that specify the size of the instruction, which must also be encoded, and the focus bit 13."</i>
   /// Finds the label line <c>: 'name ...</c> for <paramref name="symbolName"/> in node 509's (macro-
   /// expanded) source and parses the first non-blank line after it, which must read
-  /// <c>// N with focus</c> or <c>// N without focus</c>: <paramref name="words"/> = N (the entry's length
-  /// in words, encoded as N - 1 in bits 6-4) and <paramref name="focus"/> = whether bit 13 is set.
+  /// <c>// size N.</c> (2026-10-04; the legacy <c>// N with(out) focus</c> is still accepted and its focus part ignored):
+  /// <paramref name="words"/> = N (the entry's length in words, encoded as N - 1 in bits 5-4).
   /// <c>/* ... */</c> block comments are blanked out first (newlines kept), so a retired block of old code
   /// in the source can never be mistaken for the table. Returns false with a <paramref name="reason"/>
   /// when the label line or its comment cannot be found/parsed -- never a guessed size or focus.
   /// </summary>
-  private static bool TryReadNode509SpecialComment(string expandedSource, string symbolName, out int words, out bool focus, out string? reason)
+  private static bool TryReadNode509SpecialComment(string expandedSource, string symbolName, out int words, out string? reason)
   {
     words = 0;
-    focus = false;
     reason = null;
 
     if (string.IsNullOrEmpty(expandedSource))
     {
-      reason = "node 509's compile did not keep its expanded source text, so the \"// N with(out) focus\" comment under the label cannot be read.";
+      reason = "node 509's compile did not keep its expanded source text, so the \"// size N.\" comment under the label cannot be read.";
       return false;
     }
 
@@ -1369,7 +1373,8 @@ internal static class CvmAssemblyLanguage
 
     string[] lines = cleaned.ToString().Split('\n');
     Regex labelLine = new($@"^\s*:\s*{Regex.Escape(symbolName)}(\s|$)", RegexOptions.CultureInvariant);
-    Regex commentLine = new(@"^\s*//\s*(\d+)\s+(with|without)\s+focus\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    // "// size N." (current) or the legacy "// N with(out) focus" (N is read, the focus part ignored).
+    Regex commentLine = new(@"^\s*//\s*(?:size\s+(?<n>\d+)|(?<n>\d+)\s+(?:with|without)\s+focus)\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
     {
@@ -1386,19 +1391,18 @@ internal static class CvmAssemblyLanguage
 
       if (next >= lines.Length)
       {
-        reason = $"\"{symbolName}\" is the last line of node 509's source -- there is no \"// N with(out) focus\" comment line under it.";
+        reason = $"\"{symbolName}\" is the last line of node 509's source -- there is no \"// size N.\" comment line under it.";
         return false;
       }
 
       Match match = commentLine.Match(lines[next]);
       if (!match.Success)
       {
-        reason = $"the line under \"{symbolName}\" in node 509's source reads \"{lines[next].Trim()}\", expected a comment \"// N with focus\" or \"// N without focus\" (N = number of words in the entry).";
+        reason = $"the line under \"{symbolName}\" in node 509's source reads \"{lines[next].Trim()}\", expected a comment \"// size N.\" (N = number of words in the entry).";
         return false;
       }
 
-      words = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-      focus = string.Equals(match.Groups[2].Value, "with", StringComparison.OrdinalIgnoreCase);
+      words = int.Parse(match.Groups["n"].Value, CultureInfo.InvariantCulture);
       return true;
     }
 
@@ -1408,9 +1412,9 @@ internal static class CvmAssemblyLanguage
 
   /// <summary>
   /// ADDED 2026-10-03 (CVM redesign). Computes the opcode word (register field still 0) of one node-509
-  /// special word: <c>focus(0x2000) | (address &lt;&lt; 6) | ((words - 1) &lt;&lt; 4)</c>, where
+  /// special word: <c>(address &lt;&lt; 6) | ((words - 1) &lt;&lt; 4)</c> (no focus bit since 2026-10-04), where
   /// <c>address</c> is the word address of the entry's <c>'name</c> label in node 509's compile and
-  /// <c>words</c> and <c>focus</c> come from the <c>// N with(out) focus</c> comment under the label
+  /// <c>words</c> comes from the <c>// size N.</c> comment under the label
   /// (<see cref="TryReadNode509SpecialComment"/>) -- the single source of truth for both.
   ///
   /// Returns false, with a human-readable <paramref name="reason"/>, when the word cannot be represented:
@@ -1432,7 +1436,7 @@ internal static class CvmAssemblyLanguage
       return false;
     }
 
-    if (!TryReadNode509SpecialComment(compile.ExpandedSource, symbol.Name, out int words, out bool focus, out string? commentReason))
+    if (!TryReadNode509SpecialComment(compile.ExpandedSource, symbol.Name, out int words, out string? commentReason))
     {
       reason = commentReason;
       return false;
@@ -1445,7 +1449,7 @@ internal static class CvmAssemblyLanguage
       return false;
     }
 
-    opcode = tag | (focus ? Node509SpecialFocusBit : 0) | (address << Node509SpecialAddressShift) | ((words - 1) << Node509SpecialSizeFieldShift);
+    opcode = tag | (address << Node509SpecialAddressShift) | ((words - 1) << Node509SpecialSizeFieldShift);
     return true;
   }
 
