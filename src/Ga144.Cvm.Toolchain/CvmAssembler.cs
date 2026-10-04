@@ -392,7 +392,10 @@ public static class CvmAssembler
             break;
           }
 
-          int requiredArgCount = shape.Encoding is CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords ? 2 : shape.HasOperand ? 1 : 0;
+          // ADDED 2026-10-04: rlit/dlit take TWO operands (register, literal) although their shape is
+          // NodeResolvedEmbeddedValue: "rlit r1, 0x1234", "dlit d1, 0x12345678".
+          bool isRegisterLiteral = shape.Mnemonic is CvmInstructionSet.RegisterLiteralMnemonic or CvmInstructionSet.DoubleLiteralMnemonic;
+          int requiredArgCount = isRegisterLiteral || shape.Encoding is CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords ? 2 : shape.HasOperand ? 1 : 0;
           if (line.Args.Count != requiredArgCount)
           {
             errors.Add(requiredArgCount switch
@@ -814,7 +817,29 @@ public static class CvmAssembler
             EmbeddedValue = embeddedRegisterValue,
           });
 
-          if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.TrailingWord)
+          if (shape.Mnemonic == CvmInstructionSet.RegisterLiteralMnemonic)
+          {
+            // ADDED 2026-10-04: rlit -- the register is already in the opcode word (embedded value above);
+            // the second operand is the 16-bit literal word (a number, or a label/import = absolute address).
+            EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+          }
+          else if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
+          {
+            // ADDED 2026-10-04: dlit -- one 32-bit number, stored LOW word first, then HIGH (node 509's
+            // m/dnext reads "lo hi"; push2 is the other way round). Literal only, no label.
+            if (TryParsePush2WideLiteral(line.Args[1], out uint dlitValue))
+            {
+              codeSection.Words.Add((int)(dlitValue & 0xFFFF));
+              codeSection.Words.Add((int)(dlitValue >> 16));
+            }
+            else
+            {
+              errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" is not a 32-bit number (-2147483648..4294967295) -- \"dlit d1, x\" needs a numeric literal, no label.");
+              codeSection.Words.Add(0);
+              codeSection.Words.Add(0);
+            }
+          }
+          else if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.TrailingWord)
           {
             EmitOperandWord(objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
           }

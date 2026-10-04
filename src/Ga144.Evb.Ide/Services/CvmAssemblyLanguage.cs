@@ -415,6 +415,36 @@ internal static class CvmAssemblyLanguage
   // matching shift correction.
   private const int Node506BitPatternTableTagBits = 0x2000;
 
+  // ---- REVISED 2026-10-04: node 507's header table now reads (verbatim, Stefan) -------------------------
+  //
+  //   0000|0000|0000|0000| 508  | nop
+  //   0000|wwww|wwss|xxxx| 508  | special 508 with optional register
+  //   0001|00ww|wwww|iiii| 508  | special 508 direct with unsigned immediate value 0..15
+  //   0010|wwww|wwss|xxxx| 508  | special 508 with optional register with focus
+  //   01oo|oooo|oooo|oooo| 508  | br {short branch, relative}
+  //   1000|0000|cccc|xxxx| 506  | if {conditional long branch, relative}
+  //   1001|0000|cccc|xxxx| 506  | cond { condition calculation and push result on stack }
+  //   1001|1iii|iiii|iiii| 506  | slit { push 11-bit signed literal on stack }
+  //   1010|0www|wwee|xxxx| 506  | special 506 with 16-bit register read for output
+  //   1010|1www|wwee|xxxx| 506  | special 506 with 16-bit register write from input
+  //   1011|wwww|wwww|weee| 506  | special 506 without register
+  //   1100|wwww|wwee|xxxx| 506  | unary 16-bit operation
+  //   1101|pppp|yyyy|xxxx| 506  | binary 16-bit operation
+  //   1110|wwww|wwee|xxxx| 506  | unary 32-bit operation
+  //   1111|0ppp|yyyy|xxxx| 506  | binary 32-bit integer operation
+  //   1111|1ppp|yyyy|xxxx| 506  | binary 32-bit float operation
+  //
+  // with "s: size 0..3 representing actual size 1..4", "w: word address", "i: immediate unsigned value",
+  // "x: parameter1". For the node-509 special words that means
+  //
+  //     opcode = focus(0x2000) | (address of the 'name label in node 509 << 6) | ((words - 1) << 4) | x
+  //
+  // (the older paragraphs below describe the PREVIOUS layout -- address << 7, 3 size bits -- and are kept as
+  // history; the constants right below are authoritative). The direct row 0001|00ww|wwww|iiii has NO
+  // mnemonics yet: which node-509 words use it, and how their size is signalled, has not been specified.
+  // The special-506 / 16-bit / 32-bit rows still have no mnemonics either (their node-505 source has not
+  // been provided).
+  //
   // ---- ADDED 2026-10-03 (CVM REDESIGN): the node-509 special-word table ---------------------------------
   // Per Stefan directly: "I redesigned the CVM a little. there are now more CVM words available, thanks
   // to the table in node 509." Node 507's header now carries this bit-pattern table:
@@ -459,10 +489,15 @@ internal static class CvmAssemblyLanguage
   // (Node509SpecialBaseTagBits); the focus bit (Node509SpecialFocusBit, 0x2000) is OR'd in per word.
   private const int Node509SpecialBaseTagBits = 0x0000;
   private const int Node509SpecialFocusBit = 0x2000;
-  private const int Node509SpecialAddressShift = 7;
-  private const int Node509SpecialAddressFieldBitMask = 0x1F80;
+  // CHANGED 2026-10-04, per Stefan: "the number of size bits is reduced from 3 to 2 because the max size of a
+  // command in node 509 is 4." The size field "ss" is now bits 5-4 (mask 0x0030, N - 1 in 0..3 = N 1..4) and
+  // the 6-bit address field "wwwwww" moved down one bit with it, to bits 11-6 (mask 0x0FC0, shift 6). Bit 12
+  // is no longer part of the address: it is free, and "0001" in bits 15-12 now selects the new "special 508
+  // direct" row (see the table above). Focus stays bit 13. Earlier values: shift 7, mask 0x1F80, size mask 0x70.
+  private const int Node509SpecialAddressShift = 6;
+  private const int Node509SpecialAddressFieldBitMask = 0x0FC0;
   private const int Node509SpecialSizeFieldShift = 4;
-  private const int Node509SpecialSizeFieldBitMask = 0x0070;
+  private const int Node509SpecialSizeFieldBitMask = 0x0030;
 
   // CVM2's node 508 'gld/'gst tag (2026-09-04, renamed 2026-09-09 from 'ldg'/'stg -- see
   // CvmInstructionSet.LoadGlobalMnemonic's own remarks), per Stefan's node 508 source
@@ -766,9 +801,9 @@ internal static class CvmAssemblyLanguage
         // ==== ADDED 2026-10-03 (CVM REDESIGN): node 509's special-word table ================================
         // Every entry below resolves against node 509's OWN compile (Node509Program.Coordinate) to its own
         // tick-labeled word, and carries Node509SpecialBaseTagBits (0x0000). The FOCUS bit (0x2000) and the
-        // SIZE field (bits 6-4) are NOT in the tag: both are read per word from the "// N with focus" /
+        // SIZE field (bits 5-4) are NOT in the tag: both are read per word from the "// N with focus" /
         // "// N without focus" comment on the line under that label in Stefan's node 509 source (see
-        // TryReadNode509SpecialComment). ADDRESS SHIFT (7), the size field and the focus bit are applied
+        // TryReadNode509SpecialComment). ADDRESS SHIFT (6), the size field and the focus bit are applied
         // by BuildDecodeTable/BuildEncodeTable through TryResolveNode509SpecialOpcode.
         //
         // NOTE: Node509Program.cs is still the OLD (pre-redesign) node 509 source -- per Stefan's standing
@@ -801,6 +836,16 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.RegisterAddMnemonic] = (Node509Program.Coordinate, "'radd", Node509SpecialBaseTagBits),
         // 'halt (2026-10-03): "stop execution until reset or interrupt" -- table entry 2 words, WITHOUT focus.
         [CvmInstructionSet.HaltMnemonic] = (Node509Program.Coordinate, "'halt", Node509SpecialBaseTagBits),
+        // 2026-10-04: node 509's second batch of words (see CvmInstructionSet.DoubleFetchMnemonic's remarks) --
+        // all "with focus"; size and focus come from the comment under each label like every other word.
+        [CvmInstructionSet.DoubleFetchMnemonic] = (Node509Program.Coordinate, "'dfetch", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.DoubleStoreMnemonic] = (Node509Program.Coordinate, "'dstore", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.RegisterLiteralMnemonic] = (Node509Program.Coordinate, "'rlit", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.DoubleLiteralMnemonic] = (Node509Program.Coordinate, "'dlit", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.RegisterJumpMnemonic] = (Node509Program.Coordinate, "'rjmp", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.RegisterCallMnemonic] = (Node509Program.Coordinate, "'rcall", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.DropMnemonic] = (Node509Program.Coordinate, "'drop", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.DupMnemonic] = (Node509Program.Coordinate, "'dup", Node509SpecialBaseTagBits),
 
         // Node 407's long-branch op (added 2026-09-06, "more opcodes to node 407 added") -- reached
         // through node 407's own SAME "1100" n/main branch as 'lcall/'ljmp above, so it shares the SAME
@@ -1164,8 +1209,8 @@ internal static class CvmAssemblyLanguage
         // ---- REDESIGNED 2026-10-03 (CVM redesign) --------------------------------------------------
         // The node-507 "special" family (ret/link/unlink at 0, lcall/ljmp at 0, push at 0 -- all shift 0,
         // added 2026-10-01/02, see the comments retained just below) is SUPERSEDED by node 509's special-
-        // word table, whose address field ("wwwwww") sits at bits 12-7: shift 7
-        // (Node509SpecialAddressShift). The mnemonics keep their entries, now at 7 -- the same mnemonic
+        // word table, whose address field ("wwwwww") sits at bits 11-6: shift 6
+        // (Node509SpecialAddressShift; was 7 until 2026-10-04). The mnemonics keep their entries -- the same mnemonic
         // strings, a different node/tag/shift (see NodeSymbolByMnemonic's own node-509 block). The
         // old entries are kept as comments, per "do not remove any opcodes":
         //   [RetMnemonic] = 0, [LinkMnemonic] = 0, [UnlinkMnemonic] = 0,
@@ -1194,6 +1239,14 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.RegisterDecrementMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.RegisterAddMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.HaltMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.DoubleFetchMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.DoubleStoreMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.RegisterLiteralMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.DoubleLiteralMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.RegisterJumpMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.RegisterCallMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.DropMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.DupMnemonic] = Node509SpecialAddressShift,
       };
 
   /// <summary>
@@ -1305,14 +1358,14 @@ internal static class CvmAssemblyLanguage
 
   /// <summary>
   /// ADDED 2026-10-03 (CVM redesign). Computes the opcode word (register field still 0) of one node-509
-  /// special word: <c>focus(0x2000) | (address &lt;&lt; 7) | ((words - 1) &lt;&lt; 4)</c>, where
+  /// special word: <c>focus(0x2000) | (address &lt;&lt; 6) | ((words - 1) &lt;&lt; 4)</c>, where
   /// <c>address</c> is the word address of the entry's <c>'name</c> label in node 509's compile and
   /// <c>words</c> and <c>focus</c> come from the <c>// N with(out) focus</c> comment under the label
   /// (<see cref="TryReadNode509SpecialComment"/>) -- the single source of truth for both.
   ///
   /// Returns false, with a human-readable <paramref name="reason"/>, when the word cannot be represented:
   /// the address does not fit the 6-bit field (node 509's table must live in its first 64 words), the
-  /// comment is missing or unreadable, or N is outside 1..8 (the 3-bit size field holds N - 1). Never
+  /// comment is missing or unreadable, or N is outside 1..4 (the 2-bit size field holds N - 1). Never
   /// guesses -- an unresolvable entry is omitted, same graceful convention every other mnemonic that
   /// fails to resolve already follows (DiagnoseUnresolvedWiredMnemonic then says why).
   /// </summary>
@@ -1338,7 +1391,7 @@ internal static class CvmAssemblyLanguage
     int maxWords = (Node509SpecialSizeFieldBitMask >> Node509SpecialSizeFieldShift) + 1;
     if (words < 1 || words > maxWords)
     {
-      reason = $"the comment under \"{symbol.Name}\" in node 509's source says {words} word(s), but the 3-bit size field only holds 1..{maxWords}.";
+      reason = $"the comment under \"{symbol.Name}\" in node 509's source says {words} word(s), but the 2-bit size field only holds 1..{maxWords}.";
       return false;
     }
 
@@ -1519,7 +1572,7 @@ internal static class CvmAssemblyLanguage
       int resolvedAddress = symbol.Value & CvmWordCodec.WordMask;
 
       // ADDED 2026-10-03 (CVM redesign): node 509's special-word table has its own opcode formula (tag |
-      // address << 7 | size << 4 | register) -- see TryResolveNode509SpecialOpcode. A word that takes a
+      // address << 6 | size << 4 | register) -- see TryResolveNode509SpecialOpcode. A word that takes a
       // register operand ("x", bits 3-0) gets 16 decode entries, one per register value, exactly like
       // node 511's old register-file ops did below; a word without one decodes only with x = 0 (a
       // non-zero x on e.g. "ret" is not what this assembler emits, so it is not claimed here).
@@ -2088,6 +2141,22 @@ internal static class CvmAssemblyLanguage
         continue;
       }
 
+      // ADDED 2026-10-04: rlit / dlit = register embedded in the opcode word PLUS trailing literal word(s) --
+      // see EncodeRegisterLiteralInstruction. Intercepted here for the same reason as push2 above: the generic
+      // embedded-operand path below would emit the opcode word only.
+      if (string.Equals(instruction.Mnemonic, CvmInstructionSet.RegisterLiteralMnemonic, StringComparison.OrdinalIgnoreCase) ||
+          string.Equals(instruction.Mnemonic, CvmInstructionSet.DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase))
+      {
+        (List<int>? literalWords, string? literalError) = EncodeRegisterLiteralInstruction(instruction, entry, labelAddresses, line + 1);
+        if (literalWords is null)
+        {
+          return (null, null, literalError);
+        }
+
+        words.AddRange(literalWords);
+        continue;
+      }
+
       if (entry.HasOperand && instruction.Operand is null)
       {
         return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" requires an operand, e.g. \"{instruction.Mnemonic} 0x1234\".");
@@ -2473,6 +2542,71 @@ internal static class CvmAssemblyLanguage
   }
 
   /// <summary>
+  /// ADDED 2026-10-04, for <c>rlit &lt;reg&gt; &lt;value&gt;</c> and <c>dlit &lt;dreg&gt; &lt;value&gt;</c> (node 509's
+  /// "next literal -&gt; register" words). Memory layout: the opcode word (node-509 base word | register in bits
+  /// 3-0), then the literal -- <c>rlit</c>: ONE word (a 16-bit number or a label's absolute address);
+  /// <c>dlit</c>: TWO words, the 32-bit value's LOW half first and then the HIGH half (node 509's
+  /// <c>m/dnext ( - lo hi )</c> reads them in that order; note this is the opposite of <c>push2</c>'s hi-lo).
+  /// The register arrives already parsed by <see cref="ParseSource"/> (<c>rN</c> / <c>dN</c> / plain number).
+  /// </summary>
+  private static (List<int>? Words, string? Error) EncodeRegisterLiteralInstruction(
+      CvmAsmInstruction instruction,
+      (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) entry,
+      IReadOnlyDictionary<string, int> labelAddresses,
+      int lineNumber)
+  {
+    bool isDouble = string.Equals(instruction.Mnemonic, CvmInstructionSet.DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase);
+    string example = isDouble ? "dlit d1 0x12345678" : "rlit r1 0x1234";
+    if (instruction.Operand is not int register)
+    {
+      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" requires a register and a literal, e.g. \"{example}\".");
+    }
+
+    if (register < 0 || register > entry.EmbeddedValueMask)
+    {
+      return (null, $"line {lineNumber}: {register} does not fit in \"{instruction.Mnemonic}\"'s embedded register operand (0..{entry.EmbeddedValueMask}).");
+    }
+
+    int opcodeWord = entry.Opcode | ((register & entry.EmbeddedValueMask) << entry.EmbeddedValueShift);
+    if (isDouble)
+    {
+      if (instruction.Operand2 is not int wide)
+      {
+        return (null, $"line {lineNumber}: \"dlit\" requires a register and one 32-bit literal, e.g. \"{example}\".");
+      }
+
+      uint value = unchecked((uint)wide);
+      return ([opcodeWord, (int)(value & 0xFFFF), (int)(value >> 16)], null);
+    }
+
+    int literal;
+    if (instruction.Operand2 is int number)
+    {
+      if (number < -0x8000 || number > CvmWordCodec.WordMask)
+      {
+        return (null, $"line {lineNumber}: {number} does not fit in \"rlit\"'s 16-bit literal (-32768..65535).");
+      }
+
+      literal = number & CvmWordCodec.WordMask;
+    }
+    else if (instruction.OperandLabel3 is string targetLabel)
+    {
+      if (!labelAddresses.TryGetValue(targetLabel, out int labelAddress))
+      {
+        return (null, $"line {lineNumber}: \"rlit\" references undefined label \"{targetLabel}\".");
+      }
+
+      literal = labelAddress & CvmWordCodec.WordMask;
+    }
+    else
+    {
+      return (null, $"line {lineNumber}: \"rlit\" requires a register and a 16-bit literal (or label), e.g. \"{example}\".");
+    }
+
+    return ([opcodeWord, literal], null);
+  }
+
+  /// <summary>
   /// ADDED 2026-10-03, for <c>cond &lt;reg&gt; &lt;cond&gt;</c> (<see cref="CvmInstructionSet.CondMnemonic"/>): the
   /// one-word sibling of <see cref="EncodeIfInstruction"/> -- table row <c>1001|0000|cccc|xxxx| 506</c>. The
   /// register (bits 3-0) arrives already parsed by <see cref="ParseSource"/> (<c>rN</c> or a plain 0..15
@@ -2669,7 +2803,21 @@ internal static class CvmAssemblyLanguage
           // Node 511's four ops only: the operand already lives in the word's own low bits (that's how
           // this exact dictionary entry was found at all -- see BuildDecodeTable's own remarks), never a
           // trailing word, so there's no second word to read here.
-          notes[address] = $"{instruction.Mnemonic} {CvmInstructionSet.FormatRegisterOperand(instruction.Mnemonic, embeddedOperand)}";
+          string registerNote = $"{instruction.Mnemonic} {CvmInstructionSet.FormatRegisterOperand(instruction.Mnemonic, embeddedOperand)}";
+
+          // 2026-10-04: rlit (2 words) / dlit (3 words) carry their literal in the following word(s) --
+          // rlit one 16-bit word; dlit LOW word then HIGH word, shown as one 32-bit number.
+          if (instruction.WordLength == 2 && address + 1 < endAddressExclusive)
+          {
+            registerNote += " " + CvmInstructionSet.FormatOperand(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1)));
+          }
+          else if (instruction.WordLength == 3 && address + 2 < endAddressExclusive)
+          {
+            uint wideLiteral = ((uint)(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 2)) & 0xFFFF) << 16) | (uint)(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1)) & 0xFFFF);
+            registerNote += $" 0x{wideLiteral:X8} ({wideLiteral})";
+          }
+
+          notes[address] = registerNote;
           address += instruction.WordLength;
           continue;
         }
@@ -3074,6 +3222,55 @@ internal static class CvmAssemblyLanguage
           instructions.Add(new CvmAsmInstruction(parts[0], null, label, parts[1]));
           continue;
         }
+      }
+
+      // ADDED 2026-10-04, for "rlit <reg> <value>" and "dlit <dreg> <value>" (node 509's register-literal words):
+      // the register token comes first ("rlit r1 1234", "dlit d1 0x12345678"), then the literal. rlit's value is a
+      // 16-bit number (-32768..65535) or a label (its absolute word address); dlit's is one 32-bit number
+      // (-2147483648..4294967295, no label), stored in Operand2 as the same 32 bits reinterpreted as an int.
+      if (parts.Length == 3 &&
+          (string.Equals(parts[0], CvmInstructionSet.RegisterLiteralMnemonic, StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(parts[0], CvmInstructionSet.DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase)) &&
+          CvmInstructionSet.TryGetShape(parts[0]) is { } literalShape)
+      {
+        int literalRegister;
+        if (CvmInstructionSet.TryParseRegisterOperand(literalShape, parts[1], out literalRegister, out string? literalRegisterError))
+        {
+          if (literalRegisterError is not null)
+          {
+            return (null, $"line {lineNumber + 1}: {literalRegisterError}");
+          }
+        }
+        else if (!TryParseOperand(parts[1], out literalRegister))
+        {
+          string exampleRegister = CvmInstructionSet.IsDoubleRegisterMnemonic(parts[0]) ? "d1" : "r1";
+          return (null, $"line {lineNumber + 1}: \"{parts[0]}\" requires a register ({exampleRegister[0]}0-{exampleRegister[0]}15, or a plain number 0-15) as its first operand, e.g. \"{parts[0]} {exampleRegister} 0x1234\" -- got \"{parts[1]}\".");
+        }
+
+        if (CvmInstructionSet.IsDoubleRegisterMnemonic(parts[0]))
+        {
+          if (!TryParsePush2WideOperand(parts[2], out int wideLiteral))
+          {
+            return (null, $"line {lineNumber + 1}: \"dlit\"'s second operand must be one 32-bit number (-2147483648..4294967295, decimal or 0x hex) -- got \"{parts[2]}\".");
+          }
+
+          instructions.Add(new CvmAsmInstruction(parts[0], literalRegister, label, Operand2: wideLiteral));
+          continue;
+        }
+
+        if (TryParseOperand(parts[2], out int literalValue))
+        {
+          instructions.Add(new CvmAsmInstruction(parts[0], literalRegister, label, Operand2: literalValue));
+          continue;
+        }
+
+        if (IsValidIdentifier(parts[2]))
+        {
+          instructions.Add(new CvmAsmInstruction(parts[0], literalRegister, label, OperandLabel3: parts[2]));
+          continue;
+        }
+
+        return (null, $"line {lineNumber + 1}: \"rlit\"'s second operand must be a 16-bit number or a label name -- got \"{parts[2]}\".");
       }
 
       // ADDED 2026-10-03, for "cond <reg> <cond>" (CvmInstructionSet.CondMnemonic): e.g. "cond r0 ==0". The

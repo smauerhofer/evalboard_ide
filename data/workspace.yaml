@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-03T20:55:34.6705825
-      utcDateTime: 2026-10-03T20:55:34.6705825Z
-      localDateTime: 2026-10-03T22:55:34.6705825+02:00
-      date: 2026-10-03T00:00:00.0000000
-      day: 3
-      dayOfWeek: Saturday
-      dayOfYear: 276
-      hour: 20
-      millisecond: 670
-      microsecond: 582
-      nanosecond: 500
-      minute: 55
+      dateTime: 2026-10-04T07:52:56.1294603
+      utcDateTime: 2026-10-04T07:52:56.1294603Z
+      localDateTime: 2026-10-04T09:52:56.1294603+02:00
+      date: 2026-10-04T00:00:00.0000000
+      day: 4
+      dayOfWeek: Sunday
+      dayOfYear: 277
+      hour: 7
+      millisecond: 129
+      microsecond: 460
+      nanosecond: 300
+      minute: 52
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 34
-      ticks: 639266577346705825
-      utcTicks: 639266577346705825
-      timeOfDay: 20:55:34.6705825
+      second: 56
+      ticks: 639266971761294603
+      utcTicks: 639266971761294603
+      timeOfDay: 07:52:56.1294603
       year: 2026
   portB: 
   portC:
@@ -68394,11 +68394,11 @@ projects:
 
         0000|0000|0000|0000| 508  | nop
 
-        0000|wwww|wsss|xxxx| 508  | special 508 with optional register
+        0000|wwww|wwss|xxxx| 508  | special 508 with optional register
 
         0001|00ww|wwww|iiii| 508  | special 508 direct with unsigned immediate value 0..15
 
-        001w|wwww|wsss|xxxx| 508  | special 508 with optional register with focus
+        0010|wwww|wwss|xxxx| 508  | special 508 with optional register with focus
 
         01oo|oooo|oooo|oooo| 508  | br {short branch, relative}
 
@@ -68438,7 +68438,7 @@ projects:
 
         o: signed offset
 
-        s: size
+        s: size 0..3 representing actual size 1..4
 
         w: word address
 
@@ -68636,13 +68636,11 @@ projects:
         ( CVM_pipeline node 508.
 
 
-        instruction execute.
-
-
-        memory fetch/store
+        instruction execute and microcode interpreter.
 
 
         )
+
 
         # 507 import
 
@@ -68683,7 +68681,7 @@ projects:
             A[ @p m/rsend ]] lit !b
             A[ r/focus_nw ]] lit !b
 
-            // Node 507 forwards the register argument twice
+            // Node 507 reads the register argument
             A[ @p ]] lit !b
             !b
 
@@ -68710,31 +68708,36 @@ projects:
 
         : x6/unpack ( op - op r count )
           dup 0xf and
+          ( op r )
           over 2/ 2/ 2/ 2/
-          dup 7 and dup !           // send size-1
-          >r
-          2/ 2/ 2/ 0x3f and !      // send handler offset
-          r>
-        ;
+          ( op r sop )
+          dup 3 and dup >r           // retain count for node 508
+          A[ @p >r ]] lit ! !        // set node 509's loop count
 
-
-
+          ( op r sop / count )
+          2/ 2/ 0x3f and
+          A[ @p a! ]] lit ! !        // set node 509's table address
+          ( op r / count )
+          A[ @+ !p unext ]] lit !    // stream table words back
+          r> ;
 
       ramWords:
       - 0x04B12
       - 0x00175
       - 0x15555
       - 0x089B2
-      - 0x05B02
+      - 0x04812
+      - 0x00000
       - 0x0D9B2
-      - 0x3720C
+      - 0x09FDA
+      - 0x1B40E
       - 0x002DA
       - 0x307C2
       - 0x31D22
       - 0x0560E
       - 0x09555
-      - 0x37218
-      - 0x01624
+      - 0x3721A
+      - 0x01626
       - 0x2FD27
       - 0x05614
       - 0x13419
@@ -68745,14 +68748,14 @@ projects:
       - 0x05614
       - 0x09D25
       - 0x13418
-      - 0x3721F
+      - 0x37221
       - 0x00DC2
       - 0x307C7
       - 0x0003F
       - 0x3E812
       - 0x0000F
       - 0x3F555
-      - 0x01624
+      - 0x01626
       - 0x2FD22
       - 0x049B2
       - 0x089B2
@@ -68762,17 +68765,15 @@ projects:
       - 0x207C2
       - 0x30797
       - 0x00007
-      - 0x3ED2A
-      - 0x2E7C2
-      - 0x31DFA
+      - 0x3EDBF
+      - 0x048B2
+      - 0x0BAC2
+      - 0x31DFF
       - 0x0003F
+      - 0x04AB2
+      - 0x0BA12
+      - 0x07972
       - 0x0AC55
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -68797,15 +68798,15 @@ projects:
       postMortemEnabled: true
     - coordinate: 509
       enabled: true
-      sourceCode: >+
+      sourceCode: >
         ( CVM_pipeline node 509.
 
 
-        instruction execution.
-
+        microcode delivery.
 
 
         )
+
 
         # 607 import
 
@@ -68816,11 +68817,7 @@ projects:
 
         # right /b
 
-
-        [ 0x3d 0x3d 0x3d 0x3d 0x3d 0x3d 0x3d 0x3d 0x3d 9 ] /rstack
-
-
-        entry x6a/main
+        # right /p
 
 
         # 0 org
@@ -68854,54 +68851,54 @@ projects:
           // 1 with focus
           A[ m/unlink ]] ,
 
-        : 'push2 // read next 32-bit value and push it on the stack ( - lo hi ). sequence in memory: opcode(push2) hi lo
+        : 'push2 // read next 32-bit value and push it on the VM stack ( - hi lo ). sequence in memory: opcode(push2) hi lo
           // 4 with focus
           A[ m/next ]] ,
           A[ m/push ]] ,
 
-        : 'push // read next 16-bit value and push it on the stack ( - w )
+        : 'push // read next 16-bit value and push it on the VM stack ( - w )
           // 2 with focus
           A[ m/next ]] ,
           A[ m/push ]] ,
 
-        : 'rpop // pop 16-bit value from stack and stores it in a register ( w - )
+        : 'rpop // pop 16-bit value from the VM stack and stores it in a register ( w - )
           // 2 with focus
           A[ m/pop ]] ,
           A[ m/r! ]] ,
 
-        : 'dpop // pop 32-bit value from stack and stores it in a double register ( lo hi - )
+        : 'dpop // pop 32-bit value from the VM stack and stores it in a double register ( hi lo - )
           // 2 with focus
           A[ m/dpop ]] ,
           A[ m/d! ]] ,
 
-        : 'rpush // read 16-bit value from register and push it on the stack ( - w )
+        : 'rpush // read 16-bit value from register and push it on the VM stack ( - w )
           // 2 with focus
           A[ m/r@ ]] ,
           A[ m/push ]] ,
 
-        : 'dpush // read 32-bit value from double register and push it on the stack ( - lo hi )
+        : 'dpush // read 32-bit value from double register and push it on the VM stack ( - hi lo )
           // 2 with focus
           A[ m/d@ ]] ,
           A[ m/dpush ]] ,
 
-        : 'rpopi // pop 16-bit value from stack and stores it in a register indirect. register # is on the stack ( w r - )
+        : 'rpopi // pop 16-bit value from the VM stack and stores it in a register indirect. register # is on the stack ( w r - )
           // 2 with focus
           A[ m/dpop ]] ,
-          A[ over m/r! ]] ,
+          A[ m/r! ]] ,
 
-        : 'dpopi // pop 32-bit value from stack and stores it in a register indirect. register # is on the stack ( lo hi d - )
+        : 'dpopi // pop 32-bit value from the VM stack and stores it in a register indirect. register # is on the stack ( hi lo d - )
           // 3 with focus
           A[ m/pop ]] ,
-          A[ >r m/dpop ]] ,
-          A[ r> m/d! ]] ,
+          A[ m/dpop ]] ,
+          A[ m/d! ]] ,
 
-        : 'rpushi // read 16-bit value from register indirect and push it on the stack ( r - w )
+        : 'rpushi // read 16-bit value from register indirect and push it on the VM stack ( r - w )
           // 3 with focus
           A[ m/pop ]] ,
           A[ m/r@ ]] ,
           A[ m/push ]] ,
 
-        : 'dpushi // read 32-bit value from register indirect and push it on the stack ( r - lo hi )
+        : 'dpushi // read 32-bit value from register indirect and push it on the VM stack ( r - hi lo )
           // 3 with focus
           A[ m/pop ]] ,
           A[ m/d@ ]] ,
@@ -68939,83 +68936,103 @@ projects:
           A[ r> m/d@ ]] ,
           A[ m/write ]] ,
 
-        # 0x3d org
+        : 'rlit // next 16-bit literal -> register
+          // 2 with focus; memory: opcode, value
+          A[ m/next ]] ,
+          A[ m/r! ]] ,
 
+        : 'dlit // next 32-bit literal -> double register
+          // 2 with focus; memory: opcode, lo, hi
+          A[ m/dnext ]] ,
+          A[ m/d! ]] ,
 
-        : x6a/main
-          @b >r
-          @b a!
-          begin @+ !b unext ;
+        : 'rjmp // jump to address held in register
+          // 2 with focus
+          A[ m/r@ ]] ,
+          A[ a! ]] ,
 
+        : 'rcall // call address held in register
+          // 3 with focus
+          A[ m/r@ ]] ,
+          A[ a m/push ]] ,
+          A[ a! ]] ,
 
+        : 'drop // discard one VM stack word
+          // 1 with focus
+          A[ m/pop ]] ,
 
+        : 'dup // duplicate top VM stack word ( w - w w )
+          // 3 with focus
+          A[ m/pop ]] ,
+          A[ dup m/push ]] ,
+          A[ m/push ]] ,
       ramWords:
       - 0x2C9B2
-      - 0x1341B
+      - 0x1341D
       - 0x2A9B2
-      - 0x13415
+      - 0x13417
       - 0x23624
       - 0x2A9B2
-      - 0x13415
+      - 0x13417
       - 0x2A9B2
       - 0x1342B
-      - 0x13421
-      - 0x13415
+      - 0x13412
+      - 0x13417
       - 0x13424
-      - 0x13415
+      - 0x13417
       - 0x13424
-      - 0x1341B
+      - 0x1341D
       - 0x13438
-      - 0x1341A
+      - 0x1341C
       - 0x1343B
       - 0x13432
       - 0x13424
       - 0x13435
       - 0x13423
-      - 0x1341A
-      - 0x21638
-      - 0x1341B
-      - 0x2F61A
-      - 0x2763B
-      - 0x1341B
+      - 0x1341C
+      - 0x13438
+      - 0x1341D
+      - 0x1341C
+      - 0x1343B
+      - 0x1341D
       - 0x13432
       - 0x13424
-      - 0x1341B
+      - 0x1341D
       - 0x13435
       - 0x13423
-      - 0x05612
+      - 0x05614
       - 0x0562A
-      - 0x13412
-      - 0x05612
+      - 0x13414
+      - 0x05614
       - 0x0562C
       - 0x089B2
-      - 0x05612
+      - 0x05614
       - 0x05626
-      - 0x0961B
-      - 0x13412
-      - 0x05600
+      - 0x0961D
+      - 0x13414
+      - 0x0560A
       - 0x1341E
       - 0x13435
-      - 0x13417
+      - 0x13419
       - 0x13424
-      - 0x1341B
-      - 0x13435
+      - 0x2F61D
+      - 0x27635
       - 0x13428
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x00802
+      - 0x13417
+      - 0x13438
+      - 0x13416
+      - 0x1343B
+      - 0x13432
       - 0x2A9B2
-      - 0x07B75
+      - 0x13432
+      - 0x23624
+      - 0x2A9B2
+      - 0x1341D
+      - 0x1341D
+      - 0x25624
+      - 0x13424
       startup:
-        entryPoint: 0x03D
+        entryPoint: 0x1D5
         p: 0x000
         a: 0x000
         b: 0x000
@@ -70003,196 +70020,242 @@ projects:
     debuggerAssemblyCode: 
     debuggerPrograms:
     - name: default
-      source: >
-        nop               ; cold-start fetch; no side effect
+      source: >+
+        jmp start
 
         nop
 
         nop
 
-        pushlit 0x0100    ; push literal 0x0100 onto S (native stack, NOT external memory)
+        nop
 
-        pop               ; treats 0x0100 as the external stack pointer p; READs page1:0100 (fresh SRAM=0) into r
 
-        push              ; writes r (0) back out; WRITE page1:0100 <- 0000
-
-        lit 100           ; r = 0x0064
-
-        push              ; WRITE <- 0064
-
-        lit -1            ; r = 0xFFFF (lit's negative range)
-
-        push              ; WRITE <- FFFF
-
-        lit 511           ; r = 0x01FF (lit's positive extreme -- narrower than the retired slit's old 12-bit range)
-
-        push              ; WRITE <- 01FF
-
-        lit -512          ; r = 0xFE00 (lit's negative extreme -- narrower than the retired slit's old 12-bit range)
-
-        push              ; WRITE <- FE00
-
-        lit 15            ; r = 0x000F
-
-        inv               ; r = ~0x000F = 0xFFF0
-
-        push              ; WRITE <- FFF0
-
-        lit 41            ; r = 0x0029
-
-        inc               ; r = 0x002A
-
-        push              ; WRITE <- 002A
-
-        lit 41            ; r = 0x0029
-
-        dec               ; r = 0x0028
-
-        push              ; WRITE <- 0028
-
-        lit 0x0012        ; X=0x0012 (shiftee)
-
-        push              ; WRITE <- 0012
-
-        lit 8             ; Y=8 (shift count, becomes r) -- node 507's 'for'/'next' loop runs (r+1) times, the standard F18 for-loop off-by-one, so this actually shifts by 9, not 8
-
-        usl               ; pop X(0012) READ <- 0012; r = 0012<<(8+1) = 2400
-
-        push              ; WRITE <- 2400
-
-        lit -100          ; X=0xFF9C
-
-        push              ; WRITE <- FF9C
-
-        lit 3             ; Y=3 (count) -- actually shifts by (3+1)=4, same 'for'/'next' off-by-one as usl above
-
-        ssr               ; pop X(FF9C) READ <- FF9C; r = signed(FF9C)>>(3+1) = FFF9
-
-        push              ; WRITE <- FFF9
-
-        lit -100          ; X=0xFF9C
-
-        push              ; WRITE <- FF9C
-
-        lit 3             ; Y=3 (count) -- actually shifts by (3+1)=4, same 'for'/'next' off-by-one as usl above
-
-        usr               ; pop X(FF9C) READ <- FF9C; r = unsigned(FF9C)>>(3+1) = 0FF9
-
-        push              ; WRITE <- 0FF9
-
-        lit 100           ; X=100
-
-        push              ; WRITE <- 0064
-
-        lit 200           ; Y=200
-
-        add               ; pop X(0064) READ <- 0064; r = 0064+00C8 = 012C
-
-        push              ; WRITE <- 012C
-
-        lit 500           ; X=500
-
-        push              ; WRITE <- 01F4
-
-        lit 200           ; Y=200
-
-        sub               ; pop X(01F4) READ <- 01F4; r = X-Y = 01F4-00C8 = 012C
-
-        push              ; WRITE <- 012C
-
-        lit 0x0FF         ; X=0x0FF
-
-        push              ; WRITE <- 00FF
-
-        lit 0x0F0         ; Y=0x0F0
-
-        and               ; pop X(00FF) READ <- 00FF; r = 00FF & 00F0 = 00F0
-
-        push              ; WRITE <- 00F0
-
-        lit 0x0FF         ; X=0x0FF
-
-        push              ; WRITE <- 00FF
-
-        lit 0x0F0         ; Y=0x0F0
-
-        xor               ; pop X(00FF) READ <- 00FF; r = 00FF ^ 00F0 = 000F
-
-        push              ; WRITE <- 000F
-
-        lit 0x00F         ; X=0x00F
-
-        push              ; WRITE <- 000F
-
-        lit 0x0F0         ; Y=0x0F0
-
-        or                ; pop X(000F) READ <- 000F; r = 000F | 00F0 = 00FF
-
-        push              ; WRITE <- 00FF
-
-        ; node 506's register-d block (zext/addc/ldd/std/xd/mul2d/div2d/sext/umuld) and node 407's
-
-        ; register-w/port block (xpt/sthi/ldlo/stlo/ldhi) were REMOVED here 2026-09-09 as part of the
-
-        ; CVM1-opcode cleanup -- eight of the nine register-d mnemonics and all five register-w/port
-
-        ; mnemonics no longer assemble at all (no live CVM2 node backs them), and addc's own test
-
-        ; (which validated node 506's now-retired addc, not addc's current home on node 510) is omitted
-
-        ; rather than replaced with a fabricated, unverified expected value -- see this class's own
-
-        ; remarks for the full explanation. Removing these lines shifted the frame-pointer subroutine's
-
-        ; word address from 141 (0x8D) to 73 (0x49); the 'call below was updated to match.
-
-        call 73           ; jump to the frame-pointer subroutine near the end of this program -- its own word address, computed by counting words (pushlit is the only 2-word instruction here); 73 (0x49)
-
-        nop               ; execution resumes here once FRAME_TEST's own 'ret' returns
+        start:
 
         nop
 
-        nop
 
-        br 1              ; EXPLORATORY -- Node607.f18 has no real branch decode for this tag yet; observe, don't assume, what the log shows
+        // Nested frames.
 
-        nop
+        // After all three unlinks: FP = 0, SP = 0xffff.
 
-        cbr 1            ; EXPLORATORY -- same caveat as br above. This is the last instruction the main flow was ever designed to reach
+        link -3
 
-        nop
+        link -2
 
-        halt              ; stop the CPU cleanly here -- everything the main flow cares about has now been observed. Node 606's own 'halt (Stefan's addition: "wait for a word that will never come") parks execution in a blocking @b that never returns, so unlike every earlier revision of this program, control never falls through into FRAME_TEST's body a second time -- only a chip reset can move it now
+        link -1
 
-        enter 4           ; reserve a 4-word frame; WRITE (old f, expected 0000) at the address 'leave' will read back; new f := that write address
+        unlink
 
-        lit 0x0AB         ; r=0x00AB
+        unlink
 
-        stl 1             ; WRITE r(00AB) to local #1 (frame-relative offset 1)
+        unlink
 
-        lit 0x0CD         ; r=0x00CD
 
-        stp 2             ; WRITE r(00CD) to parameter #2 (frame-relative offset 2)
+        // Push a literal onto the VM stack, then store it in r0.
 
-        ldl 1             ; READ local #1 back into r -- expect the SAME address and value 00AB as the stl above
+        // Copy it through the VM stack to r1.
 
-        push              ; WRITE <- 00AB (round-trips ldl's own fetch)
+        push 0x1234
 
-        ldp 2             ; READ parameter #2 back into r -- expect the SAME address and value 00CD as the stp above
+        rpop r0
 
-        push              ; WRITE <- 00CD (round-trips ldp's own fetch)
+        rpush r0
 
-        ; lal/lap RETIRED 2026-09-09 -- no longer assemble at all. The self-check that used to live here
+        rpop r1
 
-        ; (comparing lal's/lap's freshly computed addresses against the stl/ldl and stp/ldp transactions
 
-        ; above) is omitted rather than replaced with an unverified 'pushf-based guess -- see this class's
+        // Push a double literal onto the VM stack: hi first, lo last.
 
-        ; own remarks for why.
+        // d1: r2 = lo = 0x9abc, r3 = hi = 0x5678.
 
-        leave             ; READ back the frame's saved old f -- expect value 0000, restoring f to its pre-enter value
+        push2 0x5678 0x9ABC
 
-        ret               ; pop the return address 'call FRAME_TEST' pushed and resume the main flow. This is the intended, correct 'call'/'ret' round trip -- it lands back on the padding nop right after 'call' above, which then runs br/cbr and reaches 'halt, stopping the CPU cleanly instead of falling through into THIS SAME block a second time the way every earlier revision of this program did (see the header remarks)
+        dpop d1
+
+
+        // Copy d1 to d2 through the VM stack.
+
+        dpush d1
+
+        dpop d2
+
+
+        // Indirect scalar store.
+
+        // VM stack before rpopi: ( value register-index ).
+
+        push 0xBEEF
+
+        push 6
+
+        rpopi
+
+
+        // Indirect scalar read.
+
+        // Consume register index from the VM stack; push its value.
+
+        push 6
+
+        rpushi
+
+        rpop r12
+
+
+        // Indirect double store.
+
+        // VM stack before dpopi: ( hi lo double-register-index ).
+
+        push2 0x1357 0x2468
+
+        push 3
+
+        dpopi
+
+
+        // Indirect double read, then store the result in d4.
+
+        // VM stack after dpushi: ( hi lo ).
+
+        push 3
+
+        dpushi
+
+        dpop d4
+
+
+        // Load registers directly; these do not use the VM stack.
+
+        // dlit literals in instruction memory are ordered lo, hi.
+
+        rlit r10 0xABCD
+
+        dlit d5 0xCDEF 0x0123
+
+
+        // Increment and decrement r8.
+
+        // radd consumes its offset from the VM stack.
+
+        // Expected final r8 = 7.
+
+        rlit r8 10
+
+        rinc r8
+
+        rdec r8
+
+        push -3
+
+        radd r8
+
+
+        // Discard the top VM stack word.
+
+        // Expected r13 = 0x1111.
+
+        push 0x1111
+
+        push 0x2222
+
+        drop
+
+        rpop r13
+
+
+        // Duplicate the top VM stack word.
+
+        // Expected r14 = r15 = 0x3333.
+
+        push 0x3333
+
+        dup
+
+        rpop r14
+
+        rpop r15
+
+
+        // Double-register pointer: lo = address, hi = page.
+
+        // dstore consumes a value from the VM stack.
+
+        // dfetch pushes the fetched value onto the VM stack.
+
+        dlit d10 0x0100 2
+
+        push 0xCAFE
+
+        dstore d10
+
+        dfetch d10
+
+        rpop r9
+
+
+        // Direct call: return address is saved on the VM stack.
+
+        call direct_sub
+
+
+        // Register call: return address is saved on the VM stack.
+
+        rlit r16 indirect_sub
+
+        rcall r16
+
+
+        // Register jump: skip the poison assignment.
+
+        rlit r17 after_rjmp
+
+        rjmp r17
+
+        rlit r18 0xDEAD
+
+
+        after_rjmp:
+
+        // Completion signature.
+
+        // The VM stack should be empty again: SP = 0xffff.
+
+        rlit r19 0x600D
+
+        halt
+
+
+        direct_sub:
+
+        // Create a frame, set a result, restore the frame.
+
+        // ret consumes the return address from the VM stack.
+
+        link -2
+
+        rlit r11 0x1111
+
+        unlink
+
+        ret
+
+
+        indirect_sub:
+
+        // Exercise nested frames inside a register-called subroutine.
+
+        link -3
+
+        link -1
+
+        rlit r18 0x2222
+
+        unlink
+
+        unlink
+
+        ret
     - name: test
       source: >
         jmp test1
@@ -70288,7 +70351,214 @@ projects:
         nop
 
         nop
-    lastSelectedDebuggerProgramName: test
+    - name: microcode regression test
+      source: >
+        jmp start
+
+        nop
+
+        nop
+
+        nop
+
+
+        start:
+
+        nop
+
+
+        // Nested frames; SP must return to 0xffff.
+
+        link -3
+
+        link -2
+
+        link -1
+
+        unlink
+
+        unlink
+
+        unlink
+
+
+        // Immediate push and scalar register transfers.
+
+        push 0x1234
+
+        rpop r0
+
+        rpush r0
+
+        rpop r1
+
+
+        // Immediate double push: hi, lo.
+
+        push2 0x5678 0x9ABC
+
+        dpop d1
+
+
+        // Double register transfers.
+
+        dpush d1
+
+        dpop d2
+
+
+        // Indirect scalar register write: value, register number.
+
+        push 0xBEEF
+
+        push 6
+
+        rpopi
+
+
+        // Indirect scalar register read.
+
+        push 6
+
+        rpushi
+
+        rpop r12
+
+
+        // Indirect double register write: hi, lo, double index.
+
+        push2 0x1357 0x2468
+
+        push 3
+
+        dpopi
+
+
+        // Indirect double register read.
+
+        push 3
+
+        dpushi
+
+        dpop d4
+
+
+        // Direct literal loads.
+
+        rlit r10 0xABCD
+
+        dlit d5 0xCDEF 0x0123
+
+
+        // Increment, decrement, and addition of a VM stack value.
+
+        rlit r8 10
+
+        rinc r8
+
+        rdec r8
+
+        push -3
+
+        radd r8
+
+
+        // Discard only the top VM stack word.
+
+        push 0x1111
+
+        push 0x2222
+
+        drop
+
+        rpop r13
+
+
+        // Duplicate a VM stack word.
+
+        // Remove this section if dup has not been added.
+
+        push 0x3333
+
+        dup
+
+        rpop r14
+
+        rpop r15
+
+
+        // Memory pointer: lo = address, hi = page.
+
+        dlit d10 0x0100 2
+
+        push 0xCAFE
+
+        dstore d10
+
+        dfetch d10
+
+        rpop r9
+
+
+        // Direct call and return.
+
+        call direct_sub
+
+
+        // Register call and return.
+
+        rlit r16 indirect_sub
+
+        rcall r16
+
+
+        // Register jump: the poison assignment must be skipped.
+
+        rlit r17 after_rjmp
+
+        rjmp r17
+
+        rlit r18 0xDEAD
+
+
+        after_rjmp:
+
+        // Completion signature.
+
+        rlit r19 0x600D
+
+        halt
+
+
+        // A returning subroutine with its own frame.
+
+        direct_sub:
+
+        link -2
+
+        rlit r11 0x1111
+
+        unlink
+
+        ret
+
+
+        // A second returning subroutine with nested frames.
+
+        indirect_sub:
+
+        link -3
+
+        link -1
+
+        rlit r18 0x2222
+
+        unlink
+
+        unlink
+
+        ret
+    lastSelectedDebuggerProgramName: New program
     cDebuggerPrograms:
     - name: default
       source: >

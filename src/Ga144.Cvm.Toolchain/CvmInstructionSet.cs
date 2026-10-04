@@ -744,6 +744,30 @@ public static class CvmInstructionSet
   // through hazard.
   public const string HaltMnemonic = "halt";
 
+  // ---- ADDED 2026-10-04, per Stefan: "there are new opcodes in node 509. add them to the CVM language." ----
+  // Eight new tick-labeled words in node 509's table (all "with focus"):
+  //   'dfetch  "read the content of a memory cell pointed to by a 32-register and push its value on the stack ( - w )"
+  //   'dstore  "pop a value from the stack and write the content of a memory cell pointed to by a 32-register ( w - )"
+  //   'rlit    "next 16-bit literal -> register"            memory: opcode, value
+  //   'dlit    "next 32-bit literal -> double register"     memory: opcode, lo, hi
+  //   'rjmp    "jump to address held in register"
+  //   'rcall   "call address held in register"
+  //   'drop    "discard one VM stack word"
+  //   'dup     "duplicate top VM stack word ( w - w w )"
+  // Mnemonic = tick name minus the tick. dfetch/dstore/dlit take a DOUBLE register (d0..d15, like dpop/dpush --
+  // see IsDoubleRegisterMnemonic); rlit/rjmp/rcall a 16-bit register (r0..r15); drop/dup no operand. The
+  // memory instruction is NOT the node-509 table size: rlit is 2 words and dlit 3 (their trailing literal
+  // words), drop/dup/rjmp/rcall/dfetch/dstore 1, whatever their table entries' sizes. dlit's 32-bit literal is
+  // stored LOW word first, then high (node 509's m/dnext reads "lo hi"), the opposite of push2's hi-lo.
+  // (rjmp/rcall reuse RegisterJumpMnemonic/RegisterCallMnemonic above -- those names belonged to the retired
+  // CVM2 Ids 191/192, which stay retired; the new words are new Ids.)
+  public const string DoubleFetchMnemonic = "dfetch";
+  public const string DoubleStoreMnemonic = "dstore";
+  public const string RegisterLiteralMnemonic = "rlit";
+  public const string DoubleLiteralMnemonic = "dlit";
+  public const string DropMnemonic = "drop";
+  public const string DupMnemonic = "dup";
+
   // 'tjmp, node 507's own table-jump primitive -- always present in node 507's source ("'tjmp .loc
   // (rso-rs) a . + a!", identical body to node 507's own internal m/branch), but left unwired as a CVM
   // mnemonic until Stefan confirmed its location 2026-09-09 ("'tjmp is in node 507"). Shaped exactly like
@@ -2713,6 +2737,19 @@ public static class CvmInstructionSet
     // word. Fully self-describing (EmbeddedSignedValue), so both assemblers need no code of their own for it.
     // Fresh Id: 214 had never been used; the old slit's Id 8 stays retired.
     new(Id: 214, SlitMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: 0x9800, ValueBitMask: 0x07FF),
+    // ---- node 509's second batch of words (2026-10-04; see DoubleFetchMnemonic's remarks). All resolve against
+    // node 509 like the rows above (NodeResolvedEmbeddedValue = register in bits 3-0 of the live-resolved word;
+    // None = no operand). Fresh Ids 215-222. rlit/dlit keep the NodeResolvedEmbeddedValue shape (register in the
+    // opcode word) and add 1 / 2 trailing literal words purely through WordLength (2 / 3): both assemblers
+    // handle those by name, like push2.
+    new(Id: 215, DoubleFetchMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
+    new(Id: 216, DoubleStoreMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
+    new(Id: 217, RegisterLiteralMnemonic, 2, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
+    new(Id: 218, DoubleLiteralMnemonic, 3, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
+    new(Id: 219, RegisterJumpMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
+    new(Id: 220, RegisterCallMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
+    new(Id: 221, DropMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 222, DupMnemonic, 1, CvmOperandEncoding.None),
     // sbr (Id 194): table row "1011|oooo|oooo|oooo| sbr {short branch, relative}" -- bits 15-12 fixed
     // "1011" (0xB000), bits 11-0 a 12-bit SIGNED relative offset ("o", per the table's own legend:
     // "o: signed offset") embedded directly in the one word -- no trailing word at all, which is
@@ -3257,7 +3294,10 @@ public static class CvmInstructionSet
   /// </summary>
   public static bool IsDoubleRegisterMnemonic(string mnemonic) =>
       string.Equals(mnemonic, DoublePopMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      string.Equals(mnemonic, DoublePushMnemonic, StringComparison.OrdinalIgnoreCase);
+      string.Equals(mnemonic, DoublePushMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleFetchMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleStoreMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase);
 
   /// <summary>
   /// ADDED 2026-10-03: recognises a register token as the operand of a
