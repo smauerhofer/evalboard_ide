@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-04T16:02:28.1792761
-      utcDateTime: 2026-10-04T16:02:28.1792761Z
-      localDateTime: 2026-10-04T18:02:28.1792761+02:00
+      dateTime: 2026-10-04T18:16:06.2500507
+      utcDateTime: 2026-10-04T18:16:06.2500507Z
+      localDateTime: 2026-10-04T20:16:06.2500507+02:00
       date: 2026-10-04T00:00:00.0000000
       day: 4
       dayOfWeek: Sunday
       dayOfYear: 277
-      hour: 16
-      millisecond: 179
-      microsecond: 276
-      nanosecond: 100
-      minute: 2
+      hour: 18
+      millisecond: 250
+      microsecond: 50
+      nanosecond: 700
+      minute: 16
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 28
-      ticks: 639267265481792761
-      utcTicks: 639267265481792761
-      timeOfDay: 16:02:28.1792761
+      second: 6
+      ticks: 639267345662500507
+      utcTicks: 639267345662500507
+      timeOfDay: 18:16:06.2500507
       year: 2026
   portB: 
   portC:
@@ -67631,20 +67631,16 @@ projects:
         ( CVM_pipeline node 407.
 
 
-        register file for 20 16-bit register.
+        register file for 32 16-bit register or 16 32-bit register.
 
 
         A: selected register
 
 
-        r0, r1, r2 .. r23 : 24 x 16-bit register
+        r0, r1, r2 .. r31 : 32 x 16-bit register {only the first 16 register are directly accessable}
 
-        d0, d1, d2 .. d11 : 12 x 32-bit register
+        d0, d1, d2 .. d15 : 16 x 32-bit register
 
-
-        r22 : frame pointer
-
-        r23 : stack pointer
 
 
         node 407 is a slave node to either nodes 507, 406 or nodes 307, 408.
@@ -67665,10 +67661,6 @@ projects:
         )
 
 
-        # 22 const fp
-
-        # 23 const sp
-
 
         # 0 org
 
@@ -67679,7 +67671,7 @@ projects:
 
         [
           0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
-          0 , 0 , 0 , 0 , 0 , 0 , 0 ,  0xffff , 
+          0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,   0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
         ]
 
 
@@ -67703,38 +67695,9 @@ projects:
         : r/d! ( hi ) @b @b ( hi lo d ) 2* a! !+ !+ ;
 
 
-        : r/clipped+ ( a b - c )
-          + 0xffff and ;
+        : r/d@x ( d ) 2* a! @+ @+ !b !b ;
 
-        : r/add ( - old new )
-          @b            // register
-          @b            // offset
-        : r/save_add ( reg offset - old new )
-          >r a! @ dup r> r/clipped+ dup ! ;
-
-        : r/++ ( reg - old new )
-          1 r/save_add ;
-
-        : r/-- ( reg - old new )
-          -1 r/save_add ;
-
-        : r/push ( { ,adr } ) sp r/-- drop !b ;
-
-        : r/pop  ( { ,adr } ) sp r/++ !b ;
-
-
-
-        : r/link ( receives offset; sends old-fp, save-address )
-          fp a! @+                   // old FP
-          @ dup !b                   // old FP, old SP; send address
-          fp a! dup !+               // FP = old SP
-          @b r/clipped+              // SP = old SP + offset
-          !
-          !b                         // old FP
-          ;
-
-        : r/unlink ( { ,adr 'old-fp } )
-          fp a! @ dup !b @b !+ ! ;
+        : r/d!x ( hi ) @b @b ( hi lo d ) 2* a! >r !+ r> !+ ;
 
       ramWords:
       - 0x00000
@@ -67760,12 +67723,20 @@ projects:
       - 0x00000
       - 0x00000
       - 0x00000
-      - 0x0FFFF
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
       - 0x115A5
       - 0x049B2
       - 0x00195
       - 0x24BBD
-      - 0x0571B
+      - 0x05723
       - 0x00165
       - 0x2BE25
       - 0x00A2D
@@ -67773,36 +67744,28 @@ projects:
       - 0x09C25
       - 0x01FDA
       - 0x2B83D
-      - 0x3DDFD
-      - 0x0FFFF
-      - 0x01FB2
-      - 0x2EA0B
-      - 0x27624
-      - 0x25A55
-      - 0x05727
-      - 0x00001
-      - 0x05727
-      - 0x3FFFF
-      - 0x0562C
-      - 0x00017
-      - 0x3BB55
-      - 0x0562A
-      - 0x00017
-      - 0x09555
-      - 0x04A1A
-      - 0x00016
-      - 0x02D27
-      - 0x00016
-      - 0x2AD3A
-      - 0x01624
-      - 0x0BB55
-      - 0x04A0B
-      - 0x00016
-      - 0x09F3A
-      - 0x0B555
+      - 0x36A1A
+      - 0x07B25
+      - 0x01FDA
+      - 0x2A83A
+      - 0x27855
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x1A5
+        entryPoint: 0x195
         p: 0x000
         a: 0x000
         b: 0x000
@@ -68371,8 +68334,8 @@ projects:
         : d/main
           # d/finish lit >r
           A[ !p !p ]] lit !b // make node 507 to send sop & op
-          @b // read shiftet opcode
-          ( sop )
+          @b @b // read shiftet opcode
+          ( op sop )
           2* -if // 11*
 
             2* -if // 111*
@@ -68400,7 +68363,6 @@ projects:
             2* -if // 10011*
 
               // short literal
-              @b drop
               2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
               A[ @p m/push ]] lit !b !b ;
             then // 10010*
@@ -68450,36 +68412,36 @@ projects:
       - 0x04812
       - 0x0000F
       - 0x0D9B2
-      - 0x09FDA
-      - 0x1B41D
+      - 0x09F02
+      - 0x3721D
       - 0x3721B
       - 0x05708
-      - 0x05612
+      - 0x0560F
       - 0x05708
-      - 0x0560B
+      - 0x0560A
       - 0x37220
       - 0x05708
-      - 0x05600
+      - 0x05602
       - 0x3722C
       - 0x37229
-      - 0x002DA
+      - 0x367C2
       - 0x307C2
-      - 0x307C2
-      - 0x31DFF
+      - 0x30712
       - 0x0FFFF
-      - 0x05624
-      - 0x09B55
+      - 0x3FD22
+      - 0x05612
+      - 0x09555
       - 0x1340B
       - 0x05B25
-      - 0x05624
+      - 0x05612
       - 0x1340B
       - 0x19432
       - 0x05B12
-      - 0x13417
-      - 0x1340E
+      - 0x13420
+      - 0x1341D
       - 0x09555
       - 0x05B55
-      - 0x1340C
+      - 0x13424
       - 0x15555
       - 0x15555
       - 0x15555
@@ -68539,7 +68501,7 @@ projects:
 
         0000|wwww|wwss|xxxx| 508  | microcode {from node 509} with register
 
-        0010|00ww|wwww|iiii| 508  | special 508 direct with unsigned immediate value 0..15
+        0010|0000|00ww|wwww| 508  | 508 direct
 
         01oo|oooo|oooo|oooo| 508  | br {short branch, relative}
 
@@ -68547,13 +68509,9 @@ projects:
 
         1001|0000|cccc|xxxx| 506  | cond { condition calculation and push result on stack }
 
-        1001|1iii|iiii|iiii| 506  | slit { push 11-bit signed literal on stack }
+        1010|iiii|iiii|iiii| 506  | slit { push 12-bit signed literal on stack }
 
-        1010|0www|wwee|xxxx| 506  | special 506 with 16-bit register read for output
-
-        1010|1www|wwee|xxxx| 506  | special 506 with 16-bit register write from input
-
-        1011|wwww|wwww|weee| 506  | special 506 without register
+        1011|0000|00ww|wwww| 506  | 506 direct
 
         1100|wwww|wwww|xxxx| 506  | unary 16-bit operation {w = address in node 306}
 
@@ -68568,8 +68526,6 @@ projects:
 
 
         c: binary instruction address {address in corresponing node}
-
-        e: node identifier
 
         f: instruction address  {address in corresponing node}
 
@@ -68592,6 +68548,14 @@ projects:
         .: unused bit
 
 
+
+        A: program counter
+
+        T: stack pointer
+
+        S: frame pointer
+
+
         )
 
 
@@ -68603,10 +68567,98 @@ projects:
         # 0 /a   // initial program counter
 
 
+
         entry m/nextinstr
 
 
         # 0 org
+
+
+        : m/msend ( w - ) // memory send
+          up b! !b ;
+
+        : m/rsend ( w - ) // register send
+          down b! !b ;
+
+        : m/inc ( w - w' )
+          1
+        : m/add ( w1 w2 - w ) + 0xffff and ;
+
+        : m/dec ( w - w' )
+          -1 m/add ;
+
+        : m/write ( w a p - )
+          A[ mem/wrup ]] lit m/msend
+          !b !b !b ;
+
+        : m/read ( a p - w )
+          A[ mem/rdup ]] lit m/msend !b !b @b ;
+
+        : m/dpush ( fp sp hi lo - fp sp' )
+          >r m/push r>
+        : m/push ( fp sp w - fp sp' )
+          over dup >r 1 m/write r> m/dec ;
+
+        : m/dpop ( fp sp - fp sp' hi lo )
+          m/pop >r m/pop r> ;
+        : m/pop ( fp sp - fp sp' w )
+          m/inc dup 1 m/read ;
+
+        : m/branch ( fp sp offset - fp sp )
+          a m/add a! ;
+
+        : m/dnext ( - hi lo ) leap
+
+        : m/next ( - w ) then
+          a dup m/inc a! dup dup xor m/read ;
+
+        : m/pc++ ( fp sp - fp sp )
+          a m/inc a! ;
+
+
+        : m/link ( fp sp - fp' sp' )
+          // push current fp
+          over m/push
+          // fp = sp
+          dup
+          // sp = sp + offset
+          m/next
+          m/add
+          // set new fp
+          over ;
+
+        : m/unlink ( fp sp - fp' sp' )
+          // sp = fp
+          drop
+          // pop last fp
+          m/pop over ;
+
+        : m/nextinstr ( fp sp - fp sp )
+          m/next
+          A[ mem/rdupinstr ]] lit m/msend !b @b
+          ( fp sp op )
+          --l-
+          ( fp sp )
+          m/nextinstr ;
+
+        : m/r@ ( fp sp r - fp sp w )
+          A[ @p r/r@ ]] lit m/rsend !b @b
+        ;
+
+
+        : m/d@ ( fp sp d - fp sp hi lo )
+          A[ @p r/d@x ]] lit m/rsend !b @b @b
+        ;
+
+
+        : m/r! ( fp sp r w - fp sp )
+          A[ @p r/r! ]] lit m/rsend !b !b ;
+
+        : m/d! ( fp sp hi lo d - fp sp )
+          A[ @p r/d!x ]] lit m/rsend !b !b !b ;
+
+
+        /*
 
 
         : m/nextinstr ( - )
@@ -68683,79 +68735,79 @@ projects:
           A[ @p r/d! ]] lit m/rsend !b !b !b ;
 
 
-
+        */
 
 
 
 
 
       ramWords:
-      - 0x048B2
-      - 0x00000
-      - 0x1340C
-      - 0x0560A
-      - 0x1340C
-      - 0x09F92
-      - 0x364B2
-      - 0x1B409
-      - 0x115D5
-      - 0x11575
       - 0x04B25
       - 0x00145
-      - 0x049B2
-      - 0x00001
-      - 0x22DBA
-      - 0x3DDFA
-      - 0x0FFFF
-      - 0x2AC55
-      - 0x0561F
-      - 0x1343B
       - 0x04B25
       - 0x00115
-      - 0x13417
-      - 0x1340C
-      - 0x24DE2
-      - 0x0560A
-      - 0x13403
-      - 0x09B05
-      - 0x1341D
       - 0x049B2
-      - 0x13431
-      - 0x13414
-      - 0x01DB2
       - 0x00001
-      - 0x11419
-      - 0x13424
-      - 0x05614
-      - 0x1342E
-      - 0x01DB2
-      - 0x00001
-      - 0x0560A
+      - 0x3DDFD
+      - 0x0FFFF
+      - 0x05706
+      - 0x3FFFF
+      - 0x05600
       - 0x13415
       - 0x09B25
-      - 0x13417
-      - 0x05614
-      - 0x13434
-      - 0x00822
-      - 0x00C12
+      - 0x05600
+      - 0x13403
+      - 0x09B05
+      - 0x2F612
+      - 0x269B2
+      - 0x20DBF
       - 0x00001
-      - 0x11428
-      - 0x05614
-      - 0x0561E
+      - 0x1340A
+      - 0x27708
+      - 0x13419
+      - 0x2F619
+      - 0x27555
+      - 0x13404
+      - 0x25DB2
+      - 0x00001
+      - 0x1140D
+      - 0x23606
+      - 0x2B555
+      - 0x13420
+      - 0x22DB2
+      - 0x13404
+      - 0x2AD92
+      - 0x3970D
+      - 0x23604
+      - 0x2B555
+      - 0x21612
+      - 0x25620
+      - 0x13406
+      - 0x21555
+      - 0x3B619
+      - 0x21555
+      - 0x13420
+      - 0x05600
+      - 0x1340C
+      - 0x09FB2
+      - 0x13575
+      - 0x1142C
+      - 0x05602
+      - 0x05626
       - 0x09F55
-      - 0x05614
-      - 0x05620
+      - 0x05602
+      - 0x0562C
       - 0x09F05
-      - 0x05614
-      - 0x0561F
+      - 0x05602
+      - 0x05627
       - 0x09B55
-      - 0x05614
-      - 0x05622
+      - 0x05602
+      - 0x0562E
       - 0x09B25
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x000
+        entryPoint: 0x02C
         p: 0x000
         a: 0x000
         b: 0x000
@@ -68796,29 +68848,33 @@ projects:
         : x6/main
           # x6/finish lit >r
           // execute next instruction
-          A[ !p !p ]] lit !b @b
+          A[ !p ]] lit !b @b
+          ( op )
+          2* 2* if // 1* => node 506
 
-          ( sop )
+            ( op sop )
+            A[ @p @p ]] lit b! b! b! ;
+
+          then // 0*
+
+          ( op sop )
           2* -if // 01*
 
             // br
-            @b drop
             2* 2/ 2/ 2/ 2/
             A[ @p m/branch ]] lit !b !b ;
 
           then // 00*
           2* -if // 001*
 
-            // special direct
-            @b dup
-            2/ 2/ 2/ 2/ 0x3f and >r
-            0x0f and
+            // direct
+            drop 0x3f and >r
             ;
 
           then // 000*
 
          // microcode
-          @b dup 0xf and
+          drop dup 0xf and
           ( op r )
           over 2/ 2/ 2/ 2/
           ( op r sop )
@@ -68843,22 +68899,22 @@ projects:
       - 0x089B2
       - 0x04812
       - 0x00000
-      - 0x0D9B2
+      - 0x0C9B2
       - 0x09FDA
-      - 0x1B40E
-      - 0x002DA
-      - 0x307C2
-      - 0x31D22
-      - 0x0560E
-      - 0x09555
+      - 0x3730C
+      - 0x04BA2
+      - 0x05DB2
+      - 0x29555
+      - 0x37211
+      - 0x367C2
+      - 0x30712
+      - 0x0561D
+      - 0x09B55
       - 0x37215
-      - 0x00DC2
-      - 0x307C7
+      - 0x3BDFA
       - 0x0003F
-      - 0x3E812
-      - 0x0000F
-      - 0x3F555
-      - 0x00D12
+      - 0x2F555
+      - 0x3AD12
       - 0x0000F
       - 0x3EFC2
       - 0x307C3
@@ -71503,7 +71559,7 @@ projects:
 
         halt
     - name: 16-bit binary regression test
-      source: >+
+      source: >
         // OR
 
         rlit r0 0x0000
