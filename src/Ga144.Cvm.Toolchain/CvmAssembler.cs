@@ -6,6 +6,14 @@ namespace Ga144.Cvm.Toolchain;
 /// <summary>
 /// Assembles CVM assembly language source text into a relocatable <see cref="CvmObjectFile"/>.
 ///
+/// <b>2026-10-04: THE ONE CVM ASSEMBLER.</b> Per Stefan, the CVM Debugger's own immediately-resolving assembler
+/// (Ga144.Evb.Ide.Services.CvmAssemblyLanguage.Assemble) was merged into this one: there is a single parser and a
+/// single encoder now. Operands may be separated by spaces, by commas, or by both ("if r0 ==0 then loop",
+/// "rlit r1 0x1234" and "rlit r1, 0x1234" are the same; space-separated is the documented style; the first form
+/// Stefan asked for was spaces only, and he then asked for commas to be accepted as well). The CVM Debugger
+/// assembles its Assembly Code with this class, then links the one object against the live primitive table built
+/// from its node compiles (CvmLinker with ApplyEntryLayout = false, so the program starts at address 0).
+///
 /// <b>2026-09-30: NEW VIRTUAL MACHINE, full reset -- READ THIS FIRST, before the syntax example just
 /// below.</b> Per Stefan directly: "there is a new virtual machine. all opcodes are invalid. except that
 /// 'nop' has the opcode '0'." Every mnemonic the syntax example below shows (<c>pushlit</c>, <c>push</c>,
@@ -309,7 +317,7 @@ public static class CvmAssembler
           {
             if (line.Args.Count != 3)
             {
-              errors.Add($"line {line.LineNumber}: \"if\" requires exactly three operands (register, condition, target), e.g. \"if 0, ==0, loop\".");
+              errors.Add($"line {line.LineNumber}: \"if\" requires exactly three operands (register, condition, target), e.g. \"if r0 ==0 then loop\".");
               break;
             }
 
@@ -333,7 +341,7 @@ public static class CvmAssembler
           {
             if (line.Args.Count != 2)
             {
-              errors.Add($"line {line.LineNumber}: \"cond\" requires exactly two operands (register, condition), e.g. \"cond r0, ==0\".");
+              errors.Add($"line {line.LineNumber}: \"cond\" requires exactly two operands (register, condition), e.g. \"cond r0 ==0\".");
               break;
             }
 
@@ -359,13 +367,9 @@ public static class CvmAssembler
           // Node 306/305's twelve unified floating-point ops (EmbeddedUnsignedValuePair, 2026-09-16,
           // widened from six to twelve in the 2026-09-21 rework) and node 508's litm/lit2
           // (TwoTrailingWords, 2026-09-27 -- see CvmInstructionSet.LitrMnemonic's own remarks) are the
-          // mnemonic families here needing exactly TWO operands -- comma-separated, matching this
-          // assembler's own established ".word 1, 2, 3" convention (e.g. "fadd 3, 2", "litm 0x1234,
-          // 0x5678"), rather than Stefan's own space-separated "fadd 3 2" example, which describes the
-          // CVM Debugger's separate, immediately-resolving assembler (Ga144.Evb.Ide.Services.CvmAssemblyLanguage,
-          // whose own tokenizer splits on whitespace, not commas) -- the two assemblers' syntax
-          // conventions genuinely differ here, so each keeps its own rather than forcing one into the
-          // other's mold. EXCEPT fpop/fpush (CORRECTED 2026-09-21, per Stefan directly: "only 1
+          // mnemonic families here needing exactly TWO operands -- written space-separated like every instruction
+          // operand since the 2026-10-04 unification of the two CVM assemblers ("fadd 3 2", "litm 0x1234 0x5678").
+          // EXCEPT fpop/fpush (CORRECTED 2026-09-21, per Stefan directly: "only 1
           // parameter, the other opcodes have 2") -- those two are plain EmbeddedUnsignedValue, not Pair,
           // so they fall into the one-operand branch below like any other EmbeddedUnsignedValue mnemonic.
           //
@@ -384,7 +388,7 @@ public static class CvmAssembler
           {
             if (line.Args.Count is not (1 or 2))
             {
-              errors.Add($"line {line.LineNumber}: \"push2\" takes one 32-bit operand (\"push2 0x12345678\") or two 16-bit operands (\"push2 0x1234, 0x5678\").");
+              errors.Add($"line {line.LineNumber}: \"push2\" takes one 32-bit operand (\"push2 0x12345678\") or two 16-bit operands (\"push2 0x1234 0x5678\").");
               break;
             }
 
@@ -398,7 +402,7 @@ public static class CvmAssembler
           {
             if (line.Args.Count is not (2 or 3))
             {
-              errors.Add($"line {line.LineNumber}: \"dlit\" takes a register and one 32-bit operand (\"dlit d1, 0x12345678\") or two 16-bit operands, hi then lo (\"dlit d1, 0x1234, 0x5678\").");
+              errors.Add($"line {line.LineNumber}: \"dlit\" takes a register and one 32-bit operand (\"dlit d1 0x12345678\") or two 16-bit operands, hi then lo (\"dlit d1 0x1234 0x5678\").");
               break;
             }
 
@@ -414,7 +418,7 @@ public static class CvmAssembler
           {
             errors.Add(requiredArgCount switch
             {
-              2 => $"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly two operands, e.g. \"{shape.Mnemonic} 3, 2\".",
+              2 => $"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly two operands, e.g. \"{shape.Mnemonic} 3 2\".",
               1 => $"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly one operand, e.g. \"{shape.Mnemonic} 0x1234\".",
               _ => $"line {line.LineNumber}: \"{shape.Mnemonic}\" does not take an operand."
             });
@@ -541,7 +545,7 @@ public static class CvmAssembler
             }
             else if (!TryParseNumericLiteral(line.Args[0], out ifRegister) || ifRegister < 0 || ifRegister > ifShape.SecondValueBitMask)
             {
-              errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register for \"if\" -- expected r0..r{ifShape.SecondValueBitMask} (or a plain number 0..{ifShape.SecondValueBitMask}; r0-r15 only, per Stefan directly), e.g. \"if r0, ==0, loop\".");
+              errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register for \"if\" -- expected r0..r{ifShape.SecondValueBitMask} (or a plain number 0..{ifShape.SecondValueBitMask}; r0-r15 only, per Stefan directly), e.g. \"if r0 ==0 then loop\".");
               ifRegister = 0; // keep going -- pass 1 already fixed this instruction's own 2-word size and every later label's address against it; emitting a wrong-but-correctly-SIZED word here (same resilience convention the generic NodeResolvedEmbeddedValue branch below already uses for an out-of-range register) keeps the rest of the file's layout intact even though this run will fail overall.
             }
 
@@ -605,7 +609,7 @@ public static class CvmAssembler
             }
             else if (!TryParseNumericLiteral(line.Args[0], out condRegister) || condRegister < 0 || condRegister > condShape.SecondValueBitMask)
             {
-              errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register for \"cond\" -- expected r0..r{condShape.SecondValueBitMask} (or a plain number 0..{condShape.SecondValueBitMask}), e.g. \"cond r0, ==0\".");
+              errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register for \"cond\" -- expected r0..r{condShape.SecondValueBitMask} (or a plain number 0..{condShape.SecondValueBitMask}), e.g. \"cond r0 ==0\".");
               condRegister = 0; // keep going -- pass 1 already fixed this instruction's own size; a wrong-but-correctly-SIZED word keeps the layout intact (this run fails overall anyway).
             }
 
@@ -854,7 +858,7 @@ public static class CvmAssembler
             }
             else
             {
-              errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" is not a 32-bit number (-2147483648..4294967295) -- \"dlit d1, x\" needs a numeric literal, no label.");
+              errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" is not a 32-bit number (-2147483648..4294967295) -- \"dlit d1 x\" needs a numeric literal, no label.");
               codeSection.Words.Add(0);
               codeSection.Words.Add(0);
             }
@@ -880,7 +884,7 @@ public static class CvmAssembler
               }
               else
               {
-                errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a 32-bit number (-2147483648..4294967295) -- \"push2 x\" with one operand needs a numeric literal, no label; use \"push2 hi, lo\" for two 16-bit values.");
+                errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a 32-bit number (-2147483648..4294967295) -- \"push2 x\" with one operand needs a numeric literal, no label; use \"push2 hi lo\" for two 16-bit values.");
                 codeSection.Words.Add(0);
                 codeSection.Words.Add(0);
               }
@@ -935,8 +939,24 @@ public static class CvmAssembler
     CvmSection targetSection = objectFile.GetOrAddSection(section);
     int offset = targetSection.Words.Count;
 
-    if (TryParseNumericLiteral(operand, out int literal))
+    // 2026-10-04: a leading '-' is accepted (the retired IDE assembler took "link -3", "push -3", "rlit r8 -5"): a negative
+    // value is stored as its two's-complement bit pattern within the word, so it must fit the signed half of the range
+    // (-0x8000..-1 for a 16-bit word).
+    if (TryParseSignedNumericLiteral(operand, out int literal))
     {
+      if (literal < 0)
+      {
+        if (literal < -((maxValue >> 1) + 1))
+        {
+          errors.Add($"line {lineNumber}: {operand} does not fit in {rangeDescription}.");
+          targetSection.Words.Add(0);
+          return;
+        }
+
+        targetSection.Words.Add(literal & maxValue);
+        return;
+      }
+
       if ((uint)literal > (uint)maxValue)
       {
         errors.Add($"line {lineNumber}: {operand} does not fit in {rangeDescription}.");
@@ -1351,39 +1371,27 @@ public static class CvmAssembler
         continue;
       }
 
-      int firstSpace = content.IndexOfAny([' ', '\t']);
-      string keyword = firstSpace < 0 ? content : content[..firstSpace];
-      string argsText = firstSpace < 0 ? string.Empty : content[(firstSpace + 1)..].Trim();
-      List<string> args = argsText.Length == 0
-          ? []
-          : [.. argsText.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)];
+      // UNIFIED 2026-10-04 (one CVM assembler, per Stefan: "keep the syntax with the spaces and forget the syntax
+      // with commas"), then RELAXED the same day ("allow commas also for opcode arguments"): operands may be
+      // separated by whitespace, by commas, or by both -- "fadd 3 2", "fadd 3, 2", "rlit r1, 0x1234",
+      // "if r0, ==0, then loop" and "dlit d5 0xCDEF 0x0123" are all the same. Space-separated is the documented
+      // style; commas are simply treated as separators everywhere (instructions and the .word/.import/.export list
+      // directives alike). The keyword is lower-cased, so mnemonics and directives are case-insensitive (as the
+      // CVM Debugger's old assembler already was).
+      string[] tokens = content.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+      string keyword = tokens[0].ToLowerInvariant();
+      string argsText = content[tokens[0].Length..];
+      List<string> args = [.. argsText.Split(new[] { ',', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)];
 
-      // ADDED 2026-10-03, per Stefan: "true"/"false" need no register -- "if true then label1", "if true, label1",
-      // "cond true". An implicit "r0" is inserted so every later check sees the normal register-first form
-      // (the register field is encoded as 0).
-      if (string.Equals(keyword, CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase) && argsText.Length > 0)
+      // "true"/"false" need no register (per Stefan, 2026-10-03) -- "cond true", "if true then label1",
+      // "if true label1". An implicit "r0" is inserted so every later check sees the normal register-first
+      // form (the register field is encoded as 0).
+      if (keyword == CvmInstructionSet.CondMnemonic && args.Count == 1 && CvmInstructionSet.IsRegisterlessCondition(args[0]))
       {
-        string firstWord = argsText.Split(new[] { ',', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)[0];
-        if (CvmInstructionSet.IsRegisterlessCondition(firstWord))
-        {
-          string implicitRegisterText = (argsText.Contains(',') ? "r0, " : "r0 ") + argsText;
-          if (implicitRegisterText.Contains(','))
-          {
-            args = new List<string>(implicitRegisterText.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
-          }
-          else
-          {
-            args = new List<string> { implicitRegisterText };
-          }
-        }
-      }
-      else if (string.Equals(keyword, CvmInstructionSet.CondMnemonic, StringComparison.OrdinalIgnoreCase) &&
-               args.Count == 1 && CvmInstructionSet.IsRegisterlessCondition(args[0]))
-      {
-        args = new List<string> { "r0", args[0] };
+        args.Insert(0, "r0");
       }
 
-      if (string.Equals(keyword, CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase))
+      if (keyword == CvmInstructionSet.IfMnemonic)
       {
         args = NormalizeIfArguments(args);
       }
@@ -1395,45 +1403,22 @@ public static class CvmAssembler
   }
 
   /// <summary>
-  /// ADDED 2026-10-03: <c>if</c> accepts an optional <c>then</c> before its target, for readability --
-  /// <c>if r0, ==0, then test2</c>, <c>if r0, ==0 then test2</c> or the all-space form
-  /// <c>if r0 ==0 then test2</c> -- and the word is dropped here, so every later check sees the plain
-  /// three operands (register, condition, target). The existing comma form without <c>then</c> is
-  /// unchanged; a label that is itself named "then" still works as the last operand.
+  /// <c>if</c> accepts an optional <c>then</c> before its target, for readability -- <c>if r0 ==0 then test2</c>
+  /// -- and the word is dropped here, so every later check sees the plain three operands (register, condition,
+  /// target). With <c>true</c>/<c>false</c> the register is left out altogether (<c>if true then label1</c>);
+  /// an implicit <c>r0</c> is inserted first. A label that is itself named "then" still works as the last
+  /// operand: <c>if r0 ==0 then</c> has only three tokens, so nothing is dropped.
   /// </summary>
   private static List<string> NormalizeIfArguments(List<string> args)
   {
-    static string[] Words(string text) => text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-
-    if (args.Count == 1)
+    if (args.Count > 0 && CvmInstructionSet.IsRegisterlessCondition(args[0]))
     {
-      string[] words = Words(args[0]);
-      if (words.Length == 4 && string.Equals(words[2], "then", StringComparison.OrdinalIgnoreCase))
-      {
-        return [words[0], words[1], words[3]];
-      }
-
-      return words.Length == 3 ? new List<string> { words[0], words[1], words[2] } : args;
+      args.Insert(0, "r0");
     }
 
-    if (args.Count == 2)
+    if (args.Count == 4 && string.Equals(args[2], "then", StringComparison.OrdinalIgnoreCase))
     {
-      string[] words = Words(args[1]);
-      if (words.Length == 3 && string.Equals(words[1], "then", StringComparison.OrdinalIgnoreCase))
-      {
-        return [args[0], words[0], words[2]];
-      }
-
-      return args;
-    }
-
-    if (args.Count == 3)
-    {
-      string[] words = Words(args[2]);
-      if (words.Length == 2 && string.Equals(words[0], "then", StringComparison.OrdinalIgnoreCase))
-      {
-        return [args[0], args[1], words[1]];
-      }
+      args.RemoveAt(2);
     }
 
     return args;

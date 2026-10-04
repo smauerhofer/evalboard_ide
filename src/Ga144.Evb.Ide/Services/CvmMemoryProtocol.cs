@@ -149,21 +149,15 @@ internal static class CvmMemoryProtocol
   public static (List<int>? Program, string? MissingSymbolDescription) TryBuildDebuggerTestProgram(
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
-    (List<CvmAssemblyLanguage.CvmAsmInstruction>? instructions, string? parseError) =
-        CvmAssemblyLanguage.ParseSource(CvmDebuggerDefaultProgram.Source);
-    if (instructions is null)
-    {
-      // ParseSource only fails on a malformed literal source file -- this string is a project
-      // constant, not user input, so a failure here would mean CvmDebuggerDefaultProgram.Source
-      // itself was edited into something CvmAssemblyLanguage can no longer parse.
-      return (null, parseError);
-    }
-
     // Labels aren't needed here -- this program's own words are re-assembled again moments later by
     // CvmDebuggerViewModel.StartAsync (via the Assembly Code editor, which defaults to this exact same
     // source text), and THAT call site is the one that actually captures labels for the memory
     // inspector's "Label" column -- so the label map from this one, install-time assemble is discarded.
-    (List<int>? words, IReadOnlyDictionary<string, int>? _, string? error) = CvmAssemblyLanguage.Assemble(instructions, compiledRam);
+    // (2026-10-04: assembled by the ONE CVM assembler, CvmAssembler, then linked against the live primitive
+    // table -- see CvmAssemblyLanguage.AssembleProgram. A failure here means CvmDebuggerDefaultProgram.Source
+    // no longer assembles/links against the current mesh; the installer then falls back to the minimal test.)
+    (List<int>? words, IReadOnlyDictionary<string, int>? _, string? error) =
+        CvmAssemblyLanguage.AssembleProgram(CvmDebuggerDefaultProgram.Source, compiledRam);
     return (words, error);
   }
 

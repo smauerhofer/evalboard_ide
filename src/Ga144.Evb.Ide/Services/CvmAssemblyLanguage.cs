@@ -8,6 +8,15 @@ using Ga144.Evb.Ide.Cvm;
 namespace Ga144.Evb.Ide.Services;
 
 /// <summary>
+/// <b>2026-10-04: THIS CLASS NO LONGER CONTAINS AN ASSEMBLER.</b> The remarks below were written when it did; every
+/// mention of "Assemble"/"ParseSource" in them (now <see cref="AssembleProgram"/>) describes the RETIRED
+/// immediately-resolving assembler, which was merged into <see cref="CvmAssembler"/> per Stefan ("it is time to
+/// unify the 2 assembler into 1"). What stays here: the live-node-compile opcode tables
+/// (<see cref="BuildEncodeTable"/>, <see cref="BuildIfConditionEncodeTable"/>, <see cref="BuildDecodeTable"/>), the
+/// disassembler, the unresolved-mnemonic diagnosis, and <see cref="AssembleProgram"/>/<see cref="AssembleAndLoadProgram"/>,
+/// the thin glue that assembles with <see cref="CvmAssembler"/>, links against the primitive table those tables
+/// produce, and loads the image at address 0.
+///
 /// <b>SECOND PASS, 2026-09-09.</b> Stefan supplied a NEW zip and a NEW <c>workspace.yaml</c> project
 /// export mid-way through the opcode/assembler-vs-node reconciliation audit already described below
 /// ("there are 'ugt' opcodes in the nodes ... use this new zip file and forget any reference to the
@@ -275,19 +284,19 @@ namespace Ga144.Evb.Ide.Services;
 /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>/
 /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord"/>), so
 /// none needs an F18 symbol either -- but <c>if</c> specifically can only be DECODED this way, not
-/// yet ASSEMBLED (see <see cref="Assemble"/>'s own remarks on why it is explicitly rejected rather
+/// yet ASSEMBLED (see <see cref="AssembleProgram"/>'s own remarks on why it is explicitly rejected rather
 /// than guessed at).
 ///
-/// <see cref="Assemble"/> mirrors that same dual
+/// <see cref="AssembleProgram"/> mirrors that same dual
 /// dispatch on the OTHER direction --
 /// hand-typed CVM asm source that uses <c>call</c>/<c>br</c>/<c>if</c>/node 606's or node
 /// 306's ops is encoded directly from <see cref="CvmInstructionSet"/> and the operand alone, bypassing
 /// this file's own <see cref="Instructions"/>/<see cref="NodeSymbolByMnemonic"/> pairing entirely (see
-/// <see cref="Assemble"/>'s own remarks) -- so <see cref="Instructions"/> itself still omits all of
+/// <see cref="AssembleProgram"/>'s own remarks) -- so <see cref="Instructions"/> itself still omits all of
 /// them, since they would have nothing to pair them with, without that meaning they can't be assembled.
 ///
 /// Both directions -- <see cref="BuildDecodeTable"/> for disassembly and <see cref="BuildEncodeTable"/>/
-/// <see cref="Assemble"/> for assembly -- are built from the single <see cref="Instructions"/> table,
+/// <see cref="AssembleProgram"/> for assembly -- are built from the single <see cref="Instructions"/> table,
 /// so they can never drift apart: adding a new TAGGED opcode to <see cref="CvmInstructionSet"/> plus
 /// one line here (the node and F18 symbol it resolves to) is the only change either direction needs.
 /// Each is also resolved against WHICHEVER of that mnemonic's own node happens to be present in the
@@ -522,15 +531,6 @@ internal static class CvmAssemblyLanguage
   // here as their own mnemonics), never the "1010_0???" fall-through this tag is derived from; only
   // 'gld's/'gst's own ADDRESSES on node 508 moved (resolved dynamically below, not re-derived here).
   private const int Node508LoadStoreGlobalTagBits = 0xA000;
-
-  // "literal" (2026-09-27, per Stefan: "change opcode 'literal' so that it uses 'lit' when the constant
-  // fits and 'litr' if the constant is too big for 'lit'") -- a pure assembler-level pseudo-mnemonic, not
-  // a real CVM opcode at all (it has no CvmInstructionSet.Instructions entry, no tag, no F18 symbol of
-  // its own): a hand-written .cvmasm source (or the CVM Debugger's own Assembly Code editor) can write
-  // "literal <value>" instead of choosing between "lit"/"litr" itself, and this file picks whichever one
-  // actually fits -- see EncodeLiteralPseudoMnemonic's own remarks. Intercepted by name in Assemble/
-  // GetWordLength/ParseSource, all BEFORE any CvmInstructionSet.TryGetShape/NodeSymbolByMnemonic lookup.
-  private const string LiteralPseudoMnemonic = "literal";
 
   // CVM2's node 509 unary-arithmetic tag (2026-09-05), per Stefan's node 509 source
   // (Cvm.Node509Program): its own u/main dispatch cascade falls through to its own remote-fetch-then-
@@ -1408,7 +1408,7 @@ internal static class CvmAssemblyLanguage
   /// resolution shape this file had no precedent for before <c>if</c>, since every earlier tagged
   /// mnemonic resolved its own address as a whole, never per a user-chosen operand token. "cond" is
   /// resolved exactly the same way any other node-resolved field here is (a live F18 symbol address,
-  /// looked up against <paramref name="compiledRam"/> inside <see cref="Assemble"/>'s own dedicated
+  /// looked up against <paramref name="compiledRam"/> inside <see cref="AssembleProgram"/>'s own dedicated
   /// <c>if</c> handling -- see its own remarks) -- this dictionary only supplies the name-to-symbol
   /// mapping, not the resolution itself. Node 406's own source, as pasted, declares each both under an
   /// internal <c>x1/...</c> name and a public tick-prefixed one (<c>'==0</c> etc.) via a <c>.loc</c>
@@ -1420,7 +1420,7 @@ internal static class CvmAssemblyLanguage
   /// synced to the condition-word content Stefan has since pasted in chat, per this project's own
   /// standing "do not sync the source yet" instruction) -- so, exactly like <c>'push</c>/<c>'lcall</c>/
   /// <c>'ljmp</c> against node 507 before THEIR own node was finally caught up, resolving any of these
-  /// ten names today will fail with a specific, loud diagnosis (see <see cref="Assemble"/>'s own <c>if</c>
+  /// ten names today will fail with a specific, loud diagnosis (see <see cref="AssembleProgram"/>'s own <c>if</c>
   /// handling) rather than silently producing a wrong address -- this dictionary is prepared wiring for
   /// whenever node 406 catches up, not a claim that it works today.
   /// </summary>
@@ -1462,7 +1462,7 @@ internal static class CvmAssemblyLanguage
   /// <c>lcall</c>/<c>ljmp</c>/<c>lbr</c>, <c>gld</c>/<c>gst</c>, and (2026-09-27) <c>litr</c> are the
   /// single-trailing-word instructions today; <c>litm</c>/<c>lit2</c> (also 2026-09-27) are the first
   /// two-trailing-word ones (<see cref="CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords"/>) -- see
-  /// <see cref="BuildEncodeTable"/>/<see cref="Assemble"/>/<see cref="DisassemblePage0"/>'s own remarks
+  /// <see cref="BuildEncodeTable"/>/<see cref="AssembleProgram"/>/<see cref="DisassemblePage0"/>'s own remarks
   /// for where that second operand word is actually written/read. Extend
   /// <see cref="CvmInstructionSet"/> plus <see cref="NodeSymbolByMnemonic"/> as more tagged-dispatch
   /// opcodes are defined on any node; nothing else in this file needs to change. A shape whose
@@ -1497,36 +1497,6 @@ internal static class CvmAssemblyLanguage
             (int nodeCoordinate, string symbolName, int tag) = NodeSymbolByMnemonic[shape.Mnemonic];
             return (shape.Mnemonic, nodeCoordinate, symbolName, tag, shape.WordLength, shape.HasOperand, shape.Encoding);
           })];
-
-  /// <summary>
-  /// One parsed line of CVM assembly. <see cref="Label"/> is the name defined on this line (a bare
-  /// "label:" line with nothing else has an empty <see cref="Mnemonic"/> and exists purely to mark
-  /// the address of whatever comes next -- see <see cref="ParseSource"/>'s own remarks), never both
-  /// this and <see cref="OperandLabel"/> at once. <see cref="Operand"/> is set when the line's
-  /// operand (if any) was already a literal number; <see cref="OperandLabel"/> is set instead when
-  /// it was a label reference still waiting to be resolved to a literal by
-  /// <see cref="Assemble"/>'s own label pass -- never both. <see cref="Operand2"/> (2026-09-16, node
-  /// 306's six binary floating-point ops -- the first two-operand mnemonics in this file) is set only
-  /// for a line with exactly two space-separated literal operands (Stefan's own "mnemonic f g" syntax,
-  /// e.g. "fadd 3 2"); no label is (yet) supported in either position for a two-operand line, so
-  /// there is no "OperandLabel2" counterpart.
-  ///
-  /// <see cref="ConditionName"/>/<see cref="Operand3"/>/<see cref="OperandLabel3"/> (ADDED 2026-10-02,
-  /// for <c>if</c> alone -- CvmInstructionSet.IfMnemonic, renamed from <c>cbr</c> the same day) carry
-  /// Stefan's own confirmed three-operand syntax, "if &lt;reg&gt; &lt;cond&gt; &lt;target&gt;": the
-  /// register goes in the ALREADY-EXISTING <see cref="Operand"/> field (a plain literal 0-15, the same
-  /// convention every other register-taking mnemonic here uses -- "rjmp 5", never "rjmp r5"; Stefan's
-  /// own "if r0 ==0 loop" is read as descriptive shorthand for register 0, not a literal "r0" token,
-  /// consistent with how he has described registers in prose throughout this project), <see cref="ConditionName"/>
-  /// carries the SECOND operand verbatim (always a name, e.g. "==0"/"even"/"true" -- never a number, so
-  /// unlike every other operand here it is never run through <see cref="TryParseOperand"/> at all), and
-  /// the THIRD operand (the branch target) is <see cref="Operand3"/> when it parsed as a literal number
-  /// or <see cref="OperandLabel3"/> when it was a label name -- mirroring the existing
-  /// <see cref="Operand"/>/<see cref="OperandLabel"/> pair's own convention, just for the third position,
-  /// since <c>if</c> is the first mnemonic in this file needing three operands where one of them may be
-  /// a label.
-  /// </summary>
-  public sealed record CvmAsmInstruction(string Mnemonic, int? Operand, string? Label = null, string? OperandLabel = null, int? Operand2 = null, string? ConditionName = null, int? Operand3 = null, string? OperandLabel3 = null);
 
   /// <summary>
   /// Resolves <see cref="Instructions"/> against THIS run's own compiles (never a frozen reference
@@ -1639,7 +1609,7 @@ internal static class CvmAssemblyLanguage
   }
 
   /// <summary>
-  /// The encode direction, for <see cref="Assemble"/>: resolves <see cref="Instructions"/> against
+  /// The encode direction, for <see cref="AssembleProgram"/>: resolves <see cref="Instructions"/> against
   /// THIS run's own compiles -- each mnemonic against its own node
   /// (<see cref="NodeSymbolByMnemonic"/>) -- and returns a map from mnemonic (case-insensitive) to its
   /// opcode word, word length, whether it takes an operand, and (node 511's four ops only) whether that
@@ -1648,7 +1618,7 @@ internal static class CvmAssemblyLanguage
   ///
   /// For <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/> mnemonics
   /// specifically, <c>Opcode</c> here is only the BASE word (tag | function-select field) -- the
-  /// register operand is still missing and gets OR'd in by <see cref="Assemble"/> itself once it knows
+  /// register operand is still missing and gets OR'd in by <see cref="AssembleProgram"/> itself once it knows
   /// the actual operand value; see this class's own remarks on <see cref="Node511Tag"/> for why this
   /// mnemonic needs a live resolution AND an embedded operand where every other tagged mnemonic here
   /// only ever needed one or the other.
@@ -1804,7 +1774,7 @@ internal static class CvmAssemblyLanguage
   /// CORRECTED 2026-09-11: Stefan reported "arld 1" silently assembling as a bare, operand-dropped
   /// <c>nop</c> even though node 306 is a real, wired opcode family (see <see cref="NodeSymbolByMnemonic"/>'s
   /// own node 306 entries) -- and firmly rejected the theory this session first reached for (node 307's
-  /// own compile failing), so the real defect was in THIS file, not the node source. It was: <see cref="Assemble"/>'s
+  /// own compile failing), so the real defect was in THIS file, not the node source. It was: <see cref="AssembleProgram"/>'s
   /// own "undefined opcode -&gt; nop" fallback (this class's own remarks on that rule, "these opcodes have
   /// not been defined yet ... all undefined opcodes should generate a nop") only ever checked whether
   /// <see cref="CvmInstructionSet.TryGetShape"/> recognizes the mnemonic AT ALL -- it never distinguished
@@ -1817,9 +1787,9 @@ internal static class CvmAssemblyLanguage
   /// case is a real, surprising failure a person needs to see and act on, not a deliberate design choice --
   /// silently reducing it to "nop" (worse: an operand-dropping nop, so "arld 1" and "arld" look identical
   /// once assembled) hid the actual problem behind what looked like ordinary, expected behavior. This
-  /// method is <see cref="Assemble"/>'s new first check on that fallback path: it returns a precise,
-  /// actionable reason when the mnemonic IS wired (so <see cref="Assemble"/> now fails loudly instead of
-  /// nop-substituting), or null when it genuinely has no wiring at all (so <see cref="Assemble"/>'s
+  /// method is <see cref="AssembleProgram"/>'s new first check on that fallback path: it returns a precise,
+  /// actionable reason when the mnemonic IS wired (so <see cref="AssembleProgram"/> now fails loudly instead of
+  /// nop-substituting), or null when it genuinely has no wiring at all (so <see cref="AssembleProgram"/>'s
   /// existing nop-substitution keeps working exactly as before for those). Never called for a mnemonic
   /// <see cref="BuildEncodeTable"/> already resolved -- only for the ones it silently dropped.
   /// </summary>
@@ -1882,809 +1852,131 @@ internal static class CvmAssemblyLanguage
     return $"resolved against node {wiring.NodeCoordinate:000}'s \"{wiring.SymbolName}\" but still could not be encoded, for a reason not covered by this diagnosis -- please report this as a toolchain bug.";
   }
 
+  /// <summary>Display name the debugger's one assembled program carries into <see cref="CvmLinker"/> (only ever seen in link diagnostics).</summary>
+  private const string DebuggerProgramObjectName = "program";
+
+  /// <summary>Longest list of assemble/link errors <see cref="AssembleProgram"/> reports in one message; the rest are summarised as "and N more".</summary>
+  private const int MaxReportedErrors = 8;
+
   /// <summary>
-  /// Assembles a sequence of CVM asm instructions into opcode/operand words. Two families of
-  /// mnemonic are resolved completely differently, mirroring <see cref="CvmDebugSession.DisassemblePage0"/>'s
-  /// own dual dispatch: <c>call</c>/<c>br</c>/<c>cbr</c> (the now-retired <c>slit</c> used to belong here too)
-  /// (<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>/<see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>)
-  /// are self-describing -- encoded directly from <see cref="CvmInstructionSet"/> and the operand
-  /// alone, no live compile involved -- while every other mnemonic is resolved against THIS run's own
-  /// compile of ITS OWN node (<see cref="NodeSymbolByMnemonic"/>) via <see cref="BuildEncodeTable"/>.
+  /// <b>THE CVM Debugger's assemble step, 2026-10-04 -- there is no second assembler any more.</b> Per Stefan
+  /// ("it is time to unify the 2 assembler into 1. keep the syntax with the spaces and forget the syntax with
+  /// commas"), the IDE's own immediately-resolving assembler (the former <c>ParseSource</c>/<c>Assemble</c> pair and
+  /// all their encoders, ~1,700 lines that duplicated <see cref="CvmAssembler"/>) was deleted. What remains of this
+  /// class around it is the half the toolchain cannot have: the live, node-compile-driven opcode tables
+  /// (<see cref="BuildEncodeTable"/>/<see cref="BuildIfConditionEncodeTable"/>), the decoder and the disassembler.
   ///
-  /// <b>Undefined-but-real opcodes assemble as 'nop, per Stefan (2026-09-01) -- but ONLY when they have
-  /// no live-node wiring at all.</b> A mnemonic that IS a genuine, named CVM opcode
-  /// (<see cref="CvmInstructionSet.TryGetShape"/> finds a shape for it -- the full 73-opcode table, not
-  /// just this file's own resolvable subset) AND has no entry at all in <see cref="NodeSymbolByMnemonic"/>
-  /// -- every one of CVM1's now-orphaned mnemonics (the ALU ops including <c>inv</c>, node 606's
-  /// <c>leave</c>, node 506/407's register ops, and CVM1's old node 508 comparison ops) -- is substituted
-  /// with node 507's own current <c>'nop</c> opcode instead of failing the whole assemble: "these opcodes
-  /// have not been defined yet and no longer have a meaning ... all undefined opcodes should generate a
-  /// nop." Any operand supplied on that line is simply discarded (nop takes none).
+  /// The pipeline: (1) <see cref="CvmAssembler.Assemble"/> turns <paramref name="sourceText"/> into one relocatable
+  /// object (operands separated by spaces and/or commas);
+  /// (2) <see cref="CvmPrimitiveTableExporter.BuildPrimitiveTable"/> turns <paramref name="compiledRam"/> into the
+  /// primitive table -- the SAME table a Build hands <c>galink</c>; (3) <see cref="CvmLinker.Link"/> binds every
+  /// opcode relocation against it with <see cref="CvmLinkOptions.ApplyEntryLayout"/> off, so CODE starts at address 0
+  /// with no synthesized entry vector (the debugger's CPU simply fetches from 0). A linker "undefined reference" to a
+  /// mnemonic that IS a CVM opcode is turned back into the precise <see cref="DiagnoseUnresolvedWiredMnemonic"/>
+  /// explanation (node did not compile / symbol missing / address does not fit the special-word field), so the old
+  /// helpful messages survive.
   ///
-  /// <b>CORRECTED 2026-09-11: a WIRED mnemonic that fails to resolve is a real error, never a silent
-  /// nop.</b> Stefan hit exactly this gap directly: "arld 1" (node 306's <see cref="NodeSymbolByMnemonic"/>
-  /// entry -- a real, wired opcode family) silently became a bare, operand-dropping <c>nop</c> when it
-  /// failed to resolve, indistinguishable from a genuinely-unimplemented mnemonic hitting the SAME
-  /// substitution -- see <see cref="DiagnoseUnresolvedWiredMnemonic"/>'s own remarks for the full
-  /// incident and the fix: <see cref="DiagnoseUnresolvedWiredMnemonic"/> is now checked FIRST, before the
-  /// nop-substitution path below, and fails the assemble outright with a specific reason (the node isn't
-  /// compiled, the F18 symbol isn't defined in its current source, or -- <see cref="CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue"/>
-  /// mnemonics only -- the resolved address falls outside that node's own embeddable function-select
-  /// window) whenever <see cref="NodeSymbolByMnemonic"/> has an entry for the mnemonic at all. Only a
-  /// mnemonic with NO wiring whatsoever still gets the nop treatment, exactly as before.
-  ///
-  /// This only degrades gracefully for opcodes CvmInstructionSet actually knows about -- a genuinely
-  /// unrecognized token (a typo, not a real CVM mnemonic at all) still fails the assemble below, since
-  /// that is a different problem than "not implemented yet." Returns a null word list with a
-  /// 1-based-line error message (never throws) when a mnemonic isn't recognized at all, a WIRED mnemonic
-  /// fails to resolve (see above), node 507's own 'nop can't be resolved either for a genuinely orphaned
-  /// mnemonic (nothing to substitute with), an operand is missing where one is required or out of range,
-  /// a label operand is undefined or unsupported for that mnemonic, or an operand is supplied where none
-  /// is allowed. This is what <see cref="CvmDebugSession.AssembleAndLoadProgram"/> uses to turn the CVM
-  /// Debugger's own Assembly Code editor into a program loaded straight into the simulated SRAM.
-  ///
-  /// <b>Labels (2026-09-02, per Stefan).</b> Unlike the freestanding <c>gaasm</c>/
-  /// <see cref="CvmAssembler"/>, there are still no sections, imports, or an object file here -- this
-  /// assembles one flat, immediately-loaded program, and every label is local to that one program --
-  /// but a label name (defined with "name:", optionally sharing its line with an instruction, e.g.
-  /// "loop: nop", or standing alone) IS supported as an operand wherever a literal number was already
-  /// accepted, resolved by address before any mnemonic-specific encoding happens below. Resolution is
-  /// a simple two-pass scheme entirely local to this one call: <see cref="CollectLabelAddresses"/>
-  /// (pass 1) walks every instruction once to learn each label's address -- a forward reference (using
-  /// a label before its own "name:" line, the normal case for a loop or a subroutine placed after its
-  /// caller) works exactly the same as a backward one -- then this method's own loop (pass 2) resolves
-  /// each operand label via <see cref="ResolveOperandLabel"/> before falling into the exact same
-  /// literal-operand encoding path a hand-typed number would have used, so every existing range/arity
-  /// check below applies unchanged either way. <c>call</c> and every tagged mnemonic (<c>pushlit</c>
-  /// -- the now-retired <c>slit</c> used to belong here too) resolve a label to its own ABSOLUTE word address; <c>br</c>/<c>cbr</c> resolve
-  /// to a signed RELATIVE offset instead, since that is what their own opcode word actually encodes
-  /// (see <see cref="ResolveOperandLabel"/>'s own remarks); node 606's eight
-  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/> ops don't accept a label
-  /// operand at all, since their value is a frame-relative slot index/count, never an address.
-  ///
-  /// <c>Labels</c> (added 2026-09-26, for the CVM Debugger's own memory inspector "Label" column) is
-  /// exactly the name -&gt; address map <see cref="CollectLabelAddresses"/>'s own pass 1 already computed
-  /// to resolve label OPERANDS above -- simply handed back to the caller too on success, non-null (though
-  /// possibly empty, for a source with no labels at all) whenever <c>Words</c> itself is non-null, and
-  /// null on any failure exactly like <c>Words</c>.
+  /// <c>Labels</c> maps every label the program defines (local and exported, never primitive names) to its final
+  /// address, case-insensitively, for the memory inspector's "Label" column. Behaviour that differs from the retired
+  /// assembler: label names are case-sensitive in the source (mnemonics and condition names are not); an opcode that
+  /// has no live node behind it is a link error rather than a silent <c>nop</c>; <c>slit &lt;label&gt;</c> (a label's
+  /// address as a literal) is no longer accepted -- <c>slit</c> takes a number.
   /// </summary>
-  public static (List<int>? Words, IReadOnlyDictionary<string, int>? Labels, string? Error) Assemble(
-      IReadOnlyList<CvmAsmInstruction> instructions,
+  public static (List<int>? Words, IReadOnlyDictionary<string, int>? Labels, string? Error) AssembleProgram(
+      string sourceText,
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
-    IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable = BuildEncodeTable(compiledRam);
-
-    (IReadOnlyDictionary<string, int>? labelAddresses, string? labelError) = CollectLabelAddresses(instructions, encodeTable);
-    if (labelAddresses is null)
+    (CvmObjectFile? objectFile, IReadOnlyList<string> assembleErrors) = CvmAssembler.Assemble(sourceText);
+    if (objectFile is null)
     {
-      return (null, null, labelError);
+      return (null, null, JoinErrors(assembleErrors));
     }
 
-    var words = new List<int>();
-    for (int line = 0; line < instructions.Count; line++)
+    CvmPrimitiveTable primitives = CvmPrimitiveTableExporter.BuildPrimitiveTable(compiledRam);
+    CvmLinker.Result linked = CvmLinker.Link(
+        [new CvmLinkObjectInput(DebuggerProgramObjectName, objectFile)],
+        [],
+        primitives,
+        new CvmLinkOptions { ApplyEntryLayout = false });
+    if (!linked.Success || linked.Image is null)
     {
-      CvmAsmInstruction instruction = instructions[line];
-      if (instruction.Mnemonic.Length == 0)
-      {
-        continue; // a bare "label:" line -- nothing of its own to assemble.
-      }
-
-      // "literal" (2026-09-27) does not support a label operand -- same restriction as "lit" itself (see
-      // LiteralPseudoMnemonic's own remarks), and for a stronger reason here: this mnemonic's own WORD
-      // COUNT depends on the operand's value (GetWordLength's own remarks), which a not-yet-resolved
-      // label could only tell us AFTER every earlier label's address has already been fixed by
-      // CollectLabelAddresses -- allowing one would risk every later label resolving to the wrong
-      // address whenever the label's own resolved value happened to fit "lit"'s narrower range. Checked
-      // before the generic OperandLabel resolution just below, so this never even reaches that step.
-      if (instruction.OperandLabel is not null && string.Equals(instruction.Mnemonic, LiteralPseudoMnemonic, StringComparison.OrdinalIgnoreCase))
-      {
-        return (null, null, $"line {line + 1}: \"literal\" does not support a label operand -- its word count depends on the value, which must be known up front; supply a literal number instead, or use \"litr\" directly for a label's own address.");
-      }
-
-      if (instruction.OperandLabel is not null && string.Equals(instruction.Mnemonic, CvmInstructionSet.Push2Mnemonic, StringComparison.OrdinalIgnoreCase))
-      {
-        return (null, null, $"line {line + 1}: \"push2\" does not support a label operand -- it takes a 32-bit number (\"push2 x\") or two 16-bit numbers (\"push2 x y\"); use \"push\" for a label's own 16-bit address.");
-      }
-
-      if (instruction.OperandLabel is not null)
-      {
-        (int? resolvedOperand, string? resolveError) = ResolveOperandLabel(instruction, words.Count, labelAddresses, line + 1);
-        if (resolveError is not null)
-        {
-          return (null, null, resolveError);
-        }
-
-        instruction = instruction with { Operand = resolvedOperand };
-      }
-
-      // "literal" (2026-09-27) -- intercepted here, before CvmInstructionSet.TryGetShape/encodeTable
-      // lookups below, since it is a pure assembler-level pseudo-mnemonic with no CvmInstructionSet
-      // shape or NodeSymbolByMnemonic entry of its own (see LiteralPseudoMnemonic's own remarks). By this
-      // point instruction.Operand is guaranteed non-null-or-rejected by the label check just above and
-      // EncodeLiteralPseudoMnemonic's own null check.
-      if (string.Equals(instruction.Mnemonic, LiteralPseudoMnemonic, StringComparison.OrdinalIgnoreCase))
-      {
-        (List<int>? literalWords, string? literalError) = EncodeLiteralPseudoMnemonic(instruction, encodeTable, line + 1);
-        if (literalWords is null)
-        {
-          return (null, null, literalError);
-        }
-
-        words.AddRange(literalWords);
-        continue;
-      }
-
-      // "call" -- RETIRED as an assembler-level pseudo-mnemonic 2026-10-03 (CVM redesign). It used to be
-      // intercepted here and lowered to scall (one word) or lcall (two words) depending on whether the
-      // address fit; both are gone, and "call" is now an ordinary node-509-resolved TrailingWord opcode
-      // (CvmInstructionSet Id 198: one opcode word, then the address word) that falls through to the
-      // generic tagged-mnemonic path at the bottom of this loop like link/jmp do. A label operand was
-      // already resolved to its absolute address by the generic OperandLabel step above, exactly as it
-      // is for every other trailing-word mnemonic.
-
-      // ADDED 2026-10-02, for the "CVM_pipeline" table's own cbr, RENAMED the same day to if
-      // (CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord -- see that enum
-      // case's own remarks, and CvmInstructionSet.IfMnemonic's own remarks for the full, now-fully-
-      // confirmed account). This was a hard rejection for most of the same day, pending confirmation of
-      // the branch polarity, the register field's width, and the complete operand syntax -- all three
-      // are now confirmed (see EncodeIfInstruction's own remarks for the full account, including
-      // Stefan's own final correction that the FLAG EVALUATION ITSELF needs to invert once a real
-      // "goto label" target exists, so the user-visible semantics stays "if r0 ==0 loop_label" means
-      // "goto loop_label when r0 is 0" -- the intuitive reading). Real encoding now intercepted here,
-      // explicitly, rather than being let through to the generic self-describing dispatch just below,
-      // purely because this mnemonic's own 3-operand shape (register, condition name, branch target)
-      // doesn't fit that dispatch's single-shape-per-encoding assumption -- not because anything about
-      // it is still unconfirmed.
-      if (string.Equals(instruction.Mnemonic, CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase) &&
-          CvmInstructionSet.TryGetShape(instruction.Mnemonic) is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord } ifShape)
-      {
-        (List<int>? ifWords, string? ifError) = EncodeIfInstruction(instruction, ifShape, compiledRam, labelAddresses, words.Count, line + 1);
-        if (ifWords is null)
-        {
-          return (null, null, ifError);
-        }
-
-        words.AddRange(ifWords);
-        continue;
-      }
-
-      // ADDED 2026-10-03, for "cond <reg> <cond>" (CvmInstructionSet.CondMnemonic): one word, the register plus
-      // the node-406 condition word's address -- exactly "if" minus the trailing offset word. Intercepted by
-      // name before the generic pair dispatch below, because its second operand is a condition NAME, not a
-      // number (see EncodeCondInstruction).
-      if (string.Equals(instruction.Mnemonic, CvmInstructionSet.CondMnemonic, StringComparison.OrdinalIgnoreCase) &&
-          CvmInstructionSet.TryGetShape(instruction.Mnemonic) is { } condShape)
-      {
-        (int? condWord, string? condError) = EncodeCondInstruction(instruction, condShape, compiledRam, line + 1);
-        if (condWord is null)
-        {
-          return (null, null, condError);
-        }
-
-        words.Add(condWord.Value);
-        continue;
-      }
-
-      CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
-      if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords })
-      {
-        (List<int>? selfDescribingWords, string? selfDescribingError) = EncodeSelfDescribingWord(selfDescribingShape, instruction.Operand, instruction.Operand2, line + 1);
-        if (selfDescribingWords is null)
-        {
-          return (null, null, selfDescribingError);
-        }
-
-        words.AddRange(selfDescribingWords);
-        continue;
-      }
-
-      if (!encodeTable.TryGetValue(instruction.Mnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) entry))
-      {
-        // CORRECTED 2026-09-11 (see DiagnoseUnresolvedWiredMnemonic's own remarks for the full incident):
-        // a mnemonic that IS wired to a live node (NodeSymbolByMnemonic has an entry for it) but simply
-        // failed to resolve this run is a real, surprising failure -- fail loudly with a precise reason
-        // instead of silently falling through to the nop-substitution meant for PERMANENTLY unimplemented
-        // opcodes. Only a mnemonic with no wiring at all (DiagnoseUnresolvedWiredMnemonic returns null)
-        // still gets the nop treatment below, exactly as before.
-        string? wiredDiagnosis = DiagnoseUnresolvedWiredMnemonic(instruction.Mnemonic, compiledRam);
-        if (wiredDiagnosis is not null)
-        {
-          return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" {wiredDiagnosis}");
-        }
-
-        if (selfDescribingShape is not null)
-        {
-          // A genuine CVM opcode (CvmInstructionSet knows its shape) that just has no live node to
-          // answer it right now -- per Stefan, substitute node 507's own current 'nop opcode rather
-          // than failing the whole assemble. See this method's own remarks.
-          if (!encodeTable.TryGetValue(NopMnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) nopEntry))
-          {
-            return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" has no defined opcode yet, and could not be " +
-                $"substituted with \"{NopMnemonic}\" because node 507's current compile doesn't define \"'nop\" either.");
-          }
-
-          words.Add(nopEntry.Opcode);
-          continue;
-        }
-
-        // A mnemonic that isn't a recognized CVM opcode at all -- a typo, not "not implemented yet" --
-        // still fails outright rather than silently becoming a nop.
-        // ADDED 2026-10-03, per Stefan: "All labels in node 509 that begin with an ' are opcodes like ret
-        // or call. all opcodes in node 509 must be integrated into the CVM language." A mnemonic that
-        // node 509 defines as 'name but that has no CvmInstructionSet row yet is a missing integration, not
-        // a typo -- say so, so a new node-509 opcode is noticed the first time somebody writes it.
-        if (compiledRam.TryGetValue(Node509Program.Coordinate, out F18CompileResult? node509Compile) &&
-            node509Compile.Symbols.ContainsKey("'" + instruction.Mnemonic))
-        {
-          return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" is an opcode of node 509 (label '{instruction.Mnemonic}) but has no row in CvmInstructionSet.Instructions / NodeSymbolByMnemonic yet -- it still needs to be integrated into the CVM language.");
-        }
-
-        return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" is not a known CVM asm mnemonic.");
-      }
-
-      // ADDED 2026-10-03: push2 has TWO operand forms, both always 3 memory words (opcode, hi, lo):
-      //   push2 x     -- x is ONE 32-bit number, encoded hi-lo
-      //   push2 x y   -- x and y are two 16-bit numbers, x = hi, y = lo
-      // See EncodePush2Operands. Intercepted before the generic operand checks below, which assume a fixed
-      // operand count per mnemonic.
-      if (string.Equals(instruction.Mnemonic, CvmInstructionSet.Push2Mnemonic, StringComparison.OrdinalIgnoreCase))
-      {
-        (int Hi, int Lo, string? Error) push2Operands = EncodePush2Operands(instruction, line + 1);
-        if (push2Operands.Error is not null)
-        {
-          return (null, null, push2Operands.Error);
-        }
-
-        words.Add(entry.Opcode);
-        words.Add(push2Operands.Hi);
-        words.Add(push2Operands.Lo);
-        continue;
-      }
-
-      // ADDED 2026-10-04: rlit / dlit = register embedded in the opcode word PLUS trailing literal word(s) --
-      // see EncodeRegisterLiteralInstruction. Intercepted here for the same reason as push2 above: the generic
-      // embedded-operand path below would emit the opcode word only.
-      if (string.Equals(instruction.Mnemonic, CvmInstructionSet.RegisterLiteralMnemonic, StringComparison.OrdinalIgnoreCase) ||
-          string.Equals(instruction.Mnemonic, CvmInstructionSet.DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase))
-      {
-        (List<int>? literalWords, string? literalError) = EncodeRegisterLiteralInstruction(instruction, entry, labelAddresses, line + 1);
-        if (literalWords is null)
-        {
-          return (null, null, literalError);
-        }
-
-        words.AddRange(literalWords);
-        continue;
-      }
-
-      if (entry.HasOperand && instruction.Operand is null)
-      {
-        return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" requires an operand, e.g. \"{instruction.Mnemonic} 0x1234\".");
-      }
-
-      if (!entry.HasOperand && instruction.Operand is not null)
-      {
-        return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" does not take an operand.");
-      }
-
-      // litm/lit2 (2026-09-27, CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords, WordLength 3) need
-      // a SECOND trailing operand word too -- the checks just above already required and will validate
-      // the first (instruction.Operand). Every other tagged mnemonic here still has WordLength 1 or 2, so
-      // this is a no-op for them.
-      if (entry.WordLength >= 3 && instruction.Operand2 is null)
-      {
-        return (null, null, $"line {line + 1}: \"{instruction.Mnemonic}\" requires two operands, e.g. \"{instruction.Mnemonic} 0x1234 0x5678\".");
-      }
-
-      if (entry.OperandIsEmbedded)
-      {
-        // Node 511's four ops only (see BuildEncodeTable's own remarks): the operand is a register index
-        // packed directly into entry.Opcode's own low bits, never a separate trailing word.
-        if (instruction.Operand!.Value < 0 || instruction.Operand!.Value > entry.EmbeddedValueMask)
-        {
-          return (null, null, $"line {line + 1}: {instruction.Operand!.Value} does not fit in \"{instruction.Mnemonic}\"'s embedded register operand (0..{entry.EmbeddedValueMask}).");
-        }
-
-        words.Add(entry.Opcode | ((instruction.Operand!.Value & entry.EmbeddedValueMask) << entry.EmbeddedValueShift));
-        continue;
-      }
-
-      words.Add(entry.Opcode);
-      if (entry.HasOperand)
-      {
-        words.Add(instruction.Operand!.Value & CvmWordCodec.WordMask);
-        if (entry.WordLength >= 3)
-        {
-          // litm/lit2 only (see this method's own remarks just above) -- the second trailing word,
-          // immediately after the first, same masking.
-          words.Add(instruction.Operand2!.Value & CvmWordCodec.WordMask);
-        }
-      }
+      return (null, null, JoinErrors([.. linked.Messages.Select(message => ExplainLinkMessage(message, compiledRam))]));
     }
 
-    return (words, labelAddresses, null);
-  }
-
-  /// <summary>
-  /// Pass 1 of resolving labels for <see cref="Assemble"/>: walks every instruction once, in the SAME
-  /// order pass 2 (<see cref="Assemble"/>'s own loop) will emit words in, tracking the running word
-  /// address so each label's address is known before any operand is resolved -- a forward reference
-  /// (a "call"/"br" written before the "name:" line it names) is the normal, common case for a loop or
-  /// a subroutine placed after its own caller, so labels cannot be resolved in a single pass. Word
-  /// length per line comes from <see cref="GetWordLength"/>, never from actually encoding the line, so
-  /// this pass needs no operand resolved yet. Returns a null map with a 1-based-line error only for a
-  /// genuine duplicate label definition; an undefined or unsupported label OPERAND is a pass-2 concern
-  /// instead (see <see cref="ResolveOperandLabel"/>'s own remarks), since only pass 2 knows which
-  /// mnemonic is asking for it. Label names are matched case-insensitively, like every mnemonic in
-  /// this file.
-  ///
-  /// <b>RETIRED 2026-10-03 (CVM redesign): the optimistic, iterative sizing pass for "call" targeting a
-  /// label</b> (added 2026-09-30, per Stefan: "can you use a more optimistic smart iterator for sizing
-  /// pass?") existed only to choose between scall (1 word) and lcall (2 words) for a label whose address
-  /// depended on this very walk. With "call" now a plain two-word node-509 opcode there is nothing left to
-  /// guess, so this is a single pass again. (Should a future opcode ever need variable sizing, the
-  /// iterate-until-stable scheme -- grow-only guesses, provably terminating -- is the way to do it; see
-  /// the project doc claude/cvm-pipeline-instruction-set-rebuild.md for the original description.)
-  /// </summary>
-  private static (IReadOnlyDictionary<string, int>? Labels, string? Error) CollectLabelAddresses(
-      IReadOnlyList<CvmAsmInstruction> instructions,
-      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable)
-  {
-    // (2026-10-03, CVM redesign: the optimistic scall/lcall sizing iteration that used to live here is
-    // gone together with scall/lcall and the "call" pseudo-mnemonic -- every mnemonic's word length is
-    // now fixed by GetWordLength alone, except "literal" whose own length depends on a literal operand
-    // that is already known, so a single pass assigns every label its final address.)
     var labels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-    int address = 0;
-    for (int line = 0; line < instructions.Count; line++)
+    foreach (CvmImageSymbol symbol in linked.Image.Symbols)
     {
-      CvmAsmInstruction instruction = instructions[line];
-      if (instruction.Label is not null && !labels.TryAdd(instruction.Label, address))
+      // DefiningObjectName is null for a symbol derived from a primitive-table entry (nop, call, ...) --
+      // those are opcodes, not program labels.
+      if (symbol.DefiningObjectName is not null)
       {
-        return (null, $"line {line + 1}: label \"{instruction.Label}\" is already defined.");
-      }
-
-      if (instruction.Mnemonic.Length > 0)
-      {
-        address += GetWordLength(instruction, encodeTable);
+        labels[symbol.Name] = symbol.Address;
       }
     }
 
-    return (labels, null);
+    return (new List<int>(linked.Image.Words), labels, null);
+  }
+
+  private static string JoinErrors(IReadOnlyList<string> errors)
+  {
+    if (errors.Count <= MaxReportedErrors)
+    {
+      return string.Join("\n", errors);
+    }
+
+    return string.Join("\n", errors.Take(MaxReportedErrors)) + $"\n... and {errors.Count - MaxReportedErrors} more error(s).";
   }
 
   /// <summary>
-  /// ADDED 2026-10-03, per Stefan: <c>push2</c> is assembled in two different ways.
-  /// <list type="number">
-  /// <item><description>One operand, <c>push2 x</c>: <c>x</c> is a single 32-bit number (signed or unsigned,
-  /// -2147483648..4294967295), encoded hi-lo -- the high 16 bits as the first trailing word, the low 16 bits
-  /// as the second.</description></item>
-  /// <item><description>Two operands, <c>push2 x y</c>: two 16-bit numbers (-32768..65535 each), <c>x</c> =
-  /// hi (first trailing word), <c>y</c> = lo (second).</description></item>
-  /// </list>
-  /// Both forms occupy the same three memory words (opcode, hi, lo), so word counting needs no change.
-  /// A label operand is rejected by the caller. Never masks silently: an out-of-range 16-bit value is an error.
+  /// Rewrites the linker's generic <c>undefined reference to "X" (...)</c> into the debugger's own, more specific
+  /// wording when "X" is a CVM mnemonic (resolved through <see cref="DiagnoseUnresolvedWiredMnemonic"/>) or one of
+  /// the synthetic <c>if.&lt;key&gt;</c>/<c>cond.&lt;key&gt;</c> condition keys; any other message (a genuinely
+  /// undefined label, a duplicate definition, ...) passes through unchanged.
   /// </summary>
-  private static (int Hi, int Lo, string? Error) EncodePush2Operands(CvmAsmInstruction instruction, int lineNumber)
+  private static string ExplainLinkMessage(string message, IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
-    if (instruction.Operand is null)
+    Match match = UndefinedReferencePattern.Match(message);
+    if (!match.Success)
     {
-      return (0, 0, $"line {lineNumber}: \"push2\" requires one 32-bit operand (\"push2 0x12345678\") or two 16-bit operands (\"push2 0x1234 0x5678\").");
+      return message;
     }
 
-    if (instruction.Operand2 is null)
+    string name = match.Groups["name"].Value;
+    foreach (string prefix in new[] { CvmInstructionSet.IfPrimitiveNamePrefix, CvmInstructionSet.CondPrimitiveNamePrefix })
     {
-      uint value = unchecked((uint)instruction.Operand.Value);
-      return ((int)(value >> 16), (int)(value & 0xFFFF), null);
-    }
-
-    foreach (int part in new[] { instruction.Operand.Value, instruction.Operand2.Value })
-    {
-      if (part < -0x8000 || part > 0xFFFF)
+      if (name.StartsWith(prefix, StringComparison.Ordinal))
       {
-        return (0, 0, $"line {lineNumber}: {part} does not fit in a 16-bit word -- \"push2 x y\" takes two 16-bit numbers (-32768..65535); use \"push2 x\" with one 32-bit number instead.");
+        string keyword = prefix.TrimEnd('.');
+        return $"\"{keyword} {name[prefix.Length..]}\": node {Node406Program.Coordinate:000} did not compile this run, or its current source does not define the symbol that condition resolves to -- fix/save it in the Node Editor, then re-assemble.";
       }
     }
 
-    return (instruction.Operand.Value & CvmWordCodec.WordMask, instruction.Operand2.Value & CvmWordCodec.WordMask, null);
+    string? diagnosis = DiagnoseUnresolvedWiredMnemonic(name, compiledRam);
+    if (diagnosis is not null)
+    {
+      return $"\"{name}\" {diagnosis}";
+    }
+
+    if (CvmInstructionSet.TryGetShape(name) is not null)
+    {
+      return $"\"{name}\" is a known CVM mnemonic, but no live node currently implements it, so it has no opcode to link against.";
+    }
+
+    return message;
   }
 
-  /// <summary>
-  /// How many words <paramref name="instruction"/>'s mnemonic occupies once assembled -- used by
-  /// <see cref="CollectLabelAddresses"/> to compute label addresses BEFORE any operand (literal or
-  /// label) is resolved, since word length never depends on the operand's actual value -- EXCEPT for the
-  /// new <c>"literal"</c> pseudo-mnemonic below (2026-09-27), which is variable-length BY DESIGN (that's
-  /// its whole point: pick the narrower encoding whenever the value allows it), so it alone needs the
-  /// instruction's own already-parsed <see cref="CvmAsmInstruction.Operand"/>, not just its mnemonic
-  /// name. Mirrors exactly what <see cref="Assemble"/>'s own pass 2 will actually emit for the same
-  /// mnemonic, so the two passes can never disagree on an address: a self-describing shape (<c>call</c>/
-  /// <c>br</c>/<c>cbr</c>/node 606's ops -- the now-retired <c>slit</c> used to belong here too) is
-  /// always its own <see cref="CvmInstructionSet.CvmInstructionShape.WordLength"/>; a tagged mnemonic
-  /// resolves through <paramref name="encodeTable"/> the same way pass 2 does; anything else -- a
-  /// genuine opcode with no live node to answer it, which pass 2's own "undefined opcode -&gt; nop"
-  /// substitution (see <see cref="Assemble"/>'s own remarks) always collapses to exactly one word
-  /// regardless of the substituted opcode's real shape, or an outright unrecognized mnemonic pass 2 will
-  /// reject outright -- is 1, a safe placeholder that never needs to be exact since pass 2 either matches
-  /// it anyway or fails that very line before any address past it is ever used.
-  ///
-  /// <c>"literal"</c> itself: 1 word if <see cref="CvmAsmInstruction.Operand"/> is a plain number that
-  /// fits <c>lit</c>'s signed range (pass 2 will emit <c>lit</c>), 2 otherwise (pass 2 will emit
-  /// <c>litr</c>'s tag word plus its own trailing operand word) -- see
-  /// <see cref="EncodeLiteralPseudoMnemonic"/>'s own remarks for the shared range check. A <c>"literal"</c>
-  /// line with no resolved <see cref="CvmAsmInstruction.Operand"/> yet (a label operand, which
-  /// <c>"literal"</c> does not support -- same restriction as <c>lit</c> itself, see that mnemonic's own
-  /// remarks) defaults to the worst case, 2: pass 2 will reject that exact line outright before any
-  /// address past it is ever used, so the guess here never needs to be exact for a SUCCESSFUL assembly,
-  /// only safe for a failing one.
-  ///
-  /// <c>"call"</c> was variable-length too (scall/lcall, 2026-09-30) until the 2026-10-03 CVM redesign
-  /// retired both and made it an ordinary fixed-length (2 words) node-509 opcode.
-  /// </summary>
-  private static int GetWordLength(
-      CvmAsmInstruction instruction,
-      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable)
-  {
-    string mnemonic = instruction.Mnemonic;
-    if (string.Equals(mnemonic, LiteralPseudoMnemonic, StringComparison.OrdinalIgnoreCase))
-    {
-      return instruction.Operand is int value && FitsLitRange(value) ? 1 : 2;
-    }
-
-    // ("call" used to be variable-length here -- scall/lcall -- until 2026-10-03; it is now a fixed
-    // two-word tagged mnemonic and sized by the encode-table lookup at the bottom like every other one.)
-
-    // ADDED 2026-10-02: FixedOpcodeWithTwoTrailingWords (next32) joins this generic, fixed-WordLength
-    // group. EmbeddedUnsignedValuePairWithTrailingWord (if, renamed from cbr the same day) JOINED this
-    // group later the same day, once Stefan confirmed its full operand syntax and this file's own
-    // Assemble gained a real encoder for it (see Assemble's own "if" remarks) -- it is a fixed 2 words
-    // regardless of operand values, exactly like next32/lcall/link, so it needs no variable-length
-    // handling of its own, just this one-line inclusion.
-    CvmInstructionSet.CvmInstructionShape? selfDescribingShape = CvmInstructionSet.TryGetShape(mnemonic);
-    if (selfDescribingShape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress or CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.FixedOpcode or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords or CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePairWithTrailingWord })
-    {
-      return selfDescribingShape.WordLength;
-    }
-
-    return encodeTable.TryGetValue(mnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) entry) ? entry.WordLength : 1;
-  }
-
-  /// <summary>
-  /// Turns one instruction's <see cref="CvmAsmInstruction.OperandLabel"/> into the literal value
-  /// <see cref="Assemble"/>'s own existing per-mnemonic encode logic already knows how to validate and
-  /// pack, so that logic runs completely unchanged whether the source said a number or a label name.
-  /// <c>call</c> (an <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress"/>) and every
-  /// tagged mnemonic resolved via <paramref name="labelAddresses"/> alone (<c>pushlit</c>, the only one
-  /// with a trailing-word operand today) resolve to the label's own ABSOLUTE word address -- so did the
-  /// now-retired <c>slit</c>, even though it was an <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>
-  /// like <c>br</c>/<c>cbr</c> below: loading a label's own address as a small signed literal was a
-  /// legitimate use, even though that encoding's value isn't inherently an address (see its own
-  /// remarks). <c>br</c>/<c>cbr</c> resolve to a signed RELATIVE offset instead, per
-  /// <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedSignedValue"/>'s own remarks confirmed
-  /// against real hardware: the target is relative to the address of the word immediately AFTER the
-  /// branch's own opcode word, i.e. <c>labelAddress - (instructionAddress + 1)</c>, not the branch
-  /// word's own address. Node 606's eight <see cref="CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue"/>
-  /// ops reject a label operand outright with a clear error -- their value is a frame-relative slot
-  /// index/count, never an address, so resolving one would just be silently wrong. Range/arity
-  /// validation of the resolved value itself still happens downstream exactly as it would for a
-  /// hand-typed literal -- this method only turns a name into a number, never validates its range.
-  /// </summary>
-  private static (int? Operand, string? Error) ResolveOperandLabel(
-      CvmAsmInstruction instruction,
-      int instructionAddress,
-      IReadOnlyDictionary<string, int> labelAddresses,
-      int lineNumber)
-  {
-    if (!labelAddresses.TryGetValue(instruction.OperandLabel!, out int labelAddress))
-    {
-      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" references undefined label \"{instruction.OperandLabel}\".");
-    }
-
-    CvmInstructionSet.CvmInstructionShape? shape = CvmInstructionSet.TryGetShape(instruction.Mnemonic);
-    if (shape is { Encoding: CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue })
-    {
-      // Node 606's eight ops take a frame-relative slot index/count; node 306's six take an address-
-      // register index (0..3, ValueBitMask shifted right by ValueBitShift -- see
-      // CvmInstructionSet.CvmInstructionShape.ValueBitShift's own remarks) -- neither is ever an
-      // address, so a label operand is rejected outright for both the same way.
-      int maxValue = shape.ValueBitMask >> shape.ValueBitShift;
-      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" does not support a label operand -- its value is not an address; supply a literal 0..{maxValue} value instead.");
-    }
-
-    if (shape is { Encoding: CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue })
-    {
-      // Node 511's four ops (register index 0-31) and node 308's six ops (register index 0-3) both take
-      // a register index, never an address, for the same reason as node 606/node 306's ops just above --
-      // the exact max value depends on which mnemonic's own field layout applies (see
-      // NodeResolvedEmbeddedValueFieldLayoutByMnemonic's own remarks), so it is looked up per mnemonic
-      // rather than assumed to always be node 511's own 5-bit range.
-      // (2026-10-03: a mnemonic with no entry in that dictionary -- node 509's special words -- reads its
-      // own register range straight off its shape's ValueBitMask instead of falling back to node 511's.)
-      int maxRegister = NodeResolvedEmbeddedValueFieldLayoutByMnemonic.TryGetValue(instruction.Mnemonic, out (int FunctionFieldBitMask, int FunctionFieldShift, int FunctionFieldBaseAddress, int RegisterFieldBitMask, int RegisterFieldShift) layout)
-          ? layout.RegisterFieldBitMask
-          : shape.ValueBitMask != 0 ? shape.ValueBitMask >> shape.ValueBitShift : CvmInstructionSet.Node511RegisterFieldBitMask;
-      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" does not support a label operand -- its value is a register index, not an address; supply a literal 0..{maxRegister} value instead.");
-    }
-
-    bool isRelativeBranch =
-        string.Equals(instruction.Mnemonic, CvmInstructionSet.BranchMnemonic, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(instruction.Mnemonic, CvmInstructionSet.ConditionalBranchMnemonic, StringComparison.OrdinalIgnoreCase);
-    return isRelativeBranch ? (labelAddress - (instructionAddress + 1), null) : (labelAddress, null);
-  }
-
-  /// <summary>
-  /// ADDED 2026-10-02, for <c>if</c> alone (CvmInstructionSet.IfMnemonic, renamed from <c>cbr</c> the
-  /// same day) -- <see cref="Assemble"/>'s own loop calls this instead of letting the mnemonic fall into
-  /// either the "literal"/"call" pseudo-mnemonic intercepts above it or the generic self-describing/
-  /// tagged dispatch below it, because <c>if</c>'s own three-operand shape (register, condition name,
-  /// branch target) doesn't fit either of those single-shape assumptions. All three of the open
-  /// questions this encoder used to be blocked on are now confirmed directly by Stefan -- see
-  /// <see cref="CvmInstructionSet.IfMnemonic"/>'s own remarks (CvmInstructionSet.cs's class-level remarks
-  /// right after <c>UnlinkMnemonic</c>) for the full back-and-forth:
-  ///
-  /// <list type="number">
-  /// <item>the "cond" field is a node-406-resolved reference into one of ten named condition words, each
-  /// its own tick-prefixed F18 symbol (<see cref="IfConditionSymbolByName"/>) -- resolved here exactly
-  /// the same way <see cref="DiagnoseUnresolvedWiredMnemonic"/>/<see cref="BuildEncodeTable"/> already
-  /// resolve every other node-wired mnemonic, just against <see cref="Node406Program.Coordinate"/>
-  /// instead of going through those shared tables (this is the first per-OPERAND-VALUE resolution this
-  /// file has needed, rather than per-mnemonic, so it is done by hand here rather than threading a tenth
-  /// mnemonic-like entry through <see cref="NodeSymbolByMnemonic"/>);</item>
-  /// <item>the branch's own final polarity ("if r0 ==0 loop_label" branches to loop_label WHEN r0 IS 0 --
-  /// the intuitive reading, per Stefan's own last word on it, superseding his own earlier answer) is a
-  /// runtime/node-406 behavior Stefan is achieving by changing the underlying flag evaluation on his own
-  /// side, not anything this encoder's bit packing controls -- nothing below needs to (or could) encode
-  /// it;</item>
-  /// <item>the register field is hard-limited to r0-r15 (4 bits) -- validated below exactly like every
-  /// other embedded-register field in this file;</item>
-  /// <item>the complete syntax is "if &lt;reg&gt; &lt;cond&gt; &lt;target&gt;", three operands -- already
-  /// split out by <see cref="ParseSource"/> into <see cref="CvmAsmInstruction.Operand"/> (register),
-  /// <see cref="CvmAsmInstruction.ConditionName"/>, and <see cref="CvmAsmInstruction.Operand3"/>/
-  /// <see cref="CvmAsmInstruction.OperandLabel3"/> (the branch target) by the time this method runs.</item>
-  /// </list>
-  ///
-  /// <b>STILL NOT independently confirmed, flagged rather than silently decided:</b> the trailing word's
-  /// own relative-offset BASE POINT when the target is a label. <see cref="ResolveOperandLabel"/>'s own
-  /// remarks record br/cbr's hardware-confirmed convention for a ONE-WORD branch -- the offset is
-  /// relative to "the address of the word immediately after the branch's own opcode word," i.e.
-  /// <c>instructionAddress + 1</c>. <c>if</c> is a TWO-word instruction (this opcode word, plus this
-  /// method's own trailing offset word), so that same phrase -- "immediately after the branch's own
-  /// instruction has been fully fetched" -- generalizes to <c>instructionAddress + 2</c>, which is what
-  /// this method uses; an attempt to confirm this independently by tracing node 507's own <c>m/pc++</c>/
-  /// <c>m/pc+</c>/<c>m/next</c> Forth source was inconclusive (an ambiguous stray "." token in the pasted
-  /// source). This is an extrapolation of an established convention, not a hardware-confirmed fact for
-  /// THIS two-word shape specifically -- it should be raised with Stefan and corrected here (a one-line
-  /// change, the <c>+ 2</c> below) if he confirms otherwise. A literal (non-label) third operand is never
-  /// affected by this: it is used exactly as typed, as the raw signed offset word, the same convention
-  /// every other hand-typed relative/absolute operand in this file already follows (only a LABEL ever
-  /// goes through this base-point arithmetic at all).
-  ///
-  /// Node 406's own live source (<see cref="Node406Program"/>) is still 2026-09-30's older "read
-  /// register" stub and does not define any of the ten condition symbols yet, per this project's own
-  /// standing "do not sync the source yet" instruction -- so resolving any <c>if</c> line today fails
-  /// with a specific, loud diagnosis (mirroring <see cref="DiagnoseUnresolvedWiredMnemonic"/>'s own
-  /// style) rather than silently producing a wrong address, exactly like <c>push</c>/<c>lcall</c>/
-  /// <c>ljmp</c> did against node 507 before THEIR node was finally caught up. This is expected, prepared-
-  /// but-not-yet-functional wiring, not a bug.
-  /// </summary>
-  private static (List<int>? Words, string? Error) EncodeIfInstruction(
-      CvmAsmInstruction instruction,
-      CvmInstructionSet.CvmInstructionShape ifShape,
-      IReadOnlyDictionary<int, F18CompileResult> compiledRam,
-      IReadOnlyDictionary<string, int> labelAddresses,
-      int instructionAddress,
-      int lineNumber)
-  {
-    if (instruction.Operand is not int register)
-    {
-      return (null, $"line {lineNumber}: \"if\" requires a register operand, e.g. \"if 0 ==0 loop_label\".");
-    }
-
-    int maxRegister = ifShape.SecondValueBitMask >> ifShape.SecondValueBitShift;
-    if (register < 0 || register > maxRegister)
-    {
-      return (null, $"line {lineNumber}: \"if\" register {register} does not fit its 4-bit register field (0..{maxRegister} -- r0-r15 only, per Stefan directly).");
-    }
-
-    if (instruction.ConditionName is null || !IfConditionSymbolByName.TryGetValue(instruction.ConditionName, out string? conditionSymbol))
-    {
-      string validNames = string.Join(", ", IfConditionSymbolByName.Keys);
-      return (null, $"line {lineNumber}: \"if\" does not recognize condition \"{instruction.ConditionName}\" -- valid conditions are: {validNames}.");
-    }
-
-    if (!compiledRam.TryGetValue(Node406Program.Coordinate, out F18CompileResult? compile))
-    {
-      return (null, $"line {lineNumber}: \"if\"'s condition \"{instruction.ConditionName}\" is implemented on node {Node406Program.Coordinate:000}, but node {Node406Program.Coordinate:000} did not compile (or wasn't included) this run -- fix/save it in the Node Editor, then re-assemble.");
-    }
-
-    if (!compile.Symbols.TryGetValue(conditionSymbol, out F18ExportedSymbol? symbol))
-    {
-      return (null, $"line {lineNumber}: \"if\"'s condition \"{instruction.ConditionName}\" is implemented on node {Node406Program.Coordinate:000}, but that node's CURRENT source does not define \"{conditionSymbol}\" -- node 406 is still 2026-09-30's older \"read register\" stub, not yet synced to the condition-word content this needs.");
-    }
-
-    if (CvmInstructionSet.IsRegisterlessCondition(instruction.ConditionName) && register != 0)
-    {
-      return (null, $"line {lineNumber}: \"if {instruction.ConditionName}\" takes no register -- write \"if {instruction.ConditionName} then label\" (the register field is encoded as 0), not r{register}.");
-    }
-
-    int resolvedCond = symbol.Value & CvmWordCodec.WordMask;
-    int maxCond = ifShape.ValueBitMask >> ifShape.ValueBitShift;
-    if (resolvedCond < 0 || resolvedCond > maxCond)
-    {
-      return (null, $"line {lineNumber}: \"if\"'s condition \"{instruction.ConditionName}\" resolved to node {Node406Program.Coordinate:000} address 0x{resolvedCond:X}, which does not fit this shape's own 4-bit \"cond\" field (0x0-0x{maxCond:X}) -- node 406's source has likely grown too large, or \"{conditionSymbol}\" moved.");
-    }
-
-    int offset;
-    if (instruction.Operand3 is int literalOffset)
-    {
-      // Typed as a plain number -- used exactly as-is, the raw signed offset word, same convention every
-      // other hand-typed relative/absolute operand in this file already follows.
-      offset = literalOffset;
-    }
-    else if (instruction.OperandLabel3 is string targetLabel)
-    {
-      if (!labelAddresses.TryGetValue(targetLabel, out int labelAddress))
-      {
-        return (null, $"line {lineNumber}: \"if\" references undefined label \"{targetLabel}\".");
-      }
-
-      // See this method's own remarks above: instructionAddress + 2, not + 1, because this is a TWO-word
-      // instruction -- an extrapolation of br/cbr's own hardware-confirmed one-word convention
-      // (ResolveOperandLabel's own remarks), flagged there as not independently confirmed for this shape.
-      offset = labelAddress - (instructionAddress + 2);
-    }
-    else
-    {
-      return (null, $"line {lineNumber}: \"if\" requires a branch target as its third operand, e.g. \"if {register} {instruction.ConditionName} loop_label\".");
-    }
-
-    int opcodeWord = ifShape.Tag | ((resolvedCond << ifShape.ValueBitShift) & ifShape.ValueBitMask) | ((register << ifShape.SecondValueBitShift) & ifShape.SecondValueBitMask);
-    return ([opcodeWord, offset & CvmWordCodec.WordMask], null);
-  }
-
-  /// <summary>
-  /// ADDED 2026-10-04, for <c>rlit &lt;reg&gt; &lt;value&gt;</c> and <c>dlit &lt;dreg&gt; &lt;value&gt;</c> (node 509's
-  /// "next literal -&gt; register" words). Memory layout: the opcode word (node-509 base word | register in bits
-  /// 3-0), then the literal -- <c>rlit</c>: ONE word (a 16-bit number or a label's absolute address);
-  /// <c>dlit</c>: TWO words, the 32-bit value's LOW half first and then the HIGH half (node 509's
-  /// <c>m/dnext ( - lo hi )</c> reads them in that order; note this is the opposite of <c>push2</c>'s hi-lo).
-  /// The register arrives already parsed by <see cref="ParseSource"/> (<c>rN</c> / <c>dN</c> / plain number).
-  /// </summary>
-  private static (List<int>? Words, string? Error) EncodeRegisterLiteralInstruction(
-      CvmAsmInstruction instruction,
-      (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) entry,
-      IReadOnlyDictionary<string, int> labelAddresses,
-      int lineNumber)
-  {
-    bool isDouble = string.Equals(instruction.Mnemonic, CvmInstructionSet.DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase);
-    string example = isDouble ? "dlit d1 0x12345678" : "rlit r1 0x1234";
-    if (instruction.Operand is not int register)
-    {
-      return (null, $"line {lineNumber}: \"{instruction.Mnemonic}\" requires a register and a literal, e.g. \"{example}\".");
-    }
-
-    if (register < 0 || register > entry.EmbeddedValueMask)
-    {
-      return (null, $"line {lineNumber}: {register} does not fit in \"{instruction.Mnemonic}\"'s embedded register operand (0..{entry.EmbeddedValueMask}).");
-    }
-
-    int opcodeWord = entry.Opcode | ((register & entry.EmbeddedValueMask) << entry.EmbeddedValueShift);
-    if (isDouble)
-    {
-      if (instruction.Operand2 is int dlitHighHalf && instruction.Operand3 is int dlitLowHalf)
-      {
-        // Two-operand form: "dlit d5 hi lo" -- two 16-bit numbers, hi first as written; memory still holds
-        // the LOW word first (node 509's m/dnext reads lo, hi).
-        if (dlitHighHalf < -0x8000 || dlitHighHalf > CvmWordCodec.WordMask || dlitLowHalf < -0x8000 || dlitLowHalf > CvmWordCodec.WordMask)
-        {
-          return (null, $"line {lineNumber}: \"dlit d1 hi lo\" needs two 16-bit numbers (-32768..65535) -- got {dlitHighHalf} and {dlitLowHalf}; use one operand for a 32-bit value.");
-        }
-
-        return ([opcodeWord, dlitLowHalf & CvmWordCodec.WordMask, dlitHighHalf & CvmWordCodec.WordMask], null);
-      }
-
-      if (instruction.Operand2 is not int wide)
-      {
-        return (null, $"line {lineNumber}: \"dlit\" requires a register and one 32-bit literal (\"{example}\") or two 16-bit literals, hi then lo (\"dlit d1 0x1234 0x5678\").");
-      }
-
-      uint value = unchecked((uint)wide);
-      return ([opcodeWord, (int)(value & 0xFFFF), (int)(value >> 16)], null);
-    }
-
-    int literal;
-    if (instruction.Operand2 is int number)
-    {
-      if (number < -0x8000 || number > CvmWordCodec.WordMask)
-      {
-        return (null, $"line {lineNumber}: {number} does not fit in \"rlit\"'s 16-bit literal (-32768..65535).");
-      }
-
-      literal = number & CvmWordCodec.WordMask;
-    }
-    else if (instruction.OperandLabel3 is string targetLabel)
-    {
-      if (!labelAddresses.TryGetValue(targetLabel, out int labelAddress))
-      {
-        return (null, $"line {lineNumber}: \"rlit\" references undefined label \"{targetLabel}\".");
-      }
-
-      literal = labelAddress & CvmWordCodec.WordMask;
-    }
-    else
-    {
-      return (null, $"line {lineNumber}: \"rlit\" requires a register and a 16-bit literal (or label), e.g. \"{example}\".");
-    }
-
-    return ([opcodeWord, literal], null);
-  }
-
-  /// <summary>
-  /// ADDED 2026-10-03, for <c>cond &lt;reg&gt; &lt;cond&gt;</c> (<see cref="CvmInstructionSet.CondMnemonic"/>): the
-  /// one-word sibling of <see cref="EncodeIfInstruction"/> -- table row <c>1001|0000|cccc|xxxx| 506</c>. The
-  /// register (bits 3-0) arrives already parsed by <see cref="ParseSource"/> (<c>rN</c> or a plain 0..15
-  /// number); the condition NAME resolves against node 406's live compile through
-  /// <see cref="IfConditionSymbolByName"/> -- the very same ten words <c>if</c> uses -- to the 4-bit "cccc"
-  /// field. Result: <c>0x9000 | (condAddress &lt;&lt; 4) | register</c>. No trailing word, no branch target.
-  /// </summary>
-  private static (int? Word, string? Error) EncodeCondInstruction(
-      CvmAsmInstruction instruction,
-      CvmInstructionSet.CvmInstructionShape condShape,
-      IReadOnlyDictionary<int, F18CompileResult> compiledRam,
-      int lineNumber)
-  {
-    if (instruction.Operand is not int register)
-    {
-      return (null, $"line {lineNumber}: \"cond\" requires a register operand, e.g. \"cond r0 ==0\".");
-    }
-
-    int maxRegister = condShape.SecondValueBitMask >> condShape.SecondValueBitShift;
-    if (register < 0 || register > maxRegister)
-    {
-      return (null, $"line {lineNumber}: \"cond\" register {register} does not fit its 4-bit register field (0..{maxRegister} -- r0-r15 only).");
-    }
-
-    if (instruction.ConditionName is null || !IfConditionSymbolByName.TryGetValue(instruction.ConditionName, out string? conditionSymbol))
-    {
-      string validNames = string.Join(", ", IfConditionSymbolByName.Keys);
-      return (null, $"line {lineNumber}: \"cond\" does not recognize condition \"{instruction.ConditionName}\" -- valid conditions are: {validNames}.");
-    }
-
-    if (!compiledRam.TryGetValue(Node406Program.Coordinate, out F18CompileResult? compile))
-    {
-      return (null, $"line {lineNumber}: \"cond\"'s condition \"{instruction.ConditionName}\" is implemented on node {Node406Program.Coordinate:000}, but node {Node406Program.Coordinate:000} did not compile (or wasn't included) this run -- fix/save it in the Node Editor, then re-assemble.");
-    }
-
-    if (!compile.Symbols.TryGetValue(conditionSymbol, out F18ExportedSymbol? symbol))
-    {
-      return (null, $"line {lineNumber}: \"cond\"'s condition \"{instruction.ConditionName}\" is implemented on node {Node406Program.Coordinate:000}, but that node's CURRENT source does not define \"{conditionSymbol}\".");
-    }
-
-    if (CvmInstructionSet.IsRegisterlessCondition(instruction.ConditionName) && register != 0)
-    {
-      return (null, $"line {lineNumber}: \"cond {instruction.ConditionName}\" takes no register -- write \"cond {instruction.ConditionName}\" (the register field is encoded as 0), not r{register}.");
-    }
-
-    int resolvedCond = symbol.Value & CvmWordCodec.WordMask;
-    int maxCond = condShape.ValueBitMask >> condShape.ValueBitShift;
-    if (resolvedCond < 0 || resolvedCond > maxCond)
-    {
-      return (null, $"line {lineNumber}: \"cond\"'s condition \"{instruction.ConditionName}\" resolved to node {Node406Program.Coordinate:000} address 0x{resolvedCond:X}, which does not fit this shape's own 4-bit \"cond\" field (0x0-0x{maxCond:X}) -- node 406's source has likely grown too large, or \"{conditionSymbol}\" moved.");
-    }
-
-    return (condShape.Tag | ((resolvedCond << condShape.ValueBitShift) & condShape.ValueBitMask) | ((register << condShape.SecondValueBitShift) & condShape.SecondValueBitMask), null);
-  }
+  private static readonly Regex UndefinedReferencePattern = new("^undefined reference to \"(?<name>[^\"]+)\"", RegexOptions.Compiled);
 
   /// <summary>
   /// Shared by <see cref="CvmDebugSession.AssembleAndLoadProgram"/> (a live session's own port-backed
   /// simulated SRAM) and <see cref="ViewModels.CvmDebuggerViewModel"/>'s standalone Assembly Code path
   /// (a plain in-memory <see cref="CvmSimulatedSram"/> that exists whether or not a chip is connected):
-  /// parses then assembles <paramref name="sourceText"/> against <paramref name="compiledRam"/> and, on
-  /// success, overwrites <paramref name="sram"/>'s page 0 with the result starting at address 0,
-  /// zero-filling any leftover tail from <paramref name="previousProgram"/> if it was longer, so no
-  /// stale opcode lingers past the new program's end. Returns the new word list (the caller's own job
-  /// to remember as its "currently loaded program") and never touches <paramref name="sram"/> at all on
-  /// a parse/assemble failure. <c>Labels</c> is simply <see cref="Assemble"/>'s own <c>Labels</c> output
-  /// passed straight through (added 2026-09-26, for the memory inspector's "Label" column).
+  /// assembles and links <paramref name="sourceText"/> against <paramref name="compiledRam"/>
+  /// (<see cref="AssembleProgram"/>) and, on success, overwrites <paramref name="sram"/>'s page 0 with the
+  /// result starting at address 0, zero-filling any leftover tail from <paramref name="previousProgram"/> if it
+  /// was longer, so no stale opcode lingers past the new program's end. Returns the new word list (the caller's
+  /// own job to remember as its "currently loaded program") and never touches <paramref name="sram"/> at all on
+  /// an assemble/link failure. <c>Labels</c> is <see cref="AssembleProgram"/>'s own label map.
   /// </summary>
   public static (List<int>? Words, IReadOnlyDictionary<string, int>? Labels, string? Error) AssembleAndLoadProgram(
       string sourceText,
@@ -2692,16 +1984,10 @@ internal static class CvmAssemblyLanguage
       IReadOnlyList<int> previousProgram,
       IReadOnlyDictionary<int, F18CompileResult> compiledRam)
   {
-    (List<CvmAsmInstruction>? instructions, string? parseError) = ParseSource(sourceText);
-    if (instructions is null)
-    {
-      return (null, null, parseError);
-    }
-
-    (List<int>? words, IReadOnlyDictionary<string, int>? labels, string? assembleError) = Assemble(instructions, compiledRam);
+    (List<int>? words, IReadOnlyDictionary<string, int>? labels, string? error) = AssembleProgram(sourceText, compiledRam);
     if (words is null)
     {
-      return (null, null, assembleError);
+      return (null, null, error);
     }
 
     int previousLength = previousProgram.Count;
@@ -2726,7 +2012,7 @@ internal static class CvmAssemblyLanguage
   /// so <see cref="CvmInstructionSet.TryDescribeSelfDecodingWord"/> picks them up automatically with no
   /// change needed here beyond the <c>nextWord2</c> lookahead this method now also reads (for
   /// <c>next32</c>'s own second trailing word -- see that parameter's own remarks); the new table's own
-  /// <c>cbr</c> is deliberately NOT assemblable yet (see <see cref="Assemble"/>'s own remarks) but DOES
+  /// <c>cbr</c> is deliberately NOT assemblable yet (see <see cref="AssembleProgram"/>'s own remarks) but DOES
   /// still disassemble correctly through this same path, reading being a strictly easier problem than
   /// writing here. This MUST be a stateful scan starting at 0, never an
   /// independent per-word decode: pushlit is followed by a literal operand word that would otherwise be
@@ -2865,741 +2151,4 @@ internal static class CvmAssemblyLanguage
     return notes;
   }
 
-  /// <summary>
-  /// True when <paramref name="value"/> fits <c>lit</c>'s own signed <see cref="CvmInstructionSet.CvmInstructionShape.ValueBitMask"/>
-  /// range -- shared by <see cref="GetWordLength"/> and <see cref="EncodeLiteralPseudoMnemonic"/> so the
-  /// two can never disagree on which of "lit"/"litr" a given value actually needs. Computed straight off
-  /// <c>lit</c>'s own <see cref="CvmInstructionSet.CvmInstructionShape"/> (never a hardcoded -256..255)
-  /// so a future change to <c>lit</c>'s own bit width is picked up automatically.
-  /// </summary>
-  private static bool FitsLitRange(int value)
-  {
-    // GUARD added 2026-09-30: "lit" was retired in the new VM's reset (see CvmInstructionSet.
-    // Instructions' own remarks at the top of its list) -- TryGetShape now returns null for it, where
-    // this used to unconditionally assume a shape existed (the "!" null-forgiving operator would
-    // otherwise crash with a NullReferenceException the moment anything called GetWordLength/
-    // EncodeLiteralPseudoMnemonic on a "literal" line). Returning false routes the caller down its own
-    // "too big for lit" / litr path instead, which EncodeLiteralPseudoMnemonic's own guard turns into a
-    // clean, specific error rather than a crash.
-    CvmInstructionSet.CvmInstructionShape? litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic);
-    if (litShape is null)
-    {
-      return false;
-    }
-
-    int maxValue = litShape.ValueBitMask >> 1;
-    int minValue = -(maxValue + 1);
-    return value >= minValue && value <= maxValue;
-  }
-
-  // FitsShortCallRange -- DELETED 2026-10-03 together with scall/lcall and the "call" pseudo-mnemonic
-  // (CVM redesign): "scall 0 does not exist, 'nop' has precedence" (Stefan, 2026-09-30) is moot now that no
-  // bare-address call word exists. The same small private per-file duplicate in CvmAssembler.cs went too.
-
-  /// <summary>
-  /// Encodes the <c>"literal"</c> pseudo-mnemonic (2026-09-27, per Stefan: "change opcode 'literal' so
-  /// that it uses 'lit' when the constant fits and 'litr' if the constant is too big for 'lit'") --
-  /// returns either <c>lit</c>'s own one-word self-describing encoding (<see cref="FitsLitRange"/>) or
-  /// <c>litr</c>'s own two-word tag-plus-trailing-operand encoding, resolved against
-  /// <paramref name="encodeTable"/> exactly like any other node-508 mnemonic (see
-  /// <see cref="CvmInstructionSet.LitrMnemonic"/>'s own remarks) -- never a bare <c>0x8000 | Id</c>
-  /// placeholder, since this file's assembler resolves immediately rather than deferring to a linker.
-  /// <see cref="Assemble"/>'s own remarks cover why a label operand is rejected before this is ever
-  /// called; by the time it runs, <paramref name="instruction"/>.Operand is the only operand form left to
-  /// handle.
-  /// </summary>
-  private static (List<int>? Words, string? Error) EncodeLiteralPseudoMnemonic(
-      CvmAsmInstruction instruction,
-      IReadOnlyDictionary<string, (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift)> encodeTable,
-      int lineNumber)
-  {
-    if (instruction.Operand is not int value)
-    {
-      return (null, $"line {lineNumber}: \"literal\" requires a literal numeric operand, e.g. \"literal 1234\".");
-    }
-
-    // ADDED 2026-09-30: "lit"/"litr" were both retired in the new VM's reset (see CvmInstructionSet.
-    // Instructions' own remarks at the top of its list) -- "literal" has nothing left to lower to.
-    // Checked before FitsLitRange even runs (see that method's own guard, which returns false rather
-    // than crashing for the same reason) so this fails with one clear, specific message instead of a
-    // confusing "litr is not available right now" one two branches down, or an outright crash.
-    if (CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic) is null)
-    {
-      return (null, $"line {lineNumber}: \"literal\" is not supported -- \"lit\"/\"litr\" were both retired in the new VM's 2026-09-30 reset (see CvmInstructionSet.Instructions' own remarks); \"nop\" is the only valid opcode right now.");
-    }
-
-    if (FitsLitRange(value))
-    {
-      CvmInstructionSet.CvmInstructionShape litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
-      return ([litShape.Tag | (value & litShape.ValueBitMask)], null);
-    }
-
-    if (!encodeTable.TryGetValue(CvmInstructionSet.LitrMnemonic, out (int Opcode, int WordLength, bool HasOperand, bool OperandIsEmbedded, int EmbeddedValueMask, int EmbeddedValueShift) litrEntry))
-    {
-      CvmInstructionSet.CvmInstructionShape shape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
-      int maxValue = shape.ValueBitMask >> 1;
-      int minValue = -(maxValue + 1);
-      return (null, $"line {lineNumber}: {value} does not fit in \"lit\"'s signed value ({minValue}..{maxValue}), and \"litr\" is not available right now (node 508 has no live compile defining \"'litr\").");
-    }
-
-    return ([litrEntry.Opcode, value & CvmWordCodec.WordMask], null);
-  }
-
-  /// <summary>
-  /// Encodes one <c>scall</c>/<c>br</c>/<c>cbr</c>/node-606 instruction's word(s) directly from
-  /// <paramref name="shape"/> and its literal operand (CVM2's OLD <c>call</c>, now retired, and the
-  /// now-retired <c>slit</c> used to belong here too) -- the same arithmetic
-  /// <see cref="CvmAssembler.EmitEmbeddedSignedValue"/>/<see cref="CvmAssembler.EmitEmbeddedUnsignedValue"/>
-  /// use for <c>br</c>/<c>cbr</c> and node 606's eight ops respectively (mask-derived
-  /// min/max, tag OR'd with the value's low bits) and <see cref="CvmAssembler"/>'s own
-  /// generalized <c>EmbeddedAddress</c> case uses for <c>scall</c>, kept as a small duplicate here rather
-  /// than shared: that assembler resolves a label/import operand through relocations against a
-  /// <see cref="CvmObjectFile"/>, deferred all the way to a linker, which has no place in this simpler,
-  /// immediately-loaded assembler -- this file's own label support (see <see cref="Assemble"/>'s own
-  /// remarks) resolves a label to a plain literal <c>int</c> BEFORE this method is ever called, so from
-  /// here a label-derived operand and a hand-typed one are indistinguishable.
-  ///
-  /// Returns a WORD LIST, not a single word (CHANGED 2026-09-30, alongside <c>lcall</c>'s own addition):
-  /// every branch here still returns exactly one word except
-  /// <see cref="CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord"/> (<c>lcall</c>), the
-  /// first shape in this file ever needing two -- its own tag word, already fully known from
-  /// <paramref name="shape"/>.Tag alone, plus a full trailing operand word carrying the actual resolved
-  /// address.
-  /// </summary>
-  private static (List<int>? Words, string? Error) EncodeSelfDescribingWord(CvmInstructionSet.CvmInstructionShape shape, int? operand, int? operand2, int lineNumber)
-  {
-    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair)
-    {
-      // Node 306/305's TEN two-operand floating-point ops (2026-09-16, widened from six to twelve in the
-      // 2026-09-21 rework, then narrowed back to ten the same day once Stefan corrected fpop/fpush to
-      // one-operand mnemonics -- see the EmbeddedUnsignedValue branch below, which those two now use
-      // instead): the ONLY two-operand shape in this file -- Stefan's own "mnemonic f g"
-      // syntax, e.g. "fadd 3 2" means fr[3] = fr[3] + fr[2]. Mirrors
-      // CvmAssembler.EmitEmbeddedUnsignedValuePair's own per-field validate/shift/OR pattern exactly
-      // (kept as a small duplicate here per this method's own class-level remarks on why the two
-      // assemblers don't share code).
-      if (operand is not int first || operand2 is not int second)
-      {
-        return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" requires exactly two literal operands, e.g. \"{shape.Mnemonic} 3 2\".");
-      }
-
-      int firstMaxValue = shape.ValueBitMask >> shape.ValueBitShift;
-      if (first < 0 || first > firstMaxValue)
-      {
-        return (null, $"line {lineNumber}: {first} does not fit in \"{shape.Mnemonic}\"'s first (register) operand (0..{firstMaxValue}).");
-      }
-
-      int secondMaxValue = shape.SecondValueBitMask >> shape.SecondValueBitShift;
-      if (second < 0 || second > secondMaxValue)
-      {
-        return (null, $"line {lineNumber}: {second} does not fit in \"{shape.Mnemonic}\"'s second (register) operand (0..{secondMaxValue}).");
-      }
-
-      return ([shape.Tag | ((first << shape.ValueBitShift) & shape.ValueBitMask) | ((second << shape.SecondValueBitShift) & shape.SecondValueBitMask)], null);
-    }
-
-    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.FixedOpcode)
-    {
-      // ADDED 2026-09-30, for the new VM's reset (nop, the one surviving mnemonic -- see
-      // CvmInstructionSet.Instructions' own remarks at the top of its list, and
-      // CvmOperandEncoding.FixedOpcode's own remarks). No operand at all: the whole word is already
-      // fully known from shape.Tag alone, so unlike every other branch in this method there is nothing
-      // to validate against a value -- only that the caller didn't also try to give it one.
-      if (operand is not null || operand2 is not null)
-      {
-        return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" does not take an operand.");
-      }
-
-      return ([shape.Tag], null);
-    }
-
-    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord)
-    {
-      // ADDED 2026-09-30, for the new VM's own lcall -- see CvmOperandEncoding.FixedOpcodeWithTrailingWord's
-      // own remarks. shape.Tag is already fully known (no node, no relocation for it, exactly like nop
-      // just above), but unlike nop a real operand DOES follow: the resolved target address, already a
-      // plain int by this point (a label operand is resolved to one before this method is ever called,
-      // same as every other branch here).
-      if (operand is not int lcallTarget)
-      {
-        return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" requires an operand, e.g. \"{shape.Mnemonic} 0x1234\" or \"{shape.Mnemonic} loop\".");
-      }
-
-      return ([shape.Tag, lcallTarget & CvmWordCodec.WordMask], null);
-    }
-
-    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords)
-    {
-      // ADDED 2026-10-02, for the "CVM_pipeline" table's own next32 -- see
-      // CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords' own remarks. shape.Tag is already fully
-      // known (no node, no relocation, same as next16/lcall just above), but TWO trailing operand
-      // words follow instead of one. Syntax mirrors litm/lit2's own two-separate-words convention
-      // (see this file's own remarks on CvmOperandEncoding.TwoTrailingWords): "next32 0x1234 0x5678",
-      // not a single 32-bit value split in half -- each word resolves independently, exactly like
-      // litm/lit2's own Operand/Operand2.
-      if (operand is not int next32First || operand2 is not int next32Second)
-      {
-        return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" requires two operands, e.g. \"{shape.Mnemonic} 0x1234 0x5678\".");
-      }
-
-      return ([shape.Tag, next32First & CvmWordCodec.WordMask, next32Second & CvmWordCodec.WordMask], null);
-    }
-
-    if (operand is not int value)
-    {
-      return (null, $"line {lineNumber}: \"{shape.Mnemonic}\" requires a literal operand, e.g. \"{shape.Mnemonic} 1\".");
-    }
-
-    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedAddress)
-    {
-      // GENERALIZED 2026-09-30, for the new VM's own scall (CVM2's OLD call used to be the only mnemonic
-      // here, hardcoded to its own 15-bit CallAddressMask) -- the field width is now read straight off
-      // shape.ValueBitMask (0x3FFF/14 bits for scall), mirroring CvmAssembler's own matching
-      // generalization, so a future EmbeddedAddress mnemonic with yet another width needs no change here.
-      if ((uint)value > (uint)shape.ValueBitMask)
-      {
-        return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s {System.Numerics.BitOperations.PopCount((uint)shape.ValueBitMask)}-bit target (0x0000-0x{shape.ValueBitMask:X4}).");
-      }
-
-      // ADDED 2026-09-30, CONFIRMED per Stefan directly: "scall 0 does not exist. 'nop' has precedence."
-      // A literal "scall 0" would otherwise silently encode as 0x0000 -- bit-for-bit identical to nop's own
-      // encoding -- so it is rejected here as a hard error rather than emitted. Mirrors CvmAssembler.cs's
-      // own equivalent check on its "call" pass-2 branch. Only "scall" itself needs this guard: a bare
-      // "call 0" never reaches here as scall in the first place, since EncodeCallPseudoMnemonic's own
-      // FitsShortCallRange test already routes value 0 to "lcall" before this method is ever called.
-      if (string.Equals(shape.Mnemonic, CvmInstructionSet.ShortCallMnemonic, StringComparison.Ordinal) && value == 0)
-      {
-        return (null, $"line {lineNumber}: \"scall 0\" does not exist -- address 0 is reserved for \"nop\" (the word scall would produce, 0x0000, is identical to nop's own); use \"lcall 0\" instead.");
-      }
-
-      // DEFENSIVE, added 2026-09-30 during review: scall's own Tag happens to be 0x0000 today, so
-      // "| shape.Tag" is currently a no-op -- but omitting it here would silently drop a future
-      // EmbeddedAddress mnemonic's tag bits if one is ever added with a nonzero Tag (and TryDescribeSelfDecodingWord's
-      // own decode side already masks against Tag, so a missing Tag here would fail to round-trip).
-      return ([shape.Tag | (value & shape.ValueBitMask)], null);
-    }
-
-    if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValue)
-    {
-      // Node 606's eight ops (ValueBitShift 0) and node 306's six address-register ops (ValueBitShift 1,
-      // a 2-bit register index at bits 2-1 rather than bit 0 upward -- see
-      // CvmInstructionSet.CvmInstructionShape.ValueBitShift's own remarks): unsigned
-      // 0..(ValueBitMask >> ValueBitShift), never a negative half -- unlike the signed case just below,
-      // so no min/max split is needed here. This mirrors CvmAssembler.EmitEmbeddedUnsignedValue exactly
-      // (kept as a small duplicate here per this method's own remarks). Node 306's fpop/fpush (CORRECTED
-      // 2026-09-21, per Stefan: "only 1 parameter") ALSO fall in here now -- a second operand, if the
-      // caller types one, is simply never looked at by this branch (see this method's own signature,
-      // which takes operand2 only for the Pair branch above).
-      int unsignedMaxValue = shape.ValueBitMask >> shape.ValueBitShift;
-      if (value < 0 || value > unsignedMaxValue)
-      {
-        return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s unsigned value (0..{unsignedMaxValue}).");
-      }
-
-      return ([shape.Tag | ((value << shape.ValueBitShift) & shape.ValueBitMask)], null);
-    }
-
-    int maxValue = shape.ValueBitMask >> 1;
-    int minValue = -(maxValue + 1);
-    if (value < minValue || value > maxValue)
-    {
-      return (null, $"line {lineNumber}: {value} does not fit in \"{shape.Mnemonic}\"'s signed value ({minValue}..{maxValue}).");
-    }
-
-    return ([shape.Tag | (value & shape.ValueBitMask)], null);
-  }
-
-  // EncodeCallPseudoMnemonic -- DELETED 2026-10-03 (CVM redesign): "call" no longer lowers to scall/lcall; it
-  // is a real two-word node-509 opcode handled by the generic tagged path in Assemble.
-
-  /// <summary>
-  /// Parses CVM assembly source text into <see cref="CvmAsmInstruction"/>s ready for
-  /// <see cref="Assemble"/>: one mnemonic per line, optionally followed by a "0x"-prefixed hex or
-  /// plain decimal operand OR a label name (see below), OR (2026-09-16, node 306's floating-point ops;
-  /// TEN of the twelve as of the 2026-09-21 rework, fpop/fpush excepted -- see this method's own
-  /// three-token branch below) exactly TWO space-separated literal operands, e.g. "fadd 3 2" (Stefan's
-  /// own "mnemonic f g" syntax) -- neither position accepts a label in that two-operand form; blank
-  /// lines, ";"/"//" line comments, and (2026-10-02, additional to those, not replacing them) C-style
-  /// "/* ... */" block comments -- which may span multiple lines; see <see cref="StripBlockComments"/>'s
-  /// own remarks for the full design -- are all ignored. This is purely textual -- it does not know or care whether a mnemonic actually resolves
-  /// against a live node's current compile (that's <see cref="Assemble"/>'s job) or whether a label
-  /// name it records here is ever actually defined anywhere (also <see cref="Assemble"/>'s job, via
-  /// <see cref="CollectLabelAddresses"/>) -- this method only tells the two apart syntactically.
-  ///
-  /// <b>Labels.</b> A line may start with "name:" (an identifier -- a letter or underscore, then any
-  /// mix of letters/digits/underscores -- immediately followed by a colon), either on its own (marking
-  /// the address of whatever instruction comes next) or immediately followed by that instruction on
-  /// the same line, e.g. "loop: nop". A candidate before ':' that isn't a valid identifier (starts
-  /// with a digit, e.g. a stray "0x12:") is left alone and the whole line is parsed as an ordinary
-  /// instruction instead, same as before labels existed. Once a line's optional label prefix is
-  /// stripped, its second token -- if not "0x"-hex or plain decimal -- is recorded as a label
-  /// OPERAND reference (<see cref="CvmAsmInstruction.OperandLabel"/>) when it's itself a valid
-  /// identifier, rather than an immediate parse failure; whether that label actually exists, and
-  /// whether the mnemonic in question even accepts a label there, is resolved later in
-  /// <see cref="Assemble"/>.
-  /// </summary>
-  public static (List<CvmAsmInstruction>? Instructions, string? Error) ParseSource(string source)
-  {
-    // ADDED 2026-10-02, per Stefan directly asking for C-style "/* ... */" block comments, additional
-    // to (not replacing) the ";"/"//" line comments StripComment already strips per-line below -- see
-    // StripBlockComments' own remarks for why this has to run as a separate, whole-source pre-pass
-    // BEFORE the line split just below, rather than folding into StripComment itself.
-    (string? sourceWithoutBlockComments, string? blockCommentError) = StripBlockComments(source.Replace("\r\n", "\n"));
-    if (sourceWithoutBlockComments is null)
-    {
-      return (null, blockCommentError);
-    }
-
-    var instructions = new List<CvmAsmInstruction>();
-    string[] lines = sourceWithoutBlockComments.Split('\n');
-    for (int lineNumber = 0; lineNumber < lines.Length; lineNumber++)
-    {
-      string original = lines[lineNumber];
-      string line = StripComment(original).Trim();
-      if (line.Length == 0)
-      {
-        continue;
-      }
-
-      string? label = null;
-      if (TryParseLabelPrefix(line, out string labelCandidate, out string remainder))
-      {
-        label = labelCandidate;
-        line = remainder;
-        if (line.Length == 0)
-        {
-          // A bare "label:" line with no instruction of its own -- see CollectLabelAddresses's own
-          // remarks for how this marks the address of whatever comes next.
-          instructions.Add(new CvmAsmInstruction(string.Empty, null, label));
-          continue;
-        }
-      }
-
-      string[] parts = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-      if (parts.Length == 1)
-      {
-        instructions.Add(new CvmAsmInstruction(parts[0], null, label));
-        continue;
-      }
-
-      // ADDED 2026-10-03, per Stefan: "true"/"false" need no register -- "cond true" (register encoded as 0).
-      // Must come before the generic two-token rule below, which would read "true" as an undefined label.
-      if (parts.Length == 2 &&
-          string.Equals(parts[0], CvmInstructionSet.CondMnemonic, StringComparison.OrdinalIgnoreCase) &&
-          CvmInstructionSet.IsRegisterlessCondition(parts[1]))
-      {
-        instructions.Add(new CvmAsmInstruction(parts[0], 0, label, ConditionName: parts[1]));
-        continue;
-      }
-
-      if (parts.Length == 2)
-      {
-        // ADDED 2026-10-03: register words take "rN" (16-bit register) or "dN" (double register,
-        // dpop/dpush) -- see CvmInstructionSet.TryParseRegisterOperand. Checked BEFORE the label rule
-        // below, since "d1" is also a valid identifier and used to be reported as an undefined label.
-        if (CvmInstructionSet.TryGetShape(parts[0]) is { } registerShape &&
-            CvmInstructionSet.TryParseRegisterOperand(registerShape, parts[1], out int registerToken, out string? registerError))
-        {
-          if (registerError is not null)
-          {
-            return (null, $"line {lineNumber + 1}: {registerError}");
-          }
-
-          instructions.Add(new CvmAsmInstruction(parts[0], registerToken, label));
-          continue;
-        }
-
-        if (TryParseOperand(parts[1], out int operand))
-        {
-          instructions.Add(new CvmAsmInstruction(parts[0], operand, label));
-          continue;
-        }
-
-        // ADDED 2026-10-03: "push2 x" with ONE operand takes a single 32-bit number (see
-        // EncodePush2Operands). TryParseOperand above only reaches int.MaxValue in decimal, so a decimal
-        // value in 2^31..2^32-1 needs this wider parse; the result is stored in Operand as the SAME 32 bits
-        // reinterpreted as an int (EncodePush2Operands reads it back as unsigned). Only push2 gets this --
-        // every other mnemonic keeps its plain int range.
-        if (string.Equals(parts[0], CvmInstructionSet.Push2Mnemonic, StringComparison.OrdinalIgnoreCase) &&
-            TryParsePush2WideOperand(parts[1], out int wideOperand))
-        {
-          instructions.Add(new CvmAsmInstruction(parts[0], wideOperand, label));
-          continue;
-        }
-
-        if (IsValidIdentifier(parts[1]))
-        {
-          // Not a number -- a forward or backward reference to another line's label, resolved once
-          // every label's address is known (see Assemble's own remarks).
-          instructions.Add(new CvmAsmInstruction(parts[0], null, label, parts[1]));
-          continue;
-        }
-      }
-
-      // ADDED 2026-10-04, for "rlit <reg> <value>" and "dlit <dreg> <value>" (node 509's register-literal words):
-      // the register token comes first ("rlit r1 1234", "dlit d1 0x12345678"), then the literal. rlit's value is a
-      // 16-bit number (-32768..65535) or a label (its absolute word address); dlit's is one 32-bit number
-      // (-2147483648..4294967295, no label), stored in Operand2 as the same 32 bits reinterpreted as an int.
-      // 2026-10-04 (second version): "dlit" ALSO accepts two 16-bit operands, hi then lo -- "dlit d5 0xCDEF 0x0123"
-      // (four tokens) -- exactly like push2's two forms. hi goes in Operand2, lo in Operand3.
-      if ((parts.Length == 3 ||
-           (parts.Length == 4 && string.Equals(parts[0], CvmInstructionSet.DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase))) &&
-          (string.Equals(parts[0], CvmInstructionSet.RegisterLiteralMnemonic, StringComparison.OrdinalIgnoreCase) ||
-           string.Equals(parts[0], CvmInstructionSet.DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase)) &&
-          CvmInstructionSet.TryGetShape(parts[0]) is { } literalShape)
-      {
-        int literalRegister;
-        if (CvmInstructionSet.TryParseRegisterOperand(literalShape, parts[1], out literalRegister, out string? literalRegisterError))
-        {
-          if (literalRegisterError is not null)
-          {
-            return (null, $"line {lineNumber + 1}: {literalRegisterError}");
-          }
-        }
-        else if (!TryParseOperand(parts[1], out literalRegister))
-        {
-          string exampleRegister = CvmInstructionSet.IsDoubleRegisterMnemonic(parts[0]) ? "d1" : "r1";
-          return (null, $"line {lineNumber + 1}: \"{parts[0]}\" requires a register ({exampleRegister[0]}0-{exampleRegister[0]}15, or a plain number 0-15) as its first operand, e.g. \"{parts[0]} {exampleRegister} 0x1234\" -- got \"{parts[1]}\".");
-        }
-
-        if (CvmInstructionSet.IsDoubleRegisterMnemonic(parts[0]))
-        {
-          if (parts.Length == 4)
-          {
-            if (!TryParseOperand(parts[2], out int dlitHi) || !TryParseOperand(parts[3], out int dlitLo))
-            {
-              return (null, $"line {lineNumber + 1}: \"dlit d1 hi lo\" needs two 16-bit numbers (decimal or 0x hex) -- got \"{parts[2]}\" \"{parts[3]}\".");
-            }
-
-            instructions.Add(new CvmAsmInstruction(parts[0], literalRegister, label, Operand2: dlitHi, Operand3: dlitLo));
-            continue;
-          }
-
-          if (!TryParsePush2WideOperand(parts[2], out int wideLiteral))
-          {
-            return (null, $"line {lineNumber + 1}: \"dlit\"'s second operand must be one 32-bit number (-2147483648..4294967295, decimal or 0x hex) -- got \"{parts[2]}\".");
-          }
-
-          instructions.Add(new CvmAsmInstruction(parts[0], literalRegister, label, Operand2: wideLiteral));
-          continue;
-        }
-
-        if (TryParseOperand(parts[2], out int literalValue))
-        {
-          instructions.Add(new CvmAsmInstruction(parts[0], literalRegister, label, Operand2: literalValue));
-          continue;
-        }
-
-        if (IsValidIdentifier(parts[2]))
-        {
-          instructions.Add(new CvmAsmInstruction(parts[0], literalRegister, label, OperandLabel3: parts[2]));
-          continue;
-        }
-
-        return (null, $"line {lineNumber + 1}: \"rlit\"'s second operand must be a 16-bit number or a label name -- got \"{parts[2]}\".");
-      }
-
-      // ADDED 2026-10-03, for "cond <reg> <cond>" (CvmInstructionSet.CondMnemonic): e.g. "cond r0 ==0". The
-      // register is "r0".."r15" (or a plain number 0-15, "d" tokens rejected -- 16-bit compare, same as "if"),
-      // the condition is a NAME, never a number, so it is NOT run through TryParseOperand. Checked before the
-      // numeric two-operand branch below, which would otherwise never match (the condition isn't numeric).
-      if (parts.Length == 3 && string.Equals(parts[0], CvmInstructionSet.CondMnemonic, StringComparison.OrdinalIgnoreCase))
-      {
-        int condRegister;
-        if (CvmInstructionSet.TryParseSingleRegisterToken(CvmInstructionSet.CondMnemonic, parts[1], 0x000F, out condRegister, out string? condRegisterError))
-        {
-          if (condRegisterError is not null)
-          {
-            return (null, $"line {lineNumber + 1}: {condRegisterError}");
-          }
-        }
-        else if (!TryParseOperand(parts[1], out condRegister))
-        {
-          return (null, $"line {lineNumber + 1}: \"cond\" requires a register (r0-r15, or a plain number 0-15) as its first operand, e.g. \"cond r0 ==0\" -- got \"{parts[1]}\".");
-        }
-
-        instructions.Add(new CvmAsmInstruction(parts[0], condRegister, label, ConditionName: parts[2]));
-        continue;
-      }
-
-      if (parts.Length == 3 && TryParseOperand(parts[1], out int firstOperand) && TryParseOperand(parts[2], out int secondOperand))
-      {
-        // Node 306's binary floating-point ops (2026-09-16; ten of the twelve as of the 2026-09-21
-        // rework -- fpop/fpush take only one operand, per Stefan's own same-day correction) are the only
-        // two-operand mnemonics in this file -- Stefan's own "mnemonic f g" syntax, e.g. "fadd 3 2".
-        // Neither position supports a label operand (yet); whether THIS particular mnemonic actually
-        // takes two operands at all is Assemble's own concern (see
-        // CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair), not this purely-syntactic
-        // parse -- so "fpop 3 5" still parses fine here (Operand=3, Operand2=5); EncodeSelfDescribingWord's
-        // own EmbeddedUnsignedValue branch is what silently ignores the stray second operand.
-        instructions.Add(new CvmAsmInstruction(parts[0], firstOperand, label, Operand2: secondOperand));
-        continue;
-      }
-
-      // ADDED 2026-10-02, for "if" alone (CvmInstructionSet.IfMnemonic, renamed from "cbr" the same
-      // day) -- the only three-operand mnemonic in this file, per Stefan's own confirmed syntax: "the
-      // correct syntax is 'if r0 ==0 loop_label'" ("if <reg> <cond> <target>"). Gated on the mnemonic
-      // itself (not just "four space-separated tokens") so this doesn't risk swallowing some unrelated
-      // future four-token line under a generic rule meant for exactly one mnemonic. The register (first
-      // operand) is a plain literal, same convention as every other register-taking mnemonic here
-      // (rjmp/rcall); the condition (second operand) is always a name, never parsed as a number, so it
-      // is NOT run through TryParseOperand at all; the target (third operand) may be a literal number or
-      // a label, exactly like the existing Operand/OperandLabel pair's own convention, just carried in
-      // Operand3/OperandLabel3 since Operand/OperandLabel are already the register's own slot here.
-      // 2026-10-03: an optional "then" before the target reads better -- "if r0 ==0 then test2" -- and is
-      // dropped here, so everything below sees the plain four-token form. (A label that is itself called
-      // "then" still works in the four-token form: "if r0 ==0 then".)
-      // ADDED 2026-10-03, per Stefan: "true"/"false" need no register -- "if true then label1" / "if true label1".
-      // An implicit "r0" is inserted so everything below sees the normal register-first form (register = 0).
-      if ((parts.Length == 3 || parts.Length == 4) &&
-          string.Equals(parts[0], CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase) &&
-          CvmInstructionSet.IsRegisterlessCondition(parts[1]))
-      {
-        parts = [parts[0], "r0", .. parts[1..]];
-      }
-
-      if (parts.Length == 5 &&
-          string.Equals(parts[0], CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase) &&
-          string.Equals(parts[3], "then", StringComparison.OrdinalIgnoreCase))
-      {
-        parts = [parts[0], parts[1], parts[2], parts[4]];
-      }
-
-      if (parts.Length == 4 && string.Equals(parts[0], CvmInstructionSet.IfMnemonic, StringComparison.OrdinalIgnoreCase))
-      {
-        // 2026-10-03: the register is written "r0".."r15" ("if r0 ==0 test2"); a plain number 0-15 is still
-        // accepted. "d0".."d15" are rejected (16-bit compare) -- see CvmInstructionSet.TryParseSingleRegisterToken.
-        int ifRegister;
-        if (CvmInstructionSet.TryParseSingleRegisterToken(CvmInstructionSet.IfMnemonic, parts[1], 0x000F, out ifRegister, out string? ifRegisterError))
-        {
-          if (ifRegisterError is not null)
-          {
-            return (null, $"line {lineNumber + 1}: {ifRegisterError}");
-          }
-        }
-        else if (!TryParseOperand(parts[1], out ifRegister))
-        {
-          return (null, $"line {lineNumber + 1}: \"if\" requires a register (r0-r15, or a plain number 0-15) as its first operand, e.g. \"if r0 ==0 loop\" -- got \"{parts[1]}\".");
-        }
-
-        string conditionName = parts[2];
-
-        if (TryParseOperand(parts[3], out int ifTargetLiteral))
-        {
-          instructions.Add(new CvmAsmInstruction(parts[0], ifRegister, label, ConditionName: conditionName, Operand3: ifTargetLiteral));
-          continue;
-        }
-
-        if (IsValidIdentifier(parts[3]))
-        {
-          instructions.Add(new CvmAsmInstruction(parts[0], ifRegister, label, ConditionName: conditionName, OperandLabel3: parts[3]));
-          continue;
-        }
-
-        return (null, $"line {lineNumber + 1}: \"if\"'s third operand must be a literal branch-target address or a label name -- got \"{parts[3]}\".");
-      }
-
-      return (null, $"line {lineNumber + 1}: could not parse \"{original.Trim()}\".");
-    }
-
-    return (instructions, null);
-  }
-
-  /// <summary>
-  /// ADDED 2026-10-02, per Stefan directly asking for C-style <c>/* ... */</c> block comments,
-  /// ADDITIONAL to (not replacing) the <c>;</c>/<c>//</c> line comments <see cref="StripComment"/>
-  /// already strips -- that method is left completely unchanged, and is still what handles those two.
-  /// A block comment can span multiple lines, which <see cref="StripComment"/>'s own per-line design
-  /// (<see cref="ParseSource"/> splits the source into lines FIRST, then strips each line
-  /// independently) cannot express at all, so this runs as a separate pre-pass over the WHOLE source
-  /// text, before it is ever split into lines -- <see cref="ParseSource"/> calls this first and only
-  /// then splits the result. A deliberate, separate duplicate of
-  /// Ga144.Cvm.Toolchain.CvmAssembler's own identically-named/-behaved helper, per this project's own
-  /// standing practice of not sharing code between the two assemblers.
-  ///
-  /// Every character inside a <c>/* ... */</c> span is dropped, including the delimiters themselves,
-  /// EXCEPT a newline, which is always preserved verbatim. That is what keeps every line number
-  /// <see cref="ParseSource"/>/<see cref="Assemble"/> report in their own error messages accurate
-  /// across a multi-line comment, exactly as if the commented-out lines were still there, just empty.
-  /// A closed comment is replaced by a single space rather than nothing at all, so two tokens written
-  /// adjacent to a comment with no surrounding whitespace (e.g. <c>"x/*note*/y"</c>) still tokenize as
-  /// two separate words instead of silently fusing into one -- the same convention a C preprocessor
-  /// uses.
-  ///
-  /// An unterminated comment (no matching <c>*/</c> before the source ends) is a hard parse error,
-  /// reported against the LINE the <c>/*</c> itself started on, not the end of the file, since that is
-  /// where a person fixing it needs to look -- surfaced through <see cref="ParseSource"/>'s own
-  /// existing <c>Error</c> return value, exactly like every other parse failure there.
-  ///
-  /// A <c>/*</c> or <c>*/</c> appearing inside an already-recognized <c>;</c>/<c>//</c> line comment is
-  /// NOT specially handled here -- by design, this runs BEFORE <see cref="StripComment"/>'s own
-  /// per-line stripping, so a stray <c>/*</c> after a <c>;</c>/<c>//</c> still opens a real block
-  /// comment (and a lone <c>*/</c> with no preceding <c>/*</c> is simply ordinary text, left untouched,
-  /// same as any other character outside a recognized comment). Stefan's own source has not been seen
-  /// to mix the two this way; if that ever matters, a fix belongs here, not in
-  /// <see cref="StripComment"/>.
-  /// </summary>
-  private static (string? Result, string? Error) StripBlockComments(string source)
-  {
-    var output = new System.Text.StringBuilder(source.Length);
-    int line = 1;
-    int i = 0;
-    while (i < source.Length)
-    {
-      char c = source[i];
-      if (c == '/' && i + 1 < source.Length && source[i + 1] == '*')
-      {
-        int startLine = line;
-        i += 2;
-        bool closed = false;
-        while (i < source.Length)
-        {
-          if (source[i] == '\n')
-          {
-            output.Append('\n');
-            line++;
-            i++;
-            continue;
-          }
-
-          if (source[i] == '*' && i + 1 < source.Length && source[i + 1] == '/')
-          {
-            i += 2;
-            closed = true;
-            break;
-          }
-
-          i++;
-        }
-
-        if (!closed)
-        {
-          return (null, $"line {startLine}: unterminated \"/*\" comment -- no matching \"*/\" found before the end of the file.");
-        }
-
-        output.Append(' ');
-        continue;
-      }
-
-      output.Append(c);
-      if (c == '\n')
-      {
-        line++;
-      }
-
-      i++;
-    }
-
-    return (output.ToString(), null);
-  }
-
-  private static string StripComment(string line)
-  {
-    int semicolon = line.IndexOf(';');
-    int slashSlash = line.IndexOf("//", StringComparison.Ordinal);
-    int cut = semicolon < 0 ? slashSlash : (slashSlash < 0 ? semicolon : Math.Min(semicolon, slashSlash));
-    return cut < 0 ? line : line[..cut];
-  }
-
-  // A leading "name:" where "name" is a valid identifier (IsValidIdentifier) marks a label
-  // definition -- returns the name and whatever follows the colon (trimmed, possibly empty for a
-  // bare "label:" line). A colon that isn't preceded by a valid identifier (no colon at all, or the
-  // text before it starts with a digit or contains a character an identifier can't) isn't a label at
-  // all; the whole original line is handed back unchanged for ordinary instruction parsing.
-  private static bool TryParseLabelPrefix(string line, out string label, out string remainder)
-  {
-    int colon = line.IndexOf(':');
-    if (colon < 0)
-    {
-      label = string.Empty;
-      remainder = line;
-      return false;
-    }
-
-    string candidate = line[..colon].Trim();
-    if (!IsValidIdentifier(candidate))
-    {
-      label = string.Empty;
-      remainder = line;
-      return false;
-    }
-
-    label = candidate;
-    remainder = line[(colon + 1)..].Trim();
-    return true;
-  }
-
-  // A label name (definition or operand reference): a letter or underscore, then any mix of
-  // letters/digits/underscores -- deliberately cannot start with a digit, so it never collides with a
-  // "0x..."/plain-decimal numeric operand or a stray "0x12:" that isn't meant as a label at all.
-  private static bool IsValidIdentifier(string text)
-  {
-    if (text.Length == 0 || (!char.IsLetter(text[0]) && text[0] != '_'))
-    {
-      return false;
-    }
-
-    for (int i = 1; i < text.Length; i++)
-    {
-      if (!char.IsLetterOrDigit(text[i]) && text[i] != '_')
-      {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  // Handles a leading '-' before EITHER a "0x"-prefixed hex magnitude or a plain decimal one -- the
-  // decimal case alone would already parse via NumberStyles.Integer's own AllowLeadingSign, but hex
-  // needs this to support a negative literal at all (needed for br/cbr operands, e.g. "-0x400" --
-  // the now-retired slit used to need it too).
-  private static bool TryParseOperand(string text, out int value)
-  {
-    if (text.StartsWith('-') && TryParseOperand(text[1..], out int magnitude))
-    {
-      value = -magnitude;
-      return true;
-    }
-
-    if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-    {
-      return int.TryParse(text.AsSpan(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
-    }
-
-    return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
-  }
-
-  /// <summary>
-  /// ADDED 2026-10-03, for the one-operand form of <c>push2</c> only: parses a decimal or "0x" hex literal
-  /// (optional leading '-') that must fit 32 bits as either a signed or an unsigned number
-  /// (-2147483648..4294967295) and returns its 32 bits reinterpreted as an <see cref="int"/>.
-  /// </summary>
-  private static bool TryParsePush2WideOperand(string text, out int value)
-  {
-    value = 0;
-    bool negative = text.StartsWith('-');
-    string body = negative ? text[1..] : text;
-    long magnitude;
-    if (body.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-    {
-      if (!long.TryParse(body.AsSpan(2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out magnitude))
-      {
-        return false;
-      }
-    }
-    else if (!long.TryParse(body, NumberStyles.None, CultureInfo.InvariantCulture, out magnitude))
-    {
-      return false;
-    }
-
-    long signedValue = negative ? -magnitude : magnitude;
-    if (signedValue < int.MinValue || signedValue > uint.MaxValue)
-    {
-      return false;
-    }
-
-    value = unchecked((int)(uint)signedValue);
-    return true;
-  }
 }

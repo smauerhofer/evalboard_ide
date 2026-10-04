@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-04T07:52:56.1294603
-      utcDateTime: 2026-10-04T07:52:56.1294603Z
-      localDateTime: 2026-10-04T09:52:56.1294603+02:00
+      dateTime: 2026-10-04T08:25:03.8468110
+      utcDateTime: 2026-10-04T08:25:03.8468110Z
+      localDateTime: 2026-10-04T10:25:03.8468110+02:00
       date: 2026-10-04T00:00:00.0000000
       day: 4
       dayOfWeek: Sunday
       dayOfYear: 277
-      hour: 7
-      millisecond: 129
-      microsecond: 460
-      nanosecond: 300
-      minute: 52
+      hour: 8
+      millisecond: 846
+      microsecond: 811
+      nanosecond: 0
+      minute: 25
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 56
-      ticks: 639266971761294603
-      utcTicks: 639266971761294603
-      timeOfDay: 07:52:56.1294603
+      second: 3
+      ticks: 639266991038468110
+      utcTicks: 639266991038468110
+      timeOfDay: 08:25:03.8468110
       year: 2026
   portB: 
   portC:
@@ -70020,7 +70020,7 @@ projects:
     debuggerAssemblyCode: 
     debuggerPrograms:
     - name: default
-      source: >+
+      source: >
         jmp start
 
         nop
@@ -70558,7 +70558,7 @@ projects:
         unlink
 
         ret
-    lastSelectedDebuggerProgramName: New program
+    lastSelectedDebuggerProgramName: microcode regression test
     cDebuggerPrograms:
     - name: default
       source: >

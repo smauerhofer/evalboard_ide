@@ -103,41 +103,39 @@ public static class CvmPrimitiveTableExporter
       return new Result { Success = false, Table = CvmPrimitiveTable.Empty, Messages = messages };
     }
 
-    var encodeTable = CvmAssemblyLanguage.BuildEncodeTable(compiledRam);
+    CvmPrimitiveTable table = BuildPrimitiveTable(compiledRam);
+    messages.Add($"exported {table.Entries.Count} primitive(s) from {compiledRam.Count} compiled node(s).");
+    return new Result { Success = true, Table = table, Messages = messages };
+  }
+
+  /// <summary>
+  /// Builds the <see cref="CvmPrimitiveTable"/> for an ALREADY-compiled node mesh -- split out of
+  /// <see cref="Export"/> 2026-10-04, when the CVM Debugger's own assembler was unified with
+  /// <see cref="CvmAssembler"/> (see <see cref="CvmAssemblyLanguage.AssembleProgram"/>): the debugger
+  /// already holds a <paramref name="compiledRam"/> (a live session's own, or the standalone compile
+  /// of <see cref="CvmNodeMesh.StandaloneCoordinates"/>) and needs the same table <see cref="Export"/>
+  /// hands <c>galink</c>, without compiling the mesh a second time. Exactly the two sources described
+  /// in this class's own remarks: every <see cref="CvmAssemblyLanguage.BuildEncodeTable"/> entry (its
+  /// <c>Opcode</c> is the BASE word for embedded-operand mnemonics) plus the condition-keyed synthetic
+  /// <c>if.&lt;key&gt;</c>/<c>cond.&lt;key&gt;</c> entries of
+  /// <see cref="CvmAssemblyLanguage.BuildIfConditionEncodeTable"/>.
+  /// </summary>
+  public static CvmPrimitiveTable BuildPrimitiveTable(IReadOnlyDictionary<int, F18CompileResult> compiledRam)
+  {
     var entries = new Dictionary<string, int>(StringComparer.Ordinal);
-    // NOTE, fixed 2026-09-30: this loop used to spell out BuildEncodeTable's own value-tuple shape by
-    // hand (Opcode/WordLength/HasOperand/OperandIsEmbedded/EmbeddedValueMask, 5 elements) -- once that
-    // tuple grew a 6th element, EmbeddedValueShift (for a field-layout that needs a shift alongside its
-    // mask), this hand-written copy silently fell out of step and stopped compiling at all
-    // ("CS0030: Cannot convert ... 6 elements ... to ... 5 elements"), surfaced by Stefan's own build
-    // right after the 2026-09-30 CVM reset even though this exporter itself was not touched by that
-    // reset. Switched to `var` so this loop tracks BuildEncodeTable's own return shape automatically --
-    // only `Opcode` is read here (since 2026-10-03; `OperandIsEmbedded` used to be too), so there is nothing this file needs to name
-    // explicitly, and any future change to that tuple's shape can no longer break this file again.
-    foreach (var pair in encodeTable)
+
+    // `var` on purpose (see the 2026-09-30 note in git history): only Opcode is read, so this loop
+    // tracks BuildEncodeTable's own tuple shape automatically.
+    foreach (var pair in CvmAssemblyLanguage.BuildEncodeTable(compiledRam))
     {
-      // (2026-10-03: embedded-operand entries are exported too -- Opcode is their BASE word, see this
-      // class's own remarks; they used to be skipped here.)
       entries[pair.Key] = pair.Value.Opcode;
     }
 
-    // ADDED 2026-10-02, per Stefan directly asking for the "if"-vs-CvmAssembler gap to be closed: "if"'s
-    // own "cond" field resolves one node-406 symbol per NAMED CONDITION VALUE, not per mnemonic, so it
-    // is structurally excluded from the loop just above (see BuildEncodeTable's own Instructions list
-    // remarks, and CvmInstructionSet.IfPrimitiveNamePrefix/IfConditionPrimitiveKeyByName's own remarks
-    // for the full design). CvmAssemblyLanguage.BuildIfConditionEncodeTable is the parallel,
-    // condition-keyed sibling of BuildEncodeTable that computes these entries instead -- merged in here,
-    // under their own synthetic "if.<key>" names (never colliding with any real mnemonic name, since no
-    // mnemonic contains "."), so CvmAssembler's own dedicated "if" case can resolve them through the
-    // exact same CvmPrimitiveTable/CvmRelocationType.CvmOpcode mechanism as every other entry in this
-    // table.
     foreach ((string name, int opcode) in CvmAssemblyLanguage.BuildIfConditionEncodeTable(compiledRam))
     {
       entries[name] = opcode;
     }
 
-    var table = CvmPrimitiveTable.FromEntries(entries);
-    messages.Add($"exported {entries.Count} primitive(s) from {compiledRam.Count} compiled node(s).");
-    return new Result { Success = true, Table = table, Messages = messages };
+    return CvmPrimitiveTable.FromEntries(entries);
   }
 }
