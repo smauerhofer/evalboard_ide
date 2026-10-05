@@ -294,10 +294,12 @@ public static class CvmInstructionSet
 
   // SlitMnemonic ("slit") -- BACK 2026-10-03, per Stefan directly: "'slit' is back", table row
   //   1001|1iii|iiii|iiii| 506 | slit { push 11-bit signed literal on stack }
-  // Bits 15-11 are the fixed "10011" (tag 0x9800), bits 10-0 an 11-bit SIGNED literal (-1024..1023) embedded
+  // CHANGED 2026-10-05 (Stefan's reworked node 507 table): the row is now
+  //   1010|iiii|iiii|iiii| 506 | slit { push 12-bit signed literal on stack }
+  // Bits 15-12 are the fixed "1010" (tag 0xA000), bits 11-0 a 12-bit SIGNED literal (-2048..2047) embedded
   // in the one word -- no trailing word, no node/linker involvement (CvmOperandEncoding.EmbeddedSignedValue,
-  // self-describing). It sits directly next to cond (1001|0000|cccc|xxxx): cond is 0x90xx, slit is
-  // 0x98xx-0x9FFF, no overlap. This is a NEW row with a NEW Id (214), not a revival of the old slit's Id 8
+  // self-describing). cond is 0x90xx and slit is 0xA000-0xAFFF, no overlap. (The text below describes the
+  // 2026-10-03 version: tag 0x9800, 11 bits.) This is a NEW row with a NEW Id (214), not a revival of the old slit's Id 8
   // (CVM2's 1101-class, 12-bit slit, retired 2026-09-09 and deleted outright) -- that Id stays retired.
   // Source syntax: "slit <value>", e.g. "slit 5", "slit -1", "slit 0x3FF"; the IDE assembler also accepts a
   // label (its absolute address, range-checked), exactly like the old slit did. The value is pushed
@@ -749,7 +751,7 @@ public static class CvmInstructionSet
   //   'dfetch  "read the content of a memory cell pointed to by a 32-register and push its value on the stack ( - w )"
   //   'dstore  "pop a value from the stack and write the content of a memory cell pointed to by a 32-register ( w - )"
   //   'rlit    "next 16-bit literal -> register"            memory: opcode, value
-  //   'dlit    "next 32-bit literal -> double register"     memory: opcode, lo, hi
+  //   'dlit    "next 32-bit literal -> double register"     memory: opcode, lo, hi (2026-10-05: now opcode, HI, LO)
   //   'rjmp    "jump to address held in register"
   //   'rcall   "call address held in register"
   //   'drop    "discard one VM stack word"
@@ -759,6 +761,7 @@ public static class CvmInstructionSet
   // memory instruction is NOT the node-509 table size: rlit is 2 words and dlit 3 (their trailing literal
   // words), drop/dup/rjmp/rcall/dfetch/dstore 1, whatever their table entries' sizes. dlit's 32-bit literal is
   // stored LOW word first, then high (node 509's m/dnext reads "lo hi"), the opposite of push2's hi-lo.
+  // CHANGED 2026-10-05: node 509's 'dlit now reads "hi lo" (memory: opcode, hi, lo) -- the same order as push2.
   // (rjmp/rcall reuse RegisterJumpMnemonic/RegisterCallMnemonic above -- those names belonged to the retired
   // CVM2 Ids 191/192, which stay retired; the new words are new Ids.)
   public const string DoubleFetchMnemonic = "dfetch";
@@ -766,6 +769,12 @@ public static class CvmInstructionSet
   public const string RegisterLiteralMnemonic = "rlit";
   public const string DoubleLiteralMnemonic = "dlit";
   public const string DropMnemonic = "drop";
+
+  /// <summary>
+  /// <c>swap</c> (NEW 2026-10-05, node 509's <c>'swap</c>, "size 4 without register"): swaps the top two VM stack
+  /// words, VM( w1 w2 - w2 w1 ). No operand, one memory word.
+  /// </summary>
+  public const string SwapMnemonic = "swap";
   public const string DupMnemonic = "dup";
 
   // ---- node 306's 16-bit unary and binary register operations (2026-10-04) ----------------------------------------
@@ -797,6 +806,22 @@ public static class CvmInstructionSet
   public const string HighByteMnemonic = "highbyte";
   public const string LowByteMnemonic = "lowbyte";
   public const string ByteSwapMnemonic = "byteswap";
+
+  /// <summary>
+  /// <c>rload rX dY</c> / <c>rstore rX dY</c> (NEW 2026-10-05, node 508's <c>'rload</c>/<c>'rstore</c>, reached through the
+  /// "508 direct" row <c>0010|wwww|yyyy|xxxx</c>: w = address in node 508 (4 bits, so the words must sit at node-508 addresses
+  /// 0..15), x = a 16-bit register, y = a DOUBLE register holding a memory pointer (lo = address, hi = page)).
+  /// <c>rload rx dy</c>: read memory at the address in dy and store it in register rx. <c>rstore rx dy</c>: write register rx
+  /// to the memory cell the address in dy points to. Opcode = 0x2000 | w &lt;&lt; 8 | y &lt;&lt; 4 | x. Same shape as the node-306 binary
+  /// words (second register field = SecondValueBitMask), except that the SECOND operand is a double register: "rload r1 d2".
+  /// </summary>
+  public const string RegisterLoadMnemonic = "rload";
+  public const string RegisterStoreMnemonic = "rstore";
+
+  /// <summary>True for the words whose SECOND register operand is a double register (d0..d15): rload and rstore.</summary>
+  public static bool IsSecondRegisterDoubleMnemonic(string mnemonic) =>
+      string.Equals(mnemonic, RegisterLoadMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, RegisterStoreMnemonic, StringComparison.OrdinalIgnoreCase);
 
   /// <summary>First register ("x", the destination and first operand) of a node-306 16-bit operation: bits 3-0.</summary>
   public const int Operation16FirstRegisterBitMask = 0x000F;
@@ -2785,7 +2810,8 @@ public static class CvmInstructionSet
     // stack}" -- Tag 0x9800, ValueBitMask 0x07FF (11 bits, signed: -1024..1023), WordLength 1, no trailing
     // word. Fully self-describing (EmbeddedSignedValue), so both assemblers need no code of their own for it.
     // Fresh Id: 214 had never been used; the old slit's Id 8 stays retired.
-    new(Id: 214, SlitMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: 0x9800, ValueBitMask: 0x07FF),
+    // CHANGED 2026-10-05: Tag 0xA000, ValueBitMask 0x0FFF (12 bits, signed: -2048..2047) -- "1010|iiii|iiii|iiii| 506 | slit".
+    new(Id: 214, SlitMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: 0xA000, ValueBitMask: 0x0FFF),
     // ---- node 509's second batch of words (2026-10-04; see DoubleFetchMnemonic's remarks). All resolve against
     // node 509 like the rows above (NodeResolvedEmbeddedValue = register in bits 3-0 of the live-resolved word;
     // None = no operand). Fresh Ids 215-222. rlit/dlit keep the NodeResolvedEmbeddedValue shape (register in the
@@ -2807,6 +2833,12 @@ public static class CvmInstructionSet
     new(Id: 225, XorMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 226, SubtractMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 227, AddMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    // rload/rstore (Ids 248/249, NEW 2026-10-05): node 508's 'rload/'rstore, "508 direct" row 0010|wwww|yyyy|xxxx -- binary shape
+    // (x = 16-bit register in bits 3-0, y = DOUBLE register in bits 7-4), see RegisterLoadMnemonic's remarks.
+    new(Id: 248, RegisterLoadMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 249, RegisterStoreMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    // swap (Id 247, NEW 2026-10-05): node 509's 'swap, no operand.
+    new(Id: 247, SwapMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 246, MoveRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 228, PackBytesMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 229, DivideByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
@@ -2979,6 +3011,8 @@ public static class CvmInstructionSet
     new(Id: 205, DoublePopIndirectMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 206, RegisterPushIndirectMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 207, DoublePushIndirectMnemonic, 1, CvmOperandEncoding.None),
+    // rinc/rdec/radd (Ids 208-210) are NOT in node 509 any more (reworked 2026-10-05: no 'rinc/'rdec/'radd). The rows and
+    // wiring stay (ids are never reused), but assembling one reports that node 509's source does not define it.
     new(Id: 208, RegisterIncrementMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 209, RegisterDecrementMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 210, RegisterAddMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
@@ -3386,14 +3420,17 @@ public static class CvmInstructionSet
   /// (the x field holds 0..15). Plain numbers stay accepted by the callers for the same mnemonics.
   /// </summary>
   public static bool TryParseRegisterOperand(CvmInstructionShape shape, string text, out int index, out string? error) =>
-      TryParseRegisterOperand(shape, text, shape.ValueBitMask >> shape.ValueBitShift, out index, out error);
+      TryParseRegisterOperandCore(shape, text, shape.ValueBitMask >> shape.ValueBitShift, IsDoubleRegisterMnemonic(shape.Mnemonic), out index, out error);
 
   /// <summary>
   /// Same as the overload above with an explicit <paramref name="maxIndex"/> -- used for the SECOND register of a binary
   /// node-306 operation (<see cref="IsBinaryRegisterOperation(CvmInstructionShape)"/>), whose field is
   /// <see cref="CvmInstructionShape.SecondValueBitMask"/> rather than <see cref="CvmInstructionShape.ValueBitMask"/>.
   /// </summary>
-  public static bool TryParseRegisterOperand(CvmInstructionShape shape, string text, int maxIndex, out int index, out string? error)
+  public static bool TryParseRegisterOperand(CvmInstructionShape shape, string text, int maxIndex, out int index, out string? error) =>
+      TryParseRegisterOperandCore(shape, text, maxIndex, IsSecondRegisterDoubleMnemonic(shape.Mnemonic), out index, out error);
+
+  private static bool TryParseRegisterOperandCore(CvmInstructionShape shape, string text, int maxIndex, bool isDouble, out int index, out string? error)
   {
     index = 0;
     error = null;
@@ -3416,11 +3453,12 @@ public static class CvmInstructionSet
       }
     }
 
-    bool isDouble = IsDoubleRegisterMnemonic(shape.Mnemonic);
     char expectedPrefix = isDouble ? 'd' : 'r';
     if (prefix != expectedPrefix)
     {
-      error = isDouble
+      error = isDouble && IsSecondRegisterDoubleMnemonic(shape.Mnemonic)
+          ? $"the second operand of \"{shape.Mnemonic}\" is a double register holding the memory pointer -- write d0..d{maxIndex} (e.g. \"{shape.Mnemonic} r1 d2\"), not \"{text}\"."
+          : isDouble
           ? $"\"{shape.Mnemonic}\" works on a double register -- write d0..d{maxIndex} (e.g. \"{shape.Mnemonic} d1\"), not \"{text}\": for 32-bit operations the register number is doubled (d1 = r2/r3), so an r-name would be misleading."
           : $"\"{shape.Mnemonic}\" works on a 16-bit register -- write r0..r{maxIndex} (e.g. \"{shape.Mnemonic} r1\"), not \"{text}\": d0..d{maxIndex} are the double registers of dpop/dpush.";
       return true;
@@ -3488,7 +3526,7 @@ public static class CvmInstructionSet
   /// </summary>
   public static string FormatRegisterOperand(string mnemonic, int index) =>
       IsBinaryRegisterOperation(mnemonic)
-          ? $"r{index & Operation16FirstRegisterBitMask} r{(index & Operation16SecondRegisterBitMask) >> Operation16SecondRegisterBitShift}"
+          ? $"r{index & Operation16FirstRegisterBitMask} {(IsSecondRegisterDoubleMnemonic(mnemonic) ? 'd' : 'r')}{(index & Operation16SecondRegisterBitMask) >> Operation16SecondRegisterBitShift}"
           : $"{(IsDoubleRegisterMnemonic(mnemonic) ? 'd' : 'r')}{index}";
 
   /// <summary>

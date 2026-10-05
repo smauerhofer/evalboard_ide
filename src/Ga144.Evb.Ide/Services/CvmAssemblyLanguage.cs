@@ -510,6 +510,12 @@ internal static class CvmAssemblyLanguage
   private const int Node509SpecialAddressFieldBitMask = 0x0FC0;
   private const int Node509SpecialSizeFieldShift = 4;
   private const int Node509SpecialSizeFieldBitMask = 0x0030;
+  // ADDED 2026-10-05 (Stefan's reworked node 507 table): bit 12 now separates "microcode WITHOUT register"
+  // (0000|wwww|wwss|xxxx) from "microcode WITH register" (0001|wwww|wwss|xxxx). The comment under each label in node
+  // 509 declares it ("// size N with register." / "// size N without register."); it is OR'd in for words that take a
+  // register operand (x, bits 3-0). Opcode = register bit | address << 6 | (N - 1) << 4 | x. Examples: rpop @8 size 2
+  // = 0x1210 | x, ret @1 size 1 = 0x0040.
+  private const int Node509SpecialRegisterBit = 0x1000;
 
   // CVM2's node 508 'gld/'gst tag (2026-09-04, renamed 2026-09-09 from 'ldg'/'stg -- see
   // CvmInstructionSet.LoadGlobalMnemonic's own remarks), per Stefan's node 508 source
@@ -546,6 +552,11 @@ internal static class CvmAssemblyLanguage
   private const int Node306UnaryFunctionFieldShift = 4;
   private const int Node306BinaryFunctionFieldBitMask = 0x0F00;
   private const int Node306BinaryFunctionFieldShift = 8;
+
+  // Node 508's "508 direct" row (2026-10-05, Stefan: "there are 2 new opcodes in node 508: rload and rstore"):
+  // 0010|wwww|yyyy|xxxx -- opcode = 0x2000 | w << 8 | y << 4 | x, w = the word's address in node 508 (4 bits, so 'rload/'rstore
+  // must stay at node-508 addresses 0..15), x = 16-bit register, y = double register. Same field layout as node 306's binary words.
+  private const int Node508DirectTagBits = 0x2000;
 
   // CVM2's node 509 unary-arithmetic tag (2026-09-05), per Stefan's node 509 source
   // (Cvm.Node509Program): its own u/main dispatch cascade falls through to its own remote-fetch-then-
@@ -861,6 +872,7 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.RegisterCallMnemonic] = (Node509Program.Coordinate, "'rcall", Node509SpecialBaseTagBits),
         [CvmInstructionSet.DropMnemonic] = (Node509Program.Coordinate, "'drop", Node509SpecialBaseTagBits),
         [CvmInstructionSet.DupMnemonic] = (Node509Program.Coordinate, "'dup", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.SwapMnemonic] = (Node509Program.Coordinate, "'swap", Node509SpecialBaseTagBits),
 
         // Node 407's long-branch op (added 2026-09-06, "more opcodes to node 407 added") -- reached
         // through node 407's own SAME "1100" n/main branch as 'lcall/'ljmp above, so it shares the SAME
@@ -1014,6 +1026,9 @@ internal static class CvmAssemblyLanguage
         // are the genuinely new words. "bitcount" is the new 'bitcount word -- NOT the retired "bitcnt" just above.
         [CvmInstructionSet.PackBytesMnemonic] = (Node306Program.Coordinate, "'packbytes", Node306BinaryOperationTagBits),
         [CvmInstructionSet.MoveRegisterMnemonic] = (Node306Program.Coordinate, "'mov", Node306BinaryOperationTagBits),
+        // ---- node 508's direct words (2026-10-05) ----
+        [CvmInstructionSet.RegisterLoadMnemonic] = (Node508Program.Coordinate, "'rload", Node508DirectTagBits),
+        [CvmInstructionSet.RegisterStoreMnemonic] = (Node508Program.Coordinate, "'rstore", Node508DirectTagBits),
         [CvmInstructionSet.Mask15Mnemonic] = (Node306Program.Coordinate, "'mask15", Node306UnaryOperationTagBits),
         [CvmInstructionSet.Invert15Mnemonic] = (Node306Program.Coordinate, "'inv15", Node306UnaryOperationTagBits),
         [CvmInstructionSet.BoolMnemonic] = (Node306Program.Coordinate, "'bool", Node306UnaryOperationTagBits),
@@ -1224,6 +1239,8 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.OrMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.PackBytesMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.MoveRegisterMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.RegisterLoadMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.RegisterStoreMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
         [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
@@ -1302,6 +1319,7 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.RegisterCallMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.DropMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.DupMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.SwapMnemonic] = Node509SpecialAddressShift,
       };
 
   /// <summary>
@@ -1325,9 +1343,10 @@ internal static class CvmAssemblyLanguage
   /// in the source can never be mistaken for the table. Returns false with a <paramref name="reason"/>
   /// when the label line or its comment cannot be found/parsed -- never a guessed size or focus.
   /// </summary>
-  private static bool TryReadNode509SpecialComment(string expandedSource, string symbolName, out int words, out string? reason)
+  private static bool TryReadNode509SpecialComment(string expandedSource, string symbolName, out int words, out bool? withRegister, out string? reason)
   {
     words = 0;
+    withRegister = null;
     reason = null;
 
     if (string.IsNullOrEmpty(expandedSource))
@@ -1374,7 +1393,9 @@ internal static class CvmAssemblyLanguage
     string[] lines = cleaned.ToString().Split('\n');
     Regex labelLine = new($@"^\s*:\s*{Regex.Escape(symbolName)}(\s|$)", RegexOptions.CultureInvariant);
     // "// size N." (current) or the legacy "// N with(out) focus" (N is read, the focus part ignored).
-    Regex commentLine = new(@"^\s*//\s*(?:size\s+(?<n>\d+)|(?<n>\d+)\s+(?:with|without)\s+focus)\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    // "// size N with register." / "// size N without register." (2026-10-05; the register part is optional, then the
+    // CVM instruction set decides), "// size N." (2026-10-04) or the legacy "// N with(out) focus" (focus ignored).
+    Regex commentLine = new(@"^\s*//\s*(?:size\s+(?<n>\d+)(?:\s+(?<reg>with|without)\s+register)?|(?<n>\d+)\s+(?:with|without)\s+focus)\b", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
     {
@@ -1398,11 +1419,16 @@ internal static class CvmAssemblyLanguage
       Match match = commentLine.Match(lines[next]);
       if (!match.Success)
       {
-        reason = $"the line under \"{symbolName}\" in node 509's source reads \"{lines[next].Trim()}\", expected a comment \"// size N.\" (N = number of words in the entry).";
+        reason = $"the line under \"{symbolName}\" in node 509's source reads \"{lines[next].Trim()}\", expected a comment \"// size N with register.\" or \"// size N without register.\" (N = number of words in the entry).";
         return false;
       }
 
       words = int.Parse(match.Groups["n"].Value, CultureInfo.InvariantCulture);
+      if (match.Groups["reg"].Success)
+      {
+        withRegister = string.Equals(match.Groups["reg"].Value, "with", StringComparison.OrdinalIgnoreCase);
+      }
+
       return true;
     }
 
@@ -1412,7 +1438,7 @@ internal static class CvmAssemblyLanguage
 
   /// <summary>
   /// ADDED 2026-10-03 (CVM redesign). Computes the opcode word (register field still 0) of one node-509
-  /// special word: <c>(address &lt;&lt; 6) | ((words - 1) &lt;&lt; 4)</c> (no focus bit since 2026-10-04), where
+  /// special word: <c>[0x1000 if it takes a register] | (address &lt;&lt; 6) | ((words - 1) &lt;&lt; 4)</c> (no focus bit since 2026-10-04; register bit 12 since 2026-10-05), where
   /// <c>address</c> is the word address of the entry's <c>'name</c> label in node 509's compile and
   /// <c>words</c> comes from the <c>// size N.</c> comment under the label
   /// (<see cref="TryReadNode509SpecialComment"/>) -- the single source of truth for both.
@@ -1423,7 +1449,7 @@ internal static class CvmAssemblyLanguage
   /// guesses -- an unresolvable entry is omitted, same graceful convention every other mnemonic that
   /// fails to resolve already follows (DiagnoseUnresolvedWiredMnemonic then says why).
   /// </summary>
-  private static bool TryResolveNode509SpecialOpcode(int tag, F18CompileResult compile, F18ExportedSymbol symbol, out int opcode, out string? reason)
+  private static bool TryResolveNode509SpecialOpcode(int tag, F18CompileResult compile, F18ExportedSymbol symbol, bool takesRegister, out int opcode, out string? reason)
   {
     opcode = 0;
     reason = null;
@@ -1436,9 +1462,17 @@ internal static class CvmAssemblyLanguage
       return false;
     }
 
-    if (!TryReadNode509SpecialComment(compile.ExpandedSource, symbol.Name, out int words, out string? commentReason))
+    if (!TryReadNode509SpecialComment(compile.ExpandedSource, symbol.Name, out int words, out bool? declaredWithRegister, out string? commentReason))
     {
       reason = commentReason;
+      return false;
+    }
+
+    // 2026-10-05: the comment's "with/without register" must agree with the CVM instruction set's own shape for the
+    // mnemonic (the assembler only writes a register operand into the x field of a "with register" word).
+    if (declaredWithRegister is bool declared && declared != takesRegister)
+    {
+      reason = $"the comment under \"{symbol.Name}\" in node 509's source says \"{(declared ? "with" : "without")} register\", but the CVM instruction set defines this mnemonic {(takesRegister ? "with" : "without")} a register operand -- change the comment, or the instruction set.";
       return false;
     }
 
@@ -1449,7 +1483,7 @@ internal static class CvmAssemblyLanguage
       return false;
     }
 
-    opcode = tag | (address << Node509SpecialAddressShift) | ((words - 1) << Node509SpecialSizeFieldShift);
+    opcode = tag | (takesRegister ? Node509SpecialRegisterBit : 0) | (address << Node509SpecialAddressShift) | ((words - 1) << Node509SpecialSizeFieldShift);
     return true;
   }
 
@@ -1602,7 +1636,7 @@ internal static class CvmAssemblyLanguage
       // non-zero x on e.g. "ret" is not what this assembler emits, so it is not claimed here).
       if (IsNode509SpecialWord(nodeCoordinate, tag))
       {
-        if (!TryResolveNode509SpecialOpcode(tag, compile, symbol, out int specialOpcode, out _))
+        if (!TryResolveNode509SpecialOpcode(tag, compile, symbol, encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue, out int specialOpcode, out _))
         {
           continue;
         }
@@ -1706,7 +1740,7 @@ internal static class CvmAssemblyLanguage
       // operand -- the same embedded-operand mechanism node 511's old ops used.
       if (IsNode509SpecialWord(nodeCoordinate, tag))
       {
-        if (!TryResolveNode509SpecialOpcode(tag, compile, symbol, out int specialOpcode, out _))
+        if (!TryResolveNode509SpecialOpcode(tag, compile, symbol, encoding == CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue, out int specialOpcode, out _))
         {
           continue;
         }
@@ -1884,7 +1918,7 @@ internal static class CvmAssemblyLanguage
     // the address may not fit the 6-bit field, or the comment under the label (size / focus) may be
     // missing, unparsable or out of range. TryResolveNode509SpecialOpcode already says exactly why.
     if (IsNode509SpecialWord(wiring.NodeCoordinate, wiring.Tag) &&
-        !TryResolveNode509SpecialOpcode(wiring.Tag, compile, symbol, out _, out string? specialReason))
+        !TryResolveNode509SpecialOpcode(wiring.Tag, compile, symbol, CvmInstructionSet.TryGetShape(mnemonic) is { Encoding: CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue }, out _, out string? specialReason))
     {
       return $"is implemented on node {wiring.NodeCoordinate:000}'s special-word table, but cannot be encoded: {specialReason}";
     }
@@ -2158,14 +2192,14 @@ internal static class CvmAssemblyLanguage
           string registerNote = $"{instruction.Mnemonic} {CvmInstructionSet.FormatRegisterOperand(instruction.Mnemonic, embeddedOperand)}";
 
           // 2026-10-04: rlit (2 words) / dlit (3 words) carry their literal in the following word(s) --
-          // rlit one 16-bit word; dlit LOW word then HIGH word, shown as one 32-bit number.
+          // rlit one 16-bit word; dlit HIGH word then LOW word (2026-10-05; was lo, hi), shown as one 32-bit number.
           if (instruction.WordLength == 2 && address + 1 < endAddressExclusive)
           {
             registerNote += " " + CvmInstructionSet.FormatOperand(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1)));
           }
           else if (instruction.WordLength == 3 && address + 2 < endAddressExclusive)
           {
-            uint wideLiteral = ((uint)(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 2)) & 0xFFFF) << 16) | (uint)(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1)) & 0xFFFF);
+            uint wideLiteral = ((uint)(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1)) & 0xFFFF) << 16) | (uint)(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 2)) & 0xFFFF);
             registerNote += $" 0x{wideLiteral:X8} ({wideLiteral})";
           }
 

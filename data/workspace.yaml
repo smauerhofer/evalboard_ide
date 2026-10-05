@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-04T18:16:06.2500507
-      utcDateTime: 2026-10-04T18:16:06.2500507Z
-      localDateTime: 2026-10-04T20:16:06.2500507+02:00
-      date: 2026-10-04T00:00:00.0000000
-      day: 4
-      dayOfWeek: Sunday
-      dayOfYear: 277
-      hour: 18
-      millisecond: 250
-      microsecond: 50
-      nanosecond: 700
-      minute: 16
+      dateTime: 2026-10-05T08:37:25.9493449
+      utcDateTime: 2026-10-05T08:37:25.9493449Z
+      localDateTime: 2026-10-05T10:37:25.9493449+02:00
+      date: 2026-10-05T00:00:00.0000000
+      day: 5
+      dayOfWeek: Monday
+      dayOfYear: 278
+      hour: 8
+      millisecond: 949
+      microsecond: 344
+      nanosecond: 900
+      minute: 37
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 6
-      ticks: 639267345662500507
-      utcTicks: 639267345662500507
-      timeOfDay: 18:16:06.2500507
+      second: 25
+      ticks: 639267862459493449
+      utcTicks: 639267862459493449
+      timeOfDay: 08:37:25.9493449
       year: 2026
   portB: 
   portC:
@@ -66018,7 +66018,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDE95'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 206
       enabled: true
       sourceCode: >+
@@ -66125,7 +66125,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDE7C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 207
       enabled: true
       sourceCode: >+
@@ -66231,7 +66231,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#95DE7C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 208
       enabled: true
       sourceCode: "( CVM_pipeline node 208.\n\ninstruction execution.\n\n\n)\n\r\n# up /b\r\n\r\nentry x4a/main\r\n\r\n# 0 org\r\n\n: x4a/main\n  @b\r\n  \n  x4a/main ;\n\r\n\r\n\r\n"
@@ -66740,7 +66740,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEAD'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 306
       enabled: true
       sourceCode: >+
@@ -66980,7 +66980,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDE95'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 307
       enabled: true
       sourceCode: >+
@@ -67110,7 +67110,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#95DE7C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 308
       enabled: true
       sourceCode: >
@@ -67689,15 +67689,19 @@ projects:
 
         : r/r! ( w ) @b ( w r ) a! ! ;
 
+        : r/r!x ( r ) a! @b ( w ) ! ;
+
 
         : r/d@ ( d ) 2* a! @+ !b @+ !b ;
 
-        : r/d! ( hi ) @b @b ( hi lo d ) 2* a! !+ !+ ;
-
-
         : r/d@x ( d ) 2* a! @+ @+ !b !b ;
 
-        : r/d!x ( hi ) @b @b ( hi lo d ) 2* a! >r !+ r> !+ ;
+
+        : r/d! ( hi ) @b @b ( hi lo d ) 2* a! !+ !+ ;
+
+        : r/d!x ( d ) 2* a! @b @b ( lo hi ) >r !+ r> !+ ;
+
+        : r/d!y ( lo ) @b @b ( lo hi d ) 2* a! >r !+ r> !+ ;
 
       ramWords:
       - 0x00000
@@ -67740,19 +67744,19 @@ projects:
       - 0x00165
       - 0x2BE25
       - 0x00A2D
+      - 0x2BF2D
       - 0x36A1A
       - 0x09C25
-      - 0x01FDA
-      - 0x2B83D
       - 0x36A1A
       - 0x07B25
       - 0x01FDA
+      - 0x2B83D
+      - 0x36A02
+      - 0x0083A
+      - 0x27855
+      - 0x01FDA
       - 0x2A83A
       - 0x27855
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -68479,8 +68483,7 @@ projects:
 
         3} write to memory
 
-
-        A: instruction pointer {PC}
+        4} stack handling
 
 
         memory interface:
@@ -68488,7 +68491,6 @@ projects:
         read:  <instr> a16 p4 -> w16
 
         write: <instr> a16 p4 w16
-
 
 
         1111|11
@@ -68499,9 +68501,11 @@ projects:
 
         0000|0000|0000|0000| 508  | nop
 
-        0000|wwww|wwss|xxxx| 508  | microcode {from node 509} with register
+        0000|wwww|wwss|xxxx| 508  | microcode {from node 509} without register
 
-        0010|0000|00ww|wwww| 508  | 508 direct
+        0001|wwww|wwss|xxxx| 508  | microcode {from node 509} with register
+
+        0010|wwww|yyyy|xxxx| 508  | 508 direct
 
         01oo|oooo|oooo|oooo| 508  | br {short branch, relative}
 
@@ -68522,7 +68526,6 @@ projects:
         1111|0ppp|yyyy|xxxx| 506  | binary 32-bit integer operation
 
         1111|1ppp|yyyy|xxxx| 506  | binary 32-bit float operation
-
 
 
         c: binary instruction address {address in corresponing node}
@@ -68548,7 +68551,6 @@ projects:
         .: unused bit
 
 
-
         A: program counter
 
         T: stack pointer
@@ -68566,6 +68568,7 @@ projects:
 
         # 0 /a   // initial program counter
 
+        [ 0 0xffff 2 ] /stack
 
 
         entry m/nextinstr
@@ -68575,45 +68578,13 @@ projects:
 
 
         : m/msend ( w - ) // memory send
-          up b! !b ;
+          up b! !b
+        ;
+
 
         : m/rsend ( w - ) // register send
-          down b! !b ;
-
-        : m/inc ( w - w' )
-          1
-        : m/add ( w1 w2 - w ) + 0xffff and ;
-
-        : m/dec ( w - w' )
-          -1 m/add ;
-
-        : m/write ( w a p - )
-          A[ mem/wrup ]] lit m/msend
-          !b !b !b ;
-
-        : m/read ( a p - w )
-          A[ mem/rdup ]] lit m/msend !b !b @b ;
-
-        : m/dpush ( fp sp hi lo - fp sp' )
-          >r m/push r>
-        : m/push ( fp sp w - fp sp' )
-          over dup >r 1 m/write r> m/dec ;
-
-        : m/dpop ( fp sp - fp sp' hi lo )
-          m/pop >r m/pop r> ;
-        : m/pop ( fp sp - fp sp' w )
-          m/inc dup 1 m/read ;
-
-        : m/branch ( fp sp offset - fp sp )
-          a m/add a! ;
-
-        : m/dnext ( - hi lo ) leap
-
-        : m/next ( - w ) then
-          a dup m/inc a! dup dup xor m/read ;
-
-        : m/pc++ ( fp sp - fp sp )
-          a m/inc a! ;
+          down b! !b
+        ;
 
 
         : m/link ( fp sp - fp' sp' )
@@ -68623,23 +68594,103 @@ projects:
           dup
           // sp = sp + offset
           m/next
-          m/add
           // set new fp
-          over ;
+        : m/add ( w1 w2 - w )
+          + 0xffff and
+        ;
+
+
+        : m/call ( fp sp -  fp sp' )
+          m/next
+        : m/calladdr ( fp sp addr -  fp sp' )
+          >r a m/push
+          r> a!
+        ;
+
+
+        : m/push ( fp sp w - fp sp' )
+          over 1 m/write
+        : m/dec ( w - w' )
+          -1 m/add
+        ;
+
+
+
+        : m/write ( w a p - )
+          A[ mem/wrup ]] lit m/msend
+          !b !b !b
+        ;
+
+
+        : m/pop ( fp sp - fp sp' w )
+          m/inc dup 1 m/read
+        ;
+
+
+        : m/dnext ( fp sp - fp sp hi lo ) leap
+
+        : m/next ( x - x w ) then
+          a m/pc++ dup dup xor
+        : m/read ( a p - w )
+          A[ mem/rdup ]] lit m/msend
+          !b !b @b
+        ;
+
+
+        : m/inc ( w - w' )
+          1 m/add
+        ;
+
+
+
+        : m/dpush ( fp sp hi lo - fp sp' )
+          >r m/push
+          r> m/push
+        ;
+
+
+
+        : m/dpop ( fp sp - fp sp' hi lo )
+          m/pop >r m/pop r>
+        ;
+
+
+        : m/branch ( offset - )
+          a m/add a!
+        ;
+
+
+        : m/ret ( fp sp - fp sp' )
+          m/pop
+        : m/jmp ( addr - )
+          a! ;
+
+
+        : m/pc++ ( x - x )
+          a m/inc a!
+        ;
+
+
+
 
         : m/unlink ( fp sp - fp' sp' )
           // sp = fp
           drop
           // pop last fp
-          m/pop over ;
+          m/pop over
+        ;
+
 
         : m/nextinstr ( fp sp - fp sp )
-          m/next
+          a m/pc++         // fp sp address
           A[ mem/rdupinstr ]] lit m/msend !b @b
           ( fp sp op )
-          --l-
+          --l-             // go to node 508
           ( fp sp )
-          m/nextinstr ;
+          m/nextinstr
+        ;
+
+
 
         : m/r@ ( fp sp r - fp sp w )
           A[ @p r/r@ ]] lit m/rsend !b @b
@@ -68651,91 +68702,19 @@ projects:
         ;
 
 
-        : m/r! ( fp sp r w - fp sp )
-          A[ @p r/r! ]] lit m/rsend !b !b ;
+        : m/r! ( fp sp w r - fp sp )
+          A[ @p r/r!x ]] lit m/rsend !b !b
+        ;
+
 
         : m/d! ( fp sp hi lo d - fp sp )
-          A[ @p r/d!x ]] lit m/rsend !b !b !b ;
-
-
-        /*
-
-
-        : m/nextinstr ( - )
-          # m/nextinstr lit >r
-          m/pc++
-
-          A[ mem/rdupinstr ]] lit m/msend !b @b
-          dup 2* 2* . -if
-            r--- ;             // bit 15 = 1 → node 506
-          then
-          --l- ;               // bit 15 = 0 → node 508
-
-        : m/msend ( w - ) // memory send
-          up b! !b ;
-
-        : m/pc++ ( - adr )
-          1
-        : m/branch ( offset - adr )
-          a dup >r . + 0xffff and a! r> ;
-
-        : m/unlink ( - )
-          A[ r/unlink ]] lit m/popread
-        : m/rsend ( w - ) // register send
-          down b! !b ;
-
-        : m/dnext ( - lo hi ) leap
-
-        : m/next ( - w ) then
-          m/pc++ dup dup xor
-          ( a 0 )
-        : m/read ( a p - w )
-          A[ mem/rdup ]] lit m/msend !b !b @b ;
-
-        : m/dpop ( - lo hi ) leap
-
-        : m/pop ( - w ) then
-          A[ r/pop ]] lit
-        : m/popread ( command - w )
-          m/rsend
-          @b 1 m/read ;
-
-        : m/dpush ( lo hi - ) leap
-
-        : m/push ( w - ) then
-          A[ r/push ]] lit m/rsend
-          @b 1
-        : m/write ( w a p - )
-          A[ mem/wrup ]] lit m/msend
-          !b !b !b ;
-
-        : m/link ( - )
-          m/next
-          A[ r/link ]] lit m/rsend
-          @b >r                      // receive save address
-          !b                         // send offset
-          @b                         // receive old FP
-          r> 1                       // old FP, address, page
-          m/write ;
-
-        : m/r@ ( r - w )
-          A[ @p r/r@ ]] lit m/rsend !b @b
+          A[ @p r/d!x ]] lit m/rsend !b !b !b
         ;
 
 
-        : m/d@ ( d - lo hi )
-          A[ @p r/d@ ]] lit m/rsend !b @b @b
-        ;
+        : m/pointer@ ( fp sp d - fp sp address page )
+          A[ @p r/d@ ]] lit m/rsend !b @b @b ;
 
-
-        : m/r! ( r w - )
-          A[ @p r/r! ]] lit m/rsend !b !b ;
-
-        : m/d! ( lo hi d - )
-          A[ @p r/d! ]] lit m/rsend !b !b !b ;
-
-
-        */
 
 
 
@@ -68746,68 +68725,68 @@ projects:
       - 0x00145
       - 0x04B25
       - 0x00115
-      - 0x049B2
-      - 0x00001
+      - 0x2160B
+      - 0x25617
       - 0x3DDFD
       - 0x0FFFF
+      - 0x13417
+      - 0x2EE4B
+      - 0x26A55
+      - 0x21D4F
+      - 0x00001
       - 0x05706
       - 0x3FFFF
       - 0x05600
       - 0x13415
       - 0x09B25
+      - 0x1341C
+      - 0x25DB2
+      - 0x00001
+      - 0x11419
+      - 0x13417
+      - 0x23627
+      - 0x24DE2
       - 0x05600
       - 0x13403
       - 0x09B05
+      - 0x05706
+      - 0x00001
+      - 0x2F60B
+      - 0x2770B
+      - 0x13412
       - 0x2F612
-      - 0x269B2
-      - 0x20DBF
-      - 0x00001
-      - 0x1340A
-      - 0x27708
-      - 0x13419
-      - 0x2F619
       - 0x27555
-      - 0x13404
-      - 0x25DB2
-      - 0x00001
-      - 0x1140D
       - 0x23606
       - 0x2B555
-      - 0x13420
-      - 0x22DB2
-      - 0x13404
-      - 0x2AD92
-      - 0x3970D
-      - 0x23604
+      - 0x13412
       - 0x2B555
-      - 0x21612
-      - 0x25620
-      - 0x13406
+      - 0x2361C
+      - 0x2B555
+      - 0x3B612
       - 0x21555
-      - 0x3B619
-      - 0x21555
-      - 0x13420
+      - 0x23627
       - 0x05600
       - 0x1340C
       - 0x09FB2
       - 0x13575
-      - 0x1142C
+      - 0x1142B
       - 0x05602
       - 0x05626
       - 0x09F55
       - 0x05602
-      - 0x0562C
+      - 0x0562B
       - 0x09F05
       - 0x05602
-      - 0x05627
+      - 0x05628
       - 0x09B55
       - 0x05602
-      - 0x0562E
+      - 0x0562F
       - 0x09B25
-      - 0x15555
-      - 0x15555
+      - 0x05602
+      - 0x05629
+      - 0x09F05
       startup:
-        entryPoint: 0x02C
+        entryPoint: 0x02B
         p: 0x000
         a: 0x000
         b: 0x000
@@ -68843,17 +68822,40 @@ projects:
         # 0 org // shift origin for jump target fit
 
 
-        : x6/finish left b! A[ ; ]] lit !b
+        : 'rload ( / x y - )
+          // Fetch memory through dy.
+          r>
+          A[ @p m/pointer@ ]] lit !b !b
+          A[ m/read ]] lit !b
+
+          // Store the fetched value in rx.
+          r>
+          A[ @p m/r! ]] lit !b !b
+        ;
+
+
+        : 'rstore ( / x y - )
+          // Recover Y, then X; parameter stack now ends in y x.
+          r> r>
+          A[ @p m/r@ ]] lit !b !b
+
+          // Y remains locally; send it after fetching rx.
+          A[ @p m/pointer@ ]] lit !b !b
+          A[ m/write ]] lit !b
+        ;
+
+
+        : x6/finish A[ ; ]] lit !b
 
         : x6/main
           # x6/finish lit >r
           // execute next instruction
           A[ !p ]] lit !b @b
           ( op )
-          2* 2* if // 1* => node 506
+          dup 2* 2* . -if // 1* => node 506
 
             ( op sop )
-            A[ @p @p ]] lit b! b! b! ;
+            A[ @p @p ]] lit !b !b !b ;
 
           then // 0*
 
@@ -68868,97 +68870,124 @@ projects:
           2* -if // 001*
 
             // direct
-            drop 0x3f and >r
-            ;
+            drop dup 0xf and >r // x
+            2/ 2/ 2/ 2/ dup 0xf and >r // y
+            2/ 2/ 2/ 2/ 0x0f and >r ; // jump
 
           then // 000*
 
-         // microcode
-          drop dup 0xf and
-          ( op r )
-          over 2/ 2/ 2/ 2/
-          ( op r sop )
+          2* -if // 0001*
 
-          dup 3 and dup >r           // retain count for node 508
-          A[ @p >r ]] lit ! !        // set node 509's loop count
+            // microcode with register
+            ( op sop )
+            x6/decompose
 
-          2/ 2/ 0x3f and
-          A[ @p a! ]] lit ! !        // set node 509's table address
+            A[ @p ]] lit !b !b         // send register to node 507
 
-          A[ @+ !p unext ]] lit !    // stream table words back
+            begin @ !b unext ;         // copy stream
 
-          A[ @p ]] lit !b !b         // send register to node 507
+          then // 0000*
+
+          // microcode without register
+          ( op sop )
+          x6/decompose
+          ( r )
+          drop
           begin @ !b unext
         ;
 
 
+        : x6/decompose ( op sop - r  / - cnt )
+          // microcode with register
+          drop r> 
+          ( op ret )
+          over 2/ 2/ 2/ 2/
+          ( op ret sop )
+
+          dup 3 and dup >r           // retain count for node 508
+          A[ @p >r ]] lit ! !        // set node 509's loop count
+
+          ( op ret sop / cnt )
+
+          2/ 2/ 0x3f and
+          A[ @p a! ]] lit ! !        // set node 509's table address
+
+          ( op ret / cnt )
+
+          >r
+          ( op / cnt ret )
+          0xf and
+          ( r / cnt ret )
+          A[ @+ !p unext ]] lit !    // start stream
+        ;
+
       ramWords:
-      - 0x04B12
-      - 0x00175
+      - 0x27D22
+      - 0x0563D
+      - 0x09D22
+      - 0x13419
+      - 0x27D22
+      - 0x05637
+      - 0x09555
+      - 0x26C12
+      - 0x05631
+      - 0x09B12
+      - 0x0563D
+      - 0x09B12
+      - 0x1340F
+      - 0x09555
+      - 0x05BB2
       - 0x15555
-      - 0x089B2
       - 0x04812
-      - 0x00000
+      - 0x0000E
       - 0x0C9B2
-      - 0x09FDA
-      - 0x3730C
-      - 0x04BA2
+      - 0x09F92
+      - 0x364B2
+      - 0x1B419
+      - 0x05B22
       - 0x05DB2
-      - 0x29555
-      - 0x37211
+      - 0x09555
+      - 0x3721E
       - 0x367C2
       - 0x30712
-      - 0x0561D
+      - 0x05623
       - 0x09B55
-      - 0x37215
-      - 0x3BDFA
-      - 0x0003F
-      - 0x2F555
+      - 0x37229
       - 0x3AD12
       - 0x0000F
-      - 0x3EFC2
+      - 0x3E8C2
       - 0x307C3
-      - 0x04092
-      - 0x00003
-      - 0x2FD2A
-      - 0x048B2
-      - 0x0A7C7
-      - 0x0003F
-      - 0x3FD2A
-      - 0x04AB2
-      - 0x0BD2F
-      - 0x07972
+      - 0x040BA
+      - 0x0000F
+      - 0x307C2
+      - 0x31DFA
+      - 0x0000F
+      - 0x2F555
+      - 0x3722E
+      - 0x13431
+      - 0x05B22
       - 0x049B2
-      - 0x09BB2
       - 0x03B75
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x13431
+      - 0x3A9B2
+      - 0x03B75
+      - 0x3AC82
+      - 0x307C2
+      - 0x30D12
+      - 0x00003
+      - 0x3EDBF
+      - 0x048B2
+      - 0x0BAC2
+      - 0x31DFF
+      - 0x0003F
+      - 0x04AB2
+      - 0x0BABF
+      - 0x0000F
+      - 0x3FD2D
+      - 0x07972
       - 0x15555
       startup:
-        entryPoint: 0x004
+        entryPoint: 0x010
         p: 0x000
         a: 0x000
         b: 0x000
@@ -68969,7 +68998,7 @@ projects:
       postMortemEnabled: true
     - coordinate: 509
       enabled: true
-      sourceCode: >
+      sourceCode: >+
         ( CVM_pipeline node 509.
 
 
@@ -68995,214 +69024,203 @@ projects:
 
 
         : 'nop // do nothing
-          // size 1.
+          // size 1 without register.
           A[ nop ]] ,
 
         : 'ret // return from call
-          // size 2.
-          A[ m/pop ]] ,
-          A[ a! ]] ,
+          // size 1 without register.
+          A[ m/ret ]] ,
 
         : 'call // call to address in next word
-          // size 3.
-          A[ m/next ]] ,
-          A[ a m/push ]] ,
-          A[ a! ]] ,
+          // size 1 without register.
+          A[ m/call ]] ,
 
         : 'jmp // jump to address in next word
-          // size 2.
+          // size 2 without register.
           A[ m/next ]] ,
           A[ a! ]] ,
 
         : 'link // create new stack frame with offset in next word
-          // size 1.
+          // size 1 without register.
           A[ m/link ]] ,
 
         : 'unlink // destroy current stack frame
-          // size 1.
+          // size 1 without register.
           A[ m/unlink ]] ,
 
-        : 'push2 // read next 32-bit value and push it on the VM stack ( - hi lo ). sequence in memory: opcode(push2) hi lo
-          // size 4.
+        : 'push2 // read next 32-bit value and push it on the VM stack VM( - hi lo ). sequence in memory: opcode(push2) hi lo
+          // size 2 without register.
+          A[ m/dnext ]] ,
+          A[ m/dpush ]] ,
+
+        : 'push // read next 16-bit value and push it on the VM stack VM( - w )
+          // size 2 without register.
           A[ m/next ]] ,
           A[ m/push ]] ,
 
-        : 'push // read next 16-bit value and push it on the VM stack ( - w )
-          // size 2.
-          A[ m/next ]] ,
-          A[ m/push ]] ,
-
-        : 'rpop // pop 16-bit value from the VM stack and stores it in a register ( w - )
-          // size 2.
-          A[ m/pop ]] ,
-          A[ m/r! ]] ,
-
-        : 'dpop // pop 32-bit value from the VM stack and stores it in a double register ( hi lo - )
-          // size 2.
-          A[ m/dpop ]] ,
-          A[ m/d! ]] ,
-
-        : 'rpush // read 16-bit value from register and push it on the VM stack ( - w )
-          // size 2.
-          A[ m/r@ ]] ,
-          A[ m/push ]] ,
-
-        : 'dpush // read 32-bit value from double register and push it on the VM stack ( - hi lo )
-          // size 2.
-          A[ m/d@ ]] ,
-          A[ m/dpush ]] ,
-
-        : 'rpopi // pop 16-bit value from the VM stack and stores it in a register indirect. register # is on the stack ( w r - )
-          // size 2.
-          A[ m/dpop ]] ,
-          A[ m/r! ]] ,
-
-        : 'dpopi // pop 32-bit value from the VM stack and stores it in a register indirect. register # is on the stack ( hi lo d - )
-          // size 3.
-          A[ m/pop ]] ,
-          A[ m/dpop ]] ,
-          A[ m/d! ]] ,
-
-        : 'rpushi // read 16-bit value from register indirect and push it on the VM stack ( r - w )
-          // size 3.
-          A[ m/pop ]] ,
-          A[ m/r@ ]] ,
-          A[ m/push ]] ,
-
-        : 'dpushi // read 32-bit value from register indirect and push it on the VM stack ( r - hi lo )
-          // size 3.
-          A[ m/pop ]] ,
-          A[ m/d@ ]] ,
-          A[ m/dpush ]] ,
-
-        : 'rinc // increment register
-          // size 3.
-          A[ @p m/rsend ]] , A[ @p r/++ ]] ,
-          A[ m/rsend ]] ,
-
-        : 'rdec // decrement register
-          // size 3.
-          A[ @p m/rsend ]] , A[ @p r/-- ]] ,
-          A[ !b ]] ,
-
-        : 'radd // add VM stack offset to register ( offset - )
-          // size 4.
+        : 'rpop // pop 16-bit value from the VM stack and stores it in a register VM( w - ) ( fp sp r - fp sp' )
+          // size 2 with register.
           A[ >r m/pop ]] ,
-          A[ @p m/rsend ]] ,
-          A[ r/add ]] ,
-          A[ r> !b !b ]] ,
+          A[ r> m/r! ]] ,
+
+        : 'dpop // pop 32-bit value from the VM stack and stores it in a double register VM( hi lo - )
+          // size 2 with register.
+          A[ >r m/dpop ]] ,
+          A[ r> m/d! ]] ,
+
+        : 'rpush // read 16-bit value from register and push it on the VM stack VM( - w )
+          // size 2 with register.
+          A[ m/r@ ]] ,
+          A[ m/push ]] ,
+
+        : 'dpush // read 32-bit value from double register and push it on the VM stack VM( - hi lo )
+          // size 2 with register.
+          A[ m/d@ ]] ,
+          A[ m/dpush ]] ,
+
+        : 'rpopi // pop 16-bit value from the VM stack and stores it in a register indirect. register # is on the stack VM( w r - )
+          // size 2 without register.
+          A[ m/dpop ]] ,
+          A[ m/r! ]] ,
+
+        : 'dpopi // pop 32-bit value from the VM stack and stores it in a register indirect. register # is on the stack VM( hi lo d - )
+          // size 3 without register.
+          A[ m/pop ]] ,
+          A[ >r m/dpop ]] ,
+          A[ r> m/d! ]] ,
+
+        : 'rpushi // read 16-bit value from register indirect and push it on the VM stack VM( r - w )
+          // size 3 without register.
+          A[ m/pop ]] ,
+          A[ m/r@ ]] ,
+          A[ m/push ]] ,
+
+        : 'dpushi // read 32-bit value from register indirect and push it on the VM stack VM( r - hi lo )
+          // size 3 without register.
+          A[ m/pop ]] ,
+          A[ m/d@ ]] ,
+          A[ m/dpush ]] ,
 
         : 'halt // stop execution until reset or interrupt
-          // size 2.
+          // size 2 without register.
           A[ @p m/msend ]] , A[ mem/halt ]] ,
 
-        : 'dfetch // read the content of a memory cell pointed to by a 32-register and push its value on the stack ( - w )
-          // size 3.
-          A[ m/d@ ]] ,
+        : 'dfetch // read the content of a memory cell pointed to by a 32-register and push its value on the stack VM( - w )
+          // size 3 with register.
+          A[ m/pointer@ ]] ,
           A[ m/read ]] ,
           A[ m/push ]] ,
 
-        : 'dstore // pop a value from the stack and write the content of a memory cell pointed to by a 32-register ( w - )
-          // size 3.
+        : 'dstore // pop a value from the stack and write the content of a memory cell pointed to by a 32-register VM( w - )
+          // size 3 with register.
           A[ >r m/pop ]] ,
-          A[ r> m/d@ ]] ,
+          A[ r> m/pointer@ ]] ,
           A[ m/write ]] ,
 
         : 'rlit // next 16-bit literal -> register
-          // size 2. memory: opcode, value
-          A[ m/next ]] ,
-          A[ m/r! ]] ,
+          // size 2 with register. memory: opcode, value
+          A[ >r m/next ]] ,
+          A[ r> m/r! ]] ,
 
         : 'dlit // next 32-bit literal -> double register
-          // size 2. memory: opcode, lo, hi
-          A[ m/dnext ]] ,
-          A[ m/d! ]] ,
+          // size 2 with register. memory: opcode, hi, lo
+          A[ >r m/dnext ]] ,
+          A[ r> m/d! ]] ,
 
         : 'rjmp // jump to address held in register
-          // size 2.
+          // size 2 with register.
           A[ m/r@ ]] ,
           A[ a! ]] ,
 
         : 'rcall // call address held in register
-          // size 3.
+          // size 2 with register.
           A[ m/r@ ]] ,
-          A[ a m/push ]] ,
-          A[ a! ]] ,
+          A[ m/calladdr ]] ,
 
         : 'drop // discard one VM stack word
-          // size 1.
+          // size 2 without register.
           A[ m/pop ]] ,
+          A[ drop ]] ,
 
-        : 'dup // duplicate top VM stack word ( w - w w )
-          // size 3.
+        : 'dup // duplicate top VM stack word VM( w - w w )
+          // size 4 without register.
           A[ m/pop ]] ,
-          A[ dup m/push ]] ,
-          A[ m/push ]] ,
+          A[ dup ]] ,
+          A[ >r m/push ]] ,
+          A[ r> m/push ]] ,
+
+        : 'swap // swap top VM stack words VM( w1 w2 - w2 w1 )
+          // size 4 without register.
+          A[ m/dpop ]] ,
+          A[ over >r >r ]] ,
+          A[ drop r> r> ]] ,
+          A[ m/dpush ]] ,
+
       ramWords:
       - 0x2C9B2
-      - 0x1341D
-      - 0x2A9B2
-      - 0x13417
-      - 0x23624
-      - 0x2A9B2
+      - 0x13425
+      - 0x13408
       - 0x13417
       - 0x2A9B2
-      - 0x1342B
-      - 0x13412
-      - 0x13417
-      - 0x13424
-      - 0x13417
-      - 0x13424
-      - 0x1341D
-      - 0x13438
-      - 0x1341C
-      - 0x1343B
-      - 0x13432
-      - 0x13424
-      - 0x13435
-      - 0x13423
-      - 0x1341C
-      - 0x13438
-      - 0x1341D
-      - 0x1341C
-      - 0x1343B
-      - 0x1341D
-      - 0x13432
-      - 0x13424
-      - 0x1341D
-      - 0x13435
-      - 0x13423
-      - 0x05614
-      - 0x0562A
-      - 0x13414
-      - 0x05614
-      - 0x0562C
-      - 0x089B2
-      - 0x2F61D
-      - 0x05614
-      - 0x13426
-      - 0x27B22
-      - 0x0560A
-      - 0x1341E
-      - 0x13435
-      - 0x13419
-      - 0x13424
-      - 0x2F61D
-      - 0x27635
-      - 0x13428
-      - 0x13417
-      - 0x13438
+      - 0x13404
+      - 0x13429
       - 0x13416
-      - 0x1343B
-      - 0x13432
+      - 0x1341E
+      - 0x13417
+      - 0x1340B
+      - 0x2F612
+      - 0x27637
+      - 0x2F620
+      - 0x2763A
+      - 0x13431
+      - 0x1340B
+      - 0x13434
+      - 0x1341E
+      - 0x13420
+      - 0x13437
+      - 0x13412
+      - 0x2F620
+      - 0x2763A
+      - 0x13412
+      - 0x13431
+      - 0x1340B
+      - 0x13412
+      - 0x13434
+      - 0x1341E
+      - 0x05600
+      - 0x1341E
+      - 0x13434
+      - 0x13419
+      - 0x1340B
+      - 0x2F612
+      - 0x27634
+      - 0x1340F
+      - 0x2F617
+      - 0x27637
+      - 0x2F616
+      - 0x2763A
+      - 0x13431
       - 0x2A9B2
-      - 0x13432
-      - 0x23624
-      - 0x2A9B2
-      - 0x1341D
-      - 0x1341D
-      - 0x25624
-      - 0x13424
+      - 0x13431
+      - 0x13409
+      - 0x13412
+      - 0x3A9B2
+      - 0x13412
+      - 0x249B2
+      - 0x2F60B
+      - 0x2760B
+      - 0x13420
+      - 0x208BA
+      - 0x3AC9A
+      - 0x1341E
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
         entryPoint: 0x1D5
         p: 0x000
@@ -70524,7 +70542,9 @@ projects:
 
         nop
     - name: microcode regression test
-      source: >
+      source: >-
+        // Initial state: FP = 0, SP = 0xffff.
+
         jmp start
 
         nop
@@ -70539,9 +70559,7 @@ projects:
         nop
 
 
-        // Nested frames.
-
-        // After unlink: FP = 0, SP = 0xffff.
+        // Nested frames; restore FP = 0, SP = 0xffff.
 
         link -3
 
@@ -70556,7 +70574,7 @@ projects:
         unlink
 
 
-        // Scalar transfers through the VM stack.
+        // Scalar transfers: r0 = r1 = 0x1234.
 
         push 0x1234
 
@@ -70567,16 +70585,16 @@ projects:
         rpop r1
 
 
-        // Double literal: push hi first, lo last.
+        // Double literal: instruction-memory order is hi, lo.
 
-        // d1 = 0x56789abc.
+        // d1: r2 = lo = 0x9ABC, r3 = hi = 0x5678.
 
         push2 0x5678 0x9ABC
 
         dpop d1
 
 
-        // Copy d1 to d2 through the VM stack.
+        // Copy d1 to d2.
 
         dpush d1
 
@@ -70592,7 +70610,7 @@ projects:
         rpopi
 
 
-        // Indirect scalar read.
+        // Indirect scalar read: r12 = 0xBEEF.
 
         push 6
 
@@ -70619,31 +70637,21 @@ projects:
         dpop d4
 
 
-        // Direct register literals; no VM stack effect.
+        // Register literals; instruction-memory order is hi, lo.
 
-        // dlit instruction-memory order: lo, hi.
+        // d5: r10 = lo = 0xCDEF, r11 = hi = 0x0123.
 
         rlit r10 0xABCD
 
-        dlit d5 0xCDEF 0x0123
+        dlit d5 0x0123 0xCDEF
 
 
-        // Arithmetic: final r8 = 7.
+        // Overwrite d4's low word; r8 = 7.
 
-        // This overwrites d4's low word.
-
-        rlit r8 10
-
-        rinc r8
-
-        rdec r8
-
-        push -3
-
-        radd r8
+        rlit r8 7
 
 
-        // Discard the top VM stack word.
+        // Discard top VM stack word: r13 = 0x1111.
 
         push 0x1111
 
@@ -70654,9 +70662,7 @@ projects:
         rpop r13
 
 
-        // Duplicate the top VM stack word.
-
-        // At this point r14 = r15 = 0x3333.
+        // Duplicate: r14 = r15 = 0x3333.
 
         push 0x3333
 
@@ -70667,6 +70673,10 @@ projects:
         rpop r15
 
 
+        // Inspect duplicated values before reusing these registers.
+
+        // Both writes must contain 0x3333.
+
         rpush r14
 
         drop
@@ -70676,11 +70686,26 @@ projects:
         drop
 
 
-        // Reuse d7 (r14/r15) as a pointer.
+        // Swap VM stack ( 0x4444 0x5555 -- 0x5555 0x4444 ).
 
-        // lo = address, hi = page.
+        // Swap writes: 0x5555, then 0x4444.
 
-        dlit d7 0x0100 2
+        // Following drop reads: 0x4444, then 0x5555.
+
+        push 0x4444
+
+        push 0x5555
+
+        swap
+
+        drop
+
+        drop
+
+
+        // Pointer: hi = page 2, lo = address 0x0100.
+
+        dlit d7 2 0x0100
 
         push 0xCAFE
 
@@ -70690,22 +70715,22 @@ projects:
 
         rpop r9
 
+        // Expect WRITE and READ at 2:0100, value 0xCAFE.
+
 
         // Direct call; return address uses the VM stack.
 
         call direct_sub
 
 
-        // Reuse r14 for an indirect call target.
+        // Indirect call.
 
         rlit r14 indirect_sub
 
         rcall r14
 
 
-        // Reuse r15 for an indirect jump target.
-
-        // The poison assignment must be skipped.
+        // Indirect jump; skip poison assignment.
 
         rlit r15 after_rjmp
 
@@ -70722,6 +70747,10 @@ projects:
 
 
         inspect:
+
+        // Each pair writes the register value to the VM stack,
+
+        // then reads it back and restores SP.
 
         rpush r0
 
@@ -70797,7 +70826,7 @@ projects:
 
         link -2
 
-        // Overwrites d5's high word.
+        // Overwrite d5's high word.
 
         rlit r11 0x1111
 
@@ -70812,7 +70841,7 @@ projects:
 
         link -1
 
-        // Overwrites d3's low word.
+        // Overwrite d3's low word.
 
         rlit r6 0x2222
 
@@ -71972,6 +72001,114 @@ projects:
         push 0x600D
 
         drop                     // write/read 600D at 1:FFFF
+
+        halt
+    - name: node 508 regression test
+      source: >+
+        // Initial node 507 state: FP = 0, SP = 0xffff.
+
+        jmp start
+
+
+        backward_target:
+
+        rlit r1 0x2222
+
+        br zero_branch
+
+
+        start:
+
+        rlit r0 0x1111
+
+
+        // Forward branch: skip poison.
+
+        br forward_target
+
+        rlit r0 0xDEAD
+
+        halt
+
+
+        forward_target:
+
+        rlit r2 0x3333
+
+
+        // Backward branch, executed once.
+
+        br backward_target
+
+        rlit r2 0xDEAD
+
+        halt
+
+
+        zero_branch:
+
+        // Target is the next instruction: relative offset zero.
+
+        br zero_target
+
+        zero_target:
+
+        rlit r3 0x4444
+
+
+        // Consecutive branches.
+
+        br chain1
+
+        rlit r3 0xDEAD
+
+        halt
+
+
+        chain1:
+
+        br chain2
+
+        rlit r3 0xDEAD
+
+        halt
+
+
+        chain2:
+
+        rlit r4 0x5555
+
+
+        // Inspect branch results.
+
+        rpush r0
+
+        drop
+
+        rpush r1
+
+        drop
+
+        rpush r2
+
+        drop
+
+        rpush r3
+
+        drop
+
+        rpush r4
+
+        drop
+
+
+        // Completion signature.
+
+        rlit r5 0x600D
+
+        rpush r5
+
+        drop
 
         halt
     lastSelectedDebuggerProgramName: New program

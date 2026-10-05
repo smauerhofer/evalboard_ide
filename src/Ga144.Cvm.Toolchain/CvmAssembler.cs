@@ -397,12 +397,12 @@ public static class CvmAssembler
           }
 
           // 2026-10-04 (second version): "dlit" takes a register plus EITHER one 32-bit literal ("dlit d1, 0x12345678")
-          // OR two 16-bit literals in memory order, lo then hi ("dlit d1, 0x5678, 0x1234") -- always three memory words.
+          // OR two 16-bit literals in memory order -- since 2026-10-05 hi then lo ("dlit d1, 0x1234, 0x5678") -- always three memory words.
           if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
           {
             if (line.Args.Count is not (2 or 3))
             {
-              errors.Add($"line {line.LineNumber}: \"dlit\" takes a register and one 32-bit operand (\"dlit d1 0x12345678\") or two 16-bit operands, lo then hi (\"dlit d1 0x5678 0x1234\").");
+              errors.Add($"line {line.LineNumber}: \"dlit\" takes a register and one 32-bit operand (\"dlit d1 0x12345678\") or two 16-bit operands, hi then lo (\"dlit d1 0x1234 0x5678\").");
               break;
             }
 
@@ -833,7 +833,8 @@ public static class CvmAssembler
               }
               else if (!TryParseNumericLiteral(line.Args[1], out secondIndex) || secondIndex < 0 || secondIndex > secondMaxIndex)
               {
-                errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" is not a valid register for \"{shape.Mnemonic}\" -- expected r0..r{secondMaxIndex} (or a plain number 0..{secondMaxIndex}), e.g. \"{shape.Mnemonic} r1 r2\".");
+                char secondPrefix = CvmInstructionSet.IsSecondRegisterDoubleMnemonic(shape.Mnemonic) ? 'd' : 'r';
+                errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" is not a valid register for \"{shape.Mnemonic}\" -- expected {secondPrefix}0..{secondPrefix}{secondMaxIndex} (or a plain number 0..{secondMaxIndex}), e.g. \"{shape.Mnemonic} r1 {secondPrefix}2\".");
                 secondIndex = 0;
               }
 
@@ -867,13 +868,11 @@ public static class CvmAssembler
           }
           else if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
           {
-            // ADDED 2026-10-04, CORRECTED the same day: dlit memory layout is opcode, LO, HI (node 509's m/dnext reads
-            // "lo hi"; push2 is the other way round because it pushes each word immediately, so lo must go last).
-            // One 32-bit operand: emit value & 0xFFFF, then value >> 16. TWO 16-bit operands (numbers or labels) are
-            // written in MEMORY order, "dlit d5 lo hi" -- e.g. "dlit d5 0xCDEF 0x0123" = 0x0123CDEF (memory CDEF,
-            // 0123, so r10 = CDEF) and "dlit d10 0x0100 2" = pointer 2:0100 (memory 0100, 0002). (An earlier version
-            // of this case took the two operands as hi, lo and swapped them; Stefan's regression showed that
-            // gave r10 = 0123 instead of CDEF.)
+            // CHANGED 2026-10-05 (reworked node 509: "'dlit ... memory: opcode, hi, lo"; m/dnext leaves "hi lo", lo on top):
+            // dlit memory layout is opcode, HI, LO -- the same order as push2. One 32-bit operand: emit value >> 16,
+            // then value & 0xFFFF. TWO 16-bit operands (numbers or labels) are written in MEMORY order, "dlit d5 hi lo" --
+            // e.g. "dlit d5 0x0123 0xCDEF" = 0x0123CDEF (memory 0123, CDEF) and "dlit d10 2 0x0100" = pointer 2:0100.
+            // (2026-10-04 it was lo, hi, matching the old node 509.)
             if (line.Args.Count == 3)
             {
               EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
@@ -881,8 +880,8 @@ public static class CvmAssembler
             }
             else if (TryParsePush2WideLiteral(line.Args[1], out uint dlitValue))
             {
-              codeSection.Words.Add((int)(dlitValue & 0xFFFF));
               codeSection.Words.Add((int)(dlitValue >> 16));
+              codeSection.Words.Add((int)(dlitValue & 0xFFFF));
             }
             else
             {
