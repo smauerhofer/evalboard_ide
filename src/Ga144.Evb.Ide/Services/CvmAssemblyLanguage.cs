@@ -558,6 +558,11 @@ internal static class CvmAssemblyLanguage
   // must stay at node-508 addresses 0..15), x = 16-bit register, y = double register. Same field layout as node 306's binary words.
   private const int Node508DirectTagBits = 0x2000;
 
+  // Node 506's "506 direct" row (2026-10-05): 1011|0000|00ww|wwww -- opcode = 0xB000 | w, w = the word's address in node 506
+  // (6 bits, so 'getctx/'setctx/'sp@/'fp@ must stay at node-506 addresses 0..63; a symbol beyond that is omitted).
+  private const int Node506DirectTagBits = 0xB000;
+  private const int Node506DirectAddressBitMask = 0x003F;
+
   // CVM2's node 509 unary-arithmetic tag (2026-09-05), per Stefan's node 509 source
   // (Cvm.Node509Program): its own u/main dispatch cascade falls through to its own remote-fetch-then-
   // "ex" tail (jump to whatever address is in R) once the fetched CVM opcode word's top 6 bits read
@@ -1028,6 +1033,11 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.MoveRegisterMnemonic] = (Node306Program.Coordinate, "'mov", Node306BinaryOperationTagBits),
         // ---- node 508's direct words (2026-10-05) ----
         [CvmInstructionSet.RegisterLoadMnemonic] = (Node508Program.Coordinate, "'rload", Node508DirectTagBits),
+        // ---- node 506's direct words (2026-10-05) ----
+        [CvmInstructionSet.GetContextMnemonic] = (Node506Program.Coordinate, "'getctx", Node506DirectTagBits),
+        [CvmInstructionSet.SetContextMnemonic] = (Node506Program.Coordinate, "'setctx", Node506DirectTagBits),
+        [CvmInstructionSet.StackPointerFetchMnemonic] = (Node506Program.Coordinate, "'sp@", Node506DirectTagBits),
+        [CvmInstructionSet.FramePointerFetchMnemonic] = (Node506Program.Coordinate, "'fp@", Node506DirectTagBits),
         [CvmInstructionSet.RegisterStoreMnemonic] = (Node508Program.Coordinate, "'rstore", Node508DirectTagBits),
         [CvmInstructionSet.Mask15Mnemonic] = (Node306Program.Coordinate, "'mask15", Node306UnaryOperationTagBits),
         [CvmInstructionSet.Invert15Mnemonic] = (Node306Program.Coordinate, "'inv15", Node306UnaryOperationTagBits),
@@ -1689,6 +1699,11 @@ internal static class CvmAssemblyLanguage
       // address before it's OR'd into the tag -- see that dictionary's own remarks. Every mnemonic
       // absent from it (every None-shaped mnemonic before ret) gets shift 0, so this is a no-op for
       // them: unchanged "tag | resolvedAddress".
+      if (tag == Node506DirectTagBits && (resolvedAddress & ~Node506DirectAddressBitMask) != 0)
+      {
+        continue; // does not fit the 6-bit "w" field of the 506 direct row
+      }
+
       int addressShift = NodeResolvedAddressShiftByMnemonic.TryGetValue(mnemonic, out int decodeShift) ? decodeShift : 0;
       table[tag | (resolvedAddress << addressShift)] = (mnemonic, wordLength, null);
     }
@@ -1774,6 +1789,11 @@ internal static class CvmAssemblyLanguage
       // ADDED 2026-09-30, for ret alone: see BuildDecodeTable's own remarks on
       // NodeResolvedAddressShiftByMnemonic -- same left-shift, same no-op for every mnemonic absent
       // from it.
+      if (tag == Node506DirectTagBits && (resolvedAddress & ~Node506DirectAddressBitMask) != 0)
+      {
+        continue; // does not fit the 6-bit "w" field of the 506 direct row
+      }
+
       int addressShift = NodeResolvedAddressShiftByMnemonic.TryGetValue(mnemonic, out int encodeShift) ? encodeShift : 0;
       table[mnemonic] = (tag | (resolvedAddress << addressShift), wordLength, hasOperand, false, 0, 0);
     }

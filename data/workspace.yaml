@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-05T08:37:25.9493449
-      utcDateTime: 2026-10-05T08:37:25.9493449Z
-      localDateTime: 2026-10-05T10:37:25.9493449+02:00
+      dateTime: 2026-10-05T12:12:50.7615671
+      utcDateTime: 2026-10-05T12:12:50.7615671Z
+      localDateTime: 2026-10-05T14:12:50.7615671+02:00
       date: 2026-10-05T00:00:00.0000000
       day: 5
       dayOfWeek: Monday
       dayOfYear: 278
-      hour: 8
-      millisecond: 949
-      microsecond: 344
-      nanosecond: 900
-      minute: 37
+      hour: 12
+      millisecond: 761
+      microsecond: 567
+      nanosecond: 100
+      minute: 12
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 25
-      ticks: 639267862459493449
-      utcTicks: 639267862459493449
-      timeOfDay: 08:37:25.9493449
+      second: 50
+      ticks: 639267991707615671
+      utcTicks: 639267991707615671
+      timeOfDay: 12:12:50.7615671
       year: 2026
   portB: 
   portC:
@@ -68184,6 +68184,7 @@ projects:
           A[ @p x1a/special16read ]] lit d1/forward ;
 
         : d1/op16 ( sop )
+          // 110*
           2* -if // 1101*
 
             // 16-bit binary
@@ -68195,6 +68196,7 @@ projects:
           A[ @p x1a/unary16 ]] lit d1/forward ;
 
         : d1/op32 ( sop )
+          // 111*
           2* -if // 1111* 32-bit binary
             2* -if // 11111*
 
@@ -68212,6 +68214,18 @@ projects:
           A[ @p x1a/unary32 ]] lit d1/forward ;
 
 
+        : d1/op ( sop )
+          // 11*
+          2* -if // 111*
+
+            // 32-bit operation
+            d1/op32 ;
+
+          then // 110*
+
+          // 16-bit operation
+          d1/op16 ;
+
       ramWords:
       - 0x0BF2A
       - 0x03B55
@@ -68225,20 +68239,20 @@ projects:
       - 0x05608
       - 0x3720D
       - 0x05700
-      - 0x05614
+      - 0x05619
       - 0x05700
       - 0x05611
       - 0x37215
       - 0x37213
       - 0x05700
-      - 0x0561D
+      - 0x0562C
       - 0x05700
-      - 0x0561A
+      - 0x05629
       - 0x05700
-      - 0x05617
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x05626
+      - 0x37219
+      - 0x1140F
+      - 0x1140A
       - 0x15555
       - 0x15555
       - 0x15555
@@ -68324,56 +68338,60 @@ projects:
         : d/dreceive ( - w ) down a! A[ !p ]] lit ! @ ;
 
 
-        : d/op ( sop instr - )
-           d/lsend // send operation
+        : d/op ( op sop instr - )
+           d/lsend   // send operation instruction
            !         // send sop
-           @b !      // send op
-           @ ;       // wait completion
+           !         // send original opcode
+           @ drop    // wait for completion
+        ;
 
-        : d/cond@ ( - op f )
-          @b dup A[ @p x1/cond ]] lit d/dsend ! d/dreceive ;
+
+        : d/cond@ ( op sop - op f )
+          drop dup
+          A[ @p x1/cond ]] lit d/dsend
+          !
+          d/dreceive
+        ;
+
 
         : d/finish right b! A[ ; ]] lit !b
 
         : d/main
           # d/finish lit >r
-          A[ !p !p ]] lit !b // make node 507 to send sop & op
-          @b @b // read shiftet opcode
+
+          A[ !p !p ]] lit !b // node 507 sends op, then sop
+          @b @b              // receive ( op sop )
+
           ( op sop )
           2* -if // 11*
 
-            2* -if // 111*
-
-              // 32-bit operation
-              A[ @p d1/op32 ]] lit d/op ;
-
-            then // 110*
-
-            // 16-bit operation
-            A[ @p d1/op16 ]] lit d/op ;
+            // unary & binary operations
+            A[ @p d1/op ]] lit d/op ;
 
           then // 10*
 
           2* -if // 101*
+            2* -if // 1011*
 
-            // special operation
-            A[ @p d1/special ]] lit d/op ;
+              // direct
+              drop 0x3f and >r ;
+
+            then // 1010*
+
+            // slit
+            2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
+            A[ @p m/push ]] lit !b !b ;
 
           then // 100*
 
           // conditional branch
           ( sop )
           2* -if // 1001*
-            2* -if // 10011*
-
-              // short literal
-              2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
-              A[ @p m/push ]] lit !b !b ;
-            then // 10010*
 
             // cond
             d/cond@
             A[ @p m/push ]] lit !b !b ;
+
           then // 1000*
 
           // if
@@ -68388,10 +68406,30 @@ projects:
           // no branch
           A[ m/pc++ ]] lit !b ;
 
+        // direct operations
 
 
+        : 'getctx ( - )
+          A[ over over ]] lit !b
+          A[ @p m/d! ]] lit !b
+          15 !b
+        ;
 
 
+        : 'setctx ( - )
+          A[ @p m/d@ ]] lit !b
+          15 !b
+        ;
+
+
+        : 'sp@ ( - )
+          A[ dup m/push ]] lit !b
+        ;
+
+
+        : 'fp@ ( - )
+          A[ over m/push ]] lit !b
+        ;
 
       ramWords:
       - 0x04A2D
@@ -68403,9 +68441,9 @@ projects:
       - 0x0C9B2
       - 0x0BE55
       - 0x13402
-      - 0x0BF2A
-      - 0x03555
-      - 0x00D12
+      - 0x0BA0A
+      - 0x3B555
+      - 0x3AD12
       - 0x05620
       - 0x13400
       - 0x0B704
@@ -68417,46 +68455,46 @@ projects:
       - 0x0000F
       - 0x0D9B2
       - 0x09F02
-      - 0x3721D
-      - 0x3721B
+      - 0x3721A
       - 0x05708
-      - 0x0560F
-      - 0x05708
-      - 0x0560A
-      - 0x37220
-      - 0x05708
-      - 0x05602
-      - 0x3722C
-      - 0x37229
+      - 0x05617
+      - 0x37226
+      - 0x3721F
+      - 0x3BDFA
+      - 0x0003F
+      - 0x2F555
       - 0x367C2
       - 0x307C2
       - 0x30712
       - 0x0FFFF
       - 0x3FD22
-      - 0x05612
+      - 0x0560B
       - 0x09555
+      - 0x3722A
       - 0x1340B
       - 0x05B25
-      - 0x05612
+      - 0x0560B
       - 0x1340B
-      - 0x19432
+      - 0x19430
       - 0x05B12
-      - 0x13420
-      - 0x1341D
+      - 0x13417
+      - 0x13423
       - 0x09555
       - 0x05B55
-      - 0x13424
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x13427
+      - 0x05B12
+      - 0x20FB2
+      - 0x0563A
+      - 0x09D25
+      - 0x0000F
+      - 0x05B12
+      - 0x05634
+      - 0x0000F
+      - 0x09555
+      - 0x05B55
+      - 0x2560B
+      - 0x05B55
+      - 0x2160B
       - 0x15555
       startup:
         entryPoint: 0x013
@@ -68515,7 +68553,7 @@ projects:
 
         1010|iiii|iiii|iiii| 506  | slit { push 12-bit signed literal on stack }
 
-        1011|0000|00ww|wwww| 506  | 506 direct
+        1011|00ww|wwww|xxxx| 506  | 506 direct
 
         1100|wwww|wwww|xxxx| 506  | unary 16-bit operation {w = address in node 306}
 
@@ -68534,7 +68572,7 @@ projects:
 
         p: operation code
 
-        i: immediate unsigned value
+        i: signed 12-bit immediate
 
         o: signed offset
 
@@ -70211,241 +70249,24 @@ projects:
     debuggerPrograms:
     - name: default
       source: >
-        jmp start
+        ; CVM Debugger default program -- uses only words already confirmed on real hardware.
 
-        nop
-
-        nop
-
-        nop
-
+        ; Operands are separated by spaces (commas are accepted as separators too).
 
         start:
-
-        nop
-
-
-        // Nested frames.
-
-        // After all three unlinks: FP = 0, SP = 0xffff.
-
-        link -3
-
-        link -2
-
-        link -1
-
-        unlink
-
-        unlink
-
-        unlink
-
-
-        // Push a literal onto the VM stack, then store it in r0.
-
-        // Copy it through the VM stack to r1.
-
-        push 0x1234
-
-        rpop r0
-
-        rpush r0
-
-        rpop r1
-
-
-        // Push a double literal onto the VM stack: hi first, lo last.
-
-        // d1: r2 = lo = 0x9abc, r3 = hi = 0x5678.
-
-        push2 0x5678 0x9ABC
-
-        dpop d1
-
-
-        // Copy d1 to d2 through the VM stack.
-
-        dpush d1
-
-        dpop d2
-
-
-        // Indirect scalar store.
-
-        // VM stack before rpopi: ( value register-index ).
-
-        push 0xBEEF
-
-        push 6
-
-        rpopi
-
-
-        // Indirect scalar read.
-
-        // Consume register index from the VM stack; push its value.
-
-        push 6
-
-        rpushi
-
-        rpop r12
-
-
-        // Indirect double store.
-
-        // VM stack before dpopi: ( hi lo double-register-index ).
-
-        push2 0x1357 0x2468
-
-        push 3
-
-        dpopi
-
-
-        // Indirect double read, then store the result in d4.
-
-        // VM stack after dpushi: ( hi lo ).
-
-        push 3
-
-        dpushi
-
-        dpop d4
-
-
-        // Load registers directly; these do not use the VM stack.
-
-        // dlit literals in instruction memory are ordered lo, hi.
-
-        rlit r10 0xABCD
-
-        dlit d5 0xCDEF 0x0123
-
-
-        // Increment and decrement r8.
-
-        // radd consumes its offset from the VM stack.
-
-        // Expected final r8 = 7.
-
-        rlit r8 10
-
-        rinc r8
-
-        rdec r8
-
-        push -3
-
-        radd r8
-
-
-        // Discard the top VM stack word.
-
-        // Expected r13 = 0x1111.
-
-        push 0x1111
-
-        push 0x2222
-
-        drop
-
-        rpop r13
-
-
-        // Duplicate the top VM stack word.
-
-        // Expected r14 = r15 = 0x3333.
-
-        push 0x3333
-
-        dup
-
-        rpop r14
-
-        rpop r15
-
-
-        // Double-register pointer: lo = address, hi = page.
-
-        // dstore consumes a value from the VM stack.
-
-        // dfetch pushes the fetched value onto the VM stack.
-
-        dlit d10 0x0100 2
-
-        push 0xCAFE
-
-        dstore d10
-
-        dfetch d10
-
-        rpop r9
-
-
-        // Direct call: return address is saved on the VM stack.
-
-        call direct_sub
-
-
-        // Register call: return address is saved on the VM stack.
-
-        rlit r16 indirect_sub
-
-        rcall r16
-
-
-        // Register jump: skip the poison assignment.
-
-        rlit r17 after_rjmp
-
-        rjmp r17
-
-        rlit r18 0xDEAD
-
-
-        after_rjmp:
-
-        // Completion signature.
-
-        // The VM stack should be empty again: SP = 0xffff.
-
-        rlit r19 0x600D
-
-        halt
-
-
-        direct_sub:
-
-        // Create a frame, set a result, restore the frame.
-
-        // ret consumes the return address from the VM stack.
-
-        link -2
-
-        rlit r11 0x1111
-
-        unlink
-
-        ret
-
-
-        indirect_sub:
-
-        // Exercise nested frames inside a register-called subroutine.
-
-        link -3
-
-        link -1
-
-        rlit r18 0x2222
-
-        unlink
-
-        unlink
-
-        ret
+          nop
+          slit 100            ; push the 11-bit signed literal 100 onto the data stack
+          push 0x1234         ; push a full 16-bit literal (opcode word + literal word)
+          rpop r1             ; r1 = 0x1234
+          rpop r0             ; r0 = 100
+          if r0 ==0 then skip ; r0 is not 0, so this branch is NOT taken
+          nop
+        skip:
+          call subr           ; call/ret round trip
+          halt                ; stop here
+        subr:
+          nop
+          ret
     - name: test
       source: >
         jmp test1
@@ -72004,7 +71825,7 @@ projects:
 
         halt
     - name: node 508 regression test
-      source: >+
+      source: >-
         // Initial node 507 state: FP = 0, SP = 0xffff.
 
         jmp start
@@ -72079,7 +71900,155 @@ projects:
         rlit r4 0x5555
 
 
-        // Inspect branch results.
+        // Direct register/memory operations.
+
+        // dlit order: hi = page, lo = address.
+
+
+        // Distinct source, destination, and pointer registers.
+
+        // Expect memory WRITE/READ 2:0100 = CAFE.
+
+        // Inspection WRITE/READ 1:FFFF = CAFE.
+
+        dlit d7 2 0x0100
+
+        rlit r6 0xCAFE
+
+        rstore r6 d7
+
+        rlit r6 0
+
+        rload r7 d7
+
+        rpush r7
+
+        drop
+
+
+        // Zero.
+
+        // Expect memory WRITE/READ 2:0100 = 0000.
+
+        // Inspection WRITE/READ 1:FFFF = 0000.
+
+        rlit r6 0
+
+        rstore r6 d7
+
+        rlit r7 0xDEAD
+
+        rload r7 d7
+
+        rpush r7
+
+        drop
+
+
+        // All bits set.
+
+        // Expect memory WRITE/READ 2:0100 = FFFF.
+
+        // Inspection WRITE/READ 1:FFFF = FFFF.
+
+        rlit r6 0xFFFF
+
+        rstore r6 d7
+
+        rlit r7 0
+
+        rload r7 d7
+
+        rpush r7
+
+        drop
+
+
+        // Source overlaps pointer's low register.
+
+        // r14 holds address 0101.
+
+        // Expect memory WRITE/READ 2:0101 = 0101.
+
+        // Inspection WRITE/READ 1:FFFF = 0101.
+
+        dlit d7 2 0x0101
+
+        rstore r14 d7
+
+        rload r7 d7
+
+        rpush r7
+
+        drop
+
+
+        // Source overlaps pointer's high register.
+
+        // r15 holds page 0002.
+
+        // Expect memory WRITE/READ 2:0102 = 0002.
+
+        // Inspection WRITE/READ 1:FFFF = 0002.
+
+        dlit d7 2 0x0102
+
+        rstore r15 d7
+
+        rload r7 d7
+
+        rpush r7
+
+        drop
+
+
+        // Destination overlaps pointer's low register.
+
+        // Fetch pointer before overwriting r14.
+
+        // Expect memory WRITE/READ 2:0103 = BEEF.
+
+        // Inspection WRITE/READ 1:FFFF = BEEF.
+
+        dlit d7 2 0x0103
+
+        rlit r6 0xBEEF
+
+        rstore r6 d7
+
+        rload r14 d7
+
+        rpush r14
+
+        drop
+
+
+        // Destination overlaps pointer's high register.
+
+        // Fetch pointer before overwriting r15.
+
+        // Expect memory WRITE/READ 2:0104 = 1234.
+
+        // Inspection WRITE/READ 1:FFFF = 1234.
+
+        dlit d7 2 0x0104
+
+        rlit r6 0x1234
+
+        rstore r6 d7
+
+        rload r15 d7
+
+        rpush r15
+
+        drop
+
+
+        // Inspect preserved branch results.
+
+        // Expected WRITE/READ pairs at 1:FFFF:
+
+        // 1111, 2222, 3333, 4444, 5555.
 
         rpush r0
 
@@ -72104,6 +72073,8 @@ projects:
 
         // Completion signature.
 
+        // Expect WRITE/READ 1:FFFF = 600D.
+
         rlit r5 0x600D
 
         rpush r5
@@ -72111,7 +72082,7 @@ projects:
         drop
 
         halt
-    lastSelectedDebuggerProgramName: New program
+    lastSelectedDebuggerProgramName: microcode regression test
     cDebuggerPrograms:
     - name: default
       source: >

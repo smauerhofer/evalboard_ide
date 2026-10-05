@@ -816,6 +816,17 @@ public static class CvmInstructionSet
   /// words (second register field = SecondValueBitMask), except that the SECOND operand is a double register: "rload r1 d2".
   /// </summary>
   public const string RegisterLoadMnemonic = "rload";
+
+  /// <summary>
+  /// Node 506's "506 direct" words (NEW 2026-10-05, header row <c>1011|0000|00ww|wwww</c>, opcode = 0xB000 | w, w = the word's
+  /// address in node 506, 6 bits). No operand, one memory word. Mnemonic = tick name minus the tick:
+  /// <c>getctx</c> stores the current context (fp, sp) in d15 (fp = high word, sp = low word); <c>setctx</c> loads fp and sp
+  /// from d15; <c>sp@</c> pushes the stack pointer, <c>fp@</c> pushes the frame pointer (both on the VM stack).
+  /// </summary>
+  public const string GetContextMnemonic = "getctx";
+  public const string SetContextMnemonic = "setctx";
+  public const string StackPointerFetchMnemonic = "sp@";
+  public const string FramePointerFetchMnemonic = "fp@";
   public const string RegisterStoreMnemonic = "rstore";
 
   /// <summary>True for the words whose SECOND register operand is a double register (d0..d15): rload and rstore.</summary>
@@ -2833,6 +2844,11 @@ public static class CvmInstructionSet
     new(Id: 225, XorMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 226, SubtractMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 227, AddMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    // getctx/setctx/sp@/fp@ (Ids 250-253, NEW 2026-10-05): node 506's direct words, no operand, see GetContextMnemonic's remarks.
+    new(Id: 250, GetContextMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 251, SetContextMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 252, StackPointerFetchMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 253, FramePointerFetchMnemonic, 1, CvmOperandEncoding.None),
     // rload/rstore (Ids 248/249, NEW 2026-10-05): node 508's 'rload/'rstore, "508 direct" row 0010|wwww|yyyy|xxxx -- binary shape
     // (x = 16-bit register in bits 3-0, y = DOUBLE register in bits 7-4), see RegisterLoadMnemonic's remarks.
     new(Id: 248, RegisterLoadMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
