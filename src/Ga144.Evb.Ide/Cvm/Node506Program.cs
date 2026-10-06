@@ -216,84 +216,121 @@ internal static class Node506Program
   /// and every place that resolves this node's push word by its F18 symbol name (notably
   /// <c>CvmAssemblyLanguage.NodeSymbolByMnemonic</c>) was updated to look up <c>"'pushf"</c> instead of
   /// <c>"'fpush"</c>. See <c>CvmInstructionSet.PushFrameMnemonic</c>'s own remarks for the full rationale.
+  ///
+  /// <b>REPLACED, 2026-10-06 -- the node is now the pipeline-decode node, not the stack-frame node.</b> The source below is Stefan's
+  /// current "CVM_pipeline node 506" (header table row <c>1011|00ww|wwww|xxxx</c>, "direct" words): the direct handler leaves
+  /// x (4 bits) on the parameter stack and jumps to the word w (6 bits). The four direct words are
+  /// <c>'getctx ( d - )</c> / <c>'setctx ( d - )</c> (save / load fp and sp as hi / lo of the double register dN, N = x) and
+  /// <c>'sp@ ( x - x )</c> / <c>'fp@ ( x - x )</c> (push sp / fp; x ignored). Opcode = 0xB000 | w &lt;&lt; 4 | x. Offline compile
+  /// (stubbed imports): 'getctx 52, 'setctx 56, 'sp@ 58, 'fp@ 60, 62 words used. The older frame-node paragraphs above are history only.
   /// </summary>
   public const string Source = """
-      ( CVM2 node 506. frame, 1001_????_????_???? )
-      ( A: register f (frame pointer)
-      # 507 import
-      # 0 org
-      entry f/main
-      # 0 /a
-      # right /b
+      ( CVM_pipeline node 506.
 
-      : par 0x1ff and ;
+      instruction decode.
 
-      : f/next ( -w) A[ m/next ]] lit !b ahead ;
-      : f/pop ( -w) A[ m/pop ]] lit !b then A[ !p ]] lit !b @b ;
-
-      : f/r@ ( -w) A[ over !p ]] lit !b @b ;
-      : f/r! ( w) A[ @p over ]] lit !b !b ;
-      : f/push ( w) A[ @p m/push ]] lit !b !b ;
-
-
-      : f/stack@ ( o-a) // load from stack
-        a . +  A[ @p m/1@ ]] lit !b !b A[ over ]] lit !b ;
-      : f/stack! ( o-a) // store to stack
-        a . +  A[ over @p ]] lit !b !b A[ m/1! ]] lit !b ;
-      : f/leave A[ ; ]] lit !b
-      : f/main // node entry point
-        # f/leave lit >r // prepare return address
-        A[ 2* !p !p ]] lit !b @b @b >r // push take over code
-        -if // 1001_1???_????_????
-          2* -if // 1001_11??_????_????
-
-            2* -if // 1001_111?_????_????
-              // load local
-              r> par inv f/stack@ ;
-
-            then // 1001_110?_????_????
-            // load parameter
-            r> par f/stack@ ;
-
-          then // 1001_10??_????_????
-
-            2* -if // 1001_101?_????_????
-              // store local
-              r> par inv f/stack! ;
-
-            then // 1001_100?_????_????
-            // store parameter
-            r> par f/stack! ;
-
-        then // 1001_0???_????_????
-        2* -if // 1001_01??_????_????
-          r> --l- ;
-        then // 1001_00???_????_????
-        2* -if // 1001_001?_????_????
-          // enter
-          a A[ @p m/push ]] lit !b !b  // save frame pointer
-          A[ dup !p ]] lit !b @b // read stack pointer
-          r> par inv + a! ; // calculate new frame pointer
-        then // 1001_000?_????_????
-        ex ;
-
-      : 'leave .loc
-        A[ m/pop ]] lit !b A[ !p ]] lit !b @b a! ;
-      : 'f .loc
-        a f/r! ;
-      : 'pushf .loc
-        a f/push ;
-
-      (
-      opcode ldl 1001_111?_????_???? load local into r. the offset is 9 bit.
-      opcode ldp 1001_110?_????_???? load parameter into r. the offset is 9 bit.
-      opcode stl 1001_101?_????_???? store r into local. the offset is 9 bit.
-      opcode stp 1001_100?_????_???? store r into parameter. the offset is 9 bit.
-      opcode enter 1001_001?_????_???? enter stack frame. the offset is 9 bit.
-      opcode 1001_01??_????_???? call node 505
-      'leave restore stack pointer and previous frame. undo enter stack frame.
-      'f move f to register r
-      'pushf push f onto the stack
       )
+
+      # 406 import
+      # 507 import
+      # 505 import
+
+      # right /b
+      # left /a
+
+      entry d/main
+
+      # 0 org
+
+      : d/dsend ( w - ) down a! ! ;
+      : d/lsend ( w - ) left a! ! ;
+      : d/dreceive ( - w ) down a! A[ !p ]] lit ! @ ;
+
+      : d/op ( op sop instr - )
+         d/lsend   // send operation instruction
+         !         // send sop
+         !         // send original opcode
+         @ drop    // wait for completion
+      ;
+
+      : d/cond@ ( op sop - op f )
+        drop dup
+        A[ @p x1/cond ]] lit d/dsend
+        !
+        d/dreceive
+      ;
+
+      : d/finish right b! A[ ; ]] lit !b
+      : d/main
+        # d/finish lit >r
+
+        A[ !p !p ]] lit !b // node 507 sends op, then sop
+        @b @b              // receive ( op sop )
+      // : brk brk ;
+
+        ( op sop )
+        2* -if // 11*
+
+          // unary & binary operations
+          A[ @p d1/op ]] lit d/op ;
+
+        then // 10*
+
+        2* -if // 101*
+          2* -if // 1011*
+
+            // Direct handler receives X on the return stack.
+            drop
+            dup 2/ 2/ 2/ 2/ 0x3f and >r
+            0xf and ;
+
+          then // 1010*
+
+          // slit
+          2* 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
+          A[ @p m/push ]] lit !b !b ;
+
+        then // 100*
+
+        // conditional branch
+        ( sop )
+        2* -if // 1001*
+
+          // cond
+          d/cond@
+          A[ @p m/push ]] lit !b !b ;
+
+        then // 1000*
+
+        // if
+        d/cond@
+        if
+          // true
+          // branch
+          A[ m/next ]] lit !b
+          A[ m/branch ]] lit !b ;
+        then
+        // false
+        // no branch
+        A[ m/pc++ ]] lit !b ;
+
+      // Direct handler receives x on the parameter stack.
+
+      : 'getctx ( d - )
+        A[ over over ]] lit !b
+        A[ @p m/d! ]] lit !b !b
+      ;
+
+      : 'setctx ( d - )
+        A[ @p m/d@ ]] lit !b !b
+      ;
+
+      : 'sp@ ( x - x )
+        A[ dup m/push ]] lit !b
+      ;
+
+      : 'fp@ ( x - x )
+        A[ over m/push ]] lit !b
+      ;
       """;
 }

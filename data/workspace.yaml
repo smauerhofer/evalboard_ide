@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-05T12:12:50.7615671
-      utcDateTime: 2026-10-05T12:12:50.7615671Z
-      localDateTime: 2026-10-05T14:12:50.7615671+02:00
-      date: 2026-10-05T00:00:00.0000000
-      day: 5
-      dayOfWeek: Monday
-      dayOfYear: 278
+      dateTime: 2026-10-06T12:15:03.5987093
+      utcDateTime: 2026-10-06T12:15:03.5987093Z
+      localDateTime: 2026-10-06T14:15:03.5987093+02:00
+      date: 2026-10-06T00:00:00.0000000
+      day: 6
+      dayOfWeek: Tuesday
+      dayOfYear: 279
       hour: 12
-      millisecond: 761
-      microsecond: 567
-      nanosecond: 100
-      minute: 12
+      millisecond: 598
+      microsecond: 709
+      nanosecond: 300
+      minute: 15
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 50
-      ticks: 639267991707615671
-      utcTicks: 639267991707615671
-      timeOfDay: 12:12:50.7615671
+      second: 3
+      ticks: 639268857035987093
+      utcTicks: 639268857035987093
+      timeOfDay: 12:15:03.5987093
       year: 2026
   portB: 
   portC:
@@ -67576,12 +67576,12 @@ projects:
       - 0x04B25
       - 0x001D5
       - 0x05716
-      - 0x1341C
+      - 0x13424
       - 0x05616
-      - 0x0561E
+      - 0x05626
       - 0x09F55
       - 0x05616
-      - 0x05620
+      - 0x05629
       - 0x09F05
       - 0x247C2
       - 0x30712
@@ -68361,6 +68361,7 @@ projects:
 
           A[ !p !p ]] lit !b // node 507 sends op, then sop
           @b @b              // receive ( op sop )
+        // : brk brk ;
 
           ( op sop )
           2* -if // 11*
@@ -68373,13 +68374,15 @@ projects:
           2* -if // 101*
             2* -if // 1011*
 
-              // direct
-              drop 0x3f and >r ;
+              // Direct handler receives X on the return stack.
+              drop
+              dup 2/ 2/ 2/ 2/ 0x3f and >r
+              0xf and ;
 
             then // 1010*
 
             // slit
-            2* 2/ 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
+            2* 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
             A[ @p m/push ]] lit !b !b ;
 
           then // 100*
@@ -68406,28 +68409,26 @@ projects:
           // no branch
           A[ m/pc++ ]] lit !b ;
 
-        // direct operations
+        // Direct handler receives x on the parameter stack.
 
 
-        : 'getctx ( - )
+        : 'getctx ( d - )
           A[ over over ]] lit !b
-          A[ @p m/d! ]] lit !b
-          15 !b
+          A[ @p m/d! ]] lit !b !b
         ;
 
 
-        : 'setctx ( - )
-          A[ @p m/d@ ]] lit !b
-          15 !b
+        : 'setctx ( d - )
+          A[ @p m/d@ ]] lit !b !b
         ;
 
 
-        : 'sp@ ( - )
+        : 'sp@ ( x - x )
           A[ dup m/push ]] lit !b
         ;
 
 
-        : 'fp@ ( - )
+        : 'fp@ ( x - x )
           A[ over m/push ]] lit !b
         ;
 
@@ -68458,24 +68459,26 @@ projects:
       - 0x3721A
       - 0x05708
       - 0x05617
-      - 0x37226
-      - 0x3721F
-      - 0x3BDFA
+      - 0x37228
+      - 0x37222
+      - 0x3ADC2
+      - 0x307C7
       - 0x0003F
-      - 0x2F555
+      - 0x3E812
+      - 0x0000F
+      - 0x3F555
       - 0x367C2
       - 0x307C2
-      - 0x30712
+      - 0x31DFF
       - 0x0FFFF
-      - 0x3FD22
       - 0x0560B
-      - 0x09555
-      - 0x3722A
+      - 0x09B55
+      - 0x3722C
       - 0x1340B
       - 0x05B25
       - 0x0560B
       - 0x1340B
-      - 0x19430
+      - 0x19432
       - 0x05B12
       - 0x13417
       - 0x13423
@@ -68485,16 +68488,14 @@ projects:
       - 0x05B12
       - 0x20FB2
       - 0x0563A
-      - 0x09D25
-      - 0x0000F
-      - 0x05B12
+      - 0x09B55
+      - 0x05B25
       - 0x05634
-      - 0x0000F
-      - 0x09555
       - 0x05B55
       - 0x2560B
       - 0x05B55
       - 0x2160B
+      - 0x15555
       - 0x15555
       startup:
         entryPoint: 0x013
@@ -68893,7 +68894,9 @@ projects:
           dup 2* 2* . -if // 1* => node 506
 
             ( op sop )
-            A[ @p @p ]] lit !b !b !b ;
+            A[ @p @p ]] lit !b !b !b
+            A[ r--- ; ]] lit !b
+            x6/main ;
 
           then // 0*
 
@@ -68918,7 +68921,7 @@ projects:
 
             // microcode with register
             ( op sop )
-            x6/decompose
+            drop x6/decompose
 
             A[ @p ]] lit !b !b         // send register to node 507
 
@@ -68928,16 +68931,15 @@ projects:
 
           // microcode without register
           ( op sop )
-          x6/decompose
+          drop x6/decompose
           ( r )
-          drop
           begin @ !b unext
         ;
 
 
-        : x6/decompose ( op sop - r  / - cnt )
+        : x6/decompose ( op - r  / - cnt )
           // microcode with register
-          drop r> 
+          r> 
           ( op ret )
           over 2/ 2/ 2/ 2/
           ( op ret sop )
@@ -68981,16 +68983,18 @@ projects:
       - 0x0C9B2
       - 0x09F92
       - 0x364B2
-      - 0x1B419
+      - 0x1B41B
       - 0x05B22
       - 0x05DB2
-      - 0x09555
-      - 0x3721E
+      - 0x09D22
+      - 0x115D5
+      - 0x11410
+      - 0x37220
       - 0x367C2
       - 0x30712
       - 0x05623
       - 0x09B55
-      - 0x37229
+      - 0x3722B
       - 0x3AD12
       - 0x0000F
       - 0x3E8C2
@@ -69001,29 +69005,27 @@ projects:
       - 0x31DFA
       - 0x0000F
       - 0x2F555
-      - 0x3722E
-      - 0x13431
+      - 0x37230
+      - 0x3B632
       - 0x05B22
       - 0x049B2
       - 0x03B75
-      - 0x13431
-      - 0x3A9B2
+      - 0x3B632
       - 0x03B75
-      - 0x3AC82
-      - 0x307C2
-      - 0x30D12
+      - 0x26FC2
+      - 0x307C3
+      - 0x04092
       - 0x00003
-      - 0x3EDBF
+      - 0x2FD2A
       - 0x048B2
-      - 0x0BAC2
-      - 0x31DFF
+      - 0x0A7C7
       - 0x0003F
+      - 0x3FD2A
       - 0x04AB2
-      - 0x0BABF
+      - 0x0A812
       - 0x0000F
       - 0x3FD2D
       - 0x07972
-      - 0x15555
       startup:
         entryPoint: 0x010
         p: 0x000
@@ -71410,7 +71412,24 @@ projects:
         halt
     - name: 16-bit binary regression test
       source: >
+        // Binary16 register regression. ASCII assembler source.
+
+        // Initialize node 507: FP=0000, SP=FFFF, PC=0000.
+
+        // Keeps the original 33 operation cases, then sweeps all direct registers.
+
+        // Every rpush/drop observation writes and reads at 1:FFFF.
+
+        // Expected results are comments, not automatic assertions.
+
+        // Matching the full observation sequence is required; 600D only marks arrival.
+
+
+        // Original arithmetic and operand-aliasing cases.
+
         // OR
+
+        // Case 001: or r0 r1; X=0000, Y=0000.
 
         rlit r0 0x0000
 
@@ -71418,10 +71437,16 @@ projects:
 
         or r0 r1
 
-        rpush r0                 // expected 0000
+        rpush r0 // observation 001: expected 0000; destination result
 
         drop
 
+        rpush r1 // observation 002: expected 0000; source unchanged
+
+        drop
+
+
+        // Case 002: or r0 r1; X=1234, Y=00FF.
 
         rlit r0 0x1234
 
@@ -71429,14 +71454,16 @@ projects:
 
         or r0 r1
 
-        rpush r0                 // expected 12FF
+        rpush r0 // observation 003: expected 12FF; destination result
 
         drop
 
-        rpush r1                 // expected 00FF: source unchanged
+        rpush r1 // observation 004: expected 00FF; source unchanged
 
         drop
 
+
+        // Case 003: or r0 r1; X=AAAA, Y=5555.
 
         rlit r0 0xAAAA
 
@@ -71444,22 +71471,29 @@ projects:
 
         or r0 r1
 
-        rpush r0                 // expected FFFF
+        rpush r0 // observation 005: expected FFFF; destination result
 
         drop
 
+        rpush r1 // observation 006: expected 5555; source unchanged
+
+        drop
+
+
+        // Case 004: or r0 r0; X=8001, Y=8001.
 
         rlit r0 0x8001
 
         or r0 r0
 
-        rpush r0                 // expected 8001
+        rpush r0 // observation 007: expected 8001; destination result
 
         drop
 
 
-
         // AND
+
+        // Case 005: and r0 r1; X=FFFF, Y=1234.
 
         rlit r0 0xFFFF
 
@@ -71467,14 +71501,16 @@ projects:
 
         and r0 r1
 
-        rpush r0                 // expected 1234
+        rpush r0 // observation 008: expected 1234; destination result
 
         drop
 
-        rpush r1                 // expected 1234: source unchanged
+        rpush r1 // observation 009: expected 1234; source unchanged
 
         drop
 
+
+        // Case 006: and r0 r1; X=AAAA, Y=5555.
 
         rlit r0 0xAAAA
 
@@ -71482,10 +71518,16 @@ projects:
 
         and r0 r1
 
-        rpush r0                 // expected 0000
+        rpush r0 // observation 010: expected 0000; destination result
 
         drop
 
+        rpush r1 // observation 011: expected 5555; source unchanged
+
+        drop
+
+
+        // Case 007: and r0 r1; X=8001, Y=FFFF.
 
         rlit r0 0x8001
 
@@ -71493,22 +71535,29 @@ projects:
 
         and r0 r1
 
-        rpush r0                 // expected 8001
+        rpush r0 // observation 012: expected 8001; destination result
 
         drop
 
+        rpush r1 // observation 013: expected FFFF; source unchanged
+
+        drop
+
+
+        // Case 008: and r0 r0; X=ABCD, Y=ABCD.
 
         rlit r0 0xABCD
 
         and r0 r0
 
-        rpush r0                 // expected ABCD
+        rpush r0 // observation 014: expected ABCD; destination result
 
         drop
 
 
-
         // XOR
+
+        // Case 009: xor r0 r1; X=1234, Y=00FF.
 
         rlit r0 0x1234
 
@@ -71516,14 +71565,16 @@ projects:
 
         xor r0 r1
 
-        rpush r0                 // expected 12CB
+        rpush r0 // observation 015: expected 12CB; destination result
 
         drop
 
-        rpush r1                 // expected 00FF: source unchanged
+        rpush r1 // observation 016: expected 00FF; source unchanged
 
         drop
 
+
+        // Case 010: xor r0 r1; X=AAAA, Y=5555.
 
         rlit r0 0xAAAA
 
@@ -71531,10 +71582,16 @@ projects:
 
         xor r0 r1
 
-        rpush r0                 // expected FFFF
+        rpush r0 // observation 017: expected FFFF; destination result
 
         drop
 
+        rpush r1 // observation 018: expected 5555; source unchanged
+
+        drop
+
+
+        // Case 011: xor r0 r1; X=FFFF, Y=FFFF.
 
         rlit r0 0xFFFF
 
@@ -71542,22 +71599,29 @@ projects:
 
         xor r0 r1
 
-        rpush r0                 // expected 0000
+        rpush r0 // observation 019: expected 0000; destination result
 
         drop
 
+        rpush r1 // observation 020: expected FFFF; source unchanged
+
+        drop
+
+
+        // Case 012: xor r0 r0; X=ABCD, Y=ABCD.
 
         rlit r0 0xABCD
 
         xor r0 r0
 
-        rpush r0                 // expected 0000
+        rpush r0 // observation 021: expected 0000; destination result
 
         drop
 
 
+        // SUB
 
-        // SUB: X = X - Y, clipped to 16 bits
+        // Case 013: sub r0 r1; X=1234, Y=0012.
 
         rlit r0 0x1234
 
@@ -71565,14 +71629,16 @@ projects:
 
         sub r0 r1
 
-        rpush r0                 // expected 1222
+        rpush r0 // observation 022: expected 1222; destination result
 
         drop
 
-        rpush r1                 // expected 0012: source unchanged
+        rpush r1 // observation 023: expected 0012; source unchanged
 
         drop
 
+
+        // Case 014: sub r0 r1; X=0000, Y=0001.
 
         rlit r0 0x0000
 
@@ -71580,10 +71646,16 @@ projects:
 
         sub r0 r1
 
-        rpush r0                 // expected FFFF
+        rpush r0 // observation 024: expected FFFF; destination result
 
         drop
 
+        rpush r1 // observation 025: expected 0001; source unchanged
+
+        drop
+
+
+        // Case 015: sub r0 r1; X=0001, Y=FFFF.
 
         rlit r0 0x0001
 
@@ -71591,10 +71663,16 @@ projects:
 
         sub r0 r1
 
-        rpush r0                 // expected 0002
+        rpush r0 // observation 026: expected 0002; destination result
 
         drop
 
+        rpush r1 // observation 027: expected FFFF; source unchanged
+
+        drop
+
+
+        // Case 016: sub r0 r1; X=8000, Y=0001.
 
         rlit r0 0x8000
 
@@ -71602,22 +71680,29 @@ projects:
 
         sub r0 r1
 
-        rpush r0                 // expected 7FFF
+        rpush r0 // observation 028: expected 7FFF; destination result
 
         drop
 
+        rpush r1 // observation 029: expected 0001; source unchanged
+
+        drop
+
+
+        // Case 017: sub r0 r0; X=ABCD, Y=ABCD.
 
         rlit r0 0xABCD
 
         sub r0 r0
 
-        rpush r0                 // expected 0000
+        rpush r0 // observation 030: expected 0000; destination result
 
         drop
 
 
+        // ADD
 
-        // ADD: X = X + Y, clipped to 16 bits
+        // Case 018: add r0 r1; X=1234, Y=0012.
 
         rlit r0 0x1234
 
@@ -71625,14 +71710,16 @@ projects:
 
         add r0 r1
 
-        rpush r0                 // expected 1246
+        rpush r0 // observation 031: expected 1246; destination result
 
         drop
 
-        rpush r1                 // expected 0012: source unchanged
+        rpush r1 // observation 032: expected 0012; source unchanged
 
         drop
 
+
+        // Case 019: add r0 r1; X=FFFF, Y=0001.
 
         rlit r0 0xFFFF
 
@@ -71640,10 +71727,16 @@ projects:
 
         add r0 r1
 
-        rpush r0                 // expected 0000
+        rpush r0 // observation 033: expected 0000; destination result
 
         drop
 
+        rpush r1 // observation 034: expected 0001; source unchanged
+
+        drop
+
+
+        // Case 020: add r0 r1; X=7FFF, Y=0001.
 
         rlit r0 0x7FFF
 
@@ -71651,10 +71744,16 @@ projects:
 
         add r0 r1
 
-        rpush r0                 // expected 8000
+        rpush r0 // observation 035: expected 8000; destination result
 
         drop
 
+        rpush r1 // observation 036: expected 0001; source unchanged
+
+        drop
+
+
+        // Case 021: add r0 r1; X=FFFF, Y=FFFF.
 
         rlit r0 0xFFFF
 
@@ -71662,22 +71761,29 @@ projects:
 
         add r0 r1
 
-        rpush r0                 // expected FFFE
+        rpush r0 // observation 037: expected FFFE; destination result
 
         drop
 
+        rpush r1 // observation 038: expected FFFF; source unchanged
+
+        drop
+
+
+        // Case 022: add r0 r0; X=8001, Y=8001.
 
         rlit r0 0x8001
 
         add r0 r0
 
-        rpush r0                 // expected 0002
+        rpush r0 // observation 039: expected 0002; destination result
 
         drop
 
 
+        // MOV
 
-        // MOV: X = Y
+        // Case 023: mov r0 r1; X=1234, Y=ABCD.
 
         rlit r0 0x1234
 
@@ -71685,14 +71791,16 @@ projects:
 
         mov r0 r1
 
-        rpush r0                 // expected ABCD
+        rpush r0 // observation 040: expected ABCD; destination result
 
         drop
 
-        rpush r1                 // expected ABCD: source unchanged
+        rpush r1 // observation 041: expected ABCD; source unchanged
 
         drop
 
+
+        // Case 024: mov r0 r1; X=FFFF, Y=0000.
 
         rlit r0 0xFFFF
 
@@ -71700,10 +71808,16 @@ projects:
 
         mov r0 r1
 
-        rpush r0                 // expected 0000
+        rpush r0 // observation 042: expected 0000; destination result
 
         drop
 
+        rpush r1 // observation 043: expected 0000; source unchanged
+
+        drop
+
+
+        // Case 025: mov r0 r1; X=0000, Y=8000.
 
         rlit r0 0x0000
 
@@ -71711,24 +71825,29 @@ projects:
 
         mov r0 r1
 
-        rpush r0                 // expected 8000
+        rpush r0 // observation 044: expected 8000; destination result
 
         drop
 
+        rpush r1 // observation 045: expected 8000; source unchanged
+
+        drop
+
+
+        // Case 026: mov r0 r0; X=5678, Y=5678.
 
         rlit r0 0x5678
 
         mov r0 r0
 
-        rpush r0                 // expected 5678
+        rpush r0 // observation 046: expected 5678; destination result
 
         drop
 
 
+        // PACKBYTES
 
-        // PACKBYTES:
-
-        // X = (X & 0xFF) | ((Y & 0xFF) << 8)
+        // Case 027: packbytes r0 r1; X=0034, Y=0012.
 
         rlit r0 0x0034
 
@@ -71736,14 +71855,16 @@ projects:
 
         packbytes r0 r1
 
-        rpush r0                 // expected 1234
+        rpush r0 // observation 047: expected 1234; destination result
 
         drop
 
-        rpush r1                 // expected 0012: source unchanged
+        rpush r1 // observation 048: expected 0012; source unchanged
 
         drop
 
+
+        // Case 028: packbytes r0 r1; X=AB34, Y=CD12.
 
         rlit r0 0xAB34
 
@@ -71751,10 +71872,16 @@ projects:
 
         packbytes r0 r1
 
-        rpush r0                 // expected 1234: upper bytes ignored
+        rpush r0 // observation 049: expected 1234; destination result
 
         drop
 
+        rpush r1 // observation 050: expected CD12; source unchanged
+
+        drop
+
+
+        // Case 029: packbytes r0 r1; X=0000, Y=00FF.
 
         rlit r0 0x0000
 
@@ -71762,10 +71889,16 @@ projects:
 
         packbytes r0 r1
 
-        rpush r0                 // expected FF00
+        rpush r0 // observation 051: expected FF00; destination result
 
         drop
 
+        rpush r1 // observation 052: expected 00FF; source unchanged
+
+        drop
+
+
+        // Case 030: packbytes r0 r1; X=FFFF, Y=0000.
 
         rlit r0 0xFFFF
 
@@ -71773,10 +71906,16 @@ projects:
 
         packbytes r0 r1
 
-        rpush r0                 // expected 00FF
+        rpush r0 // observation 053: expected 00FF; destination result
 
         drop
 
+        rpush r1 // observation 054: expected 0000; source unchanged
+
+        drop
+
+
+        // Case 031: packbytes r0 r1; X=FFFF, Y=FFFF.
 
         rlit r0 0xFFFF
 
@@ -71784,22 +71923,27 @@ projects:
 
         packbytes r0 r1
 
-        rpush r0                 // expected FFFF
+        rpush r0 // observation 055: expected FFFF; destination result
 
         drop
 
+        rpush r1 // observation 056: expected FFFF; source unchanged
+
+        drop
+
+
+        // Case 032: packbytes r0 r0; X=AB34, Y=AB34.
 
         rlit r0 0xAB34
 
         packbytes r0 r0
 
-        rpush r0                 // expected 3434
+        rpush r0 // observation 057: expected 3434; destination result
 
         drop
 
 
-
-        // Test the highest directly accessible register numbers
+        // Case 033: sub r14 r15; X=1234, Y=0012.
 
         rlit r14 0x1234
 
@@ -71807,23 +71951,3869 @@ projects:
 
         sub r14 r15
 
-        rpush r14                // expected 1222
+        rpush r14 // observation 058: expected 1222; destination result
 
         drop
 
-        rpush r15                // expected 0012: source unchanged
+        rpush r15 // observation 059: expected 0012; source unchanged
 
         drop
 
 
+        // OR: all distinct-register destinations and sources.
 
-        // Final marker: confirms execution reached the end
+        // Case 034: or r0 r7; X=0000, Y=FFFF.
+
+        rlit r1 0xA500 // unrelated register sentinel
+
+        rlit r0 0x0000
+
+        rlit r7 0xFFFF
+
+        or r0 r7
+
+        rpush r0 // observation 060: expected FFFF; destination result
+
+        drop
+
+        rpush r7 // observation 061: expected FFFF; source unchanged
+
+        drop
+
+        rpush r1 // observation 062: expected A500; unrelated register unchanged
+
+        drop
+
+
+        // Case 035: or r1 r8; X=FFFF, Y=0001.
+
+        rlit r2 0xA501 // unrelated register sentinel
+
+        rlit r1 0xFFFF
+
+        rlit r8 0x0001
+
+        or r1 r8
+
+        rpush r1 // observation 063: expected FFFF; destination result
+
+        drop
+
+        rpush r8 // observation 064: expected 0001; source unchanged
+
+        drop
+
+        rpush r2 // observation 065: expected A501; unrelated register unchanged
+
+        drop
+
+
+        // Case 036: or r2 r9; X=7FFF, Y=0001.
+
+        rlit r3 0xA502 // unrelated register sentinel
+
+        rlit r2 0x7FFF
+
+        rlit r9 0x0001
+
+        or r2 r9
+
+        rpush r2 // observation 066: expected 7FFF; destination result
+
+        drop
+
+        rpush r9 // observation 067: expected 0001; source unchanged
+
+        drop
+
+        rpush r3 // observation 068: expected A502; unrelated register unchanged
+
+        drop
+
+
+        // Case 037: or r3 r10; X=8000, Y=FFFF.
+
+        rlit r4 0xA503 // unrelated register sentinel
+
+        rlit r3 0x8000
+
+        rlit r10 0xFFFF
+
+        or r3 r10
+
+        rpush r3 // observation 069: expected FFFF; destination result
+
+        drop
+
+        rpush r10 // observation 070: expected FFFF; source unchanged
+
+        drop
+
+        rpush r4 // observation 071: expected A503; unrelated register unchanged
+
+        drop
+
+
+        // Case 038: or r4 r11; X=AAAA, Y=5555.
+
+        rlit r5 0xA504 // unrelated register sentinel
+
+        rlit r4 0xAAAA
+
+        rlit r11 0x5555
+
+        or r4 r11
+
+        rpush r4 // observation 072: expected FFFF; destination result
+
+        drop
+
+        rpush r11 // observation 073: expected 5555; source unchanged
+
+        drop
+
+        rpush r5 // observation 074: expected A504; unrelated register unchanged
+
+        drop
+
+
+        // Case 039: or r5 r12; X=AB34, Y=CD12.
+
+        rlit r6 0xA505 // unrelated register sentinel
+
+        rlit r5 0xAB34
+
+        rlit r12 0xCD12
+
+        or r5 r12
+
+        rpush r5 // observation 075: expected EF36; destination result
+
+        drop
+
+        rpush r12 // observation 076: expected CD12; source unchanged
+
+        drop
+
+        rpush r6 // observation 077: expected A505; unrelated register unchanged
+
+        drop
+
+
+        // Case 040: or r6 r13; X=1234, Y=00FF.
+
+        rlit r7 0xA506 // unrelated register sentinel
+
+        rlit r6 0x1234
+
+        rlit r13 0x00FF
+
+        or r6 r13
+
+        rpush r6 // observation 078: expected 12FF; destination result
+
+        drop
+
+        rpush r13 // observation 079: expected 00FF; source unchanged
+
+        drop
+
+        rpush r7 // observation 080: expected A506; unrelated register unchanged
+
+        drop
+
+
+        // Case 041: or r7 r14; X=0001, Y=8000.
+
+        rlit r8 0xA507 // unrelated register sentinel
+
+        rlit r7 0x0001
+
+        rlit r14 0x8000
+
+        or r7 r14
+
+        rpush r7 // observation 081: expected 8001; destination result
+
+        drop
+
+        rpush r14 // observation 082: expected 8000; source unchanged
+
+        drop
+
+        rpush r8 // observation 083: expected A507; unrelated register unchanged
+
+        drop
+
+
+        // Case 042: or r8 r15; X=9BDF, Y=0A77.
+
+        rlit r9 0xA508 // unrelated register sentinel
+
+        rlit r8 0x9BDF
+
+        rlit r15 0x0A77
+
+        or r8 r15
+
+        rpush r8 // observation 084: expected 9BFF; destination result
+
+        drop
+
+        rpush r15 // observation 085: expected 0A77; source unchanged
+
+        drop
+
+        rpush r9 // observation 086: expected A508; unrelated register unchanged
+
+        drop
+
+
+        // Case 043: or r9 r0; X=ACF0, Y=3802.
+
+        rlit r10 0xA509 // unrelated register sentinel
+
+        rlit r9 0xACF0
+
+        rlit r0 0x3802
+
+        or r9 r0
+
+        rpush r9 // observation 087: expected BCF2; destination result
+
+        drop
+
+        rpush r0 // observation 088: expected 3802; source unchanged
+
+        drop
+
+        rpush r10 // observation 089: expected A509; unrelated register unchanged
+
+        drop
+
+
+        // Case 044: or r10 r1; X=BE01, Y=2DCD.
+
+        rlit r11 0xA50A // unrelated register sentinel
+
+        rlit r10 0xBE01
+
+        rlit r1 0x2DCD
+
+        or r10 r1
+
+        rpush r10 // observation 090: expected BFCD; destination result
+
+        drop
+
+        rpush r1 // observation 091: expected 2DCD; source unchanged
+
+        drop
+
+        rpush r11 // observation 092: expected A50A; unrelated register unchanged
+
+        drop
+
+
+        // Case 045: or r11 r2; X=CF12, Y=5398.
+
+        rlit r12 0xA50B // unrelated register sentinel
+
+        rlit r11 0xCF12
+
+        rlit r2 0x5398
+
+        or r11 r2
+
+        rpush r11 // observation 093: expected DF9A; destination result
+
+        drop
+
+        rpush r2 // observation 094: expected 5398; source unchanged
+
+        drop
+
+        rpush r12 // observation 095: expected A50B; unrelated register unchanged
+
+        drop
+
+
+        // Case 046: or r12 r3; X=E023, Y=41A3.
+
+        rlit r13 0xA50C // unrelated register sentinel
+
+        rlit r12 0xE023
+
+        rlit r3 0x41A3
+
+        or r12 r3
+
+        rpush r12 // observation 096: expected E1A3; destination result
+
+        drop
+
+        rpush r3 // observation 097: expected 41A3; source unchanged
+
+        drop
+
+        rpush r13 // observation 098: expected A50C; unrelated register unchanged
+
+        drop
+
+
+        // Case 047: or r13 r4; X=F134, Y=776E.
+
+        rlit r14 0xA50D // unrelated register sentinel
+
+        rlit r13 0xF134
+
+        rlit r4 0x776E
+
+        or r13 r4
+
+        rpush r13 // observation 099: expected F77E; destination result
+
+        drop
+
+        rpush r4 // observation 100: expected 776E; source unchanged
+
+        drop
+
+        rpush r14 // observation 101: expected A50D; unrelated register unchanged
+
+        drop
+
+
+        // Case 048: or r14 r5; X=0245, Y=6539.
+
+        rlit r15 0xA50E // unrelated register sentinel
+
+        rlit r14 0x0245
+
+        rlit r5 0x6539
+
+        or r14 r5
+
+        rpush r14 // observation 102: expected 677D; destination result
+
+        drop
+
+        rpush r5 // observation 103: expected 6539; source unchanged
+
+        drop
+
+        rpush r15 // observation 104: expected A50E; unrelated register unchanged
+
+        drop
+
+
+        // Case 049: or r15 r6; X=1356, Y=8AC4.
+
+        rlit r0 0xA50F // unrelated register sentinel
+
+        rlit r15 0x1356
+
+        rlit r6 0x8AC4
+
+        or r15 r6
+
+        rpush r15 // observation 105: expected 9BD6; destination result
+
+        drop
+
+        rpush r6 // observation 106: expected 8AC4; source unchanged
+
+        drop
+
+        rpush r0 // observation 107: expected A50F; unrelated register unchanged
+
+        drop
+
+
+        // OR: same-register operands at every register index.
+
+        // Case 050: or r0 r0; X=0000, Y=0000.
+
+        rlit r0 0x0000
+
+        or r0 r0
+
+        rpush r0 // observation 108: expected 0000; destination result
+
+        drop
+
+
+        // Case 051: or r1 r1; X=0001, Y=0001.
+
+        rlit r1 0x0001
+
+        or r1 r1
+
+        rpush r1 // observation 109: expected 0001; destination result
+
+        drop
+
+
+        // Case 052: or r2 r2; X=0002, Y=0002.
+
+        rlit r2 0x0002
+
+        or r2 r2
+
+        rpush r2 // observation 110: expected 0002; destination result
+
+        drop
+
+
+        // Case 053: or r3 r3; X=7FFF, Y=7FFF.
+
+        rlit r3 0x7FFF
+
+        or r3 r3
+
+        rpush r3 // observation 111: expected 7FFF; destination result
+
+        drop
+
+
+        // Case 054: or r4 r4; X=8000, Y=8000.
+
+        rlit r4 0x8000
+
+        or r4 r4
+
+        rpush r4 // observation 112: expected 8000; destination result
+
+        drop
+
+
+        // Case 055: or r5 r5; X=8001, Y=8001.
+
+        rlit r5 0x8001
+
+        or r5 r5
+
+        rpush r5 // observation 113: expected 8001; destination result
+
+        drop
+
+
+        // Case 056: or r6 r6; X=FFFE, Y=FFFE.
+
+        rlit r6 0xFFFE
+
+        or r6 r6
+
+        rpush r6 // observation 114: expected FFFE; destination result
+
+        drop
+
+
+        // Case 057: or r7 r7; X=FFFF, Y=FFFF.
+
+        rlit r7 0xFFFF
+
+        or r7 r7
+
+        rpush r7 // observation 115: expected FFFF; destination result
+
+        drop
+
+
+        // Case 058: or r8 r8; X=AAAA, Y=AAAA.
+
+        rlit r8 0xAAAA
+
+        or r8 r8
+
+        rpush r8 // observation 116: expected AAAA; destination result
+
+        drop
+
+
+        // Case 059: or r9 r9; X=5555, Y=5555.
+
+        rlit r9 0x5555
+
+        or r9 r9
+
+        rpush r9 // observation 117: expected 5555; destination result
+
+        drop
+
+
+        // Case 060: or r10 r10; X=AB34, Y=AB34.
+
+        rlit r10 0xAB34
+
+        or r10 r10
+
+        rpush r10 // observation 118: expected AB34; destination result
+
+        drop
+
+
+        // Case 061: or r11 r11; X=1234, Y=1234.
+
+        rlit r11 0x1234
+
+        or r11 r11
+
+        rpush r11 // observation 119: expected 1234; destination result
+
+        drop
+
+
+        // Case 062: or r12 r12; X=00FF, Y=00FF.
+
+        rlit r12 0x00FF
+
+        or r12 r12
+
+        rpush r12 // observation 120: expected 00FF; destination result
+
+        drop
+
+
+        // Case 063: or r13 r13; X=FF00, Y=FF00.
+
+        rlit r13 0xFF00
+
+        or r13 r13
+
+        rpush r13 // observation 121: expected FF00; destination result
+
+        drop
+
+
+        // Case 064: or r14 r14; X=0101, Y=0101.
+
+        rlit r14 0x0101
+
+        or r14 r14
+
+        rpush r14 // observation 122: expected 0101; destination result
+
+        drop
+
+
+        // Case 065: or r15 r15; X=8080, Y=8080.
+
+        rlit r15 0x8080
+
+        or r15 r15
+
+        rpush r15 // observation 123: expected 8080; destination result
+
+        drop
+
+
+        // AND: all distinct-register destinations and sources.
+
+        // Case 066: and r0 r7; X=FFFF, Y=0001.
+
+        rlit r1 0xA510 // unrelated register sentinel
+
+        rlit r0 0xFFFF
+
+        rlit r7 0x0001
+
+        and r0 r7
+
+        rpush r0 // observation 124: expected 0001; destination result
+
+        drop
+
+        rpush r7 // observation 125: expected 0001; source unchanged
+
+        drop
+
+        rpush r1 // observation 126: expected A510; unrelated register unchanged
+
+        drop
+
+
+        // Case 067: and r1 r8; X=7FFF, Y=0001.
+
+        rlit r2 0xA511 // unrelated register sentinel
+
+        rlit r1 0x7FFF
+
+        rlit r8 0x0001
+
+        and r1 r8
+
+        rpush r1 // observation 127: expected 0001; destination result
+
+        drop
+
+        rpush r8 // observation 128: expected 0001; source unchanged
+
+        drop
+
+        rpush r2 // observation 129: expected A511; unrelated register unchanged
+
+        drop
+
+
+        // Case 068: and r2 r9; X=8000, Y=FFFF.
+
+        rlit r3 0xA512 // unrelated register sentinel
+
+        rlit r2 0x8000
+
+        rlit r9 0xFFFF
+
+        and r2 r9
+
+        rpush r2 // observation 130: expected 8000; destination result
+
+        drop
+
+        rpush r9 // observation 131: expected FFFF; source unchanged
+
+        drop
+
+        rpush r3 // observation 132: expected A512; unrelated register unchanged
+
+        drop
+
+
+        // Case 069: and r3 r10; X=AAAA, Y=5555.
+
+        rlit r4 0xA513 // unrelated register sentinel
+
+        rlit r3 0xAAAA
+
+        rlit r10 0x5555
+
+        and r3 r10
+
+        rpush r3 // observation 133: expected 0000; destination result
+
+        drop
+
+        rpush r10 // observation 134: expected 5555; source unchanged
+
+        drop
+
+        rpush r4 // observation 135: expected A513; unrelated register unchanged
+
+        drop
+
+
+        // Case 070: and r4 r11; X=AB34, Y=CD12.
+
+        rlit r5 0xA514 // unrelated register sentinel
+
+        rlit r4 0xAB34
+
+        rlit r11 0xCD12
+
+        and r4 r11
+
+        rpush r4 // observation 136: expected 8910; destination result
+
+        drop
+
+        rpush r11 // observation 137: expected CD12; source unchanged
+
+        drop
+
+        rpush r5 // observation 138: expected A514; unrelated register unchanged
+
+        drop
+
+
+        // Case 071: and r5 r12; X=1234, Y=00FF.
+
+        rlit r6 0xA515 // unrelated register sentinel
+
+        rlit r5 0x1234
+
+        rlit r12 0x00FF
+
+        and r5 r12
+
+        rpush r5 // observation 139: expected 0034; destination result
+
+        drop
+
+        rpush r12 // observation 140: expected 00FF; source unchanged
+
+        drop
+
+        rpush r6 // observation 141: expected A515; unrelated register unchanged
+
+        drop
+
+
+        // Case 072: and r6 r13; X=0001, Y=8000.
+
+        rlit r7 0xA516 // unrelated register sentinel
+
+        rlit r6 0x0001
+
+        rlit r13 0x8000
+
+        and r6 r13
+
+        rpush r6 // observation 142: expected 0000; destination result
+
+        drop
+
+        rpush r13 // observation 143: expected 8000; source unchanged
+
+        drop
+
+        rpush r7 // observation 144: expected A516; unrelated register unchanged
+
+        drop
+
+
+        // Case 073: and r7 r14; X=0000, Y=FFFF.
+
+        rlit r8 0xA517 // unrelated register sentinel
+
+        rlit r7 0x0000
+
+        rlit r14 0xFFFF
+
+        and r7 r14
+
+        rpush r7 // observation 145: expected 0000; destination result
+
+        drop
+
+        rpush r14 // observation 146: expected FFFF; source unchanged
+
+        drop
+
+        rpush r8 // observation 147: expected A517; unrelated register unchanged
+
+        drop
+
+
+        // Case 074: and r8 r15; X=C047, Y=5CC6.
+
+        rlit r9 0xA518 // unrelated register sentinel
+
+        rlit r8 0xC047
+
+        rlit r15 0x5CC6
+
+        and r8 r15
+
+        rpush r8 // observation 148: expected 4046; destination result
+
+        drop
+
+        rpush r15 // observation 149: expected 5CC6; source unchanged
+
+        drop
+
+        rpush r9 // observation 150: expected A518; unrelated register unchanged
+
+        drop
+
+
+        // Case 075: and r9 r0; X=D158, Y=4291.
+
+        rlit r10 0xA519 // unrelated register sentinel
+
+        rlit r9 0xD158
+
+        rlit r0 0x4291
+
+        and r9 r0
+
+        rpush r9 // observation 151: expected 4010; destination result
+
+        drop
+
+        rpush r0 // observation 152: expected 4291; source unchanged
+
+        drop
+
+        rpush r10 // observation 153: expected A519; unrelated register unchanged
+
+        drop
+
+
+        // Case 076: and r10 r1; X=E269, Y=705C.
+
+        rlit r11 0xA51A // unrelated register sentinel
+
+        rlit r10 0xE269
+
+        rlit r1 0x705C
+
+        and r10 r1
+
+        rpush r10 // observation 154: expected 6048; destination result
+
+        drop
+
+        rpush r1 // observation 155: expected 705C; source unchanged
+
+        drop
+
+        rpush r11 // observation 156: expected A51A; unrelated register unchanged
+
+        drop
+
+
+        // Case 077: and r11 r2; X=F37A, Y=6667.
+
+        rlit r12 0xA51B // unrelated register sentinel
+
+        rlit r11 0xF37A
+
+        rlit r2 0x6667
+
+        and r11 r2
+
+        rpush r11 // observation 157: expected 6262; destination result
+
+        drop
+
+        rpush r2 // observation 158: expected 6667; source unchanged
+
+        drop
+
+        rpush r12 // observation 159: expected A51B; unrelated register unchanged
+
+        drop
+
+
+        // Case 078: and r12 r3; X=048B, Y=9432.
+
+        rlit r13 0xA51C // unrelated register sentinel
+
+        rlit r12 0x048B
+
+        rlit r3 0x9432
+
+        and r12 r3
+
+        rpush r12 // observation 160: expected 0402; destination result
+
+        drop
+
+        rpush r3 // observation 161: expected 9432; source unchanged
+
+        drop
+
+        rpush r13 // observation 162: expected A51C; unrelated register unchanged
+
+        drop
+
+
+        // Case 079: and r13 r4; X=159C, Y=B9FD.
+
+        rlit r14 0xA51D // unrelated register sentinel
+
+        rlit r13 0x159C
+
+        rlit r4 0xB9FD
+
+        and r13 r4
+
+        rpush r13 // observation 163: expected 119C; destination result
+
+        drop
+
+        rpush r4 // observation 164: expected B9FD; source unchanged
+
+        drop
+
+        rpush r14 // observation 165: expected A51D; unrelated register unchanged
+
+        drop
+
+
+        // Case 080: and r14 r5; X=26AD, Y=AF88.
+
+        rlit r15 0xA51E // unrelated register sentinel
+
+        rlit r14 0x26AD
+
+        rlit r5 0xAF88
+
+        and r14 r5
+
+        rpush r14 // observation 166: expected 2688; destination result
+
+        drop
+
+        rpush r5 // observation 167: expected AF88; source unchanged
+
+        drop
+
+        rpush r15 // observation 168: expected A51E; unrelated register unchanged
+
+        drop
+
+
+        // Case 081: and r15 r6; X=37BE, Y=DD53.
+
+        rlit r0 0xA51F // unrelated register sentinel
+
+        rlit r15 0x37BE
+
+        rlit r6 0xDD53
+
+        and r15 r6
+
+        rpush r15 // observation 169: expected 1512; destination result
+
+        drop
+
+        rpush r6 // observation 170: expected DD53; source unchanged
+
+        drop
+
+        rpush r0 // observation 171: expected A51F; unrelated register unchanged
+
+        drop
+
+
+        // AND: same-register operands at every register index.
+
+        // Case 082: and r0 r0; X=0001, Y=0001.
+
+        rlit r0 0x0001
+
+        and r0 r0
+
+        rpush r0 // observation 172: expected 0001; destination result
+
+        drop
+
+
+        // Case 083: and r1 r1; X=0002, Y=0002.
+
+        rlit r1 0x0002
+
+        and r1 r1
+
+        rpush r1 // observation 173: expected 0002; destination result
+
+        drop
+
+
+        // Case 084: and r2 r2; X=7FFF, Y=7FFF.
+
+        rlit r2 0x7FFF
+
+        and r2 r2
+
+        rpush r2 // observation 174: expected 7FFF; destination result
+
+        drop
+
+
+        // Case 085: and r3 r3; X=8000, Y=8000.
+
+        rlit r3 0x8000
+
+        and r3 r3
+
+        rpush r3 // observation 175: expected 8000; destination result
+
+        drop
+
+
+        // Case 086: and r4 r4; X=8001, Y=8001.
+
+        rlit r4 0x8001
+
+        and r4 r4
+
+        rpush r4 // observation 176: expected 8001; destination result
+
+        drop
+
+
+        // Case 087: and r5 r5; X=FFFE, Y=FFFE.
+
+        rlit r5 0xFFFE
+
+        and r5 r5
+
+        rpush r5 // observation 177: expected FFFE; destination result
+
+        drop
+
+
+        // Case 088: and r6 r6; X=FFFF, Y=FFFF.
+
+        rlit r6 0xFFFF
+
+        and r6 r6
+
+        rpush r6 // observation 178: expected FFFF; destination result
+
+        drop
+
+
+        // Case 089: and r7 r7; X=AAAA, Y=AAAA.
+
+        rlit r7 0xAAAA
+
+        and r7 r7
+
+        rpush r7 // observation 179: expected AAAA; destination result
+
+        drop
+
+
+        // Case 090: and r8 r8; X=5555, Y=5555.
+
+        rlit r8 0x5555
+
+        and r8 r8
+
+        rpush r8 // observation 180: expected 5555; destination result
+
+        drop
+
+
+        // Case 091: and r9 r9; X=AB34, Y=AB34.
+
+        rlit r9 0xAB34
+
+        and r9 r9
+
+        rpush r9 // observation 181: expected AB34; destination result
+
+        drop
+
+
+        // Case 092: and r10 r10; X=1234, Y=1234.
+
+        rlit r10 0x1234
+
+        and r10 r10
+
+        rpush r10 // observation 182: expected 1234; destination result
+
+        drop
+
+
+        // Case 093: and r11 r11; X=00FF, Y=00FF.
+
+        rlit r11 0x00FF
+
+        and r11 r11
+
+        rpush r11 // observation 183: expected 00FF; destination result
+
+        drop
+
+
+        // Case 094: and r12 r12; X=FF00, Y=FF00.
+
+        rlit r12 0xFF00
+
+        and r12 r12
+
+        rpush r12 // observation 184: expected FF00; destination result
+
+        drop
+
+
+        // Case 095: and r13 r13; X=0101, Y=0101.
+
+        rlit r13 0x0101
+
+        and r13 r13
+
+        rpush r13 // observation 185: expected 0101; destination result
+
+        drop
+
+
+        // Case 096: and r14 r14; X=8080, Y=8080.
+
+        rlit r14 0x8080
+
+        and r14 r14
+
+        rpush r14 // observation 186: expected 8080; destination result
+
+        drop
+
+
+        // Case 097: and r15 r15; X=0000, Y=0000.
+
+        rlit r15 0x0000
+
+        and r15 r15
+
+        rpush r15 // observation 187: expected 0000; destination result
+
+        drop
+
+
+        // XOR: all distinct-register destinations and sources.
+
+        // Case 098: xor r0 r7; X=7FFF, Y=0001.
+
+        rlit r1 0xA520 // unrelated register sentinel
+
+        rlit r0 0x7FFF
+
+        rlit r7 0x0001
+
+        xor r0 r7
+
+        rpush r0 // observation 188: expected 7FFE; destination result
+
+        drop
+
+        rpush r7 // observation 189: expected 0001; source unchanged
+
+        drop
+
+        rpush r1 // observation 190: expected A520; unrelated register unchanged
+
+        drop
+
+
+        // Case 099: xor r1 r8; X=8000, Y=FFFF.
+
+        rlit r2 0xA521 // unrelated register sentinel
+
+        rlit r1 0x8000
+
+        rlit r8 0xFFFF
+
+        xor r1 r8
+
+        rpush r1 // observation 191: expected 7FFF; destination result
+
+        drop
+
+        rpush r8 // observation 192: expected FFFF; source unchanged
+
+        drop
+
+        rpush r2 // observation 193: expected A521; unrelated register unchanged
+
+        drop
+
+
+        // Case 100: xor r2 r9; X=AAAA, Y=5555.
+
+        rlit r3 0xA522 // unrelated register sentinel
+
+        rlit r2 0xAAAA
+
+        rlit r9 0x5555
+
+        xor r2 r9
+
+        rpush r2 // observation 194: expected FFFF; destination result
+
+        drop
+
+        rpush r9 // observation 195: expected 5555; source unchanged
+
+        drop
+
+        rpush r3 // observation 196: expected A522; unrelated register unchanged
+
+        drop
+
+
+        // Case 101: xor r3 r10; X=AB34, Y=CD12.
+
+        rlit r4 0xA523 // unrelated register sentinel
+
+        rlit r3 0xAB34
+
+        rlit r10 0xCD12
+
+        xor r3 r10
+
+        rpush r3 // observation 197: expected 6626; destination result
+
+        drop
+
+        rpush r10 // observation 198: expected CD12; source unchanged
+
+        drop
+
+        rpush r4 // observation 199: expected A523; unrelated register unchanged
+
+        drop
+
+
+        // Case 102: xor r4 r11; X=1234, Y=00FF.
+
+        rlit r5 0xA524 // unrelated register sentinel
+
+        rlit r4 0x1234
+
+        rlit r11 0x00FF
+
+        xor r4 r11
+
+        rpush r4 // observation 200: expected 12CB; destination result
+
+        drop
+
+        rpush r11 // observation 201: expected 00FF; source unchanged
+
+        drop
+
+        rpush r5 // observation 202: expected A524; unrelated register unchanged
+
+        drop
+
+
+        // Case 103: xor r5 r12; X=0001, Y=8000.
+
+        rlit r6 0xA525 // unrelated register sentinel
+
+        rlit r5 0x0001
+
+        rlit r12 0x8000
+
+        xor r5 r12
+
+        rpush r5 // observation 203: expected 8001; destination result
+
+        drop
+
+        rpush r12 // observation 204: expected 8000; source unchanged
+
+        drop
+
+        rpush r6 // observation 205: expected A525; unrelated register unchanged
+
+        drop
+
+
+        // Case 104: xor r6 r13; X=0000, Y=FFFF.
+
+        rlit r7 0xA526 // unrelated register sentinel
+
+        rlit r6 0x0000
+
+        rlit r13 0xFFFF
+
+        xor r6 r13
+
+        rpush r6 // observation 206: expected FFFF; destination result
+
+        drop
+
+        rpush r13 // observation 207: expected FFFF; source unchanged
+
+        drop
+
+        rpush r7 // observation 208: expected A526; unrelated register unchanged
+
+        drop
+
+
+        // Case 105: xor r7 r14; X=FFFF, Y=0001.
+
+        rlit r8 0xA527 // unrelated register sentinel
+
+        rlit r7 0xFFFF
+
+        rlit r14 0x0001
+
+        xor r7 r14
+
+        rpush r7 // observation 209: expected FFFE; destination result
+
+        drop
+
+        rpush r14 // observation 210: expected 0001; source unchanged
+
+        drop
+
+        rpush r8 // observation 211: expected A527; unrelated register unchanged
+
+        drop
+
+
+        // Case 106: xor r8 r15; X=E4AF, Y=6755.
+
+        rlit r9 0xA528 // unrelated register sentinel
+
+        rlit r8 0xE4AF
+
+        rlit r15 0x6755
+
+        xor r8 r15
+
+        rpush r8 // observation 212: expected 83FA; destination result
+
+        drop
+
+        rpush r15 // observation 213: expected 6755; source unchanged
+
+        drop
+
+        rpush r9 // observation 214: expected A528; unrelated register unchanged
+
+        drop
+
+
+        // Case 107: xor r9 r0; X=F5C0, Y=9560.
+
+        rlit r10 0xA529 // unrelated register sentinel
+
+        rlit r9 0xF5C0
+
+        rlit r0 0x9560
+
+        xor r9 r0
+
+        rpush r9 // observation 215: expected 60A0; destination result
+
+        drop
+
+        rpush r0 // observation 216: expected 9560; source unchanged
+
+        drop
+
+        rpush r10 // observation 217: expected A529; unrelated register unchanged
+
+        drop
+
+
+        // Case 108: xor r10 r1; X=06D1, Y=BB2B.
+
+        rlit r11 0xA52A // unrelated register sentinel
+
+        rlit r10 0x06D1
+
+        rlit r1 0xBB2B
+
+        xor r10 r1
+
+        rpush r10 // observation 218: expected BDFA; destination result
+
+        drop
+
+        rpush r1 // observation 219: expected BB2B; source unchanged
+
+        drop
+
+        rpush r11 // observation 220: expected A52A; unrelated register unchanged
+
+        drop
+
+
+        // Case 109: xor r11 r2; X=17E2, Y=A8F6.
+
+        rlit r12 0xA52B // unrelated register sentinel
+
+        rlit r11 0x17E2
+
+        rlit r2 0xA8F6
+
+        xor r11 r2
+
+        rpush r11 // observation 221: expected BF14; destination result
+
+        drop
+
+        rpush r2 // observation 222: expected A8F6; source unchanged
+
+        drop
+
+        rpush r12 // observation 223: expected A52B; unrelated register unchanged
+
+        drop
+
+
+        // Case 110: xor r12 r3; X=28F3, Y=DE81.
+
+        rlit r13 0xA52C // unrelated register sentinel
+
+        rlit r12 0x28F3
+
+        rlit r3 0xDE81
+
+        xor r12 r3
+
+        rpush r12 // observation 224: expected F672; destination result
+
+        drop
+
+        rpush r3 // observation 225: expected DE81; source unchanged
+
+        drop
+
+        rpush r13 // observation 226: expected A52C; unrelated register unchanged
+
+        drop
+
+
+        // Case 111: xor r13 r4; X=3A04, Y=CC4C.
+
+        rlit r14 0xA52D // unrelated register sentinel
+
+        rlit r13 0x3A04
+
+        rlit r4 0xCC4C
+
+        xor r13 r4
+
+        rpush r13 // observation 227: expected F648; destination result
+
+        drop
+
+        rpush r4 // observation 228: expected CC4C; source unchanged
+
+        drop
+
+        rpush r14 // observation 229: expected A52D; unrelated register unchanged
+
+        drop
+
+
+        // Case 112: xor r14 r5; X=4B15, Y=F217.
+
+        rlit r15 0xA52E // unrelated register sentinel
+
+        rlit r14 0x4B15
+
+        rlit r5 0xF217
+
+        xor r14 r5
+
+        rpush r14 // observation 230: expected B902; destination result
+
+        drop
+
+        rpush r5 // observation 231: expected F217; source unchanged
+
+        drop
+
+        rpush r15 // observation 232: expected A52E; unrelated register unchanged
+
+        drop
+
+
+        // Case 113: xor r15 r6; X=5C26, Y=E022.
+
+        rlit r0 0xA52F // unrelated register sentinel
+
+        rlit r15 0x5C26
+
+        rlit r6 0xE022
+
+        xor r15 r6
+
+        rpush r15 // observation 233: expected BC04; destination result
+
+        drop
+
+        rpush r6 // observation 234: expected E022; source unchanged
+
+        drop
+
+        rpush r0 // observation 235: expected A52F; unrelated register unchanged
+
+        drop
+
+
+        // XOR: same-register operands at every register index.
+
+        // Case 114: xor r0 r0; X=0002, Y=0002.
+
+        rlit r0 0x0002
+
+        xor r0 r0
+
+        rpush r0 // observation 236: expected 0000; destination result
+
+        drop
+
+
+        // Case 115: xor r1 r1; X=7FFF, Y=7FFF.
+
+        rlit r1 0x7FFF
+
+        xor r1 r1
+
+        rpush r1 // observation 237: expected 0000; destination result
+
+        drop
+
+
+        // Case 116: xor r2 r2; X=8000, Y=8000.
+
+        rlit r2 0x8000
+
+        xor r2 r2
+
+        rpush r2 // observation 238: expected 0000; destination result
+
+        drop
+
+
+        // Case 117: xor r3 r3; X=8001, Y=8001.
+
+        rlit r3 0x8001
+
+        xor r3 r3
+
+        rpush r3 // observation 239: expected 0000; destination result
+
+        drop
+
+
+        // Case 118: xor r4 r4; X=FFFE, Y=FFFE.
+
+        rlit r4 0xFFFE
+
+        xor r4 r4
+
+        rpush r4 // observation 240: expected 0000; destination result
+
+        drop
+
+
+        // Case 119: xor r5 r5; X=FFFF, Y=FFFF.
+
+        rlit r5 0xFFFF
+
+        xor r5 r5
+
+        rpush r5 // observation 241: expected 0000; destination result
+
+        drop
+
+
+        // Case 120: xor r6 r6; X=AAAA, Y=AAAA.
+
+        rlit r6 0xAAAA
+
+        xor r6 r6
+
+        rpush r6 // observation 242: expected 0000; destination result
+
+        drop
+
+
+        // Case 121: xor r7 r7; X=5555, Y=5555.
+
+        rlit r7 0x5555
+
+        xor r7 r7
+
+        rpush r7 // observation 243: expected 0000; destination result
+
+        drop
+
+
+        // Case 122: xor r8 r8; X=AB34, Y=AB34.
+
+        rlit r8 0xAB34
+
+        xor r8 r8
+
+        rpush r8 // observation 244: expected 0000; destination result
+
+        drop
+
+
+        // Case 123: xor r9 r9; X=1234, Y=1234.
+
+        rlit r9 0x1234
+
+        xor r9 r9
+
+        rpush r9 // observation 245: expected 0000; destination result
+
+        drop
+
+
+        // Case 124: xor r10 r10; X=00FF, Y=00FF.
+
+        rlit r10 0x00FF
+
+        xor r10 r10
+
+        rpush r10 // observation 246: expected 0000; destination result
+
+        drop
+
+
+        // Case 125: xor r11 r11; X=FF00, Y=FF00.
+
+        rlit r11 0xFF00
+
+        xor r11 r11
+
+        rpush r11 // observation 247: expected 0000; destination result
+
+        drop
+
+
+        // Case 126: xor r12 r12; X=0101, Y=0101.
+
+        rlit r12 0x0101
+
+        xor r12 r12
+
+        rpush r12 // observation 248: expected 0000; destination result
+
+        drop
+
+
+        // Case 127: xor r13 r13; X=8080, Y=8080.
+
+        rlit r13 0x8080
+
+        xor r13 r13
+
+        rpush r13 // observation 249: expected 0000; destination result
+
+        drop
+
+
+        // Case 128: xor r14 r14; X=0000, Y=0000.
+
+        rlit r14 0x0000
+
+        xor r14 r14
+
+        rpush r14 // observation 250: expected 0000; destination result
+
+        drop
+
+
+        // Case 129: xor r15 r15; X=0001, Y=0001.
+
+        rlit r15 0x0001
+
+        xor r15 r15
+
+        rpush r15 // observation 251: expected 0000; destination result
+
+        drop
+
+
+        // SUB: all distinct-register destinations and sources.
+
+        // Case 130: sub r0 r7; X=8000, Y=FFFF.
+
+        rlit r1 0xA530 // unrelated register sentinel
+
+        rlit r0 0x8000
+
+        rlit r7 0xFFFF
+
+        sub r0 r7
+
+        rpush r0 // observation 252: expected 8001; destination result
+
+        drop
+
+        rpush r7 // observation 253: expected FFFF; source unchanged
+
+        drop
+
+        rpush r1 // observation 254: expected A530; unrelated register unchanged
+
+        drop
+
+
+        // Case 131: sub r1 r8; X=AAAA, Y=5555.
+
+        rlit r2 0xA531 // unrelated register sentinel
+
+        rlit r1 0xAAAA
+
+        rlit r8 0x5555
+
+        sub r1 r8
+
+        rpush r1 // observation 255: expected 5555; destination result
+
+        drop
+
+        rpush r8 // observation 256: expected 5555; source unchanged
+
+        drop
+
+        rpush r2 // observation 257: expected A531; unrelated register unchanged
+
+        drop
+
+
+        // Case 132: sub r2 r9; X=AB34, Y=CD12.
+
+        rlit r3 0xA532 // unrelated register sentinel
+
+        rlit r2 0xAB34
+
+        rlit r9 0xCD12
+
+        sub r2 r9
+
+        rpush r2 // observation 258: expected DE22; destination result
+
+        drop
+
+        rpush r9 // observation 259: expected CD12; source unchanged
+
+        drop
+
+        rpush r3 // observation 260: expected A532; unrelated register unchanged
+
+        drop
+
+
+        // Case 133: sub r3 r10; X=1234, Y=00FF.
+
+        rlit r4 0xA533 // unrelated register sentinel
+
+        rlit r3 0x1234
+
+        rlit r10 0x00FF
+
+        sub r3 r10
+
+        rpush r3 // observation 261: expected 1135; destination result
+
+        drop
+
+        rpush r10 // observation 262: expected 00FF; source unchanged
+
+        drop
+
+        rpush r4 // observation 263: expected A533; unrelated register unchanged
+
+        drop
+
+
+        // Case 134: sub r4 r11; X=0001, Y=8000.
+
+        rlit r5 0xA534 // unrelated register sentinel
+
+        rlit r4 0x0001
+
+        rlit r11 0x8000
+
+        sub r4 r11
+
+        rpush r4 // observation 264: expected 8001; destination result
+
+        drop
+
+        rpush r11 // observation 265: expected 8000; source unchanged
+
+        drop
+
+        rpush r5 // observation 266: expected A534; unrelated register unchanged
+
+        drop
+
+
+        // Case 135: sub r5 r12; X=0000, Y=FFFF.
+
+        rlit r6 0xA535 // unrelated register sentinel
+
+        rlit r5 0x0000
+
+        rlit r12 0xFFFF
+
+        sub r5 r12
+
+        rpush r5 // observation 267: expected 0001; destination result
+
+        drop
+
+        rpush r12 // observation 268: expected FFFF; source unchanged
+
+        drop
+
+        rpush r6 // observation 269: expected A535; unrelated register unchanged
+
+        drop
+
+
+        // Case 136: sub r6 r13; X=FFFF, Y=0001.
+
+        rlit r7 0xA536 // unrelated register sentinel
+
+        rlit r6 0xFFFF
+
+        rlit r13 0x0001
+
+        sub r6 r13
+
+        rpush r6 // observation 270: expected FFFE; destination result
+
+        drop
+
+        rpush r13 // observation 271: expected 0001; source unchanged
+
+        drop
+
+        rpush r7 // observation 272: expected A536; unrelated register unchanged
+
+        drop
+
+
+        // Case 137: sub r7 r14; X=7FFF, Y=0001.
+
+        rlit r8 0xA537 // unrelated register sentinel
+
+        rlit r7 0x7FFF
+
+        rlit r14 0x0001
+
+        sub r7 r14
+
+        rpush r7 // observation 273: expected 7FFE; destination result
+
+        drop
+
+        rpush r14 // observation 274: expected 0001; source unchanged
+
+        drop
+
+        rpush r8 // observation 275: expected A537; unrelated register unchanged
+
+        drop
+
+
+        // Case 138: sub r8 r15; X=0917, Y=AA24.
+
+        rlit r9 0xA538 // unrelated register sentinel
+
+        rlit r8 0x0917
+
+        rlit r15 0xAA24
+
+        sub r8 r15
+
+        rpush r8 // observation 276: expected 5EF3; destination result
+
+        drop
+
+        rpush r15 // observation 277: expected AA24; source unchanged
+
+        drop
+
+        rpush r9 // observation 278: expected A538; unrelated register unchanged
+
+        drop
+
+
+        // Case 139: sub r9 r0; X=1A28, Y=DFEF.
+
+        rlit r10 0xA539 // unrelated register sentinel
+
+        rlit r9 0x1A28
+
+        rlit r0 0xDFEF
+
+        sub r9 r0
+
+        rpush r9 // observation 279: expected 3A39; destination result
+
+        drop
+
+        rpush r0 // observation 280: expected DFEF; source unchanged
+
+        drop
+
+        rpush r10 // observation 281: expected A539; unrelated register unchanged
+
+        drop
+
+
+        // Case 140: sub r10 r1; X=2B39, Y=CDBA.
+
+        rlit r11 0xA53A // unrelated register sentinel
+
+        rlit r10 0x2B39
+
+        rlit r1 0xCDBA
+
+        sub r10 r1
+
+        rpush r10 // observation 282: expected 5D7F; destination result
+
+        drop
+
+        rpush r1 // observation 283: expected CDBA; source unchanged
+
+        drop
+
+        rpush r11 // observation 284: expected A53A; unrelated register unchanged
+
+        drop
+
+
+        // Case 141: sub r11 r2; X=3C4A, Y=F345.
+
+        rlit r12 0xA53B // unrelated register sentinel
+
+        rlit r11 0x3C4A
+
+        rlit r2 0xF345
+
+        sub r11 r2
+
+        rpush r11 // observation 285: expected 4905; destination result
+
+        drop
+
+        rpush r2 // observation 286: expected F345; source unchanged
+
+        drop
+
+        rpush r12 // observation 287: expected A53B; unrelated register unchanged
+
+        drop
+
+
+        // Case 142: sub r12 r3; X=4D5B, Y=E110.
+
+        rlit r13 0xA53C // unrelated register sentinel
+
+        rlit r12 0x4D5B
+
+        rlit r3 0xE110
+
+        sub r12 r3
+
+        rpush r12 // observation 288: expected 6C4B; destination result
+
+        drop
+
+        rpush r3 // observation 289: expected E110; source unchanged
+
+        drop
+
+        rpush r13 // observation 290: expected A53C; unrelated register unchanged
+
+        drop
+
+
+        // Case 143: sub r13 r4; X=5E6C, Y=16DB.
+
+        rlit r14 0xA53D // unrelated register sentinel
+
+        rlit r13 0x5E6C
+
+        rlit r4 0x16DB
+
+        sub r13 r4
+
+        rpush r13 // observation 291: expected 4791; destination result
+
+        drop
+
+        rpush r4 // observation 292: expected 16DB; source unchanged
+
+        drop
+
+        rpush r14 // observation 293: expected A53D; unrelated register unchanged
+
+        drop
+
+
+        // Case 144: sub r14 r5; X=6F7D, Y=04E6.
+
+        rlit r15 0xA53E // unrelated register sentinel
+
+        rlit r14 0x6F7D
+
+        rlit r5 0x04E6
+
+        sub r14 r5
+
+        rpush r14 // observation 294: expected 6A97; destination result
+
+        drop
+
+        rpush r5 // observation 295: expected 04E6; source unchanged
+
+        drop
+
+        rpush r15 // observation 296: expected A53E; unrelated register unchanged
+
+        drop
+
+
+        // Case 145: sub r15 r6; X=808E, Y=2AB1.
+
+        rlit r0 0xA53F // unrelated register sentinel
+
+        rlit r15 0x808E
+
+        rlit r6 0x2AB1
+
+        sub r15 r6
+
+        rpush r15 // observation 297: expected 55DD; destination result
+
+        drop
+
+        rpush r6 // observation 298: expected 2AB1; source unchanged
+
+        drop
+
+        rpush r0 // observation 299: expected A53F; unrelated register unchanged
+
+        drop
+
+
+        // SUB: same-register operands at every register index.
+
+        // Case 146: sub r0 r0; X=7FFF, Y=7FFF.
+
+        rlit r0 0x7FFF
+
+        sub r0 r0
+
+        rpush r0 // observation 300: expected 0000; destination result
+
+        drop
+
+
+        // Case 147: sub r1 r1; X=8000, Y=8000.
+
+        rlit r1 0x8000
+
+        sub r1 r1
+
+        rpush r1 // observation 301: expected 0000; destination result
+
+        drop
+
+
+        // Case 148: sub r2 r2; X=8001, Y=8001.
+
+        rlit r2 0x8001
+
+        sub r2 r2
+
+        rpush r2 // observation 302: expected 0000; destination result
+
+        drop
+
+
+        // Case 149: sub r3 r3; X=FFFE, Y=FFFE.
+
+        rlit r3 0xFFFE
+
+        sub r3 r3
+
+        rpush r3 // observation 303: expected 0000; destination result
+
+        drop
+
+
+        // Case 150: sub r4 r4; X=FFFF, Y=FFFF.
+
+        rlit r4 0xFFFF
+
+        sub r4 r4
+
+        rpush r4 // observation 304: expected 0000; destination result
+
+        drop
+
+
+        // Case 151: sub r5 r5; X=AAAA, Y=AAAA.
+
+        rlit r5 0xAAAA
+
+        sub r5 r5
+
+        rpush r5 // observation 305: expected 0000; destination result
+
+        drop
+
+
+        // Case 152: sub r6 r6; X=5555, Y=5555.
+
+        rlit r6 0x5555
+
+        sub r6 r6
+
+        rpush r6 // observation 306: expected 0000; destination result
+
+        drop
+
+
+        // Case 153: sub r7 r7; X=AB34, Y=AB34.
+
+        rlit r7 0xAB34
+
+        sub r7 r7
+
+        rpush r7 // observation 307: expected 0000; destination result
+
+        drop
+
+
+        // Case 154: sub r8 r8; X=1234, Y=1234.
+
+        rlit r8 0x1234
+
+        sub r8 r8
+
+        rpush r8 // observation 308: expected 0000; destination result
+
+        drop
+
+
+        // Case 155: sub r9 r9; X=00FF, Y=00FF.
+
+        rlit r9 0x00FF
+
+        sub r9 r9
+
+        rpush r9 // observation 309: expected 0000; destination result
+
+        drop
+
+
+        // Case 156: sub r10 r10; X=FF00, Y=FF00.
+
+        rlit r10 0xFF00
+
+        sub r10 r10
+
+        rpush r10 // observation 310: expected 0000; destination result
+
+        drop
+
+
+        // Case 157: sub r11 r11; X=0101, Y=0101.
+
+        rlit r11 0x0101
+
+        sub r11 r11
+
+        rpush r11 // observation 311: expected 0000; destination result
+
+        drop
+
+
+        // Case 158: sub r12 r12; X=8080, Y=8080.
+
+        rlit r12 0x8080
+
+        sub r12 r12
+
+        rpush r12 // observation 312: expected 0000; destination result
+
+        drop
+
+
+        // Case 159: sub r13 r13; X=0000, Y=0000.
+
+        rlit r13 0x0000
+
+        sub r13 r13
+
+        rpush r13 // observation 313: expected 0000; destination result
+
+        drop
+
+
+        // Case 160: sub r14 r14; X=0001, Y=0001.
+
+        rlit r14 0x0001
+
+        sub r14 r14
+
+        rpush r14 // observation 314: expected 0000; destination result
+
+        drop
+
+
+        // Case 161: sub r15 r15; X=0002, Y=0002.
+
+        rlit r15 0x0002
+
+        sub r15 r15
+
+        rpush r15 // observation 315: expected 0000; destination result
+
+        drop
+
+
+        // ADD: all distinct-register destinations and sources.
+
+        // Case 162: add r0 r7; X=AAAA, Y=5555.
+
+        rlit r1 0xA540 // unrelated register sentinel
+
+        rlit r0 0xAAAA
+
+        rlit r7 0x5555
+
+        add r0 r7
+
+        rpush r0 // observation 316: expected FFFF; destination result
+
+        drop
+
+        rpush r7 // observation 317: expected 5555; source unchanged
+
+        drop
+
+        rpush r1 // observation 318: expected A540; unrelated register unchanged
+
+        drop
+
+
+        // Case 163: add r1 r8; X=AB34, Y=CD12.
+
+        rlit r2 0xA541 // unrelated register sentinel
+
+        rlit r1 0xAB34
+
+        rlit r8 0xCD12
+
+        add r1 r8
+
+        rpush r1 // observation 319: expected 7846; destination result
+
+        drop
+
+        rpush r8 // observation 320: expected CD12; source unchanged
+
+        drop
+
+        rpush r2 // observation 321: expected A541; unrelated register unchanged
+
+        drop
+
+
+        // Case 164: add r2 r9; X=1234, Y=00FF.
+
+        rlit r3 0xA542 // unrelated register sentinel
+
+        rlit r2 0x1234
+
+        rlit r9 0x00FF
+
+        add r2 r9
+
+        rpush r2 // observation 322: expected 1333; destination result
+
+        drop
+
+        rpush r9 // observation 323: expected 00FF; source unchanged
+
+        drop
+
+        rpush r3 // observation 324: expected A542; unrelated register unchanged
+
+        drop
+
+
+        // Case 165: add r3 r10; X=0001, Y=8000.
+
+        rlit r4 0xA543 // unrelated register sentinel
+
+        rlit r3 0x0001
+
+        rlit r10 0x8000
+
+        add r3 r10
+
+        rpush r3 // observation 325: expected 8001; destination result
+
+        drop
+
+        rpush r10 // observation 326: expected 8000; source unchanged
+
+        drop
+
+        rpush r4 // observation 327: expected A543; unrelated register unchanged
+
+        drop
+
+
+        // Case 166: add r4 r11; X=0000, Y=FFFF.
+
+        rlit r5 0xA544 // unrelated register sentinel
+
+        rlit r4 0x0000
+
+        rlit r11 0xFFFF
+
+        add r4 r11
+
+        rpush r4 // observation 328: expected FFFF; destination result
+
+        drop
+
+        rpush r11 // observation 329: expected FFFF; source unchanged
+
+        drop
+
+        rpush r5 // observation 330: expected A544; unrelated register unchanged
+
+        drop
+
+
+        // Case 167: add r5 r12; X=FFFF, Y=0001.
+
+        rlit r6 0xA545 // unrelated register sentinel
+
+        rlit r5 0xFFFF
+
+        rlit r12 0x0001
+
+        add r5 r12
+
+        rpush r5 // observation 331: expected 0000; destination result
+
+        drop
+
+        rpush r12 // observation 332: expected 0001; source unchanged
+
+        drop
+
+        rpush r6 // observation 333: expected A545; unrelated register unchanged
+
+        drop
+
+
+        // Case 168: add r6 r13; X=7FFF, Y=0001.
+
+        rlit r7 0xA546 // unrelated register sentinel
+
+        rlit r6 0x7FFF
+
+        rlit r13 0x0001
+
+        add r6 r13
+
+        rpush r6 // observation 334: expected 8000; destination result
+
+        drop
+
+        rpush r13 // observation 335: expected 0001; source unchanged
+
+        drop
+
+        rpush r7 // observation 336: expected A546; unrelated register unchanged
+
+        drop
+
+
+        // Case 169: add r7 r14; X=8000, Y=FFFF.
+
+        rlit r8 0xA547 // unrelated register sentinel
+
+        rlit r7 0x8000
+
+        rlit r14 0xFFFF
+
+        add r7 r14
+
+        rpush r7 // observation 337: expected 7FFF; destination result
+
+        drop
+
+        rpush r14 // observation 338: expected FFFF; source unchanged
+
+        drop
+
+        rpush r8 // observation 339: expected A547; unrelated register unchanged
+
+        drop
+
+
+        // Case 170: add r8 r15; X=2D7F, Y=FCB3.
+
+        rlit r9 0xA548 // unrelated register sentinel
+
+        rlit r8 0x2D7F
+
+        rlit r15 0xFCB3
+
+        add r8 r15
+
+        rpush r8 // observation 340: expected 2A32; destination result
+
+        drop
+
+        rpush r15 // observation 341: expected FCB3; source unchanged
+
+        drop
+
+        rpush r9 // observation 342: expected A548; unrelated register unchanged
+
+        drop
+
+
+        // Case 171: add r9 r0; X=3E90, Y=E27E.
+
+        rlit r10 0xA549 // unrelated register sentinel
+
+        rlit r9 0x3E90
+
+        rlit r0 0xE27E
+
+        add r9 r0
+
+        rpush r9 // observation 343: expected 210E; destination result
+
+        drop
+
+        rpush r0 // observation 344: expected E27E; source unchanged
+
+        drop
+
+        rpush r10 // observation 345: expected A549; unrelated register unchanged
+
+        drop
+
+
+        // Case 172: add r10 r1; X=4FA1, Y=1009.
+
+        rlit r11 0xA54A // unrelated register sentinel
+
+        rlit r10 0x4FA1
+
+        rlit r1 0x1009
+
+        add r10 r1
+
+        rpush r10 // observation 346: expected 5FAA; destination result
+
+        drop
+
+        rpush r1 // observation 347: expected 1009; source unchanged
+
+        drop
+
+        rpush r11 // observation 348: expected A54A; unrelated register unchanged
+
+        drop
+
+
+        // Case 173: add r11 r2; X=60B2, Y=05D4.
+
+        rlit r12 0xA54B // unrelated register sentinel
+
+        rlit r11 0x60B2
+
+        rlit r2 0x05D4
+
+        add r11 r2
+
+        rpush r11 // observation 349: expected 6686; destination result
+
+        drop
+
+        rpush r2 // observation 350: expected 05D4; source unchanged
+
+        drop
+
+        rpush r12 // observation 351: expected A54B; unrelated register unchanged
+
+        drop
+
+
+        // Case 174: add r12 r3; X=71C3, Y=2B9F.
+
+        rlit r13 0xA54C // unrelated register sentinel
+
+        rlit r12 0x71C3
+
+        rlit r3 0x2B9F
+
+        add r12 r3
+
+        rpush r12 // observation 352: expected 9D62; destination result
+
+        drop
+
+        rpush r3 // observation 353: expected 2B9F; source unchanged
+
+        drop
+
+        rpush r13 // observation 354: expected A54C; unrelated register unchanged
+
+        drop
+
+
+        // Case 175: add r13 r4; X=82D4, Y=59AA.
+
+        rlit r14 0xA54D // unrelated register sentinel
+
+        rlit r13 0x82D4
+
+        rlit r4 0x59AA
+
+        add r13 r4
+
+        rpush r13 // observation 355: expected DC7E; destination result
+
+        drop
+
+        rpush r4 // observation 356: expected 59AA; source unchanged
+
+        drop
+
+        rpush r14 // observation 357: expected A54D; unrelated register unchanged
+
+        drop
+
+
+        // Case 176: add r14 r5; X=93E5, Y=4F75.
+
+        rlit r15 0xA54E // unrelated register sentinel
+
+        rlit r14 0x93E5
+
+        rlit r5 0x4F75
+
+        add r14 r5
+
+        rpush r14 // observation 358: expected E35A; destination result
+
+        drop
+
+        rpush r5 // observation 359: expected 4F75; source unchanged
+
+        drop
+
+        rpush r15 // observation 360: expected A54E; unrelated register unchanged
+
+        drop
+
+
+        // Case 177: add r15 r6; X=A4F6, Y=7D00.
+
+        rlit r0 0xA54F // unrelated register sentinel
+
+        rlit r15 0xA4F6
+
+        rlit r6 0x7D00
+
+        add r15 r6
+
+        rpush r15 // observation 361: expected 21F6; destination result
+
+        drop
+
+        rpush r6 // observation 362: expected 7D00; source unchanged
+
+        drop
+
+        rpush r0 // observation 363: expected A54F; unrelated register unchanged
+
+        drop
+
+
+        // ADD: same-register operands at every register index.
+
+        // Case 178: add r0 r0; X=8000, Y=8000.
+
+        rlit r0 0x8000
+
+        add r0 r0
+
+        rpush r0 // observation 364: expected 0000; destination result
+
+        drop
+
+
+        // Case 179: add r1 r1; X=8001, Y=8001.
+
+        rlit r1 0x8001
+
+        add r1 r1
+
+        rpush r1 // observation 365: expected 0002; destination result
+
+        drop
+
+
+        // Case 180: add r2 r2; X=FFFE, Y=FFFE.
+
+        rlit r2 0xFFFE
+
+        add r2 r2
+
+        rpush r2 // observation 366: expected FFFC; destination result
+
+        drop
+
+
+        // Case 181: add r3 r3; X=FFFF, Y=FFFF.
+
+        rlit r3 0xFFFF
+
+        add r3 r3
+
+        rpush r3 // observation 367: expected FFFE; destination result
+
+        drop
+
+
+        // Case 182: add r4 r4; X=AAAA, Y=AAAA.
+
+        rlit r4 0xAAAA
+
+        add r4 r4
+
+        rpush r4 // observation 368: expected 5554; destination result
+
+        drop
+
+
+        // Case 183: add r5 r5; X=5555, Y=5555.
+
+        rlit r5 0x5555
+
+        add r5 r5
+
+        rpush r5 // observation 369: expected AAAA; destination result
+
+        drop
+
+
+        // Case 184: add r6 r6; X=AB34, Y=AB34.
+
+        rlit r6 0xAB34
+
+        add r6 r6
+
+        rpush r6 // observation 370: expected 5668; destination result
+
+        drop
+
+
+        // Case 185: add r7 r7; X=1234, Y=1234.
+
+        rlit r7 0x1234
+
+        add r7 r7
+
+        rpush r7 // observation 371: expected 2468; destination result
+
+        drop
+
+
+        // Case 186: add r8 r8; X=00FF, Y=00FF.
+
+        rlit r8 0x00FF
+
+        add r8 r8
+
+        rpush r8 // observation 372: expected 01FE; destination result
+
+        drop
+
+
+        // Case 187: add r9 r9; X=FF00, Y=FF00.
+
+        rlit r9 0xFF00
+
+        add r9 r9
+
+        rpush r9 // observation 373: expected FE00; destination result
+
+        drop
+
+
+        // Case 188: add r10 r10; X=0101, Y=0101.
+
+        rlit r10 0x0101
+
+        add r10 r10
+
+        rpush r10 // observation 374: expected 0202; destination result
+
+        drop
+
+
+        // Case 189: add r11 r11; X=8080, Y=8080.
+
+        rlit r11 0x8080
+
+        add r11 r11
+
+        rpush r11 // observation 375: expected 0100; destination result
+
+        drop
+
+
+        // Case 190: add r12 r12; X=0000, Y=0000.
+
+        rlit r12 0x0000
+
+        add r12 r12
+
+        rpush r12 // observation 376: expected 0000; destination result
+
+        drop
+
+
+        // Case 191: add r13 r13; X=0001, Y=0001.
+
+        rlit r13 0x0001
+
+        add r13 r13
+
+        rpush r13 // observation 377: expected 0002; destination result
+
+        drop
+
+
+        // Case 192: add r14 r14; X=0002, Y=0002.
+
+        rlit r14 0x0002
+
+        add r14 r14
+
+        rpush r14 // observation 378: expected 0004; destination result
+
+        drop
+
+
+        // Case 193: add r15 r15; X=7FFF, Y=7FFF.
+
+        rlit r15 0x7FFF
+
+        add r15 r15
+
+        rpush r15 // observation 379: expected FFFE; destination result
+
+        drop
+
+
+        // MOV: all distinct-register destinations and sources.
+
+        // Case 194: mov r0 r7; X=AB34, Y=CD12.
+
+        rlit r1 0xA550 // unrelated register sentinel
+
+        rlit r0 0xAB34
+
+        rlit r7 0xCD12
+
+        mov r0 r7
+
+        rpush r0 // observation 380: expected CD12; destination result
+
+        drop
+
+        rpush r7 // observation 381: expected CD12; source unchanged
+
+        drop
+
+        rpush r1 // observation 382: expected A550; unrelated register unchanged
+
+        drop
+
+
+        // Case 195: mov r1 r8; X=1234, Y=00FF.
+
+        rlit r2 0xA551 // unrelated register sentinel
+
+        rlit r1 0x1234
+
+        rlit r8 0x00FF
+
+        mov r1 r8
+
+        rpush r1 // observation 383: expected 00FF; destination result
+
+        drop
+
+        rpush r8 // observation 384: expected 00FF; source unchanged
+
+        drop
+
+        rpush r2 // observation 385: expected A551; unrelated register unchanged
+
+        drop
+
+
+        // Case 196: mov r2 r9; X=0001, Y=8000.
+
+        rlit r3 0xA552 // unrelated register sentinel
+
+        rlit r2 0x0001
+
+        rlit r9 0x8000
+
+        mov r2 r9
+
+        rpush r2 // observation 386: expected 8000; destination result
+
+        drop
+
+        rpush r9 // observation 387: expected 8000; source unchanged
+
+        drop
+
+        rpush r3 // observation 388: expected A552; unrelated register unchanged
+
+        drop
+
+
+        // Case 197: mov r3 r10; X=0000, Y=FFFF.
+
+        rlit r4 0xA553 // unrelated register sentinel
+
+        rlit r3 0x0000
+
+        rlit r10 0xFFFF
+
+        mov r3 r10
+
+        rpush r3 // observation 389: expected FFFF; destination result
+
+        drop
+
+        rpush r10 // observation 390: expected FFFF; source unchanged
+
+        drop
+
+        rpush r4 // observation 391: expected A553; unrelated register unchanged
+
+        drop
+
+
+        // Case 198: mov r4 r11; X=FFFF, Y=0001.
+
+        rlit r5 0xA554 // unrelated register sentinel
+
+        rlit r4 0xFFFF
+
+        rlit r11 0x0001
+
+        mov r4 r11
+
+        rpush r4 // observation 392: expected 0001; destination result
+
+        drop
+
+        rpush r11 // observation 393: expected 0001; source unchanged
+
+        drop
+
+        rpush r5 // observation 394: expected A554; unrelated register unchanged
+
+        drop
+
+
+        // Case 199: mov r5 r12; X=7FFF, Y=0001.
+
+        rlit r6 0xA555 // unrelated register sentinel
+
+        rlit r5 0x7FFF
+
+        rlit r12 0x0001
+
+        mov r5 r12
+
+        rpush r5 // observation 395: expected 0001; destination result
+
+        drop
+
+        rpush r12 // observation 396: expected 0001; source unchanged
+
+        drop
+
+        rpush r6 // observation 397: expected A555; unrelated register unchanged
+
+        drop
+
+
+        // Case 200: mov r6 r13; X=8000, Y=FFFF.
+
+        rlit r7 0xA556 // unrelated register sentinel
+
+        rlit r6 0x8000
+
+        rlit r13 0xFFFF
+
+        mov r6 r13
+
+        rpush r6 // observation 398: expected FFFF; destination result
+
+        drop
+
+        rpush r13 // observation 399: expected FFFF; source unchanged
+
+        drop
+
+        rpush r7 // observation 400: expected A556; unrelated register unchanged
+
+        drop
+
+
+        // Case 201: mov r7 r14; X=AAAA, Y=5555.
+
+        rlit r8 0xA557 // unrelated register sentinel
+
+        rlit r7 0xAAAA
+
+        rlit r14 0x5555
+
+        mov r7 r14
+
+        rpush r7 // observation 401: expected 5555; destination result
+
+        drop
+
+        rpush r14 // observation 402: expected 5555; source unchanged
+
+        drop
+
+        rpush r8 // observation 403: expected A557; unrelated register unchanged
+
+        drop
+
+
+        // Case 202: mov r8 r15; X=51E7, Y=0702.
+
+        rlit r9 0xA558 // unrelated register sentinel
+
+        rlit r8 0x51E7
+
+        rlit r15 0x0702
+
+        mov r8 r15
+
+        rpush r8 // observation 404: expected 0702; destination result
+
+        drop
+
+        rpush r15 // observation 405: expected 0702; source unchanged
+
+        drop
+
+        rpush r9 // observation 406: expected A558; unrelated register unchanged
+
+        drop
+
+
+        // Case 203: mov r9 r0; X=62F8, Y=34CD.
+
+        rlit r10 0xA559 // unrelated register sentinel
+
+        rlit r9 0x62F8
+
+        rlit r0 0x34CD
+
+        mov r9 r0
+
+        rpush r9 // observation 407: expected 34CD; destination result
+
+        drop
+
+        rpush r0 // observation 408: expected 34CD; source unchanged
+
+        drop
+
+        rpush r10 // observation 409: expected A559; unrelated register unchanged
+
+        drop
+
+
+        // Case 204: mov r10 r1; X=7409, Y=5A98.
+
+        rlit r11 0xA55A // unrelated register sentinel
+
+        rlit r10 0x7409
+
+        rlit r1 0x5A98
+
+        mov r10 r1
+
+        rpush r10 // observation 410: expected 5A98; destination result
+
+        drop
+
+        rpush r1 // observation 411: expected 5A98; source unchanged
+
+        drop
+
+        rpush r11 // observation 412: expected A55A; unrelated register unchanged
+
+        drop
+
+
+        // Case 205: mov r11 r2; X=851A, Y=48A3.
+
+        rlit r12 0xA55B // unrelated register sentinel
+
+        rlit r11 0x851A
+
+        rlit r2 0x48A3
+
+        mov r11 r2
+
+        rpush r11 // observation 413: expected 48A3; destination result
+
+        drop
+
+        rpush r2 // observation 414: expected 48A3; source unchanged
+
+        drop
+
+        rpush r12 // observation 415: expected A55B; unrelated register unchanged
+
+        drop
+
+
+        // Case 206: mov r12 r3; X=962B, Y=7E6E.
+
+        rlit r13 0xA55C // unrelated register sentinel
+
+        rlit r12 0x962B
+
+        rlit r3 0x7E6E
+
+        mov r12 r3
+
+        rpush r12 // observation 416: expected 7E6E; destination result
+
+        drop
+
+        rpush r3 // observation 417: expected 7E6E; source unchanged
+
+        drop
+
+        rpush r13 // observation 418: expected A55C; unrelated register unchanged
+
+        drop
+
+
+        // Case 207: mov r13 r4; X=A73C, Y=6C39.
+
+        rlit r14 0xA55D // unrelated register sentinel
+
+        rlit r13 0xA73C
+
+        rlit r4 0x6C39
+
+        mov r13 r4
+
+        rpush r13 // observation 419: expected 6C39; destination result
+
+        drop
+
+        rpush r4 // observation 420: expected 6C39; source unchanged
+
+        drop
+
+        rpush r14 // observation 421: expected A55D; unrelated register unchanged
+
+        drop
+
+
+        // Case 208: mov r14 r5; X=B84D, Y=91C4.
+
+        rlit r15 0xA55E // unrelated register sentinel
+
+        rlit r14 0xB84D
+
+        rlit r5 0x91C4
+
+        mov r14 r5
+
+        rpush r14 // observation 422: expected 91C4; destination result
+
+        drop
+
+        rpush r5 // observation 423: expected 91C4; source unchanged
+
+        drop
+
+        rpush r15 // observation 424: expected A55E; unrelated register unchanged
+
+        drop
+
+
+        // Case 209: mov r15 r6; X=C95E, Y=878F.
+
+        rlit r0 0xA55F // unrelated register sentinel
+
+        rlit r15 0xC95E
+
+        rlit r6 0x878F
+
+        mov r15 r6
+
+        rpush r15 // observation 425: expected 878F; destination result
+
+        drop
+
+        rpush r6 // observation 426: expected 878F; source unchanged
+
+        drop
+
+        rpush r0 // observation 427: expected A55F; unrelated register unchanged
+
+        drop
+
+
+        // MOV: same-register operands at every register index.
+
+        // Case 210: mov r0 r0; X=8001, Y=8001.
+
+        rlit r0 0x8001
+
+        mov r0 r0
+
+        rpush r0 // observation 428: expected 8001; destination result
+
+        drop
+
+
+        // Case 211: mov r1 r1; X=FFFE, Y=FFFE.
+
+        rlit r1 0xFFFE
+
+        mov r1 r1
+
+        rpush r1 // observation 429: expected FFFE; destination result
+
+        drop
+
+
+        // Case 212: mov r2 r2; X=FFFF, Y=FFFF.
+
+        rlit r2 0xFFFF
+
+        mov r2 r2
+
+        rpush r2 // observation 430: expected FFFF; destination result
+
+        drop
+
+
+        // Case 213: mov r3 r3; X=AAAA, Y=AAAA.
+
+        rlit r3 0xAAAA
+
+        mov r3 r3
+
+        rpush r3 // observation 431: expected AAAA; destination result
+
+        drop
+
+
+        // Case 214: mov r4 r4; X=5555, Y=5555.
+
+        rlit r4 0x5555
+
+        mov r4 r4
+
+        rpush r4 // observation 432: expected 5555; destination result
+
+        drop
+
+
+        // Case 215: mov r5 r5; X=AB34, Y=AB34.
+
+        rlit r5 0xAB34
+
+        mov r5 r5
+
+        rpush r5 // observation 433: expected AB34; destination result
+
+        drop
+
+
+        // Case 216: mov r6 r6; X=1234, Y=1234.
+
+        rlit r6 0x1234
+
+        mov r6 r6
+
+        rpush r6 // observation 434: expected 1234; destination result
+
+        drop
+
+
+        // Case 217: mov r7 r7; X=00FF, Y=00FF.
+
+        rlit r7 0x00FF
+
+        mov r7 r7
+
+        rpush r7 // observation 435: expected 00FF; destination result
+
+        drop
+
+
+        // Case 218: mov r8 r8; X=FF00, Y=FF00.
+
+        rlit r8 0xFF00
+
+        mov r8 r8
+
+        rpush r8 // observation 436: expected FF00; destination result
+
+        drop
+
+
+        // Case 219: mov r9 r9; X=0101, Y=0101.
+
+        rlit r9 0x0101
+
+        mov r9 r9
+
+        rpush r9 // observation 437: expected 0101; destination result
+
+        drop
+
+
+        // Case 220: mov r10 r10; X=8080, Y=8080.
+
+        rlit r10 0x8080
+
+        mov r10 r10
+
+        rpush r10 // observation 438: expected 8080; destination result
+
+        drop
+
+
+        // Case 221: mov r11 r11; X=0000, Y=0000.
+
+        rlit r11 0x0000
+
+        mov r11 r11
+
+        rpush r11 // observation 439: expected 0000; destination result
+
+        drop
+
+
+        // Case 222: mov r12 r12; X=0001, Y=0001.
+
+        rlit r12 0x0001
+
+        mov r12 r12
+
+        rpush r12 // observation 440: expected 0001; destination result
+
+        drop
+
+
+        // Case 223: mov r13 r13; X=0002, Y=0002.
+
+        rlit r13 0x0002
+
+        mov r13 r13
+
+        rpush r13 // observation 441: expected 0002; destination result
+
+        drop
+
+
+        // Case 224: mov r14 r14; X=7FFF, Y=7FFF.
+
+        rlit r14 0x7FFF
+
+        mov r14 r14
+
+        rpush r14 // observation 442: expected 7FFF; destination result
+
+        drop
+
+
+        // Case 225: mov r15 r15; X=8000, Y=8000.
+
+        rlit r15 0x8000
+
+        mov r15 r15
+
+        rpush r15 // observation 443: expected 8000; destination result
+
+        drop
+
+
+        // PACKBYTES: all distinct-register destinations and sources.
+
+        // Case 226: packbytes r0 r7; X=1234, Y=00FF.
+
+        rlit r1 0xA560 // unrelated register sentinel
+
+        rlit r0 0x1234
+
+        rlit r7 0x00FF
+
+        packbytes r0 r7
+
+        rpush r0 // observation 444: expected FF34; destination result
+
+        drop
+
+        rpush r7 // observation 445: expected 00FF; source unchanged
+
+        drop
+
+        rpush r1 // observation 446: expected A560; unrelated register unchanged
+
+        drop
+
+
+        // Case 227: packbytes r1 r8; X=0001, Y=8000.
+
+        rlit r2 0xA561 // unrelated register sentinel
+
+        rlit r1 0x0001
+
+        rlit r8 0x8000
+
+        packbytes r1 r8
+
+        rpush r1 // observation 447: expected 0001; destination result
+
+        drop
+
+        rpush r8 // observation 448: expected 8000; source unchanged
+
+        drop
+
+        rpush r2 // observation 449: expected A561; unrelated register unchanged
+
+        drop
+
+
+        // Case 228: packbytes r2 r9; X=0000, Y=FFFF.
+
+        rlit r3 0xA562 // unrelated register sentinel
+
+        rlit r2 0x0000
+
+        rlit r9 0xFFFF
+
+        packbytes r2 r9
+
+        rpush r2 // observation 450: expected FF00; destination result
+
+        drop
+
+        rpush r9 // observation 451: expected FFFF; source unchanged
+
+        drop
+
+        rpush r3 // observation 452: expected A562; unrelated register unchanged
+
+        drop
+
+
+        // Case 229: packbytes r3 r10; X=FFFF, Y=0001.
+
+        rlit r4 0xA563 // unrelated register sentinel
+
+        rlit r3 0xFFFF
+
+        rlit r10 0x0001
+
+        packbytes r3 r10
+
+        rpush r3 // observation 453: expected 01FF; destination result
+
+        drop
+
+        rpush r10 // observation 454: expected 0001; source unchanged
+
+        drop
+
+        rpush r4 // observation 455: expected A563; unrelated register unchanged
+
+        drop
+
+
+        // Case 230: packbytes r4 r11; X=7FFF, Y=0001.
+
+        rlit r5 0xA564 // unrelated register sentinel
+
+        rlit r4 0x7FFF
+
+        rlit r11 0x0001
+
+        packbytes r4 r11
+
+        rpush r4 // observation 456: expected 01FF; destination result
+
+        drop
+
+        rpush r11 // observation 457: expected 0001; source unchanged
+
+        drop
+
+        rpush r5 // observation 458: expected A564; unrelated register unchanged
+
+        drop
+
+
+        // Case 231: packbytes r5 r12; X=8000, Y=FFFF.
+
+        rlit r6 0xA565 // unrelated register sentinel
+
+        rlit r5 0x8000
+
+        rlit r12 0xFFFF
+
+        packbytes r5 r12
+
+        rpush r5 // observation 459: expected FF00; destination result
+
+        drop
+
+        rpush r12 // observation 460: expected FFFF; source unchanged
+
+        drop
+
+        rpush r6 // observation 461: expected A565; unrelated register unchanged
+
+        drop
+
+
+        // Case 232: packbytes r6 r13; X=AAAA, Y=5555.
+
+        rlit r7 0xA566 // unrelated register sentinel
+
+        rlit r6 0xAAAA
+
+        rlit r13 0x5555
+
+        packbytes r6 r13
+
+        rpush r6 // observation 462: expected 55AA; destination result
+
+        drop
+
+        rpush r13 // observation 463: expected 5555; source unchanged
+
+        drop
+
+        rpush r7 // observation 464: expected A566; unrelated register unchanged
+
+        drop
+
+
+        // Case 233: packbytes r7 r14; X=AB34, Y=CD12.
+
+        rlit r8 0xA567 // unrelated register sentinel
+
+        rlit r7 0xAB34
+
+        rlit r14 0xCD12
+
+        packbytes r7 r14
+
+        rpush r7 // observation 465: expected 1234; destination result
+
+        drop
+
+        rpush r14 // observation 466: expected CD12; source unchanged
+
+        drop
+
+        rpush r8 // observation 467: expected A567; unrelated register unchanged
+
+        drop
+
+
+        // Case 234: packbytes r8 r15; X=764F, Y=4991.
+
+        rlit r9 0xA568 // unrelated register sentinel
+
+        rlit r8 0x764F
+
+        rlit r15 0x4991
+
+        packbytes r8 r15
+
+        rpush r8 // observation 468: expected 914F; destination result
+
+        drop
+
+        rpush r15 // observation 469: expected 4991; source unchanged
+
+        drop
+
+        rpush r9 // observation 470: expected A568; unrelated register unchanged
+
+        drop
+
+
+        // Case 235: packbytes r9 r0; X=8760, Y=7F5C.
+
+        rlit r10 0xA569 // unrelated register sentinel
+
+        rlit r9 0x8760
+
+        rlit r0 0x7F5C
+
+        packbytes r9 r0
+
+        rpush r9 // observation 471: expected 5C60; destination result
+
+        drop
+
+        rpush r0 // observation 472: expected 7F5C; source unchanged
+
+        drop
+
+        rpush r10 // observation 473: expected A569; unrelated register unchanged
+
+        drop
+
+
+        // Case 236: packbytes r10 r1; X=9871, Y=6D67.
+
+        rlit r11 0xA56A // unrelated register sentinel
+
+        rlit r10 0x9871
+
+        rlit r1 0x6D67
+
+        packbytes r10 r1
+
+        rpush r10 // observation 474: expected 6771; destination result
+
+        drop
+
+        rpush r1 // observation 475: expected 6D67; source unchanged
+
+        drop
+
+        rpush r11 // observation 476: expected A56A; unrelated register unchanged
+
+        drop
+
+
+        // Case 237: packbytes r11 r2; X=A982, Y=9332.
+
+        rlit r12 0xA56B // unrelated register sentinel
+
+        rlit r11 0xA982
+
+        rlit r2 0x9332
+
+        packbytes r11 r2
+
+        rpush r11 // observation 477: expected 3282; destination result
+
+        drop
+
+        rpush r2 // observation 478: expected 9332; source unchanged
+
+        drop
+
+        rpush r12 // observation 479: expected A56B; unrelated register unchanged
+
+        drop
+
+
+        // Case 238: packbytes r12 r3; X=BA93, Y=80FD.
+
+        rlit r13 0xA56C // unrelated register sentinel
+
+        rlit r12 0xBA93
+
+        rlit r3 0x80FD
+
+        packbytes r12 r3
+
+        rpush r12 // observation 480: expected FD93; destination result
+
+        drop
+
+        rpush r3 // observation 481: expected 80FD; source unchanged
+
+        drop
+
+        rpush r13 // observation 482: expected A56C; unrelated register unchanged
+
+        drop
+
+
+        // Case 239: packbytes r13 r4; X=CBA4, Y=B688.
+
+        rlit r14 0xA56D // unrelated register sentinel
+
+        rlit r13 0xCBA4
+
+        rlit r4 0xB688
+
+        packbytes r13 r4
+
+        rpush r13 // observation 483: expected 88A4; destination result
+
+        drop
+
+        rpush r4 // observation 484: expected B688; source unchanged
+
+        drop
+
+        rpush r14 // observation 485: expected A56D; unrelated register unchanged
+
+        drop
+
+
+        // Case 240: packbytes r14 r5; X=DCB5, Y=A453.
+
+        rlit r15 0xA56E // unrelated register sentinel
+
+        rlit r14 0xDCB5
+
+        rlit r5 0xA453
+
+        packbytes r14 r5
+
+        rpush r14 // observation 486: expected 53B5; destination result
+
+        drop
+
+        rpush r5 // observation 487: expected A453; source unchanged
+
+        drop
+
+        rpush r15 // observation 488: expected A56E; unrelated register unchanged
+
+        drop
+
+
+        // Case 241: packbytes r15 r6; X=EDC6, Y=CA1E.
+
+        rlit r0 0xA56F // unrelated register sentinel
+
+        rlit r15 0xEDC6
+
+        rlit r6 0xCA1E
+
+        packbytes r15 r6
+
+        rpush r15 // observation 489: expected 1EC6; destination result
+
+        drop
+
+        rpush r6 // observation 490: expected CA1E; source unchanged
+
+        drop
+
+        rpush r0 // observation 491: expected A56F; unrelated register unchanged
+
+        drop
+
+
+        // PACKBYTES: same-register operands at every register index.
+
+        // Case 242: packbytes r0 r0; X=FFFE, Y=FFFE.
+
+        rlit r0 0xFFFE
+
+        packbytes r0 r0
+
+        rpush r0 // observation 492: expected FEFE; destination result
+
+        drop
+
+
+        // Case 243: packbytes r1 r1; X=FFFF, Y=FFFF.
+
+        rlit r1 0xFFFF
+
+        packbytes r1 r1
+
+        rpush r1 // observation 493: expected FFFF; destination result
+
+        drop
+
+
+        // Case 244: packbytes r2 r2; X=AAAA, Y=AAAA.
+
+        rlit r2 0xAAAA
+
+        packbytes r2 r2
+
+        rpush r2 // observation 494: expected AAAA; destination result
+
+        drop
+
+
+        // Case 245: packbytes r3 r3; X=5555, Y=5555.
+
+        rlit r3 0x5555
+
+        packbytes r3 r3
+
+        rpush r3 // observation 495: expected 5555; destination result
+
+        drop
+
+
+        // Case 246: packbytes r4 r4; X=AB34, Y=AB34.
+
+        rlit r4 0xAB34
+
+        packbytes r4 r4
+
+        rpush r4 // observation 496: expected 3434; destination result
+
+        drop
+
+
+        // Case 247: packbytes r5 r5; X=1234, Y=1234.
+
+        rlit r5 0x1234
+
+        packbytes r5 r5
+
+        rpush r5 // observation 497: expected 3434; destination result
+
+        drop
+
+
+        // Case 248: packbytes r6 r6; X=00FF, Y=00FF.
+
+        rlit r6 0x00FF
+
+        packbytes r6 r6
+
+        rpush r6 // observation 498: expected FFFF; destination result
+
+        drop
+
+
+        // Case 249: packbytes r7 r7; X=FF00, Y=FF00.
+
+        rlit r7 0xFF00
+
+        packbytes r7 r7
+
+        rpush r7 // observation 499: expected 0000; destination result
+
+        drop
+
+
+        // Case 250: packbytes r8 r8; X=0101, Y=0101.
+
+        rlit r8 0x0101
+
+        packbytes r8 r8
+
+        rpush r8 // observation 500: expected 0101; destination result
+
+        drop
+
+
+        // Case 251: packbytes r9 r9; X=8080, Y=8080.
+
+        rlit r9 0x8080
+
+        packbytes r9 r9
+
+        rpush r9 // observation 501: expected 8080; destination result
+
+        drop
+
+
+        // Case 252: packbytes r10 r10; X=0000, Y=0000.
+
+        rlit r10 0x0000
+
+        packbytes r10 r10
+
+        rpush r10 // observation 502: expected 0000; destination result
+
+        drop
+
+
+        // Case 253: packbytes r11 r11; X=0001, Y=0001.
+
+        rlit r11 0x0001
+
+        packbytes r11 r11
+
+        rpush r11 // observation 503: expected 0101; destination result
+
+        drop
+
+
+        // Case 254: packbytes r12 r12; X=0002, Y=0002.
+
+        rlit r12 0x0002
+
+        packbytes r12 r12
+
+        rpush r12 // observation 504: expected 0202; destination result
+
+        drop
+
+
+        // Case 255: packbytes r13 r13; X=7FFF, Y=7FFF.
+
+        rlit r13 0x7FFF
+
+        packbytes r13 r13
+
+        rpush r13 // observation 505: expected FFFF; destination result
+
+        drop
+
+
+        // Case 256: packbytes r14 r14; X=8000, Y=8000.
+
+        rlit r14 0x8000
+
+        packbytes r14 r14
+
+        rpush r14 // observation 506: expected 0000; destination result
+
+        drop
+
+
+        // Case 257: packbytes r15 r15; X=8001, Y=8001.
+
+        rlit r15 0x8001
+
+        packbytes r15 r15
+
+        rpush r15 // observation 507: expected 0101; destination result
+
+        drop
+
+
+        // Final arrival marker.
 
         push 0x600D
 
-        drop                     // write/read 600D at 1:FFFF
+        drop // observation 508: expected 600D
 
         halt
+
+
+        // Counts: 257 binary operations: 33 original + 112 distinct-register + 112 alias cases.
+
+        // All 16 register indices appear in both operand fields for every operation.
+
+        // Each added distinct-register case checks result, source and unrelated sentinel.
+
+        // Total observations including marker: 508. VM image: 2289 words.
+
+        // Source-level simulation passed; assembly and pipeline execution remain to be run.
     - name: node 508 regression test
       source: >-
         // Initial node 507 state: FP = 0, SP = 0xffff.
@@ -72082,7 +76072,6453 @@ projects:
         drop
 
         halt
-    lastSelectedDebuggerProgramName: microcode regression test
+    - name: node 506 regression test
+      source: >
+        // Node 507: FP=0, SP=ffff, PC=0.
+
+
+        // Signed 12-bit literal boundaries and alternating-bit patterns.
+
+        slit 0
+
+        drop
+
+        slit 1
+
+        drop
+
+        slit 2047
+
+        drop
+
+        slit -2048
+
+        drop
+
+        slit -1
+
+        drop
+
+        slit 1365
+
+        drop
+
+        slit -1365
+
+        drop
+
+
+        // Original SP is pushed, before the push decrements SP.
+
+        sp@
+
+        drop
+
+        fp@
+
+        drop
+
+
+        // Accessors with one existing VM stack value.
+
+        slit 85
+
+        sp@
+
+        drop
+
+        fp@
+
+        drop
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+
+        // Save baseline context in d15, copy to accessible scalar registers.
+
+        getctx d15
+
+        dpush d15
+
+        dpop d7
+
+        rpush r14
+
+        drop
+
+        rpush r15
+
+        drop
+
+
+        // Activate a deliberately different context.
+
+        // d15.hi=FP, d15.lo=SP. Both values are 16-bit.
+
+        dlit d15 0x1234 0xFF00
+
+        setctx d15
+
+        sp@
+
+        drop
+
+        fp@
+
+        drop
+
+
+        // Capture and inspect the activated context.
+
+        getctx d15
+
+        dpush d15
+
+        dpop d7
+
+        rpush r14
+
+        drop
+
+        rpush r15
+
+        drop
+
+
+        // Return to baseline before testing a saved live stack value.
+
+        dlit d15 0 0xFFFF
+
+        setctx d15
+
+        slit 85
+
+        getctx d15
+
+        // Push/drop below the saved stack top, preserving the saved value.
+
+        slit 102
+
+        drop
+
+        setctx d15
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        sp@
+
+        drop
+
+        fp@
+
+        drop
+
+
+        // Successful arrival marker.
+
+        rlit r5 0x600D
+
+        rpush r5
+
+        drop
+
+        halt
+    - name: br, if, cond regression test
+      source: >
+        // BR / IF / COND regression. ASCII source. Node 507 FP=0, SP=FFFF, PC=0.
+
+        // Uses tested node 509 setup/inspection opcodes. All observed pairs are at 1:FFFF.
+
+        // Full 65536-word page-0 image. Do not trim padding: wrap tests depend on addresses.
+
+        // Dxxx output means failure; its comment identifies the case. 600D means completion.
+
+        br main
+
+        wrap_landing:
+
+        if r4 ==0 then br_wrap_done
+
+        br if_wrap_done
+
+        // Padding to address 0010; reserved words are filled with opcode 0000.
+
+        .space 12 0
+
+        main:
+
+        br br_forward
+
+        rlit r5 0xD001
+
+        rpush r5
+
+        drop
+
+        halt
+
+        br_backward:
+
+        // Observation 2: B002 at 1:FFFF -- short backward branch
+
+        rlit r5 0xB002
+
+        rpush r5
+
+        drop
+
+        br br_zero
+
+        rlit r5 0xD002
+
+        rpush r5
+
+        drop
+
+        halt
+
+        br_forward:
+
+        // Observation 1: B001 at 1:FFFF -- short forward branch
+
+        rlit r5 0xB001
+
+        rpush r5
+
+        drop
+
+        br br_backward
+
+        rlit r5 0xD003
+
+        rpush r5
+
+        drop
+
+        halt
+
+        br_zero:
+
+        br 0
+
+        // Observation 3: B003 at 1:FFFF -- short zero displacement
+
+        rlit r5 0xB003
+
+        rpush r5
+
+        drop
+
+        br br_chain1
+
+        rlit r5 0xD004
+
+        rpush r5
+
+        drop
+
+        halt
+
+        br_chain1:
+
+        br br_chain2
+
+        rlit r5 0xD005
+
+        rpush r5
+
+        drop
+
+        halt
+
+        br_chain2:
+
+        // Observation 4: B004 at 1:FFFF -- chained short branches
+
+        rlit r5 0xB004
+
+        rpush r5
+
+        drop
+
+        // Case 1: ==0, input 0000, register r0, expected 1.
+
+        rlit r0 0x0000
+
+        cond r0 ==0
+
+        // Observation 5: 0001 at 1:FFFF -- cond case 1
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x0000
+
+        if r0 ==0 then fwd_ok_1
+
+        rlit r5 0xD101
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_1:
+
+        // Observation 6: 1001 at 1:FFFF -- forward if case 1: ==0, 0000, expected 1
+
+        rlit r5 0x1001
+
+        rpush r5
+
+        drop
+
+        br back_eval_1
+
+        back_target_1:
+
+        // Observation 7: 2001 at 1:FFFF -- backward if case 1: ==0, 0000, expected 1
+
+        rlit r5 0x2001
+
+        rpush r5
+
+        drop
+
+        br back_end_1
+
+        back_eval_1:
+
+        rlit r0 0x0000
+
+        if r0 ==0 then back_target_1
+
+        rlit r5 0xD201
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_1:
+
+        // Case 2: ==0, input 0001, register r1, expected 0.
+
+        rlit r1 0x0001
+
+        cond r1 ==0
+
+        // Observation 8: 0000 at 1:FFFF -- cond case 2
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r1 0x0001
+
+        if r1 ==0 then fwd_fail_2
+
+        br fwd_ok_2
+
+        fwd_fail_2:
+
+        rlit r5 0xD102
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_2:
+
+        // Observation 9: 1002 at 1:FFFF -- forward if case 2: ==0, 0001, expected 0
+
+        rlit r5 0x1002
+
+        rpush r5
+
+        drop
+
+        br back_eval_2
+
+        back_target_2:
+
+        rlit r5 0xD202
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_2:
+
+        rlit r1 0x0001
+
+        if r1 ==0 then back_target_2
+
+        // Observation 10: 2002 at 1:FFFF -- backward if case 2: ==0, 0001, expected 0
+
+        rlit r5 0x2002
+
+        rpush r5
+
+        drop
+
+        back_end_2:
+
+        // Case 3: ==0, input 0002, register r2, expected 0.
+
+        rlit r2 0x0002
+
+        cond r2 ==0
+
+        // Observation 11: 0000 at 1:FFFF -- cond case 3
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r2 0x0002
+
+        if r2 ==0 then fwd_fail_3
+
+        br fwd_ok_3
+
+        fwd_fail_3:
+
+        rlit r5 0xD103
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_3:
+
+        // Observation 12: 1003 at 1:FFFF -- forward if case 3: ==0, 0002, expected 0
+
+        rlit r5 0x1003
+
+        rpush r5
+
+        drop
+
+        br back_eval_3
+
+        back_target_3:
+
+        rlit r5 0xD203
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_3:
+
+        rlit r2 0x0002
+
+        if r2 ==0 then back_target_3
+
+        // Observation 13: 2003 at 1:FFFF -- backward if case 3: ==0, 0002, expected 0
+
+        rlit r5 0x2003
+
+        rpush r5
+
+        drop
+
+        back_end_3:
+
+        // Case 4: ==0, input 7FFE, register r3, expected 0.
+
+        rlit r3 0x7FFE
+
+        cond r3 ==0
+
+        // Observation 14: 0000 at 1:FFFF -- cond case 4
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r3 0x7FFE
+
+        if r3 ==0 then fwd_fail_4
+
+        br fwd_ok_4
+
+        fwd_fail_4:
+
+        rlit r5 0xD104
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_4:
+
+        // Observation 15: 1004 at 1:FFFF -- forward if case 4: ==0, 7FFE, expected 0
+
+        rlit r5 0x1004
+
+        rpush r5
+
+        drop
+
+        br back_eval_4
+
+        back_target_4:
+
+        rlit r5 0xD204
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_4:
+
+        rlit r3 0x7FFE
+
+        if r3 ==0 then back_target_4
+
+        // Observation 16: 2004 at 1:FFFF -- backward if case 4: ==0, 7FFE, expected 0
+
+        rlit r5 0x2004
+
+        rpush r5
+
+        drop
+
+        back_end_4:
+
+        // Case 5: ==0, input 7FFF, register r4, expected 0.
+
+        rlit r4 0x7FFF
+
+        cond r4 ==0
+
+        // Observation 17: 0000 at 1:FFFF -- cond case 5
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r4 0x7FFF
+
+        if r4 ==0 then fwd_fail_5
+
+        br fwd_ok_5
+
+        fwd_fail_5:
+
+        rlit r5 0xD105
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_5:
+
+        // Observation 18: 1005 at 1:FFFF -- forward if case 5: ==0, 7FFF, expected 0
+
+        rlit r5 0x1005
+
+        rpush r5
+
+        drop
+
+        br back_eval_5
+
+        back_target_5:
+
+        rlit r5 0xD205
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_5:
+
+        rlit r4 0x7FFF
+
+        if r4 ==0 then back_target_5
+
+        // Observation 19: 2005 at 1:FFFF -- backward if case 5: ==0, 7FFF, expected 0
+
+        rlit r5 0x2005
+
+        rpush r5
+
+        drop
+
+        back_end_5:
+
+        // Case 6: ==0, input 8000, register r5, expected 0.
+
+        rlit r5 0x8000
+
+        cond r5 ==0
+
+        // Observation 20: 0000 at 1:FFFF -- cond case 6
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r5 0x8000
+
+        if r5 ==0 then fwd_fail_6
+
+        br fwd_ok_6
+
+        fwd_fail_6:
+
+        rlit r5 0xD106
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_6:
+
+        // Observation 21: 1006 at 1:FFFF -- forward if case 6: ==0, 8000, expected 0
+
+        rlit r5 0x1006
+
+        rpush r5
+
+        drop
+
+        br back_eval_6
+
+        back_target_6:
+
+        rlit r5 0xD206
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_6:
+
+        rlit r5 0x8000
+
+        if r5 ==0 then back_target_6
+
+        // Observation 22: 2006 at 1:FFFF -- backward if case 6: ==0, 8000, expected 0
+
+        rlit r5 0x2006
+
+        rpush r5
+
+        drop
+
+        back_end_6:
+
+        // Case 7: ==0, input 8001, register r6, expected 0.
+
+        rlit r6 0x8001
+
+        cond r6 ==0
+
+        // Observation 23: 0000 at 1:FFFF -- cond case 7
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r6 0x8001
+
+        if r6 ==0 then fwd_fail_7
+
+        br fwd_ok_7
+
+        fwd_fail_7:
+
+        rlit r5 0xD107
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_7:
+
+        // Observation 24: 1007 at 1:FFFF -- forward if case 7: ==0, 8001, expected 0
+
+        rlit r5 0x1007
+
+        rpush r5
+
+        drop
+
+        br back_eval_7
+
+        back_target_7:
+
+        rlit r5 0xD207
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_7:
+
+        rlit r6 0x8001
+
+        if r6 ==0 then back_target_7
+
+        // Observation 25: 2007 at 1:FFFF -- backward if case 7: ==0, 8001, expected 0
+
+        rlit r5 0x2007
+
+        rpush r5
+
+        drop
+
+        back_end_7:
+
+        // Case 8: ==0, input FFFE, register r7, expected 0.
+
+        rlit r7 0xFFFE
+
+        cond r7 ==0
+
+        // Observation 26: 0000 at 1:FFFF -- cond case 8
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r7 0xFFFE
+
+        if r7 ==0 then fwd_fail_8
+
+        br fwd_ok_8
+
+        fwd_fail_8:
+
+        rlit r5 0xD108
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_8:
+
+        // Observation 27: 1008 at 1:FFFF -- forward if case 8: ==0, FFFE, expected 0
+
+        rlit r5 0x1008
+
+        rpush r5
+
+        drop
+
+        br back_eval_8
+
+        back_target_8:
+
+        rlit r5 0xD208
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_8:
+
+        rlit r7 0xFFFE
+
+        if r7 ==0 then back_target_8
+
+        // Observation 28: 2008 at 1:FFFF -- backward if case 8: ==0, FFFE, expected 0
+
+        rlit r5 0x2008
+
+        rpush r5
+
+        drop
+
+        back_end_8:
+
+        // Case 9: ==0, input FFFF, register r8, expected 0.
+
+        rlit r8 0xFFFF
+
+        cond r8 ==0
+
+        // Observation 29: 0000 at 1:FFFF -- cond case 9
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r8 0xFFFF
+
+        if r8 ==0 then fwd_fail_9
+
+        br fwd_ok_9
+
+        fwd_fail_9:
+
+        rlit r5 0xD109
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_9:
+
+        // Observation 30: 1009 at 1:FFFF -- forward if case 9: ==0, FFFF, expected 0
+
+        rlit r5 0x1009
+
+        rpush r5
+
+        drop
+
+        br back_eval_9
+
+        back_target_9:
+
+        rlit r5 0xD209
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_9:
+
+        rlit r8 0xFFFF
+
+        if r8 ==0 then back_target_9
+
+        // Observation 31: 2009 at 1:FFFF -- backward if case 9: ==0, FFFF, expected 0
+
+        rlit r5 0x2009
+
+        rpush r5
+
+        drop
+
+        back_end_9:
+
+        // Case 10: !=0, input 0000, register r9, expected 0.
+
+        rlit r9 0x0000
+
+        cond r9 !=0
+
+        // Observation 32: 0000 at 1:FFFF -- cond case 10
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r9 0x0000
+
+        if r9 !=0 then fwd_fail_10
+
+        br fwd_ok_10
+
+        fwd_fail_10:
+
+        rlit r5 0xD10A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_10:
+
+        // Observation 33: 100A at 1:FFFF -- forward if case 10: !=0, 0000, expected 0
+
+        rlit r5 0x100A
+
+        rpush r5
+
+        drop
+
+        br back_eval_10
+
+        back_target_10:
+
+        rlit r5 0xD20A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_10:
+
+        rlit r9 0x0000
+
+        if r9 !=0 then back_target_10
+
+        // Observation 34: 200A at 1:FFFF -- backward if case 10: !=0, 0000, expected 0
+
+        rlit r5 0x200A
+
+        rpush r5
+
+        drop
+
+        back_end_10:
+
+        // Case 11: !=0, input 0001, register r10, expected 1.
+
+        rlit r10 0x0001
+
+        cond r10 !=0
+
+        // Observation 35: 0001 at 1:FFFF -- cond case 11
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r10 0x0001
+
+        if r10 !=0 then fwd_ok_11
+
+        rlit r5 0xD10B
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_11:
+
+        // Observation 36: 100B at 1:FFFF -- forward if case 11: !=0, 0001, expected 1
+
+        rlit r5 0x100B
+
+        rpush r5
+
+        drop
+
+        br back_eval_11
+
+        back_target_11:
+
+        // Observation 37: 200B at 1:FFFF -- backward if case 11: !=0, 0001, expected 1
+
+        rlit r5 0x200B
+
+        rpush r5
+
+        drop
+
+        br back_end_11
+
+        back_eval_11:
+
+        rlit r10 0x0001
+
+        if r10 !=0 then back_target_11
+
+        rlit r5 0xD20B
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_11:
+
+        // Case 12: !=0, input 0002, register r11, expected 1.
+
+        rlit r11 0x0002
+
+        cond r11 !=0
+
+        // Observation 38: 0001 at 1:FFFF -- cond case 12
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r11 0x0002
+
+        if r11 !=0 then fwd_ok_12
+
+        rlit r5 0xD10C
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_12:
+
+        // Observation 39: 100C at 1:FFFF -- forward if case 12: !=0, 0002, expected 1
+
+        rlit r5 0x100C
+
+        rpush r5
+
+        drop
+
+        br back_eval_12
+
+        back_target_12:
+
+        // Observation 40: 200C at 1:FFFF -- backward if case 12: !=0, 0002, expected 1
+
+        rlit r5 0x200C
+
+        rpush r5
+
+        drop
+
+        br back_end_12
+
+        back_eval_12:
+
+        rlit r11 0x0002
+
+        if r11 !=0 then back_target_12
+
+        rlit r5 0xD20C
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_12:
+
+        // Case 13: !=0, input 7FFE, register r12, expected 1.
+
+        rlit r12 0x7FFE
+
+        cond r12 !=0
+
+        // Observation 41: 0001 at 1:FFFF -- cond case 13
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r12 0x7FFE
+
+        if r12 !=0 then fwd_ok_13
+
+        rlit r5 0xD10D
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_13:
+
+        // Observation 42: 100D at 1:FFFF -- forward if case 13: !=0, 7FFE, expected 1
+
+        rlit r5 0x100D
+
+        rpush r5
+
+        drop
+
+        br back_eval_13
+
+        back_target_13:
+
+        // Observation 43: 200D at 1:FFFF -- backward if case 13: !=0, 7FFE, expected 1
+
+        rlit r5 0x200D
+
+        rpush r5
+
+        drop
+
+        br back_end_13
+
+        back_eval_13:
+
+        rlit r12 0x7FFE
+
+        if r12 !=0 then back_target_13
+
+        rlit r5 0xD20D
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_13:
+
+        // Case 14: !=0, input 7FFF, register r13, expected 1.
+
+        rlit r13 0x7FFF
+
+        cond r13 !=0
+
+        // Observation 44: 0001 at 1:FFFF -- cond case 14
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r13 0x7FFF
+
+        if r13 !=0 then fwd_ok_14
+
+        rlit r5 0xD10E
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_14:
+
+        // Observation 45: 100E at 1:FFFF -- forward if case 14: !=0, 7FFF, expected 1
+
+        rlit r5 0x100E
+
+        rpush r5
+
+        drop
+
+        br back_eval_14
+
+        back_target_14:
+
+        // Observation 46: 200E at 1:FFFF -- backward if case 14: !=0, 7FFF, expected 1
+
+        rlit r5 0x200E
+
+        rpush r5
+
+        drop
+
+        br back_end_14
+
+        back_eval_14:
+
+        rlit r13 0x7FFF
+
+        if r13 !=0 then back_target_14
+
+        rlit r5 0xD20E
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_14:
+
+        // Case 15: !=0, input 8000, register r14, expected 1.
+
+        rlit r14 0x8000
+
+        cond r14 !=0
+
+        // Observation 47: 0001 at 1:FFFF -- cond case 15
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r14 0x8000
+
+        if r14 !=0 then fwd_ok_15
+
+        rlit r5 0xD10F
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_15:
+
+        // Observation 48: 100F at 1:FFFF -- forward if case 15: !=0, 8000, expected 1
+
+        rlit r5 0x100F
+
+        rpush r5
+
+        drop
+
+        br back_eval_15
+
+        back_target_15:
+
+        // Observation 49: 200F at 1:FFFF -- backward if case 15: !=0, 8000, expected 1
+
+        rlit r5 0x200F
+
+        rpush r5
+
+        drop
+
+        br back_end_15
+
+        back_eval_15:
+
+        rlit r14 0x8000
+
+        if r14 !=0 then back_target_15
+
+        rlit r5 0xD20F
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_15:
+
+        // Case 16: !=0, input 8001, register r15, expected 1.
+
+        rlit r15 0x8001
+
+        cond r15 !=0
+
+        // Observation 50: 0001 at 1:FFFF -- cond case 16
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r15 0x8001
+
+        if r15 !=0 then fwd_ok_16
+
+        rlit r5 0xD110
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_16:
+
+        // Observation 51: 1010 at 1:FFFF -- forward if case 16: !=0, 8001, expected 1
+
+        rlit r5 0x1010
+
+        rpush r5
+
+        drop
+
+        br back_eval_16
+
+        back_target_16:
+
+        // Observation 52: 2010 at 1:FFFF -- backward if case 16: !=0, 8001, expected 1
+
+        rlit r5 0x2010
+
+        rpush r5
+
+        drop
+
+        br back_end_16
+
+        back_eval_16:
+
+        rlit r15 0x8001
+
+        if r15 !=0 then back_target_16
+
+        rlit r5 0xD210
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_16:
+
+        // Case 17: !=0, input FFFE, register r0, expected 1.
+
+        rlit r0 0xFFFE
+
+        cond r0 !=0
+
+        // Observation 53: 0001 at 1:FFFF -- cond case 17
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0xFFFE
+
+        if r0 !=0 then fwd_ok_17
+
+        rlit r5 0xD111
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_17:
+
+        // Observation 54: 1011 at 1:FFFF -- forward if case 17: !=0, FFFE, expected 1
+
+        rlit r5 0x1011
+
+        rpush r5
+
+        drop
+
+        br back_eval_17
+
+        back_target_17:
+
+        // Observation 55: 2011 at 1:FFFF -- backward if case 17: !=0, FFFE, expected 1
+
+        rlit r5 0x2011
+
+        rpush r5
+
+        drop
+
+        br back_end_17
+
+        back_eval_17:
+
+        rlit r0 0xFFFE
+
+        if r0 !=0 then back_target_17
+
+        rlit r5 0xD211
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_17:
+
+        // Case 18: !=0, input FFFF, register r1, expected 1.
+
+        rlit r1 0xFFFF
+
+        cond r1 !=0
+
+        // Observation 56: 0001 at 1:FFFF -- cond case 18
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r1 0xFFFF
+
+        if r1 !=0 then fwd_ok_18
+
+        rlit r5 0xD112
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_18:
+
+        // Observation 57: 1012 at 1:FFFF -- forward if case 18: !=0, FFFF, expected 1
+
+        rlit r5 0x1012
+
+        rpush r5
+
+        drop
+
+        br back_eval_18
+
+        back_target_18:
+
+        // Observation 58: 2012 at 1:FFFF -- backward if case 18: !=0, FFFF, expected 1
+
+        rlit r5 0x2012
+
+        rpush r5
+
+        drop
+
+        br back_end_18
+
+        back_eval_18:
+
+        rlit r1 0xFFFF
+
+        if r1 !=0 then back_target_18
+
+        rlit r5 0xD212
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_18:
+
+        // Case 19: <0, input 0000, register r2, expected 0.
+
+        rlit r2 0x0000
+
+        cond r2 <0
+
+        // Observation 59: 0000 at 1:FFFF -- cond case 19
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r2 0x0000
+
+        if r2 <0 then fwd_fail_19
+
+        br fwd_ok_19
+
+        fwd_fail_19:
+
+        rlit r5 0xD113
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_19:
+
+        // Observation 60: 1013 at 1:FFFF -- forward if case 19: <0, 0000, expected 0
+
+        rlit r5 0x1013
+
+        rpush r5
+
+        drop
+
+        br back_eval_19
+
+        back_target_19:
+
+        rlit r5 0xD213
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_19:
+
+        rlit r2 0x0000
+
+        if r2 <0 then back_target_19
+
+        // Observation 61: 2013 at 1:FFFF -- backward if case 19: <0, 0000, expected 0
+
+        rlit r5 0x2013
+
+        rpush r5
+
+        drop
+
+        back_end_19:
+
+        // Case 20: <0, input 0001, register r3, expected 0.
+
+        rlit r3 0x0001
+
+        cond r3 <0
+
+        // Observation 62: 0000 at 1:FFFF -- cond case 20
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r3 0x0001
+
+        if r3 <0 then fwd_fail_20
+
+        br fwd_ok_20
+
+        fwd_fail_20:
+
+        rlit r5 0xD114
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_20:
+
+        // Observation 63: 1014 at 1:FFFF -- forward if case 20: <0, 0001, expected 0
+
+        rlit r5 0x1014
+
+        rpush r5
+
+        drop
+
+        br back_eval_20
+
+        back_target_20:
+
+        rlit r5 0xD214
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_20:
+
+        rlit r3 0x0001
+
+        if r3 <0 then back_target_20
+
+        // Observation 64: 2014 at 1:FFFF -- backward if case 20: <0, 0001, expected 0
+
+        rlit r5 0x2014
+
+        rpush r5
+
+        drop
+
+        back_end_20:
+
+        // Case 21: <0, input 0002, register r4, expected 0.
+
+        rlit r4 0x0002
+
+        cond r4 <0
+
+        // Observation 65: 0000 at 1:FFFF -- cond case 21
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r4 0x0002
+
+        if r4 <0 then fwd_fail_21
+
+        br fwd_ok_21
+
+        fwd_fail_21:
+
+        rlit r5 0xD115
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_21:
+
+        // Observation 66: 1015 at 1:FFFF -- forward if case 21: <0, 0002, expected 0
+
+        rlit r5 0x1015
+
+        rpush r5
+
+        drop
+
+        br back_eval_21
+
+        back_target_21:
+
+        rlit r5 0xD215
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_21:
+
+        rlit r4 0x0002
+
+        if r4 <0 then back_target_21
+
+        // Observation 67: 2015 at 1:FFFF -- backward if case 21: <0, 0002, expected 0
+
+        rlit r5 0x2015
+
+        rpush r5
+
+        drop
+
+        back_end_21:
+
+        // Case 22: <0, input 7FFE, register r5, expected 0.
+
+        rlit r5 0x7FFE
+
+        cond r5 <0
+
+        // Observation 68: 0000 at 1:FFFF -- cond case 22
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r5 0x7FFE
+
+        if r5 <0 then fwd_fail_22
+
+        br fwd_ok_22
+
+        fwd_fail_22:
+
+        rlit r5 0xD116
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_22:
+
+        // Observation 69: 1016 at 1:FFFF -- forward if case 22: <0, 7FFE, expected 0
+
+        rlit r5 0x1016
+
+        rpush r5
+
+        drop
+
+        br back_eval_22
+
+        back_target_22:
+
+        rlit r5 0xD216
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_22:
+
+        rlit r5 0x7FFE
+
+        if r5 <0 then back_target_22
+
+        // Observation 70: 2016 at 1:FFFF -- backward if case 22: <0, 7FFE, expected 0
+
+        rlit r5 0x2016
+
+        rpush r5
+
+        drop
+
+        back_end_22:
+
+        // Case 23: <0, input 7FFF, register r6, expected 0.
+
+        rlit r6 0x7FFF
+
+        cond r6 <0
+
+        // Observation 71: 0000 at 1:FFFF -- cond case 23
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r6 0x7FFF
+
+        if r6 <0 then fwd_fail_23
+
+        br fwd_ok_23
+
+        fwd_fail_23:
+
+        rlit r5 0xD117
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_23:
+
+        // Observation 72: 1017 at 1:FFFF -- forward if case 23: <0, 7FFF, expected 0
+
+        rlit r5 0x1017
+
+        rpush r5
+
+        drop
+
+        br back_eval_23
+
+        back_target_23:
+
+        rlit r5 0xD217
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_23:
+
+        rlit r6 0x7FFF
+
+        if r6 <0 then back_target_23
+
+        // Observation 73: 2017 at 1:FFFF -- backward if case 23: <0, 7FFF, expected 0
+
+        rlit r5 0x2017
+
+        rpush r5
+
+        drop
+
+        back_end_23:
+
+        // Case 24: <0, input 8000, register r7, expected 1.
+
+        rlit r7 0x8000
+
+        cond r7 <0
+
+        // Observation 74: 0001 at 1:FFFF -- cond case 24
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r7 0x8000
+
+        if r7 <0 then fwd_ok_24
+
+        rlit r5 0xD118
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_24:
+
+        // Observation 75: 1018 at 1:FFFF -- forward if case 24: <0, 8000, expected 1
+
+        rlit r5 0x1018
+
+        rpush r5
+
+        drop
+
+        br back_eval_24
+
+        back_target_24:
+
+        // Observation 76: 2018 at 1:FFFF -- backward if case 24: <0, 8000, expected 1
+
+        rlit r5 0x2018
+
+        rpush r5
+
+        drop
+
+        br back_end_24
+
+        back_eval_24:
+
+        rlit r7 0x8000
+
+        if r7 <0 then back_target_24
+
+        rlit r5 0xD218
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_24:
+
+        // Case 25: <0, input 8001, register r8, expected 1.
+
+        rlit r8 0x8001
+
+        cond r8 <0
+
+        // Observation 77: 0001 at 1:FFFF -- cond case 25
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r8 0x8001
+
+        if r8 <0 then fwd_ok_25
+
+        rlit r5 0xD119
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_25:
+
+        // Observation 78: 1019 at 1:FFFF -- forward if case 25: <0, 8001, expected 1
+
+        rlit r5 0x1019
+
+        rpush r5
+
+        drop
+
+        br back_eval_25
+
+        back_target_25:
+
+        // Observation 79: 2019 at 1:FFFF -- backward if case 25: <0, 8001, expected 1
+
+        rlit r5 0x2019
+
+        rpush r5
+
+        drop
+
+        br back_end_25
+
+        back_eval_25:
+
+        rlit r8 0x8001
+
+        if r8 <0 then back_target_25
+
+        rlit r5 0xD219
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_25:
+
+        // Case 26: <0, input FFFE, register r9, expected 1.
+
+        rlit r9 0xFFFE
+
+        cond r9 <0
+
+        // Observation 80: 0001 at 1:FFFF -- cond case 26
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r9 0xFFFE
+
+        if r9 <0 then fwd_ok_26
+
+        rlit r5 0xD11A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_26:
+
+        // Observation 81: 101A at 1:FFFF -- forward if case 26: <0, FFFE, expected 1
+
+        rlit r5 0x101A
+
+        rpush r5
+
+        drop
+
+        br back_eval_26
+
+        back_target_26:
+
+        // Observation 82: 201A at 1:FFFF -- backward if case 26: <0, FFFE, expected 1
+
+        rlit r5 0x201A
+
+        rpush r5
+
+        drop
+
+        br back_end_26
+
+        back_eval_26:
+
+        rlit r9 0xFFFE
+
+        if r9 <0 then back_target_26
+
+        rlit r5 0xD21A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_26:
+
+        // Case 27: <0, input FFFF, register r10, expected 1.
+
+        rlit r10 0xFFFF
+
+        cond r10 <0
+
+        // Observation 83: 0001 at 1:FFFF -- cond case 27
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r10 0xFFFF
+
+        if r10 <0 then fwd_ok_27
+
+        rlit r5 0xD11B
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_27:
+
+        // Observation 84: 101B at 1:FFFF -- forward if case 27: <0, FFFF, expected 1
+
+        rlit r5 0x101B
+
+        rpush r5
+
+        drop
+
+        br back_eval_27
+
+        back_target_27:
+
+        // Observation 85: 201B at 1:FFFF -- backward if case 27: <0, FFFF, expected 1
+
+        rlit r5 0x201B
+
+        rpush r5
+
+        drop
+
+        br back_end_27
+
+        back_eval_27:
+
+        rlit r10 0xFFFF
+
+        if r10 <0 then back_target_27
+
+        rlit r5 0xD21B
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_27:
+
+        // Case 28: <=0, input 0000, register r11, expected 1.
+
+        rlit r11 0x0000
+
+        cond r11 <=0
+
+        // Observation 86: 0001 at 1:FFFF -- cond case 28
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r11 0x0000
+
+        if r11 <=0 then fwd_ok_28
+
+        rlit r5 0xD11C
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_28:
+
+        // Observation 87: 101C at 1:FFFF -- forward if case 28: <=0, 0000, expected 1
+
+        rlit r5 0x101C
+
+        rpush r5
+
+        drop
+
+        br back_eval_28
+
+        back_target_28:
+
+        // Observation 88: 201C at 1:FFFF -- backward if case 28: <=0, 0000, expected 1
+
+        rlit r5 0x201C
+
+        rpush r5
+
+        drop
+
+        br back_end_28
+
+        back_eval_28:
+
+        rlit r11 0x0000
+
+        if r11 <=0 then back_target_28
+
+        rlit r5 0xD21C
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_28:
+
+        // Case 29: <=0, input 0001, register r12, expected 0.
+
+        rlit r12 0x0001
+
+        cond r12 <=0
+
+        // Observation 89: 0000 at 1:FFFF -- cond case 29
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r12 0x0001
+
+        if r12 <=0 then fwd_fail_29
+
+        br fwd_ok_29
+
+        fwd_fail_29:
+
+        rlit r5 0xD11D
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_29:
+
+        // Observation 90: 101D at 1:FFFF -- forward if case 29: <=0, 0001, expected 0
+
+        rlit r5 0x101D
+
+        rpush r5
+
+        drop
+
+        br back_eval_29
+
+        back_target_29:
+
+        rlit r5 0xD21D
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_29:
+
+        rlit r12 0x0001
+
+        if r12 <=0 then back_target_29
+
+        // Observation 91: 201D at 1:FFFF -- backward if case 29: <=0, 0001, expected 0
+
+        rlit r5 0x201D
+
+        rpush r5
+
+        drop
+
+        back_end_29:
+
+        // Case 30: <=0, input 0002, register r13, expected 0.
+
+        rlit r13 0x0002
+
+        cond r13 <=0
+
+        // Observation 92: 0000 at 1:FFFF -- cond case 30
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r13 0x0002
+
+        if r13 <=0 then fwd_fail_30
+
+        br fwd_ok_30
+
+        fwd_fail_30:
+
+        rlit r5 0xD11E
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_30:
+
+        // Observation 93: 101E at 1:FFFF -- forward if case 30: <=0, 0002, expected 0
+
+        rlit r5 0x101E
+
+        rpush r5
+
+        drop
+
+        br back_eval_30
+
+        back_target_30:
+
+        rlit r5 0xD21E
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_30:
+
+        rlit r13 0x0002
+
+        if r13 <=0 then back_target_30
+
+        // Observation 94: 201E at 1:FFFF -- backward if case 30: <=0, 0002, expected 0
+
+        rlit r5 0x201E
+
+        rpush r5
+
+        drop
+
+        back_end_30:
+
+        // Case 31: <=0, input 7FFE, register r14, expected 0.
+
+        rlit r14 0x7FFE
+
+        cond r14 <=0
+
+        // Observation 95: 0000 at 1:FFFF -- cond case 31
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r14 0x7FFE
+
+        if r14 <=0 then fwd_fail_31
+
+        br fwd_ok_31
+
+        fwd_fail_31:
+
+        rlit r5 0xD11F
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_31:
+
+        // Observation 96: 101F at 1:FFFF -- forward if case 31: <=0, 7FFE, expected 0
+
+        rlit r5 0x101F
+
+        rpush r5
+
+        drop
+
+        br back_eval_31
+
+        back_target_31:
+
+        rlit r5 0xD21F
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_31:
+
+        rlit r14 0x7FFE
+
+        if r14 <=0 then back_target_31
+
+        // Observation 97: 201F at 1:FFFF -- backward if case 31: <=0, 7FFE, expected 0
+
+        rlit r5 0x201F
+
+        rpush r5
+
+        drop
+
+        back_end_31:
+
+        // Case 32: <=0, input 7FFF, register r15, expected 0.
+
+        rlit r15 0x7FFF
+
+        cond r15 <=0
+
+        // Observation 98: 0000 at 1:FFFF -- cond case 32
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r15 0x7FFF
+
+        if r15 <=0 then fwd_fail_32
+
+        br fwd_ok_32
+
+        fwd_fail_32:
+
+        rlit r5 0xD120
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_32:
+
+        // Observation 99: 1020 at 1:FFFF -- forward if case 32: <=0, 7FFF, expected 0
+
+        rlit r5 0x1020
+
+        rpush r5
+
+        drop
+
+        br back_eval_32
+
+        back_target_32:
+
+        rlit r5 0xD220
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_32:
+
+        rlit r15 0x7FFF
+
+        if r15 <=0 then back_target_32
+
+        // Observation 100: 2020 at 1:FFFF -- backward if case 32: <=0, 7FFF, expected 0
+
+        rlit r5 0x2020
+
+        rpush r5
+
+        drop
+
+        back_end_32:
+
+        // Case 33: <=0, input 8000, register r0, expected 1.
+
+        rlit r0 0x8000
+
+        cond r0 <=0
+
+        // Observation 101: 0001 at 1:FFFF -- cond case 33
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x8000
+
+        if r0 <=0 then fwd_ok_33
+
+        rlit r5 0xD121
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_33:
+
+        // Observation 102: 1021 at 1:FFFF -- forward if case 33: <=0, 8000, expected 1
+
+        rlit r5 0x1021
+
+        rpush r5
+
+        drop
+
+        br back_eval_33
+
+        back_target_33:
+
+        // Observation 103: 2021 at 1:FFFF -- backward if case 33: <=0, 8000, expected 1
+
+        rlit r5 0x2021
+
+        rpush r5
+
+        drop
+
+        br back_end_33
+
+        back_eval_33:
+
+        rlit r0 0x8000
+
+        if r0 <=0 then back_target_33
+
+        rlit r5 0xD221
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_33:
+
+        // Case 34: <=0, input 8001, register r1, expected 1.
+
+        rlit r1 0x8001
+
+        cond r1 <=0
+
+        // Observation 104: 0001 at 1:FFFF -- cond case 34
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r1 0x8001
+
+        if r1 <=0 then fwd_ok_34
+
+        rlit r5 0xD122
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_34:
+
+        // Observation 105: 1022 at 1:FFFF -- forward if case 34: <=0, 8001, expected 1
+
+        rlit r5 0x1022
+
+        rpush r5
+
+        drop
+
+        br back_eval_34
+
+        back_target_34:
+
+        // Observation 106: 2022 at 1:FFFF -- backward if case 34: <=0, 8001, expected 1
+
+        rlit r5 0x2022
+
+        rpush r5
+
+        drop
+
+        br back_end_34
+
+        back_eval_34:
+
+        rlit r1 0x8001
+
+        if r1 <=0 then back_target_34
+
+        rlit r5 0xD222
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_34:
+
+        // Case 35: <=0, input FFFE, register r2, expected 1.
+
+        rlit r2 0xFFFE
+
+        cond r2 <=0
+
+        // Observation 107: 0001 at 1:FFFF -- cond case 35
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r2 0xFFFE
+
+        if r2 <=0 then fwd_ok_35
+
+        rlit r5 0xD123
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_35:
+
+        // Observation 108: 1023 at 1:FFFF -- forward if case 35: <=0, FFFE, expected 1
+
+        rlit r5 0x1023
+
+        rpush r5
+
+        drop
+
+        br back_eval_35
+
+        back_target_35:
+
+        // Observation 109: 2023 at 1:FFFF -- backward if case 35: <=0, FFFE, expected 1
+
+        rlit r5 0x2023
+
+        rpush r5
+
+        drop
+
+        br back_end_35
+
+        back_eval_35:
+
+        rlit r2 0xFFFE
+
+        if r2 <=0 then back_target_35
+
+        rlit r5 0xD223
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_35:
+
+        // Case 36: <=0, input FFFF, register r3, expected 1.
+
+        rlit r3 0xFFFF
+
+        cond r3 <=0
+
+        // Observation 110: 0001 at 1:FFFF -- cond case 36
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r3 0xFFFF
+
+        if r3 <=0 then fwd_ok_36
+
+        rlit r5 0xD124
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_36:
+
+        // Observation 111: 1024 at 1:FFFF -- forward if case 36: <=0, FFFF, expected 1
+
+        rlit r5 0x1024
+
+        rpush r5
+
+        drop
+
+        br back_eval_36
+
+        back_target_36:
+
+        // Observation 112: 2024 at 1:FFFF -- backward if case 36: <=0, FFFF, expected 1
+
+        rlit r5 0x2024
+
+        rpush r5
+
+        drop
+
+        br back_end_36
+
+        back_eval_36:
+
+        rlit r3 0xFFFF
+
+        if r3 <=0 then back_target_36
+
+        rlit r5 0xD224
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_36:
+
+        // Case 37: >0, input 0000, register r4, expected 0.
+
+        rlit r4 0x0000
+
+        cond r4 >0
+
+        // Observation 113: 0000 at 1:FFFF -- cond case 37
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r4 0x0000
+
+        if r4 >0 then fwd_fail_37
+
+        br fwd_ok_37
+
+        fwd_fail_37:
+
+        rlit r5 0xD125
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_37:
+
+        // Observation 114: 1025 at 1:FFFF -- forward if case 37: >0, 0000, expected 0
+
+        rlit r5 0x1025
+
+        rpush r5
+
+        drop
+
+        br back_eval_37
+
+        back_target_37:
+
+        rlit r5 0xD225
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_37:
+
+        rlit r4 0x0000
+
+        if r4 >0 then back_target_37
+
+        // Observation 115: 2025 at 1:FFFF -- backward if case 37: >0, 0000, expected 0
+
+        rlit r5 0x2025
+
+        rpush r5
+
+        drop
+
+        back_end_37:
+
+        // Case 38: >0, input 0001, register r5, expected 1.
+
+        rlit r5 0x0001
+
+        cond r5 >0
+
+        // Observation 116: 0001 at 1:FFFF -- cond case 38
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r5 0x0001
+
+        if r5 >0 then fwd_ok_38
+
+        rlit r5 0xD126
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_38:
+
+        // Observation 117: 1026 at 1:FFFF -- forward if case 38: >0, 0001, expected 1
+
+        rlit r5 0x1026
+
+        rpush r5
+
+        drop
+
+        br back_eval_38
+
+        back_target_38:
+
+        // Observation 118: 2026 at 1:FFFF -- backward if case 38: >0, 0001, expected 1
+
+        rlit r5 0x2026
+
+        rpush r5
+
+        drop
+
+        br back_end_38
+
+        back_eval_38:
+
+        rlit r5 0x0001
+
+        if r5 >0 then back_target_38
+
+        rlit r5 0xD226
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_38:
+
+        // Case 39: >0, input 0002, register r6, expected 1.
+
+        rlit r6 0x0002
+
+        cond r6 >0
+
+        // Observation 119: 0001 at 1:FFFF -- cond case 39
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r6 0x0002
+
+        if r6 >0 then fwd_ok_39
+
+        rlit r5 0xD127
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_39:
+
+        // Observation 120: 1027 at 1:FFFF -- forward if case 39: >0, 0002, expected 1
+
+        rlit r5 0x1027
+
+        rpush r5
+
+        drop
+
+        br back_eval_39
+
+        back_target_39:
+
+        // Observation 121: 2027 at 1:FFFF -- backward if case 39: >0, 0002, expected 1
+
+        rlit r5 0x2027
+
+        rpush r5
+
+        drop
+
+        br back_end_39
+
+        back_eval_39:
+
+        rlit r6 0x0002
+
+        if r6 >0 then back_target_39
+
+        rlit r5 0xD227
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_39:
+
+        // Case 40: >0, input 7FFE, register r7, expected 1.
+
+        rlit r7 0x7FFE
+
+        cond r7 >0
+
+        // Observation 122: 0001 at 1:FFFF -- cond case 40
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r7 0x7FFE
+
+        if r7 >0 then fwd_ok_40
+
+        rlit r5 0xD128
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_40:
+
+        // Observation 123: 1028 at 1:FFFF -- forward if case 40: >0, 7FFE, expected 1
+
+        rlit r5 0x1028
+
+        rpush r5
+
+        drop
+
+        br back_eval_40
+
+        back_target_40:
+
+        // Observation 124: 2028 at 1:FFFF -- backward if case 40: >0, 7FFE, expected 1
+
+        rlit r5 0x2028
+
+        rpush r5
+
+        drop
+
+        br back_end_40
+
+        back_eval_40:
+
+        rlit r7 0x7FFE
+
+        if r7 >0 then back_target_40
+
+        rlit r5 0xD228
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_40:
+
+        // Case 41: >0, input 7FFF, register r8, expected 1.
+
+        rlit r8 0x7FFF
+
+        cond r8 >0
+
+        // Observation 125: 0001 at 1:FFFF -- cond case 41
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r8 0x7FFF
+
+        if r8 >0 then fwd_ok_41
+
+        rlit r5 0xD129
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_41:
+
+        // Observation 126: 1029 at 1:FFFF -- forward if case 41: >0, 7FFF, expected 1
+
+        rlit r5 0x1029
+
+        rpush r5
+
+        drop
+
+        br back_eval_41
+
+        back_target_41:
+
+        // Observation 127: 2029 at 1:FFFF -- backward if case 41: >0, 7FFF, expected 1
+
+        rlit r5 0x2029
+
+        rpush r5
+
+        drop
+
+        br back_end_41
+
+        back_eval_41:
+
+        rlit r8 0x7FFF
+
+        if r8 >0 then back_target_41
+
+        rlit r5 0xD229
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_41:
+
+        // Case 42: >0, input 8000, register r9, expected 0.
+
+        rlit r9 0x8000
+
+        cond r9 >0
+
+        // Observation 128: 0000 at 1:FFFF -- cond case 42
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r9 0x8000
+
+        if r9 >0 then fwd_fail_42
+
+        br fwd_ok_42
+
+        fwd_fail_42:
+
+        rlit r5 0xD12A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_42:
+
+        // Observation 129: 102A at 1:FFFF -- forward if case 42: >0, 8000, expected 0
+
+        rlit r5 0x102A
+
+        rpush r5
+
+        drop
+
+        br back_eval_42
+
+        back_target_42:
+
+        rlit r5 0xD22A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_42:
+
+        rlit r9 0x8000
+
+        if r9 >0 then back_target_42
+
+        // Observation 130: 202A at 1:FFFF -- backward if case 42: >0, 8000, expected 0
+
+        rlit r5 0x202A
+
+        rpush r5
+
+        drop
+
+        back_end_42:
+
+        // Case 43: >0, input 8001, register r10, expected 0.
+
+        rlit r10 0x8001
+
+        cond r10 >0
+
+        // Observation 131: 0000 at 1:FFFF -- cond case 43
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r10 0x8001
+
+        if r10 >0 then fwd_fail_43
+
+        br fwd_ok_43
+
+        fwd_fail_43:
+
+        rlit r5 0xD12B
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_43:
+
+        // Observation 132: 102B at 1:FFFF -- forward if case 43: >0, 8001, expected 0
+
+        rlit r5 0x102B
+
+        rpush r5
+
+        drop
+
+        br back_eval_43
+
+        back_target_43:
+
+        rlit r5 0xD22B
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_43:
+
+        rlit r10 0x8001
+
+        if r10 >0 then back_target_43
+
+        // Observation 133: 202B at 1:FFFF -- backward if case 43: >0, 8001, expected 0
+
+        rlit r5 0x202B
+
+        rpush r5
+
+        drop
+
+        back_end_43:
+
+        // Case 44: >0, input FFFE, register r11, expected 0.
+
+        rlit r11 0xFFFE
+
+        cond r11 >0
+
+        // Observation 134: 0000 at 1:FFFF -- cond case 44
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r11 0xFFFE
+
+        if r11 >0 then fwd_fail_44
+
+        br fwd_ok_44
+
+        fwd_fail_44:
+
+        rlit r5 0xD12C
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_44:
+
+        // Observation 135: 102C at 1:FFFF -- forward if case 44: >0, FFFE, expected 0
+
+        rlit r5 0x102C
+
+        rpush r5
+
+        drop
+
+        br back_eval_44
+
+        back_target_44:
+
+        rlit r5 0xD22C
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_44:
+
+        rlit r11 0xFFFE
+
+        if r11 >0 then back_target_44
+
+        // Observation 136: 202C at 1:FFFF -- backward if case 44: >0, FFFE, expected 0
+
+        rlit r5 0x202C
+
+        rpush r5
+
+        drop
+
+        back_end_44:
+
+        // Case 45: >0, input FFFF, register r12, expected 0.
+
+        rlit r12 0xFFFF
+
+        cond r12 >0
+
+        // Observation 137: 0000 at 1:FFFF -- cond case 45
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r12 0xFFFF
+
+        if r12 >0 then fwd_fail_45
+
+        br fwd_ok_45
+
+        fwd_fail_45:
+
+        rlit r5 0xD12D
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_45:
+
+        // Observation 138: 102D at 1:FFFF -- forward if case 45: >0, FFFF, expected 0
+
+        rlit r5 0x102D
+
+        rpush r5
+
+        drop
+
+        br back_eval_45
+
+        back_target_45:
+
+        rlit r5 0xD22D
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_45:
+
+        rlit r12 0xFFFF
+
+        if r12 >0 then back_target_45
+
+        // Observation 139: 202D at 1:FFFF -- backward if case 45: >0, FFFF, expected 0
+
+        rlit r5 0x202D
+
+        rpush r5
+
+        drop
+
+        back_end_45:
+
+        // Case 46: >=0, input 0000, register r13, expected 1.
+
+        rlit r13 0x0000
+
+        cond r13 >=0
+
+        // Observation 140: 0001 at 1:FFFF -- cond case 46
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r13 0x0000
+
+        if r13 >=0 then fwd_ok_46
+
+        rlit r5 0xD12E
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_46:
+
+        // Observation 141: 102E at 1:FFFF -- forward if case 46: >=0, 0000, expected 1
+
+        rlit r5 0x102E
+
+        rpush r5
+
+        drop
+
+        br back_eval_46
+
+        back_target_46:
+
+        // Observation 142: 202E at 1:FFFF -- backward if case 46: >=0, 0000, expected 1
+
+        rlit r5 0x202E
+
+        rpush r5
+
+        drop
+
+        br back_end_46
+
+        back_eval_46:
+
+        rlit r13 0x0000
+
+        if r13 >=0 then back_target_46
+
+        rlit r5 0xD22E
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_46:
+
+        // Case 47: >=0, input 0001, register r14, expected 1.
+
+        rlit r14 0x0001
+
+        cond r14 >=0
+
+        // Observation 143: 0001 at 1:FFFF -- cond case 47
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r14 0x0001
+
+        if r14 >=0 then fwd_ok_47
+
+        rlit r5 0xD12F
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_47:
+
+        // Observation 144: 102F at 1:FFFF -- forward if case 47: >=0, 0001, expected 1
+
+        rlit r5 0x102F
+
+        rpush r5
+
+        drop
+
+        br back_eval_47
+
+        back_target_47:
+
+        // Observation 145: 202F at 1:FFFF -- backward if case 47: >=0, 0001, expected 1
+
+        rlit r5 0x202F
+
+        rpush r5
+
+        drop
+
+        br back_end_47
+
+        back_eval_47:
+
+        rlit r14 0x0001
+
+        if r14 >=0 then back_target_47
+
+        rlit r5 0xD22F
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_47:
+
+        // Case 48: >=0, input 0002, register r15, expected 1.
+
+        rlit r15 0x0002
+
+        cond r15 >=0
+
+        // Observation 146: 0001 at 1:FFFF -- cond case 48
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r15 0x0002
+
+        if r15 >=0 then fwd_ok_48
+
+        rlit r5 0xD130
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_48:
+
+        // Observation 147: 1030 at 1:FFFF -- forward if case 48: >=0, 0002, expected 1
+
+        rlit r5 0x1030
+
+        rpush r5
+
+        drop
+
+        br back_eval_48
+
+        back_target_48:
+
+        // Observation 148: 2030 at 1:FFFF -- backward if case 48: >=0, 0002, expected 1
+
+        rlit r5 0x2030
+
+        rpush r5
+
+        drop
+
+        br back_end_48
+
+        back_eval_48:
+
+        rlit r15 0x0002
+
+        if r15 >=0 then back_target_48
+
+        rlit r5 0xD230
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_48:
+
+        // Case 49: >=0, input 7FFE, register r0, expected 1.
+
+        rlit r0 0x7FFE
+
+        cond r0 >=0
+
+        // Observation 149: 0001 at 1:FFFF -- cond case 49
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x7FFE
+
+        if r0 >=0 then fwd_ok_49
+
+        rlit r5 0xD131
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_49:
+
+        // Observation 150: 1031 at 1:FFFF -- forward if case 49: >=0, 7FFE, expected 1
+
+        rlit r5 0x1031
+
+        rpush r5
+
+        drop
+
+        br back_eval_49
+
+        back_target_49:
+
+        // Observation 151: 2031 at 1:FFFF -- backward if case 49: >=0, 7FFE, expected 1
+
+        rlit r5 0x2031
+
+        rpush r5
+
+        drop
+
+        br back_end_49
+
+        back_eval_49:
+
+        rlit r0 0x7FFE
+
+        if r0 >=0 then back_target_49
+
+        rlit r5 0xD231
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_49:
+
+        // Case 50: >=0, input 7FFF, register r1, expected 1.
+
+        rlit r1 0x7FFF
+
+        cond r1 >=0
+
+        // Observation 152: 0001 at 1:FFFF -- cond case 50
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r1 0x7FFF
+
+        if r1 >=0 then fwd_ok_50
+
+        rlit r5 0xD132
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_50:
+
+        // Observation 153: 1032 at 1:FFFF -- forward if case 50: >=0, 7FFF, expected 1
+
+        rlit r5 0x1032
+
+        rpush r5
+
+        drop
+
+        br back_eval_50
+
+        back_target_50:
+
+        // Observation 154: 2032 at 1:FFFF -- backward if case 50: >=0, 7FFF, expected 1
+
+        rlit r5 0x2032
+
+        rpush r5
+
+        drop
+
+        br back_end_50
+
+        back_eval_50:
+
+        rlit r1 0x7FFF
+
+        if r1 >=0 then back_target_50
+
+        rlit r5 0xD232
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_50:
+
+        // Case 51: >=0, input 8000, register r2, expected 0.
+
+        rlit r2 0x8000
+
+        cond r2 >=0
+
+        // Observation 155: 0000 at 1:FFFF -- cond case 51
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r2 0x8000
+
+        if r2 >=0 then fwd_fail_51
+
+        br fwd_ok_51
+
+        fwd_fail_51:
+
+        rlit r5 0xD133
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_51:
+
+        // Observation 156: 1033 at 1:FFFF -- forward if case 51: >=0, 8000, expected 0
+
+        rlit r5 0x1033
+
+        rpush r5
+
+        drop
+
+        br back_eval_51
+
+        back_target_51:
+
+        rlit r5 0xD233
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_51:
+
+        rlit r2 0x8000
+
+        if r2 >=0 then back_target_51
+
+        // Observation 157: 2033 at 1:FFFF -- backward if case 51: >=0, 8000, expected 0
+
+        rlit r5 0x2033
+
+        rpush r5
+
+        drop
+
+        back_end_51:
+
+        // Case 52: >=0, input 8001, register r3, expected 0.
+
+        rlit r3 0x8001
+
+        cond r3 >=0
+
+        // Observation 158: 0000 at 1:FFFF -- cond case 52
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r3 0x8001
+
+        if r3 >=0 then fwd_fail_52
+
+        br fwd_ok_52
+
+        fwd_fail_52:
+
+        rlit r5 0xD134
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_52:
+
+        // Observation 159: 1034 at 1:FFFF -- forward if case 52: >=0, 8001, expected 0
+
+        rlit r5 0x1034
+
+        rpush r5
+
+        drop
+
+        br back_eval_52
+
+        back_target_52:
+
+        rlit r5 0xD234
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_52:
+
+        rlit r3 0x8001
+
+        if r3 >=0 then back_target_52
+
+        // Observation 160: 2034 at 1:FFFF -- backward if case 52: >=0, 8001, expected 0
+
+        rlit r5 0x2034
+
+        rpush r5
+
+        drop
+
+        back_end_52:
+
+        // Case 53: >=0, input FFFE, register r4, expected 0.
+
+        rlit r4 0xFFFE
+
+        cond r4 >=0
+
+        // Observation 161: 0000 at 1:FFFF -- cond case 53
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r4 0xFFFE
+
+        if r4 >=0 then fwd_fail_53
+
+        br fwd_ok_53
+
+        fwd_fail_53:
+
+        rlit r5 0xD135
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_53:
+
+        // Observation 162: 1035 at 1:FFFF -- forward if case 53: >=0, FFFE, expected 0
+
+        rlit r5 0x1035
+
+        rpush r5
+
+        drop
+
+        br back_eval_53
+
+        back_target_53:
+
+        rlit r5 0xD235
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_53:
+
+        rlit r4 0xFFFE
+
+        if r4 >=0 then back_target_53
+
+        // Observation 163: 2035 at 1:FFFF -- backward if case 53: >=0, FFFE, expected 0
+
+        rlit r5 0x2035
+
+        rpush r5
+
+        drop
+
+        back_end_53:
+
+        // Case 54: >=0, input FFFF, register r5, expected 0.
+
+        rlit r5 0xFFFF
+
+        cond r5 >=0
+
+        // Observation 164: 0000 at 1:FFFF -- cond case 54
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r5 0xFFFF
+
+        if r5 >=0 then fwd_fail_54
+
+        br fwd_ok_54
+
+        fwd_fail_54:
+
+        rlit r5 0xD136
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_54:
+
+        // Observation 165: 1036 at 1:FFFF -- forward if case 54: >=0, FFFF, expected 0
+
+        rlit r5 0x1036
+
+        rpush r5
+
+        drop
+
+        br back_eval_54
+
+        back_target_54:
+
+        rlit r5 0xD236
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_54:
+
+        rlit r5 0xFFFF
+
+        if r5 >=0 then back_target_54
+
+        // Observation 166: 2036 at 1:FFFF -- backward if case 54: >=0, FFFF, expected 0
+
+        rlit r5 0x2036
+
+        rpush r5
+
+        drop
+
+        back_end_54:
+
+        // Case 55: true, input 0000, register r0, expected 1.
+
+        rlit r0 0x0000
+
+        cond true
+
+        // Observation 167: 0001 at 1:FFFF -- cond case 55
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x0000
+
+        if true then fwd_ok_55
+
+        rlit r5 0xD137
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_55:
+
+        // Observation 168: 1037 at 1:FFFF -- forward if case 55: true, 0000, expected 1
+
+        rlit r5 0x1037
+
+        rpush r5
+
+        drop
+
+        br back_eval_55
+
+        back_target_55:
+
+        // Observation 169: 2037 at 1:FFFF -- backward if case 55: true, 0000, expected 1
+
+        rlit r5 0x2037
+
+        rpush r5
+
+        drop
+
+        br back_end_55
+
+        back_eval_55:
+
+        rlit r0 0x0000
+
+        if true then back_target_55
+
+        rlit r5 0xD237
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_55:
+
+        // Case 56: true, input 0001, register r0, expected 1.
+
+        rlit r0 0x0001
+
+        cond true
+
+        // Observation 170: 0001 at 1:FFFF -- cond case 56
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x0001
+
+        if true then fwd_ok_56
+
+        rlit r5 0xD138
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_56:
+
+        // Observation 171: 1038 at 1:FFFF -- forward if case 56: true, 0001, expected 1
+
+        rlit r5 0x1038
+
+        rpush r5
+
+        drop
+
+        br back_eval_56
+
+        back_target_56:
+
+        // Observation 172: 2038 at 1:FFFF -- backward if case 56: true, 0001, expected 1
+
+        rlit r5 0x2038
+
+        rpush r5
+
+        drop
+
+        br back_end_56
+
+        back_eval_56:
+
+        rlit r0 0x0001
+
+        if true then back_target_56
+
+        rlit r5 0xD238
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_56:
+
+        // Case 57: true, input 0002, register r0, expected 1.
+
+        rlit r0 0x0002
+
+        cond true
+
+        // Observation 173: 0001 at 1:FFFF -- cond case 57
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x0002
+
+        if true then fwd_ok_57
+
+        rlit r5 0xD139
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_57:
+
+        // Observation 174: 1039 at 1:FFFF -- forward if case 57: true, 0002, expected 1
+
+        rlit r5 0x1039
+
+        rpush r5
+
+        drop
+
+        br back_eval_57
+
+        back_target_57:
+
+        // Observation 175: 2039 at 1:FFFF -- backward if case 57: true, 0002, expected 1
+
+        rlit r5 0x2039
+
+        rpush r5
+
+        drop
+
+        br back_end_57
+
+        back_eval_57:
+
+        rlit r0 0x0002
+
+        if true then back_target_57
+
+        rlit r5 0xD239
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_57:
+
+        // Case 58: true, input 7FFE, register r0, expected 1.
+
+        rlit r0 0x7FFE
+
+        cond true
+
+        // Observation 176: 0001 at 1:FFFF -- cond case 58
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x7FFE
+
+        if true then fwd_ok_58
+
+        rlit r5 0xD13A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_58:
+
+        // Observation 177: 103A at 1:FFFF -- forward if case 58: true, 7FFE, expected 1
+
+        rlit r5 0x103A
+
+        rpush r5
+
+        drop
+
+        br back_eval_58
+
+        back_target_58:
+
+        // Observation 178: 203A at 1:FFFF -- backward if case 58: true, 7FFE, expected 1
+
+        rlit r5 0x203A
+
+        rpush r5
+
+        drop
+
+        br back_end_58
+
+        back_eval_58:
+
+        rlit r0 0x7FFE
+
+        if true then back_target_58
+
+        rlit r5 0xD23A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_58:
+
+        // Case 59: true, input 7FFF, register r0, expected 1.
+
+        rlit r0 0x7FFF
+
+        cond true
+
+        // Observation 179: 0001 at 1:FFFF -- cond case 59
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x7FFF
+
+        if true then fwd_ok_59
+
+        rlit r5 0xD13B
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_59:
+
+        // Observation 180: 103B at 1:FFFF -- forward if case 59: true, 7FFF, expected 1
+
+        rlit r5 0x103B
+
+        rpush r5
+
+        drop
+
+        br back_eval_59
+
+        back_target_59:
+
+        // Observation 181: 203B at 1:FFFF -- backward if case 59: true, 7FFF, expected 1
+
+        rlit r5 0x203B
+
+        rpush r5
+
+        drop
+
+        br back_end_59
+
+        back_eval_59:
+
+        rlit r0 0x7FFF
+
+        if true then back_target_59
+
+        rlit r5 0xD23B
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_59:
+
+        // Case 60: true, input 8000, register r0, expected 1.
+
+        rlit r0 0x8000
+
+        cond true
+
+        // Observation 182: 0001 at 1:FFFF -- cond case 60
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x8000
+
+        if true then fwd_ok_60
+
+        rlit r5 0xD13C
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_60:
+
+        // Observation 183: 103C at 1:FFFF -- forward if case 60: true, 8000, expected 1
+
+        rlit r5 0x103C
+
+        rpush r5
+
+        drop
+
+        br back_eval_60
+
+        back_target_60:
+
+        // Observation 184: 203C at 1:FFFF -- backward if case 60: true, 8000, expected 1
+
+        rlit r5 0x203C
+
+        rpush r5
+
+        drop
+
+        br back_end_60
+
+        back_eval_60:
+
+        rlit r0 0x8000
+
+        if true then back_target_60
+
+        rlit r5 0xD23C
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_60:
+
+        // Case 61: true, input 8001, register r0, expected 1.
+
+        rlit r0 0x8001
+
+        cond true
+
+        // Observation 185: 0001 at 1:FFFF -- cond case 61
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x8001
+
+        if true then fwd_ok_61
+
+        rlit r5 0xD13D
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_61:
+
+        // Observation 186: 103D at 1:FFFF -- forward if case 61: true, 8001, expected 1
+
+        rlit r5 0x103D
+
+        rpush r5
+
+        drop
+
+        br back_eval_61
+
+        back_target_61:
+
+        // Observation 187: 203D at 1:FFFF -- backward if case 61: true, 8001, expected 1
+
+        rlit r5 0x203D
+
+        rpush r5
+
+        drop
+
+        br back_end_61
+
+        back_eval_61:
+
+        rlit r0 0x8001
+
+        if true then back_target_61
+
+        rlit r5 0xD23D
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_61:
+
+        // Case 62: true, input FFFE, register r0, expected 1.
+
+        rlit r0 0xFFFE
+
+        cond true
+
+        // Observation 188: 0001 at 1:FFFF -- cond case 62
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0xFFFE
+
+        if true then fwd_ok_62
+
+        rlit r5 0xD13E
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_62:
+
+        // Observation 189: 103E at 1:FFFF -- forward if case 62: true, FFFE, expected 1
+
+        rlit r5 0x103E
+
+        rpush r5
+
+        drop
+
+        br back_eval_62
+
+        back_target_62:
+
+        // Observation 190: 203E at 1:FFFF -- backward if case 62: true, FFFE, expected 1
+
+        rlit r5 0x203E
+
+        rpush r5
+
+        drop
+
+        br back_end_62
+
+        back_eval_62:
+
+        rlit r0 0xFFFE
+
+        if true then back_target_62
+
+        rlit r5 0xD23E
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_62:
+
+        // Case 63: true, input FFFF, register r0, expected 1.
+
+        rlit r0 0xFFFF
+
+        cond true
+
+        // Observation 191: 0001 at 1:FFFF -- cond case 63
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0xFFFF
+
+        if true then fwd_ok_63
+
+        rlit r5 0xD13F
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_63:
+
+        // Observation 192: 103F at 1:FFFF -- forward if case 63: true, FFFF, expected 1
+
+        rlit r5 0x103F
+
+        rpush r5
+
+        drop
+
+        br back_eval_63
+
+        back_target_63:
+
+        // Observation 193: 203F at 1:FFFF -- backward if case 63: true, FFFF, expected 1
+
+        rlit r5 0x203F
+
+        rpush r5
+
+        drop
+
+        br back_end_63
+
+        back_eval_63:
+
+        rlit r0 0xFFFF
+
+        if true then back_target_63
+
+        rlit r5 0xD23F
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_63:
+
+        // Case 64: false, input 0000, register r0, expected 0.
+
+        rlit r0 0x0000
+
+        cond false
+
+        // Observation 194: 0000 at 1:FFFF -- cond case 64
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x0000
+
+        if false then fwd_fail_64
+
+        br fwd_ok_64
+
+        fwd_fail_64:
+
+        rlit r5 0xD140
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_64:
+
+        // Observation 195: 1040 at 1:FFFF -- forward if case 64: false, 0000, expected 0
+
+        rlit r5 0x1040
+
+        rpush r5
+
+        drop
+
+        br back_eval_64
+
+        back_target_64:
+
+        rlit r5 0xD240
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_64:
+
+        rlit r0 0x0000
+
+        if false then back_target_64
+
+        // Observation 196: 2040 at 1:FFFF -- backward if case 64: false, 0000, expected 0
+
+        rlit r5 0x2040
+
+        rpush r5
+
+        drop
+
+        back_end_64:
+
+        // Case 65: false, input 0001, register r0, expected 0.
+
+        rlit r0 0x0001
+
+        cond false
+
+        // Observation 197: 0000 at 1:FFFF -- cond case 65
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x0001
+
+        if false then fwd_fail_65
+
+        br fwd_ok_65
+
+        fwd_fail_65:
+
+        rlit r5 0xD141
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_65:
+
+        // Observation 198: 1041 at 1:FFFF -- forward if case 65: false, 0001, expected 0
+
+        rlit r5 0x1041
+
+        rpush r5
+
+        drop
+
+        br back_eval_65
+
+        back_target_65:
+
+        rlit r5 0xD241
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_65:
+
+        rlit r0 0x0001
+
+        if false then back_target_65
+
+        // Observation 199: 2041 at 1:FFFF -- backward if case 65: false, 0001, expected 0
+
+        rlit r5 0x2041
+
+        rpush r5
+
+        drop
+
+        back_end_65:
+
+        // Case 66: false, input 0002, register r0, expected 0.
+
+        rlit r0 0x0002
+
+        cond false
+
+        // Observation 200: 0000 at 1:FFFF -- cond case 66
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x0002
+
+        if false then fwd_fail_66
+
+        br fwd_ok_66
+
+        fwd_fail_66:
+
+        rlit r5 0xD142
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_66:
+
+        // Observation 201: 1042 at 1:FFFF -- forward if case 66: false, 0002, expected 0
+
+        rlit r5 0x1042
+
+        rpush r5
+
+        drop
+
+        br back_eval_66
+
+        back_target_66:
+
+        rlit r5 0xD242
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_66:
+
+        rlit r0 0x0002
+
+        if false then back_target_66
+
+        // Observation 202: 2042 at 1:FFFF -- backward if case 66: false, 0002, expected 0
+
+        rlit r5 0x2042
+
+        rpush r5
+
+        drop
+
+        back_end_66:
+
+        // Case 67: false, input 7FFE, register r0, expected 0.
+
+        rlit r0 0x7FFE
+
+        cond false
+
+        // Observation 203: 0000 at 1:FFFF -- cond case 67
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x7FFE
+
+        if false then fwd_fail_67
+
+        br fwd_ok_67
+
+        fwd_fail_67:
+
+        rlit r5 0xD143
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_67:
+
+        // Observation 204: 1043 at 1:FFFF -- forward if case 67: false, 7FFE, expected 0
+
+        rlit r5 0x1043
+
+        rpush r5
+
+        drop
+
+        br back_eval_67
+
+        back_target_67:
+
+        rlit r5 0xD243
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_67:
+
+        rlit r0 0x7FFE
+
+        if false then back_target_67
+
+        // Observation 205: 2043 at 1:FFFF -- backward if case 67: false, 7FFE, expected 0
+
+        rlit r5 0x2043
+
+        rpush r5
+
+        drop
+
+        back_end_67:
+
+        // Case 68: false, input 7FFF, register r0, expected 0.
+
+        rlit r0 0x7FFF
+
+        cond false
+
+        // Observation 206: 0000 at 1:FFFF -- cond case 68
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x7FFF
+
+        if false then fwd_fail_68
+
+        br fwd_ok_68
+
+        fwd_fail_68:
+
+        rlit r5 0xD144
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_68:
+
+        // Observation 207: 1044 at 1:FFFF -- forward if case 68: false, 7FFF, expected 0
+
+        rlit r5 0x1044
+
+        rpush r5
+
+        drop
+
+        br back_eval_68
+
+        back_target_68:
+
+        rlit r5 0xD244
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_68:
+
+        rlit r0 0x7FFF
+
+        if false then back_target_68
+
+        // Observation 208: 2044 at 1:FFFF -- backward if case 68: false, 7FFF, expected 0
+
+        rlit r5 0x2044
+
+        rpush r5
+
+        drop
+
+        back_end_68:
+
+        // Case 69: false, input 8000, register r0, expected 0.
+
+        rlit r0 0x8000
+
+        cond false
+
+        // Observation 209: 0000 at 1:FFFF -- cond case 69
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x8000
+
+        if false then fwd_fail_69
+
+        br fwd_ok_69
+
+        fwd_fail_69:
+
+        rlit r5 0xD145
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_69:
+
+        // Observation 210: 1045 at 1:FFFF -- forward if case 69: false, 8000, expected 0
+
+        rlit r5 0x1045
+
+        rpush r5
+
+        drop
+
+        br back_eval_69
+
+        back_target_69:
+
+        rlit r5 0xD245
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_69:
+
+        rlit r0 0x8000
+
+        if false then back_target_69
+
+        // Observation 211: 2045 at 1:FFFF -- backward if case 69: false, 8000, expected 0
+
+        rlit r5 0x2045
+
+        rpush r5
+
+        drop
+
+        back_end_69:
+
+        // Case 70: false, input 8001, register r0, expected 0.
+
+        rlit r0 0x8001
+
+        cond false
+
+        // Observation 212: 0000 at 1:FFFF -- cond case 70
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0x8001
+
+        if false then fwd_fail_70
+
+        br fwd_ok_70
+
+        fwd_fail_70:
+
+        rlit r5 0xD146
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_70:
+
+        // Observation 213: 1046 at 1:FFFF -- forward if case 70: false, 8001, expected 0
+
+        rlit r5 0x1046
+
+        rpush r5
+
+        drop
+
+        br back_eval_70
+
+        back_target_70:
+
+        rlit r5 0xD246
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_70:
+
+        rlit r0 0x8001
+
+        if false then back_target_70
+
+        // Observation 214: 2046 at 1:FFFF -- backward if case 70: false, 8001, expected 0
+
+        rlit r5 0x2046
+
+        rpush r5
+
+        drop
+
+        back_end_70:
+
+        // Case 71: false, input FFFE, register r0, expected 0.
+
+        rlit r0 0xFFFE
+
+        cond false
+
+        // Observation 215: 0000 at 1:FFFF -- cond case 71
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0xFFFE
+
+        if false then fwd_fail_71
+
+        br fwd_ok_71
+
+        fwd_fail_71:
+
+        rlit r5 0xD147
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_71:
+
+        // Observation 216: 1047 at 1:FFFF -- forward if case 71: false, FFFE, expected 0
+
+        rlit r5 0x1047
+
+        rpush r5
+
+        drop
+
+        br back_eval_71
+
+        back_target_71:
+
+        rlit r5 0xD247
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_71:
+
+        rlit r0 0xFFFE
+
+        if false then back_target_71
+
+        // Observation 217: 2047 at 1:FFFF -- backward if case 71: false, FFFE, expected 0
+
+        rlit r5 0x2047
+
+        rpush r5
+
+        drop
+
+        back_end_71:
+
+        // Case 72: false, input FFFF, register r0, expected 0.
+
+        rlit r0 0xFFFF
+
+        cond false
+
+        // Observation 218: 0000 at 1:FFFF -- cond case 72
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0xFFFF
+
+        if false then fwd_fail_72
+
+        br fwd_ok_72
+
+        fwd_fail_72:
+
+        rlit r5 0xD148
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_72:
+
+        // Observation 219: 1048 at 1:FFFF -- forward if case 72: false, FFFF, expected 0
+
+        rlit r5 0x1048
+
+        rpush r5
+
+        drop
+
+        br back_eval_72
+
+        back_target_72:
+
+        rlit r5 0xD248
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_72:
+
+        rlit r0 0xFFFF
+
+        if false then back_target_72
+
+        // Observation 220: 2048 at 1:FFFF -- backward if case 72: false, FFFF, expected 0
+
+        rlit r5 0x2048
+
+        rpush r5
+
+        drop
+
+        back_end_72:
+
+        // Case 73: even, input 0000, register r8, expected 1.
+
+        rlit r8 0x0000
+
+        cond r8 even
+
+        // Observation 221: 0001 at 1:FFFF -- cond case 73
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r8 0x0000
+
+        if r8 even then fwd_ok_73
+
+        rlit r5 0xD149
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_73:
+
+        // Observation 222: 1049 at 1:FFFF -- forward if case 73: even, 0000, expected 1
+
+        rlit r5 0x1049
+
+        rpush r5
+
+        drop
+
+        br back_eval_73
+
+        back_target_73:
+
+        // Observation 223: 2049 at 1:FFFF -- backward if case 73: even, 0000, expected 1
+
+        rlit r5 0x2049
+
+        rpush r5
+
+        drop
+
+        br back_end_73
+
+        back_eval_73:
+
+        rlit r8 0x0000
+
+        if r8 even then back_target_73
+
+        rlit r5 0xD249
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_73:
+
+        // Case 74: even, input 0001, register r9, expected 0.
+
+        rlit r9 0x0001
+
+        cond r9 even
+
+        // Observation 224: 0000 at 1:FFFF -- cond case 74
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r9 0x0001
+
+        if r9 even then fwd_fail_74
+
+        br fwd_ok_74
+
+        fwd_fail_74:
+
+        rlit r5 0xD14A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_74:
+
+        // Observation 225: 104A at 1:FFFF -- forward if case 74: even, 0001, expected 0
+
+        rlit r5 0x104A
+
+        rpush r5
+
+        drop
+
+        br back_eval_74
+
+        back_target_74:
+
+        rlit r5 0xD24A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_74:
+
+        rlit r9 0x0001
+
+        if r9 even then back_target_74
+
+        // Observation 226: 204A at 1:FFFF -- backward if case 74: even, 0001, expected 0
+
+        rlit r5 0x204A
+
+        rpush r5
+
+        drop
+
+        back_end_74:
+
+        // Case 75: even, input 0002, register r10, expected 1.
+
+        rlit r10 0x0002
+
+        cond r10 even
+
+        // Observation 227: 0001 at 1:FFFF -- cond case 75
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r10 0x0002
+
+        if r10 even then fwd_ok_75
+
+        rlit r5 0xD14B
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_75:
+
+        // Observation 228: 104B at 1:FFFF -- forward if case 75: even, 0002, expected 1
+
+        rlit r5 0x104B
+
+        rpush r5
+
+        drop
+
+        br back_eval_75
+
+        back_target_75:
+
+        // Observation 229: 204B at 1:FFFF -- backward if case 75: even, 0002, expected 1
+
+        rlit r5 0x204B
+
+        rpush r5
+
+        drop
+
+        br back_end_75
+
+        back_eval_75:
+
+        rlit r10 0x0002
+
+        if r10 even then back_target_75
+
+        rlit r5 0xD24B
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_75:
+
+        // Case 76: even, input 7FFE, register r11, expected 1.
+
+        rlit r11 0x7FFE
+
+        cond r11 even
+
+        // Observation 230: 0001 at 1:FFFF -- cond case 76
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r11 0x7FFE
+
+        if r11 even then fwd_ok_76
+
+        rlit r5 0xD14C
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_76:
+
+        // Observation 231: 104C at 1:FFFF -- forward if case 76: even, 7FFE, expected 1
+
+        rlit r5 0x104C
+
+        rpush r5
+
+        drop
+
+        br back_eval_76
+
+        back_target_76:
+
+        // Observation 232: 204C at 1:FFFF -- backward if case 76: even, 7FFE, expected 1
+
+        rlit r5 0x204C
+
+        rpush r5
+
+        drop
+
+        br back_end_76
+
+        back_eval_76:
+
+        rlit r11 0x7FFE
+
+        if r11 even then back_target_76
+
+        rlit r5 0xD24C
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_76:
+
+        // Case 77: even, input 7FFF, register r12, expected 0.
+
+        rlit r12 0x7FFF
+
+        cond r12 even
+
+        // Observation 233: 0000 at 1:FFFF -- cond case 77
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r12 0x7FFF
+
+        if r12 even then fwd_fail_77
+
+        br fwd_ok_77
+
+        fwd_fail_77:
+
+        rlit r5 0xD14D
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_77:
+
+        // Observation 234: 104D at 1:FFFF -- forward if case 77: even, 7FFF, expected 0
+
+        rlit r5 0x104D
+
+        rpush r5
+
+        drop
+
+        br back_eval_77
+
+        back_target_77:
+
+        rlit r5 0xD24D
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_77:
+
+        rlit r12 0x7FFF
+
+        if r12 even then back_target_77
+
+        // Observation 235: 204D at 1:FFFF -- backward if case 77: even, 7FFF, expected 0
+
+        rlit r5 0x204D
+
+        rpush r5
+
+        drop
+
+        back_end_77:
+
+        // Case 78: even, input 8000, register r13, expected 1.
+
+        rlit r13 0x8000
+
+        cond r13 even
+
+        // Observation 236: 0001 at 1:FFFF -- cond case 78
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r13 0x8000
+
+        if r13 even then fwd_ok_78
+
+        rlit r5 0xD14E
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_78:
+
+        // Observation 237: 104E at 1:FFFF -- forward if case 78: even, 8000, expected 1
+
+        rlit r5 0x104E
+
+        rpush r5
+
+        drop
+
+        br back_eval_78
+
+        back_target_78:
+
+        // Observation 238: 204E at 1:FFFF -- backward if case 78: even, 8000, expected 1
+
+        rlit r5 0x204E
+
+        rpush r5
+
+        drop
+
+        br back_end_78
+
+        back_eval_78:
+
+        rlit r13 0x8000
+
+        if r13 even then back_target_78
+
+        rlit r5 0xD24E
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_78:
+
+        // Case 79: even, input 8001, register r14, expected 0.
+
+        rlit r14 0x8001
+
+        cond r14 even
+
+        // Observation 239: 0000 at 1:FFFF -- cond case 79
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r14 0x8001
+
+        if r14 even then fwd_fail_79
+
+        br fwd_ok_79
+
+        fwd_fail_79:
+
+        rlit r5 0xD14F
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_79:
+
+        // Observation 240: 104F at 1:FFFF -- forward if case 79: even, 8001, expected 0
+
+        rlit r5 0x104F
+
+        rpush r5
+
+        drop
+
+        br back_eval_79
+
+        back_target_79:
+
+        rlit r5 0xD24F
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_79:
+
+        rlit r14 0x8001
+
+        if r14 even then back_target_79
+
+        // Observation 241: 204F at 1:FFFF -- backward if case 79: even, 8001, expected 0
+
+        rlit r5 0x204F
+
+        rpush r5
+
+        drop
+
+        back_end_79:
+
+        // Case 80: even, input FFFE, register r15, expected 1.
+
+        rlit r15 0xFFFE
+
+        cond r15 even
+
+        // Observation 242: 0001 at 1:FFFF -- cond case 80
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r15 0xFFFE
+
+        if r15 even then fwd_ok_80
+
+        rlit r5 0xD150
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_80:
+
+        // Observation 243: 1050 at 1:FFFF -- forward if case 80: even, FFFE, expected 1
+
+        rlit r5 0x1050
+
+        rpush r5
+
+        drop
+
+        br back_eval_80
+
+        back_target_80:
+
+        // Observation 244: 2050 at 1:FFFF -- backward if case 80: even, FFFE, expected 1
+
+        rlit r5 0x2050
+
+        rpush r5
+
+        drop
+
+        br back_end_80
+
+        back_eval_80:
+
+        rlit r15 0xFFFE
+
+        if r15 even then back_target_80
+
+        rlit r5 0xD250
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_80:
+
+        // Case 81: even, input FFFF, register r0, expected 0.
+
+        rlit r0 0xFFFF
+
+        cond r0 even
+
+        // Observation 245: 0000 at 1:FFFF -- cond case 81
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r0 0xFFFF
+
+        if r0 even then fwd_fail_81
+
+        br fwd_ok_81
+
+        fwd_fail_81:
+
+        rlit r5 0xD151
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_81:
+
+        // Observation 246: 1051 at 1:FFFF -- forward if case 81: even, FFFF, expected 0
+
+        rlit r5 0x1051
+
+        rpush r5
+
+        drop
+
+        br back_eval_81
+
+        back_target_81:
+
+        rlit r5 0xD251
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_81:
+
+        rlit r0 0xFFFF
+
+        if r0 even then back_target_81
+
+        // Observation 247: 2051 at 1:FFFF -- backward if case 81: even, FFFF, expected 0
+
+        rlit r5 0x2051
+
+        rpush r5
+
+        drop
+
+        back_end_81:
+
+        // Case 82: odd, input 0000, register r1, expected 0.
+
+        rlit r1 0x0000
+
+        cond r1 odd
+
+        // Observation 248: 0000 at 1:FFFF -- cond case 82
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r1 0x0000
+
+        if r1 odd then fwd_fail_82
+
+        br fwd_ok_82
+
+        fwd_fail_82:
+
+        rlit r5 0xD152
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_82:
+
+        // Observation 249: 1052 at 1:FFFF -- forward if case 82: odd, 0000, expected 0
+
+        rlit r5 0x1052
+
+        rpush r5
+
+        drop
+
+        br back_eval_82
+
+        back_target_82:
+
+        rlit r5 0xD252
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_82:
+
+        rlit r1 0x0000
+
+        if r1 odd then back_target_82
+
+        // Observation 250: 2052 at 1:FFFF -- backward if case 82: odd, 0000, expected 0
+
+        rlit r5 0x2052
+
+        rpush r5
+
+        drop
+
+        back_end_82:
+
+        // Case 83: odd, input 0001, register r2, expected 1.
+
+        rlit r2 0x0001
+
+        cond r2 odd
+
+        // Observation 251: 0001 at 1:FFFF -- cond case 83
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r2 0x0001
+
+        if r2 odd then fwd_ok_83
+
+        rlit r5 0xD153
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_83:
+
+        // Observation 252: 1053 at 1:FFFF -- forward if case 83: odd, 0001, expected 1
+
+        rlit r5 0x1053
+
+        rpush r5
+
+        drop
+
+        br back_eval_83
+
+        back_target_83:
+
+        // Observation 253: 2053 at 1:FFFF -- backward if case 83: odd, 0001, expected 1
+
+        rlit r5 0x2053
+
+        rpush r5
+
+        drop
+
+        br back_end_83
+
+        back_eval_83:
+
+        rlit r2 0x0001
+
+        if r2 odd then back_target_83
+
+        rlit r5 0xD253
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_83:
+
+        // Case 84: odd, input 0002, register r3, expected 0.
+
+        rlit r3 0x0002
+
+        cond r3 odd
+
+        // Observation 254: 0000 at 1:FFFF -- cond case 84
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r3 0x0002
+
+        if r3 odd then fwd_fail_84
+
+        br fwd_ok_84
+
+        fwd_fail_84:
+
+        rlit r5 0xD154
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_84:
+
+        // Observation 255: 1054 at 1:FFFF -- forward if case 84: odd, 0002, expected 0
+
+        rlit r5 0x1054
+
+        rpush r5
+
+        drop
+
+        br back_eval_84
+
+        back_target_84:
+
+        rlit r5 0xD254
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_84:
+
+        rlit r3 0x0002
+
+        if r3 odd then back_target_84
+
+        // Observation 256: 2054 at 1:FFFF -- backward if case 84: odd, 0002, expected 0
+
+        rlit r5 0x2054
+
+        rpush r5
+
+        drop
+
+        back_end_84:
+
+        // Case 85: odd, input 7FFE, register r4, expected 0.
+
+        rlit r4 0x7FFE
+
+        cond r4 odd
+
+        // Observation 257: 0000 at 1:FFFF -- cond case 85
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r4 0x7FFE
+
+        if r4 odd then fwd_fail_85
+
+        br fwd_ok_85
+
+        fwd_fail_85:
+
+        rlit r5 0xD155
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_85:
+
+        // Observation 258: 1055 at 1:FFFF -- forward if case 85: odd, 7FFE, expected 0
+
+        rlit r5 0x1055
+
+        rpush r5
+
+        drop
+
+        br back_eval_85
+
+        back_target_85:
+
+        rlit r5 0xD255
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_85:
+
+        rlit r4 0x7FFE
+
+        if r4 odd then back_target_85
+
+        // Observation 259: 2055 at 1:FFFF -- backward if case 85: odd, 7FFE, expected 0
+
+        rlit r5 0x2055
+
+        rpush r5
+
+        drop
+
+        back_end_85:
+
+        // Case 86: odd, input 7FFF, register r5, expected 1.
+
+        rlit r5 0x7FFF
+
+        cond r5 odd
+
+        // Observation 260: 0001 at 1:FFFF -- cond case 86
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r5 0x7FFF
+
+        if r5 odd then fwd_ok_86
+
+        rlit r5 0xD156
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_86:
+
+        // Observation 261: 1056 at 1:FFFF -- forward if case 86: odd, 7FFF, expected 1
+
+        rlit r5 0x1056
+
+        rpush r5
+
+        drop
+
+        br back_eval_86
+
+        back_target_86:
+
+        // Observation 262: 2056 at 1:FFFF -- backward if case 86: odd, 7FFF, expected 1
+
+        rlit r5 0x2056
+
+        rpush r5
+
+        drop
+
+        br back_end_86
+
+        back_eval_86:
+
+        rlit r5 0x7FFF
+
+        if r5 odd then back_target_86
+
+        rlit r5 0xD256
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_86:
+
+        // Case 87: odd, input 8000, register r6, expected 0.
+
+        rlit r6 0x8000
+
+        cond r6 odd
+
+        // Observation 263: 0000 at 1:FFFF -- cond case 87
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r6 0x8000
+
+        if r6 odd then fwd_fail_87
+
+        br fwd_ok_87
+
+        fwd_fail_87:
+
+        rlit r5 0xD157
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_87:
+
+        // Observation 264: 1057 at 1:FFFF -- forward if case 87: odd, 8000, expected 0
+
+        rlit r5 0x1057
+
+        rpush r5
+
+        drop
+
+        br back_eval_87
+
+        back_target_87:
+
+        rlit r5 0xD257
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_87:
+
+        rlit r6 0x8000
+
+        if r6 odd then back_target_87
+
+        // Observation 265: 2057 at 1:FFFF -- backward if case 87: odd, 8000, expected 0
+
+        rlit r5 0x2057
+
+        rpush r5
+
+        drop
+
+        back_end_87:
+
+        // Case 88: odd, input 8001, register r7, expected 1.
+
+        rlit r7 0x8001
+
+        cond r7 odd
+
+        // Observation 266: 0001 at 1:FFFF -- cond case 88
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r7 0x8001
+
+        if r7 odd then fwd_ok_88
+
+        rlit r5 0xD158
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_88:
+
+        // Observation 267: 1058 at 1:FFFF -- forward if case 88: odd, 8001, expected 1
+
+        rlit r5 0x1058
+
+        rpush r5
+
+        drop
+
+        br back_eval_88
+
+        back_target_88:
+
+        // Observation 268: 2058 at 1:FFFF -- backward if case 88: odd, 8001, expected 1
+
+        rlit r5 0x2058
+
+        rpush r5
+
+        drop
+
+        br back_end_88
+
+        back_eval_88:
+
+        rlit r7 0x8001
+
+        if r7 odd then back_target_88
+
+        rlit r5 0xD258
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_88:
+
+        // Case 89: odd, input FFFE, register r8, expected 0.
+
+        rlit r8 0xFFFE
+
+        cond r8 odd
+
+        // Observation 269: 0000 at 1:FFFF -- cond case 89
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r8 0xFFFE
+
+        if r8 odd then fwd_fail_89
+
+        br fwd_ok_89
+
+        fwd_fail_89:
+
+        rlit r5 0xD159
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_89:
+
+        // Observation 270: 1059 at 1:FFFF -- forward if case 89: odd, FFFE, expected 0
+
+        rlit r5 0x1059
+
+        rpush r5
+
+        drop
+
+        br back_eval_89
+
+        back_target_89:
+
+        rlit r5 0xD259
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_eval_89:
+
+        rlit r8 0xFFFE
+
+        if r8 odd then back_target_89
+
+        // Observation 271: 2059 at 1:FFFF -- backward if case 89: odd, FFFE, expected 0
+
+        rlit r5 0x2059
+
+        rpush r5
+
+        drop
+
+        back_end_89:
+
+        // Case 90: odd, input FFFF, register r9, expected 1.
+
+        rlit r9 0xFFFF
+
+        cond r9 odd
+
+        // Observation 272: 0001 at 1:FFFF -- cond case 90
+
+        rpop r6
+
+        rpush r6
+
+        drop
+
+        rlit r9 0xFFFF
+
+        if r9 odd then fwd_ok_90
+
+        rlit r5 0xD15A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        fwd_ok_90:
+
+        // Observation 273: 105A at 1:FFFF -- forward if case 90: odd, FFFF, expected 1
+
+        rlit r5 0x105A
+
+        rpush r5
+
+        drop
+
+        br back_eval_90
+
+        back_target_90:
+
+        // Observation 274: 205A at 1:FFFF -- backward if case 90: odd, FFFF, expected 1
+
+        rlit r5 0x205A
+
+        rpush r5
+
+        drop
+
+        br back_end_90
+
+        back_eval_90:
+
+        rlit r9 0xFFFF
+
+        if r9 odd then back_target_90
+
+        rlit r5 0xD25A
+
+        rpush r5
+
+        drop
+
+        halt
+
+        back_end_90:
+
+        if true then 0
+
+        // Observation 275: B005 at 1:FFFF -- if true zero offset
+
+        rlit r5 0xB005
+
+        rpush r5
+
+        drop
+
+        if false then 0
+
+        // Observation 276: B006 at 1:FFFF -- if false zero offset
+
+        rlit r5 0xB006
+
+        rpush r5
+
+        drop
+
+        if true then if_chain1
+
+        rlit r5 0xD006
+
+        rpush r5
+
+        drop
+
+        halt
+
+        if_chain1:
+
+        if true then if_chain2
+
+        rlit r5 0xD007
+
+        rpush r5
+
+        drop
+
+        halt
+
+        if_chain2:
+
+        // Observation 277: B007 at 1:FFFF -- chained taken if instructions
+
+        rlit r5 0xB007
+
+        rpush r5
+
+        drop
+
+        br edge_max
+
+        range_done:
+
+        // Observation 278: B008 at 1:FFFF -- br +8191 and -8192 both reached exact guarded destinations
+
+        rlit r5 0xB008
+
+        rpush r5
+
+        drop
+
+        rlit r4 0
+
+        jmp 0xFFFF
+
+        br_wrap_done:
+
+        // Observation 279: B009 at 1:FFFF -- br at FFFF: +1 crosses PC wrap to 0001
+
+        rlit r5 0xB009
+
+        rpush r5
+
+        drop
+
+        rlit r4 1
+
+        jmp 0xFFFC
+
+        if_wrap_done:
+
+        // Observation 280: B00A at 1:FFFF -- if at FFFC: +3 crosses PC wrap to 0001
+
+        rlit r5 0xB00A
+
+        rpush r5
+
+        drop
+
+        // Observation 281: 600D at 1:FFFF -- all expected paths completed
+
+        rlit r5 0x600D
+
+        rpush r5
+
+        drop
+
+        halt
+
+        // Padding to address 2002; reserved words are filled with opcode 0000.
+
+        .space 5015 0
+
+        halt
+
+        edge_max:
+
+        br edge_min
+
+        edge_min_destination:
+
+        br range_done
+
+        halt
+
+        // Padding to address 4002; reserved words are filled with opcode 0000.
+
+        .space 8188 0
+
+        halt
+
+        edge_min:
+
+        br edge_min_destination
+
+        halt
+
+        // Padding to address FFFC; reserved words are filled with opcode 0000.
+
+        .space 49143 0
+
+        if true then 3
+
+        halt
+
+        br 1
+    lastSelectedDebuggerProgramName: 16-bit binary regression test
     cDebuggerPrograms:
     - name: default
       source: >

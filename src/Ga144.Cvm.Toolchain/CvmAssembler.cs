@@ -14,6 +14,11 @@ namespace Ga144.Cvm.Toolchain;
 /// assembles its Assembly Code with this class, then links the one object against the live primitive table built
 /// from its node compiles (CvmLinker with ApplyEntryLayout = false, so the program starts at address 0).
 ///
+/// <b>2026-10-06: <c>.space N [fill]</c></b> (per Stefan): reserves N words (0..0x10000, decimal or 0x-hex) in the
+/// current section, each holding <c>fill</c> (a number or a label, anything <c>.word</c> accepts; default 0). Intended
+/// for padding in address-sensitive tests, e.g. <c>.space 8188</c> between a <c>br</c> and its +8191 / -8192 target.
+/// A label on the same line points at the first reserved word.
+///
 /// <b>2026-09-30: NEW VIRTUAL MACHINE, full reset -- READ THIS FIRST, before the syntax example just
 /// below.</b> Per Stefan directly: "there is a new virtual machine. all opcodes are invalid. except that
 /// 'nop' has the opcode '0'." Every mnemonic the syntax example below shows (<c>pushlit</c>, <c>push</c>,
@@ -231,6 +236,18 @@ public static class CvmAssembler
           }
 
           sectionCursors[section] += line.Args.Count;
+          break;
+
+        case ".space":
+          // 2026-10-06 (per Stefan): ".space N [fill]" reserves N words (default fill 0) -- padding for
+          // address-sensitive tests (e.g. br offsets -8192/+8191) without hundreds of ".word 0, 0, ..." lines.
+          if (!TryParseSpaceArguments(line.Args, out int spaceCount, out string? spaceError))
+          {
+            errors.Add($"line {line.LineNumber}: {spaceError}");
+            break;
+          }
+
+          sectionCursors[section] += spaceCount;
           break;
 
         case "literal":
@@ -479,6 +496,28 @@ public static class CvmAssembler
           }
 
           break;
+
+        case ".space":
+          {
+            // Pass 1 already validated the arguments. The fill operand goes through EmitOperandWord once per
+            // word, so a label fill gets one relocation per word; on the first error the rest is zero-filled,
+            // so a bad fill value reports one error instead of N.
+            TryParseSpaceArguments(line.Args, out int spaceWords, out _);
+            string fill = line.Args.Count == 2 ? line.Args[1] : "0";
+            int errorsBefore = errors.Count;
+            CvmSection spaceSection = objectFile.GetOrAddSection(section);
+            for (int i = 0; i < spaceWords; i++)
+            {
+              EmitOperandWord(objectFile, section, fill, line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+              if (errors.Count != errorsBefore)
+              {
+                spaceSection.Words.AddRange(Enumerable.Repeat(0, spaceWords - i - 1));
+                break;
+              }
+            }
+
+            break;
+          }
 
         case "literal":
           {
@@ -1315,6 +1354,34 @@ public static class CvmAssembler
     }
 
     targetSection.Words.Add(shape.Tag | ((first << shape.ValueBitShift) & shape.ValueBitMask) | ((second << shape.SecondValueBitShift) & shape.SecondValueBitMask));
+  }
+
+  /// <summary>Largest ".space" count: a whole 16-bit CVM address space (0x10000 words).</summary>
+  private const int MaxSpaceWords = 0x10000;
+
+  /// <summary>
+  /// Validates ".space"'s arguments: a count (decimal or 0x-hex, 0..0x10000) and an optional fill operand
+  /// (anything ".word" accepts: a number or a label; default 0). The fill operand itself is range-checked
+  /// when it is emitted.
+  /// </summary>
+  private static bool TryParseSpaceArguments(IReadOnlyList<string> args, out int count, out string? error)
+  {
+    count = 0;
+    error = null;
+    if (args.Count is < 1 or > 2)
+    {
+      error = "\".space\" needs a word count and an optional fill value, e.g. \".space 8191\" or \".space 16 0xFFFF\".";
+      return false;
+    }
+
+    if (!TryParseNumericLiteral(args[0], out count) || count < 0 || count > MaxSpaceWords)
+    {
+      error = $"\".space\" count \"{args[0]}\" must be a number from 0 to {MaxSpaceWords} (0x{MaxSpaceWords:X}).";
+      count = 0;
+      return false;
+    }
+
+    return true;
   }
 
   /// <summary>Like <see cref="TryParseNumericLiteral"/>, but also accepts a leading '-' for a negative decimal or hex magnitude.</summary>

@@ -558,10 +558,13 @@ internal static class CvmAssemblyLanguage
   // must stay at node-508 addresses 0..15), x = 16-bit register, y = double register. Same field layout as node 306's binary words.
   private const int Node508DirectTagBits = 0x2000;
 
-  // Node 506's "506 direct" row (2026-10-05): 1011|0000|00ww|wwww -- opcode = 0xB000 | w, w = the word's address in node 506
-  // (6 bits, so 'getctx/'setctx/'sp@/'fp@ must stay at node-506 addresses 0..63; a symbol beyond that is omitted).
+  // Node 506's "506 direct" row (2026-10-05, REWORKED 2026-10-06): 1011|00ww|wwww|xxxx -- opcode = 0xB000 | w << 4 | x, w = the
+  // word's address in node 506 (6 bits at bits 9-4, so 'getctx/'setctx/'sp@/'fp@ must stay at node-506 addresses 0..63; a symbol
+  // beyond that is omitted), x = a 4-bit operand handed to the word on node 506's parameter stack: a double register for
+  // getctx/setctx (NodeResolvedEmbeddedValue, layout entry below), ignored (x = 0) for sp@/fp@ (None, shift 4 below).
   private const int Node506DirectTagBits = 0xB000;
   private const int Node506DirectAddressBitMask = 0x003F;
+  private const int Node506DirectAddressShift = 4;
 
   // CVM2's node 509 unary-arithmetic tag (2026-09-05), per Stefan's node 509 source
   // (Cvm.Node509Program): its own u/main dispatch cascade falls through to its own remote-fetch-then-
@@ -1251,6 +1254,9 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.MoveRegisterMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.RegisterLoadMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.RegisterStoreMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        // Node 506 direct words with a double-register operand (2026-10-06): function field = node-506 address (6 bits at bits 9-4), x at bits 3-0.
+        [CvmInstructionSet.GetContextMnemonic] = (Node506DirectAddressBitMask << Node506DirectAddressShift, Node506DirectAddressShift, 0, CvmInstructionSet.SpecialRegisterFieldBitMask, 0),
+        [CvmInstructionSet.SetContextMnemonic] = (Node506DirectAddressBitMask << Node506DirectAddressShift, Node506DirectAddressShift, 0, CvmInstructionSet.SpecialRegisterFieldBitMask, 0),
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
         [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
@@ -1307,6 +1313,9 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.JmpMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.LinkMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.UnlinkMnemonic] = Node509SpecialAddressShift,
+        // Node 506 direct words without an operand (2026-10-06): address at bits 9-4, x = 0.
+        [CvmInstructionSet.StackPointerFetchMnemonic] = Node506DirectAddressShift,
+        [CvmInstructionSet.FramePointerFetchMnemonic] = Node506DirectAddressShift,
         [CvmInstructionSet.RegisterPopMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.DoublePopMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.PushMnemonic] = Node509SpecialAddressShift,
@@ -1706,6 +1715,14 @@ internal static class CvmAssemblyLanguage
 
       int addressShift = NodeResolvedAddressShiftByMnemonic.TryGetValue(mnemonic, out int decodeShift) ? decodeShift : 0;
       table[tag | (resolvedAddress << addressShift)] = (mnemonic, wordLength, null);
+      if (tag == Node506DirectTagBits)
+      {
+        // sp@/fp@ ignore the x field (2026-10-06), so every x decodes to the same operand-less word.
+        for (int ignoredX = 1; ignoredX <= CvmInstructionSet.SpecialRegisterFieldBitMask; ignoredX++)
+        {
+          table[tag | (resolvedAddress << addressShift) | ignoredX] = (mnemonic, wordLength, null);
+        }
+      }
     }
 
     return table;

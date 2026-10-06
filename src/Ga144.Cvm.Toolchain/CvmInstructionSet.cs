@@ -818,10 +818,14 @@ public static class CvmInstructionSet
   public const string RegisterLoadMnemonic = "rload";
 
   /// <summary>
-  /// Node 506's "506 direct" words (NEW 2026-10-05, header row <c>1011|0000|00ww|wwww</c>, opcode = 0xB000 | w, w = the word's
-  /// address in node 506, 6 bits). No operand, one memory word. Mnemonic = tick name minus the tick:
-  /// <c>getctx</c> stores the current context (fp, sp) in d15 (fp = high word, sp = low word); <c>setctx</c> loads fp and sp
-  /// from d15; <c>sp@</c> pushes the stack pointer, <c>fp@</c> pushes the frame pointer (both on the VM stack).
+  /// Node 506's "506 direct" words (NEW 2026-10-05, REWORKED 2026-10-06; header row <c>1011|00ww|wwww|xxxx</c>, opcode =
+  /// 0xB000 | w &lt;&lt; 4 | x, w = the word's address in node 506 (6 bits, bits 9-4), x = a 4-bit operand in bits 3-0). The direct
+  /// handler hands x to the word on node 506's parameter stack. Mnemonic = tick name minus the tick:
+  /// <c>getctx dN</c> (<c>'getctx ( d - )</c>) stores the current context in the double register dN (fp = high word, sp = low
+  /// word); <c>setctx dN</c> (<c>'setctx ( d - )</c>) loads fp and sp from dN. <c>sp@</c> (<c>'sp@ ( x - x )</c>) pushes the
+  /// stack pointer, <c>fp@</c> (<c>'fp@ ( x - x )</c>) pushes the frame pointer (both on the VM stack); these two ignore x,
+  /// take no operand and are encoded with x = 0. Before 2026-10-06 the row was <c>1011|0000|00ww|wwww</c> (opcode 0xB000 | w, no
+  /// operand, getctx/setctx fixed to d15).
   /// </summary>
   public const string GetContextMnemonic = "getctx";
   public const string SetContextMnemonic = "setctx";
@@ -2844,9 +2848,10 @@ public static class CvmInstructionSet
     new(Id: 225, XorMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 226, SubtractMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 227, AddMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
-    // getctx/setctx/sp@/fp@ (Ids 250-253, NEW 2026-10-05): node 506's direct words, no operand, see GetContextMnemonic's remarks.
-    new(Id: 250, GetContextMnemonic, 1, CvmOperandEncoding.None),
-    new(Id: 251, SetContextMnemonic, 1, CvmOperandEncoding.None),
+    // getctx/setctx/sp@/fp@ (Ids 250-253, NEW 2026-10-05): node 506's direct words, see GetContextMnemonic's remarks.
+    // REWORKED 2026-10-06: getctx/setctx take a double register dN (x, bits 3-0 of the opcode); sp@/fp@ stay operand-less.
+    new(Id: 250, GetContextMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
+    new(Id: 251, SetContextMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 252, StackPointerFetchMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 253, FramePointerFetchMnemonic, 1, CvmOperandEncoding.None),
     // rload/rstore (Ids 248/249, NEW 2026-10-05): node 508's 'rload/'rstore, "508 direct" row 0010|wwww|yyyy|xxxx -- binary shape
@@ -3423,7 +3428,9 @@ public static class CvmInstructionSet
       string.Equals(mnemonic, DoublePushMnemonic, StringComparison.OrdinalIgnoreCase) ||
       string.Equals(mnemonic, DoubleFetchMnemonic, StringComparison.OrdinalIgnoreCase) ||
       string.Equals(mnemonic, DoubleStoreMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      string.Equals(mnemonic, DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase);
+      string.Equals(mnemonic, DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, GetContextMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, SetContextMnemonic, StringComparison.OrdinalIgnoreCase);
 
   /// <summary>
   /// ADDED 2026-10-03: recognises a register token as the operand of a
