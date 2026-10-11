@@ -128,6 +128,44 @@ public sealed class PostMortemNodeDetailViewModel
     return string.Join(Environment.NewLine, lines);
   }
 
+  /// <summary>
+  /// Tab-separated rendering of the complete RAM disassembly table shown in the "RAM" tab of
+  /// <see cref="Views.PostMortemNodeWindow"/> -- same six columns (address, label, on-chip hex,
+  /// on-chip disassembly, compiled hex, compiled disassembly), same row order, as <see cref="RamRows"/>
+  /// itself, so the clipboard always mirrors what is on screen at the moment "Copy RAM" is clicked
+  /// rather than re-deriving it from <see cref="Snapshot"/> a second, possibly divergent way -- same
+  /// principle as <see cref="BuildClipboardText"/> above. Leads with a "Node {CoordinateText} RAM"
+  /// title line (2026-10-11, Stefan: "so that we know which memory was copied" -- a paste with several
+  /// of these on the clipboard/in a document otherwise has no way to tell them apart), then a header
+  /// row, same tab-separated-with-header convention as
+  /// <see cref="KrakenNodeControlViewModel.BuildRamText"/>'s own "Copy" button, just with this window's
+  /// own richer column set instead of a flat address/value pair. A missing compiled-side value (no
+  /// project chip to compare against) comes through as an empty cell, not a literal "null".
+  /// </summary>
+  public string BuildRamClipboardText() => BuildWordRowsClipboardText(RamRows, $"Node {CoordinateText} RAM");
+
+  /// <summary>Same idea as <see cref="BuildRamClipboardText"/>, for the "ROM" tab's own <see cref="RomRows"/>
+  /// (title line "Node {CoordinateText} ROM").</summary>
+  public string BuildRomClipboardText() => BuildWordRowsClipboardText(RomRows, $"Node {CoordinateText} ROM");
+
+  private static string BuildWordRowsClipboardText(IReadOnlyList<PostMortemWordRow> rows, string title)
+  {
+    var builder = new System.Text.StringBuilder();
+    builder.Append(title).Append('\n');
+    builder.Append("Address\tLabel\tHex\tOn-chip\tHex\tCompiled\n");
+    foreach (PostMortemWordRow row in rows)
+    {
+      builder.Append(row.AddressHex).Append('\t')
+          .Append(row.Label).Append('\t')
+          .Append(row.HexText).Append('\t')
+          .Append(row.Disassembly).Append('\t')
+          .Append(row.CompiledHexText).Append('\t')
+          .Append(row.CompiledDisassembly).Append('\n');
+    }
+
+    return builder.ToString();
+  }
+
   // Storage is bottom-to-top (see KrakenLiveController.ReadParameterStackAsync/ReadReturnStackAsync's
   // own remarks), so labels are assigned counting IN from the end, then the display order is reversed
   // to show the top of stack first -- the order someone reading a stack dump actually wants.

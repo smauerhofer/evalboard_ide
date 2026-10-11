@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-11T09:46:47.3123388
-      utcDateTime: 2026-10-11T09:46:47.3123388Z
-      localDateTime: 2026-10-11T11:46:47.3123388+02:00
+      dateTime: 2026-10-11T10:22:19.2546398
+      utcDateTime: 2026-10-11T10:22:19.2546398Z
+      localDateTime: 2026-10-11T12:22:19.2546398+02:00
       date: 2026-10-11T00:00:00.0000000
       day: 11
       dayOfWeek: Sunday
       dayOfYear: 284
-      hour: 9
-      millisecond: 312
-      microsecond: 338
+      hour: 10
+      millisecond: 254
+      microsecond: 639
       nanosecond: 800
-      minute: 46
+      minute: 22
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 47
-      ticks: 639273088073123388
-      utcTicks: 639273088073123388
-      timeOfDay: 09:46:47.3123388
+      second: 19
+      ticks: 639273109392546398
+      utcTicks: 639273109392546398
+      timeOfDay: 10:22:19.2546398
       year: 2026
   portB: 
   portC:
@@ -69633,7 +69633,7 @@ projects:
 
         # --lu /p
 
-        # up /b
+        # --lu /b
 
         # right /a
 
@@ -69650,16 +69650,21 @@ projects:
 
         : 'xor ( w1 w2 - w' ) xor ;
 
-        : 'sub ( w1 w2 - w' ) 'neg
+        : 'sub ( w1 w2 - w' ) x2/neg
 
         : 'add ( w1 w2 - w' ) + ;
 
         : 'mov ( w1 w2 - w1 w2 ) ;
 
         : 'packbytes ( lo hi - w )
-          >r 'lowbyte r>
+          >r 0xff and r>
           2* 2* 2* 2* 2* 2* 2* 2*
           xor
+        ;
+
+
+        : x2/neg ( w - w' )
+          inv 1 . +
         ;
 
 
@@ -69680,8 +69685,11 @@ projects:
 
 
         : x2/unary16 ( addr - ) // read sequence: r w
+
+        // : brk brk ;
           if
-            A[ @p x3/unary16 ]] lit ! !  // invoke handler, send addr
+            A[ @p x3/unary16 ]] lit ! // invoke handler
+            !          // addr
             @b !       // r
             @b !       // w
             ;
@@ -69703,15 +69711,19 @@ projects:
           r>
         : x2/result ( w r )
           A[ @p x3/store16 ]] lit !
-          ! !
+          !  // r
+          !  // w
         ;
 
 
 
-        : x2/binary16 ( addr - ) // read sequence: r w2 w1
-          @b >r >r @b @b
+        : x2/binary16 ( r1 - ) // read sequence: r1 w1 w2 addr
+          >r @b @b
+          ( w1 w2 / r )
+          @b >r
           ( w1 w2 / r addr )
           ex
+          ( w / r )
           0xffff and
           r> x2/result
         ;
@@ -69725,23 +69737,27 @@ projects:
       - 0x320CD
       - 0x3F555
       - 0x39555
-      - 0x1340F
+      - 0x1340D
       - 0x3D555
       - 0x15555
-      - 0x2F62B
+      - 0x2FDFA
+      - 0x000FF
       - 0x264DA
       - 0x364DA
       - 0x364DA
       - 0x39555
+      - 0x33DB0
+      - 0x00001
+      - 0x15555
       - 0x05A2A
       - 0x05634
-      - 0x1340F
-      - 0x13410
+      - 0x13413
+      - 0x13414
       - 0x01A55
       - 0x05A2A
       - 0x05633
-      - 0x1140F
-      - 0x19419
+      - 0x11413
+      - 0x1941D
       - 0x05A2A
       - 0x05600
       - 0x01A02
@@ -69749,25 +69765,21 @@ projects:
       - 0x00803
       - 0x2ED92
       - 0x38AB2
-      - 0x1141F
+      - 0x11423
       - 0x0629A
       - 0x3EDBA
-      - 0x1F41D
+      - 0x1F421
       - 0x23DAA
       - 0x001D5
       - 0x269B2
       - 0x05A2A
       - 0x05632
       - 0x0B555
-      - 0x008BA
-      - 0x01F5D
+      - 0x2FF02
+      - 0x0085D
       - 0x0409A
       - 0x0FFFF
-      - 0x11423
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x11427
       - 0x15555
       - 0x15555
       - 0x15555
@@ -69828,7 +69840,9 @@ projects:
 
 
         : x3/unary16 ( addr - )
-          >r @b @b ex 0xffff and
+          >r
+          @b                // r
+          @b ex 0xffff and  // w
           ( r w )
         : x3/st16 ( r w )
           up b!
@@ -69977,12 +69991,12 @@ projects:
         ;
 
 
-        : x3/unary32 ( addr - )
+        : x3/unary32 ( d - )
 
         ;
 
 
-        : x3/binary32 ( addr - )
+        : x3/binary32 ( d1 - )
 
         ;
 
@@ -69994,9 +70008,7 @@ projects:
       - 0x04B12
       - 0x00145
       - 0x05627
-      - 0x089B2
-      - 0x11408
-      - 0x09B12
+      - 0x09B27
       - 0x13421
       - 0x09DA5
       - 0x001D5
@@ -70004,7 +70016,7 @@ projects:
       - 0x364C2
       - 0x30755
       - 0x33555
-      - 0x33712
+      - 0x33710
       - 0x049F5
       - 0x00001
       - 0x049F5
@@ -70016,10 +70028,10 @@ projects:
       - 0x04355
       - 0x08000
       - 0x244DA
-      - 0x1B41F
-      - 0x3B711
+      - 0x1B41D
+      - 0x3B70F
       - 0x3B555
-      - 0x19423
+      - 0x19421
       - 0x3BD55
       - 0x00001
       - 0x15555
@@ -70034,13 +70046,15 @@ projects:
       - 0x307B2
       - 0x04055
       - 0x000FF
-      - 0x248B2
-      - 0x1342A
+      - 0x24848
       - 0x264DA
       - 0x364DA
       - 0x364DA
       - 0x39555
       - 0x01704
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -71308,8 +71322,10 @@ projects:
         ;
 
 
-        : x1a/finish ( w - )
-          down b! !b
+        : x1a/finish ( - )
+          @ // read stimulus
+          down b!
+          !b // send stimulus
         ;
 
 
@@ -71338,20 +71354,20 @@ projects:
 
 
 
-        : x1a/unary ( op instr - )
-          x1a/next
+        : x1a/unary ( op - )
+          x1a/next          // send r
           ( op' )
-          x1a/send6
+          x1a/send6         // send addr
           x1a/finish 
         ;
 
 
-        : x1a/binary ( op instr - )
-          x1a/next
+        : x1a/binary ( op - )
+          x1a/next          // send r1
           ( op' )
-          x1a/next
+          x1a/next          // send r2
           ( op'' )
-          x1a/send4
+          x1a/send4         // send addr
           x1a/finish 
         ;
 
@@ -71408,17 +71424,18 @@ projects:
       - 0x25603
       - 0x307C2
       - 0x31555
-      - 0x04B25
+      - 0x03DA2
       - 0x00115
+      - 0x09555
       - 0x04B25
       - 0x00175
       - 0x04B25
       - 0x00145
-      - 0x0560C
-      - 0x05639
+      - 0x0560D
+      - 0x05634
       - 0x0BB55
-      - 0x0560C
-      - 0x0563A
+      - 0x0560D
+      - 0x05635
       - 0x0BB55
       - 0x13407
       - 0x13405
@@ -71427,22 +71444,21 @@ projects:
       - 0x13407
       - 0x13403
       - 0x1140A
-      - 0x0560C
-      - 0x05623
-      - 0x11416
-      - 0x0560C
-      - 0x05628
-      - 0x11419
-      - 0x0560C
+      - 0x0560D
+      - 0x05626
+      - 0x11417
+      - 0x0560D
+      - 0x0562B
+      - 0x1141A
+      - 0x0560D
       - 0x05610
-      - 0x11416
+      - 0x11417
       - 0x05600
       - 0x05611
-      - 0x11419
+      - 0x1141A
       - 0x05600
       - 0x05612
       - 0x01A25
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -71474,7 +71490,198 @@ projects:
       postMortemEnabled: true
     - coordinate: 406
       enabled: true
-      sourceCode: "( CVM_pipeline node 406.\n\ninstruction execution.\n\nread register.\ncondition evaluation.\r\n\r\ncond:\r\n\r\nlabel  | name   | description\r\n-------+--------+-----------------------------\r\n'==0   | ==0    | return true if r == 0\n'!=0   | !=0    | return true if r != 0\n'<0    | <0     | return true if r < 0\n'<=0   | <=0    | return true if r <= 0\n'>0    | >0     | return true if r > 0\n'>=0   | >=0    | return true if r >= 0\n'true  | true   | return true always\n'false | false  | return true never\n\n)\n# 407 import\n# 306 import\n\r\n\n# -dlu /b     // node 506\n# up /a       // node 306\n# -dlu /p\n\n\n# 0 org\n\r\n: x1/eq0 ( w - f )\r\n: '==0 .loc ( w - f )\r\n  if\r\n: x1/false ( w - 0 ) \r\n: 'false .loc ( w - f )\r\n  dup xor ;\r\n  then\r\n: x1/true ( w = 1 )\r\n: 'true .loc ( w - f )\r\n  drop 1 ;\r\n: x1/ne0 ( w - f )\r\n: '!=0 .loc ( w - f )\r\n  # x1/false until x1/true ;\r\n: '<=0 .loc ( w - f )\r\n  # x1/true until\r\n: '<0 .loc ( w - f )\r\n  0x8000 and x1/ne0 ;\r\n: '>0 .loc ( w - f )\r\n  # x1/false until\r\n: '>=0 .loc ( w - f )\r\n  0x8000 and x1/eq0 ;\r\n\r\n: x1/reg ( o o - r o' )\r\n  >r 0xf and r> 2/ 2/ 2/ 2/\r\n;\r\n\r\n: x1/rsend ( w - ) // register send\n  right b! !b ;\n\r\n: x1/passfocus ( - )\n   A[ r/focus_se ]] lit x1/rsend\r\n;\n\r\n: x1/@ ( o instr - r w o' )\r\n  ( o instr )\r\n  x1/rsend\r\n  ( o )\r\n  dup x1/reg\r\n  ( r o' )\r\n  >r dup !b @b\r\n  ( r w / o' )\r\n  r>\n;\r\n\r\n: x1/r@ ( o - r w o' )\n  A[ @p r/r@ ]] lit x1/@\n;\n\r\n: x1/d@ ( o - r lo hi o' )\n  A[ @p r/d@ ]] lit x1/@\r\n  ( r lo o' )\r\n  >r @b r>\n  ( r lo hi o' )\r\n;\n\r\n: x1/cond ( op - f )\r\n  // receive opcode with xxcr\r\n  // c: condition\r\n  // r: register\r\n  // return x\r\n  //   x == 0: false\r\n  //   x != 0: true\r\n  ( op )\r\n  x1/r@\r\n  ( r w o' )\r\n  x1/reg\r\n  ( r w addr o'' )\r\n  drop >r\r\n;\r\n\r\n: x1/pass ( w - )\r\n  ! x1/passfocus\r\n;\r\n\r\n: x1/unary16 ( - )\r\n  A[ @p x2/unary16 ]] lit !\r\n  @b dup x1/r@\r\n  ( r w )\r\n  @b !         // addr\r\n  ( r w )\r\n  !            // w\r\n  x1/pass      // r\r\n;\r\n\r\n: x1/binary16 ( - )\r\n  A[ @p x2/binary16 ]] lit !\r\n  @b dup x1/r@\r\n  ( r1 w1 )\r\n  @b x1/r@\r\n: x1/send2 ( w1 w2 w3 )\r\n  ( r1 w1 w2 )\r\n  @b !         // addr\r\n  ( r1 w1 w2 )\r\n  !            // w3\r\n  !            // w2\r\n  x1/pass      // w1\r\n;\r\n\r\n: x1/unary32 ( o - )\r\n  A[ @p x2/unary32 ]] lit !\r\n  @b dup x1/d@\r\n  ( r lo hi )\r\n  x1/send2\r\n;\r\n\r\n: x1/binary32 ( o - )\r\n  A[ @p x2/binary32 ]] lit !\r\n  @b dup x1/d@\r\n  ( r1 lo1 hi1 )\r\n  @b x1/d@\r\n  ( r1 lo1 hi1 lo2 hi2 )\r\n  @b !         // addr\r\n  ( r1 lo1 hi1 lo2 hi2 )\r\n  !       // hi2\r\n  !       // lo2\r\n  !       // hi1\r\n  !       // lo1\r\n  x1/pass      // r1\r\n;\r\n\r\n: x1/input ( - )\r\n;\r\n\r\n: x1/output ( - )\r\n;\r\n\r\n  \r\n\n\n"
+      sourceCode: >+
+        ( CVM_pipeline node 406.
+
+
+        instruction execution.
+
+
+        read register.
+
+        condition evaluation.
+
+
+        cond:
+
+
+        label  | name   | description
+
+        -------+--------+-----------------------------
+
+        '==0   | ==0    | return true if r == 0
+
+        '!=0   | !=0    | return true if r != 0
+
+        '<0    | <0     | return true if r < 0
+
+        '<=0   | <=0    | return true if r <= 0
+
+        '>0    | >0     | return true if r > 0
+
+        '>=0   | >=0    | return true if r >= 0
+
+        'true  | true   | return true always
+
+        'false | false  | return true never
+
+
+        )
+
+        # 407 import
+
+        # 306 import
+
+
+
+        # -dl- /b     // nodes 506, 405
+
+        # up /a       // node 306
+
+        # -dl- /p
+
+
+
+        # 0 org
+
+
+        : x1/eq0 ( w - f )
+
+        : '==0 .loc ( w - f )
+          if
+        : x1/false ( w - 0 ) 
+
+        : 'false .loc ( w - f )
+          dup xor ;
+          then
+        : x1/true ( w = 1 )
+
+        : 'true .loc ( w - f )
+          drop 1 ;
+        : x1/ne0 ( w - f )
+
+        : '!=0 .loc ( w - f )
+          # x1/false until x1/true ;
+        : '<=0 .loc ( w - f )
+          # x1/true until
+        : '<0 .loc ( w - f )
+          0x8000 and x1/ne0 ;
+        : '>0 .loc ( w - f )
+          # x1/false until
+        : '>=0 .loc ( w - f )
+          0x8000 and x1/eq0 ;
+
+        : x1/n407 ( instr - )
+          right b! !b
+        ;
+
+
+        : x1/r_w/r ( r instr - w ) // register send
+          x1/n407 !b @b
+        ;
+
+
+        : x1/r@ ( r - w )
+          A[ @p r/r@ ]] lit x1/r_w/r
+        : x1/back ( - ) // finish reading
+          # -dl- lit b! ;
+        ;
+
+
+        : x1/d@ ( d - lo hi )
+          A[ @p r/d@ ]] lit x1/r_w/r
+          @b x1/back
+        ;
+
+
+        : x1/cond ( op - f )
+          // receive opcode with xxcr
+          // c: condition
+          // r: register
+          // return f
+          //   f == 0: false
+          //   f != 0: true
+          ( op )
+          0xf over
+          ( op 0x0f op )
+          2/ 2/ 2/ 2/ over and >r
+          ( op 0x0f / cond )
+          and
+          ( r / cond )
+          x1/r@
+          ( w / cond )
+          ex
+          !b
+        ;
+
+
+
+        : x1/unary16 ( r - )
+          A[ @p x2/unary16 ]] lit !
+          ( r )
+          @b !                  // receive addr, send to node 306
+          ( r )
+          dup !                 // send r
+          x1/r@
+          ( w )
+        : x1/finish
+          !                     // send w
+          A[ r/focus_se ]] lit x1/n407
+          x1/back
+          !b           // send stimulus
+        ;
+
+
+        : x1/binary16 ( r1 - )
+          A[ @p x2/binary16 ]] lit !
+          dup !         // send r1
+          ( r1 )
+          x1/r@
+          ( w1 )
+          !             // send w1
+          @b x1/r@
+          ( w2 )
+          !             // send w2
+          @b
+          x1/finish     // send addr
+        ;
+
+
+
+
+        : x1/unary32 ( d - )
+          A[ @p x2/unary32 ]] lit !
+          @b dup x1/d@
+          ( d lo hi )
+          !    // hi
+          ( d lo )
+          x1/finish
+        ;
+
+
+        : x1/binary32 ( d1 - )
+          A[ @p x2/binary32 ]] lit !
+          @b dup x1/d@
+          ( d1 lo1 hi1 )
+          @b x1/d@
+          ( d1 lo1 hi1 lo2 hi2 )
+          !    // hi2
+          !    // lo2
+          !    // hi1
+          ( d1 lo1 )
+          x1/finish
+        ;
+
+
+        : x1/input
+          x1/finish
+        ;
+
+
+        : x1/output
+          x1/finish
+        ;
+
       ramWords:
       - 0x19402
       - 0x24355
@@ -71490,58 +71697,58 @@ projects:
       - 0x040B2
       - 0x08000
       - 0x11400
-      - 0x2FDFA
-      - 0x0000F
-      - 0x267C2
-      - 0x30755
       - 0x04B25
       - 0x001D5
-      - 0x05712
-      - 0x13424
-      - 0x13412
-      - 0x2560E
-      - 0x2ED22
-      - 0x00C55
-      - 0x05716
-      - 0x05626
-      - 0x05616
-      - 0x05629
-      - 0x2FF9D
-      - 0x1341A
       - 0x1340E
-      - 0x3A855
-      - 0x0B714
-      - 0x05A03
+      - 0x09F55
+      - 0x05610
+      - 0x05626
+      - 0x04B55
+      - 0x00135
+      - 0x15555
+      - 0x05610
+      - 0x05629
+      - 0x01714
+      - 0x04FC2
+      - 0x0000F
+      - 0x307C2
+      - 0x200BA
+      - 0x3F612
+      - 0x17555
+      - 0x09555
+      - 0x05A02
       - 0x05614
-      - 0x1341A
-      - 0x01A2A
-      - 0x11422
-      - 0x05A03
-      - 0x05624
-      - 0x1341A
-      - 0x0161A
-      - 0x01A2A
-      - 0x0B722
+      - 0x0AD2A
+      - 0x13412
+      - 0x0BDB2
+      - 0x13424
+      - 0x1340E
+      - 0x13414
+      - 0x09555
+      - 0x05A92
+      - 0x05626
+      - 0x0B612
+      - 0x0BFB2
+      - 0x13412
+      - 0x0BFB2
+      - 0x11425
       - 0x05A03
       - 0x05611
-      - 0x1341C
-      - 0x1142C
+      - 0x13417
+      - 0x0B725
       - 0x05A03
       - 0x0560C
-      - 0x1341C
-      - 0x0161C
-      - 0x01A2A
+      - 0x13417
+      - 0x01617
       - 0x0BA2A
-      - 0x11422
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x11425
+      - 0x11425
+      - 0x11425
       - 0x15555
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x125
+        entryPoint: 0x135
         p: 0x000
         a: 0x000
         b: 0x000
@@ -73122,7 +73329,9 @@ projects:
 
         : d/lsend ( w - ) left a! ! ;
 
-        : d/dreceive ( - w ) down a! A[ !p ]] lit ! @ ;
+        // : d/dreceive ( - w ) down a! A[ !p ]] lit ! @ ;
+
+        : d/dreceive ( - w ) down a! @ ;
 
 
         : d/op ( op sop instr - )
@@ -73171,10 +73380,6 @@ projects:
 
             then // 1010*
               A[ @p d1/slit ]] lit ! ! @ !b @ !b ;
-            // slit
-        //    2* 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
-
-        //    A[ @p m/push ]] lit !b !b ;
 
           then // 100*
 
@@ -73228,15 +73433,13 @@ projects:
       - 0x00115
       - 0x04A2D
       - 0x00175
-      - 0x04A12
+      - 0x04A0D
       - 0x00115
-      - 0x0C9B2
-      - 0x0BE55
       - 0x13402
       - 0x0BA0A
       - 0x3B555
       - 0x3AD12
-      - 0x0561F
+      - 0x0561A
       - 0x13400
       - 0x0B704
       - 0x04B12
@@ -73244,16 +73447,16 @@ projects:
       - 0x15555
       - 0x089B2
       - 0x04812
-      - 0x0000F
+      - 0x0000D
       - 0x0D9B2
       - 0x09F02
-      - 0x3721A
-      - 0x05708
-      - 0x0561E
-      - 0x37229
-      - 0x37225
-      - 0x3721F
-      - 0x05708
+      - 0x37218
+      - 0x05706
+      - 0x0561A
+      - 0x37227
+      - 0x37223
+      - 0x3721D
+      - 0x05706
       - 0x05608
       - 0x3ADC2
       - 0x307C7
@@ -73265,12 +73468,12 @@ projects:
       - 0x05602
       - 0x03B0A
       - 0x09555
-      - 0x3722D
-      - 0x1340B
+      - 0x3722B
+      - 0x13409
       - 0x05B25
       - 0x0560B
-      - 0x1340B
-      - 0x19433
+      - 0x13409
+      - 0x19431
       - 0x05B12
       - 0x13417
       - 0x13423
@@ -73288,8 +73491,10 @@ projects:
       - 0x05B55
       - 0x2160B
       - 0x15555
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x013
+        entryPoint: 0x011
         p: 0x000
         a: 0x000
         b: 0x000
@@ -85970,1215 +86175,9 @@ projects:
 
         back_end_72:
 
-        // Case 73: even, input 0000, register r8, expected 1.
-
-        rlit r8 0x0000
-
-        cond r8 even
-
-        // Observation 221: 0001 at 1:FFFF -- cond case 73
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r8 0x0000
-
-        if r8 even then fwd_ok_73
-
-        rlit r5 0xD149
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_73:
-
-        // Observation 222: 1049 at 1:FFFF -- forward if case 73: even, 0000, expected 1
-
-        rlit r5 0x1049
-
-        rpush r5
-
-        drop
-
-        br back_eval_73
-
-        back_target_73:
-
-        // Observation 223: 2049 at 1:FFFF -- backward if case 73: even, 0000, expected 1
-
-        rlit r5 0x2049
-
-        rpush r5
-
-        drop
-
-        br back_end_73
-
-        back_eval_73:
-
-        rlit r8 0x0000
-
-        if r8 even then back_target_73
-
-        rlit r5 0xD249
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_end_73:
-
-        // Case 74: even, input 0001, register r9, expected 0.
-
-        rlit r9 0x0001
-
-        cond r9 even
-
-        // Observation 224: 0000 at 1:FFFF -- cond case 74
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r9 0x0001
-
-        if r9 even then fwd_fail_74
-
-        br fwd_ok_74
-
-        fwd_fail_74:
-
-        rlit r5 0xD14A
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_74:
-
-        // Observation 225: 104A at 1:FFFF -- forward if case 74: even, 0001, expected 0
-
-        rlit r5 0x104A
-
-        rpush r5
-
-        drop
-
-        br back_eval_74
-
-        back_target_74:
-
-        rlit r5 0xD24A
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_eval_74:
-
-        rlit r9 0x0001
-
-        if r9 even then back_target_74
-
-        // Observation 226: 204A at 1:FFFF -- backward if case 74: even, 0001, expected 0
-
-        rlit r5 0x204A
-
-        rpush r5
-
-        drop
-
-        back_end_74:
-
-        // Case 75: even, input 0002, register r10, expected 1.
-
-        rlit r10 0x0002
-
-        cond r10 even
-
-        // Observation 227: 0001 at 1:FFFF -- cond case 75
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r10 0x0002
-
-        if r10 even then fwd_ok_75
-
-        rlit r5 0xD14B
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_75:
-
-        // Observation 228: 104B at 1:FFFF -- forward if case 75: even, 0002, expected 1
-
-        rlit r5 0x104B
-
-        rpush r5
-
-        drop
-
-        br back_eval_75
-
-        back_target_75:
-
-        // Observation 229: 204B at 1:FFFF -- backward if case 75: even, 0002, expected 1
-
-        rlit r5 0x204B
-
-        rpush r5
-
-        drop
-
-        br back_end_75
-
-        back_eval_75:
-
-        rlit r10 0x0002
-
-        if r10 even then back_target_75
-
-        rlit r5 0xD24B
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_end_75:
-
-        // Case 76: even, input 7FFE, register r11, expected 1.
-
-        rlit r11 0x7FFE
-
-        cond r11 even
-
-        // Observation 230: 0001 at 1:FFFF -- cond case 76
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r11 0x7FFE
-
-        if r11 even then fwd_ok_76
-
-        rlit r5 0xD14C
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_76:
-
-        // Observation 231: 104C at 1:FFFF -- forward if case 76: even, 7FFE, expected 1
-
-        rlit r5 0x104C
-
-        rpush r5
-
-        drop
-
-        br back_eval_76
-
-        back_target_76:
-
-        // Observation 232: 204C at 1:FFFF -- backward if case 76: even, 7FFE, expected 1
-
-        rlit r5 0x204C
-
-        rpush r5
-
-        drop
-
-        br back_end_76
-
-        back_eval_76:
-
-        rlit r11 0x7FFE
-
-        if r11 even then back_target_76
-
-        rlit r5 0xD24C
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_end_76:
-
-        // Case 77: even, input 7FFF, register r12, expected 0.
-
-        rlit r12 0x7FFF
-
-        cond r12 even
-
-        // Observation 233: 0000 at 1:FFFF -- cond case 77
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r12 0x7FFF
-
-        if r12 even then fwd_fail_77
-
-        br fwd_ok_77
-
-        fwd_fail_77:
-
-        rlit r5 0xD14D
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_77:
-
-        // Observation 234: 104D at 1:FFFF -- forward if case 77: even, 7FFF, expected 0
-
-        rlit r5 0x104D
-
-        rpush r5
-
-        drop
-
-        br back_eval_77
-
-        back_target_77:
-
-        rlit r5 0xD24D
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_eval_77:
-
-        rlit r12 0x7FFF
-
-        if r12 even then back_target_77
-
-        // Observation 235: 204D at 1:FFFF -- backward if case 77: even, 7FFF, expected 0
-
-        rlit r5 0x204D
-
-        rpush r5
-
-        drop
-
-        back_end_77:
-
-        // Case 78: even, input 8000, register r13, expected 1.
-
-        rlit r13 0x8000
-
-        cond r13 even
-
-        // Observation 236: 0001 at 1:FFFF -- cond case 78
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r13 0x8000
-
-        if r13 even then fwd_ok_78
-
-        rlit r5 0xD14E
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_78:
-
-        // Observation 237: 104E at 1:FFFF -- forward if case 78: even, 8000, expected 1
-
-        rlit r5 0x104E
-
-        rpush r5
-
-        drop
-
-        br back_eval_78
-
-        back_target_78:
-
-        // Observation 238: 204E at 1:FFFF -- backward if case 78: even, 8000, expected 1
-
-        rlit r5 0x204E
-
-        rpush r5
-
-        drop
-
-        br back_end_78
-
-        back_eval_78:
-
-        rlit r13 0x8000
-
-        if r13 even then back_target_78
-
-        rlit r5 0xD24E
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_end_78:
-
-        // Case 79: even, input 8001, register r14, expected 0.
-
-        rlit r14 0x8001
-
-        cond r14 even
-
-        // Observation 239: 0000 at 1:FFFF -- cond case 79
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r14 0x8001
-
-        if r14 even then fwd_fail_79
-
-        br fwd_ok_79
-
-        fwd_fail_79:
-
-        rlit r5 0xD14F
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_79:
-
-        // Observation 240: 104F at 1:FFFF -- forward if case 79: even, 8001, expected 0
-
-        rlit r5 0x104F
-
-        rpush r5
-
-        drop
-
-        br back_eval_79
-
-        back_target_79:
-
-        rlit r5 0xD24F
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_eval_79:
-
-        rlit r14 0x8001
-
-        if r14 even then back_target_79
-
-        // Observation 241: 204F at 1:FFFF -- backward if case 79: even, 8001, expected 0
-
-        rlit r5 0x204F
-
-        rpush r5
-
-        drop
-
-        back_end_79:
-
-        // Case 80: even, input FFFE, register r15, expected 1.
-
-        rlit r15 0xFFFE
-
-        cond r15 even
-
-        // Observation 242: 0001 at 1:FFFF -- cond case 80
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r15 0xFFFE
-
-        if r15 even then fwd_ok_80
-
-        rlit r5 0xD150
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_80:
-
-        // Observation 243: 1050 at 1:FFFF -- forward if case 80: even, FFFE, expected 1
-
-        rlit r5 0x1050
-
-        rpush r5
-
-        drop
-
-        br back_eval_80
-
-        back_target_80:
-
-        // Observation 244: 2050 at 1:FFFF -- backward if case 80: even, FFFE, expected 1
-
-        rlit r5 0x2050
-
-        rpush r5
-
-        drop
-
-        br back_end_80
-
-        back_eval_80:
-
-        rlit r15 0xFFFE
-
-        if r15 even then back_target_80
-
-        rlit r5 0xD250
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_end_80:
-
-        // Case 81: even, input FFFF, register r0, expected 0.
-
-        rlit r0 0xFFFF
-
-        cond r0 even
-
-        // Observation 245: 0000 at 1:FFFF -- cond case 81
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r0 0xFFFF
-
-        if r0 even then fwd_fail_81
-
-        br fwd_ok_81
-
-        fwd_fail_81:
-
-        rlit r5 0xD151
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_81:
-
-        // Observation 246: 1051 at 1:FFFF -- forward if case 81: even, FFFF, expected 0
-
-        rlit r5 0x1051
-
-        rpush r5
-
-        drop
-
-        br back_eval_81
-
-        back_target_81:
-
-        rlit r5 0xD251
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_eval_81:
-
-        rlit r0 0xFFFF
-
-        if r0 even then back_target_81
-
-        // Observation 247: 2051 at 1:FFFF -- backward if case 81: even, FFFF, expected 0
-
-        rlit r5 0x2051
-
-        rpush r5
-
-        drop
-
-        back_end_81:
-
-        // Case 82: odd, input 0000, register r1, expected 0.
-
-        rlit r1 0x0000
-
-        cond r1 odd
-
-        // Observation 248: 0000 at 1:FFFF -- cond case 82
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r1 0x0000
-
-        if r1 odd then fwd_fail_82
-
-        br fwd_ok_82
-
-        fwd_fail_82:
-
-        rlit r5 0xD152
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_82:
-
-        // Observation 249: 1052 at 1:FFFF -- forward if case 82: odd, 0000, expected 0
-
-        rlit r5 0x1052
-
-        rpush r5
-
-        drop
-
-        br back_eval_82
-
-        back_target_82:
-
-        rlit r5 0xD252
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_eval_82:
-
-        rlit r1 0x0000
-
-        if r1 odd then back_target_82
-
-        // Observation 250: 2052 at 1:FFFF -- backward if case 82: odd, 0000, expected 0
-
-        rlit r5 0x2052
-
-        rpush r5
-
-        drop
-
-        back_end_82:
-
-        // Case 83: odd, input 0001, register r2, expected 1.
-
-        rlit r2 0x0001
-
-        cond r2 odd
-
-        // Observation 251: 0001 at 1:FFFF -- cond case 83
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r2 0x0001
-
-        if r2 odd then fwd_ok_83
-
-        rlit r5 0xD153
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_83:
-
-        // Observation 252: 1053 at 1:FFFF -- forward if case 83: odd, 0001, expected 1
-
-        rlit r5 0x1053
-
-        rpush r5
-
-        drop
-
-        br back_eval_83
-
-        back_target_83:
-
-        // Observation 253: 2053 at 1:FFFF -- backward if case 83: odd, 0001, expected 1
-
-        rlit r5 0x2053
-
-        rpush r5
-
-        drop
-
-        br back_end_83
-
-        back_eval_83:
-
-        rlit r2 0x0001
-
-        if r2 odd then back_target_83
-
-        rlit r5 0xD253
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_end_83:
-
-        // Case 84: odd, input 0002, register r3, expected 0.
-
-        rlit r3 0x0002
-
-        cond r3 odd
-
-        // Observation 254: 0000 at 1:FFFF -- cond case 84
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r3 0x0002
-
-        if r3 odd then fwd_fail_84
-
-        br fwd_ok_84
-
-        fwd_fail_84:
-
-        rlit r5 0xD154
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_84:
-
-        // Observation 255: 1054 at 1:FFFF -- forward if case 84: odd, 0002, expected 0
-
-        rlit r5 0x1054
-
-        rpush r5
-
-        drop
-
-        br back_eval_84
-
-        back_target_84:
-
-        rlit r5 0xD254
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_eval_84:
-
-        rlit r3 0x0002
-
-        if r3 odd then back_target_84
-
-        // Observation 256: 2054 at 1:FFFF -- backward if case 84: odd, 0002, expected 0
-
-        rlit r5 0x2054
-
-        rpush r5
-
-        drop
-
-        back_end_84:
-
-        // Case 85: odd, input 7FFE, register r4, expected 0.
-
-        rlit r4 0x7FFE
-
-        cond r4 odd
-
-        // Observation 257: 0000 at 1:FFFF -- cond case 85
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r4 0x7FFE
-
-        if r4 odd then fwd_fail_85
-
-        br fwd_ok_85
-
-        fwd_fail_85:
-
-        rlit r5 0xD155
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_85:
-
-        // Observation 258: 1055 at 1:FFFF -- forward if case 85: odd, 7FFE, expected 0
-
-        rlit r5 0x1055
-
-        rpush r5
-
-        drop
-
-        br back_eval_85
-
-        back_target_85:
-
-        rlit r5 0xD255
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_eval_85:
-
-        rlit r4 0x7FFE
-
-        if r4 odd then back_target_85
-
-        // Observation 259: 2055 at 1:FFFF -- backward if case 85: odd, 7FFE, expected 0
-
-        rlit r5 0x2055
-
-        rpush r5
-
-        drop
-
-        back_end_85:
-
-        // Case 86: odd, input 7FFF, register r5, expected 1.
-
-        rlit r5 0x7FFF
-
-        cond r5 odd
-
-        // Observation 260: 0001 at 1:FFFF -- cond case 86
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r5 0x7FFF
-
-        if r5 odd then fwd_ok_86
-
-        rlit r5 0xD156
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_86:
-
-        // Observation 261: 1056 at 1:FFFF -- forward if case 86: odd, 7FFF, expected 1
-
-        rlit r5 0x1056
-
-        rpush r5
-
-        drop
-
-        br back_eval_86
-
-        back_target_86:
-
-        // Observation 262: 2056 at 1:FFFF -- backward if case 86: odd, 7FFF, expected 1
-
-        rlit r5 0x2056
-
-        rpush r5
-
-        drop
-
-        br back_end_86
-
-        back_eval_86:
-
-        rlit r5 0x7FFF
-
-        if r5 odd then back_target_86
-
-        rlit r5 0xD256
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_end_86:
-
-        // Case 87: odd, input 8000, register r6, expected 0.
-
-        rlit r6 0x8000
-
-        cond r6 odd
-
-        // Observation 263: 0000 at 1:FFFF -- cond case 87
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r6 0x8000
-
-        if r6 odd then fwd_fail_87
-
-        br fwd_ok_87
-
-        fwd_fail_87:
-
-        rlit r5 0xD157
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_87:
-
-        // Observation 264: 1057 at 1:FFFF -- forward if case 87: odd, 8000, expected 0
-
-        rlit r5 0x1057
-
-        rpush r5
-
-        drop
-
-        br back_eval_87
-
-        back_target_87:
-
-        rlit r5 0xD257
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_eval_87:
-
-        rlit r6 0x8000
-
-        if r6 odd then back_target_87
-
-        // Observation 265: 2057 at 1:FFFF -- backward if case 87: odd, 8000, expected 0
-
-        rlit r5 0x2057
-
-        rpush r5
-
-        drop
-
-        back_end_87:
-
-        // Case 88: odd, input 8001, register r7, expected 1.
-
-        rlit r7 0x8001
-
-        cond r7 odd
-
-        // Observation 266: 0001 at 1:FFFF -- cond case 88
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r7 0x8001
-
-        if r7 odd then fwd_ok_88
-
-        rlit r5 0xD158
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_88:
-
-        // Observation 267: 1058 at 1:FFFF -- forward if case 88: odd, 8001, expected 1
-
-        rlit r5 0x1058
-
-        rpush r5
-
-        drop
-
-        br back_eval_88
-
-        back_target_88:
-
-        // Observation 268: 2058 at 1:FFFF -- backward if case 88: odd, 8001, expected 1
-
-        rlit r5 0x2058
-
-        rpush r5
-
-        drop
-
-        br back_end_88
-
-        back_eval_88:
-
-        rlit r7 0x8001
-
-        if r7 odd then back_target_88
-
-        rlit r5 0xD258
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_end_88:
-
-        // Case 89: odd, input FFFE, register r8, expected 0.
-
-        rlit r8 0xFFFE
-
-        cond r8 odd
-
-        // Observation 269: 0000 at 1:FFFF -- cond case 89
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r8 0xFFFE
-
-        if r8 odd then fwd_fail_89
-
-        br fwd_ok_89
-
-        fwd_fail_89:
-
-        rlit r5 0xD159
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_89:
-
-        // Observation 270: 1059 at 1:FFFF -- forward if case 89: odd, FFFE, expected 0
-
-        rlit r5 0x1059
-
-        rpush r5
-
-        drop
-
-        br back_eval_89
-
-        back_target_89:
-
-        rlit r5 0xD259
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_eval_89:
-
-        rlit r8 0xFFFE
-
-        if r8 odd then back_target_89
-
-        // Observation 271: 2059 at 1:FFFF -- backward if case 89: odd, FFFE, expected 0
-
-        rlit r5 0x2059
-
-        rpush r5
-
-        drop
-
-        back_end_89:
-
-        // Case 90: odd, input FFFF, register r9, expected 1.
-
-        rlit r9 0xFFFF
-
-        cond r9 odd
-
-        // Observation 272: 0001 at 1:FFFF -- cond case 90
-
-        rpop r6
-
-        rpush r6
-
-        drop
-
-        rlit r9 0xFFFF
-
-        if r9 odd then fwd_ok_90
-
-        rlit r5 0xD15A
-
-        rpush r5
-
-        drop
-
-        halt
-
-        fwd_ok_90:
-
-        // Observation 273: 105A at 1:FFFF -- forward if case 90: odd, FFFF, expected 1
-
-        rlit r5 0x105A
-
-        rpush r5
-
-        drop
-
-        br back_eval_90
-
-        back_target_90:
-
-        // Observation 274: 205A at 1:FFFF -- backward if case 90: odd, FFFF, expected 1
-
-        rlit r5 0x205A
-
-        rpush r5
-
-        drop
-
-        br back_end_90
-
-        back_eval_90:
-
-        rlit r9 0xFFFF
-
-        if r9 odd then back_target_90
-
-        rlit r5 0xD25A
-
-        rpush r5
-
-        drop
-
-        halt
-
-        back_end_90:
-
         if true then 0
 
-        // Observation 275: B005 at 1:FFFF -- if true zero offset
+        // Observation 221: B005 at 1:FFFF -- if true zero offset
 
         rlit r5 0xB005
 
@@ -87188,7 +86187,7 @@ projects:
 
         if false then 0
 
-        // Observation 276: B006 at 1:FFFF -- if false zero offset
+        // Observation 222: B006 at 1:FFFF -- if false zero offset
 
         rlit r5 0xB006
 
@@ -87220,7 +86219,7 @@ projects:
 
         if_chain2:
 
-        // Observation 277: B007 at 1:FFFF -- chained taken if instructions
+        // Observation 223: B007 at 1:FFFF -- chained taken if instructions
 
         rlit r5 0xB007
 
@@ -87232,7 +86231,7 @@ projects:
 
         range_done:
 
-        // Observation 278: B008 at 1:FFFF -- br +8191 and -8192 both reached exact guarded destinations
+        // Observation 224: B008 at 1:FFFF -- br +8191 and -8192 both reached exact guarded destinations
 
         rlit r5 0xB008
 
@@ -87246,7 +86245,7 @@ projects:
 
         br_wrap_done:
 
-        // Observation 279: B009 at 1:FFFF -- br at FFFF: +1 crosses PC wrap to 0001
+        // Observation 225: B009 at 1:FFFF -- br at FFFF: +1 crosses PC wrap to 0001
 
         rlit r5 0xB009
 
@@ -87260,7 +86259,7 @@ projects:
 
         if_wrap_done:
 
-        // Observation 280: B00A at 1:FFFF -- if at FFFC: +3 crosses PC wrap to 0001
+        // Observation 226: B00A at 1:FFFF -- if at FFFC: +3 crosses PC wrap to 0001
 
         rlit r5 0xB00A
 
@@ -87268,7 +86267,7 @@ projects:
 
         drop
 
-        // Observation 281: 600D at 1:FFFF -- all expected paths completed
+        // Observation 227: 600D at 1:FFFF -- all expected paths completed
 
         rlit r5 0x600D
 
@@ -87280,7 +86279,7 @@ projects:
 
         // Padding to address 2002; reserved words are filled with opcode 0000.
 
-        .space 5015 0
+        .space 5627 0
 
         halt
 
@@ -87315,7 +86314,7 @@ projects:
         halt
 
         br 1
-    lastSelectedDebuggerProgramName: 16-bit unary regression test
+    lastSelectedDebuggerProgramName: 16-bit binary regression test
     cDebuggerPrograms:
     - name: default
       source: >

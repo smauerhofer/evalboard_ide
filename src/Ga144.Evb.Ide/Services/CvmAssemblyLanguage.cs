@@ -1557,6 +1557,14 @@ internal static class CvmAssemblyLanguage
   /// handling) rather than silently producing a wrong address -- this dictionary is prepared wiring for
   /// whenever node 406 catches up, not a claim that it works today.
   /// </summary>
+  // REMOVED 2026-10-11, per Stefan directly: "remove the conditions 'even' and 'odd' from the
+  // language." The remaining eight entries are otherwise unchanged -- see
+  // CvmInstructionSet.IfConditionPrimitiveKeyByName's own matching removal note (same day) for the
+  // full reasoning, including why this is a language-level removal of two named condition VALUES, not
+  // an opcode removal, and why node 509's own unrelated "odd" mnemonic (OddMnemonic, a value-parity
+  // test, nothing to do with "if"/"cond") is untouched. BuildIfConditionEncodeTable and
+  // DisassemblePage0's own ifConditionName lookup both iterate this dictionary generically, so no
+  // further change was needed in either.
   private static readonly IReadOnlyDictionary<string, string> IfConditionSymbolByName =
       new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
       {
@@ -1568,8 +1576,6 @@ internal static class CvmAssemblyLanguage
         [">=0"] = "'>=0",
         ["true"] = "'true",
         ["false"] = "'false",
-        ["even"] = "'even",
-        ["odd"] = "'odd",
       };
 
   // EMPTY as of 2026-09-30, NO LONGER EMPTY same day (see NodeSymbolByMnemonic's own header note

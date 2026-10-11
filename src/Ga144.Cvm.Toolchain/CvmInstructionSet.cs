@@ -319,6 +319,20 @@ public static class CvmInstructionSet
       (string.Equals(conditionName, "true", StringComparison.OrdinalIgnoreCase) ||
        string.Equals(conditionName, "false", StringComparison.OrdinalIgnoreCase));
 
+  // REMOVED 2026-10-11, per Stefan directly: "remove the conditions 'even' and 'odd' from the
+  // language." Node 406 originally defined ten named conditions (confirmed on hardware, see
+  // cvm-br-if-cond-verification.md) -- this table now only exposes the remaining eight
+  // ("==0 !=0 <0 <=0 >0 >=0 true false") to "if"/"cond". This is purely a LANGUAGE-level removal of
+  // two of the ten NAMED CONDITION VALUES, not an opcode removal -- "if"/"cond" themselves (Ids
+  // 193/213) are untouched, and this project's own "do not remove any opcodes" rule does not apply
+  // here (no CvmInstructionShape row, Id, or tag is being touched). Ga144.Evb.Ide.Services.
+  // CvmAssemblyLanguage.IfConditionSymbolByName (the node-406-symbol-resolution counterpart of this
+  // dictionary) was edited the same way, same day. Both CvmAssembler.cs's error messages and
+  // CvmAssemblyLanguage.cs's disassembler/encode-table already iterate these dictionaries generically,
+  // so removing the two entries here is sufficient -- no other code references "even"/"odd" by name.
+  // Node 406's own F18 source (and the OddMnemonic unary-arithmetic op wired to node 509 -- a
+  // completely unrelated, still-live "odd" mnemonic that tests a VALUE's parity and is NOT part of
+  // this condition family at all) are both left exactly as they are.
   public static readonly IReadOnlyDictionary<string, string> IfConditionPrimitiveKeyByName =
       new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
       {
@@ -330,8 +344,6 @@ public static class CvmInstructionSet
         [">=0"] = "ge0",
         ["true"] = "true",
         ["false"] = "false",
-        ["even"] = "even",
-        ["odd"] = "odd",
       };
 
   // LinkMnemonic ("link")/UnlinkMnemonic ("unlink") -- ADDED 2026-10-01, the new VM's fourth/fifth

@@ -100,11 +100,14 @@
     <TabControl Grid.Row="3">
       <TabItem Header="RAM">
         <DockPanel>
-          <TextBlock DockPanel.Dock="Top"
-                             Margin="0,4,0,4"
-                             Foreground="#555"
-                             TextWrapping="Wrap"
-                             Text="A row shown in italics may be an inline literal (the word right after a '@p'/'!p' in the previous word), not real code -- disassembling a raw memory dump cannot always tell the two apart for certain. A shaded row differs from this project's currently compiled RAM at that address." />
+          <DockPanel DockPanel.Dock="Top" Margin="0,4,0,4">
+            <Button DockPanel.Dock="Right" Content="Copy RAM" Padding="10,4" Margin="8,0,0,0" VerticalAlignment="Top"
+                            Click="OnCopyRamClick"
+                            ToolTip="Copies the complete RAM disassembly table below (address, label, on-chip hex/disassembly, compiled hex/disassembly) to the clipboard as tab-separated text." />
+            <TextBlock Foreground="#555"
+                               TextWrapping="Wrap"
+                               Text="A row shown in italics may be an inline literal (the word right after a '@p'/'!p' in the previous word), not real code -- disassembling a raw memory dump cannot always tell the two apart for certain. A shaded row differs from this project's currently compiled RAM at that address." />
+          </DockPanel>
           <ListView ItemsSource="{Binding RamRows}">
             <ListView.ItemContainerStyle>
               <Style TargetType="ListViewItem">
@@ -136,11 +139,14 @@
       </TabItem>
       <TabItem Header="ROM">
         <DockPanel>
-          <TextBlock DockPanel.Dock="Top"
-                             Margin="0,4,0,4"
-                             Foreground="#555"
-                             TextWrapping="Wrap"
-                             Text="Same notes as the RAM tab: italics may be an inline literal, shading is a difference from this project's currently compiled ROM." />
+          <DockPanel DockPanel.Dock="Top" Margin="0,4,0,4">
+            <Button DockPanel.Dock="Right" Content="Copy ROM" Padding="10,4" Margin="8,0,0,0" VerticalAlignment="Top"
+                            Click="OnCopyRomClick"
+                            ToolTip="Copies the complete ROM disassembly table below (address, label, on-chip hex/disassembly, compiled hex/disassembly) to the clipboard as tab-separated text." />
+            <TextBlock Foreground="#555"
+                               TextWrapping="Wrap"
+                               Text="Same notes as the RAM tab: italics may be an inline literal, shading is a difference from this project's currently compiled ROM." />
+          </DockPanel>
           <ListView ItemsSource="{Binding RomRows}">
             <ListView.ItemContainerStyle>
               <Style TargetType="ListViewItem">

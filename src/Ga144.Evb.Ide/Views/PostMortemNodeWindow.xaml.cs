@@ -22,11 +22,25 @@ public partial class PostMortemNodeWindow : Window
   // Same clipboard convention as KrakenNodeControlWindow's own Copy RAM/ROM buttons: the view model
   // builds the text (BuildClipboardText -- exactly what the registers/stacks panel above shows),
   // this just puts it on the clipboard and swallows the rare "another process holds it" failure.
-  private void OnCopyRegistersAndStacksClick(object sender, RoutedEventArgs e)
+  private void OnCopyRegistersAndStacksClick(object sender, RoutedEventArgs e) =>
+      CopyToClipboard(_viewModel.BuildClipboardText());
+
+  // "Copy RAM" (2026-10-11, Stefan: "I want to copy the complete RAM disassembly array into
+  // clipboard"): same idea, this time for the RAM tab's own six-column table
+  // (BuildRamClipboardText -- exactly what the ListView below shows, tab-separated with a header row).
+  private void OnCopyRamClick(object sender, RoutedEventArgs e) =>
+      CopyToClipboard(_viewModel.BuildRamClipboardText());
+
+  // "Copy ROM" (2026-10-11, same ask as Copy RAM, for the ROM tab): BuildRomClipboardText -- exactly
+  // what the ListView on the ROM tab shows, tab-separated with a header row.
+  private void OnCopyRomClick(object sender, RoutedEventArgs e) =>
+      CopyToClipboard(_viewModel.BuildRomClipboardText());
+
+  private static void CopyToClipboard(string text)
   {
     try
     {
-      Clipboard.SetText(_viewModel.BuildClipboardText());
+      Clipboard.SetText(text);
     }
     catch (System.Runtime.InteropServices.ExternalException)
     {
