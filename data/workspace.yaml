@@ -69668,21 +69668,6 @@ projects:
         ;
 
 
-        : x2/binary32 ( addr ) // read sequence:
-          A[ @p x3/binary32 ]] lit ! !
-        : x2/pass4 leap
-
-        : x2/pass2 then leap
-
-        : x2/pass1 then @b ! ;
-
-
-        : x2/unary32 ( addr ) // read sequence:
-          A[ @p x3/unary32 ]] lit ! !
-          x2/pass2
-        ;
-
-
 
         : x2/unary16 ( addr - ) // read sequence: r w
 
@@ -69717,7 +69702,9 @@ projects:
 
 
 
-        : x2/binary16 ( r1 - ) // read sequence: r1 w1 w2 addr
+        : x2/binary16 ( r1 - )
+          // read sequence: r1 w1 w2 addr
+          // send sequence: instr r w
           >r @b @b
           ( w1 w2 / r )
           @b >r
@@ -69728,6 +69715,23 @@ projects:
           r> x2/result
         ;
 
+
+        : x2/binary32 ( addr ) // read sequence:
+          A[ @p x3/binary32 ]] lit ! !
+        : x2/pass4 leap
+
+        : x2/pass2 then leap
+
+        : x2/pass1 then @b ! ;
+
+
+        : x2/unary32 ( addr ) // read sequence:
+          A[ @p x3/unary32 ]] lit ! !
+          x2/pass2
+        ;
+
+
+        : x2/float32 ( addr ) // read sequence:
 
 
 
@@ -69749,15 +69753,7 @@ projects:
       - 0x33DB0
       - 0x00001
       - 0x15555
-      - 0x05A2A
-      - 0x05634
-      - 0x13413
-      - 0x13414
-      - 0x01A55
-      - 0x05A2A
-      - 0x05633
-      - 0x11413
-      - 0x1941D
+      - 0x19415
       - 0x05A2A
       - 0x05600
       - 0x01A02
@@ -69765,10 +69761,10 @@ projects:
       - 0x00803
       - 0x2ED92
       - 0x38AB2
-      - 0x11423
+      - 0x1141B
       - 0x0629A
       - 0x3EDBA
-      - 0x1F421
+      - 0x1F419
       - 0x23DAA
       - 0x001D5
       - 0x269B2
@@ -69779,7 +69775,15 @@ projects:
       - 0x0085D
       - 0x0409A
       - 0x0FFFF
-      - 0x11427
+      - 0x1141F
+      - 0x05A2A
+      - 0x05634
+      - 0x1342A
+      - 0x1342B
+      - 0x01A55
+      - 0x05A2A
+      - 0x05633
+      - 0x1142A
       - 0x15555
       - 0x15555
       - 0x15555
@@ -71339,6 +71343,50 @@ projects:
         ;
 
 
+        : x1a/unary ( instr2 - )
+          // receive sequence: instr3 r addr
+          // send sequence: instr2 instr3 addr r
+          down b!
+          !          // send instr2
+          @b !       // send instr3
+          @b         // receive r
+          ( r )
+          @b !       // send addr
+          !          // send r
+          @ !b       // return stimulus
+        ;
+
+
+
+        : x1a/binary ( instr2 - )
+          // receive sequence: instr2 instr3 r1 r2 addr
+          // send sequence: instr2 instr3 addr r1 r2
+          down b!
+          !          // send instr2
+          @b !       // send instr3
+          @b >r      // receive r1
+          ( / r1 )
+          @b         // receive r2
+          ( r2 / r1 )
+          @b !       // send addr
+          r> !       // send r1
+          !          // send r2
+          @ !b       // return stimulus
+        ;
+
+
+
+        : x1a/float32 ( op - )
+          A[ @p x2a/float32 ]] lit x1a/continue
+
+          @b // read op
+          !
+          !b // return stimulus
+
+        ;
+
+
+
         : x1a/input ( op - )
           A[ @p x1/input ]] lit x1a/begin406
           !
@@ -71351,66 +71399,6 @@ projects:
           !
           !b // return stimulus
         ;
-
-
-
-        : x1a/unary ( op - )
-          x1a/next          // send r
-          ( op' )
-          x1a/send6         // send addr
-          x1a/finish 
-        ;
-
-
-        : x1a/binary ( op - )
-          x1a/next          // send r1
-          ( op' )
-          x1a/next          // send r2
-          ( op'' )
-          x1a/send4         // send addr
-          x1a/finish 
-        ;
-
-
-        : x1a/unary16 ( op - )
-          A[ @p x1/unary16 ]] lit x1a/begin406
-          ( op )
-          x1a/unary
-        ;
-
-
-
-        : x1a/binary16 ( op - )
-          A[ @p x1/binary16 ]] lit x1a/begin406
-          ( op )
-          x1a/binary
-        ;
-
-
-
-        : x1a/unary32 ( op - )
-          A[ @p x2a/unary32 ]] lit x1a/begin406
-          ( op )
-          x1a/unary
-        ;
-
-
-        : x1a/binary32 ( op - )
-          A[ @p x2a/binary32 ]] lit x1a/continue
-          ( op )
-          x1a/binary
-        ;
-
-
-        : x1a/float32 ( op - )
-          A[ @p x2a/float32 ]] lit x1a/continue
-
-          @b // read op
-          !
-          !b // return stimulus
-
-        ;
-
 
 
       ramWords:
@@ -71431,34 +71419,34 @@ projects:
       - 0x00175
       - 0x04B25
       - 0x00145
-      - 0x0560D
-      - 0x05634
-      - 0x0BB55
-      - 0x0560D
-      - 0x05635
-      - 0x0BB55
-      - 0x13407
-      - 0x13405
-      - 0x1140A
-      - 0x13407
-      - 0x13407
-      - 0x13403
-      - 0x1140A
-      - 0x0560D
-      - 0x05626
-      - 0x11417
-      - 0x0560D
-      - 0x0562B
-      - 0x1141A
-      - 0x0560D
-      - 0x05610
-      - 0x11417
-      - 0x05600
-      - 0x05611
-      - 0x1141A
+      - 0x04B2A
+      - 0x00115
+      - 0x01A02
+      - 0x01A2A
+      - 0x03B55
+      - 0x04B2A
+      - 0x00115
+      - 0x01A02
+      - 0x2FF02
+      - 0x0AC2A
+      - 0x0BE25
       - 0x05600
       - 0x05612
       - 0x01A25
+      - 0x0560D
+      - 0x05637
+      - 0x0BB55
+      - 0x0560D
+      - 0x05638
+      - 0x0BB55
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -71615,15 +71603,13 @@ projects:
         ;
 
 
-
-        : x1/unary16 ( r - )
-          A[ @p x2/unary16 ]] lit !
-          ( r )
-          @b !                  // receive addr, send to node 306
-          ( r )
-          dup !                 // send r
+        : x1/unary16 ( instr3 - )
+          // receive sequence: addr r
+          // send sequence: instr3 addr r w
+          !             // send instr3
+          @b !          // send addr
+          @b dup !      // send r
           x1/r@
-          ( w )
         : x1/finish
           !                     // send w
           A[ r/focus_se ]] lit x1/n407
@@ -71632,45 +71618,49 @@ projects:
         ;
 
 
-        : x1/binary16 ( r1 - )
-          A[ @p x2/binary16 ]] lit !
-          dup !         // send r1
-          ( r1 )
-          x1/r@
-          ( w1 )
-          !             // send w1
-          @b x1/r@
-          ( w2 )
-          !             // send w2
-          @b
+        : x1/binary16 ( instr3 - )
+          // receive sequence: addr r1 r2
+          // send sequence: instr3 r w1 w2 addr
+          !             // send instr3
+          @b            // receive addr
+          ( addr )
+          @b dup !      // send r
+          x1/r@ !       // send w1
+          @b x1/r@ !    // send w2
+          ( addr )
           x1/finish     // send addr
         ;
 
 
-
-
-        : x1/unary32 ( d - )
-          A[ @p x2/unary32 ]] lit !
-          @b dup x1/d@
-          ( d lo hi )
-          !    // hi
-          ( d lo )
-          x1/finish
+        : x1/unary32 ( instr3 - )
+          // receive sequence: addr d
+          // send sequence: instr3 d hi lo addr
+          !             // send instr3
+          @b            // receive addr
+          ( addr )
+          @b dup !      // send d
+        : x1/finishd ( addr d )
+          x1/d@ !       // send hi
+          !             // send lo
+          ( addr )
+          x1/finish     // send addr
         ;
 
 
-        : x1/binary32 ( d1 - )
-          A[ @p x2/binary32 ]] lit !
-          @b dup x1/d@
-          ( d1 lo1 hi1 )
-          @b x1/d@
-          ( d1 lo1 hi1 lo2 hi2 )
-          !    // hi2
-          !    // lo2
-          !    // hi1
-          ( d1 lo1 )
-          x1/finish
+        : x1/binary32 ( instr3 - )
+          // receive sequence: addr d1 d2
+          // send sequence: instr3 d1 hi1 lo1 hi2 lo2 addr
+          !             // send instr3
+          @b            // receive addr
+          ( addr )
+          @b dup !      // send d1
+          x1/d@ !       // send hi1
+          !             // send lo1
+          @b            // receive d2
+          ( addr d2 )
+          x1/finishd
         ;
+
 
 
         : x1/input
@@ -71716,34 +71706,34 @@ projects:
       - 0x3F612
       - 0x17555
       - 0x09555
-      - 0x05A02
-      - 0x05614
-      - 0x0AD2A
+      - 0x0BF2A
+      - 0x00D2A
       - 0x13412
       - 0x0BDB2
       - 0x13424
       - 0x1340E
       - 0x13414
       - 0x09555
-      - 0x05A92
-      - 0x05626
+      - 0x0BF03
       - 0x0B612
       - 0x0BFB2
       - 0x13412
-      - 0x0BFB2
-      - 0x11425
-      - 0x05A03
-      - 0x05611
+      - 0x0B724
+      - 0x0BF03
+      - 0x0A9B2
       - 0x13417
-      - 0x0B725
-      - 0x05A03
-      - 0x0560C
-      - 0x13417
-      - 0x01617
-      - 0x0BA2A
-      - 0x11425
-      - 0x11425
-      - 0x11425
+      - 0x0BAB2
+      - 0x11424
+      - 0x0BF03
+      - 0x0B617
+      - 0x0BA02
+      - 0x11430
+      - 0x11424
+      - 0x11424
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -73135,6 +73125,10 @@ projects:
 
         # 405 import
 
+        # 406 import
+
+        # 306 import
+
         # 507 import
 
 
@@ -73149,9 +73143,10 @@ projects:
         # 0 org
 
 
-        : d1/forward ( sop command - )
-          ! @b !
-          @ !b
+        : d1/forward ( sop instr - )
+          !         // send instr
+          @b !      // send op
+          @ !b      // return stimulus
         ;
 
 
@@ -73175,6 +73170,21 @@ projects:
         ;
 
 
+        : d1/send4 ( w - )
+          0xf and !
+        ;
+
+
+        : d1/send6 ( w - )
+          0x3f and !
+        ;
+
+
+        : d1/next ( o - o' )
+          dup d1/send4    // 4-bit
+          2/ 2/ 2/ 2/
+        ;
+
 
 
         : d1/op16 ( sop )
@@ -73182,12 +73192,33 @@ projects:
           2* -if // 1101*
 
             // 16-bit binary
-            A[ @p x1a/binary16 ]] lit d1/forward ;
+            // send sequence: instr1 instr2 instr3 r1 r2 addr
+            A[ @p x1a/binary ]] lit !    // instr1
+            A[ @p x1/binary16 ]] lit !     // instr2
+            A[ @p x2/binary16 ]] lit !     // instr3
+            @b
+            ( op )
+            d1/next    // send r1
+            d1/next    // send r2
+            d1/send4   // send addr
+            @ !b      // return stimulus
+          ;
 
           then // 1100*
 
           // 16-bit unary
-          A[ @p x1a/unary16 ]] lit d1/forward ;
+          // send sequence: instr1 instr2 instr3 r addr
+          A[ @p x1a/unary ]] lit !    // instr1
+          A[ @p x1/unary16 ]] lit !     // instr2
+          A[ @p x2/unary16 ]] lit !     // instr3
+          @b
+          ( op )
+          d1/next    // send r
+          d1/send6   // send addr
+          @ !b      // return stimulus
+        ;
+
+
 
         : d1/op32 ( sop )
           // 111*
@@ -73200,12 +73231,32 @@ projects:
             then // 11110*
 
             // 32-bit binary
-            A[ @p x1a/binary32 ]] lit d1/forward ;
-
+            // send sequence: instr1 instr2 instr3 r1 r2 addr
+            A[ @p x1a/binary ]] lit !    // instr1
+            A[ @p x1/binary32 ]] lit !     // instr2
+            A[ @p x2/binary32 ]] lit !     // instr3
+            @b
+            ( op )
+            d1/next    // send r1
+            d1/next    // send r2
+            d1/send4   // send addr
+            @ !b      // return stimulus
+          ;
           then // 1110*
 
           // 32-bit unary
-          A[ @p x1a/unary32 ]] lit d1/forward ;
+          // send sequence: instr1 instr2 instr3 d addr
+          A[ @p x1a/unary ]] lit !      // instr1
+          A[ @p x1/unary32 ]] lit !     // instr2
+          A[ @p x2/unary32 ]] lit !     // instr3
+          @b
+          ( op )
+          d1/next    // send r
+          d1/send6   // send addr
+          @ !b      // return stimulus
+        ;
+
+
 
 
         : d1/op ( sop )
@@ -73231,58 +73282,58 @@ projects:
       - 0x09B55
       - 0x3720B
       - 0x05700
-      - 0x05613
+      - 0x05614
       - 0x05700
-      - 0x05610
-      - 0x37210
-      - 0x05700
-      - 0x05620
-      - 0x05700
-      - 0x0561D
-      - 0x37218
-      - 0x37216
-      - 0x05700
+      - 0x05611
+      - 0x0402D
+      - 0x0000F
+      - 0x0402D
+      - 0x0003F
+      - 0x2560D
+      - 0x307C2
+      - 0x31555
+      - 0x3721E
+      - 0x05A12
+      - 0x0561C
       - 0x05629
+      - 0x0BD2A
+      - 0x0562A
+      - 0x01611
+      - 0x13411
+      - 0x1340D
+      - 0x03B55
+      - 0x05A12
+      - 0x05617
+      - 0x05621
+      - 0x0BD2A
+      - 0x05618
+      - 0x01611
+      - 0x1340F
+      - 0x03B55
+      - 0x37233
+      - 0x3722A
       - 0x05700
-      - 0x05626
-      - 0x05700
-      - 0x05623
-      - 0x3721C
-      - 0x11412
-      - 0x1140D
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x05622
+      - 0x05A12
+      - 0x0561C
+      - 0x05633
+      - 0x0BD2A
+      - 0x05610
+      - 0x01611
+      - 0x13411
+      - 0x1340D
+      - 0x03B55
+      - 0x05A12
+      - 0x05617
+      - 0x0562E
+      - 0x0BD2A
+      - 0x05615
+      - 0x01611
+      - 0x1340F
+      - 0x03B55
+      - 0x3723D
+      - 0x11426
+      - 0x11414
       - 0x15555
       - 0x15555
       startup:
@@ -86314,7 +86365,7 @@ projects:
         halt
 
         br 1
-    lastSelectedDebuggerProgramName: 16-bit binary regression test
+    lastSelectedDebuggerProgramName: 16-bit unary regression test
     cDebuggerPrograms:
     - name: default
       source: >
