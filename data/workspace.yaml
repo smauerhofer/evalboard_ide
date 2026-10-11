@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-06T12:15:03.5987093
-      utcDateTime: 2026-10-06T12:15:03.5987093Z
-      localDateTime: 2026-10-06T14:15:03.5987093+02:00
-      date: 2026-10-06T00:00:00.0000000
-      day: 6
-      dayOfWeek: Tuesday
-      dayOfYear: 279
-      hour: 12
-      millisecond: 598
-      microsecond: 709
-      nanosecond: 300
-      minute: 15
+      dateTime: 2026-10-11T09:46:47.3123388
+      utcDateTime: 2026-10-11T09:46:47.3123388Z
+      localDateTime: 2026-10-11T11:46:47.3123388+02:00
+      date: 2026-10-11T00:00:00.0000000
+      day: 11
+      dayOfWeek: Sunday
+      dayOfYear: 284
+      hour: 9
+      millisecond: 312
+      microsecond: 338
+      nanosecond: 800
+      minute: 46
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 3
-      ticks: 639268857035987093
-      utcTicks: 639268857035987093
-      timeOfDay: 12:15:03.5987093
+      second: 47
+      ticks: 639273088073123388
+      utcTicks: 639273088073123388
+      timeOfDay: 09:46:47.3123388
       year: 2026
   portB: 
   portC:
@@ -67158,7 +67158,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 202
       enabled: true
       sourceCode: >-
@@ -67393,7 +67393,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 203
       enabled: true
       sourceCode: >-
@@ -67650,7 +67650,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 204
       enabled: true
       sourceCode: >-
@@ -67837,7 +67837,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 205
       enabled: true
       sourceCode: >
@@ -68724,7 +68724,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 302
       enabled: true
       sourceCode: >-
@@ -68922,7 +68922,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 303
       enabled: true
       sourceCode: >-
@@ -69298,7 +69298,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 304
       enabled: true
       sourceCode: >-
@@ -69449,7 +69449,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 305
       enabled: true
       sourceCode: >+
@@ -69495,54 +69495,6 @@ projects:
           0x04F3 , 0x3FB5 , // 7: sqrt(2)     = 1.41421356
         ]
 
-
-        : x2a/specialdirect ( op )
-
-        ;
-
-
-        : x2a/special16read ( op )
-
-        ;
-
-
-        : x2a/special16write ( op )
-
-        ;
-
-
-        : x2a/special ( op )
-
-        ;
-
-
-        /*
-
-        : x2a/unary16 ( op )
-          A[ @p x2/unary16 ]] lit !
-          dup 2/ 2/ 2/ 2/ 0x3f and !
-          0x0f and
-          ( r )
-        ;
-
-        */
-
-
-        : x2a/unary16 ( op - )
-          A[ @p x2/unary16 ]] lit !
-          dup 2/ 2/ 2/ 2/ 0x3f and !
-          0x0f and
-          A[ @p x2b/rwrite16 ]] lit !b !b
-        ;
-
-
-        : x2a/binary16 ( op - )
-          A[ @p x2/binary16 ]] lit !
-          dup 2/ 2/ 2/ 2/ 2/ 2/ 2/ 2/
-          0x0f and !                  // operation address in node 306
-          0x0f and                    // destination X
-          A[ @p x2b/rwrite16 ]] lit !b !b
-        ;
 
 
         : x2a/unary32 ( op )
@@ -69607,32 +69559,8 @@ projects:
       - 0x03FB5
       - 0x15555
       - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x05A92
-      - 0x0563B
-      - 0x307C2
-      - 0x31DFA
-      - 0x0003F
-      - 0x0BDFF
-      - 0x0000F
-      - 0x05600
-      - 0x09B55
-      - 0x05A92
-      - 0x0563A
-      - 0x307C2
-      - 0x307C2
-      - 0x30712
-      - 0x0000F
-      - 0x3FA12
-      - 0x0000F
-      - 0x3FD22
-      - 0x05600
-      - 0x09555
-      - 0x15555
-      - 0x15555
       - 0x05A55
-      - 0x0563B
+      - 0x05636
       - 0x01F07
       - 0x00115
       - 0x28DAA
@@ -69649,6 +69577,30 @@ projects:
       - 0x21DB0
       - 0x00000
       - 0x2A9B2
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -69679,7 +69631,7 @@ projects:
 
         // entry x2/main
 
-        # ---u /p
+        # --lu /p
 
         # up /b
 
@@ -69687,6 +69639,9 @@ projects:
 
 
         # 0 org
+
+
+        : 'bitcount // used to set address to 0
 
 
         : 'or ( w1 w2 - w' ) >r inv r> inv and inv ;
@@ -69726,11 +69681,16 @@ projects:
 
         : x2/unary16 ( addr - ) // read sequence: r w
           if
-            @b ! @b ! ;
+            A[ @p x3/unary16 ]] lit ! !  // invoke handler, send addr
+            @b !       // r
+            @b !       // w
+            ;
           then
           @b >r @b
           ( w / r )
         // bitcount ( w - 0 cnt / r - r )
+
+        // 'bitcount has been moved here
           dup >r dup dup xor a! . ahead
           begin
             @+ drop
@@ -69781,16 +69741,18 @@ projects:
       - 0x05A2A
       - 0x05633
       - 0x1140F
-      - 0x19417
+      - 0x19419
+      - 0x05A2A
+      - 0x05600
       - 0x01A02
       - 0x0B555
       - 0x00803
       - 0x2ED92
       - 0x38AB2
-      - 0x1141D
+      - 0x1141F
       - 0x0629A
       - 0x3EDBA
-      - 0x1F41B
+      - 0x1F41D
       - 0x23DAA
       - 0x001D5
       - 0x269B2
@@ -69801,9 +69763,7 @@ projects:
       - 0x01F5D
       - 0x0409A
       - 0x0FFFF
-      - 0x11421
-      - 0x15555
-      - 0x15555
+      - 0x11423
       - 0x15555
       - 0x15555
       - 0x15555
@@ -69826,7 +69786,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x145
+        entryPoint: 0x165
         p: 0x000
         a: 0x000
         b: 0x000
@@ -69834,7 +69794,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDE95'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 307
       enabled: true
       sourceCode: >+
@@ -69860,7 +69820,7 @@ projects:
 
         # left /a
 
-        # down /p
+        # rd-- /p
 
 
 
@@ -70027,10 +69987,24 @@ projects:
         ;
 
       ramWords:
+      - 0x2FF02
+      - 0x17555
+      - 0x040B2
+      - 0x0FFFF
+      - 0x04B12
+      - 0x00145
+      - 0x05627
+      - 0x089B2
+      - 0x11408
+      - 0x09B12
+      - 0x13421
+      - 0x09DA5
+      - 0x001D5
+      - 0x15555
       - 0x364C2
       - 0x30755
       - 0x33555
-      - 0x33704
+      - 0x33712
       - 0x049F5
       - 0x00001
       - 0x049F5
@@ -70042,10 +70016,10 @@ projects:
       - 0x04355
       - 0x08000
       - 0x244DA
-      - 0x1B411
-      - 0x3B703
+      - 0x1B41F
+      - 0x3B711
       - 0x3B555
-      - 0x19415
+      - 0x19423
       - 0x3BD55
       - 0x00001
       - 0x15555
@@ -70061,26 +70035,12 @@ projects:
       - 0x04055
       - 0x000FF
       - 0x248B2
-      - 0x1341C
+      - 0x1342A
       - 0x264DA
       - 0x364DA
       - 0x364DA
       - 0x39555
-      - 0x2FF02
-      - 0x17555
-      - 0x040B2
-      - 0x0FFFF
-      - 0x04B12
-      - 0x00145
-      - 0x05627
-      - 0x09B27
-      - 0x13421
-      - 0x09DA5
-      - 0x001D5
-      - 0x15555
-      - 0x0172B
-      - 0x15555
-      - 0x15555
+      - 0x01704
       - 0x15555
       - 0x15555
       - 0x15555
@@ -70092,7 +70052,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x115
+        entryPoint: 0x195
         p: 0x000
         a: 0x000
         b: 0x000
@@ -70100,7 +70060,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#95DE7C'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 308
       enabled: true
       sourceCode: >
@@ -70703,7 +70663,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 402
       enabled: true
       sourceCode: >-
@@ -70860,7 +70820,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 403
       enabled: true
       sourceCode: >-
@@ -71013,7 +70973,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 404
       enabled: true
       sourceCode: >-
@@ -71296,58 +71256,195 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 405
       enabled: true
-      sourceCode: "( CVM_pipeline node 405.\n\ninstruction execution.\n\n\n)\n# 406 import\n# 305 import\n\n# up /b\n# left /a\n# -d-- /p\n\n// entry x1a/main\n\n# 0 org\n\n: x1a/continue ( op instr - op )\n  up b! !b dup !b\n;\n\r\n: x1a/finish ( w - )\n  down b! !b\n;\n\r\n\n: x1a/specialdirect ( op - )\n  A[ @p x2a/specialdirect ]] lit x1a/continue\n  !\n  !b // return stimulus\n;\n\n\n: x1a/special16read ( op - )\n  A[ @p x2a/special16read ]] lit x1a/continue\n  !\n  !b // return stimulus\n;\n\n: x1a/special16write ( op - )\n  A[ @p x2a/special16write ]] lit x1a/continue\n  !\n  !b // return stimulus\n;\n\n\n: x1a/special ( op - )\n  A[ @p x2a/special ]] lit x1a/continue\n  @b // read op\n  !\n  !b // return stimulus\n;\n\n\n: x1a/unary16 ( op - )\n  A[ @p x2a/unary16 ]] lit x1a/continue\n\n  A[ @p x1/send16 ]] lit !\n  dup 0x0f and !              // fetch X and send to node 306\n  \r\n  A[ x1/passfocus ]] lit !\r\n\n  x1a/finish \n;\n\n\r\n: x1a/binary16 ( op - )\n  A[ @p x2a/binary16 ]] lit x1a/continue\n\n  A[ @p x1/send16 ]] lit !\n  dup 0x0f and !              // fetch X and send to node 306\n\n  A[ @p x1/send16 ]] lit !\n  dup 2/ 2/ 2/ 2/ 0x0f and ! // fetch Y and send to node 306\n\n  A[ x1/passfocus ]] lit !    // hand register file to SE\n  x1a/finish\n;\r\n\n\n: x1a/unary32 ( op - )\n  A[ @p x2a/unary32 ]] lit x1a/continue\n\n  @b // read op\n  !\n  !b // return stimulus\n\n;\n\n: x1a/binary32 ( op - )\n  A[ @p x2a/binary32 ]] lit x1a/continue\n\n  @b // read op\n  !\n  !b // return stimulus\n\n;\n\n: x1a/float32 ( op - )\n  A[ @p x2a/float32 ]] lit x1a/continue\n\n  @b // read op\n  !\n  !b // return stimulus\n\n;\n\n\n\n"
+      sourceCode: >+
+        ( CVM_pipeline node 405.
+
+
+        instruction execution.
+
+
+
+        )
+
+        # 406 import
+
+        # 305 import
+
+
+        # up /b
+
+        # left /a
+
+        # -d-- /p
+
+
+        // entry x1a/main
+
+
+        # 0 org
+
+
+        : x1a/continue ( op instr - op )
+          up b! !b dup !b
+        ;
+
+
+        : x1a/send4 ( w - )
+          0xf and !b
+        ;
+
+
+        : x1a/send6 ( w - )
+          0x3f and !b
+        ;
+
+
+        : x1a/next ( o - o' )
+          dup x1a/send4    // 4-bit
+          2/ 2/ 2/ 2/
+        ;
+
+
+        : x1a/finish ( w - )
+          down b! !b
+        ;
+
+
+        : x1a/begin406 ( instr - )
+          left b! !b
+        ;
+
+
+        : x1a/begin305 ( instr - )
+          up b! !b
+        ;
+
+
+        : x1a/input ( op - )
+          A[ @p x1/input ]] lit x1a/begin406
+          !
+          !b // return stimulus
+        ;
+
+
+        : x1a/output ( op - )
+          A[ @p x1/output ]] lit x1a/begin406
+          !
+          !b // return stimulus
+        ;
+
+
+
+        : x1a/unary ( op instr - )
+          x1a/next
+          ( op' )
+          x1a/send6
+          x1a/finish 
+        ;
+
+
+        : x1a/binary ( op instr - )
+          x1a/next
+          ( op' )
+          x1a/next
+          ( op'' )
+          x1a/send4
+          x1a/finish 
+        ;
+
+
+        : x1a/unary16 ( op - )
+          A[ @p x1/unary16 ]] lit x1a/begin406
+          ( op )
+          x1a/unary
+        ;
+
+
+
+        : x1a/binary16 ( op - )
+          A[ @p x1/binary16 ]] lit x1a/begin406
+          ( op )
+          x1a/binary
+        ;
+
+
+
+        : x1a/unary32 ( op - )
+          A[ @p x2a/unary32 ]] lit x1a/begin406
+          ( op )
+          x1a/unary
+        ;
+
+
+        : x1a/binary32 ( op - )
+          A[ @p x2a/binary32 ]] lit x1a/continue
+          ( op )
+          x1a/binary
+        ;
+
+
+        : x1a/float32 ( op - )
+          A[ @p x2a/float32 ]] lit x1a/continue
+
+          @b // read op
+          !
+          !b // return stimulus
+
+        ;
+
+
+
       ramWords:
       - 0x04B23
       - 0x00145
       - 0x09555
+      - 0x04025
+      - 0x0000F
+      - 0x04025
+      - 0x0003F
+      - 0x25603
+      - 0x307C2
+      - 0x31555
       - 0x04B25
       - 0x00115
-      - 0x05600
-      - 0x05610
+      - 0x04B25
+      - 0x00175
+      - 0x04B25
+      - 0x00145
+      - 0x0560C
+      - 0x05639
       - 0x0BB55
+      - 0x0560C
+      - 0x0563A
+      - 0x0BB55
+      - 0x13407
+      - 0x13405
+      - 0x1140A
+      - 0x13407
+      - 0x13407
+      - 0x13403
+      - 0x1140A
+      - 0x0560C
+      - 0x05623
+      - 0x11416
+      - 0x0560C
+      - 0x05628
+      - 0x11419
+      - 0x0560C
+      - 0x05610
+      - 0x11416
       - 0x05600
       - 0x05611
-      - 0x0BB55
+      - 0x11419
       - 0x05600
       - 0x05612
-      - 0x0BB55
-      - 0x05600
-      - 0x05613
       - 0x01A25
-      - 0x05600
-      - 0x05614
-      - 0x05A97
-      - 0x05625
-      - 0x0000F
-      - 0x3FA12
-      - 0x13414
-      - 0x0B703
-      - 0x05600
-      - 0x0561D
-      - 0x05A97
-      - 0x05625
-      - 0x0000F
-      - 0x3FA12
-      - 0x05625
-      - 0x0ADC2
-      - 0x307C7
-      - 0x0000F
-      - 0x3FA12
-      - 0x13414
-      - 0x0B703
-      - 0x05600
-      - 0x05628
-      - 0x01A25
-      - 0x05600
-      - 0x05629
-      - 0x01A25
-      - 0x05600
-      - 0x0562A
-      - 0x01A25
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -71377,7 +71474,7 @@ projects:
       postMortemEnabled: true
     - coordinate: 406
       enabled: true
-      sourceCode: "( CVM_pipeline node 406.\n\ninstruction execution.\n\nread register.\ncondition evaluation.\r\n\r\ncond:\r\n\r\nlabel  | name   | description\r\n-------+--------+-----------------------------\r\n'==0   | ==0    | return true if r == 0\n'!=0   | !=0    | return true if r != 0\n'<0    | <0     | return true if r < 0\n'<=0   | <=0    | return true if r <= 0\n'>0    | >0     | return true if r > 0\n'>=0   | >=0    | return true if r >= 0\n'true  | true   | return true always\n'false | false  | return true never\n\n)\n# 407 import\n# 306 import\n\r\n\n# -dlu /b     // node 506\n# up /a       // node 306\n# -dlu /p\n\n\n# 0 org\n\r\n: x1/eq0 ( w - f )\r\n: '==0 .loc ( w - f )\r\n  if\r\n: x1/false ( w - 0 ) \r\n: 'false .loc ( w - f )\r\n  dup xor ;\r\n  then\r\n: x1/true ( w = 1 )\r\n: 'true .loc ( w - f )\r\n  drop 1 ;\r\n: x1/ne0 ( w - f )\r\n: '!=0 .loc ( w - f )\r\n  # x1/false until x1/true ;\r\n: '<=0 .loc ( w - f )\r\n  # x1/true until\r\n: '<0 .loc ( w - f )\r\n  0x8000 and x1/ne0 ;\r\n: '>0 .loc ( w - f )\r\n  # x1/false until\r\n: '>=0 .loc ( w - f )\r\n  0x8000 and x1/eq0 ;\r\n\r\n: x1/reg ( o o - r o' )\r\n  >r 0xf and r> 2/ 2/ 2/ 2/\r\n;\r\n\r\n: x1/rsend ( w - ) // register send\n  right b! !b ;\n\r\n : x1/passfocus ( - )\n   A[ r/focus_se ]] lit x1/rsend ;\n\r\n: x1/r@ ( o - w r o' )\n  dup x1/reg >r dup >r A[ @p r/r@ ]] lit x1/rsend !b @b r> r>\n;\n\r\n: x1/d@ ( o - lo hi r o' )\n  dup x1/reg >r dup >r A[ @p r/d@ ]] lit x1/rsend !b @b @b r> r>\n;\n\r\n: x1/cond ( op - f )\r\n  // receive opcode with xxcr\r\n  // c: condition\r\n  // r: register\r\n  // return x\r\n  //   x == 0: false\r\n  //   x != 0: true\r\n  x1/r@ dup x1/reg drop >r ;\r\n\r\n: x1/send16 ( r - )\n  x1/r@ ! ;\n\n: x1/send32 ( d - )\n  x1/d@\n  ( lo hi )\n  >r ! r> ! ;              // send lo, then hi\n\r\n: x1/pass1 ( w - )\r\n  !\r\n;\r\n\r\n: x1/pass2 ( lo hi - )\r\n  >r ! r> !\r\n;\r\n\r\n: x1/unary16 ( o - )\r\n  x1/r@\r\n  ( w r o' )\r\n  0x3f and\r\n  ( w r addr )\r\n  A[ @p x2/unary16 ]] lit !\r\n  !       // addr\r\n  !       // r\r\n  !       // w\r\n;\r\n\r\n: x1/binary16 ( o - )\r\n  x1/r@\r\n  ( w1 r1 o' )\r\n  over >r\r\n  x1/r@\r\n  ( w1 r1 o' w2 r2 o'' / r1 )\r\n  0xf and\r\n  ( w1 r1 o' w2 r2 addr / r1 )\r\n  A[ @p x2/binary16 ]] lit !\r\n  !             // addr\r\n  ( w1 r1 o' w2 r2 / r1 )\r\n  r> !          // r\r\n  ( w1 r1 o' w2 r2 )\r\n  drop !        // w2\r\n  ( w1 r1 o' )\r\n  drop drop !   // w1\r\n;\r\n\r\n\r\n/*\n: x1/unary16 ( op - op )\n  x1/focus\n  dup 0xf and x1/send16\n  x1/nextfocus ;\n\n: x1/binary16 ( op - op )\n  x1/focus\n  dup 0xf and x1/send16     // x\n  dup 2/ 2/ 2/ 2/\n  0xf and x1/send16         // y\n  x1/nextfocus ;\n\n: x1/unary32 ( op - op )\n  x1/focus\n  dup 0xf and x1/send32\n  x1/nextfocus ;\n\n: x1/binary32 ( op - op )\n  x1/focus\n  dup 0xf and x1/send32     // x\n  dup 2/ 2/ 2/ 2/\n  0xf and x1/send32         // y\n  x1/nextfocus ;\r\n*/\r\n\r\n  \r\n\n\n"
+      sourceCode: "( CVM_pipeline node 406.\n\ninstruction execution.\n\nread register.\ncondition evaluation.\r\n\r\ncond:\r\n\r\nlabel  | name   | description\r\n-------+--------+-----------------------------\r\n'==0   | ==0    | return true if r == 0\n'!=0   | !=0    | return true if r != 0\n'<0    | <0     | return true if r < 0\n'<=0   | <=0    | return true if r <= 0\n'>0    | >0     | return true if r > 0\n'>=0   | >=0    | return true if r >= 0\n'true  | true   | return true always\n'false | false  | return true never\n\n)\n# 407 import\n# 306 import\n\r\n\n# -dlu /b     // node 506\n# up /a       // node 306\n# -dlu /p\n\n\n# 0 org\n\r\n: x1/eq0 ( w - f )\r\n: '==0 .loc ( w - f )\r\n  if\r\n: x1/false ( w - 0 ) \r\n: 'false .loc ( w - f )\r\n  dup xor ;\r\n  then\r\n: x1/true ( w = 1 )\r\n: 'true .loc ( w - f )\r\n  drop 1 ;\r\n: x1/ne0 ( w - f )\r\n: '!=0 .loc ( w - f )\r\n  # x1/false until x1/true ;\r\n: '<=0 .loc ( w - f )\r\n  # x1/true until\r\n: '<0 .loc ( w - f )\r\n  0x8000 and x1/ne0 ;\r\n: '>0 .loc ( w - f )\r\n  # x1/false until\r\n: '>=0 .loc ( w - f )\r\n  0x8000 and x1/eq0 ;\r\n\r\n: x1/reg ( o o - r o' )\r\n  >r 0xf and r> 2/ 2/ 2/ 2/\r\n;\r\n\r\n: x1/rsend ( w - ) // register send\n  right b! !b ;\n\r\n: x1/passfocus ( - )\n   A[ r/focus_se ]] lit x1/rsend\r\n;\n\r\n: x1/@ ( o instr - r w o' )\r\n  ( o instr )\r\n  x1/rsend\r\n  ( o )\r\n  dup x1/reg\r\n  ( r o' )\r\n  >r dup !b @b\r\n  ( r w / o' )\r\n  r>\n;\r\n\r\n: x1/r@ ( o - r w o' )\n  A[ @p r/r@ ]] lit x1/@\n;\n\r\n: x1/d@ ( o - r lo hi o' )\n  A[ @p r/d@ ]] lit x1/@\r\n  ( r lo o' )\r\n  >r @b r>\n  ( r lo hi o' )\r\n;\n\r\n: x1/cond ( op - f )\r\n  // receive opcode with xxcr\r\n  // c: condition\r\n  // r: register\r\n  // return x\r\n  //   x == 0: false\r\n  //   x != 0: true\r\n  ( op )\r\n  x1/r@\r\n  ( r w o' )\r\n  x1/reg\r\n  ( r w addr o'' )\r\n  drop >r\r\n;\r\n\r\n: x1/pass ( w - )\r\n  ! x1/passfocus\r\n;\r\n\r\n: x1/unary16 ( - )\r\n  A[ @p x2/unary16 ]] lit !\r\n  @b dup x1/r@\r\n  ( r w )\r\n  @b !         // addr\r\n  ( r w )\r\n  !            // w\r\n  x1/pass      // r\r\n;\r\n\r\n: x1/binary16 ( - )\r\n  A[ @p x2/binary16 ]] lit !\r\n  @b dup x1/r@\r\n  ( r1 w1 )\r\n  @b x1/r@\r\n: x1/send2 ( w1 w2 w3 )\r\n  ( r1 w1 w2 )\r\n  @b !         // addr\r\n  ( r1 w1 w2 )\r\n  !            // w3\r\n  !            // w2\r\n  x1/pass      // w1\r\n;\r\n\r\n: x1/unary32 ( o - )\r\n  A[ @p x2/unary32 ]] lit !\r\n  @b dup x1/d@\r\n  ( r lo hi )\r\n  x1/send2\r\n;\r\n\r\n: x1/binary32 ( o - )\r\n  A[ @p x2/binary32 ]] lit !\r\n  @b dup x1/d@\r\n  ( r1 lo1 hi1 )\r\n  @b x1/d@\r\n  ( r1 lo1 hi1 lo2 hi2 )\r\n  @b !         // addr\r\n  ( r1 lo1 hi1 lo2 hi2 )\r\n  !       // hi2\r\n  !       // lo2\r\n  !       // hi1\r\n  !       // lo1\r\n  x1/pass      // r1\r\n;\r\n\r\n: x1/input ( - )\r\n;\r\n\r\n: x1/output ( - )\r\n;\r\n\r\n  \r\n\n\n"
       ramWords:
       - 0x19402
       - 0x24355
@@ -71401,44 +71498,44 @@ projects:
       - 0x001D5
       - 0x05712
       - 0x13424
+      - 0x13412
       - 0x2560E
-      - 0x2EDBF
+      - 0x2ED22
+      - 0x00C55
+      - 0x05716
       - 0x05626
-      - 0x13412
-      - 0x09F9A
-      - 0x27555
-      - 0x2560E
-      - 0x2EDBF
+      - 0x05616
       - 0x05629
-      - 0x13412
-      - 0x09F02
-      - 0x26C55
-      - 0x13416
-      - 0x2560E
+      - 0x2FF9D
+      - 0x1341A
+      - 0x1340E
       - 0x3A855
-      - 0x13416
-      - 0x0B555
-      - 0x1341C
-      - 0x2FA9A
-      - 0x0B555
-      - 0x0B555
-      - 0x2FA9A
-      - 0x0B555
-      - 0x13416
-      - 0x04012
-      - 0x0003F
+      - 0x0B714
+      - 0x05A03
       - 0x05614
-      - 0x0BA2A
-      - 0x0B555
-      - 0x13416
-      - 0x208B2
-      - 0x13416
-      - 0x04012
-      - 0x0000F
+      - 0x1341A
+      - 0x01A2A
+      - 0x11422
+      - 0x05A03
       - 0x05624
-      - 0x0BA9A
-      - 0x0A22A
-      - 0x3A22D
+      - 0x1341A
+      - 0x0161A
+      - 0x01A2A
+      - 0x0B722
+      - 0x05A03
+      - 0x05611
+      - 0x1341C
+      - 0x1142C
+      - 0x05A03
+      - 0x0560C
+      - 0x1341C
+      - 0x0161C
+      - 0x01A2A
+      - 0x0BA2A
+      - 0x11422
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -72171,7 +72268,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 502
       enabled: true
       sourceCode: >-
@@ -72449,7 +72546,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 503
       enabled: true
       sourceCode: >-
@@ -72708,7 +72805,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 504
       enabled: true
       sourceCode: >+
@@ -72831,6 +72928,8 @@ projects:
 
         # 405 import
 
+        # 507 import
+
 
 
         # left /b
@@ -72845,24 +72944,31 @@ projects:
 
         : d1/forward ( sop command - )
           ! @b !
-          @ !b ;
+          @ !b
+        ;
 
-        : d1/special ( sop )
-          2* -if // 1011*
 
-            // special without register
-            A[ @p x1a/special ]] lit d1/forward ;
+        : d1/slit ( sop ) // out: ( instr w )
+          2* 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
+          A[ @p m/push ]] lit !b !b
+        ;
 
-          then // 1010* 16-bit special
-          2* -if // 10101*
 
-            // 16-bit special write (input)
-            A[ @p x1a/special16write ]] lit d1/forward ;
+        : d1/inout ( sop )
+          // 10111*
+          2* -if // 101111*
 
-          then
+            // output
+            A[ @p x1a/output ]] lit d1/forward ;
 
-          // 10100* 16-bit special read (output)
-          A[ @p x1a/special16read ]] lit d1/forward ;
+          then // 101110* 
+
+          // input
+          A[ @p x1a/input ]] lit d1/forward
+        ;
+
+
+
 
         : d1/op16 ( sop )
           // 110*
@@ -72910,33 +73016,33 @@ projects:
       ramWords:
       - 0x0BF2A
       - 0x03B55
-      - 0x37205
-      - 0x05700
-      - 0x0560E
-      - 0x37208
-      - 0x05700
+      - 0x367C2
+      - 0x307C2
+      - 0x31DFF
+      - 0x0FFFF
       - 0x0560B
+      - 0x09B55
+      - 0x3720B
       - 0x05700
-      - 0x05608
-      - 0x3720D
+      - 0x05613
       - 0x05700
-      - 0x05619
+      - 0x05610
+      - 0x37210
       - 0x05700
-      - 0x05611
-      - 0x37215
-      - 0x37213
+      - 0x05620
       - 0x05700
-      - 0x0562C
+      - 0x0561D
+      - 0x37218
+      - 0x37216
       - 0x05700
       - 0x05629
       - 0x05700
       - 0x05626
-      - 0x37219
-      - 0x1140F
-      - 0x1140A
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x05700
+      - 0x05623
+      - 0x3721C
+      - 0x11412
+      - 0x1140D
       - 0x15555
       - 0x15555
       - 0x15555
@@ -72981,7 +73087,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEDE'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 506
       enabled: true
       sourceCode: >+
@@ -73054,17 +73160,21 @@ projects:
 
           2* -if // 101*
             2* -if // 1011*
+              2* -if // 10111*
+                A[ @p d1/inout ]] lit d/op ;
+              then // 10110*
 
-              // Direct handler receives X on the return stack.
+              // Direct handler receives X on the parameter stack.
               drop
               dup 2/ 2/ 2/ 2/ 0x3f and >r
               0xf and ;
 
             then // 1010*
-
+              A[ @p d1/slit ]] lit ! ! @ !b @ !b ;
             // slit
-            2* 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
-            A[ @p m/push ]] lit !b !b ;
+        //    2* 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
+
+        //    A[ @p m/push ]] lit !b !b ;
 
           then // 100*
 
@@ -73126,7 +73236,7 @@ projects:
       - 0x0BA0A
       - 0x3B555
       - 0x3AD12
-      - 0x05620
+      - 0x0561F
       - 0x13400
       - 0x0B704
       - 0x04B12
@@ -73139,27 +73249,28 @@ projects:
       - 0x09F02
       - 0x3721A
       - 0x05708
-      - 0x05617
-      - 0x37228
-      - 0x37222
+      - 0x0561E
+      - 0x37229
+      - 0x37225
+      - 0x3721F
+      - 0x05708
+      - 0x05608
       - 0x3ADC2
       - 0x307C7
       - 0x0003F
       - 0x3E812
       - 0x0000F
       - 0x3F555
-      - 0x367C2
-      - 0x307C2
-      - 0x31DFF
-      - 0x0FFFF
-      - 0x0560B
-      - 0x09B55
-      - 0x3722C
+      - 0x05A2A
+      - 0x05602
+      - 0x03B0A
+      - 0x09555
+      - 0x3722D
       - 0x1340B
       - 0x05B25
       - 0x0560B
       - 0x1340B
-      - 0x19432
+      - 0x19433
       - 0x05B12
       - 0x13417
       - 0x13423
@@ -73177,7 +73288,6 @@ projects:
       - 0x05B55
       - 0x2160B
       - 0x15555
-      - 0x15555
       startup:
         entryPoint: 0x013
         p: 0x000
@@ -73187,7 +73297,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEDE'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 507
       enabled: true
       sourceCode: >+
@@ -73236,6 +73346,10 @@ projects:
         1010|iiii|iiii|iiii| 506  | slit { push 12-bit signed literal on stack }
 
         1011|00ww|wwww|xxxx| 506  | 506 direct
+
+        1011|10ww|wwww|xxxx| 506  | input
+
+        1011|11ww|wwww|xxxx| 506  | output
 
         1100|wwww|wwww|xxxx| 506  | unary 16-bit operation {w = address in node 306}
 
@@ -73516,7 +73630,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#D6ECF7'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 508
       enabled: true
       sourceCode: >+
@@ -73718,7 +73832,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#DEAD7C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 509
       enabled: true
       sourceCode: >+
@@ -87201,7 +87315,7 @@ projects:
         halt
 
         br 1
-    lastSelectedDebuggerProgramName: 16-bit binary regression test
+    lastSelectedDebuggerProgramName: 16-bit unary regression test
     cDebuggerPrograms:
     - name: default
       source: >
