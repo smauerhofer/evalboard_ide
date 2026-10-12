@@ -427,6 +427,25 @@ public static class CvmAssembler
             break;
           }
 
+          // ADDED 2026-10-12: "c32 dx <index>" (CvmInstructionSet.Const32Mnemonic) -- the generic
+          // EmbeddedUnsignedValuePair branch just below would already enforce the right ARG COUNT (two),
+          // since c32's shape uses that encoding, but its own generic error message ("c32 3 2") doesn't
+          // tell the reader the first operand is a register -- this dedicated branch exists purely for a
+          // syntax-accurate example, mirroring push2/dlit's own dedicated messages just above. The real
+          // parsing/encoding (register-token vs. plain-number first operand) happens in pass 2's own
+          // "case Const32Mnemonic", not here -- see that case's own remarks.
+          if (shape.Mnemonic == CvmInstructionSet.Const32Mnemonic)
+          {
+            if (line.Args.Count != 2)
+            {
+              errors.Add($"line {line.LineNumber}: \"c32\" requires exactly two operands (destination double register, constant index), e.g. \"c32 d3 2\".");
+              break;
+            }
+
+            sectionCursors[section] += shape.WordLength;
+            break;
+          }
+
           // ADDED 2026-10-04: rlit/dlit take TWO operands (register, literal) although their shape is
           // NodeResolvedEmbeddedValue: "rlit r1, 0x1234", "dlit d1, 0x12345678".
           bool isRegisterLiteral = shape.Mnemonic is CvmInstructionSet.RegisterLiteralMnemonic or CvmInstructionSet.DoubleLiteralMnemonic;
@@ -672,6 +691,57 @@ public static class CvmAssembler
               Type = CvmRelocationType.CvmOpcode,
               EmbeddedValue = condRegister & condShape.SecondValueBitMask,
             });
+            break;
+          }
+
+        case CvmInstructionSet.Const32Mnemonic:
+          {
+            // "c32 dx <index>" -- CORRECTED 2026-10-12, same day as this mnemonic's first pass: Stefan's
+            // own node-507 source comment read "c32 <index>" (one operand), which turned out to be a typo
+            // for "c32 dx <index>" (two) -- see Const32Mnemonic's own remarks for the full account. Fully
+            // self-describing (CvmOperandEncoding.EmbeddedUnsignedValuePair, no node compile, no
+            // relocation) -- but unlike node 306/305's own "fadd f g" (two PLAIN numbers), c32's FIRST
+            // operand is a destination double-register TOKEN ("d3"), so this is written out directly
+            // here instead of falling into the generic EmbeddedUnsignedValuePair branch below, exactly
+            // like if/cond intercept their own non-plain-number operand just above.
+            CvmInstructionSet.CvmInstructionShape c32Shape = CvmInstructionSet.TryGetShape(CvmInstructionSet.Const32Mnemonic)!;
+            CvmSection c32Section = objectFile.GetOrAddSection(section);
+
+            int c32MaxRegister = c32Shape.ValueBitMask >> c32Shape.ValueBitShift;
+            string c32RegisterToken = line.Args[0];
+            int c32Register;
+            if (c32RegisterToken.Length >= 2 && char.ToLowerInvariant(c32RegisterToken[0]) == 'r')
+            {
+              // Explicitly called out, not just "not a number": c32's destination is always a DOUBLE
+              // register -- r0..r15 would silently alias the wrong half of some dN if accepted.
+              errors.Add($"line {line.LineNumber}: \"c32\"'s first operand is a destination DOUBLE register -- write d0..d{c32MaxRegister} (e.g. \"c32 d3 2\"), not \"{c32RegisterToken}\": c32 has no r-register form.");
+              c32Register = 0;
+            }
+            else if (c32RegisterToken.Length >= 2 && char.ToLowerInvariant(c32RegisterToken[0]) == 'd' &&
+                     int.TryParse(c32RegisterToken.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out c32Register))
+            {
+              // Parsed as a "dN" token -- range-checked below, same as the plain-number fallback.
+            }
+            else if (!TryParseNumericLiteral(c32RegisterToken, out c32Register))
+            {
+              errors.Add($"line {line.LineNumber}: \"{c32RegisterToken}\" is not a valid destination register for \"c32\" -- write d0..d{c32MaxRegister} or a plain number, e.g. \"c32 d3 2\".");
+              c32Register = 0;
+            }
+
+            if (c32Register < 0 || c32Register > c32MaxRegister)
+            {
+              errors.Add($"line {line.LineNumber}: \"{c32RegisterToken}\" is out of range for \"c32\" -- expected d0..d{c32MaxRegister}.");
+              c32Register = 0;
+            }
+
+            int c32MaxIndex = c32Shape.SecondValueBitMask >> c32Shape.SecondValueBitShift;
+            if (!TryParseNumericLiteral(line.Args[1], out int c32Index) || c32Index < 0 || c32Index > c32MaxIndex)
+            {
+              errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" does not fit \"c32\"'s unsigned constant index (0..{c32MaxIndex}) -- \"c32\" does not (yet) support a label/import operand for it.");
+              c32Index = 0;
+            }
+
+            c32Section.Words.Add(c32Shape.Tag | (c32Register & c32Shape.ValueBitMask) | ((c32Index << c32Shape.SecondValueBitShift) & c32Shape.SecondValueBitMask));
             break;
           }
 

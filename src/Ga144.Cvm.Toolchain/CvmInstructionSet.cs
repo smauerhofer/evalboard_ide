@@ -820,6 +820,44 @@ public static class CvmInstructionSet
   public const string ByteSwapMnemonic = "byteswap";
 
   /// <summary>
+  /// <c>c32 dx &lt;index&gt;</c> -- ADDED 2026-10-12, per the newest node 505/506/507 source Stefan pasted. Node
+  /// 507's own header table gained a new row right next to the unary/binary 16-bit ones it sits between:
+  /// <code>1100|1000|ffff|xxxx| 506  | 32-bit constant</code>
+  /// with the legend's own new entry "f: 32-bit constant index". Tag <c>0xC800</c> (fixed bits <c>1100 1000</c>),
+  /// <c>f</c> (bits 7-4, <see cref="Const32IndexFieldBitMask"/>) selects one of the sixteen 32-bit IEEE-754
+  /// constants resident in node 305's own table (<c>ln(2)</c>, <c>1/ln(2)</c>, <c>pi/2</c>, <c>2/pi</c>, <c>1.0</c>,
+  /// <c>0.5</c>, <c>2.0</c>, <c>sqrt(2)</c> at indices 0-7, the remaining indices 8-15 still zero-filled in the
+  /// pasted source).
+  ///
+  /// CORRECTED same day, immediately after this mnemonic's first pass: Stefan's own node-507 inline
+  /// comment originally read "the mnemonic for 32-bit constant is: 'c32 &lt;index&gt;'", one operand -- this
+  /// file's first version of <see cref="Const32Mnemonic"/> matched that literally, encoding bits 3-0 of the
+  /// opcode word as a fixed 0 and flagging (rather than guessing) that those bits looked like a real,
+  /// separate field node 405's own <c>x1a/const32 ( d - )</c> genuinely threads through as a parameter named
+  /// <c>d</c>. Stefan confirmed that flag the same day: <c>"sorry that was a typo. the mnemonic is 'c32 dx
+  /// &lt;index&gt;'"</c> -- so bits 3-0 (<see cref="Const32RegisterFieldBitMask"/>) ARE a real operand after all: the
+  /// destination DOUBLE register (<c>d0..d15</c>, matching this project's existing <c>IsDoubleRegisterMnemonic</c>
+  /// family), written FIRST, before the constant index. <c>CvmOperandEncoding.EmbeddedUnsignedValuePair</c>
+  /// -- still fully self-describing, no node compile needed -- but unlike node 306/305's own "mnemonic f g"
+  /// pair mnemonics (two plain numbers), <c>c32</c>'s first operand is a register TOKEN ("d3"), not a bare
+  /// number, so both assemblers intercept <c>Const32Mnemonic</c> by name before the generic
+  /// EmbeddedUnsignedValuePair handling, exactly like <c>if</c>/<c>cond</c> intercept their own own
+  /// node-406-condition-name second operand -- see <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/>'s own
+  /// "case Const32Mnemonic" and <see cref="TryDescribeSelfDecodingWord"/>'s own matching special case for the
+  /// real encode/decode logic.
+  /// </summary>
+  public const string Const32Mnemonic = "c32";
+
+  /// <summary>Isolates <see cref="Const32Mnemonic"/>'s destination double-register field ("d", the FIRST operand), bits 3-0 -- see that mnemonic's own remarks on Stefan's same-day typo correction ("c32 &lt;index&gt;" -> "c32 dx &lt;index&gt;").</summary>
+  public const int Const32RegisterFieldBitMask = 0x000F;
+
+  /// <summary>Isolates <see cref="Const32Mnemonic"/>'s 4-bit constant-table index field ("f", the SECOND operand), bits 7-4 -- see that mnemonic's own remarks.</summary>
+  public const int Const32IndexFieldBitMask = 0x00F0;
+
+  /// <summary>How far left <see cref="Const32Mnemonic"/>'s index operand is shifted before OR-ing into <see cref="Const32IndexFieldBitMask"/>'s bits (and shifted back right when decoding) -- the field sits at bits 7-4, not bit 0 upward.</summary>
+  public const int Const32IndexFieldShift = 4;
+
+  /// <summary>
   /// <c>rload rX dY</c> / <c>rstore rX dY</c> (NEW 2026-10-05, node 508's <c>'rload</c>/<c>'rstore</c>, reached through the
   /// "508 direct" row <c>0010|wwww|yyyy|xxxx</c>: w = address in node 508 (4 bits, so the words must sit at node-508 addresses
   /// 0..15), x = a 16-bit register, y = a DOUBLE register holding a memory pointer (lo = address, hi = page)).
@@ -2891,6 +2929,16 @@ public static class CvmInstructionSet
     new(Id: 243, HighByteMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
     new(Id: 244, LowByteMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
     new(Id: 245, ByteSwapMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    // c32 (Id 254, NEW 2026-10-12, CORRECTED same day -- "c32 dx <index>", not "c32 <index>"): table row
+    // "1100|1000|ffff|xxxx| 506 | 32-bit constant" -- see Const32Mnemonic's own remarks for the full
+    // derivation. EmbeddedUnsignedValuePair (first operand = ValueBitMask = the destination double
+    // register "d", bits 3-0; second = SecondValueBitMask = the constant index "f", bits 7-4) -- still
+    // fully self-describing, no node compile needed, but BOTH assemblers intercept this mnemonic by name
+    // (CvmAssembler's own "case Const32Mnemonic") rather than the generic EmbeddedUnsignedValuePair path,
+    // since the first operand is a register token ("d3"), not a bare number like node 306/305's "fadd f
+    // g". TryDescribeSelfDecodingWord's own generic EmbeddedUnsignedValuePair loop has a matching special
+    // case so disassembly prints "c32 d<n> <index>", not "c32 <n> <index>".
+    new(Id: 254, Const32Mnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: 0xC800, ValueBitMask: Const32RegisterFieldBitMask, SecondValueBitMask: Const32IndexFieldBitMask, SecondValueBitShift: Const32IndexFieldShift),
     // sbr (Id 194): table row "1011|oooo|oooo|oooo| sbr {short branch, relative}" -- bits 15-12 fixed
     // "1011" (0xB000), bits 11-0 a 12-bit SIGNED relative offset ("o", per the table's own legend:
     // "o: signed offset") embedded directly in the one word -- no trailing word at all, which is
@@ -3852,6 +3900,14 @@ public static class CvmInstructionSet
           return IsRegisterlessCondition(condText) && second == 0
               ? $"{shape.Mnemonic} {condText}"
               : $"{shape.Mnemonic} r{second} {condText}";
+        }
+
+        // ADDED 2026-10-12: "c32" is listed the way it is written -- "c32 d3 2" (destination double
+        // register first, matching Stefan's "c32 dx <index>" correction), not the generic "c32 3 2" the
+        // fallback below would otherwise print.
+        if (string.Equals(shape.Mnemonic, Const32Mnemonic, StringComparison.Ordinal))
+        {
+          return $"{shape.Mnemonic} d{first} {FormatOperand(second)}";
         }
 
         return $"{shape.Mnemonic} {FormatOperand(first)} {FormatOperand(second)}";

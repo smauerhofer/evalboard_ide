@@ -30,39 +30,6 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-11T10:22:19.2546398
-      utcDateTime: 2026-10-11T10:22:19.2546398Z
-      localDateTime: 2026-10-11T12:22:19.2546398+02:00
-      date: 2026-10-11T00:00:00.0000000
-      day: 11
-      dayOfWeek: Sunday
-      dayOfYear: 284
-      hour: 10
-      millisecond: 254
-      microsecond: 639
-      nanosecond: 800
-      minute: 22
-      month: 10
-      offset: 00:00:00
-      totalOffsetMinutes: 0
-      second: 19
-      ticks: 639273109392546398
-      utcTicks: 639273109392546398
-      timeOfDay: 10:22:19.2546398
-      year: 2026
-  portB: 
-  portC:
-    role: PortCTarget
-    ftdi:
-      stableId: USB:0403:6001:GAEVB001S0121CA
-      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
-      vid: 0403
-      pid: 6001
-      serialNumber: GAEVB001S0121CA
-      manufacturer: FTDI
-      friendlyName: USB Serial Port (COM4)
-    lastKnownComPort: COM4
-    lastSeenUtc:
       dateTime: 0001-01-01T00:00:00.0000000
       utcDateTime: 0001-01-01T00:00:00.0000000Z
       localDateTime: 0001-01-01T01:00:00.0000000+01:00
@@ -83,6 +50,19 @@ boards:
       utcTicks: 0
       timeOfDay: 00:00:00
       year: 1
+  portB: 
+  portC:
+    role: PortCTarget
+    ftdi:
+      stableId: USB:0403:6001:GAEVB001S0121CA
+      pnpDeviceId: FTDIBUS\VID_0403+PID_6001+GAEVB001S0121CA\0000
+      vid: 0403
+      pid: 6001
+      serialNumber: GAEVB001S0121CA
+      manufacturer: FTDI
+      friendlyName: USB Serial Port (COM4)
+    lastKnownComPort: COM4
+    lastSeenUtc: *o0
   jumpers:
     J23-A-RX: true
     J23-A-TX: true
@@ -67850,22 +67830,16 @@ projects:
 
         )
 
-        # 206 import
-
 
         # left /b
-
-        # -d-- /p
 
         # right /a
 
 
+        entry x2b/main
+
+
         # 0 org
-
-
-        : x2b/rwrite16 ( r -  )
-          A[ @p x2c/rwrite16 ]] lit ! !
-        ;
 
 
         : x2b/frac? ( l h - l h f )
@@ -67976,39 +67950,39 @@ projects:
 
 
 
-        : x2b/float32
-          @b !                     // o
+        : x2b/main ( o - )
+          // receive sequence: o l1 h1 l2 h2
+          // send sequence: o t1 s1 e1 h1 l1 t2 s2 e2 h2 l2
+          @b !                         // o
 
           @b x2b/decompose             // l1 h1 -> t1 s1 e1 h1 l1
           @b x2b/decompose             // l2 h2 -> t2 s2 e2 h2 l2
-
+          x2b/main
         ;
       ramWords:
-      - 0x05A2D
-      - 0x05600
       - 0x25DFA
       - 0x0007F
-      - 0x19406
+      - 0x19404
       - 0x15555
       - 0x3AF55
-      - 0x19417
+      - 0x19415
       - 0x043B2
       - 0x000FF
-      - 0x1940C
+      - 0x1940A
       - 0x24355
-      - 0x3B602
-      - 0x19415
+      - 0x3B600
+      - 0x19413
       - 0x3AD12
       - 0x00040
-      - 0x3F313
+      - 0x3F311
       - 0x3BD55
       - 0x00004
       - 0x3BD55
       - 0x0000C
       - 0x3BD55
       - 0x00002
-      - 0x3B602
-      - 0x1941A
+      - 0x3B600
+      - 0x19418
       - 0x24355
       - 0x3BD55
       - 0x00001
@@ -68017,30 +67991,32 @@ projects:
       - 0x307C7
       - 0x000FF
       - 0x3EDBA
-      - 0x13407
+      - 0x13405
       - 0x0AD12
       - 0x08000
       - 0x3FA9B
-      - 0x2F327
-      - 0x0B72C
-      - 0x3B602
-      - 0x1942B
+      - 0x2F325
+      - 0x0B72A
+      - 0x3B600
+      - 0x19429
       - 0x3BDB2
       - 0x00001
       - 0x0A9B2
       - 0x0409A
       - 0x0007F
-      - 0x19435
+      - 0x19433
       - 0x043B2
       - 0x000FF
-      - 0x19435
+      - 0x19433
       - 0x3BDE2
       - 0x00080
       - 0x0BA55
       - 0x3BA2D
       - 0x01A02
-      - 0x1341C
-      - 0x0171C
+      - 0x1341A
+      - 0x0161A
+      - 0x11434
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -68049,7 +68025,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x115
+        entryPoint: 0x034
         p: 0x000
         a: 0x000
         b: 0x000
@@ -68071,31 +68047,39 @@ projects:
         )
 
 
-        # 207 import
+        # down /b
 
+        # -d-- /p
 
-        # left /b
-
-        # --l- /p
-
-        # right /a
+        # left /a
 
 
         # 0 org
 
 
 
-        : x2c/rwrite16 ( op -  )
-          A[ @p x3a/rwrite16 ]] lit ! !
+        : x2c/float32 ( hi1 -  )
+          // receive sequence: hi1 lo1 hi2 lo2 addr
+          // send sequence: instr r w
+          @b
+          ( h1 l1 )
+          @b >r @b >r
+          ( h1 l1 / h2 l2 )
+          @b !       // send o
+          !          // send l1
+          !          // send h1
+          ( / h2 l2 )
+          r> !       // send l2
+          r> !       // send h2
         ;
 
 
       ramWords:
-      - 0x05A2D
-      - 0x05600
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x01FBA
+      - 0x00802
+      - 0x0BA2A
+      - 0x27A9A
+      - 0x0B555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -68156,7 +68140,7 @@ projects:
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x175
+        entryPoint: 0x115
         p: 0x000
         a: 0x000
         b: 0x000
@@ -69462,26 +69446,17 @@ projects:
 
         )
 
-        # 205 import
-
-        # 306 import
 
 
-
-        # down /b
+        # right /a
 
         # ---u /p
 
-        # left /a
-
-
-        // entry x2a/main
+        # left /b
 
 
         # 0 org
 
-
-        : fr/cbase .loc
 
         [ // memory order lo, hi
           0x7218 , 0x3F31 , // 0: ln(2)       = 0.69314718
@@ -69493,52 +69468,39 @@ projects:
           0x0000 , 0x3F00 , // 5: 0.5
           0x0000 , 0x4000 , // 6: 2.0
           0x04F3 , 0x3FB5 , // 7: sqrt(2)     = 1.41421356
+
+          0x0000 , 0x0000 , // 8: 
+          0x0000 , 0x0000 , // 9: 
+          0x0000 , 0x0000 , // 10: 
+          0x0000 , 0x0000 , // 11: 
+
+          0x0000 , 0x0000 , // 12: 
+          0x0000 , 0x0000 , // 13: 
+          0x0000 , 0x0000 , // 14: 
+          0x0000 , 0x0000 , // 15: 
+
         ]
 
 
 
-        : x2a/unary32 ( op )
 
-        ;
-
-
-        : x2a/binary32 ( op )
-
-        ;
-
-
-        : x2a/float32 ( op )
-          A[ @p x2b/float32 ]] lit !
+        : x2a/float32 ( - )
+          // receive sequence: hi lo
+          // send sequence: lo hi
+          right a!
+          @ @
+          !b !b
         ;
 
 
 
-        : fr/binary
-          // read input
-          @b                         // o
-          @b                         // g
-          @b                         // f
-          down b!
-          // send op + 2 parameter
-          ( o g f )
-          dup a!                     // set f
-          >r >r !b                   // o
-          @+ !b @+ !b                 // lh
-          r> a!                      // set g
-          @+ !b @+ !b                 // lh
-          // receive result
-          right b!
-          r> a!                      // set f
-          @b
-          @b
-          !+
-          !+                         // hl
-          left b!
+
+        : x2a/const ( const# )
+          // send sequence: lo hi
+          2* a!         // select constant
+          @+ !b         // lo
+          @+ !b         // hi
         ;
-
-
-        : fr/const ( g f ) over # fr/cbase lit . + a! 
-
 
       ramWords:
       - 0x07218
@@ -69557,27 +69519,27 @@ projects:
       - 0x04000
       - 0x004F3
       - 0x03FB5
-      - 0x15555
-      - 0x15555
-      - 0x05A55
-      - 0x05636
-      - 0x01F07
-      - 0x00115
-      - 0x28DAA
-      - 0x2E822
-      - 0x07B1A
-      - 0x08CAA
-      - 0x07B1A
-      - 0x09DA2
-      - 0x001D5
-      - 0x26A02
-      - 0x0183F
-      - 0x00175
-      - 0x29555
-      - 0x21DB0
       - 0x00000
-      - 0x2A9B2
-      - 0x15555
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x00000
+      - 0x04A0A
+      - 0x001D5
+      - 0x03B25
+      - 0x36A1A
+      - 0x09C25
       - 0x15555
       - 0x15555
       - 0x15555
@@ -69627,6 +69589,8 @@ projects:
         )
 
         # 307 import
+
+        # 206 import
 
 
         // entry x2/main
@@ -69703,7 +69667,7 @@ projects:
 
 
         : x2/binary16 ( r1 - )
-          // read sequence: r1 w1 w2 addr
+          // receive sequence: r1 w1 w2 addr
           // send sequence: instr r w
           >r @b @b
           ( w1 w2 / r )
@@ -69731,7 +69695,12 @@ projects:
         ;
 
 
-        : x2/float32 ( addr ) // read sequence:
+        : x2/float32 ( d1 - )
+          // receive sequence: d1 hi1 lo1 hi2 lo2 addr
+          down a!
+          A[ @p x2c/float32 ]] lit ! !
+
+        : x2/const32 ( - )
 
 
 
@@ -69784,10 +69753,10 @@ projects:
       - 0x05A2A
       - 0x05633
       - 0x1142A
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x04A12
+      - 0x00115
+      - 0x05600
+      - 0x0BAB2
       - 0x15555
       - 0x15555
       - 0x15555
@@ -71291,6 +71260,8 @@ projects:
 
         # 305 import
 
+        # 306 import
+
 
         # up /b
 
@@ -71375,6 +71346,17 @@ projects:
         ;
 
 
+        : x1a/const32 ( d - )
+          // receive sequence: const#
+          // send sequence: instr const#
+          A[ @p x1/finish ]] lit x1a/begin406
+          A[ x2/const32 ]] lit !
+          @          // read stimulus
+          up a!      // switch to node 305
+          A[ x2a/const ]] lit !
+          left a!
+        ;
+
 
         : x1a/float32 ( op - )
           A[ @p x2a/float32 ]] lit x1a/continue
@@ -71430,8 +71412,17 @@ projects:
       - 0x2FF02
       - 0x0AC2A
       - 0x0BE25
+      - 0x0560D
+      - 0x05624
+      - 0x05A0F
+      - 0x13433
+      - 0x00145
+      - 0x2BD2F
+      - 0x13423
+      - 0x00175
+      - 0x2B555
       - 0x05600
-      - 0x05612
+      - 0x05620
       - 0x01A25
       - 0x0560D
       - 0x05637
@@ -71439,15 +71430,6 @@ projects:
       - 0x0560D
       - 0x05638
       - 0x0BB55
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -73186,39 +73168,9 @@ projects:
         ;
 
 
-
-        : d1/op16 ( sop )
-          // 110*
-          2* -if // 1101*
-
-            // 16-bit binary
-            // send sequence: instr1 instr2 instr3 r1 r2 addr
-            A[ @p x1a/binary ]] lit !    // instr1
-            A[ @p x1/binary16 ]] lit !     // instr2
-            A[ @p x2/binary16 ]] lit !     // instr3
-            @b
-            ( op )
-            d1/next    // send r1
-            d1/next    // send r2
-            d1/send4   // send addr
-            @ !b      // return stimulus
-          ;
-
-          then // 1100*
-
-          // 16-bit unary
-          // send sequence: instr1 instr2 instr3 r addr
-          A[ @p x1a/unary ]] lit !    // instr1
-          A[ @p x1/unary16 ]] lit !     // instr2
-          A[ @p x2/unary16 ]] lit !     // instr3
-          @b
-          ( op )
-          d1/next    // send r
-          d1/send6   // send addr
-          @ !b      // return stimulus
-        ;
-
-
+        : d1/op ( sop )
+          // 11*
+          2* -if // 111*
 
         : d1/op32 ( sop )
           // 111*
@@ -73232,16 +73184,10 @@ projects:
 
             // 32-bit binary
             // send sequence: instr1 instr2 instr3 r1 r2 addr
-            A[ @p x1a/binary ]] lit !    // instr1
+            A[ @p x1a/binary ]] lit !      // instr1
             A[ @p x1/binary32 ]] lit !     // instr2
             A[ @p x2/binary32 ]] lit !     // instr3
-            @b
-            ( op )
-            d1/next    // send r1
-            d1/next    // send r2
-            d1/send4   // send addr
-            @ !b      // return stimulus
-          ;
+            d1/binfinish ;
           then // 1110*
 
           // 32-bit unary
@@ -73249,27 +73195,52 @@ projects:
           A[ @p x1a/unary ]] lit !      // instr1
           A[ @p x1/unary32 ]] lit !     // instr2
           A[ @p x2/unary32 ]] lit !     // instr3
+          d1/unfinish
+        ;
+
+          then // 110*
+
+        : d1/op16 ( sop )
+          // 110*
+          2* -if // 1101*
+
+            // 16-bit binary
+            // send sequence: instr1 instr2 instr3 r1 r2 addr
+            A[ @p x1a/binary ]] lit !      // instr1
+            A[ @p x1/binary16 ]] lit !     // instr2
+            A[ @p x2/binary16 ]] lit !     // instr3
+        : d1/binfinish
+            @b
+            ( op )
+            d1/next    // send r1
+            d1/next    // send r2
+            d1/send4   // send addr
+            @ !b      // return stimulus
+          ;
+
+          then // 1100*
+
+          2* -if // 11001*
+
+            // 32-bit constant
+            // the mnemonic for 32-bit constant is: "c32 dx <index>"
+            A[ @p x1a/const32 ]] lit !    // instr
+            d1/unfinish ;
+
+          then // 11000*
+
+          // 16-bit unary
+          // send sequence: instr1 instr2 instr3 r addr
+          A[ @p x1a/unary ]] lit !      // instr1
+          A[ @p x1/unary16 ]] lit !     // instr2
+          A[ @p x2/unary16 ]] lit !     // instr3
+        : d1/unfinish
           @b
           ( op )
           d1/next    // send r
           d1/send6   // send addr
           @ !b      // return stimulus
         ;
-
-
-
-
-        : d1/op ( sop )
-          // 11*
-          2* -if // 111*
-
-            // 32-bit operation
-            d1/op32 ;
-
-          then // 110*
-
-          // 16-bit operation
-          d1/op16 ;
 
       ramWords:
       - 0x0BF2A
@@ -73282,9 +73253,9 @@ projects:
       - 0x09B55
       - 0x3720B
       - 0x05700
-      - 0x05614
+      - 0x05623
       - 0x05700
-      - 0x05611
+      - 0x05620
       - 0x0402D
       - 0x0000F
       - 0x0402D
@@ -73292,48 +73263,48 @@ projects:
       - 0x2560D
       - 0x307C2
       - 0x31555
-      - 0x3721E
+      - 0x37225
+      - 0x3721F
+      - 0x37219
+      - 0x05700
+      - 0x0561D
       - 0x05A12
-      - 0x0561C
+      - 0x05616
+      - 0x05633
+      - 0x0BD2A
+      - 0x05627
+      - 0x1142B
+      - 0x05A12
+      - 0x05611
+      - 0x0562E
+      - 0x0BD2A
+      - 0x0562C
+      - 0x11437
+      - 0x3722F
+      - 0x05A12
+      - 0x05616
       - 0x05629
       - 0x0BD2A
-      - 0x0562A
+      - 0x05622
       - 0x01611
       - 0x13411
       - 0x1340D
       - 0x03B55
-      - 0x05A12
-      - 0x05617
-      - 0x05621
-      - 0x0BD2A
-      - 0x05618
-      - 0x01611
-      - 0x1340F
-      - 0x03B55
-      - 0x37233
-      - 0x3722A
-      - 0x05700
-      - 0x05622
-      - 0x05A12
+      - 0x37232
+      - 0x05A47
       - 0x0561C
-      - 0x05633
+      - 0x05A12
+      - 0x05611
+      - 0x05621
       - 0x0BD2A
       - 0x05610
       - 0x01611
-      - 0x13411
-      - 0x1340D
-      - 0x03B55
-      - 0x05A12
-      - 0x05617
-      - 0x0562E
-      - 0x0BD2A
-      - 0x05615
-      - 0x01611
       - 0x1340F
       - 0x03B55
-      - 0x3723D
-      - 0x11426
-      - 0x11414
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       startup:
@@ -73607,7 +73578,9 @@ projects:
 
         1011|11ww|wwww|xxxx| 506  | output
 
-        1100|wwww|wwww|xxxx| 506  | unary 16-bit operation {w = address in node 306}
+        1100|00ww|wwww|xxxx| 506  | unary 16-bit operation {w = address in node 306}
+
+        1100|1000|ffff|xxxx| 506  | 32-bit constant
 
         1101|wwww|yyyy|xxxx| 506  | binary 16-bit operation {w = address in node 306}
 
@@ -73620,9 +73593,9 @@ projects:
         1111|1ppp|yyyy|xxxx| 506  | binary 32-bit float operation
 
 
-        c: binary instruction address {address in corresponing node}
+        c: condition instruction address {address in corresponing node}
 
-        f: instruction address  {address in corresponing node}
+        f: 32-bit constant index
 
         p: operation code
 
