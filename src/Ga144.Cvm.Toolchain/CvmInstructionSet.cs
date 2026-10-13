@@ -1905,6 +1905,106 @@ public static class CvmInstructionSet
   /// <summary>Per-mnemonic tag for <see cref="FloatingPointPushMnemonic"/> -- operation index 11. UNLIKE the old <c>'fpush</c>, no longer node-resolved -- see the removal note above <see cref="FloatingPointRegisterFieldBitMask"/>. CORRECTED 2026-09-21: assembler syntax is "fpush f" -- ONE argument, not two (see the class-level remarks above <see cref="FloatingPointAddMnemonic"/>) -- so this mnemonic's own <see cref="CvmInstructionShape"/> row uses plain <see cref="CvmOperandEncoding.EmbeddedUnsignedValue"/>, not the Pair encoding the other ten share.</summary>
   public const int FloatingPointPushTag = FloatingPointOperationTag | (11 << FloatingPointOperationFieldShift);
 
+  // ------------------------------------------------------------------------------------------------
+  // Node 306/305's OLD unified floating-point family just above (FloatingPointOperationTag 0xDC00,
+  // FloatingPointAddMnemonic.."fadd" etc.) is CONFIRMED FULLY DEAD, 2026-10-13, not merely superseded:
+  // Stefan's 2026-10-11/2026-10-13 CVM_pipeline source dumps show node 306 has been repurposed
+  // entirely into a pure 16-bit-binary decoder (see cvm-pipeline-float32-coprocessor.md's own
+  // "CORRECTION, same day, second pass") -- there is no trace anywhere in the new dumps of an
+  // fr[0..7] float register file, an "oooo" 4-bit operation field, or a 0xDC00 tag. The entire
+  // multi-node float32 pipeline that replaces it (nodes 102-105, 201-209, 301-309, 401-409, 501-509)
+  // is a fundamentally different architecture: 32-bit float values live in ordinary CVM "d" double
+  // registers (d0..d15, the same ones c32/dpop/dpush already use), not a separate small register
+  // file, and the six BINARY operations (add/sub/min/max/mul/div) are dispatched by a fixed jump-table
+  // index -- see FloatingPointBinaryOperationTag's own remarks below for the new encoding, confirmed
+  // directly from node 507's own header table row ("1111|1ppp|yyyy|xxxx") and traced end to end in
+  // cvm-pipeline-float32-coprocessor.md ("Dispatch chain for 1111|1ppp|yyyy|xxxx").
+  //
+  // Per Stefan directly, 2026-10-13 ("i would like to test the float32 binary opcodes. replace the
+  // old float32 opcodes with the new ones."): FloatingPointAddMnemonic/SubtractMnemonic/
+  // MinimumMnemonic/MaximumMnemonic/MultiplyMnemonic/DivideMnemonic ("fadd"/"fsub"/"fmin"/"fmax"/
+  // "fmul"/"fdiv") keep their existing names/string values -- only their TAG and FIELD LAYOUT move,
+  // from the retired FloatingPointAddTag..FloatingPointDivideTag (0xDC00-based) to the new
+  // FloatingPointBinaryAddTag..FloatingPointBinaryDivideTag (0xF800-based) below. The OLD Instructions
+  // rows for these six (Ids 160-165, already commented out above) stay commented out and Ids 160-165
+  // stay permanently retired (never reused) -- the ACTIVE rows for fadd/fsub/fmin/fmax/fmul/fdiv now
+  // use fresh Ids 255-260 instead, since an Id, once assigned to a specific bit encoding, is never
+  // repointed to a different one in this file's own convention (see e.g. Ids 148-159's own retirement
+  // note above).
+  //
+  // FloatingPointMoveMnemonic/ConstantMnemonic/NegateMnemonic/AbsoluteMnemonic/PopMnemonic/
+  // PushMnemonic ("fmove"/"fconst"/"fneg"/"fabs"/"fpop"/"fpush") are NOT part of this request (Stefan
+  // asked specifically about the BINARY opcodes) and have NO known replacement encoding yet: the new
+  // pipeline's own "unary 32-bit float" row (tag 0xE800, cvm-pipeline-float32-coprocessor.md's
+  // "Still-stub rows" table) is still an empty stub (node 305 x2a/unary32), and nothing in either dump
+  // gives a tick-prefixed name or bit layout for move/const/neg/abs/pop/push under the new
+  // architecture. Per the standing "never guess, flag instead" rule, these six mnemonics' OLD Tag
+  // constants (FloatingPointMoveTag..FloatingPointPushTag above) are left as historical dead code,
+  // same as FloatingPointAddTag..FloatingPointDivideTag -- genuinely orphaned, not wired to anything,
+  // until Stefan gives the new encoding (if any) for them.
+  //
+  // New field layout, confirmed directly from node 507's own header table row and node 306's own
+  // "x2/float32 ( d1 - )" forwarding word (the parameter name "d1" confirms the register operand is a
+  // double register, exactly like c32's "dx"): fixed prefix bits 15-11 = 11111
+  // (FloatingPointBinaryOperationTag, 0xF800), "p" (bits 10-8, THREE bits,
+  // FloatingPointBinaryOperationIndexFieldBitMask/Shift) selects the operation by the SAME fixed
+  // jump-table index node 104's own fs1/main table uses (0=add, 1=sub, 2=min, 3=max, 4=mul, 5=div;
+  // 6-7 unused, not safe to encode -- see cvm-pipeline-float32-coprocessor.md), "y" (bits 7-4,
+  // FloatingPointBinarySecondRegisterFieldBitMask/Shift) is the SECOND operand's double register, "x"
+  // (bits 3-0, FloatingPointBinaryFirstRegisterFieldBitMask) is the FIRST operand's double register
+  // (also where the result is written back -- "fadd d3 d2" means d3 := d3 + d2, same "mnemonic f g"
+  // convention, destination/first operand printed before second, the OLD scheme already used).
+  //
+  // FLAGGED, not confirmed by Stefan directly (same "never guess, flag instead" treatment c32 itself
+  // got on its first pass): that BOTH operands are "dN" register TOKENS, not plain numbers like the
+  // OLD scheme's "fadd 3 2". This is inferred from node 306's own "x2/float32 ( d1 - )" word genuinely
+  // naming its one embedded parameter "d1" (a double register), not from an explicit Stefan statement
+  // about assembler syntax -- exactly the same strength of evidence (a live F18 parameter name) that
+  // correctly predicted c32's own register operand before Stefan confirmed it. If this turns out
+  // wrong, only CvmAssembler.cs's own "case FloatingPointAddMnemonic: ... case
+  // FloatingPointDivideMnemonic:" block and CvmInstructionSet.TryDescribeSelfDecodingWord's own
+  // matching special case need to change -- the tag/field layout itself (0xF800/p/y/x) is NOT in
+  // question, only how the two register operands are spelled in source.
+  //
+  // ALSO FLAGGED: FloatingPointBinaryOperationTag (0xF800, all variable bits zero) is the exact same
+  // numeric value as BitOperationTag (node 409's bclr/bset/binv/bcopy, see BitClearMnemonic's own
+  // remarks) -- a genuine tag-range collision between two different, unrelated opcode families both
+  // claiming "top 5 bits all 1". Not a problem today: BitClearMnemonic's own Instructions rows (Ids
+  // 172-175) are still commented out/unwired (two of BitClearMnemonic's own opens were never
+  // resolved), so nothing currently assembles against BitOperationTag. Flagging here so whoever wires
+  // bit ops later notices the collision before picking a different, non-overlapping tag.
+  // ------------------------------------------------------------------------------------------------
+  public const int FloatingPointBinaryOperationTag = 0xF800;
+
+  /// <summary>Isolates the 3-bit fixed jump-table operation index "p" (bits 10-8) of a <see cref="FloatingPointBinaryOperationTag"/> word -- 0=add, 1=sub, 2=min, 3=max, 4=mul, 5=div (6-7 unused). See the remarks above <see cref="FloatingPointBinaryOperationTag"/>.</summary>
+  public const int FloatingPointBinaryOperationIndexFieldBitMask = 0x0700;
+
+  /// <summary>How far left the operation index is shifted before OR-ing into <see cref="FloatingPointBinaryOperationIndexFieldBitMask"/>'s bits -- 8, since the two 4-bit register fields (bits 7-4 and 3-0) sit below it. See the remarks above <see cref="FloatingPointBinaryOperationTag"/>.</summary>
+  public const int FloatingPointBinaryOperationIndexFieldShift = 8;
+
+  /// <summary>Isolates the FIRST operand's double-register field, "x" (bits 3-0, 0-15) -- also where the result is written back. See the remarks above <see cref="FloatingPointBinaryOperationTag"/>.</summary>
+  public const int FloatingPointBinaryFirstRegisterFieldBitMask = 0x000F;
+
+  /// <summary>Isolates the SECOND operand's double-register field, "y" (bits 7-4, 0-15). See the remarks above <see cref="FloatingPointBinaryOperationTag"/>.</summary>
+  public const int FloatingPointBinarySecondRegisterFieldBitMask = 0x00F0;
+
+  /// <summary>How far left the second operand's register index is shifted before OR-ing into <see cref="FloatingPointBinarySecondRegisterFieldBitMask"/>'s bits -- 4, since the 4-bit "x" field (bits 3-0) sits below it. See the remarks above <see cref="FloatingPointBinaryOperationTag"/>.</summary>
+  public const int FloatingPointBinarySecondRegisterFieldShift = 4;
+
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointAddMnemonic"/>'s NEW encoding -- operation index 0 (<see cref="FloatingPointBinaryOperationTag"/> | (0 &lt;&lt; <see cref="FloatingPointBinaryOperationIndexFieldShift"/>)). See the remarks above <see cref="FloatingPointBinaryOperationTag"/>.</summary>
+  public const int FloatingPointBinaryAddTag = FloatingPointBinaryOperationTag | (0 << FloatingPointBinaryOperationIndexFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointSubtractMnemonic"/>'s NEW encoding -- operation index 1.</summary>
+  public const int FloatingPointBinarySubtractTag = FloatingPointBinaryOperationTag | (1 << FloatingPointBinaryOperationIndexFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointMinimumMnemonic"/>'s NEW encoding -- operation index 2.</summary>
+  public const int FloatingPointBinaryMinimumTag = FloatingPointBinaryOperationTag | (2 << FloatingPointBinaryOperationIndexFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointMaximumMnemonic"/>'s NEW encoding -- operation index 3.</summary>
+  public const int FloatingPointBinaryMaximumTag = FloatingPointBinaryOperationTag | (3 << FloatingPointBinaryOperationIndexFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointMultiplyMnemonic"/>'s NEW encoding -- operation index 4.</summary>
+  public const int FloatingPointBinaryMultiplyTag = FloatingPointBinaryOperationTag | (4 << FloatingPointBinaryOperationIndexFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="FloatingPointDivideMnemonic"/>'s NEW encoding -- operation index 5.</summary>
+  public const int FloatingPointBinaryDivideTag = FloatingPointBinaryOperationTag | (5 << FloatingPointBinaryOperationIndexFieldShift);
+  // ------------------------------------------------------------------------------------------------
+
   // Node 405's nine "multiword arithmetic" (carry-flag) ops, added 2026-09-09 (same audit) -- BRAND NEW,
   // no earlier revision of node 405 existed here. Shaped like every other simple tagged/node-resolved
   // family (CvmOperandEncoding.None): node 405's own mw/main has no bit cascade of its own at all, just a
@@ -2939,6 +3039,24 @@ public static class CvmInstructionSet
     // g". TryDescribeSelfDecodingWord's own generic EmbeddedUnsignedValuePair loop has a matching special
     // case so disassembly prints "c32 d<n> <index>", not "c32 <n> <index>".
     new(Id: 254, Const32Mnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: 0xC800, ValueBitMask: Const32RegisterFieldBitMask, SecondValueBitMask: Const32IndexFieldBitMask, SecondValueBitShift: Const32IndexFieldShift),
+    // fadd/fsub/fmin/fmax/fmul/fdiv (Ids 255-260, NEW 2026-10-13, replacing the OLD 0xDC00-based
+    // encoding -- see FloatingPointBinaryOperationTag's own remarks for the full derivation and the
+    // two flagged opens (register-token syntax, BitOperationTag collision)). Table row
+    // "1111|1ppp|yyyy|xxxx | 506 | binary 32-bit float", confirmed hardware-testable per Stefan's own
+    // 2026-10-13 message. EmbeddedUnsignedValuePair (first operand/destination = ValueBitMask = "x",
+    // bits 3-0; second operand = SecondValueBitMask = "y", bits 7-4) -- fully self-describing, no node
+    // compile needed, but like c32, BOTH assemblers intercept these six mnemonics by name
+    // (CvmAssembler's own "case FloatingPointAddMnemonic: ... case FloatingPointDivideMnemonic:")
+    // rather than the generic EmbeddedUnsignedValuePair path, since BOTH operands are register tokens
+    // ("d3 d2"), not bare numbers like the OLD scheme's "fadd f g". TryDescribeSelfDecodingWord's own
+    // generic EmbeddedUnsignedValuePair loop has a matching special case so disassembly prints
+    // "fadd d3 d2", not "fadd 3 2".
+    new(Id: 255, FloatingPointAddMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointBinaryAddTag, ValueBitMask: FloatingPointBinaryFirstRegisterFieldBitMask, SecondValueBitMask: FloatingPointBinarySecondRegisterFieldBitMask, SecondValueBitShift: FloatingPointBinarySecondRegisterFieldShift),
+    new(Id: 256, FloatingPointSubtractMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointBinarySubtractTag, ValueBitMask: FloatingPointBinaryFirstRegisterFieldBitMask, SecondValueBitMask: FloatingPointBinarySecondRegisterFieldBitMask, SecondValueBitShift: FloatingPointBinarySecondRegisterFieldShift),
+    new(Id: 257, FloatingPointMinimumMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointBinaryMinimumTag, ValueBitMask: FloatingPointBinaryFirstRegisterFieldBitMask, SecondValueBitMask: FloatingPointBinarySecondRegisterFieldBitMask, SecondValueBitShift: FloatingPointBinarySecondRegisterFieldShift),
+    new(Id: 258, FloatingPointMaximumMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointBinaryMaximumTag, ValueBitMask: FloatingPointBinaryFirstRegisterFieldBitMask, SecondValueBitMask: FloatingPointBinarySecondRegisterFieldBitMask, SecondValueBitShift: FloatingPointBinarySecondRegisterFieldShift),
+    new(Id: 259, FloatingPointMultiplyMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointBinaryMultiplyTag, ValueBitMask: FloatingPointBinaryFirstRegisterFieldBitMask, SecondValueBitMask: FloatingPointBinarySecondRegisterFieldBitMask, SecondValueBitShift: FloatingPointBinarySecondRegisterFieldShift),
+    new(Id: 260, FloatingPointDivideMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointBinaryDivideTag, ValueBitMask: FloatingPointBinaryFirstRegisterFieldBitMask, SecondValueBitMask: FloatingPointBinarySecondRegisterFieldBitMask, SecondValueBitShift: FloatingPointBinarySecondRegisterFieldShift),
     // sbr (Id 194): table row "1011|oooo|oooo|oooo| sbr {short branch, relative}" -- bits 15-12 fixed
     // "1011" (0xB000), bits 11-0 a 12-bit SIGNED relative offset ("o", per the table's own legend:
     // "o: signed offset") embedded directly in the one word -- no trailing word at all, which is
@@ -3908,6 +4026,16 @@ public static class CvmInstructionSet
         if (string.Equals(shape.Mnemonic, Const32Mnemonic, StringComparison.Ordinal))
         {
           return $"{shape.Mnemonic} d{first} {FormatOperand(second)}";
+        }
+
+        // ADDED 2026-10-13: fadd/fsub/fmin/fmax/fmul/fdiv's NEW encoding (FloatingPointBinaryOperationTag)
+        // lists BOTH operands as "dN" double-register tokens -- "fadd d3 d2" -- not the generic
+        // "fadd 3 2" the fallback below would otherwise print. See FloatingPointBinaryOperationTag's
+        // own remarks for why this is flagged rather than certain.
+        if (shape.Mnemonic is FloatingPointAddMnemonic or FloatingPointSubtractMnemonic or FloatingPointMinimumMnemonic
+            or FloatingPointMaximumMnemonic or FloatingPointMultiplyMnemonic or FloatingPointDivideMnemonic)
+        {
+          return $"{shape.Mnemonic} d{first} d{second}";
         }
 
         return $"{shape.Mnemonic} {FormatOperand(first)} {FormatOperand(second)}";

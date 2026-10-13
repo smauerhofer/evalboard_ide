@@ -446,6 +446,28 @@ public static class CvmAssembler
             break;
           }
 
+          // ADDED 2026-10-13: fadd/fsub/fmin/fmax/fmul/fdiv's NEW encoding
+          // (CvmInstructionSet.FloatingPointBinaryOperationTag) -- the generic EmbeddedUnsignedValuePair
+          // branch just below would already enforce the right ARG COUNT (two), since these six
+          // mnemonics' shape uses that encoding, but its own generic error message ("fadd 3 2") doesn't
+          // tell the reader BOTH operands are registers -- this dedicated branch exists purely for a
+          // syntax-accurate example, mirroring c32's own dedicated message just above. The real
+          // parsing/encoding (register-token operands, not plain numbers) happens in pass 2's own shared
+          // "case FloatingPointAddMnemonic: ... case FloatingPointDivideMnemonic:", not here.
+          if (shape.Mnemonic is CvmInstructionSet.FloatingPointAddMnemonic or CvmInstructionSet.FloatingPointSubtractMnemonic
+              or CvmInstructionSet.FloatingPointMinimumMnemonic or CvmInstructionSet.FloatingPointMaximumMnemonic
+              or CvmInstructionSet.FloatingPointMultiplyMnemonic or CvmInstructionSet.FloatingPointDivideMnemonic)
+          {
+            if (line.Args.Count != 2)
+            {
+              errors.Add($"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly two double-register operands (destination first), e.g. \"{shape.Mnemonic} d3 d2\".");
+              break;
+            }
+
+            sectionCursors[section] += shape.WordLength;
+            break;
+          }
+
           // ADDED 2026-10-04: rlit/dlit take TWO operands (register, literal) although their shape is
           // NodeResolvedEmbeddedValue: "rlit r1, 0x1234", "dlit d1, 0x12345678".
           bool isRegisterLiteral = shape.Mnemonic is CvmInstructionSet.RegisterLiteralMnemonic or CvmInstructionSet.DoubleLiteralMnemonic;
@@ -742,6 +764,66 @@ public static class CvmAssembler
             }
 
             c32Section.Words.Add(c32Shape.Tag | (c32Register & c32Shape.ValueBitMask) | ((c32Index << c32Shape.SecondValueBitShift) & c32Shape.SecondValueBitMask));
+            break;
+          }
+
+        case CvmInstructionSet.FloatingPointAddMnemonic:
+        case CvmInstructionSet.FloatingPointSubtractMnemonic:
+        case CvmInstructionSet.FloatingPointMinimumMnemonic:
+        case CvmInstructionSet.FloatingPointMaximumMnemonic:
+        case CvmInstructionSet.FloatingPointMultiplyMnemonic:
+        case CvmInstructionSet.FloatingPointDivideMnemonic:
+          {
+            // "fadd d3 d2" etc. -- NEW 2026-10-13, per Stefan directly ("i would like to test the
+            // float32 binary opcodes. replace the old float32 opcodes with the new ones."), replacing
+            // the OLD 0xDC00-based "fadd f g" (two PLAIN numbers, an fr[0..7] register-file index) --
+            // see CvmInstructionSet.FloatingPointBinaryOperationTag's own remarks for the full
+            // derivation and the two flagged opens. Fully self-describing
+            // (CvmOperandEncoding.EmbeddedUnsignedValuePair, no node compile, no relocation) -- but
+            // UNLIKE the OLD scheme, BOTH operands are destination/source double-register TOKENS
+            // ("d3"/"d2"), not bare numbers, so this is written out directly here instead of falling
+            // into the generic EmbeddedUnsignedValuePair branch below, exactly like c32 intercepts its
+            // own register-token first operand just above.
+            CvmInstructionSet.CvmInstructionShape fBinShape = CvmInstructionSet.TryGetShape(line.Directive)!;
+            CvmSection fBinSection = objectFile.GetOrAddSection(section);
+
+            int fBinMaxRegister = fBinShape.ValueBitMask >> fBinShape.ValueBitShift;
+
+            int ParseFloatBinaryRegisterOperand(string token, string operandDescription)
+            {
+              if (token.Length >= 2 && char.ToLowerInvariant(token[0]) == 'r')
+              {
+                // Explicitly called out, not just "not a number": both of these operands are always
+                // DOUBLE registers -- r0..r15 would silently alias the wrong half of some dN if accepted.
+                errors.Add($"line {line.LineNumber}: \"{fBinShape.Mnemonic}\"'s {operandDescription} is a DOUBLE register -- write d0..d{fBinMaxRegister} (e.g. \"{fBinShape.Mnemonic} d3 d2\"), not \"{token}\": {fBinShape.Mnemonic} has no r-register form.");
+                return 0;
+              }
+
+              int parsed;
+              if (token.Length >= 2 && char.ToLowerInvariant(token[0]) == 'd' &&
+                  int.TryParse(token.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out parsed))
+              {
+                // Parsed as a "dN" token -- range-checked below, same as the plain-number fallback.
+              }
+              else if (!TryParseNumericLiteral(token, out parsed))
+              {
+                errors.Add($"line {line.LineNumber}: \"{token}\" is not a valid {operandDescription} for \"{fBinShape.Mnemonic}\" -- write d0..d{fBinMaxRegister} or a plain number, e.g. \"{fBinShape.Mnemonic} d3 d2\".");
+                return 0;
+              }
+
+              if (parsed < 0 || parsed > fBinMaxRegister)
+              {
+                errors.Add($"line {line.LineNumber}: \"{token}\" is out of range for \"{fBinShape.Mnemonic}\" -- expected d0..d{fBinMaxRegister}.");
+                return 0;
+              }
+
+              return parsed;
+            }
+
+            int fBinFirst = ParseFloatBinaryRegisterOperand(line.Args[0], "destination/first operand");
+            int fBinSecond = ParseFloatBinaryRegisterOperand(line.Args[1], "second operand");
+
+            fBinSection.Words.Add(fBinShape.Tag | (fBinFirst & fBinShape.ValueBitMask) | ((fBinSecond << fBinShape.SecondValueBitShift) & fBinShape.SecondValueBitMask));
             break;
           }
 
