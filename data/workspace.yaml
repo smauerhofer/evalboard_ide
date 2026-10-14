@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-13T11:29:38.8605962
-      utcDateTime: 2026-10-13T11:29:38.8605962Z
-      localDateTime: 2026-10-13T13:29:38.8605962+02:00
-      date: 2026-10-13T00:00:00.0000000
-      day: 13
-      dayOfWeek: Tuesday
-      dayOfYear: 286
-      hour: 11
-      millisecond: 860
-      microsecond: 596
+      dateTime: 2026-10-14T08:11:38.4835162
+      utcDateTime: 2026-10-14T08:11:38.4835162Z
+      localDateTime: 2026-10-14T10:11:38.4835162+02:00
+      date: 2026-10-14T00:00:00.0000000
+      day: 14
+      dayOfWeek: Wednesday
+      dayOfYear: 287
+      hour: 8
+      millisecond: 483
+      microsecond: 516
       nanosecond: 200
-      minute: 29
+      minute: 11
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
       second: 38
-      ticks: 639274877788605962
-      utcTicks: 639274877788605962
-      timeOfDay: 11:29:38.8605962
+      ticks: 639275622984835162
+      utcTicks: 639275622984835162
+      timeOfDay: 08:11:38.4835162
       year: 2026
   portB: 
   portC:
@@ -67197,9 +67197,8 @@ projects:
         # 0 org
 
 
-        : f4/sub inv . +
-
-
+        : f4/sub
+          >r inv r> . + inv
 
         : f4/gt ( d-c )
           -if
@@ -67320,28 +67319,29 @@ projects:
           f4/main
         ;
       ramWords:
-      - 0x329F2
-      - 0x1B404
+      - 0x2E69A
+      - 0x3C6B2
+      - 0x1B405
       - 0x3BD55
       - 0x20000
-      - 0x19407
+      - 0x19408
       - 0x3BD55
       - 0x08000
       - 0x15555
       - 0x04A82
       - 0x00115
       - 0x0AD2D
-      - 0x13408
+      - 0x13409
       - 0x04A12
       - 0x00175
       - 0x11409
       - 0x0B555
-      - 0x13408
+      - 0x13409
       - 0x04AB2
       - 0x00175
       - 0x13400
-      - 0x19418
-      - 0x13401
+      - 0x19419
+      - 0x13402
       - 0x09D2D
       - 0x11409
       - 0x05A0A
@@ -67349,26 +67349,26 @@ projects:
       - 0x09555
       - 0x2AD12
       - 0x00001
-      - 0x3931F
+      - 0x39320
       - 0x3B555
       - 0x3A9B2
       - 0x23B02
-      - 0x19423
+      - 0x19424
       - 0x3B555
       - 0x3BDB0
       - 0x3FFFF
-      - 0x11420
+      - 0x11421
       - 0x15555
       - 0x04B12
       - 0x00175
       - 0x1341E
-      - 0x1341B
+      - 0x1341C
       - 0x2FDB2
       - 0x1342F
-      - 0x1341B
+      - 0x1341C
       - 0x27D22
       - 0x11409
-      - 0x11408
+      - 0x11409
       - 0x04B02
       - 0x001D5
       - 0x01DAA
@@ -67377,15 +67377,14 @@ projects:
       - 0x0BF2A
       - 0x01A02
       - 0x2F455
-      - 0x11431
-      - 0x15555
+      - 0x11432
       - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
       startup:
-        entryPoint: 0x031
+        entryPoint: 0x032
         p: 0x000
         a: 0x000
         b: 0x000
@@ -67393,7 +67392,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 203
       enabled: true
       sourceCode: >-
@@ -67650,7 +67649,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 204
       enabled: true
       sourceCode: >-
@@ -67837,7 +67836,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 205
       enabled: true
       sourceCode: >
@@ -69301,7 +69300,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 304
       enabled: true
       sourceCode: >-
@@ -69452,7 +69451,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#E6D6F7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 305
       enabled: true
       sourceCode: >+
@@ -69508,8 +69507,8 @@ projects:
           // receive sequence: hi lo
           // send sequence: lo hi
           right a!
-          @ @
-          !b !b
+          @ !b                  // hi
+          @ !b                  // lo
         ;
 
 
@@ -69557,7 +69556,7 @@ projects:
       - 0x040C9
       - 0x04A0A
       - 0x001D5
-      - 0x03B25
+      - 0x09E25
       - 0x36A1A
       - 0x09C25
       - 0x15555
@@ -69634,7 +69633,7 @@ projects:
 
         : 'xor ( w1 w2 - w' ) xor ;
 
-        : 'sub ( w1 w2 - w' ) x2/neg
+        : 'sub ( w1 w2 - w' ) >r inv r> . + inv ;
 
         : 'add ( w1 w2 - w' ) + ;
 
@@ -69644,11 +69643,6 @@ projects:
           >r 0xff and r>
           2* 2* 2* 2* 2* 2* 2* 2*
           xor
-        ;
-
-
-        : x2/neg ( w - w' )
-          inv 1 . +
         ;
 
 
@@ -69686,12 +69680,12 @@ projects:
 
 
 
-        : x2/binary16 ( r1 - )
-          // receive sequence: r1 w1 w2 addr
+        : x2/binary16 ( addr - )
+          // receive sequence: addr r1 w1 w2
           // send sequence: instr r w
-          >r @b @b
-          ( w1 w2 / r )
-          @b >r
+          @b >r >r @b
+          ( w1 / r addr )
+          @b
           ( w1 w2 / r addr )
           ex
           ( w / r )
@@ -69700,7 +69694,8 @@ projects:
         ;
 
 
-        : x2/binary32 ( addr ) // read sequence:
+        : x2/binary32 ( addr )
+          // receive sequence: addr d1 hi1 lo1 hi2 lo2
           A[ @p x3/binary32 ]] lit ! !
         : x2/pass4 leap
 
@@ -69709,7 +69704,7 @@ projects:
         : x2/pass1 then @b ! ;
 
 
-        : x2/unary32 ( addr ) // read sequence:
+        : x2/unary32 ( addr ) // receive sequence:
           A[ @p x3/unary32 ]] lit ! !
           x2/pass2
         ;
@@ -69718,7 +69713,17 @@ projects:
         : x2/float32 ( op - )
           // receive sequence: op d1 hi1 lo1 hi2 lo2
           down a!
-          A[ @p x2c/float32 ]] lit ! !
+          A[ @p x2c/float32 ]] lit !
+          !              // send op
+          @b             // receive d1
+          ( d1 )
+          x2/pass4
+          right a!
+          A[ @p x3/store32 ]] lit !
+          !              // send d1
+          x2/pass2
+        ;
+
 
         : x2/const32 ( d - )
           >r
@@ -69738,7 +69743,8 @@ projects:
       - 0x320CD
       - 0x3F555
       - 0x39555
-      - 0x1340D
+      - 0x2E69A
+      - 0x3C655
       - 0x3D555
       - 0x15555
       - 0x2FDFA
@@ -69747,10 +69753,7 @@ projects:
       - 0x364DA
       - 0x364DA
       - 0x39555
-      - 0x33DB0
-      - 0x00001
-      - 0x15555
-      - 0x19415
+      - 0x19413
       - 0x05A2A
       - 0x05600
       - 0x01A02
@@ -69758,33 +69761,39 @@ projects:
       - 0x00803
       - 0x2ED92
       - 0x38AB2
-      - 0x1141B
+      - 0x11419
       - 0x0629A
       - 0x3EDBA
-      - 0x1F419
+      - 0x1F417
       - 0x23DAA
       - 0x001D5
       - 0x269B2
       - 0x05A2A
       - 0x05632
       - 0x0B555
-      - 0x2FF02
-      - 0x0085D
+      - 0x008BA
+      - 0x01F5D
       - 0x0409A
       - 0x0FFFF
-      - 0x1141F
+      - 0x1141D
       - 0x05A2A
       - 0x05634
-      - 0x1342A
-      - 0x1342B
+      - 0x13428
+      - 0x13429
       - 0x01A55
       - 0x05A2A
       - 0x05633
-      - 0x1142A
+      - 0x11428
       - 0x04A12
       - 0x00115
       - 0x05600
+      - 0x0BA02
+      - 0x13427
+      - 0x04A12
+      - 0x001D5
+      - 0x05635
       - 0x0BAB2
+      - 0x11428
       - 0x2FDAA
       - 0x00175
       - 0x03E9F
@@ -69792,10 +69801,6 @@ projects:
       - 0x2BD2A
       - 0x05635
       - 0x0BA2D
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       startup:
@@ -70002,7 +70007,6 @@ projects:
         : x3/binary32 ( d1 - )
 
         ;
-
 
 
         : x3/store32 ( d - )
@@ -71313,7 +71317,7 @@ projects:
         # 306 import
 
 
-        # up /b
+        # down /b
 
         # left /a
 
@@ -71326,9 +71330,13 @@ projects:
         # 0 org
 
 
+        /*
+
         : x1a/continue ( op instr - op )
           up b! !b dup !b
         ;
+
+        */
 
 
         : x1a/send4 ( w - )
@@ -71355,20 +71363,19 @@ projects:
 
 
         : x1a/begin406 ( instr - )
-          left b! !b
+          left a! !
         ;
 
 
         : x1a/begin305 ( instr - )
-          up b! !b
+          up a! !
         ;
 
 
         : x1a/unary ( instr2 - )
           // receive sequence: instr3 r addr
           // send sequence: instr2 instr3 addr r
-          down b!
-          !          // send instr2
+          x1a/begin406   // send instr2
           @b !       // send instr3
           @b         // receive r
           ( r )
@@ -71382,8 +71389,7 @@ projects:
         : x1a/binary ( instr2 - )
           // receive sequence: instr2 instr3 r1 r2 addr
           // send sequence: instr2 instr3 addr r1 r2
-          down b!
-          !          // send instr2
+          x1a/begin406 // send instr2
           @b !       // send instr3
           @b >r      // receive r1
           ( / r1 )
@@ -71405,35 +71411,32 @@ projects:
           !                     // send d
           @                     // wait for focus-transfer stimulus
 
-          down a!
-          @                     // receive constant index from node 505
-          up a!
-          A[ @p x2a/const ]] lit !
+          @b                    // receive constant index from node 505
+          A[ @p x2a/const ]] lit x1a/begin305
           !                     // send index to node 305
-          left a!               // restore output to node 406
-          down b!               // select node 505
           !b                    // return stimulus
         ;
 
 
-        : x1a/float32 ( instr2 - )
-          // receive sequence: instr2 instr3 r1 r2 addr
-          // send sequence 406: instr1 instr2 d
+        : x1a/float32 ( d1 - )
+          // receive sequence: d1 d2 o
+          // send sequence 406: instr1 instr2 o d1 d2
           // send sequence 305: instr const#
-          down b!
-          !          // send instr2
-          @b !       // send instr3
-          @b         // f1
-          @b         // f2
-          @b         // o
-
-
-          ( op )
-
-          @b // read op
-          !
+          A[ @p x1/binary32 ]] lit x1a/begin406
+          A[ @p x2/float32 ]] lit !
+          >r         // d1
+          ( / d1 )
+          @b         // receive d2
+          ( d2 / d1 )
+          @b         // receive o
+          ( d2 o / d1 )
+          0x7 and
+          !          // send o
+          r> !       // send d1
+          !          // send d2
+          @          // wait for stimulus
           !b // return stimulus
-
+          A[ x2a/float32 ]] lit x1a/begin305
         ;
 
 
@@ -71453,55 +71456,55 @@ projects:
 
 
       ramWords:
-      - 0x04B23
-      - 0x00145
-      - 0x09555
       - 0x04025
       - 0x0000F
       - 0x04025
       - 0x0003F
-      - 0x25603
+      - 0x25600
       - 0x307C2
       - 0x31555
       - 0x03DA2
       - 0x00115
       - 0x09555
-      - 0x04B25
+      - 0x04A2D
       - 0x00175
-      - 0x04B25
+      - 0x04A2D
       - 0x00145
-      - 0x04B2A
-      - 0x00115
+      - 0x1340A
       - 0x01A02
       - 0x01A2A
       - 0x03B55
-      - 0x04B2A
-      - 0x00115
+      - 0x1340A
       - 0x01A02
       - 0x2FF02
       - 0x0AC2A
       - 0x0BE25
-      - 0x0560D
-      - 0x05637
+      - 0x0560A
+      - 0x05638
       - 0x05A2A
-      - 0x05633
-      - 0x03DAA
-      - 0x00115
-      - 0x03DAF
-      - 0x00145
-      - 0x05623
-      - 0x0BA12
-      - 0x00175
-      - 0x2BDA2
-      - 0x00115
-      - 0x09555
-      - 0x01A25
-      - 0x0560D
       - 0x05639
+      - 0x03F12
+      - 0x05623
+      - 0x1340C
       - 0x0BB55
-      - 0x0560D
+      - 0x0560A
+      - 0x05633
+      - 0x05ABA
+      - 0x0562F
+      - 0x01F12
+      - 0x00007
+      - 0x3FA9A
+      - 0x0BA0A
+      - 0x09DB2
+      - 0x13420
+      - 0x1140C
+      - 0x0560A
       - 0x0563A
       - 0x0BB55
+      - 0x0560A
+      - 0x0563B
+      - 0x0BB55
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -71661,8 +71664,8 @@ projects:
           @b !          // send addr
           @b dup !      // send r
           x1/r@
-        : x1/finish
-          !                     // send w
+        : x1/finish ( - )
+          !             // send w
           A[ r/focus_se ]] lit x1/n407
           x1/back
           !b           // send stimulus
@@ -71671,39 +71674,40 @@ projects:
 
         : x1/binary16 ( instr3 - )
           // receive sequence: addr r1 r2
-          // send sequence: instr3 r w1 w2 addr
+          // send sequence: instr3 addr r w1 w2
           !             // send instr3
           @b            // receive addr
           ( addr )
+          !             // send addr
           @b dup !      // send r
           x1/r@ !       // send w1
-          @b x1/r@ !    // send w2
-          ( addr )
-          x1/finish     // send addr
+          @b x1/r@      // 
+          ( w )
+          x1/finish     // send w2
         ;
 
 
         : x1/unary32 ( instr3 - )
           // receive sequence: addr d
-          // send sequence: instr3 d hi lo addr
+          // send sequence: instr3 addr d hi lo
           !             // send instr3
           @b            // receive addr
           ( addr )
+          !             // send addr
           @b dup !      // send d
-        : x1/finishd ( addr d )
+        : x1/finishd ( d )
           x1/d@ !       // send hi
-          !             // send lo
-          ( addr )
-          x1/finish     // send addr
+          x1/finish     // send lo
         ;
 
 
         : x1/binary32 ( instr3 - )
-          // receive sequence: addr d1 d2
-          // send sequence: instr3 d1 hi1 lo1 hi2 lo2 addr
+          // receive sequence: instr3 addr d1 d2
+          // send sequence: instr3 addr d1 hi1 lo1 hi2 lo2
           !             // send instr3
           @b            // receive addr
           ( addr )
+          !             // send addr
           @b dup !      // send d1
           x1/d@ !       // send hi1
           !             // send lo1
@@ -71718,6 +71722,7 @@ projects:
           @b
           x1/finish             // send d, transfer focus, return stimulus
         ;
+
 
 
         : x1/input
@@ -71771,25 +71776,25 @@ projects:
       - 0x1340E
       - 0x13414
       - 0x09555
-      - 0x0BF03
-      - 0x0B612
+      - 0x0BF2A
+      - 0x00D2A
+      - 0x13412
       - 0x0BFB2
       - 0x13412
-      - 0x0B724
-      - 0x0BF03
-      - 0x0A9B2
+      - 0x11424
+      - 0x0BF2A
+      - 0x00D2A
       - 0x13417
-      - 0x0BAB2
-      - 0x11424
-      - 0x0BF03
-      - 0x0B617
+      - 0x0B724
+      - 0x0BF2A
+      - 0x00D2A
+      - 0x13417
       - 0x0BA02
-      - 0x11430
+      - 0x11431
+      - 0x0BFB2
       - 0x11424
       - 0x11424
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x11424
       - 0x15555
       - 0x15555
       - 0x15555
@@ -73347,9 +73352,9 @@ projects:
       - 0x09B55
       - 0x3720B
       - 0x05700
-      - 0x0562E
+      - 0x05639
       - 0x05700
-      - 0x0562B
+      - 0x05636
       - 0x0402D
       - 0x0000F
       - 0x0402D
@@ -73371,7 +73376,7 @@ projects:
       - 0x1142C
       - 0x05A12
       - 0x05611
-      - 0x0562E
+      - 0x0562F
       - 0x0BD2A
       - 0x0562C
       - 0x11439
@@ -73410,7 +73415,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEDE'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 506
       enabled: true
       sourceCode: >+
@@ -75391,7 +75396,255 @@ projects:
           ret
     - name: test
       source: >
-        c32 d0 0
+        // Float32 ADD/SUB: seven failing cases extracted from the full regression.
+
+        // Node 507: FP=0000, SP=FFFF, PC=0000.
+
+        // Original case numbers retained for comparison with the full trace.
+
+        // Expected results use binary32 round-to-nearest-even; exact cancellation gives +0.
+
+        // dpush/drop/drop: write HI at 1:FFFF, LO at 1:FFFE; read LO then HI.
+
+        // Includes original source and guard checks. Expectations are comments.
+
+
+        // Case 027: add d0 d1; negative finite / positive finite.
+
+        // X=C0200000, Y=3FC00000, expected X=BF800000.
+
+        dlit d0 0xC020 0x0000
+
+        dlit d1 0x3FC0 0x0000
+
+        dlit d2 0xA544 0xB847
+
+        .word 0xF810 // float32 add d0 d1
+
+        // Observation 001: destination result; d0=BF800000.
+
+        dpush d0
+
+        drop // expected LO 0000
+
+        drop // expected HI BF80
+
+        // Observation 002: source unchanged; d1=3FC00000.
+
+        dpush d1
+
+        drop // expected LO 0000
+
+        drop // expected HI 3FC0
+
+        // Observation 003: guard unchanged; d2=A544B847.
+
+        dpush d2
+
+        drop // expected LO B847
+
+        drop // expected HI A544
+
+
+        // Case 076: add d2 d13; finite boundary.
+
+        // X=3F800000, Y=BF800000, expected X=00000000.
+
+        dlit d2 0x3F80 0x0000
+
+        dlit d13 0xBF80 0x0000
+
+        dlit d0 0xA50C 0x787C
+
+        .word 0xF8D2 // float32 add d2 d13
+
+        // Observation 004: destination result; d2=00000000.
+
+        dpush d2
+
+        drop // expected LO 0000
+
+        drop // expected HI 0000
+
+        // Observation 005: source unchanged; d13=BF800000.
+
+        dpush d13
+
+        drop // expected LO 0000
+
+        drop // expected HI BF80
+
+        // Observation 006: guard unchanged; d0=A50C787C.
+
+        dpush d0
+
+        drop // expected LO 787C
+
+        drop // expected HI A50C
+
+        // Register field sweep; each register used as destination and source.
+
+
+        // Case 117: sub d0 d1; positive finite / positive finite.
+
+        // X=3FC00000, Y=3FC00000, expected X=00000000.
+
+        dlit d0 0x3FC0 0x0000
+
+        dlit d1 0x3FC0 0x0000
+
+        dlit d2 0xA5DF 0x1E89
+
+        .word 0xF910 // float32 sub d0 d1
+
+        // Observation 007: destination result; d0=00000000.
+
+        dpush d0
+
+        drop // expected LO 0000
+
+        drop // expected HI 0000
+
+        // Observation 008: source unchanged; d1=3FC00000.
+
+        dpush d1
+
+        drop // expected LO 0000
+
+        drop // expected HI 3FC0
+
+        // Observation 009: guard unchanged; d2=A5DF1E89.
+
+        dpush d2
+
+        drop // expected LO 1E89
+
+        drop // expected HI A5DF
+
+
+        // Case 125: sub d0 d1; negative finite / positive finite.
+
+        // X=C0200000, Y=3FC00000, expected X=C0800000.
+
+        dlit d0 0xC020 0x0000
+
+        dlit d1 0x3FC0 0x0000
+
+        dlit d2 0xA5D4 0x38B1
+
+        .word 0xF910 // float32 sub d0 d1
+
+        // Observation 010: destination result; d0=C0800000.
+
+        dpush d0
+
+        drop // expected LO 0000
+
+        drop // expected HI C080
+
+        // Observation 011: source unchanged; d1=3FC00000.
+
+        dpush d1
+
+        drop // expected LO 0000
+
+        drop // expected HI 3FC0
+
+        // Observation 012: guard unchanged; d2=A5D438B1.
+
+        dpush d2
+
+        drop // expected LO 38B1
+
+        drop // expected HI A5D4
+
+
+        // Case 191: sub d0 d0; same register.
+
+        // X=3FC00000, Y=3FC00000, expected X=00000000.
+
+        dlit d0 0x3FC0 0x0000
+
+        dlit d1 0xA583 0x507B
+
+        .word 0xF900 // float32 sub d0 d0
+
+        // Observation 013: destination result; d0=00000000.
+
+        dpush d0
+
+        drop // expected LO 0000
+
+        drop // expected HI 0000
+
+        // Observation 014: guard unchanged; d1=A583507B.
+
+        dpush d1
+
+        drop // expected LO 507B
+
+        drop // expected HI A583
+
+
+        // Case 193: sub d7 d7; same register.
+
+        // X=00000001, Y=00000001, expected X=00000000.
+
+        dlit d7 0x0000 0x0001
+
+        dlit d0 0xA581 0x9705
+
+        .word 0xF977 // float32 sub d7 d7
+
+        // Observation 015: destination result; d7=00000000.
+
+        dpush d7
+
+        drop // expected LO 0000
+
+        drop // expected HI 0000
+
+        // Observation 016: guard unchanged; d0=A5819705.
+
+        dpush d0
+
+        drop // expected LO 9705
+
+        drop // expected HI A581
+
+
+        // Case 194: sub d8 d8; same register.
+
+        // X=7F7FFFFF, Y=7F7FFFFF, expected X=00000000.
+
+        dlit d8 0x7F7F 0xFFFF
+
+        dlit d0 0xA586 0xBA4A
+
+        .word 0xF988 // float32 sub d8 d8
+
+        // Observation 017: destination result; d8=00000000.
+
+        dpush d8
+
+        drop // expected LO 0000
+
+        drop // expected HI 0000
+
+        // Observation 018: guard unchanged; d0=A586BA4A.
+
+        dpush d0
+
+        drop // expected LO BA4A
+
+        drop // expected HI A586
+
+
+        // Completion marker.
+
+        push 0x600D
+
+        drop // expected 600D at 1:FFFF
 
         halt
     - name: microcode regression test
@@ -117511,7 +117764,7 @@ projects:
         drop // expected 600D at 1:FFFF
 
         halt
-    lastSelectedDebuggerProgramName: binary float32 regression test
+    lastSelectedDebuggerProgramName: c32 regression test
     cDebuggerPrograms:
     - name: default
       source: >
