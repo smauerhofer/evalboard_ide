@@ -767,7 +767,21 @@ internal static class CvmAssemblyLanguage
         // execute" dispatch -- see Node507Cvm2LocalExecuteTagBits's own remarks for the derivation (not
         // yet confirmed with Stefan). Corrected 2026-09-01 from node 508 (a mistaken earlier attribution
         // in this project's own session -- see this class's own remarks) to node 507, CVM2's real CPU.
-        [NopMnemonic] = (Node507Program.Coordinate, "'nop", Node507Cvm2LocalExecuteTagBits),
+        // NopMnemonic ("nop") -- this OLD CVM2-era entry was missed when nop's own Instructions row
+        // became CvmOperandEncoding.FixedOpcode (new VM reset, 2026-09-30 -- see
+        // CvmInstructionSet.Instructions' own remarks on nop's Id 0: "a reshaping of what nop IS, not a
+        // retirement-and-replacement," so unlike push/pop/ret's sibling CVM2-era entries right around
+        // here, nothing flagged this one for comment-out at the time). A FixedOpcode mnemonic's real
+        // opcode comes straight from its own Tag (0x0000 here) -- no node, no symbol, no live compile --
+        // so this entry was ALREADY dead code from that day on, regardless of what it points at.
+        // SPOTTED 2026-10-15, cross-checking the newest CVM_pipeline source against this toolchain
+        // (see cvm-opcode-audit-2026-10-15.md): the OLD coordinate (node 507) doesn't even have a 'nop
+        // word any more (that pasted source only has one on node 509, where node 206/306/etc.'s other
+        // relays live). Stefan confirmed: "'nop is in node 509. the opcode is still 0." -- i.e. this
+        // doesn't matter, nop's opcode is unconditionally 0x0000 either way. Commented out here, same
+        // treatment as push/pop/ret's own OLD CVM2-era entries just below, rather than left pointing at
+        // a node that no longer defines the word it names.
+        // [NopMnemonic] = (Node507Program.Coordinate, "'nop", Node507Cvm2LocalExecuteTagBits),
         [PushLitMnemonic] = (Node507Program.Coordinate, "'plit", Node507Cvm2LocalExecuteTagBits),
         // PushMnemonic ("push") -- RETIRED 2026-10-02, SAME REASON as RetMnemonic's/LongCallMnemonic's
         // own OLD entries elsewhere in this dictionary (a Dictionary literal cannot hold two entries
@@ -905,9 +919,9 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoublePopIndirectMnemonic] = (Node509Program.Coordinate, "'dpopi", Node509SpecialBaseTagBits),
         [CvmInstructionSet.RegisterPushIndirectMnemonic] = (Node509Program.Coordinate, "'rpushi", Node509SpecialBaseTagBits),
         [CvmInstructionSet.DoublePushIndirectMnemonic] = (Node509Program.Coordinate, "'dpushi", Node509SpecialBaseTagBits),
-        [CvmInstructionSet.RegisterIncrementMnemonic] = (Node509Program.Coordinate, "'rinc", Node509SpecialBaseTagBits),
-        [CvmInstructionSet.RegisterDecrementMnemonic] = (Node509Program.Coordinate, "'rdec", Node509SpecialBaseTagBits),
-        [CvmInstructionSet.RegisterAddMnemonic] = (Node509Program.Coordinate, "'radd", Node509SpecialBaseTagBits),
+        // RegisterIncrementMnemonic/RegisterDecrementMnemonic/RegisterAddMnemonic ("rinc"/"rdec"/"radd")
+        // -- DELETED OUTRIGHT 2026-10-15 along with their constants in CvmInstructionSet.cs; see that
+        // file's own remarks (where these three constants used to be declared) for the full history.
         // 'halt (2026-10-03): "stop execution until reset or interrupt" -- table entry 2 words, WITHOUT focus.
         [CvmInstructionSet.HaltMnemonic] = (Node509Program.Coordinate, "'halt", Node509SpecialBaseTagBits),
         // 2026-10-04: node 509's second batch of words (see CvmInstructionSet.DoubleFetchMnemonic's remarks) --
@@ -1438,9 +1452,8 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoublePopIndirectMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.RegisterPushIndirectMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.DoublePushIndirectMnemonic] = Node509SpecialAddressShift,
-        [CvmInstructionSet.RegisterIncrementMnemonic] = Node509SpecialAddressShift,
-        [CvmInstructionSet.RegisterDecrementMnemonic] = Node509SpecialAddressShift,
-        [CvmInstructionSet.RegisterAddMnemonic] = Node509SpecialAddressShift,
+        // RegisterIncrementMnemonic/RegisterDecrementMnemonic/RegisterAddMnemonic -- DELETED OUTRIGHT
+        // 2026-10-15, see CvmInstructionSet.cs's own remarks.
         [CvmInstructionSet.HaltMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.DoubleFetchMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.DoubleStoreMnemonic] = Node509SpecialAddressShift,

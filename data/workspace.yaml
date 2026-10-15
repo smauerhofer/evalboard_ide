@@ -76608,7 +76608,7 @@ projects:
 
         ret
     - name: 16-bit unary regression test
-      source: >
+      source: >+
         // div2: signed arithmetic shift
 
         rlit r0 0x0000
@@ -77143,11 +77143,11 @@ projects:
 
 
 
-        // bitcount
+        // bitcnt
 
         rlit r0 0x0000
 
-        bitcount r0
+        bitcnt r0
 
         rpush r0
 
@@ -77158,7 +77158,7 @@ projects:
 
         rlit r0 0x8000
 
-        bitcount r0
+        bitcnt r0
 
         rpush r0
 
@@ -77169,7 +77169,7 @@ projects:
 
         rlit r0 0x5555
 
-        bitcount r0
+        bitcnt r0
 
         rpush r0
 
@@ -77180,7 +77180,7 @@ projects:
 
         rlit r0 0xFFFF
 
-        bitcount r0
+        bitcnt r0
 
         rpush r0
 
@@ -77189,7 +77189,7 @@ projects:
         // expected: 0010
 
 
-        // Verify A was restored after bitcount
+        // Verify A was restored after bitcnt
 
         rlit r0 0x1234
 
@@ -147880,7 +147880,7 @@ projects:
         drop // expected 600D at 1:FFFF
 
         halt
-    lastSelectedDebuggerProgramName: bitcnt regression test
+    lastSelectedDebuggerProgramName: binary32 regression test
     cDebuggerPrograms:
     - name: default
       source: >
