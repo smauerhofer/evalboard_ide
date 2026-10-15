@@ -930,6 +930,15 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoubleStoreMnemonic] = (Node509Program.Coordinate, "'dstore", Node509SpecialBaseTagBits),
         [CvmInstructionSet.RegisterLiteralMnemonic] = (Node509Program.Coordinate, "'rlit", Node509SpecialBaseTagBits),
         [CvmInstructionSet.DoubleLiteralMnemonic] = (Node509Program.Coordinate, "'dlit", Node509SpecialBaseTagBits),
+        // ldf/stf (NEW 2026-10-16, see CvmInstructionSet.LoadFrameMnemonic's own remarks): same
+        // register-plus-trailing-word shape as 'rlit just above, on node 509's own special-word table.
+        // No entry is needed in NodeResolvedEmbeddedValueFieldLayoutByMnemonic or
+        // NodeResolvedAddressShiftByMnemonic below -- like every other node-509 special word, both
+        // Build*Table methods route this family through TryResolveNode509SpecialOpcode instead (see its
+        // own remarks), which reads the address/word-count/register-bit straight from node 509's live
+        // source rather than a per-mnemonic table entry here.
+        [CvmInstructionSet.LoadFrameMnemonic] = (Node509Program.Coordinate, "'ldf", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.StoreFrameMnemonic] = (Node509Program.Coordinate, "'stf", Node509SpecialBaseTagBits),
         [CvmInstructionSet.RegisterJumpMnemonic] = (Node509Program.Coordinate, "'rjmp", Node509SpecialBaseTagBits),
         [CvmInstructionSet.RegisterCallMnemonic] = (Node509Program.Coordinate, "'rcall", Node509SpecialBaseTagBits),
         [CvmInstructionSet.DropMnemonic] = (Node509Program.Coordinate, "'drop", Node509SpecialBaseTagBits),

@@ -116,35 +116,29 @@ internal static class F18Tokenizer
       var tokenLine = line;
       var tokenColumn = column;
 
-      if ((current == 'A' || current == 'a') && index + 1 < source.Length && source[index + 1] == '[')
-      {
-        tokens.Add(new F18Token("A[", tokenLine, tokenColumn, index, 2));
-        Advance(current, ref index, ref line, ref column);
-        Advance('[', ref index, ref line, ref column);
-        continue;
-      }
-
-      if (current == ']' && index + 1 < source.Length && source[index + 1] == ']')
-      {
-        tokens.Add(new F18Token("]]", tokenLine, tokenColumn, index, 2));
-        Advance(current, ref index, ref line, ref column);
-        Advance(']', ref index, ref line, ref column);
-        continue;
-      }
-
+      // REMOVED 2026-10-16, per Stefan directly: "the tokenizer can be much simpler. every
+      // word needs to be separated by at least 1 whitespace. so no ']]' lookahead is needed.
+      // ']]' is simply a word that finishes the 'A[' sequence. then ']],' is not allowed,
+      // because ']],' is not a word, but ']]' and ',' are words." This used to special-case
+      // "A[" and "]]" as their own two-character tokens via explicit lookahead, independent
+      // of whether whitespace followed them -- which is exactly why a glued "]]," used to
+      // tokenize as two separate tokens ("]]" then ",") and silently compile, instead of
+      // being rejected as the single unrecognized word "]]," it actually is. Both mnemonics
+      // are ordinary reserved words to F18Compiler's own dispatch (its switch matches on
+      // token.Text alone, case "a[" / "]]"), so they need no tokenizer-level special
+      // treatment at all: like every other word, ':', ';', ',', '=', '[', ']' included (see
+      // the rule just below), they are only ever recognized when whitespace delimits them on
+      // BOTH sides -- a glued "]]," is now the single, undefined word "]]," and is reported
+      // as an unresolved word, not silently split.
+      //
       // ':', ';', ',', '=', '[', ']' are NOT self-delimiting -- matching strict
-      // Forth semantics, where every token (including these) is just a maximal
-      // run of non-whitespace characters. A properly spaced "main ;" still
-      // tokenizes as two tokens ("main" and ";") because whitespace already
-      // separates them below; a glued "main;" tokenizes as the single word
-      // "main;", which then fails to resolve as any known word -- exactly like
-      // a real Forth system would reject it, rather than silently splitting it
-      // the way a C-like tokenizer would. (The "A[" and "]]" two-character
-      // sequences above are this project's own packed-literal notation, not
-      // standard Forth syntax, and are unaffected by this rule -- they are
-      // recognized by their own explicit lookahead before this point is ever
-      // reached, and are always written adjacent to whitespace on the other
-      // side by convention, not by requirement.)
+      // Forth semantics, where every token is just a maximal run of non-whitespace
+      // characters. A properly spaced "main ;" still tokenizes as two tokens
+      // ("main" and ";") because whitespace already separates them below; a
+      // glued "main;" tokenizes as the single word "main;", which then fails to
+      // resolve as any known word -- exactly like a real Forth system would
+      // reject it, rather than silently splitting it the way a C-like tokenizer
+      // would. "A[" and "]]" now follow this exact same rule, with no exception.
       var start = index;
       while (index < source.Length)
       {

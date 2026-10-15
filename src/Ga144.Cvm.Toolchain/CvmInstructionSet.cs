@@ -804,6 +804,61 @@ public static class CvmInstructionSet
   public const string SwapMnemonic = "swap";
   public const string DupMnemonic = "dup";
 
+  /// <summary>
+  /// <c>ldf rX, offset</c> / <c>stf rX, offset</c> (ADDED 2026-10-16, two more words in node 509's own
+  /// microcode table -- Stefan confirmed there was still room: "all current CVM_pipeline opcodes are
+  /// confirmed working on hardware. we have some space left for microcodes in node 509. can 'ldf' and
+  /// 'stf' opcodes be implemented there for load/store relative to the frame pointer with the offset in
+  /// the next word?", then "yes, the offset is signed. use register for ldf and stf."
+  ///
+  /// This is the replacement for the OLD node-606/old-node-506 <c>ldl</c>/<c>stl</c>/<c>ldp</c>/<c>stp</c>
+  /// family (see <see cref="StoreLocalMnemonic"/>'s own remarks) -- which, along with <c>enter</c>/
+  /// <c>leave</c> and <c>f</c>/<c>pushf</c>, never got a replacement when the CVM_pipeline rebuild
+  /// retired them (see each of those four's own remarks; all four are currently commented-out,
+  /// unreachable <see cref="Instructions"/> rows). Unlike the old scheme's four-way split (locals get a
+  /// NEGATIVE embedded offset via <c>ldl</c>/<c>stl</c>, parameters a POSITIVE one via <c>ldp</c>/
+  /// <c>stp</c>), <c>ldf</c>/<c>stf</c> are ONE mnemonic pair: the offset is a full, SIGNED trailing
+  /// word (not a small embedded field), so it covers both directions -- negative for a local below
+  /// <c>fp</c>, positive for a parameter above it -- without needing two separate opcodes.
+  ///
+  /// Semantics: <c>ldf rX, offset</c> -- <c>rX := memory[page 1, fp + offset]</c>; <c>stf rX, offset</c>
+  /// -- <c>memory[page 1, fp + offset] := rX</c>. <b>Page 1, not page 0</b> -- per node 507's own
+  /// <c>m/push</c>/<c>m/pop</c>, the VM's stack (and therefore every local/parameter slot <c>fp</c>
+  /// addresses) lives in "ordinary memory at page 1, addressed by sp" (see
+  /// <c>claude/cvm-node507-memory-access.md</c>), NOT page 0 the way <c>rload</c>/<c>rstore</c>'s
+  /// pointer-register convention currently does -- node 509's own F18 body for these two words must
+  /// supply page 1 explicitly, not copy whatever page convention <c>rload</c>/<c>rstore</c> use.
+  ///
+  /// Shape: exactly <see cref="RegisterLiteralMnemonic"/>'s own shape, register embedded in the opcode
+  /// word (<see cref="SpecialRegisterFieldBitMask"/>, bits 3-0) plus ONE trailing word (the signed
+  /// offset) -- <see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/>, <c>WordLength</c> 2, "with
+  /// register" on node 509's own table. Both assemblers already special-case
+  /// <see cref="RegisterLiteralMnemonic"/>/<see cref="DoubleLiteralMnemonic"/> for exactly this "register
+  /// plus one trailing word" shape (two operands, second one a plain numeric literal rather than another
+  /// embedded register) -- <c>ldf</c>/<c>stf</c> are added to that same special-casing, not a new
+  /// mechanism (see <c>Ga144.Cvm.Toolchain.CvmAssembler</c>'s own remarks at that branch). The IDE-side
+  /// <c>Ga144.Evb.Ide.Services.CvmAssemblyLanguage</c> needs only a <c>NodeSymbolByMnemonic</c> entry --
+  /// unlike node 306's/308's node-resolved families, node 509's own "special word" table (<c>rlit</c>/
+  /// <c>dfetch</c>/<c>rjmp</c>/... already on it) resolves its address/size/register-bit generically from
+  /// the live F18 source's own "// size N with/without register." comment
+  /// (<c>TryResolveNode509SpecialOpcode</c>), with no further per-mnemonic field-layout entry needed.
+  ///
+  /// Fresh Ids 78/79 (every Id 0-77 is spoken for since the 2026-10-15 compaction) -- per that same
+  /// compaction's own new policy, a new entry's Id does not need to match its physical position in this
+  /// list, so these two are declared textually next to <see cref="RegisterLiteralMnemonic"/>/
+  /// <see cref="DoubleLiteralMnemonic"/> (their closest sibling in shape) even though 78/79 sort after
+  /// every row physically above them.
+  ///
+  /// NOT YET real: like every other node-509 word added ahead of Stefan's own F18 source landing in his
+  /// live Node Editor project (<c>rinc</c>/<c>rdec</c>/<c>radd</c>'s own now-closed history is the
+  /// cautionary precedent), assembling <c>ldf</c>/<c>stf</c> today will fail loudly via
+  /// <c>DiagnoseUnresolvedWiredMnemonic</c> ("node 509's current source does not define '<c>'ldf</c>'")
+  /// until node 509's own source actually defines <c>'ldf</c>/<c>'stf</c> with a "// size 2 with
+  /// register." comment underneath each.
+  /// </summary>
+  public const string LoadFrameMnemonic = "ldf";
+  public const string StoreFrameMnemonic = "stf";
+
   // ---- node 306's 16-bit unary and binary register operations (2026-10-04) ----------------------------------------
   // Stefan: table rows "1100|wwww|wwww|xxxx| 506 | unary 16-bit operation {w = address in node 306}" and
   // "1101|wwww|yyyy|xxxx| 506 | binary 16-bit operation {w = address in node 306}" ("x: parameter1, binary: x = x op y;
@@ -3148,6 +3203,12 @@ public static class CvmInstructionSet
     new(Id: 8, DoubleStoreMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 9, RegisterLiteralMnemonic, 2, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 10, DoubleLiteralMnemonic, 3, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
+    // ldf/stf (NEW 2026-10-16, see LoadFrameMnemonic's own remarks): same shape as rlit just above --
+    // register embedded (bits 3-0) plus one trailing word, here a SIGNED offset from fp rather than an
+    // arbitrary literal. Fresh Ids 78/79 (every Id through 77 is taken since the compaction); declared
+    // here, not at the end of this list, because rlit is their closest sibling in shape.
+    new(Id: 78, LoadFrameMnemonic, 2, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
+    new(Id: 79, StoreFrameMnemonic, 2, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 11, RegisterJumpMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 12, RegisterCallMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 13, DropMnemonic, 1, CvmOperandEncoding.None),

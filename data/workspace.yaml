@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-15T15:10:41.2666734
-      utcDateTime: 2026-10-15T15:10:41.2666734Z
-      localDateTime: 2026-10-15T17:10:41.2666734+02:00
+      dateTime: 2026-10-15T17:45:40.0005731
+      utcDateTime: 2026-10-15T17:45:40.0005731Z
+      localDateTime: 2026-10-15T19:45:40.0005731+02:00
       date: 2026-10-15T00:00:00.0000000
       day: 15
       dayOfWeek: Thursday
       dayOfYear: 288
-      hour: 15
-      millisecond: 266
-      microsecond: 673
-      nanosecond: 400
-      minute: 10
+      hour: 17
+      millisecond: 0
+      microsecond: 573
+      nanosecond: 100
+      minute: 45
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 41
-      ticks: 639276738412666734
-      utcTicks: 639276738412666734
-      timeOfDay: 15:10:41.2666734
+      second: 40
+      ticks: 639276831400005731
+      utcTicks: 639276831400005731
+      timeOfDay: 17:45:40.0005731
       year: 2026
   portB: 
   portC:
@@ -74093,9 +74093,9 @@ projects:
 
         : d/dsend ( w - ) down a! ! ;
 
+
         : d/lsend ( w - ) left a! ! ;
 
-        // : d/dreceive ( - w ) down a! A[ !p ]] lit ! @ ;
 
         : d/dreceive ( - w ) down a! @ ;
 
@@ -74123,7 +74123,6 @@ projects:
 
           A[ !p !p ]] lit !b // node 507 sends op, then sop
           @b @b              // receive ( op sop )
-        // : brk brk ;
 
           ( op sop )
           2* -if // 11*
@@ -74165,7 +74164,8 @@ projects:
             // true
             // branch
             A[ m/next ]] lit !b
-            A[ m/branch ]] lit !b ;
+            A[ a m/add ]] lit !b ;
+            A[ a! ]] lit !b ;
           then
           // false
           // no branch
@@ -74205,7 +74205,7 @@ projects:
       - 0x0BA0A
       - 0x3B555
       - 0x3AD12
-      - 0x0561A
+      - 0x0561B
       - 0x13400
       - 0x0B704
       - 0x04B12
@@ -74218,12 +74218,12 @@ projects:
       - 0x09F02
       - 0x37218
       - 0x05706
-      - 0x05614
+      - 0x05611
       - 0x37227
       - 0x37223
       - 0x3721D
       - 0x05706
-      - 0x05608
+      - 0x05600
       - 0x3ADC2
       - 0x307C7
       - 0x0003F
@@ -74231,33 +74231,33 @@ projects:
       - 0x0000F
       - 0x3F555
       - 0x05A2A
-      - 0x05602
+      - 0x05604
       - 0x03B0A
       - 0x09555
       - 0x3722B
       - 0x13409
       - 0x05B25
-      - 0x0560B
+      - 0x0560D
       - 0x13409
-      - 0x19431
+      - 0x19433
       - 0x05B12
-      - 0x13417
-      - 0x13423
+      - 0x13418
+      - 0x23606
       - 0x09555
       - 0x05B55
-      - 0x13427
+      - 0x2A9B2
+      - 0x05B55
+      - 0x13426
       - 0x05B12
       - 0x20FB2
-      - 0x0563A
+      - 0x05639
       - 0x09B55
       - 0x05B25
-      - 0x05634
+      - 0x05633
       - 0x05B55
-      - 0x2560B
+      - 0x2560D
       - 0x05B55
-      - 0x2160B
-      - 0x15555
-      - 0x15555
+      - 0x2160D
       - 0x15555
       startup:
         entryPoint: 0x011
@@ -74423,8 +74423,13 @@ projects:
         ;
 
 
+        : m/1write ( fp sp w addr - fp sp )
+          1 m/write
+        ;
+
+
         : m/push ( fp sp w - fp sp' )
-          over 1 m/write
+          over m/1write
         : m/dec ( w - w' )
           -1 m/add
         ;
@@ -74438,7 +74443,9 @@ projects:
 
 
         : m/pop ( fp sp - fp sp' w )
-          m/inc dup 1 m/read
+          m/inc dup
+        : m/1read ( fp sp addr - w )
+          1 m/read
         ;
 
 
@@ -74451,6 +74458,8 @@ projects:
           !b !b @b
         ;
 
+
+        : m/branch
 
         : m/inc ( w - w' )
           1 m/add
@@ -74467,11 +74476,6 @@ projects:
 
         : m/dpop ( fp sp - fp sp' hi lo )
           m/pop >r m/pop r>
-        ;
-
-
-        : m/branch ( offset - )
-          a m/add a!
         ;
 
 
@@ -74517,6 +74521,9 @@ projects:
         ;
 
 
+        : m/pointer@ ( fp sp d - fp sp address page )
+          A[ @p r/d@ ]] lit m/rsend !b @b @b ;
+
         : m/r! ( fp sp w r - fp sp )
           A[ @p r/r!x ]] lit m/rsend !b !b
         ;
@@ -74525,10 +74532,6 @@ projects:
         : m/d! ( fp sp hi lo d - fp sp )
           A[ @p r/d!x ]] lit m/rsend !b !b !b
         ;
-
-
-        : m/pointer@ ( fp sp d - fp sp address page )
-          A[ @p r/d@ ]] lit m/rsend !b @b @b ;
 
 
 
@@ -74540,51 +74543,50 @@ projects:
       - 0x00145
       - 0x04B25
       - 0x00115
-      - 0x2160B
-      - 0x25617
+      - 0x2160D
+      - 0x25618
       - 0x3DDFD
       - 0x0FFFF
-      - 0x13417
-      - 0x2EE4B
+      - 0x13418
+      - 0x2EE4D
       - 0x26A55
-      - 0x21D4F
+      - 0x05710
       - 0x00001
+      - 0x2160B
       - 0x05706
       - 0x3FFFF
       - 0x05600
       - 0x13415
       - 0x09B25
-      - 0x1341C
-      - 0x25DB2
+      - 0x1341D
+      - 0x249B2
+      - 0x0571A
       - 0x00001
-      - 0x11419
-      - 0x13417
-      - 0x23627
+      - 0x13418
+      - 0x23626
       - 0x24DE2
       - 0x05600
       - 0x13403
       - 0x09B05
       - 0x05706
       - 0x00001
-      - 0x2F60B
-      - 0x2770B
-      - 0x13412
-      - 0x2F612
+      - 0x2F60D
+      - 0x2770D
+      - 0x13413
+      - 0x2F613
       - 0x27555
-      - 0x23606
+      - 0x13413
       - 0x2B555
-      - 0x13412
+      - 0x2361D
       - 0x2B555
-      - 0x2361C
-      - 0x2B555
-      - 0x3B612
+      - 0x3B613
       - 0x21555
-      - 0x23627
+      - 0x23626
       - 0x05600
       - 0x1340C
       - 0x09FB2
       - 0x13575
-      - 0x1142B
+      - 0x1142A
       - 0x05602
       - 0x05626
       - 0x09F55
@@ -74600,8 +74602,9 @@ projects:
       - 0x05602
       - 0x05629
       - 0x09F05
+      - 0x15555
       startup:
-        entryPoint: 0x02B
+        entryPoint: 0x02A
         p: 0x000
         a: 0x000
         b: 0x000
@@ -74739,18 +74742,18 @@ projects:
 
       ramWords:
       - 0x27D22
-      - 0x0563D
+      - 0x0563C
       - 0x09D22
-      - 0x13419
+      - 0x1341A
       - 0x27D22
-      - 0x05637
+      - 0x05636
       - 0x09555
       - 0x26C12
-      - 0x05631
+      - 0x05630
       - 0x09B12
-      - 0x0563D
+      - 0x0563C
       - 0x09B12
-      - 0x1340F
+      - 0x13410
       - 0x09555
       - 0x05BB2
       - 0x15555
@@ -74768,7 +74771,7 @@ projects:
       - 0x37220
       - 0x367C2
       - 0x30712
-      - 0x05623
+      - 0x0561D
       - 0x09B55
       - 0x3722B
       - 0x3AD12
@@ -74972,67 +74975,75 @@ projects:
           A[ drop r> r> ]] ,
           A[ m/dpush ]] ,
 
+        : 'stl // store register to a VM stack location relative to the fp VM( - )
+          // size 4 with register.
+          ( fp sp r )
+          A[ m/r@ ]] , ( fp sp w )
+          A[ >r m/next ]] ,  ( fp sp offset / w )
+          A[ >r over r> ]] , ( fp sp fp offset )
+          A[ r> . + ]],
+
       ramWords:
       - 0x2C9B2
-      - 0x13425
+      - 0x13424
       - 0x13408
-      - 0x13417
+      - 0x13418
       - 0x2A9B2
       - 0x13404
-      - 0x13429
-      - 0x13416
-      - 0x1341E
+      - 0x13428
       - 0x13417
-      - 0x1340B
-      - 0x2F612
-      - 0x27637
-      - 0x2F620
-      - 0x2763A
-      - 0x13431
-      - 0x1340B
-      - 0x13434
-      - 0x1341E
-      - 0x13420
-      - 0x13437
-      - 0x13412
-      - 0x2F620
-      - 0x2763A
-      - 0x13412
-      - 0x13431
-      - 0x1340B
-      - 0x13412
-      - 0x13434
-      - 0x1341E
+      - 0x1341F
+      - 0x13418
+      - 0x1340D
+      - 0x2F613
+      - 0x27636
+      - 0x2F621
+      - 0x27639
+      - 0x13430
+      - 0x1340D
+      - 0x13433
+      - 0x1341F
+      - 0x13421
+      - 0x13436
+      - 0x13413
+      - 0x2F621
+      - 0x27639
+      - 0x13413
+      - 0x13430
+      - 0x1340D
+      - 0x13413
+      - 0x13433
+      - 0x1341F
       - 0x05600
       - 0x1341E
-      - 0x13434
-      - 0x13419
-      - 0x1340B
-      - 0x2F612
-      - 0x27634
-      - 0x1340F
+      - 0x1343C
+      - 0x1341A
+      - 0x1340D
+      - 0x2F613
+      - 0x2763C
+      - 0x13410
+      - 0x2F618
+      - 0x27636
       - 0x2F617
-      - 0x27637
-      - 0x2F616
-      - 0x2763A
-      - 0x13431
+      - 0x27639
+      - 0x13430
       - 0x2A9B2
-      - 0x13431
+      - 0x13430
       - 0x13409
-      - 0x13412
+      - 0x13413
       - 0x3A9B2
-      - 0x13412
+      - 0x13413
       - 0x249B2
-      - 0x2F60B
-      - 0x2760B
-      - 0x13420
+      - 0x2F60D
+      - 0x2760D
+      - 0x13421
       - 0x208BA
       - 0x3AC9A
-      - 0x1341E
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x1341F
+      - 0x13430
+      - 0x2F618
+      - 0x2EF9A
+      - 0x269F2
       - 0x15555
       - 0x15555
       - 0x15555
@@ -76608,7 +76619,7 @@ projects:
 
         ret
     - name: 16-bit unary regression test
-      source: >+
+      source: >
         // div2: signed arithmetic shift
 
         rlit r0 0x0000

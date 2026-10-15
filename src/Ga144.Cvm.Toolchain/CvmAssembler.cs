@@ -468,6 +468,24 @@ public static class CvmAssembler
             break;
           }
 
+          // ADDED 2026-10-16: ldf/stf take TWO operands (register, SIGNED frame offset) although their
+          // shape is NodeResolvedEmbeddedValue, same as rlit/dlit just below -- see
+          // CvmInstructionSet.LoadFrameMnemonic's own remarks. A dedicated branch (like c32's/the
+          // floating-point family's own just above) purely for a syntax-accurate example; the real
+          // parsing/encoding happens in pass 2 (see this file's own "shape.Mnemonic ==
+          // CvmInstructionSet.RegisterLiteralMnemonic" branch there, now joined by ldf/stf).
+          if (shape.Mnemonic is CvmInstructionSet.LoadFrameMnemonic or CvmInstructionSet.StoreFrameMnemonic)
+          {
+            if (line.Args.Count != 2)
+            {
+              errors.Add($"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly two operands (a register, a signed offset from the frame pointer), e.g. \"{shape.Mnemonic} r1 -4\".");
+              break;
+            }
+
+            sectionCursors[section] += shape.WordLength;
+            break;
+          }
+
           // ADDED 2026-10-04: rlit/dlit take TWO operands (register, literal) although their shape is
           // NodeResolvedEmbeddedValue: "rlit r1, 0x1234", "dlit d1, 0x12345678".
           bool isRegisterLiteral = shape.Mnemonic is CvmInstructionSet.RegisterLiteralMnemonic or CvmInstructionSet.DoubleLiteralMnemonic;
@@ -1055,6 +1073,15 @@ public static class CvmAssembler
           {
             // ADDED 2026-10-04: rlit -- the register is already in the opcode word (embedded value above);
             // the second operand is the 16-bit literal word (a number, or a label/import = absolute address).
+            EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+          }
+          else if (shape.Mnemonic is CvmInstructionSet.LoadFrameMnemonic or CvmInstructionSet.StoreFrameMnemonic)
+          {
+            // ADDED 2026-10-16: ldf/stf -- same shape as rlit just above (register already embedded in
+            // the opcode word; the second operand is the trailing word). Here it's a SIGNED offset from
+            // fp, not an arbitrary literal/address, but EmitOperandWord already accepts a negative
+            // numeric literal (two's-complement within the word) exactly as rlit's own literal does, so
+            // no separate emitter is needed -- see CvmInstructionSet.LoadFrameMnemonic's own remarks.
             EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
           }
           else if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
