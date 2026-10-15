@@ -555,6 +555,13 @@ public static class CvmInstructionSet
   // a mnemonic constant, and none is referenced by CvmAssembler/CvmAssemblyLanguage/
   // TryDescribeSelfDecodingWord. Add the real rows once Stefan defines a concrete mnemonic and (where
   // needed) node target for each.
+  // FLAGGED 2026-10-14: ReservedImmediateTag (0xC800) is no longer an empty gap in Stefan's own table --
+  // the newest node 507 header now puts a real (if still unimplemented) "16-bit bit operation rx =
+  // bitop(p, rx, b)" row at 0xC800-0xCBFF, plus a second variant "bitop(p, rx, ry)" at 0xCC00-0xCFFF (see
+  // cvm-node507-memory-access.md and Const32Mnemonic's own "RELOCATED 2026-10-14" remarks -- c32 itself
+  // moved OFF 0xC800 to 0xC400 to make room). This constant is left exactly as it was computed on
+  // 2026-10-02 (still unreferenced by anything) since no concrete mnemonic/body for either bitop row
+  // exists yet to wire -- just noting the collision is no longer purely theoretical.
   public const int ReservedImpliedTag = 0xC000;
   public const int ReservedImmediateTag = 0xC800;
   public const int ReservedUnary16Tag = 0xD000;
@@ -814,6 +821,11 @@ public static class CvmInstructionSet
   public const string BoolMnemonic = "bool";
   public const string ClearLowestBitMnemonic = "clearlow";
   public const string LowestBitMnemonic = "lowbit";
+  // RETIRED 2026-10-15: Stefan renamed node 206's own F18 word from 'bitcount to 'bitcnt and said
+  // "bitcount is no longer valid and must be removed" -- see BitCountMnemonic's own remarks for the
+  // full two-pass history. This constant and its doc-comment history stay (per this file's own "do not
+  // remove any opcodes" convention), but its Instructions row is now commented out, same treatment as
+  // the old Id 55 row -- "bitcount" no longer assembles to anything. Never reuse Id 242.
   public const string BitCountOperationMnemonic = "bitcount";
   public const string HighByteMnemonic = "highbyte";
   public const string LowByteMnemonic = "lowbyte";
@@ -823,11 +835,11 @@ public static class CvmInstructionSet
   /// <c>c32 dx &lt;index&gt;</c> -- ADDED 2026-10-12, per the newest node 505/506/507 source Stefan pasted. Node
   /// 507's own header table gained a new row right next to the unary/binary 16-bit ones it sits between:
   /// <code>1100|1000|ffff|xxxx| 506  | 32-bit constant</code>
-  /// with the legend's own new entry "f: 32-bit constant index". Tag <c>0xC800</c> (fixed bits <c>1100 1000</c>),
-  /// <c>f</c> (bits 7-4, <see cref="Const32IndexFieldBitMask"/>) selects one of the sixteen 32-bit IEEE-754
-  /// constants resident in node 305's own table (<c>ln(2)</c>, <c>1/ln(2)</c>, <c>pi/2</c>, <c>2/pi</c>, <c>1.0</c>,
-  /// <c>0.5</c>, <c>2.0</c>, <c>sqrt(2)</c> at indices 0-7, the remaining indices 8-15 still zero-filled in the
-  /// pasted source).
+  /// with the legend's own new entry "f: 32-bit constant index". Tag (originally) <c>0xC800</c> (fixed bits
+  /// <c>1100 1000</c>), <c>f</c> (bits 7-4, <see cref="Const32IndexFieldBitMask"/>) selects one of the sixteen
+  /// 32-bit IEEE-754 constants resident in node 305's own table (<c>ln(2)</c>, <c>1/ln(2)</c>, <c>pi/2</c>,
+  /// <c>2/pi</c>, <c>1.0</c>, <c>0.5</c>, <c>2.0</c>, <c>sqrt(2)</c> at indices 0-7, the remaining indices 8-15
+  /// still zero-filled in the pasted source).
   ///
   /// CORRECTED same day, immediately after this mnemonic's first pass: Stefan's own node-507 inline
   /// comment originally read "the mnemonic for 32-bit constant is: 'c32 &lt;index&gt;'", one operand -- this
@@ -845,6 +857,17 @@ public static class CvmInstructionSet
   /// node-406-condition-name second operand -- see <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/>'s own
   /// "case Const32Mnemonic" and <see cref="TryDescribeSelfDecodingWord"/>'s own matching special case for the
   /// real encode/decode logic.
+  ///
+  /// RELOCATED 2026-10-14: Stefan's newest node 507 header table moves this row to
+  /// <code>1100|0100|ffff|xxxx| 506  | 32-bit constant</code> -- tag <c>0xC400</c> (fixed bits <c>1100 0100</c>),
+  /// freeing the old <c>0xC800</c>-<c>0xCBFF</c> range for a new "16-bit bit operation" mnemonic family
+  /// (<c>rx = bitop(p, rx, b)</c> with an immediate bit index, and <c>rx = bitop(p, rx, ry)</c> with a register
+  /// bit index at <c>0xCC00</c>-<c>0xCFFF</c> -- see <c>cvm-node507-memory-access.md</c>). <c>f</c> and the
+  /// destination register field keep the exact same bit positions (7-4 and 3-0); only the tag's own fixed
+  /// nibble moved, so <see cref="Const32RegisterFieldBitMask"/>/<see cref="Const32IndexFieldBitMask"/>/
+  /// <see cref="Const32IndexFieldShift"/> are unchanged. No F18 body for either new bitop row has been given
+  /// yet (still no tick-named mnemonic or node target), so nothing was wired for them -- only this already-
+  /// hardware-confirmed opcode's tag was updated to keep matching Stefan's live source.
   /// </summary>
   public const string Const32Mnemonic = "c32";
 
@@ -906,6 +929,91 @@ public static class CvmInstructionSet
   /// <summary>Same test by mnemonic (false for an unknown mnemonic).</summary>
   public static bool IsBinaryRegisterOperation(string mnemonic) =>
       TryGetShape(mnemonic) is CvmInstructionShape shape && IsBinaryRegisterOperation(shape);
+
+  /// <summary>
+  /// <c>dinv</c>/<c>dabs</c>/<c>dlow16</c>/<c>dhigh16</c>/<c>dinc</c>/<c>ddec</c>/<c>dswap</c>/<c>dneg</c>/
+  /// <c>dmul2</c>/<c>ddiv2</c>/<c>dudiv2</c> -- ADDED 2026-10-15, per Stefan's own new node 507 header row
+  /// (<c>1110|0www|wwww|xxxx| 506 | unary 32-bit integer operation</c>) and the full node 102-409/501-504
+  /// float32-coprocessor dump, pasted with the instruction "add the 32 bit unary opcodes to the language."
+  /// Node 308's own source (right after its <c>x4/unary32</c> relay, under the SAME <c>&#35; 0 org</c> as
+  /// that relay and <c>x4/store32</c>/<c>x4/binary32</c>) defines eleven tick-named words, each
+  /// <c>( hi lo - .. lo' hi' )</c> on a double register: <c>'dinv</c> (bitwise invert both words),
+  /// <c>'dabs</c> (32-bit absolute value, falls into <c>'dneg</c> when negative), <c>'dlow16</c> (zero the
+  /// high word), <c>'dhigh16</c> (zero the low word, keep high), <c>'dinc</c>/<c>'ddec</c> (32-bit
+  /// increment/decrement with carry/borrow into the high word), <c>'dswap</c> (documented as swapping hi
+  /// and lo), <c>'dneg</c> (32-bit two's-complement negate), <c>'dmul2</c> (32-bit multiply by two, shift
+  /// left with carry), <c>'ddiv2</c>/<c>'dudiv2</c> (signed/unsigned divide by two, sharing a tail labelled
+  /// <c>x4/shrlo</c>).
+  ///
+  /// Bit layout, from the table row: fixed prefix bits 15-11 = <c>11100</c>
+  /// (<see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>'s own <c>Node308UnaryInt32OperationTagBits</c>,
+  /// 0xE000 -- bit 11 is the fixed 0 that distinguishes this row from the still-unimplemented "unary 32-bit
+  /// FLOAT operation" row right below it, 0xE800, which is a completely separate, still-orphaned family --
+  /// see <see cref="FloatingPointMoveMnemonic"/>'s own remarks), <c>www wwww</c> (bits 10-4, SEVEN bits --
+  /// wider than the 16-bit unary family's six, since node 308 needs more address space) is the resolved
+  /// address of the word's own 'name label in node 308, <c>xxxx</c> (bits 3-0,
+  /// <see cref="UnaryInt32RegisterFieldBitMask"/>) is the double register, read AND written in place
+  /// (<c>d0..d15</c>; see <see cref="IsDoubleRegisterMnemonic"/>). <c>CvmOperandEncoding.
+  /// NodeResolvedEmbeddedValue</c> -- same generic shape as <c>getctx</c>/<c>setctx</c>, needing no
+  /// per-mnemonic case in <c>CvmAssembler</c>/<c>TryDescribeSelfDecodingWord</c> -- resolved against node
+  /// 308's own LIVE compile, never <c>Node308Program.cs</c>'s reference copy, same as every other
+  /// node-resolved family in this file.
+  ///
+  /// NAMING NOTE: <c>dinc</c>/<c>ddec</c> reuse mnemonic STRINGS node 308 once carried under a wholly
+  /// unrelated, REMOVED OUTRIGHT (2026-09-15) "VM 32 arithmetic" family (<c>dpop</c>/<c>dpush</c>/<c>dinc</c>/
+  /// <c>ddec</c>/<c>dadd</c>/<c>dor</c>, Ids 123-128, never reused -- see the removal note above
+  /// <see cref="ReverseSubtractMnemonic"/>). Exactly like <c>dpop</c>/<c>dpush</c> were themselves later
+  /// RE-ADDED under the same strings for the node-509 32-bit stack family (see that removal note's own
+  /// remarks), these are fresh Ids (261-271) under a deliberately DIFFERENT C# constant-name prefix
+  /// (<c>DoubleRegister*Mnemonic</c>, not the retired <c>DoubleIncrementMnemonic</c>/
+  /// <c>DoubleDecrementMnemonic</c>) so the two unrelated eras are never confused in this file's own
+  /// cross-references, even though the opcode strings Stefan actually types are the same.
+  ///
+  /// FLAGGED, not resolved: <c>'ddec</c>'s own borrow branch (<c>-if over -1 . + ;</c>) textually ENDS with
+  /// the very <c>;</c> that is also <c>'dswap</c>'s entire labelled body (<c>'dswap</c>'s header sits between
+  /// that <c>;</c> and <c>'ddec</c>'s own closing <c>then over ;</c>) -- so, read as plain F18 control flow,
+  /// calling <c>'dswap</c> directly would land on an address that just returns, not the hi/lo exchange its
+  /// own comment describes. Reproduced byte-for-byte, not corrected or omitted -- the toolchain only needs
+  /// <c>'dswap</c>'s own live-compiled address (whatever Stefan's real node 308 resolves it to), the same as
+  /// every other node-resolved mnemonic; whether it behaves as documented on real hardware is Stefan's own
+  /// question to answer by testing it, not something guessed here. Similarly, <c>'ddiv2</c> ends with a call
+  /// to <c>x4/shrlo</c> (a label inside <c>'dudiv2</c>'s own body, not a separate word) rather than its own
+  /// explicit <c>;</c> -- reproduced as-is, same "trust the live compile's resolved address" treatment.
+  /// </summary>
+  public const string DoubleRegisterInvertMnemonic = "dinv";
+
+  /// <summary>See <see cref="DoubleRegisterInvertMnemonic"/>'s own remarks for the full family derivation.</summary>
+  public const string DoubleRegisterAbsoluteMnemonic = "dabs";
+
+  /// <summary>See <see cref="DoubleRegisterInvertMnemonic"/>'s own remarks.</summary>
+  public const string DoubleRegisterLowWordMnemonic = "dlow16";
+
+  /// <summary>See <see cref="DoubleRegisterInvertMnemonic"/>'s own remarks.</summary>
+  public const string DoubleRegisterHighWordMnemonic = "dhigh16";
+
+  /// <summary>See <see cref="DoubleRegisterInvertMnemonic"/>'s own remarks.</summary>
+  public const string DoubleRegisterIncrementMnemonic = "dinc";
+
+  /// <summary>See <see cref="DoubleRegisterInvertMnemonic"/>'s own remarks, including the "naming note" on string reuse.</summary>
+  public const string DoubleRegisterDecrementMnemonic = "ddec";
+
+  /// <summary>See <see cref="DoubleRegisterInvertMnemonic"/>'s own remarks, including the "flagged, not resolved" note on this word's own address.</summary>
+  public const string DoubleRegisterSwapMnemonic = "dswap";
+
+  /// <summary>See <see cref="DoubleRegisterInvertMnemonic"/>'s own remarks.</summary>
+  public const string DoubleRegisterNegateMnemonic = "dneg";
+
+  /// <summary>See <see cref="DoubleRegisterInvertMnemonic"/>'s own remarks.</summary>
+  public const string DoubleRegisterMultiplyByTwoMnemonic = "dmul2";
+
+  /// <summary>See <see cref="DoubleRegisterInvertMnemonic"/>'s own remarks, including the shared "x4/shrlo" tail note.</summary>
+  public const string DoubleRegisterDivideByTwoMnemonic = "ddiv2";
+
+  /// <summary>See <see cref="DoubleRegisterInvertMnemonic"/>'s own remarks, including the shared "x4/shrlo" tail note.</summary>
+  public const string DoubleRegisterUnsignedDivideByTwoMnemonic = "dudiv2";
+
+  /// <summary>Isolates the double-register field ("x", bits 3-0) of every <see cref="DoubleRegisterInvertMnemonic"/>-family mnemonic.</summary>
+  public const int UnaryInt32RegisterFieldBitMask = 0x000F;
 
   // 'tjmp, node 507's own table-jump primitive -- always present in node 507's source ("'tjmp .loc
   // (rso-rs) a . + a!", identical body to node 507's own internal m/branch), but left unwired as a CVM
@@ -1009,6 +1117,28 @@ public static class CvmInstructionSet
   // uses node 306's arst/lda/sta instead), no live CVM2 node and no in-toolchain dependent backed any of
   // these four any longer -- see this file's own remarks above on the 2026-09-09 CVM1-opcode purge.
   // Ids 51-54 are still never to be reused.
+  //
+  // HISTORY, 2026-10-15 (same day, two passes): Id 55's own old row (immediately below, still commented
+  // out) was never revived -- the comment on node 509's own unary-arithmetic family (see
+  // InvertMnemonic's remarks, a few hundred lines down) claiming this mnemonic got "repointed" there was
+  // never actually carried out in Instructions. The live bit-count op that family ended up with used a
+  // DIFFERENT string, BitCountOperationMnemonic ("bitcount", node 206) -- that mismatch is what made
+  // Stefan's own "bitcnt" line fail to assemble ("not a known instruction or directive") on first pass.
+  // Rather than guess he meant "bitcount" and silently rewrite his source, this was confirmed with him
+  // directly; his FIRST answer was to keep "bitcnt" working as a second spelling alongside "bitcount" --
+  // so a brand-new Id 272 row was added (never Id 55, which stays retired per the note above), pointing
+  // at the exact same node-206 symbol "bitcount" used.
+  //
+  // RENAMED, same day (second pass): Stefan then pasted an updated node 206 source showing the F18 word
+  // itself renamed from <c>'bitcount</c> to <c>'bitcnt</c>, with an explicit instruction: "I renamed it
+  // 'bitcnt'. so 'bitcount' is no longer valid and must be removed." Id 272 (below) now points at the
+  // live, CURRENT node-206 symbol name, <c>'bitcnt</c>, directly -- it is no longer merely an alias of
+  // Id 242, it is the one and only live row for this operation. Id 242 (BitCountOperationMnemonic,
+  // "bitcount") is RETIRED as of this same pass -- its own Instructions row is now commented out, same
+  // treatment as Id 55 above -- see that constant's own remarks for the retirement, and
+  // Ga144.Evb.Ide.Services.CvmAssemblyLanguage's NodeSymbolByMnemonic/
+  // NodeResolvedEmbeddedValueFieldLayoutByMnemonic for the matching "bitcnt"-now-points-at-"'bitcnt"
+  // rewiring. Ids 55 AND 242 are both retired going forward; only Id 272 is live.
   public const string BitCountMnemonic = "bitcnt";
 
   // Node 506's register-d/extended-precision ops, added per Stefan's node 506 source and the same
@@ -1685,14 +1815,21 @@ public static class CvmInstructionSet
   // of the nine takes an assembled operand: each acts on register r alone (already relayed across two
   // hops -- 507 to 508 to 509 -- by the time u/main dispatches to it).
   //
-  // EIGHT of these nine REPOINT an existing, previously-orphaned mnemonic rather than adding a new one,
+  // SEVEN of these eight REPOINT an existing, previously-orphaned mnemonic rather than adding a new one,
   // per "only update existing opcodes where possible": InvertMnemonic/IncrementMnemonic/
   // DecrementMnemonic (node 507's own old ALU-op family, three of its eleven unary/binary ops) and
-  // AbsoluteValueMnemonic/MultiplyByTwoMnemonic/DivideByTwoMnemonic/UnsignedDivideByTwoMnemonic/
-  // BitCountMnemonic (five of node 508's own old 27-op family) all already existed in Instructions below
-  // with no live node to resolve against; node 509's own tick-prefixed words ('inv, 'inc, 'dec, 'abs,
-  // 'mul2, 'div2, 'udiv2, 'bitcnt) match those exact mnemonic strings, so they are repointed here rather
-  // than duplicated. Only NegMnemonic below is a genuinely NEW entry: node 509's own word is named
+  // AbsoluteValueMnemonic/MultiplyByTwoMnemonic/DivideByTwoMnemonic/UnsignedDivideByTwoMnemonic (four of
+  // node 508's own old 27-op family) all already existed in Instructions below with no live node to
+  // resolve against; node 509's own tick-prefixed words ('inv, 'inc, 'dec, 'abs, 'mul2, 'div2, 'udiv2)
+  // match those exact mnemonic strings, so they are repointed here rather than duplicated.
+  // CORRECTED 2026-10-15: this used to also claim BitCountMnemonic ("bitcnt") as an eighth repointed
+  // entry, but that was never actually done below -- the row this family ended up with for bit-counting
+  // was BitCountOperationMnemonic ("bitcount", node 206, NOW ITSELF RETIRED -- see that mnemonic's own
+  // remarks), wired against node 206 rather than node 509 directly. "bitcnt" itself sat fully orphaned
+  // until Stefan hit the resulting "not a known instruction" error; after a brief aliasing pass it
+  // ended up renamed, on node 206's own F18 source, to be the live, canonical word for this op (Id 272)
+  // -- see BitCountMnemonic's own remarks above for the full two-pass story. Still never Id 55.
+  // Only NegMnemonic below is a genuinely NEW entry: node 509's own word is named
   // 'neg, not 'negate, so it did NOT repoint the old, separately orphaned "negate" mnemonic (Id 51) --
   // taken literally, per Stefan's own tick-naming rule, rather than assumed to be a renaming of it.
   // "negate" was itself deleted outright later (2026-09-09) once CCodeGenerator stopped emitting it in
@@ -3025,12 +3162,25 @@ public static class CvmInstructionSet
     new(Id: 239, BoolMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
     new(Id: 240, ClearLowestBitMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
     new(Id: 241, LowestBitMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
-    new(Id: 242, BitCountOperationMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    // bitcount (Id 242) -- RETIRED 2026-10-15: Stefan renamed node 206's own F18 word to 'bitcnt and
+    // said "bitcount is no longer valid and must be removed" -- see BitCountOperationMnemonic's and
+    // BitCountMnemonic's own remarks for the full two-pass history. Commented out, same treatment as
+    // Id 55 above; never reuse Id 242.
+    // new(Id: 242, BitCountOperationMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
+    // bitcnt (Id 272, NEW 2026-10-15, now the SOLE live row for this op): first added as an alias of
+    // Id 242 (same shape, pointed at the same node-206 "'bitcount" symbol as "bitcount" itself), then
+    // Stefan renamed the underlying F18 word to 'bitcnt and retired "bitcount" outright (immediately
+    // above) -- see BitCountMnemonic's own remarks for the full story. Ga144.Evb.Ide.Services.
+    // CvmAssemblyLanguage now points "bitcnt" at node 206's live "'bitcnt" symbol directly, not at a
+    // copy of "bitcount"'s old entry.
+    new(Id: 272, BitCountMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
     new(Id: 243, HighByteMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
     new(Id: 244, LowByteMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
     new(Id: 245, ByteSwapMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
-    // c32 (Id 254, NEW 2026-10-12, CORRECTED same day -- "c32 dx <index>", not "c32 <index>"): table row
-    // "1100|1000|ffff|xxxx| 506 | 32-bit constant" -- see Const32Mnemonic's own remarks for the full
+    // c32 (Id 254, NEW 2026-10-12, CORRECTED same day -- "c32 dx <index>", not "c32 <index>"; RELOCATED
+    // 2026-10-14): table row now "1100|0100|ffff|xxxx| 506 | 32-bit constant" (was "1100|1000|ffff|xxxx",
+    // tag 0xC800, before Stefan's newest node 507 table moved it to 0xC400 to make room for the new
+    // "16-bit bit operation" rows at 0xC800-0xCFFF) -- see Const32Mnemonic's own remarks for the full
     // derivation. EmbeddedUnsignedValuePair (first operand = ValueBitMask = the destination double
     // register "d", bits 3-0; second = SecondValueBitMask = the constant index "f", bits 7-4) -- still
     // fully self-describing, no node compile needed, but BOTH assemblers intercept this mnemonic by name
@@ -3038,7 +3188,7 @@ public static class CvmInstructionSet
     // since the first operand is a register token ("d3"), not a bare number like node 306/305's "fadd f
     // g". TryDescribeSelfDecodingWord's own generic EmbeddedUnsignedValuePair loop has a matching special
     // case so disassembly prints "c32 d<n> <index>", not "c32 <n> <index>".
-    new(Id: 254, Const32Mnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: 0xC800, ValueBitMask: Const32RegisterFieldBitMask, SecondValueBitMask: Const32IndexFieldBitMask, SecondValueBitShift: Const32IndexFieldShift),
+    new(Id: 254, Const32Mnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: 0xC400, ValueBitMask: Const32RegisterFieldBitMask, SecondValueBitMask: Const32IndexFieldBitMask, SecondValueBitShift: Const32IndexFieldShift),
     // fadd/fsub/fmin/fmax/fmul/fdiv (Ids 255-260, NEW 2026-10-13, replacing the OLD 0xDC00-based
     // encoding -- see FloatingPointBinaryOperationTag's own remarks for the full derivation and the
     // two flagged opens (register-token syntax, BitOperationTag collision)). Table row
@@ -3057,6 +3207,24 @@ public static class CvmInstructionSet
     new(Id: 258, FloatingPointMaximumMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointBinaryMaximumTag, ValueBitMask: FloatingPointBinaryFirstRegisterFieldBitMask, SecondValueBitMask: FloatingPointBinarySecondRegisterFieldBitMask, SecondValueBitShift: FloatingPointBinarySecondRegisterFieldShift),
     new(Id: 259, FloatingPointMultiplyMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointBinaryMultiplyTag, ValueBitMask: FloatingPointBinaryFirstRegisterFieldBitMask, SecondValueBitMask: FloatingPointBinarySecondRegisterFieldBitMask, SecondValueBitShift: FloatingPointBinarySecondRegisterFieldShift),
     new(Id: 260, FloatingPointDivideMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: FloatingPointBinaryDivideTag, ValueBitMask: FloatingPointBinaryFirstRegisterFieldBitMask, SecondValueBitMask: FloatingPointBinarySecondRegisterFieldBitMask, SecondValueBitShift: FloatingPointBinarySecondRegisterFieldShift),
+    // dinv/dabs/dlow16/dhigh16/dinc/ddec/dswap/dneg/dmul2/ddiv2/dudiv2 (Ids 261-271, NEW 2026-10-15):
+    // table row "1110|0www|wwww|xxxx| 506 | unary 32-bit integer operation" -- see
+    // DoubleRegisterInvertMnemonic's own remarks for the full derivation, the naming note on the
+    // "dinc"/"ddec" string reuse, and the two flagged (not resolved) addressing oddities. Node-resolved
+    // (NodeResolvedEmbeddedValue, no Tag here -- Ga144.Evb.Ide.Services.CvmAssemblyLanguage's own
+    // NodeSymbolByMnemonic/NodeResolvedEmbeddedValueFieldLayoutByMnemonic entries supply the live tag and
+    // field layout, same as getctx/setctx).
+    new(Id: 261, DoubleRegisterInvertMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
+    new(Id: 262, DoubleRegisterAbsoluteMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
+    new(Id: 263, DoubleRegisterLowWordMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
+    new(Id: 264, DoubleRegisterHighWordMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
+    new(Id: 265, DoubleRegisterIncrementMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
+    new(Id: 266, DoubleRegisterDecrementMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
+    new(Id: 267, DoubleRegisterSwapMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
+    new(Id: 268, DoubleRegisterNegateMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
+    new(Id: 269, DoubleRegisterMultiplyByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
+    new(Id: 270, DoubleRegisterDivideByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
+    new(Id: 271, DoubleRegisterUnsignedDivideByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
     // sbr (Id 194): table row "1011|oooo|oooo|oooo| sbr {short branch, relative}" -- bits 15-12 fixed
     // "1011" (0xB000), bits 11-0 a 12-bit SIGNED relative offset ("o", per the table's own legend:
     // "o: signed offset") embedded directly in the one word -- no trailing word at all, which is
@@ -3608,7 +3776,20 @@ public static class CvmInstructionSet
       string.Equals(mnemonic, DoubleStoreMnemonic, StringComparison.OrdinalIgnoreCase) ||
       string.Equals(mnemonic, DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase) ||
       string.Equals(mnemonic, GetContextMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      string.Equals(mnemonic, SetContextMnemonic, StringComparison.OrdinalIgnoreCase);
+      string.Equals(mnemonic, SetContextMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      // ADDED 2026-10-15: node 308's new "unary 32-bit integer operation" family -- see
+      // DoubleRegisterInvertMnemonic's own remarks.
+      string.Equals(mnemonic, DoubleRegisterInvertMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleRegisterAbsoluteMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleRegisterLowWordMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleRegisterHighWordMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleRegisterIncrementMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleRegisterDecrementMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleRegisterSwapMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleRegisterNegateMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleRegisterMultiplyByTwoMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleRegisterDivideByTwoMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleRegisterUnsignedDivideByTwoMnemonic, StringComparison.OrdinalIgnoreCase);
 
   /// <summary>
   /// ADDED 2026-10-03: recognises a register token as the operand of a

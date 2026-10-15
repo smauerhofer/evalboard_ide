@@ -242,6 +242,20 @@ public static class CvmNodeMesh
     Node203Program.Coordinate, // 203, step 3 (opcode decoding, optional magnitude compare calculation).
     Node204Program.Coordinate, // 204, step 2 (reorder and processing split).
     Node205Program.Coordinate, // 205, step 1 (unpack and categorize).
+    // ADDED 2026-10-14, per Stefan directly ("unary 16-bit opcodes have been moved to node 206:"),
+    // pasting node 206's full source for the first time -- see claude/cvm-node206-unary16-move.md.
+    // All 17 16-bit UNARY opcode mnemonics (inv/inc/dec/neg/mul2/udiv2/div2/abs/mask15/inv15/bool/
+    // clearlow/lowbit/bitcount/highbyte/lowbyte/byteswap -- repointed in CvmAssemblyLanguage's own
+    // NodeSymbolByMnemonic the same day) are node-resolved against this coordinate's live compile, so
+    // it must be in THIS list or Assemble reports them as "did not compile (or wasn't included) this
+    // run" even when node 206 compiles fine on its own in the Node Editor -- exactly what happened
+    // before this entry was added. Bare int literal, not a NodeXxxProgram.Coordinate reference, since
+    // no Cvm/Node206Program.cs reference-copy file exists for it (per the standing "do not sync
+    // Node###Program.cs for CVM_pipeline-era source" practice -- see that doc's own remarks); this
+    // compiles from the live project's own node 206 data regardless, same as every other entry here.
+    // Node 206 also hosts x2c/float32 (the float32-binary relay, already part of the mesh via node
+    // 305's own x2a/float32 -- unaffected by this addition, no NodeSymbolByMnemonic entry of its own).
+    206,
     Node102Program.Coordinate, // 102, special step 4 (MUL/DIV special-case resolution).
     Node103Program.Coordinate, // 103, special step 3 (ADD/SUB special-case handling; MUL/DIV delegated to 102).
     Node104Program.Coordinate, // 104, special step 1 (special operation dispatcher).
