@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-15T17:45:40.0005731
-      utcDateTime: 2026-10-15T17:45:40.0005731Z
-      localDateTime: 2026-10-15T19:45:40.0005731+02:00
-      date: 2026-10-15T00:00:00.0000000
-      day: 15
-      dayOfWeek: Thursday
-      dayOfYear: 288
-      hour: 17
-      millisecond: 0
-      microsecond: 573
-      nanosecond: 100
-      minute: 45
+      dateTime: 2026-10-16T04:24:44.9991442
+      utcDateTime: 2026-10-16T04:24:44.9991442Z
+      localDateTime: 2026-10-16T06:24:44.9991442+02:00
+      date: 2026-10-16T00:00:00.0000000
+      day: 16
+      dayOfWeek: Friday
+      dayOfYear: 289
+      hour: 4
+      millisecond: 999
+      microsecond: 144
+      nanosecond: 200
+      minute: 24
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 40
-      ticks: 639276831400005731
-      utcTicks: 639276831400005731
-      timeOfDay: 17:45:40.0005731
+      second: 44
+      ticks: 639277214849991442
+      utcTicks: 639277214849991442
+      timeOfDay: 04:24:44.9991442
       year: 2026
   portB: 
   portC:
@@ -72335,6 +72335,8 @@ projects:
 
         : r/d!y ( lo ) @b @b ( lo hi d ) 2* a! >r !+ r> !+ ;
 
+        : r/d!z ( d ) 2* a! @b >r @b ( d hi lo ) !+ r> !+ ;
+
       ramWords:
       - 0x00000
       - 0x00000
@@ -72389,9 +72391,9 @@ projects:
       - 0x01FDA
       - 0x2A83A
       - 0x27855
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x36A02
+      - 0x2FF3A
+      - 0x27855
       - 0x15555
       - 0x15555
       - 0x15555
@@ -74079,6 +74081,8 @@ projects:
 
         # 505 import
 
+        # 607 import
+
 
         # right /b
 
@@ -74088,7 +74092,7 @@ projects:
         entry d/main
 
 
-        # 0 org
+        # 2 org
 
 
         : d/dsend ( w - ) down a! ! ;
@@ -74159,70 +74163,93 @@ projects:
           then // 1000*
 
           // if
+
+          d/cond@
+          A[ m/next ]] lit !b
+          if
+            // true
+            // branch
+            A[ m/branch ]] A[ drop ; ]] [ xor ] lit
+          then
+          // false
+          // no branch
+          A[ drop ; ]] lit xor !b
+        ;
+
+
+        /*
+          A[ m/next ]] lit !b
           d/cond@
           if
             // true
             // branch
-            A[ m/next ]] lit !b
-            A[ a m/add ]] lit !b ;
-            A[ a! ]] lit !b ;
+            A[ m/branch ]] lit !b
+          ;
           then
           // false
           // no branch
-          A[ m/pc++ ]] lit !b ;
+          A[ drop ; ]] lit !b
+        ;
+
+        */
+
 
         // Direct handler receives x on the parameter stack.
 
 
-        : 'getctx ( d - )
-          A[ over over ]] lit !b
-          A[ @p m/d! ]] lit !b !b
+        : 'sp@ ( - )
+          A[ m/sp ]] lit !b
+          A[ m/push ; ]] lit !b
         ;
 
 
-        : 'setctx ( d - )
-          A[ @p m/d@ ]] lit !b !b
+        : 'fp@ ( - )
+          A[ dup m/push ; ]] lit !b
         ;
 
 
-        : 'sp@ ( x - x )
-          A[ dup m/push ]] lit !b
+        : 'fp! ( - )
+          A[ m/pop ; ]] lit !b
         ;
 
 
-        : 'fp@ ( x - x )
-          A[ over m/push ]] lit !b
+        : 'sp! ( - )
+          A[ m/pop ]] lit !b
+          A[ @p ! ! ; ]] lit !b
+          A[ @p !sp ]] lit !b
         ;
 
       ramWords:
+      - 0x05606
+      - 0x15555
       - 0x04A2D
       - 0x00115
       - 0x04A2D
       - 0x00175
       - 0x04A0D
       - 0x00115
-      - 0x13402
+      - 0x13404
       - 0x0BA0A
       - 0x3B555
       - 0x3AD12
       - 0x0561B
-      - 0x13400
-      - 0x0B704
+      - 0x13402
+      - 0x0B706
       - 0x04B12
       - 0x001D5
       - 0x15555
       - 0x089B2
       - 0x04812
-      - 0x0000D
+      - 0x0000F
       - 0x0D9B2
       - 0x09F02
-      - 0x37218
-      - 0x05706
+      - 0x3721A
+      - 0x05708
       - 0x05611
-      - 0x37227
-      - 0x37223
-      - 0x3721D
-      - 0x05706
+      - 0x37229
+      - 0x37225
+      - 0x3721F
+      - 0x05708
       - 0x05600
       - 0x3ADC2
       - 0x307C7
@@ -74234,33 +74261,31 @@ projects:
       - 0x05604
       - 0x03B0A
       - 0x09555
-      - 0x3722B
-      - 0x13409
+      - 0x3722D
+      - 0x1340B
       - 0x05B25
-      - 0x0560D
-      - 0x13409
-      - 0x19433
+      - 0x05626
+      - 0x1340B
+      - 0x05B62
+      - 0x1340B
+      - 0x049B2
+      - 0x2816E
+      - 0x04325
+      - 0x3B555
       - 0x05B12
-      - 0x13418
-      - 0x23606
+      - 0x1341F
+      - 0x11426
       - 0x09555
       - 0x05B55
-      - 0x2A9B2
+      - 0x25726
       - 0x05B55
-      - 0x13426
+      - 0x11408
       - 0x05B12
-      - 0x20FB2
-      - 0x05639
-      - 0x09B55
-      - 0x05B25
-      - 0x05633
-      - 0x05B55
-      - 0x2560D
-      - 0x05B55
-      - 0x2160D
-      - 0x15555
+      - 0x13408
+      - 0x05A2D
+      - 0x09D25
       startup:
-        entryPoint: 0x011
+        entryPoint: 0x013
         p: 0x000
         a: 0x000
         b: 0x000
@@ -74366,11 +74391,7 @@ projects:
         .: unused bit
 
 
-        A: program counter
-
-        T: stack pointer
-
-        S: frame pointer
+        T: frame pointer
 
 
         )
@@ -74381,16 +74402,167 @@ projects:
         # 407 import
 
 
-        # 0 /a   // initial program counter
+        # up /a
+
+        # down /b
 
         [ 0 0xffff 2 ] /stack
 
 
-        entry m/nextinstr
+        entry m/main
 
 
         # 0 org
 
+
+        : m/main
+          @
+         ( op )
+         --l-
+         A[ mem/instrloop ; ]] lit !
+         m/main
+        ;
+
+
+        : m/unlink ( fp - .. fp' )
+          A[ @p !sp ]] lit !
+          !
+          m/pop ;
+
+        : m/dpop ( - w1 w2 ) leap
+
+        : m/pop ( - w ) then
+          A[ mem/pop ]] lit !
+          m/get
+        ;
+
+
+        : m/dnext ( x - x w1 w2 )
+          leap
+        : m/next ( x - x w ) then
+          A[ mem/next ]] lit !
+        : m/get
+          A[ !p ]] lit !
+          @
+        ;
+
+
+        : m/d@ ( d - lo hi )
+          A[ @p r/d@ ]] lit !b
+          !b @b @b
+        ;
+
+
+        : m/r@ ( r - w )
+          A[ @p r/r@ ]] lit !b !b @b
+        ;
+
+
+        : m/r! ( w r - )
+          A[ @p r/r!x ]] lit
+        : m/!b3 !b !b !b
+
+        ;
+
+
+        : m/d! ( lo hi d - )
+          A[ @p r/d!z ]] lit !b  m/!b3
+        ;
+
+
+        : m/r!x ( r w - )
+          over m/r! drop
+        ;
+
+
+        : m/link ( offset new-fp - new-fp )
+          >r m/adjust
+          r>
+        ;
+
+
+        : m/sp ( - sp )
+          A[ sp ]] lit !
+          m/get
+        ;
+
+
+        : m/fpnext   ( fp r - fp r addr )
+          over m/next
+        : m/add ( w1 w2 - w )
+          + 0xffff and
+        ;
+
+
+        : m/dpush ( w1 w2 - ) leap
+
+        : m/push ( w - ) then
+          A[ @p mem/push ]] lit ! !
+        ;
+
+
+
+        : m/call ( - )
+          A[ mem/call ]] lit !
+        ;
+
+
+        : m/calladdr ( addr - )
+          A[ @p mem/calladdr ]] lit ! !
+        ;
+
+
+        : m/ret ( fp -  fp )
+          A[ mem/ret ]] lit !
+        ;
+
+
+        // : m/1write ( w addr - )
+
+        //  1
+
+        : m/write ( w addr p - )
+          A[ @p @p @p ]] lit !
+          >r >r ! r> ! r> !
+          A[ mem/write ]] lit !
+        ;
+
+
+        // : m/1read ( addr - w )
+
+        //  1
+
+        : m/read ( addr p - w )
+          A[ @p @p ]] lit !
+          >r ! r> !
+          A[ mem/read ]] lit !
+          m/get
+        ;
+
+
+        : m/jmp ( addr - )
+          A[ @p !pc ]] lit !
+          !
+        ;
+
+
+        : m/branch ( offset - )
+          A[ @p mem/branch ]] lit !
+          !
+        ;
+
+
+        : m/adjust ( offset - )
+          A[ @p mem/adjust ]] lit !
+          !
+        ;
+
+
+
+
+
+
+        /*
 
         : m/msend ( w - ) // memory send
           up b! !b
@@ -74402,14 +74574,6 @@ projects:
         ;
 
 
-        : m/link ( fp sp - fp' sp' )
-          // push current fp
-          over m/push
-          // fp = sp
-          dup
-          // sp = sp + offset
-          m/next
-          // set new fp
         : m/add ( w1 w2 - w )
           + 0xffff and
         ;
@@ -74423,13 +74587,13 @@ projects:
         ;
 
 
-        : m/1write ( fp sp w addr - fp sp )
-          1 m/write
-        ;
-
 
         : m/push ( fp sp w - fp sp' )
-          over m/1write
+
+        //  over m/1write
+          over
+        : m/1write ( fp sp w addr - fp sp )
+          1 m/write
         : m/dec ( w - w' )
           -1 m/add
         ;
@@ -74444,7 +74608,7 @@ projects:
 
         : m/pop ( fp sp - fp sp' w )
           m/inc dup
-        : m/1read ( fp sp addr - w )
+        : m/1read ( fp sp addr - fp sp w )
           1 m/read
         ;
 
@@ -74459,7 +74623,12 @@ projects:
         ;
 
 
-        : m/branch
+
+        : m/branch ( offset - )
+          a m/add a!
+        ;
+
+
 
         : m/inc ( w - w' )
           1 m/add
@@ -74479,10 +74648,13 @@ projects:
         ;
 
 
+
         : m/ret ( fp sp - fp sp' )
           m/pop
         : m/jmp ( addr - )
-          a! ;
+          a!
+        ;
+
 
 
         : m/pc++ ( x - x )
@@ -74490,14 +74662,6 @@ projects:
         ;
 
 
-
-
-        : m/unlink ( fp sp - fp' sp' )
-          // sp = fp
-          drop
-          // pop last fp
-          m/pop over
-        ;
 
 
         : m/nextinstr ( fp sp - fp sp )
@@ -74533,78 +74697,79 @@ projects:
           A[ @p r/d!x ]] lit m/rsend !b !b !b
         ;
 
+        */
 
 
 
 
 
       ramWords:
-      - 0x04B25
-      - 0x00145
-      - 0x04B25
-      - 0x00115
-      - 0x2160D
-      - 0x25618
+      - 0x029B2
+      - 0x13575
+      - 0x05A40
+      - 0x1140A
+      - 0x05A2A
+      - 0x05606
+      - 0x11408
+      - 0x13408
+      - 0x05A45
+      - 0x1342E
+      - 0x1340B
+      - 0x05AB2
+      - 0x13423
+      - 0x05A0D
+      - 0x0C9B2
+      - 0x05B22
+      - 0x05629
+      - 0x01F55
+      - 0x05B22
+      - 0x05626
+      - 0x01555
+      - 0x049B2
+      - 0x05628
+      - 0x09B25
+      - 0x05BB2
+      - 0x05635
+      - 0x11417
+      - 0x21615
+      - 0x3B555
+      - 0x2F63D
+      - 0x27555
+      - 0x05AB2
+      - 0x13407
+      - 0x1140D
+      - 0x2160B
       - 0x3DDFD
       - 0x0FFFF
-      - 0x13418
-      - 0x2EE4D
-      - 0x26A55
-      - 0x05710
-      - 0x00001
-      - 0x2160B
-      - 0x05706
-      - 0x3FFFF
-      - 0x05600
-      - 0x13415
-      - 0x09B25
-      - 0x1341D
-      - 0x249B2
-      - 0x0571A
-      - 0x00001
-      - 0x13418
-      - 0x23626
-      - 0x24DE2
-      - 0x05600
-      - 0x13403
-      - 0x09B05
-      - 0x05706
-      - 0x00001
-      - 0x2F60D
-      - 0x2770D
-      - 0x13413
-      - 0x2F613
-      - 0x27555
-      - 0x13413
-      - 0x2B555
-      - 0x2361D
-      - 0x2B555
-      - 0x3B613
-      - 0x21555
-      - 0x23626
-      - 0x05600
-      - 0x1340C
-      - 0x09FB2
-      - 0x13575
-      - 0x1142A
-      - 0x05602
-      - 0x05626
-      - 0x09F55
-      - 0x05602
-      - 0x0562B
-      - 0x09F05
-      - 0x05602
-      - 0x05628
-      - 0x09B55
-      - 0x05602
-      - 0x0562F
-      - 0x09B25
-      - 0x05602
+      - 0x13426
+      - 0x05A2D
       - 0x05629
-      - 0x09F05
+      - 0x05A55
+      - 0x13433
+      - 0x05A2D
+      - 0x05634
+      - 0x05A55
+      - 0x13437
+      - 0x05ABA
+      - 0x05D12
+      - 0x2FA9A
+      - 0x0AC2F
+      - 0x13421
+      - 0x0B555
+      - 0x05ABA
+      - 0x05DB2
+      - 0x0AC2F
+      - 0x13427
+      - 0x0B70D
+      - 0x05A2D
+      - 0x05603
+      - 0x05A2D
+      - 0x05639
+      - 0x05A2D
+      - 0x0563C
       - 0x15555
       startup:
-        entryPoint: 0x02A
+        entryPoint: 0x000
         p: 0x000
         a: 0x000
         b: 0x000
@@ -74643,7 +74808,7 @@ projects:
         : 'rload ( / x y - )
           // Fetch memory through dy.
           r>
-          A[ @p m/pointer@ ]] lit !b !b
+          A[ @p m/d@ ]] lit !b !b
           A[ m/read ]] lit !b
 
           // Store the fetched value in rx.
@@ -74658,7 +74823,7 @@ projects:
           A[ @p m/r@ ]] lit !b !b
 
           // Y remains locally; send it after fetching rx.
-          A[ @p m/pointer@ ]] lit !b !b
+          A[ @p m/d@ ]] lit !b !b
           A[ m/write ]] lit !b
         ;
 
@@ -74701,6 +74866,7 @@ projects:
             // microcode with register
             ( op sop )
             drop x6/decompose
+            ( r / cnt )
 
             A[ @p ]] lit !b !b         // send register to node 507
 
@@ -74711,7 +74877,7 @@ projects:
           // microcode without register
           ( op sop )
           drop x6/decompose
-          ( r )
+          ( r / cnt )
           begin @ !b unext
         ;
 
@@ -74742,18 +74908,18 @@ projects:
 
       ramWords:
       - 0x27D22
-      - 0x0563C
+      - 0x0560F
       - 0x09D22
-      - 0x1341A
+      - 0x13434
       - 0x27D22
-      - 0x05636
+      - 0x05615
       - 0x09555
       - 0x26C12
-      - 0x05630
+      - 0x05612
       - 0x09B12
-      - 0x0563C
+      - 0x0560F
       - 0x09B12
-      - 0x13410
+      - 0x1342E
       - 0x09555
       - 0x05BB2
       - 0x15555
@@ -74771,7 +74937,7 @@ projects:
       - 0x37220
       - 0x367C2
       - 0x30712
-      - 0x0561D
+      - 0x0563B
       - 0x09B55
       - 0x3722B
       - 0x3AD12
@@ -74844,209 +75010,211 @@ projects:
 
         : 'nop // do nothing
           // size 1 without register.
-          A[ nop ]] ,
+          A[ ; ]] ,
 
         : 'ret // return from call
           // size 1 without register.
-          A[ m/ret ]] ,
+          A[ m/ret ; ]] ,
 
         : 'call // call to address in next word
           // size 1 without register.
-          A[ m/call ]] ,
+          A[ m/call ; ]] ,
 
         : 'jmp // jump to address in next word
           // size 2 without register.
           A[ m/next ]] ,
-          A[ a! ]] ,
+          A[ m/jmp ; ]] ,
 
         : 'link // create new stack frame with offset in next word
-          // size 1 without register.
-          A[ m/link ]] ,
+          // size 4 without register.
+          A[ m/next ]] ,
+          A[ over m/push ]] ,
+          A[ m/sp ]] ,
+          A[ m/link ; ]] ,
 
         : 'unlink // destroy current stack frame
           // size 1 without register.
-          A[ m/unlink ]] ,
+          A[ m/unlink ; ]] ,
 
-        : 'push2 // read next 32-bit value and push it on the VM stack VM( - hi lo ). sequence in memory: opcode(push2) hi lo
+        : 'push2 // read next 32-bit value and push it on the VM stack VM( - hi lo ). sequence in memory: opcode(push2) lo hi
           // size 2 without register.
           A[ m/dnext ]] ,
-          A[ m/dpush ]] ,
+          A[ m/dpush ; ]] ,
 
         : 'push // read next 16-bit value and push it on the VM stack VM( - w )
           // size 2 without register.
           A[ m/next ]] ,
-          A[ m/push ]] ,
+          A[ m/push ; ]] ,
 
         : 'rpop // pop 16-bit value from the VM stack and stores it in a register VM( w - ) ( fp sp r - fp sp' )
           // size 2 with register.
           A[ >r m/pop ]] ,
-          A[ r> m/r! ]] ,
+          A[ r> m/r! ; ]] ,
 
         : 'dpop // pop 32-bit value from the VM stack and stores it in a double register VM( hi lo - )
           // size 2 with register.
           A[ >r m/dpop ]] ,
-          A[ r> m/d! ]] ,
+          A[ r> m/d! ; ]] ,
 
         : 'rpush // read 16-bit value from register and push it on the VM stack VM( - w )
           // size 2 with register.
           A[ m/r@ ]] ,
-          A[ m/push ]] ,
+          A[ m/push ; ]] ,
 
         : 'dpush // read 32-bit value from double register and push it on the VM stack VM( - hi lo )
           // size 2 with register.
           A[ m/d@ ]] ,
-          A[ m/dpush ]] ,
+          A[ m/dpush ; ]] ,
 
         : 'rpopi // pop 16-bit value from the VM stack and stores it in a register indirect. register # is on the stack VM( w r - )
           // size 2 without register.
           A[ m/dpop ]] ,
-          A[ m/r! ]] ,
+          A[ m/r!x ; ]] ,
 
         : 'dpopi // pop 32-bit value from the VM stack and stores it in a register indirect. register # is on the stack VM( hi lo d - )
           // size 3 without register.
           A[ m/pop ]] ,
           A[ >r m/dpop ]] ,
-          A[ r> m/d! ]] ,
+          A[ r> m/d! ; ]] ,
 
         : 'rpushi // read 16-bit value from register indirect and push it on the VM stack VM( r - w )
           // size 3 without register.
           A[ m/pop ]] ,
           A[ m/r@ ]] ,
-          A[ m/push ]] ,
+          A[ m/push ; ]] ,
 
         : 'dpushi // read 32-bit value from register indirect and push it on the VM stack VM( r - hi lo )
           // size 3 without register.
           A[ m/pop ]] ,
           A[ m/d@ ]] ,
-          A[ m/dpush ]] ,
+          A[ m/dpush ; ]] ,
 
         : 'halt // stop execution until reset or interrupt
           // size 2 without register.
-          A[ @p m/msend ]] , A[ mem/halt ]] ,
+          A[ @p ! ; ]] , A[ mem/halt ]] ,
 
         : 'dfetch // read the content of a memory cell pointed to by a 32-register and push its value on the stack VM( - w )
           // size 3 with register.
-          A[ m/pointer@ ]] ,
+          A[ m/d@ ]] ,
           A[ m/read ]] ,
-          A[ m/push ]] ,
+          A[ m/push ; ]] ,
 
         : 'dstore // pop a value from the stack and write the content of a memory cell pointed to by a 32-register VM( w - )
           // size 3 with register.
           A[ >r m/pop ]] ,
-          A[ r> m/pointer@ ]] ,
-          A[ m/write ]] ,
+          A[ r> m/d@ ]] ,
+          A[ m/write ; ]] ,
 
         : 'rlit // next 16-bit literal -> register
           // size 2 with register. memory: opcode, value
           A[ >r m/next ]] ,
-          A[ r> m/r! ]] ,
+          A[ r> m/r! ; ]] ,
 
         : 'dlit // next 32-bit literal -> double register
-          // size 2 with register. memory: opcode, hi, lo
+          // size 2 with register. memory: opcode, lo, hi
           A[ >r m/dnext ]] ,
           A[ r> m/d! ]] ,
 
         : 'rjmp // jump to address held in register
           // size 2 with register.
           A[ m/r@ ]] ,
-          A[ a! ]] ,
+          A[ m/jmp ; ]] ,
 
         : 'rcall // call address held in register
           // size 2 with register.
           A[ m/r@ ]] ,
-          A[ m/calladdr ]] ,
+          A[ m/calladdr ; ]] ,
 
         : 'drop // discard one VM stack word
           // size 2 without register.
           A[ m/pop ]] ,
-          A[ drop ]] ,
+          A[ drop ; ]] ,
 
         : 'dup // duplicate top VM stack word VM( w - w w )
           // size 4 without register.
           A[ m/pop ]] ,
           A[ dup ]] ,
           A[ >r m/push ]] ,
-          A[ r> m/push ]] ,
+          A[ r> m/push ; ]] ,
 
-        : 'swap // swap top VM stack words VM( w1 w2 - w2 w1 )
-          // size 4 without register.
-          A[ m/dpop ]] ,
-          A[ over >r >r ]] ,
-          A[ drop r> r> ]] ,
-          A[ m/dpush ]] ,
-
-        : 'stl // store register to a VM stack location relative to the fp VM( - )
+        : 'ldf // load register from mem[1: fp + offset]
           // size 4 with register.
-          ( fp sp r )
-          A[ m/r@ ]] , ( fp sp w )
-          A[ >r m/next ]] ,  ( fp sp offset / w )
-          A[ >r over r> ]] , ( fp sp fp offset )
-          A[ r> . + ]],
+          A[ m/fpnext ]] ,
+          A[ @p m/read ]] ,
+          # 1 ,
+          A[ m/r!x ; ]] ,
+
+        : 'stf // store register to mem[1: fp + offset]
+          // size 4 with register.
+          A[ m/r@ ]] ,
+          A[ m/fpnext ]] ,
+          A[ @p m/write ; ]] ,
+          # 1 ,
 
       ramWords:
-      - 0x2C9B2
-      - 0x13424
+      - 0x15555
+      - 0x1142C
+      - 0x11428
+      - 0x1340B
+      - 0x11439
+      - 0x1340B
+      - 0x21626
+      - 0x1341F
+      - 0x1141D
+      - 0x11404
+      - 0x1340A
+      - 0x11425
+      - 0x1340B
+      - 0x11426
+      - 0x2F608
+      - 0x27715
+      - 0x2F607
+      - 0x27718
+      - 0x13412
+      - 0x11426
+      - 0x1340F
+      - 0x11425
+      - 0x13407
+      - 0x1141B
       - 0x13408
-      - 0x13418
-      - 0x2A9B2
-      - 0x13404
-      - 0x13428
-      - 0x13417
-      - 0x1341F
-      - 0x13418
-      - 0x1340D
-      - 0x2F613
-      - 0x27636
-      - 0x2F621
-      - 0x27639
-      - 0x13430
-      - 0x1340D
-      - 0x13433
-      - 0x1341F
-      - 0x13421
-      - 0x13436
-      - 0x13413
-      - 0x2F621
-      - 0x27639
-      - 0x13413
-      - 0x13430
-      - 0x1340D
-      - 0x13413
-      - 0x13433
-      - 0x1341F
-      - 0x05600
-      - 0x1341E
-      - 0x1343C
-      - 0x1341A
-      - 0x1340D
-      - 0x2F613
-      - 0x2763C
-      - 0x13410
-      - 0x2F618
-      - 0x27636
-      - 0x2F617
-      - 0x27639
-      - 0x13430
-      - 0x2A9B2
-      - 0x13430
+      - 0x2F607
+      - 0x27718
+      - 0x13408
+      - 0x13412
+      - 0x11426
+      - 0x13408
+      - 0x1340F
+      - 0x11425
+      - 0x05A55
       - 0x13409
-      - 0x13413
-      - 0x3A9B2
-      - 0x13413
+      - 0x1340F
+      - 0x13434
+      - 0x11426
+      - 0x2F608
+      - 0x2760F
+      - 0x1142E
+      - 0x2F60B
+      - 0x27715
+      - 0x2F60A
+      - 0x27618
+      - 0x13412
+      - 0x11439
+      - 0x13412
+      - 0x1142A
+      - 0x13408
+      - 0x3B555
+      - 0x13408
       - 0x249B2
-      - 0x2F60D
-      - 0x2760D
-      - 0x13421
-      - 0x208BA
-      - 0x3AC9A
-      - 0x1341F
-      - 0x13430
-      - 0x2F618
-      - 0x2EF9A
-      - 0x269F2
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x2F626
+      - 0x27726
+      - 0x13422
+      - 0x05634
+      - 0x00001
+      - 0x1141B
+      - 0x13412
+      - 0x13422
+      - 0x0572E
+      - 0x00001
       - 0x15555
       startup:
         entryPoint: 0x1D5
@@ -75270,7 +75438,7 @@ projects:
       postMortemEnabled: false
     - coordinate: 607
       enabled: true
-      sourceCode: >+
+      sourceCode: >
         ( CVM_pipeline node 607.
 
         SRAM simulator using the PC
@@ -75309,16 +75477,129 @@ projects:
           // == 0: no interrupt pending
           // != 0: interrupt pending
 
+        # 0 f18var pc 
+
+
+        # 0xffff f18var sp 
+
+
+
+        : mem/halt
+          r-l-
+        : mem/instrloop // instruction loop
+          io a!
+          @ 0x8800 and
+          if // pending write on left or right port
+            0x0800 and
+            if // pending write on left port
+              left a! --l- ;
+            then
+            right a! r--- ;
+          then
+          up a!
+          mem/next
+          ! ---u
+        ;
+
+
+        : mem/add ( w1 w2 - w )
+          + 0xffff and
+        ;
+
+
+        : mem/inc ( w - w' )
+          1 mem/add
+        ;
+
+
+        : mem/dec ( w - w' )
+          -1 mem/add
+        ;
+
+
+        : mem/write ( w addr page - )
+          >r !b       // a16
+          r> inv !b   // page
+          !b          // data
+        ;
+
+
+        : mem/next ( - w )
+          pc dup mem/inc !pc
+          ( pc )
+        : mem/0read ( addr - w )
+          dup dup xor
+        : mem/read ( addr page - w )
+          >r !b       // a16
+          r> !b       // page
+          @b          // data
+        ;
+
+
+        : mem/push ( w - )
+          sp
+          dup mem/dec !sp
+          1 mem/write
+        ;
+
+
+        : mem/pop ( - w )
+          sp
+          mem/inc dup
+          !sp
+          1 mem/read
+        ;
+
+
+        : mem/call ( - )
+          mem/next
+        : mem/calladdr ( addr - )
+          pc mem/push
+          !pc
+        ;
+
+
+        : mem/ret ( - )
+          mem/pop
+          !pc
+        ;
+
+
+        : mem/branch ( offset - )
+          pc mem/add !pc
+        ;
+
+
+        : mem/adjust ( offset - )
+          sp mem/add !sp
+        ;
+
+
+
+        /*
+
         // read
 
 
         : mem/rdup
           up
         : mem/read
+          // receive sequence: page addr
+          // send sequence: w
           a!
           @ @ !b    // a16
           !b        // page
           @b ! ;    // data
+
+        *
+
+        : mem/1read
+          up a!
+          @ !b      // a16
+          1 !b      // page
+          @b ! ;    // data
+        /
+
 
         : mem/rdleft left mem/read ;
 
@@ -75329,12 +75610,18 @@ projects:
         : mem/rdupinstr
           intr/pend if
             // interrupt
-            dup dup xor !intr/pend
+            dup dup xor !intr/pend // clear interrupt flag
+            // return interrupt instruction
+            up a!
           then
-          drop up a!
+          drop
+        : mem/0read
+          up a!
           @ !b        // a16
-          dup xor !b  // page = 0
-          @b ! ;
+          dup xor !b  // page
+          @b !        // data
+        ;
+
 
         // write
 
@@ -75342,10 +75629,21 @@ projects:
         : mem/wrup
           up
         : mem/write
+          // receive sequence: page addr w
           a!
           @ @ !b      // a16
           inv !b      // page
           @ !b ;      // data
+
+        *
+
+        : mem/1write
+          up a!
+          @ !b      // a16
+          -2 !b     // page
+          @ !b ;    // data
+        /
+
 
         : mem/wrleft left mem/write ;
 
@@ -75361,70 +75659,71 @@ projects:
 
         : mem/intr 1 !intr/pend r-lu ;
 
+        */
       ramWords:
       - 0x04235
       - 0x05555
       - 0x00000
-      - 0x049B2
-      - 0x00145
-      - 0x2BE0A
-      - 0x09B02
-      - 0x0B555
-      - 0x05705
+      - 0x04235
+      - 0x05555
+      - 0x00000
+      - 0x04235
+      - 0x05555
+      - 0x0FFFF
+      - 0x135F5
+      - 0x04A0F
+      - 0x0015D
+      - 0x08800
+      - 0x3F316
+      - 0x04063
+      - 0x00800
+      - 0x04AB2
       - 0x00175
-      - 0x05705
+      - 0x11575
+      - 0x04AB2
       - 0x001D5
-      - 0x13401
-      - 0x19410
-      - 0x24DE2
-      - 0x13400
-      - 0x3BDAA
+      - 0x115D5
+      - 0x04AB2
       - 0x00145
-      - 0x03B92
-      - 0x39B02
-      - 0x0B555
-      - 0x049B2
-      - 0x00145
-      - 0x2BE0A
-      - 0x08622
-      - 0x03B55
-      - 0x05717
-      - 0x00175
-      - 0x05717
-      - 0x001D5
-      - 0x115F5
-      - 0x05600
+      - 0x13423
+      - 0x0A9B2
+      - 0x11545
+      - 0x3DDFD
+      - 0x0FFFF
+      - 0x0571B
       - 0x00001
-      - 0x115E5
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x0571B
+      - 0x3FFFF
+      - 0x2FB9A
+      - 0x33B25
+      - 0x13404
+      - 0x2561D
+      - 0x13403
+      - 0x24DE2
+      - 0x2FB9A
+      - 0x09F55
+      - 0x13407
+      - 0x2561F
+      - 0x13406
+      - 0x05721
+      - 0x00001
+      - 0x13407
+      - 0x1341D
+      - 0x25606
+      - 0x05727
+      - 0x00001
+      - 0x13423
+      - 0x13404
+      - 0x13429
+      - 0x11403
+      - 0x1342E
+      - 0x11403
+      - 0x13404
+      - 0x1341B
+      - 0x11403
+      - 0x13407
+      - 0x1341B
+      - 0x11406
       - 0x15555
       startup:
         entryPoint: 0x1E5
@@ -76450,23 +76749,6 @@ projects:
         drop
 
         rpush r15
-
-        drop
-
-
-        // Swap VM stack ( 0x4444 0x5555 -- 0x5555 0x4444 ).
-
-        // Swap writes: 0x5555, then 0x4444.
-
-        // Following drop reads: 0x4444, then 0x5555.
-
-        push 0x4444
-
-        push 0x5555
-
-        swap
-
-        drop
 
         drop
 
@@ -147891,7 +148173,7 @@ projects:
         drop // expected 600D at 1:FFFF
 
         halt
-    lastSelectedDebuggerProgramName: binary32 regression test
+    lastSelectedDebuggerProgramName: microcode regression test
     cDebuggerPrograms:
     - name: default
       source: >
