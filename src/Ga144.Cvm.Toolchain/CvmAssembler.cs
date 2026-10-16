@@ -399,8 +399,12 @@ public static class CvmAssembler
           // requiredArgCount/EmitOperandWord machinery has no group for a mnemonic needing a
           // per-condition-name (not per-mnemonic) node-resolved relocation plus a separately-resolved
           // relative-offset trailing word; see that case's own remarks for the real encoding.
-          // ADDED 2026-10-03: push2 accepts ONE operand (a single 32-bit number, encoded hi-lo) or TWO
-          // (two 16-bit numbers, hi then lo) -- both always three memory words (opcode, hi, lo).
+          // ADDED 2026-10-03: push2 accepts ONE operand (a single 32-bit number) or TWO (two 16-bit
+          // numbers, typed hi then lo) -- both always three memory words. Memory layout is "opcode, lo,
+          // hi" as of 2026-10-16 (was "opcode, hi, lo" 2026-10-03..2026-10-16) -- the typed order stays
+          // hi-then-lo (unchanged from 2026-10-03); pass 2's own emission for the explicit two-operand
+          // form now writes them in reverse of typed order to match. See the Push2Mnemonic Instructions
+          // row's own remarks in CvmInstructionSet.cs for the full history.
           if (string.Equals(shape.Mnemonic, CvmInstructionSet.Push2Mnemonic, StringComparison.Ordinal))
           {
             if (line.Args.Count is not (1 or 2))
@@ -414,7 +418,10 @@ public static class CvmAssembler
           }
 
           // 2026-10-04 (second version): "dlit" takes a register plus EITHER one 32-bit literal ("dlit d1, 0x12345678")
-          // OR two 16-bit literals in memory order -- since 2026-10-05 hi then lo ("dlit d1, 0x1234, 0x5678") -- always three memory words.
+          // OR two 16-bit literals, TYPED hi then lo ("dlit d1, 0x1234, 0x5678") -- always three memory words.
+          // The typed order is hi-then-lo again as of 2026-10-16 (same text Stefan would have written on
+          // 2026-10-04) -- what changed that day is which one gets WRITTEN first; see pass 2's own
+          // "DoubleLiteralMnemonic" branch for the emission-order fix and its full history.
           if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
           {
             if (line.Args.Count is not (2 or 3))
@@ -1086,20 +1093,34 @@ public static class CvmAssembler
           }
           else if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
           {
-            // CHANGED 2026-10-05 (reworked node 509: "'dlit ... memory: opcode, hi, lo"; m/dnext leaves "hi lo", lo on top):
-            // dlit memory layout is opcode, HI, LO -- the same order as push2. One 32-bit operand: emit value >> 16,
-            // then value & 0xFFFF. TWO 16-bit operands (numbers or labels) are written in MEMORY order, "dlit d5 hi lo" --
-            // e.g. "dlit d5 0x0123 0xCDEF" = 0x0123CDEF (memory 0123, CDEF) and "dlit d10 2 0x0100" = pointer 2:0100.
-            // (2026-10-04 it was lo, hi, matching the old node 509.)
+            // REVERSED 2026-10-16, per Stefan directly ("notice that 'dlit' and 'push2' have reverse the
+            // order of their 32-bit argument") -- CORRECTED again same day, per Stefan: "Double literals
+            // still use the old assembler order. reverse the order." / "double literals are used in
+            // 'dlit' and 'push2' opcodes." / "this is not about byte order, but about 16-bit word order."
+            // The first pass at this only swapped the single-32-bit-literal convenience form and
+            // RELABELED the explicit two-operand form's documented meaning (hi/lo -> lo/hi) without
+            // touching its emission CODE -- which left "dlit d1, x, y" written by hand still emitting x
+            // then y, unchanged, same bytes as before. That's the bug: the ASSEMBLER's own emission order
+            // for the explicit two-operand form never actually reversed.
+            //
+            // Fix: the textual convention is back to its ORIGINAL meaning -- "dlit d1, hi, lo" (first
+            // operand hi, second lo), exactly as before any of this -- but the two trailing words are now
+            // EMITTED in the opposite order from how they're typed (lo's word written first, hi's word
+            // second), so existing "dlit d1, hi, lo" source lines need no edits at all and now compile to
+            // the correct "opcode, lo, hi" memory layout node 509 actually reads. One 32-bit operand: emit
+            // value & 0xFFFF (lo) first, then value >> 16 (hi) second -- unchanged from the first pass,
+            // since there's only one operand and no typed order to preserve.
+            // e.g. "dlit d5 0x0123 0xCDEF" = 0x0123CDEF (hi=0x0123, lo=0xCDEF, memory CDEF then 0123) and
+            // "dlit d10 2 0x0100" = pointer 2:0100 (memory 0100 then 2).
             if (line.Args.Count == 3)
             {
-              EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
               EmitOperandWord(objectFile, section, line.Args[2], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+              EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
             }
             else if (TryParsePush2WideLiteral(line.Args[1], out uint dlitValue))
             {
-              codeSection.Words.Add((int)(dlitValue >> 16));
               codeSection.Words.Add((int)(dlitValue & 0xFFFF));
+              codeSection.Words.Add((int)(dlitValue >> 16));
             }
             else
             {
@@ -1115,17 +1136,27 @@ public static class CvmAssembler
           else if (shape.Encoding == CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords)
           {
             // litm/lit2 only (2026-09-27) -- the SECOND operand word, immediately after the first;
-            // otherwise identical to the TrailingWord branch just above.
+            // otherwise identical to the TrailingWord branch just above. UNCHANGED by the push2 fix
+            // below -- litm/lit2 are a different mnemonic family with no hi/lo convention at all, and
+            // must keep emitting their two operands in the order typed.
             //
-            // push2 (2026-10-03) with ONE operand: a single 32-bit number, encoded hi-lo as two literal
-            // words (hi first). With two operands it falls through to the two-word path below (x = hi,
-            // y = lo), like litm/lit2 -- there a label is allowed, as a 16-bit address.
+            // push2 (2026-10-03) with ONE operand: a single 32-bit number, encoded as two literal words.
+            // REVERSED 2026-10-16, per Stefan directly ("notice that 'dlit' and 'push2' have reverse the
+            // order of their 32-bit argument") -- CORRECTED again same day ("Double literals still use
+            // the old assembler order. reverse the order." / "this is not about byte order, but about
+            // 16-bit word order."): the first pass only swapped this single-literal form (correctly --
+            // value & 0xFFFF, i.e. lo, first) and relabeled the explicit two-operand form's documented
+            // meaning without touching ITS emission code, which left "push2 x y" typed by hand still
+            // emitting x then y unchanged -- the actual bug. Fix: the typed convention is back to its
+            // original meaning (x = hi, y = lo, same as 2026-10-03), but now emitted in the OPPOSITE
+            // order from how they're typed (y's word first, x's word second), so an existing "push2 hi lo"
+            // source line needs no edit and now compiles to the correct "opcode, lo, hi" memory layout.
             if (string.Equals(shape.Mnemonic, CvmInstructionSet.Push2Mnemonic, StringComparison.Ordinal) && line.Args.Count == 1)
             {
               if (TryParsePush2WideLiteral(line.Args[0], out uint push2Value))
               {
-                codeSection.Words.Add((int)(push2Value >> 16));
                 codeSection.Words.Add((int)(push2Value & 0xFFFF));
+                codeSection.Words.Add((int)(push2Value >> 16));
               }
               else
               {
@@ -1133,6 +1164,13 @@ public static class CvmAssembler
                 codeSection.Words.Add(0);
                 codeSection.Words.Add(0);
               }
+            }
+            else if (string.Equals(shape.Mnemonic, CvmInstructionSet.Push2Mnemonic, StringComparison.Ordinal))
+            {
+              // Two explicit operands, typed "push2 hi lo" -- emitted in reverse (lo's word first), see
+              // this branch's own remarks just above.
+              EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
+              EmitOperandWord(objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
             }
             else
             {

@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-16T04:24:44.9991442
-      utcDateTime: 2026-10-16T04:24:44.9991442Z
-      localDateTime: 2026-10-16T06:24:44.9991442+02:00
+      dateTime: 2026-10-16T21:44:59.5411769
+      utcDateTime: 2026-10-16T21:44:59.5411769Z
+      localDateTime: 2026-10-16T23:44:59.5411769+02:00
       date: 2026-10-16T00:00:00.0000000
       day: 16
       dayOfWeek: Friday
       dayOfYear: 289
-      hour: 4
-      millisecond: 999
-      microsecond: 144
-      nanosecond: 200
-      minute: 24
+      hour: 21
+      millisecond: 541
+      microsecond: 176
+      nanosecond: 900
+      minute: 44
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 44
-      ticks: 639277214849991442
-      utcTicks: 639277214849991442
-      timeOfDay: 04:24:44.9991442
+      second: 59
+      ticks: 639277838995411769
+      utcTicks: 639277838995411769
+      timeOfDay: 21:44:59.5411769
       year: 2026
   portB: 
   portC:
@@ -68138,7 +68138,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDE95'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 206
       enabled: true
       sourceCode: >+
@@ -68365,7 +68365,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDE7C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 207
       enabled: true
       sourceCode: >-
@@ -68475,7 +68475,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#95DE7C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 208
       enabled: true
       sourceCode: "( CVM_pipeline node 208.\n\ninstruction execution.\n\n\n)\n\r\n# down /b\r\n# right /a\r\n\r\nentry x4a/main\r\n\r\n# 0 org\r\n\n: x4a/main\n  @b       // addr\r\n  \n  x4a/main\r\n;\n\r\n\r\n\r\n"
@@ -68553,7 +68553,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#ADDE7C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 209
       enabled: true
       sourceCode: "( CVM_pipeline node 209.\n\ninstruction execution.\n\n\n)\n\r\n# up /b\r\n\r\nentry x4b/main\r\n\r\n# 0 org\r\n\n: x4b/main\n  @b\r\n  \n  x4b/main ;\n\r\n\r\n\r\n"
@@ -69833,7 +69833,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEAD'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 306
       enabled: true
       sourceCode: >
@@ -70056,7 +70056,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDE95'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 307
       enabled: true
       sourceCode: >+
@@ -70284,7 +70284,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#95DE7C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 308
       enabled: true
       sourceCode: >+
@@ -70510,7 +70510,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#C6DE7C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 309
       enabled: true
       sourceCode: >+
@@ -71962,7 +71962,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEC6'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 406
       enabled: true
       sourceCode: >+
@@ -72256,7 +72256,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEC6'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 407
       enabled: true
       sourceCode: >+
@@ -72648,7 +72648,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#DEC67C'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 409
       enabled: true
       sourceCode: >+
@@ -73884,7 +73884,7 @@ projects:
 
         : d1/slit ( sop ) // out: ( instr w )
           2* 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
-          A[ @p m/push ]] lit !b !b
+          A[ @p m/push ; ]] lit !b !b
         ;
 
 
@@ -73997,7 +73997,7 @@ projects:
       - 0x307C2
       - 0x31DFF
       - 0x0FFFF
-      - 0x0560B
+      - 0x05726
       - 0x09B55
       - 0x0402D
       - 0x0000F
@@ -74010,24 +74010,24 @@ projects:
       - 0x3721D
       - 0x37217
       - 0x05AB2
-      - 0x05632
+      - 0x05633
       - 0x11429
       - 0x05A12
-      - 0x05625
-      - 0x0562E
+      - 0x05626
+      - 0x05630
       - 0x0BD2A
       - 0x0561D
       - 0x11429
       - 0x05A12
-      - 0x05621
-      - 0x0562B
+      - 0x05622
+      - 0x05629
       - 0x0BD2A
       - 0x05623
       - 0x1143A
       - 0x3722D
       - 0x05A12
-      - 0x05625
       - 0x05626
+      - 0x05624
       - 0x0BD2A
       - 0x05618
       - 0x0160E
@@ -74036,14 +74036,14 @@ projects:
       - 0x03B55
       - 0x37231
       - 0x05AB2
-      - 0x05609
+      - 0x0560A
       - 0x11402
       - 0x37235
       - 0x05AB2
-      - 0x0562A
+      - 0x0562B
       - 0x1143A
       - 0x05A12
-      - 0x05621
+      - 0x05622
       - 0x05610
       - 0x0BD2A
       - 0x0560E
@@ -74062,7 +74062,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEDE'
-      postMortemEnabled: true
+      postMortemEnabled: false
     - coordinate: 506
       enabled: true
       sourceCode: >+
@@ -74109,6 +74109,7 @@ projects:
            !         // send sop
            !         // send original opcode
            @ drop    // wait for completion
+           A[ ; ]] lit !b
         ;
 
 
@@ -74120,10 +74121,8 @@ projects:
         ;
 
 
-        : d/finish right b! A[ ; ]] lit !b
-
         : d/main
-          # d/finish lit >r
+          # d/main lit >r
 
           A[ !p !p ]] lit !b // node 507 sends op, then sop
           @b @b              // receive ( op sop )
@@ -74158,18 +74157,19 @@ projects:
 
             // cond
             d/cond@
-            A[ @p m/push ]] lit !b !b ;
+            A[ @p m/push ; ]] lit !b !b ;
 
           then // 1000*
 
           // if
+
 
           d/cond@
           A[ m/next ]] lit !b
           if
             // true
             // branch
-            A[ m/branch ]] A[ drop ; ]] [ xor ] lit
+            A[ m/branch ; ]] A[ drop ; ]] [ xor ] lit
           then
           // false
           // no branch
@@ -74183,7 +74183,7 @@ projects:
           if
             // true
             // branch
-            A[ m/branch ]] lit !b
+            A[ m/branch ; ]] lit !b
           ;
           then
           // false
@@ -74220,7 +74220,7 @@ projects:
         ;
 
       ramWords:
-      - 0x05606
+      - 0x15555
       - 0x15555
       - 0x04A2D
       - 0x00115
@@ -74230,25 +74230,22 @@ projects:
       - 0x00115
       - 0x13404
       - 0x0BA0A
-      - 0x3B555
+      - 0x3BD25
+      - 0x15555
       - 0x3AD12
       - 0x0561B
       - 0x13402
       - 0x0B706
-      - 0x04B12
-      - 0x001D5
-      - 0x15555
-      - 0x089B2
       - 0x04812
-      - 0x0000F
+      - 0x00010
       - 0x0D9B2
       - 0x09F02
-      - 0x3721A
+      - 0x37217
       - 0x05708
       - 0x05611
-      - 0x37229
-      - 0x37225
-      - 0x3721F
+      - 0x37226
+      - 0x37222
+      - 0x3721C
       - 0x05708
       - 0x05600
       - 0x3ADC2
@@ -74261,15 +74258,15 @@ projects:
       - 0x05604
       - 0x03B0A
       - 0x09555
-      - 0x3722D
-      - 0x1340B
+      - 0x3722A
+      - 0x1340C
       - 0x05B25
-      - 0x05626
-      - 0x1340B
-      - 0x05B62
+      - 0x05726
+      - 0x1340C
+      - 0x05B67
       - 0x1340B
       - 0x049B2
-      - 0x2816E
+      - 0x2A16E
       - 0x04325
       - 0x3B555
       - 0x05B12
@@ -74284,8 +74281,11 @@ projects:
       - 0x13408
       - 0x05A2D
       - 0x09D25
+      - 0x05607
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x013
+        entryPoint: 0x010
         p: 0x000
         a: 0x000
         b: 0x000
@@ -74293,7 +74293,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#7CDEDE'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 507
       enabled: true
       sourceCode: >+
@@ -74406,7 +74406,7 @@ projects:
 
         # down /b
 
-        [ 0 0xffff 2 ] /stack
+        [ 0 1 ] /stack  // initial fp
 
 
         entry m/main
@@ -74707,16 +74707,16 @@ projects:
       - 0x029B2
       - 0x13575
       - 0x05A40
-      - 0x1140A
+      - 0x1140B
       - 0x05A2A
-      - 0x05606
+      - 0x05607
       - 0x11408
       - 0x13408
       - 0x05A45
-      - 0x1342E
+      - 0x1342F
       - 0x1340B
       - 0x05AB2
-      - 0x13423
+      - 0x13424
       - 0x05A0D
       - 0x0C9B2
       - 0x05B22
@@ -74736,37 +74736,37 @@ projects:
       - 0x2F63D
       - 0x27555
       - 0x05AB2
-      - 0x13407
+      - 0x13408
       - 0x1140D
       - 0x2160B
       - 0x3DDFD
       - 0x0FFFF
       - 0x13426
       - 0x05A2D
-      - 0x05629
+      - 0x0562A
       - 0x05A55
-      - 0x13433
+      - 0x13434
       - 0x05A2D
-      - 0x05634
+      - 0x05635
       - 0x05A55
-      - 0x13437
+      - 0x13438
       - 0x05ABA
       - 0x05D12
       - 0x2FA9A
       - 0x0AC2F
-      - 0x13421
+      - 0x13422
       - 0x0B555
       - 0x05ABA
       - 0x05DB2
       - 0x0AC2F
-      - 0x13427
+      - 0x13428
       - 0x0B70D
       - 0x05A2D
-      - 0x05603
+      - 0x05604
       - 0x05A2D
-      - 0x05639
+      - 0x0563A
       - 0x05A2D
-      - 0x0563C
+      - 0x0563D
       - 0x15555
       startup:
         entryPoint: 0x000
@@ -74777,7 +74777,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#D6ECF7'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 508
       enabled: true
       sourceCode: >+
@@ -74813,7 +74813,7 @@ projects:
 
           // Store the fetched value in rx.
           r>
-          A[ @p m/r! ]] lit !b !b
+          A[ @p m/r! ; ]] lit !b !b
         ;
 
 
@@ -74824,14 +74824,12 @@ projects:
 
           // Y remains locally; send it after fetching rx.
           A[ @p m/d@ ]] lit !b !b
-          A[ m/write ]] lit !b
+          A[ m/write ; ]] lit !b
         ;
 
 
-        : x6/finish A[ ; ]] lit !b
-
         : x6/main
-          # x6/finish lit >r
+          # x6/main lit >r
           // execute next instruction
           A[ !p ]] lit !b @b
           ( op )
@@ -74849,7 +74847,7 @@ projects:
 
             // br
             2* 2/ 2/ 2/ 2/
-            A[ @p m/branch ]] lit !b !b ;
+            A[ @p m/branch ; ]] lit !b !b ;
 
           then // 00*
           2* -if // 001*
@@ -74921,25 +74919,23 @@ projects:
       - 0x09B12
       - 0x1342E
       - 0x09555
-      - 0x05BB2
-      - 0x15555
       - 0x04812
       - 0x0000E
       - 0x0C9B2
       - 0x09F92
       - 0x364B2
-      - 0x1B41B
+      - 0x1B419
       - 0x05B22
       - 0x05DB2
       - 0x09D22
       - 0x115D5
-      - 0x11410
-      - 0x37220
+      - 0x1140E
+      - 0x3721E
       - 0x367C2
       - 0x30712
       - 0x0563B
       - 0x09B55
-      - 0x3722B
+      - 0x37229
       - 0x3AD12
       - 0x0000F
       - 0x3E8C2
@@ -74950,12 +74946,12 @@ projects:
       - 0x31DFA
       - 0x0000F
       - 0x2F555
-      - 0x37230
-      - 0x3B632
+      - 0x3722E
+      - 0x3B630
       - 0x05B22
       - 0x049B2
       - 0x03B75
-      - 0x3B632
+      - 0x3B630
       - 0x03B75
       - 0x26FC2
       - 0x307C3
@@ -74971,8 +74967,10 @@ projects:
       - 0x0000F
       - 0x3FD2D
       - 0x07972
+      - 0x15555
+      - 0x15555
       startup:
-        entryPoint: 0x010
+        entryPoint: 0x00E
         p: 0x000
         a: 0x000
         b: 0x000
@@ -74980,7 +74978,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#DEAD7C'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 509
       enabled: true
       sourceCode: >+
@@ -75113,7 +75111,7 @@ projects:
         : 'dlit // next 32-bit literal -> double register
           // size 2 with register. memory: opcode, lo, hi
           A[ >r m/dnext ]] ,
-          A[ r> m/d! ]] ,
+          A[ r> m/d! ; ]] ,
 
         : 'rjmp // jump to address held in register
           // size 2 with register.
@@ -75458,30 +75456,19 @@ projects:
         )
 
 
-        # 0 org
-
         # down /b
 
-        # r-lu /p
+
+        entry mem/instrloop
 
 
-        // up is node 507
+        # 4 org
 
-        // right is node 606
-
-        // left is node 608
-
-
-        # 0 f18var intr/pend 
-          // interupt pending flag
-          // == 0: no interrupt pending
-          // != 0: interrupt pending
 
         # 0 f18var pc 
 
 
         # 0xffff f18var sp 
-
 
 
         : mem/halt
@@ -75661,9 +75648,10 @@ projects:
 
         */
       ramWords:
-      - 0x04235
-      - 0x05555
-      - 0x00000
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x04235
       - 0x05555
       - 0x00000
@@ -75674,8 +75662,8 @@ projects:
       - 0x04A0F
       - 0x0015D
       - 0x08800
-      - 0x3F316
-      - 0x04063
+      - 0x3F317
+      - 0x04064
       - 0x00800
       - 0x04AB2
       - 0x00175
@@ -75685,48 +75673,47 @@ projects:
       - 0x115D5
       - 0x04AB2
       - 0x00145
-      - 0x13423
+      - 0x13424
       - 0x0A9B2
       - 0x11545
       - 0x3DDFD
       - 0x0FFFF
-      - 0x0571B
+      - 0x0571C
       - 0x00001
-      - 0x0571B
+      - 0x0571C
       - 0x3FFFF
       - 0x2FB9A
       - 0x33B25
+      - 0x13405
+      - 0x2561E
       - 0x13404
-      - 0x2561D
-      - 0x13403
       - 0x24DE2
       - 0x2FB9A
       - 0x09F55
+      - 0x13408
+      - 0x25620
       - 0x13407
-      - 0x2561F
-      - 0x13406
-      - 0x05721
+      - 0x05722
       - 0x00001
-      - 0x13407
-      - 0x1341D
-      - 0x25606
-      - 0x05727
+      - 0x13408
+      - 0x1341E
+      - 0x25607
+      - 0x05728
       - 0x00001
-      - 0x13423
-      - 0x13404
-      - 0x13429
-      - 0x11403
-      - 0x1342E
-      - 0x11403
-      - 0x13404
-      - 0x1341B
-      - 0x11403
-      - 0x13407
-      - 0x1341B
-      - 0x11406
-      - 0x15555
+      - 0x13424
+      - 0x13405
+      - 0x1342A
+      - 0x11404
+      - 0x1342F
+      - 0x11404
+      - 0x13405
+      - 0x1341C
+      - 0x11404
+      - 0x13408
+      - 0x1341C
+      - 0x11407
       startup:
-        entryPoint: 0x1E5
+        entryPoint: 0x00B
         p: 0x000
         a: 0x000
         b: 0x000
@@ -75734,7 +75721,7 @@ projects:
         returnStack: []
         parameterStack: []
       color: '#F5E6B8'
-      postMortemEnabled: false
+      postMortemEnabled: true
     - coordinate: 608
       enabled: false
       sourceCode: ''
@@ -76641,6 +76628,172 @@ projects:
         unlink
 
 
+        // Frame-relative memory access.
+
+        // r14 and r15 are scratch registers in this section.
+
+        link -4
+
+        // FP = 0xfffe, SP = 0xfffa.
+
+
+        // Offset zero reads the saved FP.
+
+        // Expect READ 1:FFFE -> 0000.
+
+        ldf r15 0
+
+        rpush r15
+
+        drop
+
+        // Inspection value: 0000.
+
+
+        // Negative offset; preserve the source register.
+
+        // Expect WRITE/READ 1:FFFD, value 1357.
+
+        rlit r14 0x1357
+
+        stf r14 -1
+
+        rlit r15 0xDEAD
+
+        ldf r15 -1
+
+        rpush r14
+
+        drop
+
+        rpush r15
+
+        drop
+
+        // Both inspection values: 1357.
+
+
+        // Store and load using the same register.
+
+        // Expect WRITE/READ 1:FFFC, value A55A.
+
+        rlit r15 0xA55A
+
+        stf r15 -2
+
+        rlit r15 0
+
+        ldf r15 -2
+
+        rpush r15
+
+        drop
+
+        // Inspection value: A55A.
+
+
+        // Positive offset with 16-bit address wrap.
+
+        // 0xfffe + 2 = 0x0000.
+
+        // Expect WRITE/READ 1:0000, value 2468.
+
+        rlit r14 0x2468
+
+        stf r14 2
+
+        ldf r15 2
+
+        rpush r15
+
+        drop
+
+        // Inspection value: 2468.
+
+
+        // Minimum signed offset.
+
+        // 0xfffe - 32768 = 0x7ffe.
+
+        // Expect WRITE/READ 1:7FFE, value 8001.
+
+        rlit r14 0x8001
+
+        stf r14 -32768
+
+        ldf r15 -32768
+
+        rpush r15
+
+        drop
+
+        // Inspection value: 8001.
+
+
+        // Maximum signed offset.
+
+        // 0xfffe + 32767 = 0x7ffd.
+
+        // Expect WRITE/READ 1:7FFD, value 7FFE.
+
+        rlit r14 0x7FFE
+
+        stf r14 32767
+
+        ldf r15 32767
+
+        rpush r15
+
+        drop
+
+        // Inspection value: 7FFE.
+
+
+        // Nested frame: same offset selects a different address.
+
+        link -2
+
+        // FP = 0xfff9, SP = 0xfff7.
+
+        // Expect WRITE/READ 1:FFF8, value BEEF.
+
+        rlit r14 0xBEEF
+
+        stf r14 -1
+
+        ldf r15 -1
+
+        rpush r15
+
+        drop
+
+        // Inspection value: BEEF.
+
+        unlink
+
+        // Expect READ 1:FFFA -> FFFE.
+
+
+        // Outer frame's local must remain unchanged.
+
+        // Expect READ 1:FFFD -> 1357.
+
+        ldf r15 -1
+
+        rpush r15
+
+        drop
+
+        // Inspection value: 1357.
+
+
+        unlink
+
+        // Expect READ 1:FFFE -> 0000.
+
+        // Restored FP = 0, SP = 0xffff.
+
+
         // Scalar transfers: r0 = r1 = 0x1234.
 
         push 0x1234
@@ -76652,7 +76805,9 @@ projects:
         rpop r1
 
 
-        // Double literal: instruction-memory order is hi, lo.
+        // Double literal: source operands are hi, lo.
+
+        // Assembler emits instruction-memory operands lo, hi.
 
         // d1: r2 = lo = 0x9ABC, r3 = hi = 0x5678.
 
@@ -76704,7 +76859,9 @@ projects:
         dpop d4
 
 
-        // Register literals; instruction-memory order is hi, lo.
+        // Register literals: source operands are hi, lo.
+
+        // Assembler emits instruction-memory operands lo, hi.
 
         // d5: r10 = lo = 0xCDEF, r11 = hi = 0x0123.
 
@@ -76797,6 +76954,42 @@ projects:
 
 
         inspect:
+
+        // Expected final register values:
+
+        // r0  = 1234
+
+        // r1  = 1234
+
+        // r2  = 9ABC
+
+        // r3  = 5678
+
+        // r4  = 9ABC
+
+        // r5  = 5678
+
+        // r6  = 2222
+
+        // r7  = 600D
+
+        // r8  = 0007
+
+        // r9  = CAFE
+
+        // r10 = CDEF
+
+        // r11 = 1111
+
+        // r12 = BEEF
+
+        // r13 = 1111
+
+        // r14 = address of indirect_sub
+
+        // r15 = address of after_rjmp.
+
+        //
 
         // Each pair writes the register value to the VM stack,
 
@@ -148173,7 +148366,902 @@ projects:
         drop // expected 600D at 1:FFFF
 
         halt
-    lastSelectedDebuggerProgramName: microcode regression test
+    - name: 506 & 508 regression test
+      source: >-
+        // Node 506 regression:
+
+        // slit, all eight cond selectors, taken/untaken if,
+
+        // sp@, sp!, fp@, fp!.
+
+        //
+
+        // Initial FP = 0, SP = 0xffff.
+
+        // Each rpush/drop pair exposes the expected register value
+
+        // as a WRITE followed by a READ.
+
+        //
+
+        // Raw condition encodings:
+
+        // 0: ==0   4: !=0   7: <0    6: <=0
+
+        // A: >0    B: >=0   2: true  1: false
+
+        //
+
+        // This test does not exercise external input/output.
+
+
+        // ------------------------------------------------------------
+
+        // Signed 12-bit literals.
+
+        // ------------------------------------------------------------
+
+
+        slit 0
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect 0000.
+
+
+        slit 1
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect 0001.
+
+
+        slit 2047
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect 07FF.
+
+
+        slit -2048
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect F800.
+
+
+        slit -1
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect FFFF.
+
+
+        // ------------------------------------------------------------
+
+        // cond: zero input.
+
+        // Expected results in selector order below:
+
+        // 1, 0, 0, 1, 0, 1, 1, 0.
+
+        // ------------------------------------------------------------
+
+
+        rlit r0 0
+
+
+        .word 0x9000
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // ==0: 0001.
+
+
+        .word 0x9040
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // !=0: 0000.
+
+
+        .word 0x9070
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // <0: 0000.
+
+
+        .word 0x9060
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // <=0: 0001.
+
+
+        .word 0x90A0
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // >0: 0000.
+
+
+        .word 0x90B0
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // >=0: 0001.
+
+
+        .word 0x9020
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // true: 0001.
+
+
+        .word 0x9010
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // false: 0000.
+
+
+        // ------------------------------------------------------------
+
+        // cond: negative input.
+
+        // Expected: 0, 1, 1, 1, 0, 0, 1, 0.
+
+        // ------------------------------------------------------------
+
+
+        rlit r0 0x8000
+
+
+        .word 0x9000
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // ==0: 0000.
+
+
+        .word 0x9040
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // !=0: 0001.
+
+
+        .word 0x9070
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // <0: 0001.
+
+
+        .word 0x9060
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // <=0: 0001.
+
+
+        .word 0x90A0
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // >0: 0000.
+
+
+        .word 0x90B0
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // >=0: 0000.
+
+
+        .word 0x9020
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // true: 0001.
+
+
+        .word 0x9010
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // false: 0000.
+
+
+        // ------------------------------------------------------------
+
+        // cond: positive input.
+
+        // Expected: 0, 1, 0, 0, 1, 1, 1, 0.
+
+        // ------------------------------------------------------------
+
+
+        rlit r0 0x7FFF
+
+
+        .word 0x9000
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // ==0: 0000.
+
+
+        .word 0x9040
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // !=0: 0001.
+
+
+        .word 0x9070
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // <0: 0000.
+
+
+        .word 0x9060
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // <=0: 0000.
+
+
+        .word 0x90A0
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // >0: 0001.
+
+
+        .word 0x90B0
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // >=0: 0001.
+
+
+        .word 0x9020
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // true: 0001.
+
+
+        .word 0x9010
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // false: 0000.
+
+
+        // ------------------------------------------------------------
+
+        // if: offset +2 skips exactly one two-word rlit.
+
+        // Taken: r1 remains 1111.
+
+        // Untaken: r1 becomes 2222.
+
+        // ------------------------------------------------------------
+
+
+        // ==0, taken.
+
+        rlit r0 0
+
+        rlit r1 0x1111
+
+        .word 0x8000
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 1111.
+
+
+        // ==0, untaken.
+
+        rlit r0 1
+
+        rlit r1 0x1111
+
+        .word 0x8000
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 2222.
+
+
+        // !=0, taken.
+
+        rlit r0 1
+
+        rlit r1 0x1111
+
+        .word 0x8040
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 1111.
+
+
+        // !=0, untaken.
+
+        rlit r0 0
+
+        rlit r1 0x1111
+
+        .word 0x8040
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 2222.
+
+
+        // <0, taken.
+
+        rlit r0 0x8000
+
+        rlit r1 0x1111
+
+        .word 0x8070
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 1111.
+
+
+        // <0, untaken.
+
+        rlit r0 0x7FFF
+
+        rlit r1 0x1111
+
+        .word 0x8070
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 2222.
+
+
+        // <=0, taken.
+
+        rlit r0 0
+
+        rlit r1 0x1111
+
+        .word 0x8060
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 1111.
+
+
+        // <=0, untaken.
+
+        rlit r0 1
+
+        rlit r1 0x1111
+
+        .word 0x8060
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 2222.
+
+
+        // >0, taken.
+
+        rlit r0 1
+
+        rlit r1 0x1111
+
+        .word 0x80A0
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 1111.
+
+
+        // >0, untaken.
+
+        rlit r0 0
+
+        rlit r1 0x1111
+
+        .word 0x80A0
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 2222.
+
+
+        // >=0, taken.
+
+        rlit r0 0
+
+        rlit r1 0x1111
+
+        .word 0x80B0
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 1111.
+
+
+        // >=0, untaken.
+
+        rlit r0 0xFFFF
+
+        rlit r1 0x1111
+
+        .word 0x80B0
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 2222.
+
+
+        // Always taken.
+
+        rlit r1 0x1111
+
+        .word 0x8020
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 1111.
+
+
+        // Never taken.
+
+        rlit r1 0x1111
+
+        .word 0x8010
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Expect 2222.
+
+
+        // ------------------------------------------------------------
+
+        // FP access and replacement.
+
+        // ------------------------------------------------------------
+
+
+        fp@
+
+        rpop r2
+
+        rpush r2
+
+        drop
+
+        // Expect 0000.
+
+
+        push 0x1234
+
+        fp!
+
+        fp@
+
+        rpop r2
+
+        rpush r2
+
+        drop
+
+        // Expect 1234.
+
+
+        push 0xFFFF
+
+        fp!
+
+        fp@
+
+        rpop r2
+
+        rpush r2
+
+        drop
+
+        // Expect FFFF.
+
+
+        push 0
+
+        fp!
+
+        fp@
+
+        rpop r2
+
+        rpush r2
+
+        drop
+
+        // Expect 0000.
+
+
+        // ------------------------------------------------------------
+
+        // SP query: captures SP before pushing its value.
+
+        // ------------------------------------------------------------
+
+
+        sp@
+
+        rpop r3
+
+        rpush r3
+
+        drop
+
+        // Expect FFFF.
+
+
+        // Keep one sentinel on the VM stack.
+
+        push 0x0055
+
+
+        sp@
+
+        rpop r3
+
+        rpush r3
+
+        drop
+
+        // Expect FFFE.
+
+
+        rpop r4
+
+        rpush r4
+
+        drop
+
+        // Expect 0055.
+
+
+        // ------------------------------------------------------------
+
+        // SP replacement and restoration.
+
+        // The value consumed by sp! is popped before setting SP.
+
+        // ------------------------------------------------------------
+
+
+        push 0xFF00
+
+        sp!
+
+
+        sp@
+
+        rpop r3
+
+        rpush r3
+
+        drop
+
+        // Expect FF00.
+
+        // Inspection accesses 1:FF00.
+
+
+        push 0xA55A
+
+        rpop r4
+
+        rpush r4
+
+        drop
+
+        // Expect A55A at 1:FF00.
+
+
+        push 0
+
+        sp!
+
+
+        sp@
+
+        rpop r3
+
+        rpush r3
+
+        drop
+
+        // Expect 0000.
+
+        // Inspection accesses 1:0000.
+
+
+        // Check stack wrap at SP = 0.
+
+        push 0x5AA5
+
+        // Expect WRITE 1:0000 <- 5AA5; SP becomes FFFF.
+
+        rpop r4
+
+        // Expect READ 1:0000 -> 5AA5; SP becomes 0000.
+
+        rpush r4
+
+        drop
+
+        // Expect 5AA5 at 1:0000.
+
+
+        push 0xFFFF
+
+        sp!
+
+
+        sp@
+
+        rpop r3
+
+        rpush r3
+
+        drop
+
+        // Expect FFFF.
+
+
+        // Confirm FP survived all SP operations.
+
+        fp@
+
+        rpop r2
+
+        rpush r2
+
+        drop
+
+        // Expect 0000.
+
+
+        // ------------------------------------------------------------
+
+        // Completion.
+
+        // Restored FP = 0, SP = 0xffff.
+
+        // ------------------------------------------------------------
+
+
+        rlit r7 0x600D
+
+        rpush r7
+
+        drop
+
+        // Expect WRITE/READ 1:FFFF, value 600D.
+
+
+        halt
+
+        halt
+    lastSelectedDebuggerProgramName: 506 & 508 regression test
     cDebuggerPrograms:
     - name: default
       source: >

@@ -778,7 +778,8 @@ public static class CvmInstructionSet
   //   'dfetch  "read the content of a memory cell pointed to by a 32-register and push its value on the stack ( - w )"
   //   'dstore  "pop a value from the stack and write the content of a memory cell pointed to by a 32-register ( w - )"
   //   'rlit    "next 16-bit literal -> register"            memory: opcode, value
-  //   'dlit    "next 32-bit literal -> double register"     memory: opcode, lo, hi (2026-10-05: now opcode, HI, LO)
+  //   'dlit    "next 32-bit literal -> double register"     memory: opcode, lo, hi (2026-10-05: was opcode, HI, LO;
+  //                                                          REVERSED BACK 2026-10-16, see below)
   //   'rjmp    "jump to address held in register"
   //   'rcall   "call address held in register"
   //   'drop    "discard one VM stack word"
@@ -786,9 +787,37 @@ public static class CvmInstructionSet
   // Mnemonic = tick name minus the tick. dfetch/dstore/dlit take a DOUBLE register (d0..d15, like dpop/dpush --
   // see IsDoubleRegisterMnemonic); rlit/rjmp/rcall a 16-bit register (r0..r15); drop/dup no operand. The
   // memory instruction is NOT the node-509 table size: rlit is 2 words and dlit 3 (their trailing literal
-  // words), drop/dup/rjmp/rcall/dfetch/dstore 1, whatever their table entries' sizes. dlit's 32-bit literal is
-  // stored LOW word first, then high (node 509's m/dnext reads "lo hi"), the opposite of push2's hi-lo.
-  // CHANGED 2026-10-05: node 509's 'dlit now reads "hi lo" (memory: opcode, hi, lo) -- the same order as push2.
+  // words), drop/dup/rjmp/rcall/dfetch/dstore 1, whatever their table entries' sizes. dlit's 32-bit literal was
+  // originally stored LOW word first, then high (node 509's m/dnext reads "lo hi"), the opposite of push2's
+  // hi-lo at the time. CHANGED 2026-10-05: node 509's 'dlit read "hi lo" (memory: opcode, hi, lo) -- the same
+  // order as push2.
+  // REVERSED 2026-10-16, per Stefan directly ("notice that 'dlit' and 'push2' have reverse the order of their
+  // 32-bit argument"): the newest node 509 source has BOTH 'dlit ("memory: opcode, lo, hi") and 'push2
+  // ("sequence in memory: opcode(push2) lo hi") back to lo-then-hi -- dlit's original 2026-10-04 order, and
+  // push2's first-ever reversal (it had been hi-lo since it was added 2026-10-03). Still consistent with each
+  // other, just both flipped from the 2026-10-05..2026-10-16 state. Confirmed against the new node 507/509
+  // source directly: m/dnext's two leap-doubled fetches read the word immediately after the opcode FIRST (lo,
+  // per the "opcode, lo, hi" memory layout), then the word after that (hi); m/dpush (also a leap-doubled call
+  // into m/push) then pushes the second-fetched value (hi) onto the VM stack first and the first-fetched value
+  // (lo) second, landing lo on top -- VM( - hi lo ), matching the project's established "lo on top" convention
+  // for double-word results. Wired: CvmAssembler.cs's dlit/push2 single-32-bit-literal emission now writes
+  // value & 0xFFFF before value >> 16 (was the reverse); CvmAssemblyLanguage.cs's disassembly combiner for
+  // dlit's trailing words now reads address+1 as the low word and address+2 as the high word (was the
+  // reverse).
+  //
+  // CORRECTED same day, per Stefan ("Double literals still use the old assembler order. reverse the
+  // order." / "double literals are used in 'dlit' and 'push2' opcodes." / "this is not about byte order,
+  // but about 16-bit word order."): the paragraph above's claim that the two-explicit-operand textual
+  // forms ("dlit d5 x y", "push2 x y") "were never literally hi/lo in the CODE -- they always just emit
+  // whatever is typed, in the order typed" was true but led to the wrong fix -- only RELABELING their
+  // documented meaning (hi/lo -> lo/hi) left their actual EMISSION untouched, so "dlit d1, x, y" /
+  // "push2 x y" written by hand still produced the exact same bytes as before this whole change, which is
+  // the bug Stefan was pointing at. Fixed: the typed convention is back to its ORIGINAL meaning (first
+  // operand = hi, second = lo, same as before any of this), and CvmAssembler.cs's own emission for both
+  // explicit two-operand forms now writes them in the OPPOSITE order from how they're typed -- lo's word
+  // first, hi's word second -- so an existing "dlit d1, hi, lo" or "push2 hi lo" source line needs no
+  // edit at all and now compiles to the correct "opcode, lo, hi" memory layout. The single-32-bit-literal
+  // forms needed no further change (value & 0xFFFF, i.e. lo, was already emitted first).
   // (rjmp/rcall reuse RegisterJumpMnemonic/RegisterCallMnemonic above -- those names belonged to the retired
   // CVM2 Ids 191/192, which stay retired; the new words are new Ids.)
   public const string DoubleFetchMnemonic = "dfetch";
@@ -956,17 +985,32 @@ public static class CvmInstructionSet
   /// <summary>
   /// Node 506's "506 direct" words (NEW 2026-10-05, REWORKED 2026-10-06; header row <c>1011|00ww|wwww|xxxx</c>, opcode =
   /// 0xB000 | w &lt;&lt; 4 | x, w = the word's address in node 506 (6 bits, bits 9-4), x = a 4-bit operand in bits 3-0). The direct
-  /// handler hands x to the word on node 506's parameter stack. Mnemonic = tick name minus the tick:
-  /// <c>getctx dN</c> (<c>'getctx ( d - )</c>) stores the current context in the double register dN (fp = high word, sp = low
-  /// word); <c>setctx dN</c> (<c>'setctx ( d - )</c>) loads fp and sp from dN. <c>sp@</c> (<c>'sp@ ( x - x )</c>) pushes the
-  /// stack pointer, <c>fp@</c> (<c>'fp@ ( x - x )</c>) pushes the frame pointer (both on the VM stack); these two ignore x,
-  /// take no operand and are encoded with x = 0. Before 2026-10-06 the row was <c>1011|0000|00ww|wwww</c> (opcode 0xB000 | w, no
-  /// operand, getctx/setctx fixed to d15).
+  /// handler hands x to the word on node 506's parameter stack. Mnemonic = tick name minus the tick. <c>sp@</c>
+  /// (<c>'sp@ ( x - x )</c>) pushes the stack pointer, <c>fp@</c> (<c>'fp@ ( x - x )</c>) pushes the frame pointer (both on
+  /// the VM stack); these two ignore x, take no operand and are encoded with x = 0. Before 2026-10-06 the row was
+  /// <c>1011|0000|00ww|wwww</c> (opcode 0xB000 | w, no operand).
+  ///
+  /// <c>getctx dN</c>/<c>setctx dN</c> -- GetContextMnemonic/SetContextMnemonic, this family's original other two
+  /// members (<c>'getctx ( d - )</c> stored the current context in the double register dN, fp = high word, sp = low
+  /// word; <c>'setctx ( d - )</c> loaded fp and sp from dN) -- DELETED OUTRIGHT 2026-10-16, per Stefan: *"opcodes
+  /// 'getctx' and 'setctx' no longer exist and must be replaced with 'sp!' and 'fp!'. the id's can be reused."*
+  /// Node 506's own source no longer defines <c>'getctx</c>/<c>'setctx</c> at all. Ids 20/21 (the ones getctx/setctx
+  /// used) are, per that explicit instruction, REUSED below for <c>sp!</c>/<c>fp!</c> rather than retired outright
+  /// the usual way (contrast rinc/rdec/radd's Ids 208-210, "still never to be reused" -- see
+  /// RegisterIncrementMnemonic's former remarks); this is a deliberate, Stefan-directed exception to that norm.
+  ///
+  /// <c>sp!</c>/<c>fp!</c> (NEW 2026-10-16, replacing getctx/setctx above): node 506's own <c>'sp!</c>/<c>'fp!</c> --
+  /// same shape as <c>sp@</c>/<c>fp@</c> (operand-less, x ignored, x = 0): <c>sp!</c> (<c>'sp! ( w - )</c>) pops the VM
+  /// stack and stores the value in sp; <c>fp!</c> (<c>'fp! ( w - )</c>) pops the VM stack and stores the value in fp
+  /// (node 507's own hardware T register doubles as fp, so <c>'fp!</c>'s body is just a remotely-executed
+  /// <c>m/pop</c> -- the pop's own result already lands in T). First wired (briefly) at fresh Ids 80/81, moved to
+  /// the reused Ids 20/21 the same day once Stefan clarified getctx/setctx's Ids could be reused -- 80/81 were
+  /// never shipped against live hardware and stay free for a future opcode.
   /// </summary>
-  public const string GetContextMnemonic = "getctx";
-  public const string SetContextMnemonic = "setctx";
   public const string StackPointerFetchMnemonic = "sp@";
   public const string FramePointerFetchMnemonic = "fp@";
+  public const string StackPointerStoreMnemonic = "sp!";
+  public const string FramePointerStoreMnemonic = "fp!";
   public const string RegisterStoreMnemonic = "rstore";
 
   /// <summary>True for the words whose SECOND register operand is a double register (d0..d15): rload and rstore.</summary>
@@ -3221,12 +3265,19 @@ public static class CvmInstructionSet
     new(Id: 17, XorMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 18, SubtractMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 19, AddMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
-    // getctx/setctx/sp@/fp@ (Ids 250-253, NEW 2026-10-05): node 506's direct words, see GetContextMnemonic's remarks.
-    // REWORKED 2026-10-06: getctx/setctx take a double register dN (x, bits 3-0 of the opcode); sp@/fp@ stay operand-less.
-    new(Id: 20, GetContextMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
-    new(Id: 21, SetContextMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
+    // getctx/setctx (formerly Ids 20/21, NEW 2026-10-05, REWORKED 2026-10-06 to take a double register dN) --
+    // DELETED OUTRIGHT 2026-10-16, see StackPointerFetchMnemonic's own remarks (above, where the constants
+    // used to be declared) for Stefan's exact words. Ids 20/21 REUSED immediately below for sp!/fp!, per his
+    // own explicit "the id's can be reused" -- not left permanently retired the way this file's other
+    // outright deletions are.
+    // sp@/fp@ (Ids 22/23, NEW 2026-10-05): node 506's direct words, operand-less (x ignored, x = 0).
     new(Id: 22, StackPointerFetchMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 23, FramePointerFetchMnemonic, 1, CvmOperandEncoding.None),
+    // sp!/fp! (NEW 2026-10-16, REASSIGNED the same day from fresh Ids 80/81 to getctx/setctx's old Ids
+    // 20/21 -- see StackPointerFetchMnemonic's own remarks): node 506's store counterparts to sp@/fp@ just
+    // above, same operand-less "506 direct" shape (x ignored, x = 0).
+    new(Id: 20, StackPointerStoreMnemonic, 1, CvmOperandEncoding.None),
+    new(Id: 21, FramePointerStoreMnemonic, 1, CvmOperandEncoding.None),
     // rload/rstore (Ids 248/249, NEW 2026-10-05): node 508's 'rload/'rstore, "508 direct" row 0010|wwww|yyyy|xxxx -- binary shape
     // (x = 16-bit register in bits 3-0, y = DOUBLE register in bits 7-4), see RegisterLoadMnemonic's remarks.
     new(Id: 24, RegisterLoadMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
@@ -3477,13 +3528,26 @@ public static class CvmInstructionSet
     // (see BranchTag's own remarks; node 507's m/pc++ runs before the fetch).
     new(Id: 75, BranchMnemonic, 1, CvmOperandEncoding.EmbeddedSignedValue, Tag: BranchTag, ValueBitMask: BranchOffsetBitMask),
     // push2 (Id 212, ADDED 2026-10-03, node 509 follow-up): "read next 32-bit value and push it on the stack
-    // ( - lo hi ). sequence in memory: opcode(push2) hi lo" -- the opcode word is followed by TWO operand
-    // words (hi, then lo, the order they sit in memory).
+    // ( - hi lo ). sequence in memory: opcode(push2) lo hi" -- the opcode word is followed by TWO operand
+    // words (lo, then hi, the order they sit in memory). The VM stack-effect comment was corrected
+    // 2026-10-16 to "( - hi lo )" (hi deeper, lo on top) -- matching the project's "lo on top" convention for
+    // double-word results; it had read "( - lo hi )" here, which never matched that convention.
     // CvmOperandEncoding.TwoTrailingWords, 3 memory words. CONFIRMED by Stefan 2026-10-03: the table size
     // of 4 is correct -- 'push2 deliberately falls through into the words of the NEXT table entry ('push)
-    // to save space ('call uses the same trick). ASSEMBLER SYNTAX (both assemblers, always 3 words):
-    //   push2 x     -- x is ONE 32-bit number, encoded hi-lo
-    //   push2 x y   -- two 16-bit numbers, x = hi, y = lo (comma-separated in CvmAssembler: "push2 x, y")
+    // to save space ('call uses the same trick).
+    // REVERSED 2026-10-16, per Stefan directly ("notice that 'dlit' and 'push2' have reverse the order of
+    // their 32-bit argument"): node 509's own 'push2 now reads "sequence in memory: opcode(push2) lo hi"
+    // (was hi, lo, 2026-10-03..2026-10-16) -- see CvmInstructionSet's own "ADDED 2026-10-04" remarks above
+    // (near DoubleFetchMnemonic) for the full trace.
+    // CORRECTED again same day, per Stefan ("Double literals still use the old assembler order. reverse
+    // the order."): the typed/assembler-syntax convention below is back to ITS ORIGINAL meaning (x = hi,
+    // typed first, same as 2026-10-03) -- what actually changed is that CvmAssembler.cs now EMITS the
+    // two-operand form's words in the opposite order from how they're typed (y's word, then x's word), so
+    // an existing "push2 x y" source line needs no edit to produce the new "opcode, lo, hi" memory layout.
+    // ASSEMBLER SYNTAX (both assemblers, always 3 words):
+    //   push2 x     -- x is ONE 32-bit number; emitted as lo-word then hi-word
+    //   push2 x y   -- two 16-bit numbers, x = hi, y = lo (comma-separated in CvmAssembler: "push2 x, y"),
+    //                  emitted in memory as y's word then x's word
     new(Id: 76, Push2Mnemonic, 3, CvmOperandEncoding.TwoTrailingWords),
     // ---------------------------------------------------------------------------------------------
     // new(Id: 1, PushLitMnemonic, 2, CvmOperandEncoding.TrailingWord),
@@ -3861,8 +3925,9 @@ public static class CvmInstructionSet
       string.Equals(mnemonic, DoubleFetchMnemonic, StringComparison.OrdinalIgnoreCase) ||
       string.Equals(mnemonic, DoubleStoreMnemonic, StringComparison.OrdinalIgnoreCase) ||
       string.Equals(mnemonic, DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      string.Equals(mnemonic, GetContextMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      string.Equals(mnemonic, SetContextMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      // getctx/setctx (the two double-register node-506-direct words) were DELETED OUTRIGHT 2026-10-16 --
+      // see StackPointerFetchMnemonic's own remarks; their replacements sp!/fp! are operand-less, so this
+      // predicate has nothing left to say about that family.
       // ADDED 2026-10-15: node 308's new "unary 32-bit integer operation" family -- see
       // DoubleRegisterInvertMnemonic's own remarks.
       string.Equals(mnemonic, DoubleRegisterInvertMnemonic, StringComparison.OrdinalIgnoreCase) ||

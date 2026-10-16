@@ -1115,10 +1115,16 @@ internal static class CvmAssemblyLanguage
         // ---- node 508's direct words (2026-10-05) ----
         [CvmInstructionSet.RegisterLoadMnemonic] = (Node508Program.Coordinate, "'rload", Node508DirectTagBits),
         // ---- node 506's direct words (2026-10-05) ----
-        [CvmInstructionSet.GetContextMnemonic] = (Node506Program.Coordinate, "'getctx", Node506DirectTagBits),
-        [CvmInstructionSet.SetContextMnemonic] = (Node506Program.Coordinate, "'setctx", Node506DirectTagBits),
+        // getctx/setctx -- DELETED OUTRIGHT 2026-10-16 alongside their CvmInstructionSet constants (see
+        // CvmInstructionSet.StackPointerFetchMnemonic's own remarks): node 506's source no longer defines
+        // 'getctx/'setctx at all. No orphaned entry kept here -- unlike a mnemonic that's merely unwired,
+        // these two don't exist as instructions any more.
         [CvmInstructionSet.StackPointerFetchMnemonic] = (Node506Program.Coordinate, "'sp@", Node506DirectTagBits),
         [CvmInstructionSet.FramePointerFetchMnemonic] = (Node506Program.Coordinate, "'fp@", Node506DirectTagBits),
+        // sp!/fp! (NEW 2026-10-16): node 506's store counterparts to sp@/fp@ just above -- see
+        // CvmInstructionSet.StackPointerStoreMnemonic's own remarks.
+        [CvmInstructionSet.StackPointerStoreMnemonic] = (Node506Program.Coordinate, "'sp!", Node506DirectTagBits),
+        [CvmInstructionSet.FramePointerStoreMnemonic] = (Node506Program.Coordinate, "'fp!", Node506DirectTagBits),
         [CvmInstructionSet.RegisterStoreMnemonic] = (Node508Program.Coordinate, "'rstore", Node508DirectTagBits),
         // REPOINTED 2026-10-11 from node 306 to node 307, then REPOINTED AGAIN 2026-10-14 to node 206,
         // alongside inv/inc/dec/neg/mul2/udiv2/div2/abs above -- see that block's own remarks and
@@ -1375,9 +1381,11 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.MoveRegisterMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.RegisterLoadMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.RegisterStoreMnemonic] = (Node306BinaryFunctionFieldBitMask, Node306BinaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
-        // Node 506 direct words with a double-register operand (2026-10-06): function field = node-506 address (6 bits at bits 9-4), x at bits 3-0.
-        [CvmInstructionSet.GetContextMnemonic] = (Node506DirectAddressBitMask << Node506DirectAddressShift, Node506DirectAddressShift, 0, CvmInstructionSet.SpecialRegisterFieldBitMask, 0),
-        [CvmInstructionSet.SetContextMnemonic] = (Node506DirectAddressBitMask << Node506DirectAddressShift, Node506DirectAddressShift, 0, CvmInstructionSet.SpecialRegisterFieldBitMask, 0),
+        // Node 506 direct words with a double-register operand (2026-10-06): getctx/setctx used this row --
+        // DELETED OUTRIGHT 2026-10-16 alongside their CvmInstructionSet constants (see
+        // CvmInstructionSet.StackPointerFetchMnemonic's own remarks). Their replacements, sp!/fp!, are
+        // operand-less "506 direct" words (CvmOperandEncoding.None), so they don't need a row here at all --
+        // see NodeResolvedAddressShiftByMnemonic's own entries for them instead.
         // Node 308's "unary 32-bit integer operation" family (2026-10-15): function field = node-308 address
         // (7 bits at bits 10-4), x (the double register) at bits 3-0 -- see Node308UnaryInt32OperationTagBits's
         // own remarks and CvmInstructionSet.DoubleRegisterInvertMnemonic's own remarks for the full derivation.
@@ -1451,6 +1459,10 @@ internal static class CvmAssemblyLanguage
         // Node 506 direct words without an operand (2026-10-06): address at bits 9-4, x = 0.
         [CvmInstructionSet.StackPointerFetchMnemonic] = Node506DirectAddressShift,
         [CvmInstructionSet.FramePointerFetchMnemonic] = Node506DirectAddressShift,
+        // sp!/fp! (NEW 2026-10-16): same shift as sp@/fp@ just above -- see
+        // CvmInstructionSet.StackPointerStoreMnemonic's own remarks.
+        [CvmInstructionSet.StackPointerStoreMnemonic] = Node506DirectAddressShift,
+        [CvmInstructionSet.FramePointerStoreMnemonic] = Node506DirectAddressShift,
         [CvmInstructionSet.RegisterPopMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.DoublePopMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.PushMnemonic] = Node509SpecialAddressShift,
@@ -2369,14 +2381,18 @@ internal static class CvmAssemblyLanguage
           string registerNote = $"{instruction.Mnemonic} {CvmInstructionSet.FormatRegisterOperand(instruction.Mnemonic, embeddedOperand)}";
 
           // 2026-10-04: rlit (2 words) / dlit (3 words) carry their literal in the following word(s) --
-          // rlit one 16-bit word; dlit HIGH word then LOW word (2026-10-05; was lo, hi), shown as one 32-bit number.
+          // rlit one 16-bit word; dlit LOW word then HIGH word, shown as one 32-bit number.
+          // (2026-10-05..2026-10-16 it was HIGH word then LOW word; REVERSED BACK 2026-10-16, per Stefan
+          // directly ("notice that 'dlit' and 'push2' have reverse the order of their 32-bit argument") --
+          // node 509's own 'dlit reads "memory: opcode, lo, hi" again. See
+          // CvmInstructionSet.DoubleFetchMnemonic's own remarks for the full trace.)
           if (instruction.WordLength == 2 && address + 1 < endAddressExclusive)
           {
             registerNote += " " + CvmInstructionSet.FormatOperand(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1)));
           }
           else if (instruction.WordLength == 3 && address + 2 < endAddressExclusive)
           {
-            uint wideLiteral = ((uint)(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1)) & 0xFFFF) << 16) | (uint)(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 2)) & 0xFFFF);
+            uint wideLiteral = ((uint)(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 2)) & 0xFFFF) << 16) | (uint)(sram.Read(CvmMemoryProtocol.CombineAddress(0, address + 1)) & 0xFFFF);
             registerNote += $" 0x{wideLiteral:X8} ({wideLiteral})";
           }
 
