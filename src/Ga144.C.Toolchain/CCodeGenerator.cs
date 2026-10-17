@@ -1057,8 +1057,21 @@ public sealed class CCodeGenerator
   {
     if (TryGetStaticType(expr, out CType type) && type.IsArray)
     {
-      CType elementType = EmitAddressOfInto(expr, destDouble, depth);
-      return CType.PointerTo(elementType);
+      // BUG FIXED 2026-10-18 (confirmed by Stefan's own disassembly trace of "d[0] = a;" for a local
+      // `int d[7]`, which showed a two-word store through a dummy wideSrc=0 instead of the real value
+      // register): EmitAddressOfInto(expr, ...), for a plain array name/member/index, returns the
+      // ARRAY's own declared type (e.g. "int[7]"), not its element type -- every one of its branches
+      // (CNameExpr -> symbol.Type, CMemberAccessExpr -> field.Type, ...) returns the addressed entity's
+      // OWN full type, array-ness included, by design (that's the right answer for every OTHER caller).
+      // This decay is the one place that needs the ELEMENT type, so it must unwrap ElementType itself --
+      // wrapping the array type directly in CType.PointerTo (as this used to do) produced a bogus
+      // "pointer to int[7]" whose own ElementType (int[7], SizeInWords 7) then propagated into
+      // EmitAddressOfInto's CIndexExpr case as the indexed element's type, corrupting every downstream
+      // SizeInWords-based decision (EmitStoreValueToAddr/EmitLoadValueFromAddr only ever expect size 1
+      // or 2, so a stray 7 silently fell through to the 2-word branch using whatever dummy register the
+      // caller had passed as "unused").
+      CType arrayType = EmitAddressOfInto(expr, destDouble, depth);
+      return CType.PointerTo(arrayType.ElementType!);
     }
 
     return EmitWideExprInto(expr, destDouble, depth);
@@ -1162,6 +1175,19 @@ public sealed class CCodeGenerator
       return;
     }
 
+    // Guard added 2026-10-18, alongside the EmitPointerDecayInto/EmitWideExprInto array-decay fix that
+    // bug exposed: this method only ever expects 1 word (above) or exactly 2 (below) -- never anything
+    // else, since every addr.Type reaching here should be a scalar, a pointer, or a float. A corrupted
+    // type (e.g. an array type wrongly surviving pointer decay, as Stefan's own disassembly trace of
+    // "d[0] = a;" caught) would otherwise silently fall through to the 2-word path below and load through
+    // whatever "unused" placeholder register the caller happened to pass for wideDest, exactly like that
+    // bug did on the STORE side -- flagged loudly here instead of repeating that silently.
+    if (size != 2)
+    {
+      _diagnostics.Add($"<internal>: EmitLoadValueFromAddr on \"{addr.Type}\" (SizeInWords={addr.Type.SizeInWords}) -- only 1-word and 2-word (pointer/float) types are expected here.");
+      _hasError = true;
+    }
+
     if (addr.Kind == CAddrKind.Pointer && addr.PointerDouble == wideDest)
     {
       // The destination IS the register holding the pointer (this happens routinely -- e.g. evaluating
@@ -1195,6 +1221,16 @@ public sealed class CCodeGenerator
     {
       EmitStoreWordToAddr(addr, 0, scalarSrc);
       return;
+    }
+
+    // Guard added 2026-10-18 -- see EmitLoadValueFromAddr's own matching entry just above for why: this
+    // is precisely the fallback that silently stored through the caller's "unused" wideSrc=0 placeholder
+    // when a corrupted array-as-pointee type reached here with SizeInWords=7 (confirmed by Stefan's own
+    // disassembly trace of "d[0] = a;"). Flagged loudly now instead of repeating that silently.
+    if (size != 2)
+    {
+      _diagnostics.Add($"<internal>: EmitStoreValueToAddr on \"{addr.Type}\" (SizeInWords={addr.Type.SizeInWords}) -- only 1-word and 2-word (pointer/float) types are expected here.");
+      _hasError = true;
     }
 
     EmitStoreWordToAddr(addr, 0, 2 * wideSrc);
@@ -1548,9 +1584,12 @@ public sealed class CCodeGenerator
         {
           if (TryGetStaticType(expr, out CType exprType) && exprType.IsArray)
           {
-            // Array used as a value (not &arr, not arr[i]) decays to its own address.
-            CType elementType = EmitAddressOfInto(expr, destDouble, depth);
-            return CType.PointerTo(elementType);
+            // Array used as a value (not &arr, not arr[i]) decays to its own address. Same fix as
+            // EmitPointerDecayInto's own matching entry above (and same bug, duplicated here) --
+            // EmitAddressOfInto returns the ARRAY's own type, not its element type, so this must
+            // unwrap ElementType itself before wrapping it in CType.PointerTo.
+            CType arrayType = EmitAddressOfInto(expr, destDouble, depth);
+            return CType.PointerTo(arrayType.ElementType!);
           }
 
           return EmitLoadAddressableValue(expr, ScalarReg(depth), destDouble, depth);
