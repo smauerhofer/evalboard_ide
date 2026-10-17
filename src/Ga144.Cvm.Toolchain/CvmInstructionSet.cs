@@ -890,6 +890,15 @@ public static class CvmInstructionSet
   public const string LoadFrameMnemonic = "ldf";
   public const string StoreFrameMnemonic = "stf";
 
+  // 'lea (NEW 2026-10-17, "i added some more microcodes" -- node 408's own source, the "with register" half
+  // of the split special-word table): rx = (fp + signed next-word offset) & 0xffff -- an ADDRESS into a
+  // register, as opposed to ldf's VALUE. Exact same shape as ldf/stf just above (register embedded in the
+  // opcode word plus one trailing signed-offset word -- CvmOperandEncoding.NodeResolvedEmbeddedValue,
+  // WordLength 2, "size 2 with register"), and node 408's own F18 body reuses the same two primitives
+  // (m/fpnext, m/r!x) ldf already does. See Ga144.Cvm.Toolchain.CvmAssembler's own remarks -- joins the same
+  // "RegisterLiteralMnemonic or LoadFrameMnemonic or StoreFrameMnemonic" special-casing there.
+  public const string LeaMnemonic = "lea";
+
   // ---- node 306's 16-bit unary and binary register operations (2026-10-04) ----------------------------------------
   // Stefan: table rows "1100|wwww|wwww|xxxx| 506 | unary 16-bit operation {w = address in node 306}" and
   // "1101|wwww|yyyy|xxxx| 506 | binary 16-bit operation {w = address in node 306}" ("x: parameter1, binary: x = x op y;
@@ -1013,6 +1022,40 @@ public static class CvmInstructionSet
   public const string FramePointerFetchMnemonic = "fp@";
   public const string StackPointerStoreMnemonic = "sp!";
   public const string FramePointerStoreMnemonic = "fp!";
+
+  /// <summary>
+  /// Node 509's three newest "without register" words (NEW 2026-10-17, "i added some more microcodes"),
+  /// all plain <see cref="CvmOperandEncoding.TrailingWord"/> -- no register operand at all, so unlike
+  /// <see cref="LeaMnemonic"/>/<see cref="LoadFrameMnemonic"/>/<see cref="StoreFrameMnemonic"/> these need NO
+  /// dedicated branch in <c>Ga144.Cvm.Toolchain.CvmAssembler</c>: the fully generic
+  /// <see cref="CvmOperandEncoding.TrailingWord"/> handling already used for <see cref="PushMnemonic"/>/
+  /// <see cref="JmpMnemonic"/>/<see cref="LinkMnemonic"/> (pass 1's <c>HasOperand ? 1 : 0</c> arg count,
+  /// pass 2's generic trailing-word emission) covers them as-is.
+  ///
+  /// <c>adjust</c> -- <c>'adjust ( - )</c>, <c>SP = (SP + signed next-word offset) &amp; 0xffff</c>. Reuses
+  /// node 507's own existing <c>m/adjust</c> primitive (unrelated to this new CVM mnemonic, already present
+  /// on node 507 before this addition). NOTE: a DIFFERENT, unrelated mnemonic once used this exact string --
+  /// node 606's old <c>'adjust</c> (self-describing, unsigned 8-bit offset/count embedded in the tag, no
+  /// relation to the stack pointer) -- was DELETED OUTRIGHT 2026-09-10 after a real hardware run showed
+  /// executing it corrupted the whole cluster's control flow (see this file's own class-level remarks on
+  /// that removal). The constant name and Id were freed outright (not kept-commented) at the time, so
+  /// reusing the string here is not a collision -- just flagging the string's own history, confirmed with
+  /// Stefan before wiring.
+  ///
+  /// <c>pushfp</c>/<c>popfp</c> -- <c>'pushfp ( - )</c> pushes <c>mem[page 1, fp + signed next-word
+  /// offset]</c> onto the VM stack; <c>'popfp ( w - )</c> pops the VM stack into that same address. The
+  /// "without register" siblings of <see cref="LoadFrameMnemonic"/>/<see cref="StoreFrameMnemonic"/>.
+  /// Originally pasted as plain <c>'pushf</c>/<c>'popf</c>; RENAMED by Stefan to <c>pushfp</c>/<c>popfp</c>
+  /// before wiring, specifically to avoid colliding with the string <see cref="PushFrameMnemonic"/>
+  /// ("pushf") already names -- a different, still-dormant node-506 word (see that constant's own remarks)
+  /// -- so no rename of the existing constant was needed. <c>pushfp</c>'s own F18 body is the only one of
+  /// this trio to use a new node-507 helper, <c>m/fnext</c> (<c>( fp - fp addr )</c>, composing the existing
+  /// <c>m/next</c>/<c>m/add</c> -- not itself a new CVM-level primitive, just a new F18 word on node 507).
+  /// </summary>
+  public const string AdjustMnemonic = "adjust";
+  public const string PushFpMnemonic = "pushfp";
+  public const string PopFpMnemonic = "popfp";
+
   public const string RegisterStoreMnemonic = "rstore";
 
   /// <summary>
@@ -3441,6 +3484,11 @@ public static class CvmInstructionSet
     // here, not at the end of this list, because rlit is their closest sibling in shape.
     new(Id: 78, LoadFrameMnemonic, 2, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 79, StoreFrameMnemonic, 2, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
+    // lea (NEW 2026-10-17, see LeaMnemonic's own remarks): exact same shape as ldf/stf just above. Fresh Id
+    // 243 -- the highest Id ever assigned anywhere in this file (live or retired-commented) is 242, so per
+    // this same "fresh Ids don't need to match physical position" convention this is declared here, next to
+    // its closest sibling in shape, not at the numeric end of the list.
+    new(Id: 243, LeaMnemonic, 2, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 11, RegisterJumpMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 12, RegisterCallMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: SpecialRegisterFieldBitMask),
     new(Id: 13, DropMnemonic, 1, CvmOperandEncoding.None),
@@ -3466,6 +3514,12 @@ public static class CvmInstructionSet
     // above, same operand-less "506 direct" shape (x ignored, x = 0).
     new(Id: 20, StackPointerStoreMnemonic, 1, CvmOperandEncoding.None),
     new(Id: 21, FramePointerStoreMnemonic, 1, CvmOperandEncoding.None),
+    // adjust/pushfp/popfp (NEW 2026-10-17, see AdjustMnemonic's own remarks): all plain TrailingWord, no
+    // register -- same shape as push/jmp/link, not sp@/fp@/sp!/fp!'s operand-less shape just above. Fresh
+    // Ids 244-246 (243 just used by lea above).
+    new(Id: 244, AdjustMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 245, PushFpMnemonic, 2, CvmOperandEncoding.TrailingWord),
+    new(Id: 246, PopFpMnemonic, 2, CvmOperandEncoding.TrailingWord),
     // rload/rstore (Ids 248/249, NEW 2026-10-05): node 508's 'rload/'rstore, "508 direct" row 0010|wwww|yyyy|xxxx -- binary shape
     // (x = 16-bit register in bits 3-0, y = DOUBLE register in bits 7-4), see RegisterLoadMnemonic's remarks.
     new(Id: 24, RegisterLoadMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),

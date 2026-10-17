@@ -192,20 +192,20 @@ public static class CvmNodeMesh
   public static readonly IReadOnlyList<int> StandaloneCoordinates =
   [
     CvmMemoryProtocol.NopSourceNodeCoordinate, // 507, CVM2's entire CPU (corrected 2026-09-01 from 508).
-    Node407Program.Coordinate, // 407, CVM2's long-call/long-jump helper (added 2026-09-02).
-    Node506Program.Coordinate, // 506, CVM2's stack-frame node (added 2026-09-04).
-    Node505Program.Coordinate, // 505, CVM2's frame2/more-frame-operations node (added 2026-09-09).
-    Node508Program.Coordinate, // 508, CVM2's gld/gst node (added 2026-09-05, renamed 2026-09-09).
-    Node509Program.Coordinate, // 509, CVM2's unary-arithmetic node (added 2026-09-05).
-    Node510Program.Coordinate, // 510, CVM2's extended-arithmetic (double-register) node (added 2026-09-09).
-    Node511Program.Coordinate, // 511, CVM2's 32-register register-file node (added 2026-09-09).
-    Node406Program.Coordinate, // 406, CVM2's binary-arithmetic node (added 2026-09-05).
-    Node405Program.Coordinate, // 405, CVM2's multiword-arithmetic (carry-flag) node (added 2026-09-09).
-    Node409Program.Coordinate, // 409, CVM2's bit-operations node (bclr/bset/binv/bcopy, added 2026-09-27).
-    Node408Program.Coordinate, // 408, CVM2's comparison node (added 2026-09-06).
-    Node307Program.Coordinate, // 307, CVM2's "VM ternary main" relay node (added 2026-09-09).
-    Node308Program.Coordinate, // 308, CVM2's address-register node (added 2026-09-09 as "306"; RENUMBERED 2026-09-15 -- see Node308Program's own remarks).
-    Node306Program.Coordinate, // 306, CVM2's floatingpoint register node (added 2026-09-15, RENUMBERED from the unrelated "VM 32 arithmetic" node this coordinate held 2026-09-09 through 2026-09-15 -- see Node306Program's own remarks). 'fpop, plus (2026-09-16) fadd/fsub/fmin/fmax/fmul/fdiv/fln2/filn2/fpi2/f2pi, are wired into the CVM instruction set; 'fpush is ALSO wired (2026-09-16, per Stefan's direct override: "fpush must be wired. it is a valid opcode."), once the naming collision with node 506's own 'fpush was resolved by Stefan renaming that one to 'pushf.
+    407, // 407, CVM2's long-call/long-jump helper (added 2026-09-02).
+    506, // 506, CVM2's stack-frame node (added 2026-09-04).
+    505, // 505, CVM2's frame2/more-frame-operations node (added 2026-09-09).
+    508, // 508, CVM2's gld/gst node (added 2026-09-05, renamed 2026-09-09).
+    509, // 509, CVM2's unary-arithmetic node (added 2026-09-05).
+    510, // 510, CVM2's extended-arithmetic (double-register) node (added 2026-09-09).
+    511, // 511, CVM2's 32-register register-file node (added 2026-09-09).
+    406, // 406, CVM2's binary-arithmetic node (added 2026-09-05).
+    405, // 405, CVM2's multiword-arithmetic (carry-flag) node (added 2026-09-09).
+    409, // 409, CVM2's bit-operations node (bclr/bset/binv/bcopy, added 2026-09-27).
+    408, // 408, CVM2's comparison node (added 2026-09-06).
+    307, // 307, CVM2's "VM ternary main" relay node (added 2026-09-09).
+    308, // 308, CVM2's address-register node (added 2026-09-09 as "306"; RENUMBERED 2026-09-15 -- see Node308Program's own remarks).
+    306, // 306, CVM2's floatingpoint register node (added 2026-09-15, RENUMBERED from the unrelated "VM 32 arithmetic" node this coordinate held 2026-09-09 through 2026-09-15 -- see Node306Program's own remarks). 'fpop, plus (2026-09-16) fadd/fsub/fmin/fmax/fmul/fdiv/fln2/filn2/fpi2/f2pi, are wired into the CVM instruction set; 'fpush is ALSO wired (2026-09-16, per Stefan's direct override: "fpush must be wired. it is a valid opcode."), once the naming collision with node 506's own 'fpush was resolved by Stefan renaming that one to 'pushf.
 
     // The 32-bit floating-point subprocessor (added 2026-09-16; SOFTWARE REPLACED WHOLESALE 2026-09-26 --
     // see this class's own remarks above and Node102Program's own remarks for the full context). Order
@@ -213,19 +213,19 @@ public static class CvmNodeMesh
     // established convention -- see CvmBootStreamBuilder.BuildDescriptors' own remarks for the exact
     // compile-dependency graph (three of these import from more than one chain at once: 403, 303's own
     // importer, and the 201-205 cluster's own 203).
-    Node305Program.Coordinate, // 305, the floating-point register file (unrelated second role for this coordinate -- see line above/BuildDescriptors' own remarks; NOT part of this pipeline's own data flow).
-    Node304Program.Coordinate, // 304, step 7 (pack sign/exponent/mantissa into IEEE-754 words).
-    Node303Program.Coordinate, // 303, step 3a (operation selection, operand ordering, sign processing).
-    Node302Program.Coordinate, // 302, step 4a (mantissa preparation, addition/subtraction).
-    Node301Program.Coordinate, // 301, step 5a (mantissa preparation, addition/subtraction; a slave of 302).
-    Node401Program.Coordinate, // 401, step 5b (mantissa multiplication and pass-through; a slave of 402).
-    Node402Program.Coordinate, // 402, step 4b (selects node 401's operation, computes the exponent).
-    Node403Program.Coordinate, // 403, step 3b (multiply/divide control and sign relay; imports BOTH 402 and 503).
-    Node404Program.Coordinate, // 404, step 6 (round-to-nearest-even, pack to 24-bit significand).
-    Node501Program.Coordinate, // 501, step 5c (non-restoring division and result pass-through; a slave of 502).
-    Node502Program.Coordinate, // 502, step 4c (exponent finalization, division dispatch).
-    Node503Program.Coordinate, // 503, step 3c (sign handling, exponent range check, subnormal prep).
-    Node504Program.Coordinate, // 504, a pure relay (node 503 to node 404).
+    305, // 305, the floating-point register file (unrelated second role for this coordinate -- see line above/BuildDescriptors' own remarks; NOT part of this pipeline's own data flow).
+    304, // 304, step 7 (pack sign/exponent/mantissa into IEEE-754 words).
+    303, // 303, step 3a (operation selection, operand ordering, sign processing).
+    302, // 302, step 4a (mantissa preparation, addition/subtraction).
+    301, // 301, step 5a (mantissa preparation, addition/subtraction; a slave of 302).
+    401, // 401, step 5b (mantissa multiplication and pass-through; a slave of 402).
+    402, // 402, step 4b (selects node 401's operation, computes the exponent).
+    403, // 403, step 3b (multiply/divide control and sign relay; imports BOTH 402 and 503).
+    404, // 404, step 6 (round-to-nearest-even, pack to 24-bit significand).
+    501, // 501, step 5c (non-restoring division and result pass-through; a slave of 502).
+    502, // 502, step 4c (exponent finalization, division dispatch).
+    503, // 503, step 3c (sign handling, exponent range check, subnormal prep).
+    504, // 504, a pure relay (node 503 to node 404).
     // Node601Program.Coordinate/Node602Program.Coordinate/Node603Program.Coordinate/Node604Program.Coordinate
     // REMOVED 2026-09-26 -- retired per Stefan directly ("node 601..604 are no longer used"). Their own
     // NodeXxxProgram.cs files are left in the repo (orphaned, like CVM1's own retired nodes above), just
@@ -237,11 +237,11 @@ public static class CvmNodeMesh
     // node 305). UPDATED 2026-09-26: all nine now have a real NodeXxxProgram.cs reference source (see
     // this class's own remarks above), so these are now Coordinate references like every other entry in
     // this list rather than bare int literals.
-    Node201Program.Coordinate, // 201, step 5 (mantissa preparation, optional magnitude comparison).
-    Node202Program.Coordinate, // 202, step 4 (separation of exponent and mantissa, optional magnitude comparison).
-    Node203Program.Coordinate, // 203, step 3 (opcode decoding, optional magnitude compare calculation).
-    Node204Program.Coordinate, // 204, step 2 (reorder and processing split).
-    Node205Program.Coordinate, // 205, step 1 (unpack and categorize).
+    201, // 201, step 5 (mantissa preparation, optional magnitude comparison).
+    202, // 202, step 4 (separation of exponent and mantissa, optional magnitude comparison).
+    203, // 203, step 3 (opcode decoding, optional magnitude compare calculation).
+    204, // 204, step 2 (reorder and processing split).
+    205, // 205, step 1 (unpack and categorize).
     // ADDED 2026-10-14, per Stefan directly ("unary 16-bit opcodes have been moved to node 206:"),
     // pasting node 206's full source for the first time -- see claude/cvm-node206-unary16-move.md.
     // All 17 16-bit UNARY opcode mnemonics (inv/inc/dec/neg/mul2/udiv2/div2/abs/mask15/inv15/bool/
@@ -256,9 +256,9 @@ public static class CvmNodeMesh
     // Node 206 also hosts x2c/float32 (the float32-binary relay, already part of the mesh via node
     // 305's own x2a/float32 -- unaffected by this addition, no NodeSymbolByMnemonic entry of its own).
     206,
-    Node102Program.Coordinate, // 102, special step 4 (MUL/DIV special-case resolution).
-    Node103Program.Coordinate, // 103, special step 3 (ADD/SUB special-case handling; MUL/DIV delegated to 102).
-    Node104Program.Coordinate, // 104, special step 1 (special operation dispatcher).
-    Node105Program.Coordinate, // 105, special step 2 (MIN/MAX special-case handling).
+    102, // 102, special step 4 (MUL/DIV special-case resolution).
+    103, // 103, special step 3 (ADD/SUB special-case handling; MUL/DIV delegated to 102).
+    104, // 104, special step 1 (special operation dispatcher).
+    105, // 105, special step 2 (MIN/MAX special-case handling).
   ];
 }

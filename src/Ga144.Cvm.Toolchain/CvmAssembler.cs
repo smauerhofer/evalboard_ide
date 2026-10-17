@@ -503,7 +503,9 @@ public static class CvmAssembler
           // floating-point family's own just above) purely for a syntax-accurate example; the real
           // parsing/encoding happens in pass 2 (see this file's own "shape.Mnemonic ==
           // CvmInstructionSet.RegisterLiteralMnemonic" branch there, now joined by ldf/stf).
-          if (shape.Mnemonic is CvmInstructionSet.LoadFrameMnemonic or CvmInstructionSet.StoreFrameMnemonic)
+          // JOINED 2026-10-17 by lea (CvmInstructionSet.LeaMnemonic) -- exact same two-operand shape
+          // (register, signed frame offset), see that constant's own remarks.
+          if (shape.Mnemonic is CvmInstructionSet.LoadFrameMnemonic or CvmInstructionSet.StoreFrameMnemonic or CvmInstructionSet.LeaMnemonic)
           {
             if (line.Args.Count != 2)
             {
@@ -1192,13 +1194,14 @@ public static class CvmAssembler
             // the second operand is the 16-bit literal word (a number, or a label/import = absolute address).
             EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
           }
-          else if (shape.Mnemonic is CvmInstructionSet.LoadFrameMnemonic or CvmInstructionSet.StoreFrameMnemonic)
+          else if (shape.Mnemonic is CvmInstructionSet.LoadFrameMnemonic or CvmInstructionSet.StoreFrameMnemonic or CvmInstructionSet.LeaMnemonic)
           {
             // ADDED 2026-10-16: ldf/stf -- same shape as rlit just above (register already embedded in
             // the opcode word; the second operand is the trailing word). Here it's a SIGNED offset from
             // fp, not an arbitrary literal/address, but EmitOperandWord already accepts a negative
             // numeric literal (two's-complement within the word) exactly as rlit's own literal does, so
             // no separate emitter is needed -- see CvmInstructionSet.LoadFrameMnemonic's own remarks.
+            // JOINED 2026-10-17 by lea -- identical shape, see CvmInstructionSet.LeaMnemonic's own remarks.
             EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
           }
           else if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
