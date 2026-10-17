@@ -573,7 +573,27 @@ public sealed class CProjectViewModel : ObservableObject
                 .Select(member => new CvmLinkObjectInput(member.Name, CvmObjectFile.Load(new MemoryStream(member.ObjectBytes))))
                 .ToList();
 
-            CvmLinker.Result linkResult = CvmLinker.Link(objectInputs, libraryInputs, exported.Table, new CvmLinkOptions());
+            // SectionPages (added 2026-10-17, CVM_pipeline C ABI v2): places every "DATA" section --
+            // the C compiler's own globals/statics, and any hand-assembled .casm "DATA" section -- on
+            // the shared global-data page (CCodeGenerator.GlobalDataPage) instead of concatenating it
+            // into page 0 right after CODE, so every pointer to a global agrees on which page it's
+            // actually on no matter which source file defined it. See CvmLinkOptions.SectionPages's
+            // own remarks and CCodeGenerator's own "global addressing" remarks for the full design.
+            //
+            // HeapStartSymbolName/HeapStartAfterSectionName (added 2026-10-17, per Stefan's own ask for
+            // a way to find the heap's own start address): synthesizes a 2-word pointer-shaped
+            // "_heap_start" marker right after DATA's own last word, so a C program's own allocator can
+            // simply `extern void *heap_start;` and read it directly -- see CCodeGenerator.HeapStartSymbolName's
+            // own remarks and CvmLinkOptions.HeapStartSymbolName's own remarks for the full design. Wired
+            // in unconditionally, alongside SectionPages above, since it only ever costs 2 extra words
+            // (negligible against a 64K-word page) whether or not any particular program actually
+            // references it.
+            CvmLinker.Result linkResult = CvmLinker.Link(objectInputs, libraryInputs, exported.Table, new CvmLinkOptions
+            {
+              SectionPages = new Dictionary<string, int> { [CCodeGenerator.GlobalDataSectionName] = CCodeGenerator.GlobalDataPage },
+              HeapStartSymbolName = CCodeGenerator.HeapStartSymbolName,
+              HeapStartAfterSectionName = CCodeGenerator.GlobalDataSectionName,
+            });
             messages.AddRange(linkResult.Messages);
 
             if (!linkResult.Success || linkResult.Image is null)
@@ -599,6 +619,72 @@ public sealed class CProjectViewModel : ObservableObject
 
     StatusText = success ? "Build succeeded." : "Build failed -- see the build results for details.";
     return new CBuildResult { Success = success, Messages = messages };
+  }
+
+  /// <summary>
+  /// Added 2026-10-17, per Stefan's own ask: a "Rebuild" button next to "Build" in the C project
+  /// window that "compiles every source in the project again and build[s] the library or program."
+  ///
+  /// <see cref="Build"/> itself already recompiles and reassembles EVERY current source file on every
+  /// single call -- there is no incremental, timestamp-based "only recompile what changed" skip
+  /// anywhere in this toolchain, so Rebuild cannot mean "Build, but actually compile everything this
+  /// time" the way it would in a toolchain that DOES skip unchanged files. What Rebuild adds instead,
+  /// matching the conventional "Rebuild = Clean + Build" IDE meaning: it first deletes every
+  /// previously-generated artifact this project's own Build step can produce -- the preprocessed
+  /// ("pre") output, the compiler-generated assembly ("tasm") output, the assembled objects ("obj"),
+  /// and this project's own previous Library/Image output -- all of which <see cref="CProject"/>'s own
+  /// directory remarks already call "entirely generated, safe to delete". This matters because Build()
+  /// only ever OVERWRITES the output path for a source file that still exists today; it never deletes
+  /// an orphaned leftover from a source file that was since renamed or removed, so that leftover would
+  /// otherwise sit on disk forever (harmlessly, since nothing re-reads it, but it is still stale data a
+  /// genuine "clean rebuild" is expected to clear). Runs the exact same <see cref="Build"/> afterward.
+  /// </summary>
+  public CBuildResult Rebuild()
+  {
+    var messages = new List<string>();
+    int deletedCount = 0;
+
+    deletedCount += CleanGeneratedDirectory(Model.PreprocessedDirectoryPath, CProject.PreprocessedSearchPattern);
+    deletedCount += CleanGeneratedDirectory(Model.TargetAssemblyDirectoryPath, "*.casm");
+    deletedCount += CleanGeneratedDirectory(Model.ObjectDirectoryPath, CProject.ObjectSearchPattern);
+    deletedCount += DeleteGeneratedFileIfExists(Model.LibraryOutputPath);
+    deletedCount += DeleteGeneratedFileIfExists(Model.ImageOutputPath);
+
+    messages.Add(deletedCount > 0
+        ? $"Rebuild: removed {deletedCount} previously generated file(s) before building from scratch."
+        : "Rebuild: nothing previously generated to remove -- building from scratch.");
+
+    CBuildResult buildResult = Build();
+    messages.AddRange(buildResult.Messages);
+    return new CBuildResult { Success = buildResult.Success, Messages = messages };
+  }
+
+  private static int CleanGeneratedDirectory(string directoryPath, string searchPattern)
+  {
+    if (!Directory.Exists(directoryPath))
+    {
+      return 0;
+    }
+
+    int count = 0;
+    foreach (string filePath in Directory.EnumerateFiles(directoryPath, searchPattern, SearchOption.AllDirectories))
+    {
+      File.Delete(filePath);
+      count++;
+    }
+
+    return count;
+  }
+
+  private static int DeleteGeneratedFileIfExists(string filePath)
+  {
+    if (!File.Exists(filePath))
+    {
+      return 0;
+    }
+
+    File.Delete(filePath);
+    return 1;
   }
 
   private string AddExistingFile(string sourceFilePath, CFileKind kind)

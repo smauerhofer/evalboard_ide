@@ -175,6 +175,22 @@ public partial class CProjectWindow : Window
             result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
       });
 
+  /// <summary>Next to "Build" -- see <see cref="CProjectViewModel.Rebuild"/>'s own remarks for why a
+  /// separate button is meaningful even though Build() itself already recompiles every source on every
+  /// call: Rebuild additionally clears out previously generated files first, so nothing left over from
+  /// a renamed/removed source, or from a previous Build, survives into this one.</summary>
+  private void OnRebuildClick(object sender, RoutedEventArgs e) =>
+      RunGuarded(() =>
+      {
+        CBuildResult result = _viewModel.Rebuild();
+        MessageBox.Show(
+            this,
+            result.Messages.Count > 0 ? string.Join(Environment.NewLine, result.Messages) : "Nothing to build.",
+            (result.Success ? "Rebuild succeeded -- " : "Rebuild failed -- ") + _viewModel.Name,
+            MessageBoxButton.OK,
+            result.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
+      });
+
   /// <summary>
   /// Builds this project, then opens (or reactivates) the CVM Debugger against its own chosen chip
   /// project with the resulting .gaimg already loaded -- Stefan's own ask: "I am missing a debugger

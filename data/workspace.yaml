@@ -8,9 +8,9 @@ settings:
   baudRate: 921600
   krakenIdlePolicy: CloseAfterIdleTimeout
   recentCProjectPaths:
-  - C:\devl\GreenArray\Ga144EvalboardIde\libs\libc
-  - C:\devl\GreenArray\Ga144EvalboardIde\libs\cvm
   - C:\devl\GreenArray\Ga144EvalboardIde\prgs\CTest1
+  - C:\devl\GreenArray\Ga144EvalboardIde\libs\cvm
+  - C:\devl\GreenArray\Ga144EvalboardIde\libs\libc
   - C:\devl\GreenArray\Ga144EvalboardIde\libs\CTest1
   cWorkspaceRootPath: C:\devl\GreenArray\Ga144EvalboardIde
 boards:
@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-16T21:44:59.5411769
-      utcDateTime: 2026-10-16T21:44:59.5411769Z
-      localDateTime: 2026-10-16T23:44:59.5411769+02:00
-      date: 2026-10-16T00:00:00.0000000
-      day: 16
-      dayOfWeek: Friday
-      dayOfYear: 289
-      hour: 21
-      millisecond: 541
-      microsecond: 176
-      nanosecond: 900
-      minute: 44
+      dateTime: 2026-10-17T13:24:47.9548113
+      utcDateTime: 2026-10-17T13:24:47.9548113Z
+      localDateTime: 2026-10-17T15:24:47.9548113+02:00
+      date: 2026-10-17T00:00:00.0000000
+      day: 17
+      dayOfWeek: Saturday
+      dayOfYear: 290
+      hour: 13
+      millisecond: 954
+      microsecond: 811
+      nanosecond: 300
+      minute: 24
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 59
-      ticks: 639277838995411769
-      utcTicks: 639277838995411769
-      timeOfDay: 21:44:59.5411769
+      second: 47
+      ticks: 639278402879548113
+      utcTicks: 639278402879548113
+      timeOfDay: 13:24:47.9548113
       year: 2026
   portB: 
   portC:
@@ -149261,7 +149261,1206 @@ projects:
         halt
 
         halt
-    lastSelectedDebuggerProgramName: 506 & 508 regression test
+    - name: complete regression test
+      source: >-
+        // CVM opcode regression.
+
+        // Initial FP = 0, SP = 0xffff.
+
+        //
+
+        // Double-literal source operands: hi, lo.
+
+        // Assembler must emit their memory operands: lo, hi.
+
+        //
+
+        // rpush/drop exposes one expected 16-bit value.
+
+        // dpush/drop/drop exposes lo first, then hi on the READ trace.
+
+        //
+
+        // Arithmetic opcodes are emitted explicitly below so their
+
+        // expected encodings are visible alongside the operation.
+
+        //
+
+        // Not yet assembled or hardware-tested.
+
+
+        // ------------------------------------------------------------
+
+        // nop, jmp, br.
+
+        // ------------------------------------------------------------
+
+
+        jmp start
+
+        rlit r0 0xDEAD
+
+
+        start:
+
+        nop
+
+        rlit r0 0x1111
+
+        br branch_target
+
+        rlit r0 0xDEAD
+
+
+        branch_target:
+
+        br branch_next
+
+        branch_next:
+
+        rpush r0
+
+        drop
+
+        // Expect 1111.
+
+
+        // ------------------------------------------------------------
+
+        // push, rpop, rpush, drop, dup, slit.
+
+        // ------------------------------------------------------------
+
+
+        push 0x1234
+
+        dup
+
+        rpop r0
+
+        rpop r1
+
+        rpush r0
+
+        drop
+
+        rpush r1
+
+        drop
+
+        // Expect 1234, 1234.
+
+
+        push 0xDEAD
+
+        drop
+
+
+        slit -2048
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect F800.
+
+
+        slit 2047
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect 07FF.
+
+
+        slit -1
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect FFFF.
+
+
+        // ------------------------------------------------------------
+
+        // rlit, if, cond.
+
+        // Raw selectors: ==0 = 0, !=0 = 4.
+
+        // Each if offset is relative to PC after reading its offset.
+
+        // ------------------------------------------------------------
+
+
+        rlit r0 0
+
+        rlit r1 0x1111
+
+        .word 0x8000
+
+        .word 2
+
+        rlit r1 0xDEAD
+
+        rpush r1
+
+        drop
+
+        // Taken ==0: expect 1111.
+
+
+        rlit r0 1
+
+        rlit r1 0x1111
+
+        .word 0x8000
+
+        .word 2
+
+        rlit r1 0x2222
+
+        rpush r1
+
+        drop
+
+        // Untaken ==0: expect 2222.
+
+
+        .word 0x9000
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // cond ==0 r0: expect 0000.
+
+
+        .word 0x9040
+
+        rpop r1
+
+        rpush r1
+
+        drop
+
+        // cond !=0 r0: expect 0001.
+
+
+        // ------------------------------------------------------------
+
+        // dlit, push2, dpop, dpush.
+
+        // ------------------------------------------------------------
+
+
+        dlit d0 0x1234 0x5678
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 5678, 1234.
+
+
+        push2 0x9ABC 0xDEF0
+
+        dpop d1
+
+        dpush d1
+
+        drop
+
+        drop
+
+        // READ sequence: DEF0, 9ABC.
+
+
+        // ------------------------------------------------------------
+
+        // rpopi, rpushi.
+
+        // ------------------------------------------------------------
+
+
+        push 0xBEEF
+
+        push 6
+
+        rpopi
+
+
+        push 6
+
+        rpushi
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect BEEF.
+
+
+        // ------------------------------------------------------------
+
+        // dpopi, dpushi.
+
+        // ------------------------------------------------------------
+
+
+        push2 0x1357 0x2468
+
+        push 3
+
+        dpopi
+
+
+        push 3
+
+        dpushi
+
+        dpop d4
+
+        dpush d4
+
+        drop
+
+        drop
+
+        // READ sequence: 2468, 1357.
+
+
+        // ------------------------------------------------------------
+
+        // link, unlink, ldf, stf.
+
+        // ------------------------------------------------------------
+
+
+        link -4
+
+        // FP = FFFE, SP = FFFA.
+
+
+        rlit r0 0xA55A
+
+        stf r0 -1
+
+        rlit r1 0
+
+        ldf r1 -1
+
+        rpush r0
+
+        drop
+
+        rpush r1
+
+        drop
+
+        // WRITE/READ 1:FFFD = A55A.
+
+        // Both inspection values: A55A.
+
+
+        rlit r0 0x2468
+
+        stf r0 2
+
+        ldf r1 2
+
+        rpush r1
+
+        drop
+
+        // WRITE/READ 1:0000 = 2468.
+
+        // Inspection value: 2468.
+
+
+        link -2
+
+        // FP = FFF9, SP = FFF7.
+
+        rlit r0 0xBEEF
+
+        stf r0 -1
+
+        ldf r1 -1
+
+        rpush r1
+
+        drop
+
+        // WRITE/READ 1:FFF8 = BEEF.
+
+        // Inspection value: BEEF.
+
+        unlink
+
+
+        ldf r1 -1
+
+        rpush r1
+
+        drop
+
+        // Outer local remains A55A.
+
+        unlink
+
+        // FP = 0000, SP = FFFF.
+
+
+        // ------------------------------------------------------------
+
+        // fp@, fp!, sp@, sp!.
+
+        // ------------------------------------------------------------
+
+
+        fp@
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect 0000.
+
+
+        push 0x1234
+
+        fp!
+
+        fp@
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect 1234.
+
+
+        push 0
+
+        fp!
+
+
+        sp@
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect FFFF.
+
+
+        push 0xFF00
+
+        sp!
+
+        sp@
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect FF00; inspection accesses 1:FF00.
+
+
+        push 0xFFFF
+
+        sp!
+
+        sp@
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect FFFF.
+
+
+        fp@
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect 0000.
+
+
+        // ------------------------------------------------------------
+
+        // dstore, dfetch.
+
+        // ------------------------------------------------------------
+
+
+        dlit d7 2 0x0100
+
+        push 0xCAFE
+
+        dstore d7
+
+        dfetch d7
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // WRITE/READ 2:0100 = CAFE.
+
+        // Inspection value: CAFE.
+
+
+        // ------------------------------------------------------------
+
+        // rstore, rload.
+
+        // Direct handler addresses: rload = 0, rstore = 7.
+
+        // ------------------------------------------------------------
+
+
+        rlit r6 0xBEEF
+
+        .word 0x2776
+
+        // rstore r6, d7: WRITE 2:0100 <- BEEF.
+
+
+        rlit r6 0
+
+        .word 0x2076
+
+        // rload r6, d7: READ 2:0100 -> BEEF.
+
+
+        rpush r6
+
+        drop
+
+        // Expect BEEF.
+
+
+        // ------------------------------------------------------------
+
+        // Binary16: or, and, xor, sub, add, mov, packbytes.
+
+        // Each operation updates r0 using r1.
+
+        // ------------------------------------------------------------
+
+
+        rlit r0 0x1234
+
+        rlit r1 0x00FF
+
+        .word 0xD010
+
+        // or r0, r1
+
+        rpush r0
+
+        drop
+
+        // Expect 12FF.
+
+
+        .word 0xD210
+
+        // and r0, r1
+
+        rpush r0
+
+        drop
+
+        // Expect 00FF.
+
+
+        .word 0xD310
+
+        // xor r0, r1
+
+        rpush r0
+
+        drop
+
+        // Expect 0000.
+
+
+        .word 0xD410
+
+        // sub r0, r1
+
+        rpush r0
+
+        drop
+
+        // Expect FF01.
+
+
+        .word 0xD610
+
+        // add r0, r1
+
+        rpush r0
+
+        drop
+
+        // Expect 0000.
+
+
+        .word 0xD710
+
+        // mov r0, r1
+
+        rpush r0
+
+        drop
+
+        // Expect 00FF.
+
+
+        rlit r0 0x1234
+
+        rlit r1 0xABCD
+
+        .word 0xD810
+
+        // packbytes r0, r1
+
+        rpush r0
+
+        drop
+
+        // Expect CD34.
+
+
+        rpush r1
+
+        drop
+
+        // Source remains ABCD.
+
+
+        // ------------------------------------------------------------
+
+        // Unary16.
+
+        // ------------------------------------------------------------
+
+
+        rlit r0 0x8001
+
+        .word 0xC030
+
+        // div2
+
+        rpush r0
+
+        drop
+
+        // Expect C000.
+
+
+        .word 0xC050
+
+        // inv
+
+        rpush r0
+
+        drop
+
+        // Expect 3FFF.
+
+
+        .word 0xC060
+
+        // neg
+
+        rpush r0
+
+        drop
+
+        // Expect C001.
+
+
+        .word 0xC070
+
+        // inc
+
+        rpush r0
+
+        drop
+
+        // Expect C002.
+
+
+        .word 0xC090
+
+        // dec
+
+        rpush r0
+
+        drop
+
+        // Expect C001.
+
+
+        .word 0xC0B0
+
+        // mul2
+
+        rpush r0
+
+        drop
+
+        // Expect 8002.
+
+
+        .word 0xC0C0
+
+        // udiv2
+
+        rpush r0
+
+        drop
+
+        // Expect 4001.
+
+
+        rlit r0 0xFFFF
+
+        .word 0xC0D0
+
+        // mask15
+
+        rpush r0
+
+        drop
+
+        // Expect 7FFF.
+
+
+        .word 0xC0F0
+
+        // inv15
+
+        rpush r0
+
+        drop
+
+        // Expect FFFF.
+
+
+        .word 0xC110
+
+        // abs
+
+        rpush r0
+
+        drop
+
+        // Expect 0001.
+
+
+        .word 0xC150
+
+        // bool
+
+        rpush r0
+
+        drop
+
+        // Expect 0001.
+
+
+        rlit r0 0x1234
+
+        .word 0xC190
+
+        // clearlow
+
+        rpush r0
+
+        drop
+
+        // Expect 1230.
+
+
+        .word 0xC1C0
+
+        // lowbit
+
+        rpush r0
+
+        drop
+
+        // Expect 0010.
+
+
+        rlit r0 0xFFFF
+
+        .word 0xC1F0
+
+        // bitcnt
+
+        rpush r0
+
+        drop
+
+        // Expect 0010.
+
+
+        rlit r0 0xABCD
+
+        .word 0xC270
+
+        // highbyte
+
+        rpush r0
+
+        drop
+
+        // Expect 00AB.
+
+
+        rlit r0 0xABCD
+
+        .word 0xC2A0
+
+        // lowbyte
+
+        rpush r0
+
+        drop
+
+        // Expect 00CD.
+
+
+        rlit r0 0xABCD
+
+        .word 0xC2C0
+
+        // byteswap
+
+        rpush r0
+
+        drop
+
+        // Expect CDAB.
+
+
+        // ------------------------------------------------------------
+
+        // c32: selector 4 = float32 1.0.
+
+        // ------------------------------------------------------------
+
+
+        c32 d0 4
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0000, 3F80.
+
+
+        // ------------------------------------------------------------
+
+        // Float32 binary operations.
+
+        // d0 = destination; d1 = source, constant 2.0.
+
+        // ------------------------------------------------------------
+
+
+        dlit d0 0x3FC0 0x0000
+
+        dlit d1 0x4000 0x0000
+
+
+        .word 0xF810
+
+        // fadd: 1.5 + 2.0 = 3.5.
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0000, 4060.
+
+
+        .word 0xF910
+
+        // fsub: 3.5 - 2.0 = 1.5.
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0000, 3FC0.
+
+
+        .word 0xFA10
+
+        // fmin: min(1.5, 2.0) = 1.5.
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0000, 3FC0.
+
+
+        .word 0xFB10
+
+        // fmax: max(1.5, 2.0) = 2.0.
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0000, 4000.
+
+
+        .word 0xFC10
+
+        // fmul: 2.0 * 2.0 = 4.0.
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0000, 4080.
+
+
+        .word 0xFD10
+
+        // fdiv: 4.0 / 2.0 = 2.0.
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0000, 4000.
+
+
+        dpush d1
+
+        drop
+
+        drop
+
+        // Source unchanged: READ sequence 0000, 4000.
+
+
+        // ------------------------------------------------------------
+
+        // Unary32 integer operations.
+
+        // ------------------------------------------------------------
+
+
+        dlit d0 0x1234 0x5678
+
+        .word 0xE100
+
+        // dinv
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: A987, EDCB.
+
+
+        dlit d0 0xFFFF 0xFFFE
+
+        .word 0xE110
+
+        // dabs
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0002, 0000.
+
+
+        dlit d0 0x1234 0x5678
+
+        .word 0xE160
+
+        // dlow16
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 5678, 0000.
+
+
+        dlit d0 0x1234 0x5678
+
+        .word 0xE150
+
+        // dhigh16
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 1234, 0000.
+
+
+        dlit d0 0x0000 0xFFFF
+
+        .word 0xE170
+
+        // dinc
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0000, 0001.
+
+
+        .word 0xE1E0
+
+        // ddec
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: FFFF, 0000.
+
+
+        dlit d0 0x1234 0x5678
+
+        .word 0xE230
+
+        // dswap
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 1234, 5678.
+
+
+        dlit d0 0x0000 0x0001
+
+        .word 0xE250
+
+        // dneg
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: FFFF, FFFF.
+
+
+        dlit d0 0x0000 0x8000
+
+        .word 0xE2C0
+
+        // dmul2
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0000, 0001.
+
+
+        dlit d0 0x8000 0x0001
+
+        .word 0xE320
+
+        // ddiv2
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0000, C000.
+
+
+        dlit d0 0x8000 0x0001
+
+        .word 0xE350
+
+        // dudiv2
+
+        dpush d0
+
+        drop
+
+        drop
+
+        // READ sequence: 0000, 4000.
+
+
+        // ------------------------------------------------------------
+
+        // call, rcall, ret, rjmp.
+
+        // ------------------------------------------------------------
+
+
+        call direct_sub
+
+        rpush r6
+
+        drop
+
+        // Expect 1111.
+
+
+        rlit r14 indirect_sub
+
+        rcall r14
+
+        rpush r6
+
+        drop
+
+        // Expect 2222.
+
+
+        rlit r15 after_rjmp
+
+        rjmp r15
+
+        rlit r6 0xDEAD
+
+
+        after_rjmp:
+
+        rpush r6
+
+        drop
+
+        // Expect 2222.
+
+
+        // ------------------------------------------------------------
+
+        // Completion and halt.
+
+        // FP = 0, SP = 0xffff.
+
+        // ------------------------------------------------------------
+
+
+        rlit r7 0x600D
+
+        rpush r7
+
+        drop
+
+        // Expect WRITE/READ 1:FFFF = 600D.
+
+
+        halt
+
+        halt
+
+
+        direct_sub:
+
+        link -2
+
+        rlit r6 0x1111
+
+        unlink
+
+        ret
+
+
+        indirect_sub:
+
+        link -3
+
+        link -1
+
+        rlit r6 0x2222
+
+        unlink
+
+        unlink
+
+        ret
+    lastSelectedDebuggerProgramName: New program
     cDebuggerPrograms:
     - name: default
       source: >

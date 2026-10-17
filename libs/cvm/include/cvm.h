@@ -4,4 +4,6 @@
 extern void _start();
 extern void _exit();
 
+extern void *heap_start;
+
 #endif

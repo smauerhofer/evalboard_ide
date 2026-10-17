@@ -3,493 +3,179 @@ using System.Text;
 namespace Ga144.C.Toolchain;
 
 /// <summary>
-/// Walks a <see cref="CTranslationUnit"/> and emits CVM assembly text (the same <c>.casm</c> syntax
-/// <c>CvmAssembler</c> accepts) implementing it. There is no separate type-checking pass and no
-/// annotated tree: <see cref="EmitExpr"/> computes (and checks) each expression's <see cref="CType"/>
-/// in the same walk that emits its code.
+/// REWRITTEN 2026-10-17 against the final, hardware-confirmed <c>CVM_pipeline</c> 79-mnemonic opcode
+/// set (see <c>claude/cvm-opcode-audit-2026-10-15.md</c>'s combined-regression section) and the
+/// CVM_pipeline C ABI v2 (<c>claude/cvm-abi.md</c> section 3). The previous version of this class
+/// targeted a register architecture that no longer exists at all (an address-register file, a separate
+/// float-register file, <c>enter</c>/<c>leave</c>/<c>ldl</c>/<c>stl</c>/<c>ldp</c>/<c>stp</c>) -- every
+/// mnemonic this class emits below is one of the 79 that opcode audit confirmed; nothing from the old
+/// ISA is referenced anywhere in this file.
 ///
-/// <para><b>CVM C ABI v1 -- read this before touching any codegen method below.</b> None of the
-/// following is confirmed against real CVM hardware or a full node-506/606/607 simulation; it is this
-/// compiler's own necessary, documented hypothesis about how the primitives it emits actually behave at
-/// runtime, chosen as the most standard interpretation for a stack machine of this shape. If any part of
-/// it turns out wrong once CVM2's frame/interpreter nodes are simulated in full, the fix is localized to
-/// the handful of methods named in each bullet:</para>
+/// Walks a <see cref="CTranslationUnit"/> exactly once and emits CVM assembly text (the same
+/// <c>.casm</c> syntax <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/> accepts) -- there is no separate
+/// type-checking pass and no annotated tree: <see cref="EmitExprForValue"/> computes (and checks) each
+/// expression's <see cref="CType"/> in the same walk that emits its code, exactly like the previous
+/// version did.
+///
+/// <para><b>Read <c>claude/cvm-abi.md</c> section 3 before touching any codegen method below</b> -- it
+/// is the complete design this file implements (memory model, register allocation, frame layout, global
+/// addressing, comparisons, float strategy). The short version:</para>
 /// <list type="bullet">
-/// <item><description><c>pushlit N</c> pushes literal N as a new stack top (stack depth +1).</description></item>
-/// <item><description><c>pop</c> pops the stack top into register r (stack -1). <c>push</c> pushes r
-/// back onto the stack non-destructively, leaving r unchanged (stack +1) -- so "pop; push; push"
-/// duplicates the top of stack ([...,v] -&gt; pop: r:=v,[...] -&gt; push: [...,v] -&gt; push: [...,v,v]).
-/// See <see cref="EmitDup"/>.</description></item>
-/// <item><description>Every binary ALU/comparison op (add, sub, and, xor, or, usl, ssr, usr, eq, ne, lt,
-/// gt, le, ge, ult, ugt, ule, uge) consumes r (set by an immediately preceding <c>pop</c>) and the
-/// current stack top, and replaces the stack top with the result -- so "EmitExpr(lhs); EmitExpr(rhs);
-/// pop; &lt;op&gt;" computes "lhs OP rhs" with the correct operand order and leaves exactly one result
-/// word. See <see cref="EmitBinaryOperation"/>.</description></item>
-/// <item><description>Every unary op (inv, negate, eq0) acts on r alone: "pop; &lt;op&gt;; push" pops the
-/// operand into r, transforms r in place, and pushes the result back (net: pop 1, push 1). See
-/// <see cref="EmitExpr"/>'s <see cref="CUnaryExpr"/> case.</description></item>
-/// <item><description><c>xt</c>/<c>ldt</c>/<c>stt</c> are this ABI's generic pointer/memory primitives:
-/// <c>xt</c> pops an address off the stack into a "t" register; <c>ldt</c> pushes the value stored at
-/// address t without consuming t; <c>stt</c> pops a value off the stack and stores it at address t.
-/// IMPORTANT: "t" has no save/restore of its own, so this compiler never assumes it survives arbitrary
-/// code emitted between resolving an Indirect lvalue's address and using it -- every Indirect lvalue's
-/// address is cached into its own dedicated local slot the moment it's computed, and <c>xt</c> is
-/// re-issued from that cached slot immediately before every single load or store through it, however
-/// many other things (including further "xt"s of their own) ran in between. See
-/// <see cref="CLvalue"/>/<see cref="ResolveLvalue"/>/<see cref="CacheIndirectAddress"/>/
-/// <see cref="EmitLoad"/>/<see cref="EmitStore"/>.</description></item>
-/// <item><description><c>ldl</c>/<c>ldp</c> load a local's/parameter's value into register r WITHOUT
-/// touching the stack; <c>stl</c>/<c>stp</c> store r INTO a local/parameter, also without touching the
-/// stack -- CONFIRMED against real hardware 2026-09-09 from Stefan's own opcode bit patterns (<c>ldl</c>
-/// <c>1001_111?_????_????</c>, <c>ldp</c> <c>1001_110?_????_????</c>, <c>stl</c>
-/// <c>1001_101?_????_????</c>, <c>stp</c> <c>1001_100?_????_????</c>, each a 9-bit frame-relative
-/// offset): "locals and parameters are stored on the stack relative to the frame pointer and are NOT
-/// accessed with push and pop." This OVERTURNS this class's former, never-confirmed and now-known-wrong
-/// assumption that these four worked directly against the data stack like <c>xt</c>/<c>ldt</c>/<c>stt</c>
-/// do. They behave like the generic ALU/unary ops instead: every load site must follow with an explicit
-/// <c>push</c> to move the loaded value from r onto the stack, and every store site must precede with an
-/// explicit <c>pop</c> to move the value-to-store from the stack into r first -- see
-/// <see cref="EmitLoad"/>/<see cref="EmitStore"/>/<see cref="EmitName"/>/
-/// <see cref="CacheIndirectAddress"/>/<see cref="EmitSwitch"/> and the register-parameter spill in
-/// <see cref="EmitFunction"/>, all fixed together for this. <c>lal</c>/<c>lap</c> (load ADDRESS of a
-/// local/parameter, a different pair of mnemonics) are RETIRED as of 2026-09-09 ("'lal' &amp; 'lap' are
-/// removed. use ''f' or 'fpush' from node 506 and add the offset to calculate the address of a local or
-/// parameter." -- quoted verbatim as originally given; node 506's own push word was renamed from
-/// <c>'fpush</c> to <c>'pushf</c> on 2026-09-16, see below) -- this compiler no longer emits them at all.
-/// In their place, computing the address of a local or parameter now emits <c>pushf</c> (push node 506's
-/// own frame pointer <c>f</c> directly onto the data stack) followed by
-/// <c>pushlit &lt;offset&gt;; pop; sub</c> for a LOCAL (address = f - offset,
-/// matching node 506's own <c>f/main</c> dispatch, which negates a local's offset with <c>inv</c> before
-/// adding) or <c>pushlit &lt;offset&gt;; pop; add</c> for a PARAMETER (address = f + offset, no
-/// negation) -- see <see cref="EmitAddressOf"/>'s <c>CNameExpr</c> case and <see cref="EmitName"/>'s
-/// array-decay branches, both updated together for this. This has NOT been confirmed against real
-/// hardware (no fresh self-check has been run since the change), so treat it with the same caution as
-/// every other "not yet confirmed" item in this list.</description></item>
-/// <item><description><c>cbr &lt;label&gt;</c> (formerly named <c>ifbr</c> -- Stefan, 2026-09-09: "ifbr"
-/// no longer exist and should be replaced with "cbr". it is basically the same. opcode cbr
-/// 1010_11??_????_???? conditional branch to offset if r == 0. the offset is signed 10-bit number.)
-/// branches when the condition (loaded into r by an immediately preceding <c>pop</c>) is ZERO (false).
-/// CONFIRMED against real hardware, and the OPPOSITE polarity from this class's own former, never-
-/// confirmed assumption (the old "ifbr" placeholder was assumed to branch on NONZERO/true) -- every
-/// control-flow codegen method below was originally built around that wrong polarity and has been
-/// re-derived for this one instead. The net effect actually simplifies most call sites: "branch away
-/// from a block when its condition is false" (if/while/for/ternary's else-branch, &amp;&amp;'s short
-/// circuit) now needs no extra op at all, since <c>cbr</c> already tests exactly that; "branch when the
-/// condition is true" (do-while's loop-back, a switch case match, ||'s short circuit) now needs an
-/// explicit <c>eq0</c> first to invert the sense before branching. See <see cref="EmitStatement"/>'s
-/// <c>CIfStmt</c>/<c>CWhileStmt</c>/<c>CDoWhileStmt</c>/<c>CForStmt</c> cases, <see cref="EmitLogical"/>,
-/// <see cref="EmitConditional"/>, and <see cref="EmitSwitch"/>, all re-derived together for
-/// this.</description></item>
-/// <item><description><b>Uniform codegen invariant:</b> every non-void expression's codegen leaves
-/// EXACTLY one word on the data stack representing its value; a void-typed expression (a call to a void
-/// function) leaves nothing. An expression used as a statement emits the expression, then a bare
-/// <c>pop</c> to discard the leftover value when its type isn't void. This single invariant is what lets
-/// every expression case in <see cref="EmitExpr"/> compose with every other one with no "is this value
-/// needed" threading anywhere in the compiler, at the modest cost of an occasional extra
-/// <c>pop</c>/dup.</description></item>
-/// <item><description><b>Function calling convention:</b> the caller evaluates and pushes each argument
-/// left-to-right, then <c>call</c>s; the callee's <c>enter &lt;n&gt;</c> reserves n local slots and is
-/// assumed to make the caller's pushed arguments addressable via <c>ldp</c>/<c>stp</c> (or, for a
-/// parameter's ADDRESS rather than its value, the <c>pushf</c>-based sequence described above, now that
-/// <c>lap</c> is retired) (parameter offset 0 = the first declared parameter); <c>return expr;</c> evaluates expr (leaving its
-/// value on the stack) and branches to the function's epilogue label; the epilogue's <c>leave</c> is
-/// assumed to deallocate all locals AND the caller's pushed arguments together, leaving only the single
-/// return value (if any) on top -- a Pascal-style callee-cleanup convention -- followed by <c>ret</c>.
-/// See <see cref="EmitFunction"/>.</description></item>
-/// <item><description><b>RENUMBERED 2026-09-15: every "node 306" below is physical node 308.</b> Stefan:
-/// "node 306 and 308 have swapped roles" -- the 32-bit address-register node this whole ABI v2 section
-/// describes has not changed shape or mnemonics (still <c>arld</c>/<c>lda</c>/<c>sta</c>/etc., still
-/// wired the same way in <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet"/>/
-/// <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>), only its coordinate moved, from 306 to 308
-/// -- see <see cref="Ga144.Evb.Ide.Cvm.Node308Program"/>'s own remarks. This codegen never hardcodes the
-/// coordinate itself (it emits mnemonics, resolved against whichever node currently owns them), so no
-/// code change was needed here, only this flag; the "node 306" wording throughout the remarks below is
-/// left as Stefan originally wrote/was quoted saying it, describing the mechanism, not literally today's
-/// coordinate.</description></item>
-/// <item><description><b>ABI v2 addition (2026-09-06): address-register pointer parameters.</b> Per
-/// Stefan's own node 306 source ("In 306 there are 4 32-bit address register to access the whole memory
-/// range... for the ABI the address register are volatile and are not saved on the stack when a
-/// function is entered. they are also used for the first 4 pointers as arguments to a function"): among
-/// a function's PARAMETERS, in declaration order, the first four whose TYPE is a pointer (an array
-/// parameter already decays to pointer by the time <see cref="CParser"/> hands it here -- see
-/// <see cref="CParameter"/>) are passed via node 306's address registers 0-3 instead of the ordinary
-/// push-onto-the-stack convention above; every OTHER parameter (a 5th-or-later pointer, or any
-/// non-pointer parameter, wherever it falls among the four) keeps ABI v1's stack convention completely
-/// unchanged, just renumbered to skip the register-passed ones (see
-/// <see cref="ComputeParameterRegisterSlots"/>). This is a pure CALLING-CONVENTION change, nothing else:
-/// pointer TYPE and SIZE are UNCHANGED (still exactly one CVM word each -- this compiler does not yet
-/// support the "whole memory range"/far/32-bit addressing node 306's own registers make possible; every
-/// pointer this compiler emits still addresses only the current node's own local page, with an implicit
-/// page word of 0 -- a known, deliberate gap, not yet resolved with Stefan), and pointer DEREFERENCE
-/// (<c>*p</c>, <c>p[i]</c>) still goes through the existing <c>xt</c>/<c>ldt</c>/<c>stt</c> mechanism
-/// above, completely untouched.
-///
-/// Mechanically: at a CALL SITE (<see cref="EmitCall"/>), a register-eligible argument is still
-/// evaluated in its normal left-to-right position (leaving one stack word, per the uniform invariant
-/// below) but is then immediately popped into r, paired with a literal page word of 0, and loaded into
-/// its assigned address register via <c>lda</c> -- never left on the stack for the callee. At the
-/// CALLEE'S OWN PROLOGUE (<see cref="EmitFunction"/>), right after <c>enter &lt;n&gt;</c>, each
-/// register-eligible parameter is immediately spilled OUT of its address register (<c>sta</c>) into an
-/// ordinary LOCAL slot (not a Parameter-kind frame offset -- it never arrived via the stack, so it is
-/// allocated and referenced exactly like any other <see cref="CLvalueKind.Local"/> variable for the rest
-/// of the function body, needing no new <see cref="CLvalueKind"/> or <see cref="CVarKind"/> at all).
-/// Address registers are NEVER trusted to persist beyond that one transient moment (call-site transmit,
-/// or prologue spill) -- exactly the same discipline this ABI already applies to the "t" register above,
-/// for the same reason (volatile, no save/restore of its own, and here explicitly confirmed by Stefan:
-/// "not saved on the stack when a function is entered"). See <see cref="ComputeParameterRegisterSlots"/>,
-/// <see cref="EmitFunction"/>, and <see cref="EmitCall"/> for the exact instruction sequences.
-/// </description></item>
-/// <item><description><c>*</c>/<c>/</c>/<c>%</c> have no hardware primitive, so they compile to calls
-/// into runtime helper routines Stefan implements by hand in the "cvm" assembly library:
-/// <c>__mul</c>, <c>__divs</c>/<c>__divu</c> (signed/unsigned divide), <c>__mods</c>/<c>__modu</c>
-/// (signed/unsigned modulo). Calling convention for these leaf helpers: caller pushes lhs then rhs
-/// (left-to-right), <c>call</c>s, callee consumes both top-of-stack words and pushes exactly one result
-/// word, then <c>ret</c>s -- no frame needed since they're pure leaves. See
-/// <see cref="EmitLibraryBinary"/>.</description></item>
-/// <item><description><c>&lt;&lt;</c>/<c>&gt;&gt;</c> need no library call: node 507's <c>usl</c>/
-/// <c>ssr</c>/<c>usr</c> are binary (value, count), so they use the ordinary pop+op pattern
-/// directly.</description></item>
-/// <item><description>Every scalar and pointer type this compiler supports is exactly one CVM word
-/// (see <see cref="CType.SizeInWords"/>'s own remarks) -- so pointer arithmetic and array indexing never
-/// need a scaling multiplication; <c>arr[i]</c> is simply "base address + i" via a plain
-/// <c>add</c>.</description></item>
-/// <item><description><b>Optimizer addition (2026-09-10): constant-indexed local array elements skip
-/// address computation entirely.</b> <c>arr[K]</c> for a compile-time-constant <c>K</c> on a genuinely
-/// LOCAL array is just the local at slot <c>arr's own base slot + K</c> -- loadable/storable with a plain
-/// <c>ldl</c>/<c>stl</c>, no runtime address, no node-306 indirection, no <see
-/// cref="CvmPeepholeOptimizer"/> toggle needed (it relies on nothing but this compiler's own local-slot
-/// layout and the already-confirmed <c>ldl</c>/<c>stl</c> addressing every other local already uses, so it
-/// is unconditional). See <see cref="TryGetConstantLocalArrayElementSlot"/>'s own remarks for the full
-/// reasoning and scope.</description></item>
-/// <item><description><b>Optimizer addition (2026-09-10): global-scalar access uses <c>gld</c>/<c>gst</c>
-/// directly, no address-register dance.</b> A plain module-scope or <c>static</c> global used to be
-/// treated exactly like a runtime pointer -- push its label, cache the "address" into a spilled local
-/// slot, then indirect through node 306's <c>arst</c>/<c>lda</c>/<c>sta</c> on every access -- even
-/// though the label is already a fixed, compile-time-constant reference the assembler/linker resolve via
-/// a relocation. It now goes straight through <c>gld</c> (fetch: r := global) / <c>gst</c> (assign:
-/// global := r), named and behaving exactly like an ordinary "load"/"store" -- see <see
-/// cref="EmitGlobalFetch"/>/<see cref="EmitGlobalAssign"/>'s own remarks for the real hardware bug this
-/// direction was hiding (node 508's own <c>g/@</c>/<c>g/!</c> primitives really were swapped) and
-/// Stefan's 2026-09-10 hardware trace that caught and corrected it. Unconditional, like the array
-/// optimization above: no case this recognizes (a compile-time-known global label) can ever need the
-/// general address-computation
-/// path.</description></item>
-/// <item><description><c>switch</c>/<c>case</c> does NOT use a real <c>tjmp</c> (table jump) instruction:
-/// its LOCATION is now confirmed (node 507, "'tjmp is in node 507", 2026-09-09 -- the same
-/// "1000_1???" local-execute tag family as <c>nop</c>/<c>push</c>/<c>pop</c>/<c>ret</c>/<c>halt</c>, per
-/// <see cref="CvmInstructionSet.TableJumpMnemonic"/>'s own remarks), but its calling convention -- how a
-/// case table is laid out in memory, how the selector is bounds-checked and turned into an index, and
-/// whether/how out-of-range selectors fall through to a default -- is still not confirmed anywhere in the
-/// project's documentation, and this compiler follows the project's own established practice of never
-/// guessing an unconfirmed hardware/table convention. Instead, a switch still compiles to a
-/// straightforward, always-correct chain of equality comparisons against the selector (evaluated once
-/// into a compiler-allocated temporary local). This is flagged here as a future optimization pending
-/// Stefan supplying <c>tjmp</c>'s real calling convention -- see <see cref="EmitStatement"/>'s
-/// <see cref="CSwitchStmt"/> case.</description></item>
-/// <item><description>
-/// <b>Float ABI (added 2026-09-26) -- basic <c>float</c> support, per Stefan's own dictation
-/// (<c>claude/cvm-abi.md</c> section 2.3).</b> Everything above this bullet assumes every value is
-/// exactly one CVM word; <c>float</c> (see <see cref="CType.Float"/>) is the first exception, and it does
-/// NOT go through the ordinary one-word data-stack machinery at all -- it is evaluated entirely in node
-/// 305's own 8-register floating-point file (<c>fr[0..7]</c>) via <c>fadd</c>/<c>fsub</c>/<c>fmul</c>/
-/// <c>fdiv</c>/<c>fneg</c>/<c>fabs</c>/<c>fmin</c>/<c>fmax</c>/<c>fmove</c>/<c>fpop</c>/<c>fpush</c>, and
-/// only ever touches the ordinary stack/memory to load/store a <c>float</c> variable's two words or to
-/// marshal a stack-passed <c>float</c> argument.
-/// <list type="bullet">
-/// <item><description><b>Scope (a deliberate SCOPE decision for this first pass, not a hardware
-/// hypothesis):</b> a plain <c>float</c> scalar only -- local, parameter, global, literal, <c>+</c> <c>-</c>
-/// <c>*</c> <c>/</c> unary <c>+</c>/<c>-</c>, assignment (<c>=</c> <c>+=</c> <c>-=</c> <c>*=</c> <c>/=</c>),
-/// <c>return</c>, and calls (as an argument or return value). NOT supported, rejected with a diagnostic:
-/// <c>float *</c>/<c>float[]</c> (see <see cref="CType.Float"/>'s own remarks -- rejected in
-/// <see cref="CParser"/>), comparisons (<c>==</c> <c>!=</c> <c>&lt;</c> <c>&gt;</c> <c>&lt;=</c>
-/// <c>&gt;=</c>), <c>++</c>/<c>--</c>, any int/<c>float</c> conversion (implicit or an explicit cast), and
-/// a <c>float</c> literal used directly where an <c>int</c> is expected or vice versa -- Stefan: "only add
-/// functions that are directly supported by the FP subprocessor... later we will add more functions in a
-/// float-library." Three built-ins expose the three hardware ops with no C operator of their own --
-/// <c>fabsf</c>/<c>fminf</c>/<c>fmaxf</c> compile directly to <c>fabs</c>/<c>fmin</c>/<c>fmax</c>, never a
-/// real call (see <see cref="TryGetFloatBuiltin"/>).</description></item>
-/// <item><description><b>Codegen model: a depth-counter register allocator, not a stack machine.</b>
-/// <see cref="EmitFloatExprInto"/> evaluates a <c>float</c> expression into a chosen destination register
-/// <c>fr[destReg]</c>, recursively: a binary op evaluates its left operand into <c>fr[destReg]</c> and its
-/// right operand into <c>fr[destReg+1]</c> (never lower than <c>destReg</c>, so an already-computed OUTER
-/// operand sitting in a lower-numbered register is never disturbed), then combines them in place
-/// (<c>fadd destReg destReg+1</c>, etc., per node 305/306's own <c>fr[f] := fr[f] OP fr[g]</c> semantics --
-/// see <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointAddMnemonic"/>'s own remarks). Every
-/// register below the CURRENT <c>destReg</c> is, by construction, still needed by an enclosing operation --
-/// this is exactly what <see cref="_liveFloatRegisterCount"/> tracks, and it is what
-/// <see cref="EmitCall"/> consults to decide how many registers a call needs to protect. Nesting deeper
-/// than <see cref="FloatRegisterCount"/> (8) registers is a compiler error ("expression too complex"),
-/// not silently wrong code.</description></item>
-/// <item><description><b>Loading/storing a <c>float</c> variable's two words -- word order, DERIVED
-/// from node 305's own F18 source (<c>fr/push</c>/<c>fr/pop</c>), not yet independently confirmed on real
-/// hardware.</b> <c>fr/push (g f)</c> is <c>a! @+ !b @ !b</c> -- it sends the LOW word first, then the
-/// HIGH word second; <c>fr/pop (g f)</c> is <c>a! @b !+ @b !</c> -- the FIRST word it reads is stored into
-/// the LOW slot, the SECOND into the HIGH slot. Combined with Stefan's own general rule ("low word at
-/// memory[adr], high word at memory[adr+1]"), this compiler always composes/decomposes a register the
-/// same way: to LOAD <c>fr[d]</c> from two known words, push the LOW word then the HIGH word (in that
-/// order) then <c>fpop d</c>; to STORE <c>fr[d]</c> out, <c>fpush d</c> then pop twice -- the first pop is
-/// the HIGH word, the second is the LOW word. See <see cref="EmitFloatLoad"/>/<see cref="EmitFloatStore"/>/
-/// <see cref="EmitFloatLiteralInto"/>. A bare <c>fpush f</c> ... (nothing else touching the stack)
-/// ... <c>fpop f</c> pair (used ONLY for caller-save/restore, see below) is trusted to round-trip
-/// <c>fr[f]</c>'s exact value -- this is the more likely intended reading of "the caller must save the
-/// register... and restore them," but note it is NOT mechanically re-derivable from the same F18 trace
-/// above without also assuming something about how <c>@b</c>/<c>!b</c> interact with whatever real stack
-/// backs them; flagged for Stefan's confirmation.</description></item>
-/// <item><description><b>A <c>float</c> LOCAL's two frame slots are HIGH-then-LOW, the opposite order
-/// from a <c>float</c> PARAMETER or a <c>float</c> GLOBAL's two words.</b> A local's own address is
-/// <c>f - offset</c> (see this class's own <c>pushf</c>/<c>lal</c>/<c>lap</c> remarks above) -- ADDRESS
-/// DECREASES as the frame-slot offset increases -- so honoring "low word at the lower address" means the
-/// LOW word must live at the HIGHER slot number (<c>baseSlot+1</c>) and the HIGH word at the base slot
-/// itself. A PARAMETER's address is <c>f + offset</c> (increases with offset) and a GLOBAL's second word
-/// is a second, immediately-following data-section label (see below) -- both the natural, unsurprising
-/// order (LOW at the base, HIGH at base+1). See <see cref="EmitFloatLoad"/>/<see
-/// cref="EmitFloatStore"/>.</description></item>
-/// <item><description><b>A <c>float</c> GLOBAL is two contiguous data words under two labels, not one.</b>
-/// <c>gld</c>/<c>gst</c> (see this class's own "global-scalar access" bullet above) take a single label
-/// with no address arithmetic, so a <c>float</c> global's high word gets its OWN label,
-/// <c>&lt;label&gt;__hi</c>, emitted immediately after the low word's own <c>.word</c> line with nothing
-/// else emitted in between (see <see cref="EmitFloatGlobalStorage"/>) -- this compiler controls DATA-
-/// section layout entirely, so the two words ARE genuinely contiguous (<c>label__hi</c>'s address really
-/// is <c>label</c>'s address + 1), exactly matching Stefan's memory-layout rule; only the SYMBOLIC name
-/// for the second word is a compiler-internal convention (a hand-written <c>.casm</c> routine expecting
-/// to reach it via "<c>label+1</c>" address arithmetic -- which this assembler does not support for any
-/// operand, not just this one -- would not find a symbol for it under that name). A future
-/// pointer-to-float/float-array feature will need to revisit this.</description></item>
-/// <item><description><b>Return-value convention -- HYPOTHESIS, not stated by Stefan and NOT yet
-/// confirmed.</b> This compiler places a <c>float</c>-returning function's return value in <c>fr[0]</c>
-/// unconditionally, regardless of calling convention, right before branching to the epilogue -- the
-/// simplest, most standard choice for a single dedicated "the" float register, mirroring how a plain
-/// (non-<c>__fastcall</c>) int/pointer return already uses one fixed, implicit slot (the stack top). See
-/// <see cref="EmitStatement"/>'s <c>CReturnStmt</c> case and <see cref="EmitCall"/>'s own return-value
-/// retrieval.</description></item>
-/// <item><description><b>Parameter passing, per Stefan verbatim:</b> "for fastcall functions the
-/// parameter are passed by register fr[0] for the first float parameter, fr[1] for the second parameter,
-/// ... for normal functions float parameter are put on the stack as a 32-bit value little endian word."
-/// <see cref="ComputeParameterFloatRegisterSlots"/> assigns fr-registers to a <c>__fastcall</c>
-/// function's <c>float</c> parameters, counting ONLY among its own <c>float</c> parameters (a completely
-/// separate, independent count from the pointer/ar-register assignment above -- node 305's register file
-/// has nothing to do with node 306's). A register-assigned <c>float</c> parameter is spilled into an
-/// ordinary local slot pair immediately in the prologue, exactly like a register-assigned pointer
-/// parameter already is (see this class's own ABI v2 remarks) -- fr registers are never trusted to
-/// survive past that one moment. A stack-passed <c>float</c> parameter's word OFFSET is generalized from
-/// the pre-existing per-PARAMETER count to a per-WORD count (<see cref="CType.SizeInWords"/>), since it is
-/// no longer true that every stack-passed parameter is exactly one word.</description></item>
-/// <item><description><b>Caller-save/restore, per Stefan verbatim:</b> "within a function all fr register
-/// can be used freely, that means, calling a function may use some fr register. so calling a function
-/// that use fr register, the caller must save the fr register in use to the stack and restore them after
-/// the call. for functions that do not use fr register, there is no need to save/restore any fr-register.
-/// so the compiler must know if a function directly or indirectly uses any fr-register."
-/// <see cref="ComputeFunctionUsesFloatRegisters"/> computes exactly that (a whole-translation-unit,
-/// fixed-point call-graph analysis -- DIRECT use is any <c>float</c> parameter/return/local/literal
-/// anywhere in a function's own body; INDIRECT use is calling, however deeply, a function that does; a
-/// call to a function whose body isn't visible in this file -- only declared, or in another translation
-/// unit -- is conservatively treated as "may use fr registers," since nothing here can see its actual
-/// body). <see cref="EmitCall"/> consults it for EVERY call (not just one inside a <c>float</c>
-/// expression): whenever <see cref="_liveFloatRegisterCount"/> is nonzero and the callee may use fr
-/// registers, it wraps the call with <c>fpush 0..fpush (n-1)</c> before and <c>fpop (n-1)..fpop 0</c>
-/// after (ascending save, descending restore -- ordinary LIFO stack discipline), retrieving a
-/// <c>float</c> return value out of <c>fr[0]</c> into its own destination register BEFORE the restore
-/// pops run (since <c>fr[0]</c> is always among the registers being restored whenever the destination is
-/// anything other than <c>fr[0]</c> itself).</description></item>
+/// <item><description>A pointer is 2 words, <c>(page, address)</c> -- <see cref="CType.Pointer"/>'s own
+/// <see cref="CType.SizeInWords"/> is 2.</description></item>
+/// <item><description>Globals live on page <see cref="GlobalDataPage"/>, reached through
+/// <c>dlit</c>+<c>rload</c>/<c>rstore</c>. Locals/parameters live in the current frame (page 1,
+/// implicit), reached through <c>ldf</c>/<c>stf rX, offset</c> relative to <c>fp</c>.</description></item>
+/// <item><description>Fastcall parameters: up to 4 scalar (<c>int</c>/<c>char</c>) in <c>r0</c>-<c>r3</c>,
+/// up to 4 wide (pointer/<c>float</c>) in <c>d4</c>-<c>d7</c> -- both spilled into ordinary frame slots
+/// in the prologue. Every other parameter (including every parameter of a non-<c>__fastcall</c>
+/// function) is stack-passed, addressed directly at its own positive frame offset, no spill
+/// needed.</description></item>
+/// <item><description>Return value: 1-word in <c>r0</c>, 2-word (pointer/<c>float</c>) in
+/// <c>d0</c>.</description></item>
+/// <item><description>Expression scratch: <c>int</c>/<c>char</c> in <c>r8</c>-<c>r15</c> (depth-counter
+/// allocated, left operand then right operand then combine in place); pointer/<c>float</c> in
+/// <c>d1</c>-<c>d3</c>, same allocation scheme. <c>d0</c> itself is reserved separately -- shared by the
+/// return value above and <see cref="EmitAddConstantToRegister"/>'s own transient pointer-arithmetic
+/// scratch (CHANGED 2026-10-18, per Stefan directly: "reserve d0 for in-flight pointer arithmetic and
+/// return values, not for parameter passing" -- see <c>claude/cvm-abi.md</c> section 3.4's own update).
+/// That same method only uses the cheap single-double-register (<c>rlit</c>/<c>add</c>/<c>inc</c>/
+/// <c>dec</c>) encoding when the caller can prove the result never leaves the current page; otherwise it
+/// uses the full carry-propagating <c>dlit</c>/<c>dadd</c> encoding instead (CHANGED 2026-10-18, same
+/// day, same person: "rlit and add can only be used if it is guaranteed that the final address does not
+/// cross a page border. if not then dlit and dadd must be used for pointer arithmetic").
+/// Every register is call-volatile; a sub-expression containing a call forces the other operand's value
+/// to be spilled to a scratch frame slot first (see <see cref="ContainsCall"/>).</description></item>
+/// <item><description><c>*</c>/<c>/</c>/<c>%</c> have no hardware opcode (the 16-bit binary ALU row is
+/// <c>or</c>/<c>and</c>/<c>xor</c>/<c>sub</c>/<c>add</c>/<c>mov</c>/<c>packbytes</c> only) and neither
+/// does a general shift -- all five lower to a call to a hand-written runtime library routine
+/// (<c>__mul</c>/<c>__divs</c>/<c>__divu</c>/<c>__mods</c>/<c>__modu</c>/<c>__shl</c>/<c>__shrs</c>/
+/// <c>__shru</c>), exactly the same pattern the previous version already used for
+/// <c>*</c>/<c>/</c>/<c>%</c> (this is a real, pre-existing ISA gap, not new scope). <b>That library
+/// itself still needs rewriting against the new ISA -- out of scope for this file, flagged, not silently
+/// assumed done.</b></description></item>
+/// <item><description>A general two-operand comparison lowers to subtract + a <c>cond</c>/<c>if</c>
+/// sign-test (<c>&lt;0</c>/<c>&lt;=0</c>/<c>&gt;0</c>/<c>&gt;=0</c>/<c>==0</c>/<c>!=0</c>); an unsigned
+/// comparison XORs both operands with <c>0x8000</c> first (the standard bias trick).</description></item>
 /// </list>
-/// </description></item>
-/// <item><description>
-/// <b>Basic <c>struct</c> support (added 2026-09-26), per Stefan's own "add 'struct' to the C language"
-/// instruction.</b> See <see cref="CType.StructOf"/>'s own remarks for the full scope. Unlike
-/// <c>float</c>, a struct needs no new expression-evaluation model at all -- every member this compiler
-/// supports (scalar, pointer, float, array, or a nested struct accessed no further than its own address)
-/// is reached purely through the EXISTING lvalue/address machinery above: a struct local/global/static
-/// already gets exactly <see cref="CType.SizeInWords"/> consecutive slots or data words for free (<see
-/// cref="DeclareLocal"/>/<see cref="EmitGlobal"/> already generalize over any size, not just 1), and
-/// "." / "->" member access (<see cref="CMemberAccessExpr"/>) is just one more address-plus-known-offset
-/// computation feeding the SAME <see cref="CacheIndirectAddress"/>/<see cref="EmitDereferenceLoad"/>/
-/// <see cref="EmitDereferenceStore"/> sequence <c>*ptr</c> and <c>arr[i]</c> already use -- see <see
-/// cref="EmitAddressOfMember"/>. The one part of a struct that DOES still need its own explicit guard is
-/// reading/assigning an entire multi-word struct value as if it were the usual single stack word (<see
-/// cref="EmitAssign"/>/<see cref="EmitAssignForEffect"/>'s own struct checks, and <see
-/// cref="ResolveLvalue"/>'s/<see cref="EmitExpr"/>'s own <see cref="CMemberAccessExpr"/>/<see
-/// cref="CIndexExpr"/> cases). A struct is never passed/returned BY VALUE in a function signature (<see
-/// cref="CParser"/> rejects that at parse time, so <see cref="CCodeGenerator"/> never even sees one
-/// there) -- that is the one struct-by-value scope limit that remains.
-/// </description></item>
-/// <item><description>
-/// <b>Multi-word pointer arithmetic/indexing (added 2026-09-26, the same day, per Stefan's own follow-up
-/// request to lift the struct/<c>float</c> pointer scope limits above).</b> Every pointer/array/index
-/// computation in this class used to assume every element was exactly one word (no scaling
-/// multiplication, ever) -- now <see cref="EmitScaleByElementSize"/>/<see
-/// cref="EmitDescaleByElementSize"/> multiply/divide by the pointee's own <see cref="CType.SizeInWords"/>
-/// via the same hand-written "__mul"/"__divs" runtime routines "*"/"/" already use, wired into <see
-/// cref="EmitAddressOfIndex"/>, <see cref="EmitBinaryOperation"/>'s pointer +/- cases (which is also how
-/// <see cref="EmitIncrementOrDecrement"/> automatically got correctly-scaled <c>p++</c>/<c>p--</c>, with
-/// no changes of its own), and <see cref="TryGetConstantLocalArrayElementSlot"/>'s constant-index fast
-/// path. This is what makes an array of <c>float</c>/<c>struct</c>, a <c>float</c>/array/struct member of
-/// a <c>struct</c>, a pointer to <c>float</c>/<c>struct</c>, and pointer arithmetic/indexing on any of
-/// those all correct rather than just "no longer rejected." The float ABI itself gained a matching <see
-/// cref="CFloatLvalueKind.Indirect"/> lvalue kind (<see cref="CacheFloatIndirectAddress"/>/<see
-/// cref="EmitFloatLoadIndirect"/>/<see cref="EmitFloatStoreIndirect"/>) for a dereferenced <c>float
-/// *</c>/a <c>float</c> array element/a <c>float</c> struct member, and <see cref="LooksLikeFloatExpr"/>
-/// gained a side-effect-free <see cref="TryGetStaticType"/> helper so it (and <see cref="EmitExpr"/>'s own
-/// dereference/index/member-access cases) can recognize these as 'float'-typed BEFORE emitting any code.
-/// <see cref="ComputeFunctionUsesFloatRegisters"/>'s "does this function use fr registers" scan also
-/// needed a safety fix the same day -- see <see cref="ExprUsesFloatDirectly"/>'s own remarks.
-///
-/// <b>Known limitation, discovered while implementing this (not something this pass attempts to fix):</b>
-/// this class's own confirmed rule that "a LOCAL's address is <c>f - offset</c>, DECREASING as the
-/// frame-slot offset increases" (see the <c>pushf</c>/<c>EmitLocalOrParameterAddress</c> remarks above)
-/// means a multi-word LOCAL aggregate's own words do NOT sit at ascending addresses as its slot number
-/// increases, the opposite of every other storage kind (global, heap, a pointer received as a parameter).
-/// <see cref="EmitFloatLoadLocal"/>/<see cref="EmitFloatStoreLocal"/> already special-case this for a
-/// PLAIN <c>float</c> local (storing it HIGH-then-LOW in slot order specifically so its actual memory
-/// order comes out low-then-high), and this pass's own <see cref="EmitAddressOf"/> fix for "&amp;" of a
-/// local <c>float</c> does the matching offset-by-one adjustment -- but <see
-/// cref="TryGetConstantLocalArrayElementSlot"/>'s general formula and <see cref="EmitAddressOfMember"/>'s
-/// offset-add do NOT apply an equivalent correction for a LOCAL array with more than one word per element
-/// or a LOCAL struct with more than one word total. This is consistent with (not a regression from) the
-/// SAME formula's pre-existing behavior for a plain LOCAL array indexed by a NON-constant expression (its
-/// general/runtime address path already composed addresses in the opposite direction from the
-/// constant-index fast path, for any element size, before today) -- a real, apparently long-standing gap
-/// in this compiler's local-frame addressing model, orthogonal to today's struct/float/scaling work and
-/// deliberately NOT investigated or fixed here. It does not affect GLOBAL or heap/parameter-passed
-/// pointers (the realistic case for struct-pointer arithmetic -- e.g. the <c>libc</c> <c>heap.c</c>
-/// free-list allocator that originally motivated <c>struct</c> support manages heap memory, not a local
-/// frame), only a LOCAL array/struct/float variable's own multi-word internal layout.
-/// </description></item>
-/// </list>
-///
-/// <b><c>short</c>/<c>long</c> (added 2026-09-26, the same day, per Stefan verbatim: "support 'short'.
-/// make 'short' equal to 'int'. support 'long'. a 'long' is represented as a 2 word little endian unit.
-/// do not generate code for handling 'long' yet, because that has to be defined first in the CVM.")</b>
-/// <c>short</c> needed NO changes at all here: it is a pure <see cref="CParser"/>-level synonym for
-/// <c>int</c>/<c>unsigned int</c> (see <see cref="CParser"/>'s own remarks) -- by the time an expression's
-/// type reaches this class, it already IS plain <c>int</c>. <c>long</c> is the interesting one: see <see
-/// cref="CType.Long"/>'s own remarks for the full scope, and <see cref="IsUnsupportedWholeValueType"/>'s
-/// own remarks for the shared mechanism. In short (no pun intended): declaring/sizing/addressing a
-/// <c>long</c>, and pointer arithmetic/indexing on <c>long *</c>/<c>long[]</c>, all already worked with NO
-/// changes needed here either (pure address math, already generic over <see cref="CType.SizeInWords"/>
-/// since the multi-word pointer-arithmetic work above) -- what needed guarding was every place that would
-/// otherwise have tried to actually MOVE a <c>long</c> VALUE using this class's uniform "exactly one CVM
-/// word" <see cref="EmitLoad"/>/<see cref="EmitStore"/> machinery (which does not hold for a 2-word type,
-/// per Stefan's own explicit "do not generate code for handling long yet"): <see cref="EmitName"/>, <see
-/// cref="EmitExpr"/>'s dereference/index/member-access cases, <see cref="EmitAssign"/>/<see
-/// cref="EmitAssignForEffect"/>, <see cref="EmitCompoundAssign"/>/<see cref="EmitCompoundAssignForEffect"/>,
-/// <see cref="EmitIncrementOrDecrement"/>/<see cref="EmitIncrementOrDecrementForEffect"/>, a cast TO
-/// <c>long</c> in <see cref="EmitExpr"/>'s <see cref="CCastExpr"/> case, and a global/static <c>long</c>'s
-/// initializer in <see cref="ComputeGlobalInitialWords"/> (an uninitialized one is still correctly zero-
-/// filled -- no sign-extension needed for zero). Auditing <see cref="EmitName"/> and <see
-/// cref="EmitExpr"/>'s dereference case for this ALSO surfaced two genuine PRE-EXISTING gaps in the
-/// already-shipped <c>struct</c> support (neither had a whole-struct-value guard at all, unlike the
-/// CIndexExpr/CMemberAccessExpr cases, which already rejected this) -- both closed the same way, in the
-/// same commit, since they are exactly the same bug class <see cref="IsUnsupportedWholeValueType"/> now
-/// guards against for both types at once. <see cref="CSizeOfExprExpr"/>'s codegen was also changed to
-/// prefer <see cref="TryGetStaticType"/> over actually evaluating its operand where possible -- needed so
-/// <c>sizeof</c> of a <c>long</c>/struct/<c>float</c> variable keeps working (it never needed the
-/// operand's VALUE, only its type), and as a side effect this also fixes a real pre-existing bug where
-/// <c>sizeof</c> of a plain <c>float</c> variable incorrectly reported an error and returned the wrong
-/// size (1 instead of 2), since it always evaluated the operand through the exact same general path
-/// <c>float</c>'s own "cannot be used outside a floating-point expression" guard rejects.
 /// </summary>
 public sealed class CCodeGenerator
 {
-  private enum CVarKind
-  {
-    Local,
-    Parameter,
-    Global,
-  }
+  // ---------------------------------------------------------------------------------------------------
+  // ABI v2 shared constants (claude/cvm-abi.md section 3). GlobalDataSectionName/GlobalDataPage are also
+  // read directly by Ga144.Evb.Ide's own CvmLinker.Link call sites (CDebuggerViewModel.CompileAndLoadCore,
+  // CProjectViewModel's Build path) to build CvmLinkOptions.SectionPages -- this is the ONE place either
+  // value is defined; nothing else should hardcode "DATA" or 2 for this purpose.
+  public const string GlobalDataSectionName = "DATA";
+  public const int GlobalDataPage = 2;
 
-  private sealed record CVarSymbol(CVarKind Kind, int Index, CType Type, string? GlobalLabel = null);
+  /// <summary>
+  /// ADDED 2026-10-17, per Stefan's own ask for a way to find the heap's own start address (see
+  /// <see cref="Ga144.Cvm.Toolchain.CvmLinkOptions.HeapStartSymbolName"/>'s own remarks for the full
+  /// design): the already-mangled name <see cref="Ga144.Cvm.Toolchain.CvmLinker.Link"/> synthesizes a
+  /// 2-word, pointer-shaped marker symbol under, placed immediately after the DATA section's own last
+  /// word. Pre-mangled (leading
+  /// underscore, matching <see cref="MangleExternalSymbol"/>'s own convention for every other global)
+  /// specifically so plain C source can reach it with the ordinary, unmangled name: <c>extern void
+  /// *heap_start;</c> -- the C compiler mangles that reference to "_heap_start" exactly like it would any
+  /// other extern global, which is this constant's own value, so the two always agree without either side
+  /// having to know about the other's naming convention directly. Read by <c>Ga144.Evb.Ide</c>'s own
+  /// <c>CProjectViewModel.Build</c> (alongside <see cref="GlobalDataSectionName"/>/<see cref="GlobalDataPage"/>)
+  /// to build every C project's own <see cref="Ga144.Cvm.Toolchain.CvmLinkOptions"/> -- this is the ONE
+  /// place this name is defined; nothing else should hardcode "_heap_start" for this purpose.
+  /// </summary>
+  public const string HeapStartSymbolName = "_heap_start";
+
+  // Register pools (claude/cvm-abi.md section 3.4). Fastcall parameter counts are CParser's own
+  // MaxFastcallScalarParameters/MaxFastcallWideParameters (enforced there at parse time); this class
+  // reads those constants directly rather than duplicating the numbers, so the two can never drift apart.
+  private const int ScalarParamFirstRegister = 0;      // r0..r{MaxFastcallScalarParameters-1}
+  private const int WideParamFirstDouble = 4;          // d4..d{3+MaxFastcallWideParameters}
+  private const int ScalarReturnRegister = 0;          // r0
+  private const int WideReturnDouble = 0;              // d0
+
+  /// <summary>
+  /// CHANGED 2026-10-18, per Stefan directly ("i suggest reserving 1 register(d0) for inflight pointer
+  /// arithmetic. d0 is also used for return values, but this does not collide with pointer arithmetic.
+  /// so change the ABI to use register d0 (r0,r1) as reserved for pointer arithmetic and return values
+  /// and not for parameter passing"): <c>d0</c> is carved OUT of the general wide scratch pool below (it
+  /// used to be <c>WideScratchFirstDouble</c>, i.e. depth 0 of that pool) and dedicated instead to this
+  /// one narrow, always-transient purpose -- the scratch register <see
+  /// cref="EmitAddConstantToRegister"/> uses to add/subtract a compile-time constant too large for
+  /// repeated <c>inc</c>/<c>dec</c> to a frame/struct-member/array offset. This is safe to share with
+  /// <see cref="WideReturnDouble"/> (also <c>d0</c>) for the same reason the old scheme already shared
+  /// <c>d0</c> between the return value and the FIRST level of the general wide scratch pool: "return
+  /// -value production always happens after scratch use ends for that frame" (claude/cvm-abi.md section
+  /// 3.4) -- in-flight pointer arithmetic is itself just one more kind of scratch use, so the same timing
+  /// argument covers it. <c>d0</c> was already never used for parameter passing (fastcall wide
+  /// parameters have always been <c>d4</c>-<c>d7</c>, see <see cref="WideParamFirstDouble"/>) -- Stefan's
+  /// own "not for parameter passing" is this ABI's own existing rule restated, now made explicit for this
+  /// new reserved purpose too, not a change to where parameters go.
+  /// </summary>
+  private const int PointerArithmeticScratchDouble = WideReturnDouble; // d0 (r0/r1)
+
+  private const int ScalarScratchFirstRegister = 8;    // r8..r15
+  private const int ScalarScratchMaxDepth = 8;
+
+  /// <summary>
+  /// CHANGED 2026-10-18 (see <see cref="PointerArithmeticScratchDouble"/>'s own remarks): was 0
+  /// (<c>d0</c>..<c>d3</c>), now 1 -- <c>d0</c> no longer belongs to this general pool at all, so
+  /// <see cref="WideReg"/> can never return 0 any more, which is exactly what keeps
+  /// <see cref="EmitAddConstantToRegister"/>'s own borrow of <c>d0</c> always collision-free regardless
+  /// of expression nesting depth.
+  /// </summary>
+  private const int WideScratchFirstDouble = 1;        // d1..d3
+
+  /// <summary>CHANGED 2026-10-18: was 4, now 3 -- the pool lost its <c>d0</c> member (now <see cref="PointerArithmeticScratchDouble"/>) without gaining a replacement, so a wide expression's maximum nesting depth is one level shallower than before. See <see cref="PointerArithmeticScratchDouble"/>'s own remarks.</summary>
+  private const int WideScratchMaxDepth = 3;
+
+  // ---------------------------------------------------------------------------------------------------
+  // Symbol tables.
+
+  /// <summary>Where one parameter or local variable's VALUE lives, relative to the current frame.
+  /// <see cref="Offset"/> is meaningful only for <see cref="FrameSlot"/> (signed, relative to <c>fp</c>,
+  /// matching <c>ldf</c>/<c>stf</c>'s own operand directly -- for a multi-word variable this is always
+  /// the LOW word's offset, the more-negative/smaller one; see claude/cvm-abi.md section 3.5/3.6).
+  /// <see cref="Label"/> is meaningful only for <see cref="StaticGlobal"/> (a "static" local compiles as
+  /// an ordinary mangled global, exactly like the previous version of this class did).</summary>
+  private enum CVarStorage { FrameSlot, StaticGlobal }
+
+  private sealed record CVarSymbol(CVarStorage Storage, CType Type, int Offset = 0, string? Label = null);
+
+  /// <summary>One parameter's ABI v2 passing shape, computed purely from its own type/position and
+  /// whether the function is <c>__fastcall</c> -- see <see cref="ComputeParameterSlots"/>. Used
+  /// identically by <see cref="EmitFunction"/>'s own prologue (spill register-passed parameters; address
+  /// stack-passed ones directly) and by <see cref="EmitCall"/>'s own argument marshaling, so caller and
+  /// callee can never disagree about where an argument goes.</summary>
+  private sealed record CParamSlot(CType Type, bool IsRegister, bool IsWide, int RegisterIndex, int StackOffset);
 
   private sealed class CFunctionSignature
   {
+    public required string Name { get; init; }
     public required CType ReturnType { get; init; }
-
     public required IReadOnlyList<CType> ParameterTypes { get; init; }
-
-    /// <summary>ABI v2: one entry per parameter, parallel to <see cref="ParameterTypes"/> -- the
-    /// address-register index (0-3) a register-eligible pointer parameter is passed in, or null for
-    /// every other parameter (which keeps ABI v1's stack convention). See
-    /// <see cref="ComputeParameterRegisterSlots"/> and this class's own ABI doc comment.</summary>
-    public required IReadOnlyList<int?> ParameterRegisterSlots { get; init; }
-
-    /// <summary>Float ABI (added 2026-09-26): one entry per parameter, parallel to
-    /// <see cref="ParameterTypes"/> -- the fr-register index (0-7) a <c>float</c> parameter of a
-    /// <c>__fastcall</c> function is passed in, or null for every other parameter (a non-<c>float</c>
-    /// parameter, or a <c>float</c> parameter of a NON-<c>__fastcall</c> function, which is always
-    /// stack-passed instead -- Stefan verbatim: "for normal functions float parameter are put on the
-    /// stack"). A SEPARATE, independent count from <see cref="ParameterRegisterSlots"/>'s own pointer
-    /// count -- node 305's floating-point register file is a completely separate 8-register file from
-    /// node 306's address registers. See <see cref="ComputeParameterFloatRegisterSlots"/> and this
-    /// class's own doc comment.</summary>
-    public required IReadOnlyList<int?> ParameterFloatRegisterSlots { get; init; }
-
-    public bool IsDefined { get; set; }
-
-    /// <summary><c>__optimize</c> (added 2026-09-27) -- true only for a function declared
-    /// <c>__optimize</c> (see <see cref="CFunctionDecl.IsOptimize"/>'s own remarks). <see
-    /// cref="CollectSignatures"/> rejects, at signature-collection time, any <c>__optimize</c> declaration
-    /// whose name+signature this compiler does not actually recognize (today, only
-    /// <c>fabsf(float) -&gt; float</c>) -- so once collection has finished without error, every
-    /// <c>CFunctionSignature</c> with <c>IsOptimize</c> true is guaranteed to be one of the recognized
-    /// substitutions consulted from <see cref="TryGetFloatBuiltin"/> (register path) and <see
-    /// cref="TryEmitOptimizedFabsAssignment"/> (narrow in-place path).</summary>
-    public bool IsOptimize { get; init; }
+    public required bool IsFastcall { get; init; }
+    public required bool IsDefinedHere { get; init; }
+    public required bool IsOptimize { get; init; }
   }
 
   private sealed class CGlobalSymbol
   {
     public required CType Type { get; init; }
-
     public required string Label { get; init; }
-
-    public required bool IsStatic { get; init; }
   }
 
-  private enum CLvalueKind
-  {
-    Local,
-    Parameter,
-    Global,
-    Indirect,
-  }
-
-  /// <summary>
-  /// The resolved location of an assignable expression. Local/Parameter carry no stack side-effect --
-  /// <see cref="Index"/> is just the frame offset for <see cref="EmitLoad"/>/<see cref="EmitStore"/> to
-  /// use directly (<c>ldl</c>/<c>stl</c>/<c>ldp</c>/<c>stp</c> take the offset right in the opcode
-  /// word). Indirect (<c>*ptr</c> or a non-constant-indexed array element) means <see
-  /// cref="ResolveLvalue"/> has already computed the address ONCE and cached it into the local slot
-  /// number <see cref="Index"/> refers to (via <see cref="CacheIndirectAddress"/>) -- NOT left sitting
-  /// only in the CVM's "r" register, which has no save/restore and does not survive arbitrary code
-  /// running in between (see this class's own doc comment). <see cref="EmitLoad"/>/<see
-  /// cref="EmitStore"/> each reload that cached address and re-run the full node-306 dereference
-  /// sequence (<see cref="EmitDereferenceLoad"/>/<see cref="EmitDereferenceStore"/>) immediately before
-  /// using it, so they stay correct no matter what runs between resolving the lvalue and using it.
-  ///
-  /// Global (added 2026-09-10) is a plain module-scope or <c>static</c> global's own scalar/pointer
-  /// storage, addressed directly by its own compile-time-constant assembly <see cref="Label"/> via
-  /// <c>gld</c>/<c>gst</c> (see <see cref="EmitGlobalFetch"/>/<see cref="EmitGlobalAssign"/>'s own
-  /// remarks) -- unlike Indirect, there is nothing to cache into a local slot at all, because the
-  /// label itself (not a runtime-computed address) is already a fixed, permanently-valid reference the
-  /// assembler/linker resolve once at link time; <see cref="EmitLoad"/>/<see cref="EmitStore"/> just
-  /// re-emit <c>gld</c>/<c>gst</c> against that same label text every time.
-  /// </summary>
-  private sealed record CLvalue(CLvalueKind Kind, int Index, CType Type, string? Label = null);
-
+  /// <summary>Per-function codegen state, live only while <see cref="EmitFunction"/> is walking one
+  /// function's body.</summary>
   private sealed class CFunctionContext
   {
     public required string Name { get; init; }
-
     public required CType ReturnType { get; init; }
-
-    public required string EpilogueLabel { get; init; }
-
-    public int NextLocalSlot { get; set; }
-
-    public readonly List<Dictionary<string, CVarSymbol>> Scopes = [];
-
-    public readonly Stack<string> BreakLabels = new();
-
-    public readonly Stack<string> ContinueLabels = new();
+    public required bool IsFastcall { get; init; }
+    public List<Dictionary<string, CVarSymbol>> Scopes { get; } = [];
+    public int NextFrameOffset { get; set; } = -1; // next free (most-negative) frame offset to hand out.
+    public List<string> BodyLines { get; } = []; // buffered separately from _codeLines -- see EmitFunction.
+    public List<(string BreakLabel, string? ContinueLabel)> LoopLabels { get; } = [];
   }
 
   private readonly Dictionary<string, CFunctionSignature> _functions = new(StringComparer.Ordinal);
@@ -506,59 +192,11 @@ public sealed class CCodeGenerator
   private CFunctionContext? _currentFunction;
   private Dictionary<CStmt, string>? _switchLabelsByNode;
 
-  /// <summary>Float ABI (added 2026-09-26): node 305's own fr-register count -- see this class's own doc
-  /// comment's "Float ABI" section.</summary>
-  private const int FloatRegisterCount = 8;
-
-  /// <summary>Float ABI: DirectlyOrIndirectlyUsesFloatRegisters per DEFINED function name, computed once
-  /// by <see cref="ComputeFunctionUsesFloatRegisters"/> right after <see cref="CollectSignatures"/> runs.
-  /// Consulted by <see cref="EmitCall"/> via <see cref="CalleeUsesFloatRegisters"/> (which treats a name
-  /// missing here -- an external/only-declared function -- as "true," conservatively, since its body is
-  /// not visible to this translation unit).</summary>
-  private readonly Dictionary<string, bool> _functionUsesFr = new(StringComparer.Ordinal);
-
-  /// <summary>Float ABI: how many of node 305's fr registers (0.._liveFloatRegisterCount-1) currently
-  /// hold a value some ENCLOSING, still-in-progress evaluation needs to survive -- see
-  /// <see cref="EmitFloatExprInto"/>'s own remarks. Zero outside of any <c>float</c>-expression
-  /// evaluation or <c>float</c>-argument marshalling. <see cref="EmitCall"/> reads this to decide how
-  /// many registers a call needs to save/restore around itself.</summary>
-  private int _liveFloatRegisterCount;
-
-  /// <summary>Optimizer step 2 of 2, added 2026-09-10 -- see <see cref="CvmPeepholeOptimizer"/>'s own
-  /// remarks. Off by default: unlike <see cref="CConstantFolder"/> (pure AST arithmetic, the same
-  /// already-used evaluator as this class's own <see cref="TryEvaluateConstantLong"/>), two of this
-  /// pass's rules lean on an assumption this codebase has flagged but not yet confirmed against real
-  /// hardware (see <see cref="EmitFunction"/>'s own ABI v2 prologue remarks on "stl"/"sta" and register
-  /// r) -- so it stays opt-in per project (<c>Ga144.Evb.Ide.Models.CProjectMetadata.EnablePeepholeOptimization</c>)
-  /// until Stefan has had a chance to verify it.</summary>
   private readonly bool _enablePeepholeOptimization;
-
-  /// <summary>
-  /// Added 2026-09-26, for the C Debugger's own "disassembled code mixed with the corresponding C code
-  /// as comments" runtime display (see <see cref="SourceCommentLabels"/>'s own remarks). The top-level
-  /// file this generator is compiling, and that file's own raw source text split into lines -- both
-  /// null for a caller that doesn't want source-comment labels at all (every pre-existing call site,
-  /// via <see cref="CCodeGenerator(bool)"/>'s single-argument overload, still compiles and behaves
-  /// exactly as before this feature existed). Only a statement whose OWN <see cref="CSourceLocation.FileName"/>
-  /// matches <see cref="_sourceFileName"/> exactly gets a label -- one expanded from a macro defined in
-  /// an `#include`d header, for instance, has a DIFFERENT FileName, and deliberately gets no label at
-  /// all rather than one pointing at the wrong file's line N (this compiler has no multi-file source
-  /// map to draw on here, so "skip it" is the only correct choice, not "guess").
-  /// </summary>
   private readonly string? _sourceFileName;
   private readonly IReadOnlyList<string>? _sourceLines;
 
-  /// <summary>Every synthetic per-statement label this generator emitted (see <see cref="EmitSourceLineComment"/>),
-  /// mapped to that statement's own trimmed source line text -- e.g. "__srcline_3" -&gt; "a = a + 1;".
-  /// Empty when this generator was constructed with no <see cref="_sourceLines"/> to draw from. Each
-  /// label is a plain, NEVER-exported (<see cref="EmitLabel"/>, not ".export") local label -- assembled
-  /// with <c>Ga144.Cvm.Toolchain.CvmSymbolBinding.Local</c> binding, so it costs nothing at runtime (a
-  /// label consumes no word of its own) and is deliberately NOT required to be globally unique across a
-  /// whole link (see <c>Ga144.Cvm.Toolchain.CvmImageSymbol.DefiningObjectName</c>'s own remarks for how
-  /// a consumer like the C Debugger resolves one of these back to a final address without ambiguity once
-  /// several objects, each with their own "__srcline_0", are linked together).</summary>
   public IReadOnlyDictionary<string, string> SourceCommentLabels => _sourceCommentLabels;
-
   private readonly Dictionary<string, string> _sourceCommentLabels = new(StringComparer.Ordinal);
   private int _sourceCommentCounter;
 
@@ -569,43 +207,41 @@ public sealed class CCodeGenerator
     _sourceLines = sourceLines;
   }
 
-  /// <summary>
-  /// Emits a synthetic, never-exported label (recorded in <see cref="_sourceCommentLabels"/>) right
-  /// before a statement's own generated code, naming the exact C source line it came from -- purely
-  /// additive metadata: the label itself is zero words wide, so a compile with nowhere to feed the
-  /// result (<see cref="_sourceLines"/> null, or a location outside <see cref="_sourceFileName"/>) can
-  /// just skip it with no effect on the generated program either way. Called once per statement from
-  /// <see cref="EmitStatement"/>'s own top-level dispatch -- never for a <see cref="CCompoundStmt"/>
-  /// itself (its own "location" is just its opening brace, not a statement with code of its own) or a
-  /// <see cref="CEmptyStmt"/> (a bare ";", nothing to label).
-  /// </summary>
+  // ---------------------------------------------------------------------------------------------------
+  // Small shared helpers.
+
+  private void Error(CSourceLocation location, string message)
+  {
+    _diagnostics.Add($"{_sourceFileName ?? "<source>"}:{location.Line}:{location.Column}: {message}");
+    _hasError = true;
+  }
+
+  private string NewLabel(string hint) => $"__L{_labelCounter++}_{hint}";
+
+  private static string MangleExternalSymbol(string name) => "_" + name;
+
+  private void EmitCode(string line) => _currentFunction!.BodyLines.Add("  " + line);
+
+  private void EmitLabel(string label) => _currentFunction!.BodyLines.Add($"{label}:");
+
+  /// <summary>One source line's worth of generated code gets a local label immediately before it, keyed
+  /// by its 0-based occurrence index -- the same per-statement source-comment-label mechanism the
+  /// previous version of this class used, unchanged mechanics, so the C Debugger's own address-to-
+  /// source-line mapping (<see cref="SourceCommentLabels"/>) keeps working exactly as before.</summary>
   private void EmitSourceLineComment(CSourceLocation location)
   {
-    if (_sourceLines is null || !string.Equals(location.FileName, _sourceFileName, StringComparison.Ordinal))
-    {
-      return;
-    }
-
-    int lineIndex = location.Line - 1;
-    if (lineIndex < 0 || lineIndex >= _sourceLines.Count)
-    {
-      return;
-    }
-
-    string text = _sourceLines[lineIndex].Trim();
-    if (text.Length == 0)
+    if (_sourceLines is null || location.Line < 1 || location.Line > _sourceLines.Count)
     {
       return;
     }
 
     string label = $"__srcline_{_sourceCommentCounter++}";
     EmitLabel(label);
+    string text = _sourceLines[location.Line - 1].Trim();
+    EmitCode($"; {location.Line}: {text}");
     _sourceCommentLabels[label] = text;
   }
 
-  /// <summary>Generates CVM assembly text for <paramref name="unit"/>. Returns null (with at least one
-  /// diagnostic) if any error was reported anywhere during generation; warnings alone still return the
-  /// generated text.</summary>
   public (string? Assembly, IReadOnlyList<string> Diagnostics) Generate(CTranslationUnit unit)
   {
     CollectSignatures(unit);
@@ -630,567 +266,179 @@ public sealed class CCodeGenerator
       return (null, _diagnostics);
     }
 
-    var text = new StringBuilder();
-    text.AppendLine("; Generated by the GA144 C compiler -- do not edit by hand.");
+    List<string> finalCodeLines = _enablePeepholeOptimization ? CvmPeepholeOptimizer.Optimize(_codeLines) : _codeLines;
 
+    var output = new StringBuilder();
     foreach (string import in _imports)
     {
-      text.AppendLine($".import {import}");
+      output.AppendLine($".import {import}");
     }
 
-    text.AppendLine(".section DATA");
-    foreach (string line in _dataLines)
+    if (_imports.Count > 0)
     {
-      text.AppendLine(line);
+      output.AppendLine();
     }
 
-    // Optimizer step 2 of 2 (see CvmPeepholeOptimizer's own remarks) -- runs over the already-fully-
-    // emitted CODE lines, after every "enter N" placeholder above has already been patched to its real
-    // value (EmitFunction patches _codeLines by INDEX while a function's body is still being emitted;
-    // by the time Generate reaches this point every function is done, so there is no patch left for this
-    // pass to disturb). DATA-section lines are never touched -- there is nothing peephole-optimizable in
-    // a plain ".word" declaration.
-    IReadOnlyList<string> codeLines = _enablePeepholeOptimization ? CvmPeepholeOptimizer.Optimize(_codeLines) : _codeLines;
-
-    text.AppendLine(".section CODE");
-    foreach (string line in codeLines)
+    output.AppendLine(".section CODE");
+    foreach (string line in finalCodeLines)
     {
-      text.AppendLine(line);
+      output.AppendLine(line);
     }
 
-    return (text.ToString(), _diagnostics);
+    if (_dataLines.Count > 0)
+    {
+      output.AppendLine();
+      output.AppendLine($".section {GlobalDataSectionName}");
+      foreach (string line in _dataLines)
+      {
+        output.AppendLine(line);
+      }
+    }
+
+    return (output.ToString(), _diagnostics);
   }
 
-  private void Error(CSourceLocation location, string message)
-  {
-    _diagnostics.Add(location.FormatDiagnostic("error", message));
-    _hasError = true;
-  }
-
-  private string NewLabel(string hint) => $"__L{_labelCounter++}_{hint}";
-
-  /// <summary>
-  /// The CVM C ABI's external-symbol naming convention (per Stefan, 2026-09-07: "an external symbol
-  /// should prepend an addition '_' character to the label"): every assembly-level symbol that IS
-  /// directly a user-written C identifier -- a function's own name, or a global variable's own name --
-  /// gets one additional leading underscore prepended on top of whatever the person wrote. A C
-  /// function named <c>start</c> becomes the CVM label/export <c>_start</c>; a C function literally
-  /// named <c>_start</c> becomes <c>__start</c>. This mirrors the classic C toolchain convention of
-  /// prefixing every C-linkage symbol, so a compiled C name can never collide with a hand-written CVM
-  /// assembly label that doesn't carry the prefix.
-  ///
-  /// Applied at every point a function's or global's OWN name becomes literal assembly text: its own
-  /// label/".export" line, a ".import" for one only declared (not defined) in this file, a "call"
-  /// target, and a "pushlit" reference to a global's address.
-  ///
-  /// <b>Deliberately NOT applied to:</b>
-  /// <list type="bullet">
-  /// <item><description>this compiler's own internal, already-mangled labels -- loop/branch labels
-  /// (<see cref="NewLabel"/>), the string-literal pool's "__strN" (<see cref="InternStringLiteral"/>),
-  /// a "static" local's "__static_&lt;function&gt;_&lt;name&gt;_&lt;n&gt;" (see
-  /// <see cref="DeclareLocal"/>) -- none of which is a direct re-emission of a user identifier, so none
-  /// needs (or gets) this prefix;</description></item>
-  /// <item><description>the hand-written CVM runtime library routine names ("__mul"/"__divs"/
-  /// "__divu"/"__mods"/"__modu", see <see cref="EmitLibraryBinary"/>) -- these are this compiler's own
-  /// fixed, reserved call targets, not something the person wrote in their C source, so they are
-  /// emitted exactly as chosen. <b>Flagged:</b> Stefan has not said whether these should ALSO gain an
-  /// extra leading underscore (i.e. call sites emitting "___mul" to match a "cvm" library that defines
-  /// it under that name) -- left unprefixed until confirmed, since changing this later is a one-line
-  /// fix localized to <see cref="EmitLibraryBinary"/>'s three call sites.</description></item>
-  /// </list>
-  /// </summary>
-  private static string MangleExternalSymbol(string name) => "_" + name;
-
-  private void EmitCode(string line) => _codeLines.Add("  " + line);
-
-  private void EmitLabel(string label) => _codeLines.Add($"{label}:");
-
-  // ---------------------------------------------------------------------------------------------
-  // Signature collection -- a first pass over the whole translation unit so a function or global may
-  // be referenced before its own declaration appears (ordinary C forward-reference rules), without
-  // this compiler needing a separate header/prototype mechanism.
-  // ---------------------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------------------------
+  // Signature collection (two passes over the whole translation unit happen before any code is emitted,
+  // so a function may call another one declared later in the same file, exactly like the previous
+  // version of this class allowed).
 
   private void CollectSignatures(CTranslationUnit unit)
   {
-    foreach (CFunctionDecl function in unit.Functions)
-    {
-      if (_functions.TryGetValue(function.Name, out CFunctionSignature? existing))
-      {
-        if (existing.IsDefined && function.Body is not null)
-        {
-          Error(function.Location, $"function \"{function.Name}\" is already defined");
-          continue;
-        }
-
-        if (function.Body is not null)
-        {
-          existing.IsDefined = true;
-        }
-
-        continue;
-      }
-
-      // __optimize (added 2026-09-27; recognized name changed from "fabs" to "fabsf" the same day, per
-      // Stefan's own follow-up -- see IsRecognizedOptimizeSignature's own remarks): a declaration this
-      // compiler does not actually recognize by name+signature is a compile error here, not a
-      // silently-ignored keyword -- see CFunctionSignature.IsOptimize's own remarks. Checked once, at
-      // collection time, rather than at every call site, since the signature (not any particular call) is
-      // what makes a substitution possible at all. Only "float fabsf(float)" is recognized today; a future
-      // addition (per Stefan's own "later we will add more functions in a float-library" scope note)
-      // extends this check, not the substitution logic itself.
-      if (function.IsOptimize && !IsRecognizedOptimizeSignature(function))
-      {
-        Error(function.Location, $"\"{function.Name}\" is declared '__optimize', but this compiler does not recognize that name/signature as a compiler-substitutable function -- only \"float fabsf(float)\" is recognized today");
-      }
-
-      IReadOnlyList<CType> parameterTypes = function.Parameters.Select(p => p.Type).ToList();
-      _functions[function.Name] = new CFunctionSignature
-      {
-        ReturnType = function.ReturnType,
-        ParameterTypes = parameterTypes,
-        ParameterRegisterSlots = ComputeParameterRegisterSlots(parameterTypes),
-        ParameterFloatRegisterSlots = ComputeParameterFloatRegisterSlots(parameterTypes, function.IsFastcall),
-        IsDefined = function.Body is not null,
-        IsOptimize = function.IsOptimize,
-      };
-    }
-
     foreach (CGlobalVarDecl global in unit.Globals)
     {
-      if (_globals.ContainsKey(global.Name))
+      if (global.Type.IsFunction)
       {
-        Error(global.Location, $"global \"{global.Name}\" is already declared");
+        Error(global.Location, $"\"{global.Name}\" cannot be declared as a function type -- declare it as a function instead");
         continue;
       }
 
-      _globals[global.Name] = new CGlobalSymbol { Type = global.Type, Label = global.Name, IsStatic = global.IsStatic };
+      _globals[global.Name] = new CGlobalSymbol { Type = global.Type, Label = MangleExternalSymbol(global.Name) };
     }
 
-    // Float ABI (added 2026-09-26): a whole-translation-unit fixed-point pass over every DEFINED
-    // function's own body, computing which functions use node 305's fr registers -- directly (a float
-    // parameter/return/local/literal/expression of their own) or indirectly (calling, however deeply
-    // nested, a function that does). See ComputeFunctionUsesFloatRegisters' own remarks; this MUST run
-    // after every function's CFunctionSignature above is populated (a call site needs ParameterTypes to
-    // even recognize a float argument) but before any function body is compiled (EmitCall consults the
-    // result for every call it emits, including a call to a function defined LATER in this file).
-    ComputeFunctionUsesFloatRegisters(unit);
+    foreach (CFunctionDecl function in unit.Functions)
+    {
+      if (_functions.TryGetValue(function.Name, out CFunctionSignature? existing) && existing.IsDefinedHere && function.Body is not null)
+      {
+        Error(function.Location, $"\"{function.Name}\" is already defined");
+        continue;
+      }
+
+      if (function.IsOptimize && !IsRecognizedOptimizeSignature(function))
+      {
+        Error(function.Location, $"\"__optimize\" function \"{function.Name}\" is not one this compiler recognizes as a builtin (recognized: \"float fabsf(float)\", \"float fminf(float, float)\", \"float fmaxf(float, float)\")");
+      }
+
+      _functions[function.Name] = new CFunctionSignature
+      {
+        Name = function.Name,
+        ReturnType = function.ReturnType,
+        ParameterTypes = function.Parameters.Select(p => p.Type).ToList(),
+        IsFastcall = function.IsFastcall,
+        IsDefinedHere = function.Body is not null,
+        IsOptimize = function.IsOptimize,
+      };
+
+      if (function.Body is null && !function.IsOptimize)
+      {
+        _imports.Add(function.Name);
+      }
+    }
   }
 
-  /// <summary><c>__optimize</c> (added 2026-09-27): whether <paramref name="function"/>'s own declared
-  /// name+signature is one this compiler actually knows how to substitute. Today this is a single,
-  /// hardcoded case -- <c>float fabsf(float)</c> -- rather than a table, since it is the only substitution
-  /// Stefan has asked for so far; a future one (per Stefan's own "later we will add more functions in a
-  /// float-library" scope note) adds another explicit case here alongside <see
-  /// cref="OptimizeFloatRegisterMnemonics"/>'s own table entry and <see
-  /// cref="TryEmitOptimizedFabsAssignment"/>'s own narrow-path logic, rather than trying to infer a
-  /// substitution generically from an arbitrary signature.
-  ///
-  /// <b>RENAMED 2026-09-27</b> (later the same day), per Stefan's own direct follow-up: the recognized
-  /// name changed from <c>fabs</c> to <c>fabsf</c>, matching the standard C <c>&lt;math.h&gt;</c>
-  /// float-suffixed convention <see cref="FloatBuiltins"/>'s own <c>fabsf</c>/<c>fminf</c>/<c>fmaxf</c>
-  /// entries already use -- see <see cref="OptimizeFloatRegisterMnemonics"/>'s own remarks for the naming
-  /// overlap this creates with that unconditional, no-declaration-needed built-in, and why it is harmless
-  /// rather than a collision to resolve.</summary>
   private static bool IsRecognizedOptimizeSignature(CFunctionDecl function) =>
-      function.Name == "fabsf" &&
-      function.ReturnType.IsFloat &&
-      function.Parameters.Count == 1 &&
-      function.Parameters[0].Type.IsFloat;
-
-  /// <summary>How many of a function's own pointer-typed parameters get an address register (ABI v2) --
-  /// node 306 has exactly four (see <see cref="CvmInstructionSet"/>'s own <c>ldar</c>/<c>star</c>/
-  /// <c>inca</c>/<c>deca</c>/<c>lda</c>/<c>sta</c> remarks).</summary>
-  private const int MaxAddressRegisterParameters = 4;
+      function.Parameters.Count switch
+      {
+        1 => function.Name == "fabsf" && function.ReturnType.IsFloat && function.Parameters[0].Type.IsFloat,
+        2 => (function.Name == "fminf" || function.Name == "fmaxf") && function.ReturnType.IsFloat
+            && function.Parameters[0].Type.IsFloat && function.Parameters[1].Type.IsFloat,
+        _ => false,
+      };
 
   /// <summary>
-  /// ABI v2: among <paramref name="parameterTypes"/>, in order, assigns the first
-  /// <see cref="MaxAddressRegisterParameters"/> POINTER-typed ones an address-register index (0, 1, 2,
-  /// 3, in the order their own pointer encountered) -- every other parameter (a later pointer, or any
-  /// non-pointer parameter, wherever it falls) gets null, keeping ABI v1's stack convention. Computed
-  /// once per signature, from parameter TYPES alone, so a call site can rely on it even for a function
-  /// only declared (not yet defined) -- see this class's own ABI doc comment.
+  /// The ABI v2 parameter-passing shape for every parameter of a function with these parameter types,
+  /// given whether it is <c>__fastcall</c> (claude/cvm-abi.md section 3.4). A plain (non-<c>__fastcall</c>)
+  /// function passes every parameter on the stack, in declaration order. A <c>__fastcall</c> function
+  /// passes every scalar (<c>int</c>/<c>char</c>, <c>SizeInWords</c> 1) parameter in <c>r0</c>..<c>r3</c>
+  /// (declaration order among scalar parameters only) and every wide (pointer/<c>float</c>) parameter in
+  /// <c>d4</c>..<c>d7</c> (declaration order among wide parameters only) -- <see cref="CParser"/>'s own
+  /// parse-time check already guarantees there are at most <see cref="CParser.MaxFastcallScalarParameters"/>
+  /// of the former and <see cref="CParser.MaxFastcallWideParameters"/> of the latter, so this method never
+  /// needs to itself reject an overflow into the stack for those two categories. A <c>long</c>/struct
+  /// parameter (<c>SizeInWords</c> 2, neither pointer nor <c>float</c>) is never register-eligible under
+  /// this ABI at all, so it always falls to the stack, renumbered to skip whichever parameters (of either
+  /// kind) went to a register -- exactly the old ABI's own "by register" renumbering rule, just against
+  /// the new register pools.
   /// </summary>
-  private static IReadOnlyList<int?> ComputeParameterRegisterSlots(IReadOnlyList<CType> parameterTypes)
+  private static IReadOnlyList<CParamSlot> ComputeParameterSlots(IReadOnlyList<CType> parameterTypes, bool isFastcall)
   {
-    var slots = new int?[parameterTypes.Count];
-    int pointerCount = 0;
+    var slots = new CParamSlot[parameterTypes.Count];
+    int nextScalarRegister = ScalarParamFirstRegister;
+    int nextWideDouble = WideParamFirstDouble;
+    int nextStackOffset = 2; // offset +2 = the first stack-passed parameter, closest to fp -- see claude/cvm-abi.md section 3.5.
+
     for (int i = 0; i < parameterTypes.Count; i++)
     {
-      if (!parameterTypes[i].IsPointer)
+      CType type = parameterTypes[i];
+      bool isWideEligible = type.IsPointer || type.IsFloat;
+      bool isScalarEligible = !isWideEligible && type.SizeInWords <= 1;
+
+      if (isFastcall && isScalarEligible && nextScalarRegister < ScalarParamFirstRegister + CParser.MaxFastcallScalarParameters)
       {
-        continue;
+        slots[i] = new CParamSlot(type, IsRegister: true, IsWide: false, RegisterIndex: nextScalarRegister, StackOffset: 0);
+        nextScalarRegister++;
       }
-
-      if (pointerCount < MaxAddressRegisterParameters)
+      else if (isFastcall && isWideEligible && nextWideDouble < WideParamFirstDouble + CParser.MaxFastcallWideParameters)
       {
-        slots[i] = pointerCount;
+        slots[i] = new CParamSlot(type, IsRegister: true, IsWide: true, RegisterIndex: nextWideDouble, StackOffset: 0);
+        nextWideDouble++;
       }
-
-      pointerCount++;
-    }
-
-    return slots;
-  }
-
-  /// <summary>
-  /// Float ABI (added 2026-09-26): among <paramref name="parameterTypes"/>, in order, assigns EVERY
-  /// <c>float</c>-typed one an fr-register index (0, 1, 2, ... in the order its own <c>float</c>
-  /// parameter is encountered) -- but ONLY when <paramref name="isFastcall"/> is true. Per Stefan
-  /// verbatim: "for fastcall functions the parameter are passed by register fr[0] for the first float
-  /// parameter, fr[1] for the second parameter, ... for normal functions float parameter are put on the
-  /// stack" -- so a NON-<c>__fastcall</c> function gets an all-null result here regardless of how many
-  /// <c>float</c> parameters it declares (every one of them is stack-passed, two words each, see
-  /// <see cref="EmitFunction"/>'s own stack-parameter-offset accounting). <see cref="CParser"/> already
-  /// rejects, at parse time, a <c>__fastcall</c> function declaring more than
-  /// <c>MaxFastcallFloatParameters</c> (8, node 305's own register count) <c>float</c> parameters, so this
-  /// method never needs to reject an overflow itself.</summary>
-  private static IReadOnlyList<int?> ComputeParameterFloatRegisterSlots(IReadOnlyList<CType> parameterTypes, bool isFastcall)
-  {
-    var slots = new int?[parameterTypes.Count];
-    if (!isFastcall)
-    {
-      return slots;
-    }
-
-    int floatCount = 0;
-    for (int i = 0; i < parameterTypes.Count; i++)
-    {
-      if (parameterTypes[i].IsFloat)
+      else
       {
-        slots[i] = floatCount;
-        floatCount++;
+        int size = Math.Max(type.SizeInWords, 1);
+        slots[i] = new CParamSlot(type, IsRegister: false, IsWide: false, RegisterIndex: 0, StackOffset: nextStackOffset);
+        nextStackOffset += size;
       }
     }
 
     return slots;
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Float ABI: whole-translation-unit "does this function use fr registers, directly or indirectly"
-  // analysis -- see this class's own doc comment's "Float ABI" section, "Caller-save/restore" bullet.
-  // ---------------------------------------------------------------------------------------------
-
-  private void ComputeFunctionUsesFloatRegisters(CTranslationUnit unit)
-  {
-    List<CFunctionDecl> defined = unit.Functions.Where(f => f.Body is not null).ToList();
-
-    foreach (CFunctionDecl function in defined)
-    {
-      _functionUsesFr[function.Name] = function.ReturnType.IsFloat
-          || function.Parameters.Any(p => p.Type.IsFloat)
-          || StatementUsesFloatDirectly(function.Body!);
-    }
-
-    // Fixed-point iteration over the (possibly recursive/mutually-recursive) call graph: a function
-    // becomes "uses fr registers" as soon as ANY call it makes (at any nesting depth) is to a function
-    // that does -- including a function not defined in this file at all, treated conservatively as "may
-    // use fr registers" since its body isn't visible here. Bounded: at most defined.Count passes can
-    // ever flip a false to true.
-    bool changed = true;
-    while (changed)
-    {
-      changed = false;
-      foreach (CFunctionDecl function in defined)
-      {
-        if (_functionUsesFr[function.Name])
-        {
-          continue;
-        }
-
-        if (StatementCallsFloatUsingFunction(function.Body!))
-        {
-          _functionUsesFr[function.Name] = true;
-          changed = true;
-        }
-      }
-    }
-  }
-
-  /// <summary>Float ABI: consulted by <see cref="EmitCall"/> for every call site -- a callee not defined
-  /// in this translation unit (only declared, or genuinely external) is conservatively assumed to
-  /// possibly use fr registers, since this compiler cannot see its body.</summary>
-  private bool CalleeUsesFloatRegisters(string calleeName) => !_functionUsesFr.TryGetValue(calleeName, out bool uses) || uses;
-
-  /// <summary>Float ABI: true if <paramref name="stmt"/> (a function's own body, not descending into a
-  /// nested function -- there are none in C) declares a <c>float</c> local anywhere, or contains a
-  /// <see cref="CFloatLiteralExpr"/> anywhere in any expression. Originally (2026-09-26) deliberately did
-  /// NOT need full symbol resolution, on the reasoning that referencing an already-<c>float</c>-typed
-  /// global or parameter always flowed through a <c>float</c> local, literal, or (already separately
-  /// checked by the caller) this function's own parameter/return type -- true for every program "basic"
-  /// <c>float</c> support could compile AT THE TIME, since no pointer/array of <c>float</c> existed yet.
-  /// <b>That stopped being true the same day, once multi-word pointer arithmetic/indexing legalized
-  /// <c>float *</c>/an array or struct member of <c>float</c></b>: <c>void setpx(float *fp) { *fp =
-  /// 3.14f; }</c> is a genuine 'float'-register-using function (its body's OWN 'float' literal still gets
-  /// caught, but not every such function needs one -- e.g. "void copy(float *dst, float *src) { *dst =
-  /// *src; }" has no literal at all) whose SIGNATURE doesn't say so either (its parameters are `float *`,
-  /// not `float` -- <c>function.Parameters.Any(p =&gt; p.Type.IsFloat)</c> in <see
-  /// cref="ComputeFunctionUsesFloatRegisters"/> is false). Missing this would be a genuine SAFETY bug, not
-  /// just a missed optimization: <see cref="EmitCall"/> would then skip a save/restore a caller actually
-  /// needed, silently corrupting live float register state across the call. See <see
-  /// cref="ExprUsesFloatDirectly"/>'s own remarks for the (deliberately conservative, not precise) fix.
-  /// </summary>
-  private static bool StatementUsesFloatDirectly(CStmt stmt)
-  {
-    switch (stmt)
-    {
-      case CCompoundStmt compound:
-        return compound.Statements.Any(StatementUsesFloatDirectly);
-      case CLocalVarDecl localDecl:
-        return localDecl.Type.IsFloat || (localDecl.Initializer is not null && ExprUsesFloatDirectly(localDecl.Initializer));
-      case CExprStmt exprStmt:
-        return ExprUsesFloatDirectly(exprStmt.Expression);
-      case CIfStmt ifStmt:
-        return ExprUsesFloatDirectly(ifStmt.Condition) || StatementUsesFloatDirectly(ifStmt.Then) || (ifStmt.Else is not null && StatementUsesFloatDirectly(ifStmt.Else));
-      case CWhileStmt whileStmt:
-        return ExprUsesFloatDirectly(whileStmt.Condition) || StatementUsesFloatDirectly(whileStmt.Body);
-      case CDoWhileStmt doWhileStmt:
-        return StatementUsesFloatDirectly(doWhileStmt.Body) || ExprUsesFloatDirectly(doWhileStmt.Condition);
-      case CForStmt forStmt:
-        return (forStmt.Init is not null && StatementUsesFloatDirectly(forStmt.Init))
-            || (forStmt.Condition is not null && ExprUsesFloatDirectly(forStmt.Condition))
-            || (forStmt.Update is not null && ExprUsesFloatDirectly(forStmt.Update))
-            || StatementUsesFloatDirectly(forStmt.Body);
-      case CReturnStmt { Value: { } value }:
-        return ExprUsesFloatDirectly(value);
-      case CLabelStmt labelStmt:
-        return StatementUsesFloatDirectly(labelStmt.Inner);
-      case CCaseLabelStmt caseLabelStmt:
-        return ExprUsesFloatDirectly(caseLabelStmt.Value) || StatementUsesFloatDirectly(caseLabelStmt.Inner);
-      case CDefaultLabelStmt defaultLabelStmt:
-        return StatementUsesFloatDirectly(defaultLabelStmt.Inner);
-      case CSwitchStmt switchStmt:
-        return ExprUsesFloatDirectly(switchStmt.Selector) || StatementUsesFloatDirectly(switchStmt.Body);
-      default:
-        return false;
-    }
-  }
-
-  /// <summary>See <see cref="StatementUsesFloatDirectly"/>'s own remarks for why the
-  /// <see cref="CUnaryExpr"/>{Dereference}/<see cref="CIndexExpr"/>/<see cref="CMemberAccessExpr"/> cases
-  /// below were added 2026-09-26 (the same day as basic <c>float</c> support itself, once a
-  /// pointer/array/struct member could first be 'float'-typed): this whole analysis runs before any
-  /// per-function type/symbol resolution is available (see this class's own doc comment on why the float
-  /// ABI's "does this function use fr registers" scan is context-free), so there is no cheap way to know
-  /// HERE whether a given dereference/index/member-access is actually 'float'-typed the way <see
-  /// cref="TryGetStaticType"/> can once real per-function symbol tables exist. Rather than risk the
-  /// SAFETY bug documented above, these three node shapes are treated as "uses float" UNCONDITIONALLY --
-  /// deliberately conservative, matching the SAME conservative choice this class already makes for a
-  /// callee whose body isn't visible (<see cref="CalleeUsesFloatRegisters"/>): a function that merely
-  /// dereferences/indexes/member-accesses through a pointer for entirely non-'float' reasons now also
-  /// gets an fpush/fpop save-restore its callers didn't strictly need, a missed optimization, never a
-  /// missed SAVE.</summary>
-  private static bool ExprUsesFloatDirectly(CExpr expr)
-  {
-    switch (expr)
-    {
-      case CFloatLiteralExpr:
-        return true;
-      case CUnaryExpr { Op: CUnaryOp.Dereference }:
-      case CIndexExpr:
-      case CMemberAccessExpr:
-        return true;
-      case CUnaryExpr unary:
-        return ExprUsesFloatDirectly(unary.Operand);
-      case CBinaryExpr binary:
-        return ExprUsesFloatDirectly(binary.Left) || ExprUsesFloatDirectly(binary.Right);
-      case CAssignExpr assign:
-        return ExprUsesFloatDirectly(assign.Target) || ExprUsesFloatDirectly(assign.Value);
-      case CCompoundAssignExpr compoundAssign:
-        return ExprUsesFloatDirectly(compoundAssign.Target) || ExprUsesFloatDirectly(compoundAssign.Value);
-      case CConditionalExpr conditional:
-        return ExprUsesFloatDirectly(conditional.Condition) || ExprUsesFloatDirectly(conditional.WhenTrue) || ExprUsesFloatDirectly(conditional.WhenFalse);
-      case CCallExpr call:
-        return call.Arguments.Any(ExprUsesFloatDirectly);
-      case CCastExpr cast:
-        return cast.TargetType.IsFloat || ExprUsesFloatDirectly(cast.Operand);
-      case CSizeOfExprExpr sizeOfExpr:
-        return ExprUsesFloatDirectly(sizeOfExpr.Operand);
-      case CCommaExpr comma:
-        return ExprUsesFloatDirectly(comma.Left) || ExprUsesFloatDirectly(comma.Right);
-      default:
-        return false;
-    }
-  }
-
-  /// <summary>Float ABI: true if <paramref name="stmt"/> contains a call (at any nesting depth, including
-  /// inside another call's own arguments) to a function this compiler already knows uses fr registers
-  /// (per <see cref="_functionUsesFr"/> so far) or cannot see the body of at all. Walks the same shape as
-  /// <see cref="StatementUsesFloatDirectly"/>/<see cref="ExprUsesFloatDirectly"/> but collects
-  /// <see cref="CCallExpr"/> nodes instead.</summary>
-  private bool StatementCallsFloatUsingFunction(CStmt stmt) => EnumerateCalls(stmt).Any(call => CalleeUsesFloatRegisters(call.FunctionName));
-
-  private static IEnumerable<CCallExpr> EnumerateCalls(CStmt stmt)
-  {
-    switch (stmt)
-    {
-      case CCompoundStmt compound:
-        return compound.Statements.SelectMany(EnumerateCalls);
-      case CLocalVarDecl { Initializer: { } init }:
-        return EnumerateCalls(init);
-      case CExprStmt exprStmt:
-        return EnumerateCalls(exprStmt.Expression);
-      case CIfStmt ifStmt:
-        return EnumerateCalls(ifStmt.Condition).Concat(EnumerateCalls(ifStmt.Then)).Concat(ifStmt.Else is not null ? EnumerateCalls(ifStmt.Else) : []);
-      case CWhileStmt whileStmt:
-        return EnumerateCalls(whileStmt.Condition).Concat(EnumerateCalls(whileStmt.Body));
-      case CDoWhileStmt doWhileStmt:
-        return EnumerateCalls(doWhileStmt.Body).Concat(EnumerateCalls(doWhileStmt.Condition));
-      case CForStmt forStmt:
-        return (forStmt.Init is not null ? EnumerateCalls(forStmt.Init) : [])
-            .Concat(forStmt.Condition is not null ? EnumerateCalls(forStmt.Condition) : [])
-            .Concat(forStmt.Update is not null ? EnumerateCalls(forStmt.Update) : [])
-            .Concat(EnumerateCalls(forStmt.Body));
-      case CReturnStmt { Value: { } value }:
-        return EnumerateCalls(value);
-      case CLabelStmt labelStmt:
-        return EnumerateCalls(labelStmt.Inner);
-      case CCaseLabelStmt caseLabelStmt:
-        return EnumerateCalls(caseLabelStmt.Value).Concat(EnumerateCalls(caseLabelStmt.Inner));
-      case CDefaultLabelStmt defaultLabelStmt:
-        return EnumerateCalls(defaultLabelStmt.Inner);
-      case CSwitchStmt switchStmt:
-        return EnumerateCalls(switchStmt.Selector).Concat(EnumerateCalls(switchStmt.Body));
-      default:
-        return [];
-    }
-  }
-
-  private static IEnumerable<CCallExpr> EnumerateCalls(CExpr expr)
-  {
-    switch (expr)
-    {
-      case CCallExpr call:
-        return call.Arguments.SelectMany(EnumerateCalls).Append(call);
-      case CUnaryExpr unary:
-        return EnumerateCalls(unary.Operand);
-      case CBinaryExpr binary:
-        return EnumerateCalls(binary.Left).Concat(EnumerateCalls(binary.Right));
-      case CAssignExpr assign:
-        return EnumerateCalls(assign.Target).Concat(EnumerateCalls(assign.Value));
-      case CCompoundAssignExpr compoundAssign:
-        return EnumerateCalls(compoundAssign.Target).Concat(EnumerateCalls(compoundAssign.Value));
-      case CConditionalExpr conditional:
-        return EnumerateCalls(conditional.Condition).Concat(EnumerateCalls(conditional.WhenTrue)).Concat(EnumerateCalls(conditional.WhenFalse));
-      case CIndexExpr index:
-        return EnumerateCalls(index.Base).Concat(EnumerateCalls(index.Index));
-      case CMemberAccessExpr member:
-        // Added 2026-09-26 alongside basic struct support's own CMemberAccessExpr node -- without this
-        // case, a call nested in a member access's own base (e.g. "getFoo()->x", legal since a function
-        // may return a struct pointer) would be invisible to the fixed-point "transitively calls a
-        // float-using function" scan below, the same class of gap ExprUsesFloatDirectly's own remarks
-        // describe for the "direct use" scan.
-        return EnumerateCalls(member.Base);
-      case CCastExpr cast:
-        return EnumerateCalls(cast.Operand);
-      case CSizeOfExprExpr sizeOfExpr:
-        return EnumerateCalls(sizeOfExpr.Operand);
-      case CCommaExpr comma:
-        return EnumerateCalls(comma.Left).Concat(EnumerateCalls(comma.Right));
-      default:
-        return [];
-    }
-  }
-
-  // ---------------------------------------------------------------------------------------------
-  // Globals and the string-literal pool.
-  // ---------------------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------------------------
+  // Globals and static locals. Unified for every type (int/char/float/long/pointer/array/struct) via
+  // ComputeGlobalInitialWords -- under ABI v2 every multi-word type's access goes through the same
+  // dlit+rload/rstore(+inc) mechanism (claude/cvm-abi.md section 3.6), so, unlike the previous version
+  // of this class, float no longer needs its own separate "label"/"label__hi" two-label storage scheme:
+  // every multi-word global is simply N contiguous words under ONE label, low word first.
 
   private void EmitGlobal(CGlobalVarDecl global)
   {
     string label = MangleExternalSymbol(global.Name);
 
+    if (global.Type.IsFunction)
+    {
+      return; // already diagnosed in CollectSignatures.
+    }
+
     if (global.IsExtern)
     {
-      // Declared here, defined elsewhere -- no storage, just a reference the linker resolves.
       _imports.Add(label);
-      if (global.Type.IsFloat)
-      {
-        // Float ABI: a float global is TWO words under two labels -- see EmitFloatGlobalStorage's own
-        // remarks and this class's own doc comment. Both need importing.
-        _imports.Add(label + "__hi");
-      }
-
       return;
     }
 
     if (!global.IsStatic)
     {
       _dataLines.Add($".export {label}");
-      if (global.Type.IsFloat)
-      {
-        _dataLines.Add($".export {label}__hi");
-      }
-    }
-
-    if (global.Type.IsFloat)
-    {
-      EmitFloatGlobalStorage(label, global.Initializer, global.Location);
-      return;
     }
 
     List<string> words = ComputeGlobalInitialWords(global.Type, global.Initializer, global.Location);
     _dataLines.Add($"{label}: .word {string.Join(", ", words)}");
   }
 
-  /// <summary>Float ABI: emits a <c>float</c> global's (or static local's) two-word storage as TWO
-  /// separate, immediately-adjacent <c>.word</c> lines under two labels (<paramref name="label"/> for the
-  /// low word, <c>&lt;label&gt;__hi</c> for the high word) -- see this class's own doc comment's "A
-  /// <c>float</c> GLOBAL is two contiguous data words" remarks for why (in short: <c>gld</c>/<c>gst</c>
-  /// take a single label with no address arithmetic, so the high word needs its own label; nothing else
-  /// is emitted between these two lines, so the two words ARE genuinely contiguous in the final
-  /// binary).</summary>
-  private void EmitFloatGlobalStorage(string label, CExpr? initializer, CSourceLocation location)
-  {
-    (string lowWord, string highWord) = ComputeFloatInitialWords(initializer, location);
-    _dataLines.Add($"{label}: .word {lowWord}");
-    _dataLines.Add($"{label}__hi: .word {highWord}");
-  }
-
-  /// <summary>Float ABI: computes a <c>float</c> global/static-local's initial (low, high) words --
-  /// see <see cref="EmitFloatLiteralInto"/>'s own remarks for the identical bit-splitting logic used for
-  /// a <c>float</c> literal appearing inside a function body.</summary>
-  private (string Low, string High) ComputeFloatInitialWords(CExpr? initializer, CSourceLocation location)
-  {
-    float value = 0f;
-    if (initializer is not null && !TryEvaluateConstantFloat(initializer, out value))
-    {
-      Error(location, "a 'float' global/static variable's initializer must be a compile-time constant floating-point literal");
-    }
-
-    int bits = BitConverter.SingleToInt32Bits(value);
-    return ((bits & 0xFFFF).ToString(), ((bits >> 16) & 0xFFFF).ToString());
-  }
-
-  /// <summary>Float ABI: folds a <c>float</c> global initializer to a compile-time constant value --
-  /// mirrors <see cref="TryEvaluateConstantGlobalInitializer"/>'s own small scope (a literal, optionally
-  /// negated) for the non-<c>float</c> case.</summary>
-  private static bool TryEvaluateConstantFloat(CExpr expr, out float value)
-  {
-    switch (expr)
-    {
-      case CFloatLiteralExpr literal:
-        value = literal.Value;
-        return true;
-
-      case CUnaryExpr { Op: CUnaryOp.Minus } unary when TryEvaluateConstantFloat(unary.Operand, out float v):
-        value = -v;
-        return true;
-
-      case CUnaryExpr { Op: CUnaryOp.Plus } unary when TryEvaluateConstantFloat(unary.Operand, out float v):
-        value = v;
-        return true;
-
-      default:
-        value = 0f;
-        return false;
-    }
-  }
-
-  /// <summary>Computes the DATA-section words for a global (or static-local) variable's initial value:
-  /// one word per <see cref="CType.SizeInWords"/> slot, each either a decimal literal or a label name
-  /// the assembler will resolve. An array with no initializer is zero-filled; a scalar with no
-  /// initializer is a single zero word.</summary>
+  /// <summary>Computes a global's (or static local's) initial DATA-section words: exactly
+  /// <see cref="CType.SizeInWords"/> of them, low word first for a multi-word type, each either a
+  /// decimal literal or a label name the assembler/linker will resolve. No initializer -> zero-filled.
+  /// </summary>
   private List<string> ComputeGlobalInitialWords(CType type, CExpr? initializer, CSourceLocation location)
   {
     int size = Math.Max(type.SizeInWords, 1);
@@ -1200,19 +448,32 @@ public sealed class CCodeGenerator
       return Enumerable.Repeat("0", size).ToList();
     }
 
+    if (type.IsFloat)
+    {
+      if (!TryEvaluateConstantFloat(initializer, out float value))
+      {
+        Error(location, "a 'float' global/static variable's initializer must be a compile-time constant floating-point literal");
+        value = 0f;
+      }
+
+      int bits = BitConverter.SingleToInt32Bits(value);
+      return [(bits & 0xFFFF).ToString(), ((bits >> 16) & 0xFFFF).ToString()];
+    }
+
     if (type.IsLong)
     {
-      // Added 2026-09-26 alongside 'long' support: a real initializer here would need to fold a full
-      // 32-bit constant into two CORRECTLY sign-extended words (low word at the lower address, matching
-      // this compiler's established float convention -- see CType.Long's own remarks) -- e.g.
-      // "long x = -1;" needs BOTH words to be all-ones, not "-1" then a zero-padded high word, which is
-      // what the generic string/constant folding below would otherwise silently produce for anything
-      // outside a small non-negative low word. Rather than get that sign-extension arithmetic right with
-      // no way to test it against real CVM 'long' instructions (which don't exist yet -- see this type's
-      // own remarks), this is rejected outright; the branch just above already handles the one case that
-      // needs no sign-extension at all -- no initializer, so it's simply zero-filled.
-      Error(location, "initializing a 'long' global/static variable is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet (declare it without an initializer; it will be zero-filled)");
+      // Same real ISA gap as before this rewrite (see CType.Long's own remarks): there is still no
+      // 32-bit binary integer opcode in the final ISA, so correctly sign-extending an arbitrary 'long'
+      // constant into two words is not attempted -- declaring one without an initializer (zero-filled)
+      // still works.
+      Error(location, "initializing a 'long' global/static variable is not yet supported by this compiler -- the CVM has no 'long' arithmetic instructions defined yet (declare it without an initializer; it will be zero-filled)");
       return Enumerable.Repeat("0", size).ToList();
+    }
+
+    if (type.IsPointer)
+    {
+      (string low, string high) = ComputeConstantPointerWords(initializer, location);
+      return [low, high];
     }
 
     if (type.IsArray && type.ElementType is { IsIntegral: true } elementType && (elementType.Equals(CType.Char) || elementType.Equals(CType.UnsignedChar))
@@ -1250,10 +511,55 @@ public sealed class CCodeGenerator
     return result;
   }
 
-  /// <summary>Folds a global initializer expression to a single assembler-level word (a decimal literal
-  /// or a label name) at compile time -- the only shapes a hand-written <c>.word</c> line itself
-  /// accepts. No general constant-folding is attempted; only the handful of forms real C programs
-  /// commonly use for a global's initializer.</summary>
+  /// <summary>Folds a pointer global's initializer to its two words (low = address, high = page) --
+  /// claude/cvm-abi.md section 3.3/3.6. Only "0"/NULL, "&amp;globalName", a bare array/function name
+  /// (which decays to its own address), and a string literal (which interns a fresh <c>char[]</c> and
+  /// points at it) are supported, all of which live at the compile-time-known <see cref="GlobalDataPage"/>.
+  /// </summary>
+  private (string Low, string High) ComputeConstantPointerWords(CExpr initializer, CSourceLocation location)
+  {
+    switch (initializer)
+    {
+      case CIntLiteralExpr { Value: 0 }:
+        return ("0", "0");
+
+      case CUnaryExpr { Op: CUnaryOp.AddressOf, Operand: CNameExpr name } when _globals.ContainsKey(name.Name):
+        return (MangleExternalSymbol(name.Name), GlobalDataPage.ToString());
+
+      case CNameExpr arrayName when _globals.TryGetValue(arrayName.Name, out CGlobalSymbol? symbol) && symbol.Type.IsArray:
+        return (MangleExternalSymbol(arrayName.Name), GlobalDataPage.ToString());
+
+      case CStringLiteralExpr stringLiteral:
+        return (InternStringLiteral(stringLiteral.Value), GlobalDataPage.ToString());
+
+      default:
+        Error(location, "a pointer global/static variable's initializer must be 0 (NULL), \"&amp;globalName\", an array/function name, or a string literal");
+        return ("0", "0");
+    }
+  }
+
+  private static bool TryEvaluateConstantFloat(CExpr expr, out float value)
+  {
+    switch (expr)
+    {
+      case CFloatLiteralExpr literal:
+        value = literal.Value;
+        return true;
+
+      case CUnaryExpr { Op: CUnaryOp.Minus } unary when TryEvaluateConstantFloat(unary.Operand, out float v):
+        value = -v;
+        return true;
+
+      case CUnaryExpr { Op: CUnaryOp.Plus } unary when TryEvaluateConstantFloat(unary.Operand, out float v):
+        value = v;
+        return true;
+
+      default:
+        value = 0f;
+        return false;
+    }
+  }
+
   private bool TryEvaluateConstantGlobalInitializer(CExpr expr, out string? word)
   {
     switch (expr)
@@ -1266,23 +572,8 @@ public sealed class CCodeGenerator
         word = (-inner.Value).ToString();
         return true;
 
-      case CUnaryExpr { Op: CUnaryOp.AddressOf, Operand: CNameExpr name }:
-        if (_globals.ContainsKey(name.Name))
-        {
-          word = MangleExternalSymbol(name.Name);
-          return true;
-        }
-
-        word = null;
-        return false;
-
-      case CNameExpr arrayName when _globals.TryGetValue(arrayName.Name, out CGlobalSymbol? symbol) && symbol.Type.IsArray:
-        // A bare array name decays to its own address, same as everywhere else in C.
-        word = MangleExternalSymbol(arrayName.Name);
-        return true;
-
-      case CStringLiteralExpr stringLiteral:
-        word = InternStringLiteral(stringLiteral.Value);
+      case CUnaryExpr { Op: CUnaryOp.BitwiseNot, Operand: CIntLiteralExpr inner }:
+        word = (~inner.Value).ToString();
         return true;
 
       default:
@@ -1291,18 +582,11 @@ public sealed class CCodeGenerator
     }
   }
 
-  /// <summary>Evaluates a constant integer expression at compile time (used for array bounds, case
-  /// labels, and <c>sizeof</c>'s array-length interplay). Handles literals and the small set of integer
-  /// operators macros commonly expand to; anything else is "not constant" rather than a hard error, so
-  /// callers can report their own, more specific diagnostic.
-  ///
-  /// The binary-operator arithmetic itself is factored out into <see
-  /// cref="CConstantFolder.TryEvaluateBinaryOp"/> (added 2026-09-10 alongside that class), shared with
-  /// the AST-level constant-folding optimizer pass so the two can never quietly disagree about what a
-  /// compile-time integer operation computes -- this method's own job is purely walking the handful of
-  /// node shapes ITS OWN narrower callers need (a literal, a unary +/-/~ on one, sizeof, or a binary op
-  /// whose own operands are themselves already constant), not the arithmetic underneath a binary
-  /// op.</summary>
+  /// <summary>Evaluates a constant integer expression at compile time (array bounds, <c>case</c> labels,
+  /// <c>sizeof</c>'s array-length interplay). The binary-operator arithmetic itself is
+  /// <see cref="CConstantFolder.TryEvaluateBinaryOp"/>, shared with the AST-level constant-folding
+  /// optimizer pass so the two can never disagree about what a compile-time integer operation computes.
+  /// </summary>
   private static bool TryEvaluateConstantLong(CExpr expr, out long value)
   {
     switch (expr)
@@ -1336,9 +620,6 @@ public sealed class CCodeGenerator
     }
   }
 
-  /// <summary>Interns a string literal as an anonymous global <c>char[]</c>, reusing the same label for
-  /// an identical literal seen more than once. Actual DATA-section emission happens once, in
-  /// <see cref="EmitStringPool"/>, after every function has been compiled.</summary>
   private string InternStringLiteral(string value)
   {
     if (_stringPool.TryGetValue(value, out string? existing))
@@ -1356,131 +637,97 @@ public sealed class CCodeGenerator
     foreach ((string value, string label) in _stringPool)
     {
       byte[] bytes = Encoding.ASCII.GetBytes(value);
-      IEnumerable<string> words = bytes.Select(b => ((int)b).ToString()).Append("0");
+      var words = bytes.Select(b => ((int)b).ToString()).ToList();
+      words.Add("0");
       _dataLines.Add($"{label}: .word {string.Join(", ", words)}");
     }
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Functions, scopes, and local variables.
-  // ---------------------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------------------------
+  // Functions: prologue (link + register-parameter spill), body, epilogue (unlink + ret). Functions are
+  // NOT mangled the way globals are (CvmBootStreamBuilder/claude/cvm-abi.md's own "__start"/"__exit"
+  // convention, and the previous version of this class, both use a function's own plain C name directly
+  // as its label) -- only a GLOBAL VARIABLE gets the leading underscore (MangleExternalSymbol).
 
   private void EmitFunction(CFunctionDecl function)
   {
+    var context = new CFunctionContext { Name = function.Name, ReturnType = function.ReturnType, IsFastcall = function.IsFastcall };
+    _currentFunction = context;
+    EnterScope();
+
     if (!function.IsStatic)
     {
-      _codeLines.Add($".export {MangleExternalSymbol(function.Name)}");
+      _codeLines.Add($".export {function.Name}");
     }
 
-    _codeLines.Add($"{MangleExternalSymbol(function.Name)}:");
+    EmitLabel(function.Name);
+    int linkPlaceholderIndex = context.BodyLines.Count;
+    context.BodyLines.Add(string.Empty); // patched below, once the final local word count is known.
 
-    var context = new CFunctionContext { Name = function.Name, ReturnType = function.ReturnType, EpilogueLabel = NewLabel("epilogue") };
-    context.Scopes.Add(new Dictionary<string, CVarSymbol>(StringComparer.Ordinal));
-
-    // ABI v2: CollectSignatures already ran over the whole translation unit, so this function's own
-    // signature (and its ParameterRegisterSlots) is already sitting in _functions -- reuse it rather
-    // than recomputing, so a call site and this function's own prologue can never disagree about which
-    // parameters are register-eligible.
-    CFunctionSignature signature = _functions[function.Name];
-    int stackParameterIndex = 0;
-    var registerParameters = new List<(int RegisterIndex, int LocalSlot)>();
-    // Float ABI: parallel to registerParameters above, but for fr-register-assigned float parameters,
-    // which need TWO local slots each (spilled via EmitFloatStoreLocal, not a single "stl") -- see this
-    // class's own doc comment's "Parameter passing" bullet.
-    var floatRegisterParameters = new List<(int RegisterIndex, int LocalBaseSlot)>();
+    IReadOnlyList<CParamSlot> slots = ComputeParameterSlots(function.Parameters.Select(p => p.Type).ToList(), function.IsFastcall);
     for (int i = 0; i < function.Parameters.Count; i++)
     {
       CParameter parameter = function.Parameters[i];
-      int? registerIndex = i < signature.ParameterRegisterSlots.Count ? signature.ParameterRegisterSlots[i] : null;
-      int? floatRegisterIndex = i < signature.ParameterFloatRegisterSlots.Count ? signature.ParameterFloatRegisterSlots[i] : null;
-      if (registerIndex is int assignedRegister)
+      CParamSlot slot = slots[i];
+      if (slot.IsRegister)
       {
-        // Register-eligible: this parameter never arrives via the stack at all, so it gets an ordinary
-        // LOCAL slot instead of a Parameter-kind frame offset -- see this class's own ABI doc comment.
-        int localSlot = context.NextLocalSlot++;
-        context.Scopes[0][parameter.Name] = new CVarSymbol(CVarKind.Local, localSlot, parameter.Type);
-        registerParameters.Add((assignedRegister, localSlot));
-      }
-      else if (floatRegisterIndex is int assignedFrRegister)
-      {
-        // Float ABI: a fastcall float parameter arrives in fr[assignedFrRegister], never the stack --
-        // gets a 2-word LOCAL slot pair instead of a Parameter-kind frame offset, exactly like a
-        // register-eligible pointer parameter above.
-        int localBaseSlot = context.NextLocalSlot;
-        context.NextLocalSlot += 2;
-        context.Scopes[0][parameter.Name] = new CVarSymbol(CVarKind.Local, localBaseSlot, parameter.Type);
-        floatRegisterParameters.Add((assignedFrRegister, localBaseSlot));
+        int size = Math.Max(parameter.Type.SizeInWords, 1);
+        int offset = AllocateFrameWords(size);
+        DeclareSymbol(parameter.Name, new CVarSymbol(CVarStorage.FrameSlot, parameter.Type, Offset: offset));
+        if (slot.IsWide)
+        {
+          EmitCode($"stf r{2 * slot.RegisterIndex}, {offset}");
+          EmitCode($"stf r{2 * slot.RegisterIndex + 1}, {offset + 1}");
+        }
+        else
+        {
+          EmitCode($"stf r{slot.RegisterIndex}, {offset}");
+        }
       }
       else
       {
-        // Stack-passed, same as ABI v1 -- but renumbered to count only the parameters that are ACTUALLY
-        // pushed, since any register-eligible ones earlier in the declaration are simply absent from the
-        // caller's own push sequence. Float ABI (2026-09-26): generalized from a per-PARAMETER count to a
-        // per-WORD count, since a stack-passed 'float' parameter now occupies 2 words, not 1 -- see this
-        // class's own doc comment.
-        context.Scopes[0][parameter.Name] = new CVarSymbol(CVarKind.Parameter, stackParameterIndex, parameter.Type);
-        stackParameterIndex += Math.Max(parameter.Type.SizeInWords, 1);
+        DeclareSymbol(parameter.Name, new CVarSymbol(CVarStorage.FrameSlot, parameter.Type, Offset: slot.StackOffset));
       }
     }
 
-    int enterLineIndex = _codeLines.Count;
-    _codeLines.Add(string.Empty); // patched below once the body's local-slot count is known.
-
-    // ABI v2 prologue: spill every register-eligible parameter out of its (volatile, caller-set)
-    // address register into its own ordinary local slot, immediately -- before the body runs and before
-    // this function makes any call of its own that could clobber the register. See this class's own ABI
-    // doc comment for why the value's ONLY safe lifetime inside the register is this one moment.
-    foreach ((int registerIndex, int localSlot) in registerParameters)
+    if (function.Body is not null)
     {
-      // 2026-09-09: "stl" stores r directly (see this class's own ABI doc comment) -- no "push" needed
-      // to shuttle the address through the stack first. "arst" leaves the address in r AND pushes a page
-      // word onto the stack as a side effect; "stl" reads r (assumed to leave r unchanged, like "push"
-      // does) so the trailing "pop" only needs to clean up that leftover page word (always 0 -- far
-      // pointers are not supported yet, see this class's own ABI doc comment).
-      //
-      // CORRECTED 2026-09-11: this line used to emit "sta {registerIndex}" -- flagged the moment the
-      // register-operand fix made it assemblable for the first time, since "sta"
-      // (StoreAddressRegisterValueMnemonic) is node 306's dereference-STORE role ("store r TO the
-      // address held in register aa," the same mnemonic EmitDereferenceStore uses), not "read this
-      // register's own (address, page) value back out" as this comment describes. Stefan confirmed
-      // directly: "arld loads an address into an address register. lda loads r using the address of an
-      // address register." -- i.e. arld is the SET direction (address in, from r/stack) and lda is the
-      // dereference-read direction; by elimination arst is arld's complement, reading the register's own
-      // stored value back OUT into (r, stack), which is exactly what this prologue needs. Fixed to
-      // "arst {registerIndex}".
-      EmitCode($"arst {registerIndex}"); // r := this register's address word; stack: [..., page]
-      EmitCode($"stl {localSlot}");     // localSlot := r (the address); stack unchanged
-      EmitCode("pop");                  // r := the leftover page word, discarded; stack: [...]
+      foreach (CStmt statement in function.Body.Statements)
+      {
+        EmitStatement(statement);
+      }
     }
 
-    // Float ABI (2026-09-26): spill every fr-register-assigned float parameter into its own 2-word local
-    // slot pair immediately, same timing and same "never trusted to survive past this one moment"
-    // discipline as the address-register spill above -- see this class's own doc comment.
-    foreach ((int registerIndex, int localBaseSlot) in floatRegisterParameters)
-    {
-      EmitFloatStoreLocal(localBaseSlot, registerIndex);
-    }
+    EmitCode("unlink");
+    EmitCode("ret");
 
-    _currentFunction = context;
-    EmitStatement(function.Body!);
+    int localWordCount = -context.NextFrameOffset - 1;
+    context.BodyLines[linkPlaceholderIndex] = $"  link {-localWordCount}";
+
+    ExitScope();
+    _codeLines.AddRange(context.BodyLines);
     _currentFunction = null;
+  }
 
-    _codeLines.Add($"{context.EpilogueLabel}:");
-    _codeLines.Add("  leave");
-    _codeLines.Add("  ret");
-    _codeLines[enterLineIndex] = $"  enter {context.NextLocalSlot}";
+  private int AllocateFrameWords(int count)
+  {
+    CFunctionContext context = _currentFunction!;
+    int low = context.NextFrameOffset - (count - 1);
+    context.NextFrameOffset -= count;
+    return low;
   }
 
   private void EnterScope() => _currentFunction!.Scopes.Add(new Dictionary<string, CVarSymbol>(StringComparer.Ordinal));
 
   private void ExitScope() => _currentFunction!.Scopes.RemoveAt(_currentFunction.Scopes.Count - 1);
 
+  private void DeclareSymbol(string name, CVarSymbol symbol) => _currentFunction!.Scopes[^1][name] = symbol;
+
   private CVarSymbol? LookupVariable(string name)
   {
-    List<Dictionary<string, CVarSymbol>> scopes = _currentFunction!.Scopes;
-    for (int i = scopes.Count - 1; i >= 0; i--)
+    for (int i = _currentFunction!.Scopes.Count - 1; i >= 0; i--)
     {
-      if (scopes[i].TryGetValue(name, out CVarSymbol? symbol))
+      if (_currentFunction.Scopes[i].TryGetValue(name, out CVarSymbol? symbol))
       {
         return symbol;
       }
@@ -1489,969 +736,491 @@ public sealed class CCodeGenerator
     return null;
   }
 
-  /// <summary>Declares a local variable in the innermost active scope. A non-static array reserves
-  /// <see cref="CType.SizeInWords"/> consecutive local slots (every other type reserves exactly one,
-  /// since every scalar/pointer is one word); a "static" local gets the same one-per-program storage and
-  /// lifetime as a global, under a mangled name only this function's scope can see, with its initializer
-  /// baked into the DATA section once rather than executed as runtime code each time control reaches the
-  /// declaration.</summary>
+  /// <summary>A local variable declaration (<see cref="CLocalVarDecl"/>), reached as a statement. A
+  /// "static" local compiles as an ordinary, uniquely-mangled global (same storage/lifetime as a real
+  /// global, visible only inside this function) -- exactly the previous version's own approach, unchanged.
+  /// </summary>
   private void DeclareLocal(CLocalVarDecl decl)
   {
-    if (_currentFunction!.Scopes[^1].ContainsKey(decl.Name))
-    {
-      Error(decl.Location, $"\"{decl.Name}\" is already declared in this scope");
-      return;
-    }
-
     if (decl.IsStatic)
     {
-      string label = $"__static_{_currentFunction!.Name}_{decl.Name}_{_staticLocalCounter++}";
-      if (decl.Type.IsFloat)
-      {
-        // Float ABI: see EmitFloatGlobalStorage's own remarks -- a static local float needs the same
-        // two-label, two-word storage a plain float global does (it is addressed the same way, via
-        // CVarKind.Global + GlobalLabel, by ResolveFloatLvalue).
-        EmitFloatGlobalStorage(label, decl.Initializer, decl.Location);
-      }
-      else
-      {
-        List<string> words = ComputeGlobalInitialWords(decl.Type, decl.Initializer, decl.Location);
-        _dataLines.Add($"{label}: .word {string.Join(", ", words)}");
-      }
-
-      _currentFunction.Scopes[^1][decl.Name] = new CVarSymbol(CVarKind.Global, 0, decl.Type, label);
+      string label = $"_{_currentFunction!.Name}__static{_staticLocalCounter++}_{decl.Name}";
+      List<string> words = ComputeGlobalInitialWords(decl.Type, decl.Initializer, decl.Location);
+      _dataLines.Add($"{label}: .word {string.Join(", ", words)}");
+      DeclareSymbol(decl.Name, new CVarSymbol(CVarStorage.StaticGlobal, decl.Type, Label: label));
       return;
     }
 
-    int slot = _currentFunction!.NextLocalSlot;
-    _currentFunction.NextLocalSlot += Math.Max(decl.Type.SizeInWords, 1);
-    _currentFunction.Scopes[^1][decl.Name] = new CVarSymbol(CVarKind.Local, slot, decl.Type);
+    int size = Math.Max(decl.Type.SizeInWords, 1);
+    int offset = AllocateFrameWords(size);
+    DeclareSymbol(decl.Name, new CVarSymbol(CVarStorage.FrameSlot, decl.Type, Offset: offset));
+
+    if (decl.Initializer is not null)
+    {
+      if (IsUnsupportedWholeValueType(decl.Type))
+      {
+        ReportUnsupportedValueRead(decl.Location, decl.Type, $"local \"{decl.Name}\"");
+        return;
+      }
+
+      EmitAssignToAddr(new CAddr(CAddrKind.Frame, decl.Type, offset), decl.Initializer, decl.Location, 0);
+    }
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Lvalues: the single mechanism plain assignment, compound assignment, and pre/post increment and
-  // decrement all share.
+  // ---------------------------------------------------------------------------------------------------
+  // Addressing (claude/cvm-abi.md section 3.3/3.6). Deliberately simplified relative to the previous
+  // version of this class: a BARE name (local/parameter/static-local/global) resolves directly, with no
+  // runtime pointer ever built, exactly like before. ANYTHING ELSE addressable -- a dereference, an
+  // index, a member access via "." or "->" -- always resolves by computing a full runtime (page,
+  // address) pointer into a wide scratch register first (<see cref="EmitAddressOfInto"/>), then reusing
+  // the exact same word-at-a-time load/store machinery through that pointer. This costs a few extra
+  // instructions for, e.g., a local struct's own member access (which could in principle be addressed
+  // directly at a compile-time-constant frame offset, the way the previous version did) in exchange for
+  // a single, uniform, much less error-prone addressing path -- a deliberate simplicity-over-optimality
+  // scope choice for this rewrite, not a hardware limitation. Revisit if profiling ever shows this
+  // actually matters.
   //
-  // IMPORTANT correctness note (found in review, 2026-09-06): the CVM's "t" register has no save/
-  // restore of its own, so it is NOT safe to assume it survives arbitrary code emitted between
-  // resolving an Indirect lvalue's address and actually loading/storing through it -- e.g. in
-  // "globalA = globalB;", resolving globalA's address latches t, but evaluating the RHS globalB reads
-  // a global too, which does its own "xt" and silently repoints t at globalB before the store runs.
-  // The fix: an Indirect lvalue's address is computed exactly ONCE (preserving CCompoundAssignExpr's
-  // own "do not re-run the target's side effects" contract) but immediately cached into a dedicated
-  // local slot, not left sitting only in t. EmitLoad/EmitStore then each independently reload that
-  // cached address and re-issue "xt" right before their own ldt/stt -- "ldl addressSlot; push; xt" is a
-  // pure, side-effect-free re-derivation of t from the cache (2026-09-09: "ldl" itself only sets r, per
-  // this class's own ABI doc comment -- the "push" is what actually puts the address back on the stack
-  // for "xt" to consume), not a re-evaluation of the original target expression, so this is safe to
-  // repeat as many times as needed (compound assignment loads once and stores once; increment/decrement
-  // do the same) no matter what runs in between, or what "r" holds by the time it runs.
-  // ---------------------------------------------------------------------------------------------
+  // GlobalAddressTempDouble (d8 = r16/r17) is a dedicated scratch double register for building a Global
+  // address's pointer -- never used for anything else (not a parameter/return/scratch-pool register), so
+  // always safe to clobber. It is never used with `inc`/`add` (every Global word has its OWN label --
+  // see <see cref="GlobalWordLabel"/> -- so no runtime increment is ever needed for the Global case),
+  // which is why it's safe for it to sit outside the r0-r15 range every ordinary 16-bit op is restricted
+  // to: `dlit`/`rload`/`rstore`'s own register-holding-the-pointer operand is a full 4-bit d0-d15 field,
+  // unrelated to that restriction.
+  //
+  // <b>The shared nesting-depth parameter ("depth") every evaluator below takes.</b> Expression
+  // evaluation needs two independent scratch pools (int r8-r15, wide d1-d3 -- claude/cvm-abi.md section
+  // 3.4) PLUS the occasional transient borrow of the OTHER pool (e.g. an array index's own int value,
+  // computed while building a pointer). Rather than thread two separate counters (and get their
+  // interaction wrong), every evaluator takes ONE shared "depth" int: the scalar register used is
+  // always r(8+depth), the wide register used is always d(1+depth) -- the SAME depth number, just
+  // mapped into whichever pool that particular call needs (CHANGED 2026-10-18: the wide pool's own base
+  // moved from d0 to d1 when d0 was carved out for PointerArithmeticScratchDouble -- see that constant's
+  // own remarks). Recursing into a sub-expression ALWAYS passes depth+1 for an operand that must stay
+  // independently alive (a binary op's own left/right operands, or a compound lvalue's transient pointer
+  // one level "underneath" the value being loaded through it); a one-off borrow of the OTHER pool for
+  // something that does not overlap the current value's own lifetime (an index's own int value while the
+  // pointer it scales is being built) reuses the SAME depth. Since depth strictly increases going down
+  // and the two pools are only ever indexed by the CURRENT depth, two live values can never collide. The
+  // practical effect: a single expression can nest at most 3 levels deep before running out of wide
+  // registers (the smaller of the two pools, now one level tighter than before d0's reservation) even in
+  // a pure-int sub-expression that never touches a pointer -- tighter than the int pool's own 8-deep
+  // limit, and worth knowing if a genuinely deep expression ever hits "expression nested too deeply".
+  // d0 itself is never part of this depth-indexed scheme at all any more -- see
+  // PointerArithmeticScratchDouble's own remarks for its separate, fixed, always-collision-free role.
 
-  /// <summary>Optimizer addition, 2026-09-10 -- Stefan's own observation on <c>d[0] = a;</c> (<c>d</c> a
-  /// local array, <c>a</c> a local scalar): "d[0] is a local variable, a is a local variable. so a simple
-  /// 'ldl d[0]; stl a' with the offset calculated for d[0] and a would have done the job." He's right, and
-  /// unlike <see cref="CvmPeepholeOptimizer"/>'s rules this needs no unconfirmed hardware assumption to
-  /// exploit: local-array element storage is entirely this compiler's OWN decision, not a hardware fact
-  /// still awaiting confirmation. Local-slot allocation (<see cref="DeclareLocal"/>) already reserves
-  /// <c>Type.SizeInWords</c> CONSECUTIVE local slots per declaration, so an array's <c>K</c>-th element
-  /// (every element type here is exactly one CVM word -- see <see cref="CType"/>'s own remarks) always
-  /// lives at local slot <c>arrayBaseSlot + K</c>. When <c>K</c> is itself known at compile time, that slot
-  /// number is just as loadable/storable with a single <c>ldl</c>/<c>stl</c> as any plain scalar local --
-  /// the exact same, already-confirmed addressing (see "ldl/ldp/stl/stp go through register r, confirmed
-  /// (2026-09-09)" in the C-compiler design doc) every OTHER local already uses. No need to ever compute a
-  /// runtime address, cache it, or indirect through it via node 306's address-register mechanism (<see
-  /// cref="EmitDereferenceLoad"/>/<see cref="EmitDereferenceStore"/>) at all.
-  ///
-  /// This only ever fires for a genuinely LOCAL array (<see cref="CVarKind.Local"/>) referenced directly
-  /// by its own bare name -- never a parameter (a parameter of array type has already decayed to a plain
-  /// runtime pointer value by the time it reaches a <see cref="CVarSymbol"/>, so there is no fixed frame
-  /// slot per element to fold into), never a global/static-local (those are addressed by a data-section
-  /// label, not a frame offset -- <see cref="CVarKind.Global"/>), and never through a further expression
-  /// (a dereferenced pointer, a function's return value, another index) -- anything this can't prove safe
-  /// at compile time falls through unchanged to the general, always-correct address-computation path
-  /// below. Because it can only ever produce EQUAL-OR-CHEAPER, equally-correct code compared to that
-  /// general path for the one narrow case it recognizes, this fast path is unconditional -- unlike
-  /// <see cref="CvmPeepholeOptimizer"/>, it is not gated behind a project optimizer toggle.</summary>
-  private bool TryGetConstantLocalArrayElementSlot(CIndexExpr index, out int slot, out CType elementType)
+  private enum CAddrKind { Frame, Global, Pointer }
+
+  private sealed record CAddr(CAddrKind Kind, CType Type, int Offset = 0, string? Label = null, int PointerDouble = -1);
+
+  private const int GlobalAddressTempDouble = 8;
+
+  private static string GlobalWordLabel(string label, int wordIndex) => wordIndex == 0 ? label : $"{label}__w{wordIndex}";
+
+  private int ScalarReg(int depth)
   {
-    slot = 0;
-    elementType = CType.Int;
-
-    if (index.Base is not CNameExpr name)
+    if (depth >= ScalarScratchMaxDepth)
     {
-      return false;
+      _diagnostics.Add("<internal>: expression nested too deeply for this compiler's int scratch pool (max depth 8).");
+      _hasError = true;
+      depth = ScalarScratchMaxDepth - 1;
     }
 
-    CVarSymbol? symbol = LookupVariable(name.Name);
-    if (symbol is not { Kind: CVarKind.Local, Type.Kind: CTypeKind.Array })
+    return ScalarScratchFirstRegister + depth;
+  }
+
+  private int WideReg(int depth)
+  {
+    if (depth >= WideScratchMaxDepth)
     {
-      return false;
+      _diagnostics.Add("<internal>: expression nested too deeply for this compiler's pointer/float scratch pool (max depth 4).");
+      _hasError = true;
+      depth = WideScratchMaxDepth - 1;
     }
 
-    if (symbol.Type.ArrayLength < 0)
-    {
-      return false;
-    }
-
-    if (!TryEvaluateConstantLong(index.Index, out long constIndex) || constIndex < 0 || constIndex >= symbol.Type.ArrayLength)
-    {
-      return false;
-    }
-
-    elementType = symbol.Type.ElementType!;
-
-    // Added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a local array's element used to
-    // always be exactly one word (this fast path predates 'float'/'struct' array elements), so the K-th
-    // element's own slot was always just "base slot + K". A wider element (float, struct, or an array
-    // member) now needs K scaled by its own SizeInWords, the same generalization EmitScaleByElementSize
-    // applies to the general (runtime-address) indexing path -- see that method's own remarks.
-    slot = symbol.Index + (int)constIndex * Math.Max(elementType.SizeInWords, 1);
-    return true;
+    return WideScratchFirstDouble + depth;
   }
 
-  private CLvalue ResolveLvalue(CExpr expr)
-  {
-    switch (expr)
-    {
-      case CNameExpr name:
-        {
-          CVarSymbol? symbol = LookupVariable(name.Name);
-          if (symbol is { Kind: CVarKind.Local })
-          {
-            return new CLvalue(CLvalueKind.Local, symbol.Index, symbol.Type);
-          }
-
-          if (symbol is { Kind: CVarKind.Parameter })
-          {
-            return new CLvalue(CLvalueKind.Parameter, symbol.Index, symbol.Type);
-          }
-
-          string label = symbol?.GlobalLabel ?? MangleExternalSymbol(name.Name);
-          CType type;
-          if (symbol is { Kind: CVarKind.Global })
-          {
-            type = symbol.Type;
-          }
-          else if (_globals.TryGetValue(name.Name, out CGlobalSymbol? global))
-          {
-            type = global.Type;
-          }
-          else if (_functions.ContainsKey(name.Name))
-          {
-            Error(expr.Location, $"\"{name.Name}\" is a function and cannot be assigned to");
-            type = CType.Int;
-          }
-          else
-          {
-            Error(expr.Location, $"\"{name.Name}\" is not declared");
-            type = CType.Int;
-          }
-
-          if (!_globals.ContainsKey(name.Name) && symbol is not { Kind: CVarKind.Global })
-          {
-            _imports.Add(label);
-          }
-
-          // 2026-09-10: a global's own label is already a fixed, compile-time-constant reference (the
-          // assembler/linker resolve it once, via a relocation exactly like pushlit's -- see
-          // EmitGlobalFetch/EmitGlobalAssign's own remarks) -- there is nothing to compute or cache into
-          // a local slot the way *ptr's or a non-constant array index's runtime address needs. This
-          // used to unconditionally do "EmitCode($\"pushlit {label}\"); return CacheIndirectAddress(type);",
-          // spending a whole address-computation-and-cache sequence (and burning a local slot) on
-          // something already known at compile time; gld/gst make that unnecessary. See
-          // "Global-scalar addressing: gld/gst replace the address-register dance (2026-09-10)" in
-          // c-compiler-design.md for the full story, including the hardware trace that caught and fixed
-          // a real bug in node 508's own g/@/g/! primitives underlying gld/gst.
-          return new CLvalue(CLvalueKind.Global, 0, type, label);
-        }
-
-      case CUnaryExpr { Op: CUnaryOp.Dereference } deref:
-        {
-          CType pointerType = EmitExpr(deref.Operand);
-          CType pointeeType = pointerType.IsPointer ? pointerType.ElementType! : pointerType.Decay() is { IsPointer: true } decayed ? decayed.ElementType! : CType.Int;
-          if (!pointerType.IsPointer)
-          {
-            Error(expr.Location, $"cannot dereference a value of type \"{pointerType}\"");
-          }
-
-          return CacheIndirectAddress(pointeeType);
-        }
-
-      case CIndexExpr index:
-        {
-          if (TryGetConstantLocalArrayElementSlot(index, out int directSlot, out CType directElementType))
-          {
-            return new CLvalue(CLvalueKind.Local, directSlot, directElementType);
-          }
-
-          CType elementType = EmitAddressOfIndex(index);
-          return CacheIndirectAddress(elementType);
-        }
-
-      case CMemberAccessExpr member:
-        {
-          CType fieldType = EmitAddressOfMember(member);
-          if (fieldType.IsStruct)
-          {
-            // See CType.StructOf's own remarks: reading/assigning a WHOLE struct value in one expression
-            // is not yet supported -- access one of its own members instead, or use '&' for its address.
-            // Still returns a real (if unusable) CLvalue, same as every other error branch in this
-            // method, since a CParseException-style abort mid-codegen isn't this class's error model.
-            Error(expr.Location, $"\"{member.Member}\" is a struct member of type \"{fieldType}\" -- reading or assigning a whole struct value is not yet supported by this compiler");
-          }
-
-          return CacheIndirectAddress(fieldType);
-        }
-
-      default:
-        Error(expr.Location, "expression is not assignable");
-        EmitCode("pushlit 0");
-        return CacheIndirectAddress(CType.Int);
-    }
-  }
-
-  /// <summary>Given an address already sitting on top of the stack, caches a copy of it into a fresh
-  /// local slot (so it can be safely re-derived later regardless of what runs in between -- see this
-  /// section's own remarks), leaving the stack exactly as it was before the address was pushed.
-  ///
-  /// REWRITTEN 2026-09-09: this used to also "prime" node 508's pointer register "t" (via <c>xt</c>) for
-  /// whatever load/store came next -- but <see cref="EmitLoad"/>/<see cref="EmitStore"/>'s own
-  /// <c>default</c> case always re-derives the address from <paramref name="type"/>'s own cached slot
-  /// and re-runs the full dereference sequence anyway, so that priming was already dead work even before
-  /// node 508's <c>xt</c>/<c>ldt</c>/<c>stt</c> stopped resolving against any live node. Dropped outright
-  /// rather than ported to node 306's replacement sequence (see <see cref="EmitDereferenceLoad"/>'s own
-  /// remarks) -- there is nothing left here that needs it.
-  /// </summary>
-  private CLvalue CacheIndirectAddress(CType type)
-  {
-    int addressSlot = _currentFunction!.NextLocalSlot++;
-    EmitCode("pop");                    // r := address; stack: [] (one word consumed off the incoming stack)
-    EmitCode($"stl {addressSlot}");     // addressSlot := r (the address)
-    return new CLvalue(CLvalueKind.Indirect, addressSlot, type);
-  }
-
-  /// <summary>Dereferences the address already sitting in register r, pushing the value read from
-  /// memory at that address.
-  ///
-  /// ADDED 2026-09-09, replacing node 508's now-dead <c>xt</c>/<c>ldt</c> (deleted outright from
-  /// <see cref="CvmInstructionSet"/> the same day, once this codegen stopped emitting them -- see
-  /// that class's own remarks on the 2026-09-09 CVM1-opcode purge). The replacement uses node 306's address-register mechanism instead (see
-  /// <see cref="Node306Program"/>'s own remarks for the F18-level design): <c>'arld</c> ("load an address
-  /// into an address register") loads node 306's address register 0 from (address = r, page = the
-  /// stack's own top word), and <c>'lda</c> ("load r using the address of an address register") then
-  /// reads memory at that address back into r. Every C pointer in this compiler is a plain 16-bit CVM
-  /// address (there is no notion of a non-zero page anywhere else in this ABI), so the page pushed here
-  /// is always a literal 0.
-  ///
-  /// CORRECTED 2026-09-11 (twice): first, <c>arld</c>/<c>lda</c>/<c>sta</c> gained a real register-index
-  /// OPERAND (<c>CvmInstructionSet.CvmOperandEncoding.NodeResolvedEmbeddedValue</c> -- see
-  /// <see cref="CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic"/>'s own remarks), since node
-  /// 306 genuinely has SIX address registers (0-5), not the single hardwired one the codebase used to
-  /// assume, and <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/> can now express any of them. Second, this
-  /// method itself used to emit <c>"arst 0"</c> for the register-setup step -- WRONG, per Stefan's own
-  /// direct follow-up confirming the direction of both mnemonics: "arld loads an address into an address
-  /// register. lda loads r using the address of an address register." <c>arld</c> is the SET direction
-  /// (address in, from r/stack); <c>arst</c> is its complement, reading a register's own stored value
-  /// back OUT (used by <see cref="EmitFunction"/>'s own ABI v2 prologue spill, not here). Fixed to
-  /// <c>"arld 0"</c>. This method still always uses register 0 -- the compiler's own pointer
-  /// representation is still a single 16-bit CVM address with no notion of which register or page it
-  /// belongs to, so there is nothing yet for a second live register to hold; using more than one address
-  /// register at once is a question for a future ABI change (e.g. a heap spanning more than one page),
-  /// not something this correction decides on its own. Also NOT YET CONFIRMED ON REAL HARDWARE -- this
-  /// sequence has not been run against a physical GA144 board.
-  /// </summary>
-  private void EmitDereferenceLoad()
-  {
-    EmitCode("pushlit 0");   // stack: [..., 0] (page = 0)
-    EmitCode("arld 0");      // node 306 address register 0 := (address = r, page = pop 0); stack: [...]
-    EmitCode("lda 0");       // r := memory[address register 0]
-    EmitCode("push");        // stack: [..., value]
-  }
-
-  /// <summary>Dereferences the address already sitting in register r, storing the value already on top
-  /// of the stack to memory at that address. See <see cref="EmitDereferenceLoad"/>'s own remarks for the
-  /// node-306 mechanism this uses (including the 2026-09-11 register-operand and arld/arst-direction
-  /// corrections) -- <c>'sta</c> ("store r to address in address register") is <c>'lda</c>'s write-side
-  /// counterpart.</summary>
-  private void EmitDereferenceStore()
-  {
-    EmitCode("pushlit 0");   // stack: [..., value, 0] (page = 0)
-    EmitCode("arld 0");      // node 306 address register 0 := (address = r, page = pop 0); stack: [..., value]
-    EmitCode("pop");         // r := value; stack: [...]
-    EmitCode("sta 0");       // memory[address register 0] := r
-  }
-
-  /// <summary>Fetches a global's value into r, via <c>gld</c> -- named and behaving exactly like an
-  /// ordinary CPU "load": r := the global at <paramref name="label"/>.
-  ///
-  /// CORRECTED 2026-09-10 (same day as this whole feature, superseding an earlier, WRONG resolution of
-  /// the same question). This class, <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet"/>'s own
-  /// <c>LoadGlobalMnemonic</c>/<c>StoreGlobalMnemonic</c> remarks, and <c>Node508Program</c>'s own
-  /// remarks had all flagged an apparent naming/body cross-wire in node 508's F18 source (<c>'gld</c>
-  /// calling a primitive whose body ends in a remote STORE; <c>'gst</c> calling one whose body ends in a
-  /// remote FETCH). Asked directly, Stefan's FIRST answer ("gld loads a global from r" / "gst stores a
-  /// global into r") was read as confirming that backwards direction was intentional -- <c>gld</c> :=
-  /// store, <c>gst</c> := fetch -- and this method and <see cref="EmitGlobalAssign"/> were wired that
-  /// way. That reading was WRONG: Stefan then ran an actual hardware/simulation test (<c>lit 1; gst 2;
-  /// gld 2; gst 4; nop</c>) and the trace shows a WRITE to global address 2 on the <c>gst 2</c>
-  /// instruction (storing r's value 1 there) and a READ of that same address back into r on the
-  /// following <c>gld 2</c> -- i.e. <c>gst</c> genuinely STORES (global := r) and <c>gld</c> genuinely
-  /// LOADS (r := global), exactly as their names ordinarily would suggest, with no reversal at all. The
-  /// earlier "cross-wire" was a REAL bug in node 508's original F18 source (g/@'s and g/!'s own bodies
-  /// really were swapped relative to their names), not a naming-convention quirk -- Stefan fixed it by
-  /// swapping the two bodies and re-wiring <c>'gld</c>/<c>'gst</c> to alias <c>g/@</c>/<c>g/!</c>
-  /// directly (see <c>Node508Program.Source</c>'s own updated text). Call sites should always go
-  /// through this helper (and <see cref="EmitGlobalAssign"/>), never emit <c>gld</c>/<c>gst</c>
-  /// directly, so a future correction (should one ever be needed again) has exactly one place to
-  /// change.</summary>
-  private void EmitGlobalFetch(string label) => EmitCode($"gld {label}");
-
-  /// <summary>Stores r's value into a global, via <c>gst</c> -- named and behaving exactly like an
-  /// ordinary CPU "store": the global at <paramref name="label"/> := r. See <see
-  /// cref="EmitGlobalFetch"/>'s own remarks for the full history, including the earlier WRONG
-  /// resolution this corrects and the hardware trace that corrected it.</summary>
-  private void EmitGlobalAssign(string label) => EmitCode($"gst {label}");
-
-  private void EmitLoad(CLvalue lvalue)
-  {
-    switch (lvalue.Kind)
-    {
-      case CLvalueKind.Local:
-        EmitCode($"ldl {lvalue.Index}");
-        EmitCode("push");
-        break;
-      case CLvalueKind.Parameter:
-        EmitCode($"ldp {lvalue.Index}");
-        EmitCode("push");
-        break;
-      case CLvalueKind.Global:
-        EmitGlobalFetch(lvalue.Label!);   // r := the global's value -- no address computation at all
-        EmitCode("push");
-        break;
-      default:
-        EmitCode($"ldl {lvalue.Index}");   // r := the cached address
-        EmitDereferenceLoad();
-        break;
-    }
-  }
-
-  private void EmitStore(CLvalue lvalue)
-  {
-    switch (lvalue.Kind)
-    {
-      case CLvalueKind.Local:
-        EmitCode("pop");                   // r := value to store; stack: [...] (one word consumed)
-        EmitCode($"stl {lvalue.Index}");   // the local := r
-        break;
-      case CLvalueKind.Parameter:
-        EmitCode("pop");                   // r := value to store; stack: [...] (one word consumed)
-        EmitCode($"stp {lvalue.Index}");   // the parameter := r
-        break;
-      case CLvalueKind.Global:
-        EmitCode("pop");                   // r := value to store; stack: [...] (one word consumed)
-        EmitGlobalAssign(lvalue.Label!);   // the global := r -- no address computation at all
-        break;
-      default:
-        EmitCode($"ldl {lvalue.Index}");   // r := the cached address
-        EmitDereferenceStore();
-        break;
-    }
-  }
-
-  // ---------------------------------------------------------------------------------------------
-  // 2-word register-return ABI (added 2026-09-27), per Stefan verbatim: "a return type is like a
-  // parameter. it must be allowed for all types. for a 2 word (32 bit) return type the following rule is
-  // applied: a float return is always in fr[0] [unchanged] / a pointer return is always in ar[0] / all
-  // remaining types: low word in reg[0], high word in reg[1]" -- confirmed, after being asked whether this
-  // covers every return width or only a genuinely 2-word one, to be scoped to 2-word types only ("these
-  // new rules only apply to 2 word types" / "i meant all remaining 2-word types"): a 1-word return (int,
-  // char, unsigned, a 1-word struct) is UNCHANGED, still the original stack-based convention (see
-  // EmitStatement's own CReturnStmt case). "All remaining types" here means every 2-word return type that
-  // is neither float nor pointer -- in practice 'long', or a struct whose own SizeInWords is exactly 2
-  // (see CParser's own return-type remarks for what's rejected instead: an incomplete struct, or one wider
-  // than 2 words). See EmitCall's own remarks for how a CALLER retrieves each of these.
-  // ---------------------------------------------------------------------------------------------
-
-  /// <summary>
-  /// Loads ONE word (<paramref name="wordIndex"/> 0 = low, 1 = high, ...) of a plain named variable
-  /// directly into register r -- Local, Parameter, or Global only, never Indirect (see <see
-  /// cref="TryResolveTwoWordRegisterReturnLvalue"/>'s own remarks for why the register-return narrow path
-  /// never resolves anything else). Entirely independent of whether this TYPE's value is otherwise
-  /// supported (see <see cref="IsUnsupportedWholeValueType"/>) -- this reads raw words by STORAGE
-  /// LOCATION, the same way <see cref="EmitFloatWordLoadIntoR"/> already does for the <c>__optimize</c>
-  /// narrow path, just generalized from float's fixed 2-word width to an arbitrary <paramref
-  /// name="totalWords"/> (always 2 for this ABI's own callers, but written generally rather than
-  /// hardcoded).
-  ///
-  /// Local and Parameter mirror <see cref="EmitFloatWordLoadIntoR"/>'s own per-kind word order exactly (a
-  /// LOCAL's slots are HIGH-then-LOW -- <paramref name="lvalue"/>.Index is the HIGH word, since a local's
-  /// own address is <c>f - slot</c> and the LOW word must sit at the lower address, i.e. the HIGHER slot
-  /// number; a PARAMETER's are LOW-then-HIGH, natural increasing order -- see this class's own doc comment
-  /// and <see cref="CType.Long"/>'s own remarks). Global DIFFERS from the float case: a 'long'/struct
-  /// global has no "<c>{label}__hi</c>" companion label the way a <c>float</c> global does (see <see
-  /// cref="EmitGlobal"/>'s own remarks -- that convention only exists because <c>gld</c>/<c>gst</c> take a
-  /// literal label with no address arithmetic, and float's OWN codegen path was built around it; a
-  /// 'long'/struct global was never built out that far, since its value was rejected everywhere until
-  /// now). So word 0 (the low word, living at the global's own label) uses a plain <c>gld</c>, exactly like
-  /// an ordinary scalar global; every other word computes <c>label + wordIndex</c> at runtime and
-  /// dereferences through it, the same general address-plus-offset mechanism <see
-  /// cref="EmitAddressOfMember"/> already uses for a struct member's own offset.
-  /// </summary>
-  private void EmitRegisterWordLoadIntoR(CLvalue lvalue, int wordIndex, int totalWords)
-  {
-    switch (lvalue.Kind)
-    {
-      case CLvalueKind.Local:
-        EmitCode($"ldl {lvalue.Index + (totalWords - 1 - wordIndex)}");
-        break;
-
-      case CLvalueKind.Parameter:
-        EmitCode($"ldp {lvalue.Index + wordIndex}");
-        break;
-
-      case CLvalueKind.Global:
-        if (wordIndex == 0)
-        {
-          EmitGlobalFetch(lvalue.Label!);
-        }
-        else
-        {
-          EmitCode($"pushlit {lvalue.Label}"); // stack: [..., label_addr]
-          EmitCode($"pushlit {wordIndex}");    // stack: [..., label_addr, wordIndex]
-          EmitCode("pop");                     // r := wordIndex; stack: [..., label_addr]
-          EmitCode("add");                     // stack: [..., label_addr + wordIndex]
-          EmitCode("pop");                     // r := the target word's address; stack: [...]
-          EmitDereferenceLoad();               // stack: [..., value] (address consumed from r)
-          EmitCode("pop");                     // r := value; stack: [...]
-        }
-
-        break;
-
-      default:
-        throw new InvalidOperationException($"EmitRegisterWordLoadIntoR does not support a '{lvalue.Kind}' lvalue -- the 2-word register-return narrow path only ever resolves a plain named variable (see TryResolveTwoWordRegisterReturnLvalue).");
-    }
-  }
-
-  /// <summary>
-  /// Resolves <paramref name="expr"/> to a <see cref="CLvalue"/> ONLY when it is a plain named variable of
-  /// EXACTLY <paramref name="expectedType"/> -- never a dereference, array element, or struct member (an
-  /// Indirect lvalue computes a runtime address with its own side effects, which the raw word-at-a-time
-  /// read in <see cref="EmitRegisterWordLoadIntoR"/> cannot safely interleave with, the same reason <see
-  /// cref="TryResolveSimpleFloatLvalue"/> narrows the <c>__optimize</c> path the same way), and never a
-  /// variable of some OTHER 2-word type (reading a mismatched type's two words as if they were <paramref
-  /// name="expectedType"/>'s own would silently reinterpret unrelated bits). This is deliberately the
-  /// narrowest possible shape -- "<c>return someVariable;</c>" -- because this compiler has no general
-  /// mechanism to compute an arbitrary 'long'/struct-typed EXPRESSION's value at all (see <see
-  /// cref="IsUnsupportedWholeValueType"/>'s own remarks); only a value that is already sitting, fully
-  /// formed, in a plain variable's own storage can be forwarded this way.
-  /// </summary>
-  private bool TryResolveTwoWordRegisterReturnLvalue(CExpr expr, CType expectedType, out CLvalue lvalue)
+  /// <summary>Resolves <paramref name="expr"/> to an addressable <see cref="CAddr"/>, borrowing wide
+  /// register <c>WideReg(depth)</c> if a runtime pointer needs to be materialized (every non-bare-name
+  /// case) -- or reports an error and returns a dummy Frame address at offset 0 if it is not an lvalue
+  /// at all.</summary>
+  private CAddr ResolveAddr(CExpr expr, int depth)
   {
     if (expr is CNameExpr name)
     {
       CVarSymbol? symbol = LookupVariable(name.Name);
-      CType? type = symbol?.Type ?? (_globals.TryGetValue(name.Name, out CGlobalSymbol? global) ? global.Type : null);
-      if (type is not null && type.Equals(expectedType))
+      if (symbol is not null)
       {
-        lvalue = ResolveLvalue(name);
-        return true;
+        return symbol.Storage == CVarStorage.StaticGlobal
+            ? new CAddr(CAddrKind.Global, symbol.Type, Label: symbol.Label)
+            : new CAddr(CAddrKind.Frame, symbol.Type, Offset: symbol.Offset);
       }
+
+      if (_globals.TryGetValue(name.Name, out CGlobalSymbol? global))
+      {
+        return new CAddr(CAddrKind.Global, global.Type, Label: global.Label);
+      }
+
+      Error(expr.Location, $"\"{name.Name}\" is not declared");
+      return new CAddr(CAddrKind.Frame, CType.Int, Offset: 0);
     }
 
-    lvalue = null!;
-    return false;
+    int pointerDouble = WideReg(depth);
+    CType pointeeType = EmitAddressOfInto(expr, pointerDouble, depth);
+    return new CAddr(CAddrKind.Pointer, pointeeType, PointerDouble: pointerDouble);
   }
 
   /// <summary>
-  /// Emits a <c>return</c> for a genuinely 2-word "remaining" (neither <c>float</c> nor pointer) type --
-  /// 'long', or a struct whose own <see cref="CType.SizeInWords"/> is exactly 2 -- into <c>reg[0]</c>
-  /// (low word) / <c>reg[1]</c> (high word) via node 511's own <c>rld</c> ("move r to reg[a]" -- see
-  /// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.LoadRegisterFileMnemonic</c>'s own remarks). Only the narrow
-  /// "<c>return someVariable;</c>" shape is supported (see <see
-  /// cref="TryResolveTwoWordRegisterReturnLvalue"/>'s own remarks for why) -- any other expression shape
-  /// is reported, the same "functions with long will come later" boundary already drawn for a 'long'
-  /// parameter/argument, and reg[0]/reg[1] are still written (to a deterministic zero) rather than left
-  /// holding stale content from some earlier, unrelated call, mirroring <see
-  /// cref="ReportUnsupportedValueRead"/>'s own "report, but still leave well-defined state behind"
-  /// convention.
+  /// True when <c>&amp;</c><paramref name="expr"/> is guaranteed, at compile time, to land in a single
+  /// bounded page -- a local's own frame slot (page 1, bounded by this function's own declared local
+  /// size) or a global's own fixed location (page <see cref="GlobalDataPage"/>, bounded by the whole
+  /// program's own declared global data size) -- as opposed to an address reached through an arbitrary
+  /// RUNTIME pointer VALUE (a pointer parameter/local, a dereferenced pointer, the heap, a cast, a
+  /// function call's return value, ...), which cannot be bounded this way and must be assumed to be
+  /// anywhere on its own page. ADDED 2026-10-18, per Stefan directly ("the variable-index case has 2
+  /// options. the variable is global (page 2) then 16-bit arithmetic can be used. but if the variable
+  /// is on the heap or a pointer then the safe 32-bit arithmetic must be used") -- this is the SAME
+  /// "guaranteedSamePage" boundary <see cref="EmitAddConstantToRegister"/> and <see
+  /// cref="EmitAddIndexScaledToPointer"/> both need, extended (this round) past "is it a local frame
+  /// address" to also cover "is it a global" (Stefan's own clarification: a global is JUST as bounded as
+  /// a local, for this purpose -- both sit at a single, fixed, compile-time-known page -- only an actual
+  /// pointer VALUE, wherever it points, is not), computed once here and reused by every call site that
+  /// needs to decide it.
+  ///
+  /// "." inherits its base's own boundedness (a member of a bounded struct is itself bounded); "->"
+  /// dereferences a pointer VALUE first, which breaks it immediately regardless of anything past that
+  /// point. Indexing inherits its own base's boundedness the same way, but ONLY when that base is
+  /// itself an array (<c>arr[i]</c> on a bounded array is bounded; <c>ptr[i]</c> on a pointer VALUE --
+  /// even one currently held in a bounded local/global VARIABLE -- is not, since it is the VALUE stored
+  /// in that variable, not the variable's own address, that ends up being indexed).
   /// </summary>
-  private void EmitRegisterReturn(CExpr value, CType returnType, CSourceLocation location, string functionName)
+  private bool IsBoundedAddress(CExpr expr) => expr switch
   {
-    if (!TryResolveTwoWordRegisterReturnLvalue(value, returnType, out CLvalue lvalue))
-    {
-      Error(location, $"function \"{functionName}\" cannot return this \"{returnType}\" expression yet -- only returning a plain variable of exactly this type is supported so far (e.g. \"return someVariable;\"), not a computed expression");
-      EmitCode("pushlit 0");
-      EmitCode("pop");
-      EmitCode("rld 0");
-      EmitCode("pushlit 0");
-      EmitCode("pop");
-      EmitCode("rld 1");
-      return;
-    }
+    CNameExpr => true,
+    CMemberAccessExpr member => !member.IsArrow && IsBoundedAddress(member.Base),
+    CIndexExpr index => IsBoundedPointerValue(index.Base),
+    _ => false,
+  };
 
-    EmitRegisterWordLoadIntoR(lvalue, wordIndex: 0, totalWords: 2); // r := low word
-    EmitCode("rld 0");
-    EmitRegisterWordLoadIntoR(lvalue, wordIndex: 1, totalWords: 2); // r := high word
-    EmitCode("rld 1");
-  }
+  /// <summary>True when evaluating <paramref name="expr"/> AS A POINTER VALUE (not necessarily as an
+  /// lvalue -- this is what <see cref="EmitPointerDecayInto"/>/<see cref="EmitWideExprInto"/>'s own
+  /// array-decay branches actually produce) is guaranteed to land in a single bounded page: exactly when
+  /// <paramref name="expr"/> is itself a compile-time-bounded ARRAY (see <see cref="IsBoundedAddress"/>),
+  /// which decays to its own bounded address. Anything pointer-TYPED instead (a pointer parameter/local,
+  /// a dereferenced pointer, the heap, a cast, a function call's return value, ...) evaluates to a
+  /// general runtime VALUE this method cannot bound, even if that pointer happens to be held in a
+  /// perfectly bounded local/global VARIABLE -- it is the VALUE, not the variable's own address, that
+  /// ends up being indexed/offset. Used wherever a pointer-typed OPERAND (not an lvalue being addressed)
+  /// needs this same "guaranteedSamePage" classification -- see <see
+  /// cref="EmitWidePointerOrFloatAddSub"/>'s own two call sites.</summary>
+  private bool IsBoundedPointerValue(CExpr expr) =>
+      TryGetStaticType(expr, out CType type) && type.IsArray && IsBoundedAddress(expr);
 
-  /// <summary>
-  /// Emits a <c>return</c> for a pointer -- always into <c>ar[0]</c>, per Stefan's own direct
-  /// clarification ("a pointer is always a 2 word type... these new rules only apply to 2 word types"),
-  /// regardless of this compiler's own in-memory pointer representation (still exactly one CVM word --
-  /// see <see cref="PointerToChecked"/>'s own remarks in <c>CParser</c>; that representation question is
-  /// separate from this ABI decision). The pointer VALUE itself is fully general -- unlike 'long'/struct,
-  /// nothing about reading or computing a pointer expression is restricted anywhere in this compiler -- so
-  /// this evaluates <paramref name="value"/> with the ordinary <see cref="EmitExpr"/> path (any expression
-  /// shape at all), then marshals the resulting address into <c>ar[0]</c> with the exact same
-  /// pop/pushlit-0/arld sequence <see cref="EmitCall"/> already uses to marshal a register-eligible
-  /// pointer PARAMETER at a call site.
-  /// </summary>
-  private void EmitPointerReturn(CExpr value, CSourceLocation location, string functionName)
-  {
-    CType valueType = EmitExpr(value);
-    if (!valueType.IsPointer)
-    {
-      Error(location, $"function \"{functionName}\" does not return a pointer (this expression has type \"{valueType}\")");
-    }
-
-    EmitCode("pop");
-    EmitCode("pushlit 0");
-    EmitCode("arld 0");
-  }
-
-  /// <summary>Duplicates the current stack top: "pop" into r, then "push; push" -- the first push
-  /// restores the original value, the second leaves a copy above it. Net stack effect: +1.</summary>
-  private void EmitDup()
-  {
-    EmitCode("pop");
-    EmitCode("push");
-    EmitCode("push");
-  }
-
-  // ---------------------------------------------------------------------------------------------
-  // Float ABI (added 2026-09-26): 'float' expressions, lvalues, and register save/restore. See this
-  // class's own doc comment's "Float ABI" section for the full model -- everything below operates on
-  // node 305's fr registers, not the ordinary one-word data stack.
-  // ---------------------------------------------------------------------------------------------
-
-  private enum CFloatLvalueKind
-  {
-    Local,
-    Parameter,
-    Global,
-
-    /// <summary>A <c>float</c> reached through a computed RUNTIME address -- a dereferenced <c>float
-    /// *</c>, a <c>float</c> array element, or a <c>float</c> struct member -- added 2026-09-26 alongside
-    /// multi-word pointer arithmetic/indexing, once a pointer/array/struct member could first be
-    /// 'float'-typed. Parallels <see cref="CLvalueKind.Indirect"/> exactly: <see cref="CFloatLvalue.Index"/>
-    /// names a local slot holding the cached address (of the LOW word -- see
-    /// <see cref="EmitFloatLoadIndirect"/>'s own remarks), re-derived from that slot each time it's
-    /// dereferenced rather than kept live in a register across other code, the same reason
-    /// <see cref="CacheIndirectAddress"/> caches into a slot instead of trusting a register to survive.
-    /// </summary>
-    Indirect,
-  }
-
-  /// <summary>The resolved location of an assignable <c>float</c> value. <see cref="Index"/> is the base
-  /// LOCAL slot or PARAMETER word offset (the second word lives at <see cref="Index"/>+1, or -1 for Local
-  /// -- see <see cref="EmitFloatLoad"/>/<see cref="EmitFloatStore"/>'s own remarks on the direction flip)
-  /// for <see cref="CFloatLvalueKind.Local"/>/<see cref="CFloatLvalueKind.Parameter"/>; the cached
-  /// address's own local slot for <see cref="CFloatLvalueKind.Indirect"/> (see
-  /// <see cref="CacheFloatIndirectAddress"/>); unused for Global. For Global, <see cref="Label"/> is the
-  /// low word's own label (the high word is <c>{Label}__hi</c>).</summary>
-  private sealed record CFloatLvalue(CFloatLvalueKind Kind, int Index, string? Label = null);
-
-  /// <summary>Resolves a <c>float</c>-context lvalue: a plain named variable (<see
-  /// cref="CFloatLvalueKind.Local"/>/<see cref="CFloatLvalueKind.Parameter"/>/<see
-  /// cref="CFloatLvalueKind.Global"/>), or -- added 2026-09-26 alongside multi-word pointer
-  /// arithmetic/indexing -- a dereferenced <c>float *</c>, a <c>float</c> array element, or a <c>float</c>
-  /// struct member (all <see cref="CFloatLvalueKind.Indirect"/>, via <see
-  /// cref="CacheFloatIndirectAddress"/>). Each of the three new cases evaluates its own ADDRESS
-  /// computation through the exact same (non-float) helpers the general int/pointer lvalue machinery
-  /// uses (<see cref="EmitExpr"/> for the pointer operand, <see cref="EmitAddressOfIndex"/>, <see
-  /// cref="EmitAddressOfMember"/>) -- an address is always a plain one-word CVM value regardless of what
-  /// it points AT, so nothing float-specific is needed until the address is actually dereferenced.
-  /// Anything else (an arbitrary non-lvalue expression) is a clear diagnostic, same as before.</summary>
-  private CFloatLvalue ResolveFloatLvalue(CExpr expr)
+  /// <summary>Computes <paramref name="expr"/>'s ADDRESS (not its value) into double register
+  /// <paramref name="destDouble"/> -- the general machinery behind both the <c>&amp;</c> operator and
+  /// every compound lvalue's own addressing (see this class's own "Addressing" remarks). <paramref
+  /// name="depth"/> is <c>destDouble</c>'s own nesting depth (<c>destDouble == WideReg(depth)</c>),
+  /// passed through so an internal sub-computation (an index's int value, a nested "." base's own
+  /// address) can safely reuse it. Returns the pointee's type.</summary>
+  private CType EmitAddressOfInto(CExpr expr, int destDouble, int depth)
   {
     switch (expr)
     {
       case CNameExpr name:
         {
           CVarSymbol? symbol = LookupVariable(name.Name);
-          if (symbol is { Kind: CVarKind.Local })
+          if (symbol is not null)
           {
-            return new CFloatLvalue(CFloatLvalueKind.Local, symbol.Index);
+            if (symbol.Storage == CVarStorage.StaticGlobal)
+            {
+              EmitCode($"dlit d{destDouble}, {GlobalDataPage}, {symbol.Label}");
+              return symbol.Type;
+            }
+
+            // Frame address = fp + offset, page 1 (implicit). fp@ pushes fp's own raw address value
+            // onto the VM stack; rpop brings it into a plain r-register for arithmetic. guaranteedSamePage:
+            // true -- this is the VM's OWN frame pointer plus this function's own local-frame offset
+            // (bounded by its total declared local size, a compile-time-known small quantity), on page 1
+            // only; the stack itself would have to overflow a whole 64K-word page before this could ever
+            // leave page 1, a pre-existing, out-of-scope failure mode distinct from general C pointer
+            // arithmetic on an arbitrary runtime pointer value (see the other three call sites below).
+            EmitCode("fp@");
+            EmitCode($"rpop r{2 * destDouble}");
+            if (symbol.Offset != 0)
+            {
+              EmitAddConstantToRegister(2 * destDouble, symbol.Offset, guaranteedSamePage: true);
+            }
+
+            EmitCode($"rlit r{2 * destDouble + 1}, 1");
+            return symbol.Type;
           }
 
-          if (symbol is { Kind: CVarKind.Parameter })
+          if (_globals.TryGetValue(name.Name, out CGlobalSymbol? global))
           {
-            return new CFloatLvalue(CFloatLvalueKind.Parameter, symbol.Index);
+            EmitCode($"dlit d{destDouble}, {GlobalDataPage}, {global.Label}");
+            return global.Type;
           }
 
-          string label = symbol?.GlobalLabel ?? MangleExternalSymbol(name.Name);
-          if (symbol is not { Kind: CVarKind.Global })
-          {
-            if (_globals.ContainsKey(name.Name))
-            {
-              // A real global defined in this file -- EmitGlobal already declared its storage.
-            }
-            else if (_functions.ContainsKey(name.Name))
-            {
-              Error(expr.Location, $"\"{name.Name}\" is a function and cannot be assigned to");
-            }
-            else
-            {
-              // Not defined in this file -- assume an external 'float' global the linker will resolve.
-              // Both labels need importing -- see EmitGlobal's own remarks.
-              _imports.Add(label);
-              _imports.Add(label + "__hi");
-            }
-          }
-
-          return new CFloatLvalue(CFloatLvalueKind.Global, 0, label);
+          Error(expr.Location, $"\"{name.Name}\" is not declared");
+          EmitCode($"dlit d{destDouble}, 0, 0");
+          return CType.Int;
         }
 
       case CUnaryExpr { Op: CUnaryOp.Dereference } deref:
         {
-          CType pointerType = EmitExpr(deref.Operand);
-          if (!pointerType.IsPointer || !pointerType.ElementType!.IsFloat)
+          CType pointerType = EmitWideExprInto(deref.Operand, destDouble, depth);
+          if (!pointerType.IsPointer)
           {
-            Error(expr.Location, $"cannot dereference a value of type \"{pointerType}\" as 'float'");
+            Error(expr.Location, $"cannot dereference a value of type \"{pointerType}\"");
+            return CType.Int;
           }
 
-          return CacheFloatIndirectAddress();
+          return pointerType.ElementType!;
         }
 
       case CIndexExpr index:
         {
-          CType elementType = EmitAddressOfIndex(index);
-          if (!elementType.IsFloat)
+          CType baseType = EmitPointerDecayInto(index.Base, destDouble, depth);
+          if (!baseType.IsPointer)
           {
-            Error(expr.Location, $"indexing here yields a value of type \"{elementType}\", not 'float'");
+            Error(expr.Location, $"cannot index a value of type \"{baseType}\"");
+            return CType.Int;
           }
 
-          return CacheFloatIndirectAddress();
+          CType elementType = baseType.ElementType!;
+
+          // guaranteedSamePage: IsBoundedAddress(index) -- true exactly when index.Base is itself a
+          // bounded array (local OR global; see IsBoundedAddress's own remarks), in which case destDouble
+          // decayed to that array's own compile-time-bounded address; false when index.Base is anything
+          // pointer-typed (a pointer parameter/local, a dereferenced pointer, a heap pointer, ...), in
+          // which case destDouble holds that pointer's own RUNTIME value -- could be anywhere on its page.
+          EmitAddIndexScaledToPointer(destDouble, index.Index, Math.Max(elementType.SizeInWords, 1), depth, guaranteedSamePage: IsBoundedAddress(index));
+          return elementType;
         }
 
       case CMemberAccessExpr member:
         {
-          CType fieldType = EmitAddressOfMember(member);
-          if (!fieldType.IsFloat)
+          CType baseStructType;
+          if (member.IsArrow)
           {
-            Error(expr.Location, $"\"{member.Member}\" is not a 'float' member");
+            baseStructType = EmitWideExprInto(member.Base, destDouble, depth);
+            if (!baseStructType.IsPointer)
+            {
+              Error(expr.Location, $"\"->\" needs a pointer on its left, got \"{baseStructType}\"");
+              return CType.Int;
+            }
+
+            baseStructType = baseStructType.ElementType!;
+          }
+          else
+          {
+            baseStructType = EmitAddressOfInto(member.Base, destDouble, depth);
           }
 
-          return CacheFloatIndirectAddress();
+          if (!baseStructType.IsStruct)
+          {
+            Error(expr.Location, $"\"{member.Member}\" is not a member of \"{baseStructType}\" (not a struct)");
+            return CType.Int;
+          }
+
+          CStructMember? field = baseStructType.Members?.FirstOrDefault(m => m.Name == member.Member);
+          if (field is null)
+          {
+            Error(expr.Location, $"\"struct {baseStructType.Tag}\" has no member \"{member.Member}\"");
+            return CType.Int;
+          }
+
+          if (field.Offset != 0)
+          {
+            // guaranteedSamePage: IsBoundedAddress(member) -- true via plain "." on a local/global
+            // struct lvalue (destDouble holds a compile-time-bounded frame/global address, exactly like
+            // CNameExpr above); false via "->" (destDouble holds an arbitrary RUNTIME pointer value --
+            // could be anywhere on its own page). destDouble already holds a COMPLETE (page, address)
+            // pair by this point in every case above, so dadd is immediately safe in the false case.
+            EmitAddConstantToRegister(2 * destDouble, field.Offset, guaranteedSamePage: IsBoundedAddress(member));
+          }
+
+          return field.Type;
         }
 
       default:
-        Error(expr.Location, "only a plain 'float' variable, dereference, array element, or struct member is supported here");
-        return new CFloatLvalue(CFloatLvalueKind.Local, 0);
+        Error(expr.Location, "this expression is not addressable (it is not an lvalue)");
+        EmitCode($"dlit d{destDouble}, 0, 0");
+        return CType.Int;
     }
   }
 
-  /// <summary>Loads a <c>float</c> lvalue's two words into <c>fr[destReg]</c> -- pushes LOW then HIGH (in
-  /// that order, per this class's own doc comment's word-order remarks), then <c>fpop destReg</c>.</summary>
-  private void EmitFloatLoad(CFloatLvalue lvalue, int destReg)
+  /// <summary>An array decays to its own address; anything else is evaluated for its (pointer) VALUE.
+  /// Shared by index/pointer-arithmetic codegen, exactly mirroring ordinary C decay rules.</summary>
+  private CType EmitPointerDecayInto(CExpr expr, int destDouble, int depth)
   {
-    switch (lvalue.Kind)
+    if (TryGetStaticType(expr, out CType type) && type.IsArray)
     {
-      case CFloatLvalueKind.Local:
-        EmitFloatLoadLocal(lvalue.Index, destReg);
-        break;
-      case CFloatLvalueKind.Parameter:
-        EmitCode($"ldp {lvalue.Index}");     // low
-        EmitCode("push");
-        EmitCode($"ldp {lvalue.Index + 1}"); // high
-        EmitCode("push");
-        EmitCode($"fpop {destReg}");
-        break;
-      case CFloatLvalueKind.Indirect:
-        EmitFloatLoadIndirect(lvalue.Index, destReg);
-        break;
-      default:
-        EmitGlobalFetch(lvalue.Label!);          // low
-        EmitCode("push");
-        EmitGlobalFetch(lvalue.Label + "__hi");  // high
-        EmitCode("push");
-        EmitCode($"fpop {destReg}");
-        break;
+      CType elementType = EmitAddressOfInto(expr, destDouble, depth);
+      return CType.PointerTo(elementType);
     }
+
+    return EmitWideExprInto(expr, destDouble, depth);
   }
 
-  /// <summary>Stores <c>fr[srcReg]</c> into a <c>float</c> lvalue's two words -- <c>fpush srcReg</c>
-  /// leaves [low, high(top)] on the stack (per this class's own doc comment's word-order remarks), so the
-  /// FIRST word popped back off is the HIGH word, the SECOND is the LOW word.</summary>
-  private void EmitFloatStore(CFloatLvalue lvalue, int srcReg)
+  /// <summary>Adds <paramref name="indexExpr"/>'s value, scaled by <paramref name="elementWords"/>,
+  /// to the pointer already sitting in double register <paramref name="pointerDouble"/>. <paramref
+  /// name="guaranteedSamePage"/> is the caller's own page-crossing claim (see <see
+  /// cref="IsBoundedAddress"/>'s own remarks) -- true when indexing into a compile-time-bounded array
+  /// (local OR global), false when indexing through a general runtime pointer VALUE (parameter, heap,
+  /// dereferenced pointer, ...).
+  ///
+  /// CHANGED 2026-10-18, per Stefan directly, two rounds: first "rlit and add can only be used if it is
+  /// guaranteed that the final address does not cross a page border. if not then dlit and dadd must be
+  /// used for pointer arithmetic", then the refinement that actually decides <paramref
+  /// name="guaranteedSamePage"/> here: "the variable-index case has 2 options. the variable is global
+  /// (page 2) then 16-bit arithmetic can be used. but if the variable is on the heap or a pointer then
+  /// the safe 32-bit arithmetic must be used."
+  ///
+  /// - The COMPILE-TIME-CONSTANT index case goes through <see cref="EmitAddConstantToRegister"/>
+  ///   directly, carrying <paramref name="guaranteedSamePage"/> through unchanged (<paramref
+  ///   name="pointerDouble"/> is completely populated -- both halves -- by every caller of this method
+  ///   before it runs, via <see cref="EmitPointerDecayInto"/>/<see cref="EmitAddressOfInto"/>, so that
+  ///   method's own safe path is immediately usable here whenever it's needed).
+  /// - The RUNTIME-VARIABLE index case (this method's own remaining logic) has no constant to hand
+  ///   `dlit` -- the scaled delta is already sitting in a plain register (<c>indexRegister</c>) by the
+  ///   time it needs adding. When guaranteed, the ORIGINAL plain 16-bit `add` is unchanged (cheapest,
+  ///   and provably correct here). When NOT guaranteed, `indexRegister`'s value (a signed 16-bit delta)
+  ///   is copied into <see cref="PointerArithmeticScratchDouble"/>'s own low alias, its HIGH alias is set
+  ///   to the correct sign-extension (`0` or `-1`, via the same `cond`/`if` sign-test
+  ///   `claude/cvm-abi.md` section 3.7 already uses for comparisons) so the resulting double register is
+  ///   a properly sign-extended 32-bit delta, and `dadd` adds that into <paramref name="pointerDouble"/>
+  ///   -- mirroring <see cref="EmitAddConstantToRegister"/>'s own `dlit`+`dadd` encoding, just with the
+  ///   delta's low half coming from a register instead of a compile-time literal.
+  ///   <b>Self-aliasing exception, flagged rather than fully solved</b>: if <paramref
+  ///   name="pointerDouble"/> IS <see cref="PointerArithmeticScratchDouble"/> itself (the same rare
+  ///   `return ptr[i];`/`return &amp;arr[i];`-into-the-return-register case <see
+  ///   cref="EmitAddConstantToRegister"/> also has to guard against), there is no OTHER
+  ///   individually-16-bit-addressable double register to borrow as scratch for the sign-extension step
+  ///   (unlike that method's constant case, this one needs a plain `mov` into the scratch's low alias,
+  ///   which only reaches <c>d0</c>-<c>d7</c> -- <see cref="GlobalAddressTempDouble"/>, `d8`, is not a
+  ///   substitute here). This one combination falls back to the plain 16-bit `add` instead -- correct
+  ///   unless THIS particular access also happens to cross a page, a narrower residual gap than before
+  ///   this change, not a new one, and flagged rather than silently accepted.
+  ///
+  /// The index's own int value is computed into <c>ScalarReg(depth)</c> -- safe to reuse the SAME depth
+  /// as the pointer itself, since the index value's lifetime ends (consumed into the pointer) before
+  /// anything else at this depth runs.</summary>
+  private void EmitAddIndexScaledToPointer(int pointerDouble, CExpr indexExpr, int elementWords, int depth, bool guaranteedSamePage)
   {
-    switch (lvalue.Kind)
+    if (TryEvaluateConstantLong(indexExpr, out long constantIndex))
     {
-      case CFloatLvalueKind.Local:
-        EmitFloatStoreLocal(lvalue.Index, srcReg);
-        break;
-      case CFloatLvalueKind.Parameter:
-        EmitCode($"fpush {srcReg}");
-        EmitCode("pop"); EmitCode($"stp {lvalue.Index + 1}"); // high -> offset+1
-        EmitCode("pop"); EmitCode($"stp {lvalue.Index}");     // low -> offset
-        break;
-      case CFloatLvalueKind.Indirect:
-        EmitFloatStoreIndirect(lvalue.Index, srcReg);
-        break;
-      default:
-        EmitCode($"fpush {srcReg}");
-        EmitCode("pop"); EmitGlobalAssign(lvalue.Label + "__hi"); // high
-        EmitCode("pop"); EmitGlobalAssign(lvalue.Label!);          // low
-        break;
-    }
-  }
-
-  /// <summary>Float ABI: a LOCAL float's two frame slots are HIGH-then-LOW (<paramref name="baseSlot"/>
-  /// holds HIGH, <paramref name="baseSlot"/>+1 holds LOW) -- the opposite of a parameter/global -- because
-  /// a local's own address is <c>f - offset</c> (DECREASES as the slot number increases), so the LOW word
-  /// (which must sit at the LOWER address, per Stefan's own memory-layout rule) has to live at the HIGHER
-  /// slot number. See this class's own doc comment for the full derivation. Used both by
-  /// <see cref="EmitFloatLoad"/>/<see cref="EmitFloatStore"/> (a named local variable) and by
-  /// <see cref="EmitFunction"/>'s own float-register-parameter prologue spill (a fastcall float parameter,
-  /// which is ALSO just an ordinary local slot pair once spilled).</summary>
-  private void EmitFloatLoadLocal(int baseSlot, int destReg)
-  {
-    EmitCode($"ldl {baseSlot + 1}"); // low
-    EmitCode("push");
-    EmitCode($"ldl {baseSlot}");     // high
-    EmitCode("push");
-    EmitCode($"fpop {destReg}");
-  }
-
-  private void EmitFloatStoreLocal(int baseSlot, int srcReg)
-  {
-    EmitCode($"fpush {srcReg}");
-    EmitCode("pop"); EmitCode($"stl {baseSlot}");     // high -> baseSlot
-    EmitCode("pop"); EmitCode($"stl {baseSlot + 1}"); // low -> baseSlot+1
-  }
-
-  /// <summary>Float ABI, added 2026-09-26: caches an address already on top of the ordinary (non-float)
-  /// stack into a fresh local slot, for <see cref="CFloatLvalueKind.Indirect"/> -- a dereferenced <c>float
-  /// *</c>, a <c>float</c> array element, or a <c>float</c> struct member. Mirrors
-  /// <see cref="CacheIndirectAddress"/> exactly (identical single-word caching, same underlying node-306
-  /// dereference sequence); kept as a separate method only because it returns a <see cref="CFloatLvalue"/>
-  /// instead of a <see cref="CLvalue"/>. The cached address always points at the value's own LOW word --
-  /// see <see cref="EmitFloatLoadIndirect"/>'s own remarks for why.</summary>
-  private CFloatLvalue CacheFloatIndirectAddress()
-  {
-    int addressSlot = _currentFunction!.NextLocalSlot++;
-    EmitCode("pop");                // r := address; stack: []
-    EmitCode($"stl {addressSlot}"); // addressSlot := r (the address)
-    return new CFloatLvalue(CFloatLvalueKind.Indirect, addressSlot);
-  }
-
-  /// <summary>Float ABI, added 2026-09-26: loads <paramref name="addressSlot"/>'s cached address into r,
-  /// optionally offset by one word first (entirely via the ordinary one-word stack -- <c>ldl</c> only ever
-  /// sets r, so adding 1 needs the same "push, pushlit, pop, add, pop" dance <see
-  /// cref="EmitLocalOrParameterAddress"/> uses for "f +/- offset"). Stack-neutral overall (whatever was on
-  /// the stack before this call is still there after it, undisturbed underneath any temporaries this
-  /// pushes and pops again) -- safe to call with a not-yet-stored value already sitting on top of the
-  /// stack, which is exactly what <see cref="EmitFloatStoreIndirect"/> needs.</summary>
-  private void EmitLoadAddressSlotPlusOffsetIntoR(int addressSlot, int offset)
-  {
-    if (offset == 0)
-    {
-      EmitCode($"ldl {addressSlot}");
+      EmitAddConstantToRegister(2 * pointerDouble, (int)(constantIndex * elementWords), guaranteedSamePage);
       return;
     }
 
-    EmitCode($"ldl {addressSlot}"); // r := the cached address
-    EmitCode("push");               // stack: [..., address]
-    EmitCode($"pushlit {offset}");  // stack: [..., address, offset]
-    EmitCode("pop");                // r := offset; stack: [..., address]
-    EmitCode("add");                // stack: [..., address + offset]
-    EmitCode("pop");                // r := address + offset; stack: [...] (back to where it started)
-  }
-
-  /// <summary>Float ABI, added 2026-09-26: loads the two words at a cached RUNTIME address (<see
-  /// cref="CFloatLvalueKind.Indirect"/>) into <c>fr[destReg]</c>. The LOW word lives at the cached address
-  /// itself and the HIGH word at address+1 -- the same "low at the lower address" layout a local/global
-  /// float already uses (see <see cref="EmitFloatLoadLocal"/>'s own remarks for the local case's reversed
-  /// SLOT order, which is exactly what makes its actual memory-ADDRESS order match this one), so a
-  /// pointer to <c>float</c> is simply the address of its low word, with no special-casing needed anywhere
-  /// pointer arithmetic itself happens. Re-derives the address from its cached slot twice (once for low,
-  /// once for high) rather than trying to keep an address register live across both dereferences,
-  /// mirroring <see cref="EmitLoad"/>/<see cref="EmitStore"/>'s own "default" (non-float Indirect) case,
-  /// which re-derives its own single-word address the same way.</summary>
-  private void EmitFloatLoadIndirect(int addressSlot, int destReg)
-  {
-    EmitLoadAddressSlotPlusOffsetIntoR(addressSlot, 0);
-    EmitDereferenceLoad();  // stack: [low]
-    EmitLoadAddressSlotPlusOffsetIntoR(addressSlot, 1);
-    EmitDereferenceLoad();  // stack: [low, high]
-    EmitCode($"fpop {destReg}");
-  }
-
-  /// <summary>Float ABI, added 2026-09-26: stores <c>fr[srcReg]</c>'s two words to a cached RUNTIME
-  /// address (<see cref="CFloatLvalueKind.Indirect"/>) -- the write-side counterpart of <see
-  /// cref="EmitFloatLoadIndirect"/>, same low-at-the-address/high-at-address+1 layout. <c>fpush srcReg</c>
-  /// leaves [low, high(top)] on the stack (per this class's own doc comment's word-order remarks), so the
-  /// HIGH word is stored FIRST (already on top, to address+1) and the LOW word second (to the address
-  /// itself) -- matching <see cref="EmitFloatStoreLocal"/>/<see cref="EmitFloatStore"/>'s own "pop HIGH
-  /// first" convention.</summary>
-  private void EmitFloatStoreIndirect(int addressSlot, int srcReg)
-  {
-    EmitCode($"fpush {srcReg}"); // stack: [low, high]
-    EmitLoadAddressSlotPlusOffsetIntoR(addressSlot, 1); // r := address+1; stack unchanged: [low, high]
-    EmitDereferenceStore();                             // pops "high", stores to address+1; stack: [low]
-    EmitLoadAddressSlotPlusOffsetIntoR(addressSlot, 0); // r := address; stack unchanged: [low]
-    EmitDereferenceStore();                             // pops "low", stores to address; stack: []
-  }
-
-  /// <summary>Materializes an arbitrary compile-time <c>float</c> constant into <c>fr[destReg]</c>: splits
-  /// its IEEE-754 bit pattern into two 16-bit words and pushes LOW then HIGH (matching
-  /// <see cref="EmitFloatLoad"/>'s own convention) before <c>fpop destReg</c>. There is no hardware
-  /// "load an arbitrary float immediate into a register" primitive -- only <c>fconst</c>'s 8 fixed ROM
-  /// constants (see <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.FloatingPointConstantMnemonic"/>'s
-  /// own remarks) -- so every literal goes through the ordinary stack, exactly like loading a variable's
-  /// value does.</summary>
-  private void EmitFloatLiteralInto(float value, int destReg)
-  {
-    int bits = BitConverter.SingleToInt32Bits(value);
-    int low = bits & 0xFFFF;
-    int high = (bits >> 16) & 0xFFFF;
-    EmitCode($"pushlit {low}");
-    EmitCode($"pushlit {high}");
-    EmitCode($"fpop {destReg}");
-  }
-
-  private static string FloatBinaryMnemonic(CBinaryOp op) => op switch
-  {
-    CBinaryOp.Add => "fadd",
-    CBinaryOp.Subtract => "fsub",
-    CBinaryOp.Multiply => "fmul",
-    CBinaryOp.Divide => "fdiv",
-    _ => throw new InvalidOperationException($"'{op}' has no floating-point hardware opcode"),
-  };
-
-  /// <summary>The three directly-hardware-backed <c>float</c> built-ins this compiler exposes, per
-  /// Stefan's own scope instruction ("only add functions that are directly supported by the FP
-  /// subprocessor should be used by the compiler") -- C has no operator for min/max/absolute-value, so
-  /// these are recognized here purely by name (like a real compiler's <c>__builtin_*</c> intrinsics),
-  /// never emitted as an actual <c>call</c>. Named after the standard C library's own <c>&lt;math.h&gt;</c>
-  /// float-suffixed convention (<c>fabsf</c>/<c>fminf</c>/<c>fmaxf</c>) rather than the raw CVM mnemonics,
-  /// so a future float-library can define real (non-built-in) versions under the SAME names for other
-  /// toolchains/targets without a collision here.</summary>
-  private static readonly Dictionary<string, (string Mnemonic, int Arity)> FloatBuiltins = new(StringComparer.Ordinal)
-  {
-    ["fabsf"] = ("fabs", 1),
-    ["fminf"] = ("fmin", 2),
-    ["fmaxf"] = ("fmax", 2),
-  };
-
-  /// <summary><c>__optimize</c> register path (added 2026-09-27): a SEPARATE table from <see
-  /// cref="FloatBuiltins"/> above, on purpose -- <see cref="FloatBuiltins"/>'s names are recognized
-  /// unconditionally, by name alone, with no user declaration required at all, while an entry here only
-  /// ever applies to a name Stefan's own source has actually declared <c>__optimize</c> (checked via <see
-  /// cref="CFunctionSignature.IsOptimize"/> in <see cref="TryGetFloatBuiltin"/> below). This is the
-  /// GENERAL/register path of the two-path substitution Stefan asked for ("if the variable is in a float
-  /// register, there is already an 'fabs' opcode"): reuses <see cref="EmitFloatExprInto"/>'s existing
-  /// machinery unchanged, by emitting the same <c>fabs destReg destReg</c> node-305 opcode <see
-  /// cref="FloatBuiltins"/>'s own <c>fabsf</c> entry already uses. See <see
-  /// cref="TryEmitOptimizedFabsAssignment"/> for the OTHER (narrow, register-file-bypassing) path this
-  /// same <c>__optimize</c> declaration also enables.
-  ///
-  /// <b>RENAMED 2026-09-27</b> (later the same day, alongside <see
-  /// cref="IsRecognizedOptimizeSignature"/>'s own rename): the recognized name changed from <c>fabs</c> to
-  /// <c>fabsf</c>, which means this table's own key now COLLIDES, in NAME only, with <see
-  /// cref="FloatBuiltins"/>'s own pre-existing, unconditional <c>fabsf</c> entry above. This is harmless,
-  /// not a bug to fix: <see cref="TryGetFloatBuiltin"/> checks <see cref="FloatBuiltins"/> FIRST and
-  /// returns as soon as it matches, so for the REGISTER path specifically, a call to <c>fabsf(...)</c>
-  /// already resolves to the identical <c>fabs destReg destReg</c> substitution whether or not the source
-  /// ALSO declares <c>__optimize float fabsf(float);</c> -- this table's own <c>fabsf</c> entry is
-  /// therefore dead code for that path today (unreachable, but not wrong: it maps to the exact same
-  /// mnemonic <see cref="FloatBuiltins"/> already would have). It is NOT dead for the NARROW path, though
-  /// -- <see cref="TryEmitOptimizedFabsAssignment"/> bypasses <see cref="FloatBuiltins"/>/<see
-  /// cref="TryGetFloatBuiltin"/> entirely and checks <see cref="CFunctionSignature.IsOptimize"/> directly,
-  /// so an actual <c>__optimize float fabsf(float);</c> declaration is still REQUIRED to unlock that
-  /// register-file-bypassing substitution; a plain, non-<c>__optimize</c> <c>fabsf</c> call only ever gets
-  /// the register path via <see cref="FloatBuiltins"/>, exactly as it already did before this feature
-  /// existed.
-  /// </summary>
-  private static readonly Dictionary<string, (string Mnemonic, int Arity)> OptimizeFloatRegisterMnemonics = new(StringComparer.Ordinal)
-  {
-    ["fabsf"] = ("fabs", 1),
-  };
-
-  private bool TryGetFloatBuiltin(CCallExpr call, out string mnemonic, out int arity)
-  {
-    if (FloatBuiltins.TryGetValue(call.FunctionName, out (string Mnemonic, int Arity) entry))
+    int indexRegister = ScalarReg(depth);
+    EmitIntExprInto(indexExpr, indexRegister, depth);
+    if (elementWords != 1)
     {
-      if (call.Arguments.Count != entry.Arity)
-      {
-        Error(call.Location, $"\"{call.FunctionName}\" expects {entry.Arity} argument(s), but {call.Arguments.Count} were given");
-      }
-
-      mnemonic = entry.Mnemonic;
-      arity = entry.Arity;
-      return true;
+      EmitCode($"rlit r{indexRegister + 1}, {elementWords}");
+      _imports.Add("__mul");
+      EmitCode($"rpush r{indexRegister}");
+      EmitCode($"rpush r{indexRegister + 1}");
+      EmitCode("call __mul");
+      EmitCode($"rpop r{indexRegister}");
     }
 
-    if (_functions.TryGetValue(call.FunctionName, out CFunctionSignature? signature) && signature.IsOptimize &&
-        OptimizeFloatRegisterMnemonics.TryGetValue(call.FunctionName, out (string Mnemonic, int Arity) optimizeEntry))
+    if (guaranteedSamePage || pointerDouble == PointerArithmeticScratchDouble)
     {
-      if (call.Arguments.Count != optimizeEntry.Arity)
-      {
-        Error(call.Location, $"\"{call.FunctionName}\" expects {optimizeEntry.Arity} argument(s), but {call.Arguments.Count} were given");
-      }
-
-      mnemonic = optimizeEntry.Mnemonic;
-      arity = optimizeEntry.Arity;
-      return true;
+      EmitCode($"add r{2 * pointerDouble}, r{indexRegister}");
+      return;
     }
 
-    mnemonic = string.Empty;
-    arity = 0;
-    return false;
+    EmitCode($"mov r{2 * PointerArithmeticScratchDouble}, r{indexRegister}");
+    string deltaNegativeLabel = NewLabel("idxdeltaneg");
+    string deltaDoneLabel = NewLabel("idxdeltadone");
+    EmitCode($"if r{indexRegister} <0 then {deltaNegativeLabel}");
+    EmitCode($"rlit r{2 * PointerArithmeticScratchDouble + 1}, 0");
+    EmitCode($"br {deltaDoneLabel}");
+    EmitLabel(deltaNegativeLabel);
+    EmitCode($"rlit r{2 * PointerArithmeticScratchDouble + 1}, -1");
+    EmitLabel(deltaDoneLabel);
+    EmitCode($"dadd d{pointerDouble}, d{PointerArithmeticScratchDouble}");
   }
 
-  /// <summary>Float ABI: a best-effort, code-free STATIC check of whether <paramref name="expr"/> would,
-  /// if evaluated, produce a <c>float</c> value -- used only to disambiguate a handful of contexts that
-  /// need to know BEFORE emitting any code (a cast's operand, an assignment's target). Deliberately not a
-  /// full type-checker (this compiler has none -- see this class's own doc comment); every <c>float</c>
-  /// sub-expression this "basic" support actually needs to recognize eventually bottoms out in a literal,
-  /// a name, a supported operator over those, a call, a cast, or -- added 2026-09-26 alongside multi-word
-  /// pointer arithmetic/indexing -- a dereference/index/member-access resolved via
-  /// <see cref="TryGetStaticType"/>, all covered below.</summary>
-  private bool LooksLikeFloatExpr(CExpr expr) => expr switch
+  /// <summary>Loads <paramref name="addr"/>'s whole value: 1 word into plain register <paramref
+  /// name="scalarDest"/> when <see cref="CAddr.Type"/> is 1 word, or 2 words into double register
+  /// <paramref name="wideDest"/> (low into its low r-alias, high into its high r-alias) when it is 2
+  /// words. Exactly one of the two destinations is used, per the type's own <see
+  /// cref="CType.SizeInWords"/>. <paramref name="depth"/> is only consulted in the rare self-aliasing
+  /// case below; pass the caller's own current depth (or any value one call deeper, e.g. <c>baseDepth</c>
+  /// in a caller that already bumped past a fresh-register depth) -- it is never consumed when that case
+  /// does not apply.</summary>
+  private void EmitLoadValueFromAddr(CAddr addr, int scalarDest, int wideDest, int depth)
   {
-    CFloatLiteralExpr => true,
-    CNameExpr name => IsFloatNamedVariable(name),
-    CUnaryExpr { Op: CUnaryOp.Plus or CUnaryOp.Minus } unary => LooksLikeFloatExpr(unary.Operand),
-    CUnaryExpr { Op: CUnaryOp.Dereference } => TryGetStaticType(expr, out CType derefType) && derefType.IsFloat,
-    CIndexExpr => TryGetStaticType(expr, out CType indexType) && indexType.IsFloat,
-    CMemberAccessExpr => TryGetStaticType(expr, out CType memberType) && memberType.IsFloat,
-    CBinaryExpr { Op: CBinaryOp.Add or CBinaryOp.Subtract or CBinaryOp.Multiply or CBinaryOp.Divide } binary =>
-        LooksLikeFloatExpr(binary.Left) || LooksLikeFloatExpr(binary.Right),
-    CCallExpr call => (FloatBuiltins.ContainsKey(call.FunctionName)) || (_functions.TryGetValue(call.FunctionName, out CFunctionSignature? sig) && sig.ReturnType.IsFloat),
-    CCastExpr cast => cast.TargetType.IsFloat,
-    CAssignExpr assign => LooksLikeFloatExpr(assign.Target),
-    CCompoundAssignExpr compoundAssign => LooksLikeFloatExpr(compoundAssign.Target),
-    _ => false,
-  };
+    int size = Math.Max(addr.Type.SizeInWords, 1);
+    if (size == 1)
+    {
+      EmitLoadWordFromAddr(addr, 0, scalarDest);
+      return;
+    }
 
-  /// <summary>Float ABI, added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a
-  /// side-effect-free, best-effort STATIC re-derivation of an expression's type, used only by
-  /// <see cref="LooksLikeFloatExpr"/> to decide -- before emitting anything -- whether a
-  /// dereference/index/member-access expression would produce a 'float' value now that a
-  /// pointer/array/struct member can first be 'float'-typed. Mirrors <see cref="ResolveLvalue"/>/<see
-  /// cref="EmitAddressOf"/>'s own type logic for exactly these three node kinds, but computes no code:
-  /// the expression itself is never evaluated here (a variable/parameter/global's declared TYPE is looked
-  /// up, never a runtime value), so this is safe to call speculatively even on an expression with side
-  /// effects (the side effects still only actually happen once, when the caller goes on to really emit
-  /// it). Not a full type-checker -- an expression shape this compiler doesn't otherwise support returns
-  /// <see langword="false"/> rather than guessing.</summary>
+    if (addr.Kind == CAddrKind.Pointer && addr.PointerDouble == wideDest)
+    {
+      // The destination IS the register holding the pointer (this happens routinely -- e.g. evaluating
+      // "*pp" where pp is a pointer-to-wide-type at the top of an expression, where both the pointer
+      // and its eventual value naturally land at the same depth-indexed register). Fetching word 0
+      // directly into wideDest would overwrite the pointer's own low r-alias before word 1's fetch gets
+      // a chance to `inc` it -- so route both words through a FRESH depth-indexed scratch double (never
+      // GlobalAddressTempDouble/d8 here: its r-aliases, r16/r17, are not reachable by `mov`'s 4-bit
+      // register field -- confirmed by Stefan 2026-10-18, "r16 and r17 are not accessible with opcodes
+      // using rx") and move into place only once both words are safely captured. WideReg(depth + 1) is
+      // always a DIFFERENT double register from wideDest itself: every call site that can actually reach
+      // this branch passes a depth one shallower than the one used to produce wideDest (see this
+      // method's callers), so WideReg's injectivity in depth guarantees no self-collision; WideReg's own
+      // overflow guard also makes depth + 1 safe to call even in a pathological over-nested case.
+      int scratchDouble = WideReg(depth + 1);
+      EmitLoadWordFromAddr(addr, 0, 2 * scratchDouble);
+      EmitLoadWordFromAddr(addr, 1, 2 * scratchDouble + 1);
+      EmitCode($"mov r{2 * wideDest}, r{2 * scratchDouble}");
+      EmitCode($"mov r{2 * wideDest + 1}, r{2 * scratchDouble + 1}");
+      return;
+    }
+
+    EmitLoadWordFromAddr(addr, 0, 2 * wideDest);
+    EmitLoadWordFromAddr(addr, 1, 2 * wideDest + 1);
+  }
+
+  private void EmitStoreValueToAddr(CAddr addr, int scalarSrc, int wideSrc)
+  {
+    int size = Math.Max(addr.Type.SizeInWords, 1);
+    if (size == 1)
+    {
+      EmitStoreWordToAddr(addr, 0, scalarSrc);
+      return;
+    }
+
+    EmitStoreWordToAddr(addr, 0, 2 * wideSrc);
+    EmitStoreWordToAddr(addr, 1, 2 * wideSrc + 1);
+  }
+
+  // ---------------------------------------------------------------------------------------------------
+  // Static type resolution -- pure type-system logic, independent of the register architecture, so
+  // reused essentially unchanged from the previous version of this class.
+
   private bool TryGetStaticType(CExpr expr, out CType type)
   {
     switch (expr)
     {
+      case CIntLiteralExpr literal:
+        type = literal.IsUnsigned ? CType.UnsignedInt : CType.Int;
+        return true;
+
+      case CFloatLiteralExpr:
+        type = CType.Float;
+        return true;
+
+      case CStringLiteralExpr:
+        type = CType.PointerTo(CType.Char);
+        return true;
+
       case CNameExpr name:
         {
           CVarSymbol? symbol = LookupVariable(name.Name);
@@ -2480,6 +1249,18 @@ public sealed class CCodeGenerator
           }
 
           type = CType.Int;
+          return false;
+        }
+
+      case CUnaryExpr { Op: CUnaryOp.AddressOf } addressOf:
+        {
+          if (TryGetStaticType(addressOf.Operand, out CType pointeeType))
+          {
+            type = CType.PointerTo(pointeeType);
+            return true;
+          }
+
+          type = CType.PointerTo(CType.Int);
           return false;
         }
 
@@ -2526,1119 +1307,1428 @@ public sealed class CCodeGenerator
         type = cast.TargetType;
         return true;
 
+      case CCallExpr call when _functions.TryGetValue(call.FunctionName, out CFunctionSignature? signature):
+        type = signature.ReturnType;
+        return true;
+
+      case CConditionalExpr conditional:
+        return TryGetStaticType(conditional.WhenTrue, out type);
+
+      case CAssignExpr assign:
+        return TryGetStaticType(assign.Target, out type);
+
+      case CCompoundAssignExpr compoundAssign:
+        return TryGetStaticType(compoundAssign.Target, out type);
+
+      case CCommaExpr comma:
+        return TryGetStaticType(comma.Right, out type);
+
+      case CBinaryExpr { Op: CBinaryOp.Add or CBinaryOp.Subtract } binary:
+        {
+          bool haveLeft = TryGetStaticType(binary.Left, out CType leftType);
+          bool haveRight = TryGetStaticType(binary.Right, out CType rightType);
+          if (haveLeft && leftType.IsPointer)
+          {
+            type = leftType;
+            return true;
+          }
+
+          if (haveRight && rightType.IsPointer && binary.Op == CBinaryOp.Add)
+          {
+            type = rightType;
+            return true;
+          }
+
+          type = haveLeft && leftType.IsFloat || haveRight && rightType.IsFloat ? CType.Float : CType.Int;
+          return haveLeft || haveRight;
+        }
+
+      case CBinaryExpr binary:
+        {
+          bool haveLeft = TryGetStaticType(binary.Left, out CType leftType);
+          bool haveRight = TryGetStaticType(binary.Right, out CType rightType);
+          type = haveLeft && leftType.IsFloat || haveRight && rightType.IsFloat ? CType.Float : CType.Int;
+          return haveLeft || haveRight;
+        }
+
       default:
         type = CType.Int;
         return false;
     }
   }
 
-  private bool IsFloatNamedVariable(CNameExpr name)
-  {
-    CVarSymbol? symbol = LookupVariable(name.Name);
-    if (symbol is not null)
-    {
-      return symbol.Type.IsFloat;
-    }
-
-    return _globals.TryGetValue(name.Name, out CGlobalSymbol? global) && global.Type.IsFloat;
-  }
-
-  /// <summary>Whether <paramref name="type"/> is one this class's general, one-CVM-word <see
-  /// cref="EmitLoad"/>/<see cref="EmitStore"/> machinery cannot correctly read or write as a whole value:
-  /// <c>struct</c> (added 2026-09-26 -- see <see cref="CType.StructOf"/>'s own remarks: reading/assigning
-  /// an ENTIRE struct value was explicitly left unsupported, member-at-a-time access only) or <c>long</c>
-  /// (added 2026-09-26 -- see <see cref="CType.Long"/>'s own remarks: the CVM itself has no <c>long</c>
-  /// instructions defined yet, a real ISA gap, not a compiler scope choice). <c>float</c> is deliberately
-  /// excluded here even though it is ALSO multi-word: <c>float</c> has its own complete, dedicated lvalue/
-  /// load/store machinery (this class's own "Float ABI" section), so nothing calling this needs to
-  /// special-case it too.</summary>
   private static bool IsUnsupportedWholeValueType(CType type) => type.IsStruct || type.IsLong;
 
-  /// <summary>Reports that reading <paramref name="subject"/> here is not yet supported (see <see
-  /// cref="IsUnsupportedWholeValueType"/>'s own remarks for which types and why), then emits a single
-  /// placeholder word so the surrounding expression tree still has *a* value to keep compiling with --
-  /// matching this class's own error-recovery convention elsewhere (report once, keep compiling to surface
-  /// further diagnostics, never crash mid-codegen).</summary>
   private CType ReportUnsupportedValueRead(CSourceLocation location, CType type, string subject)
   {
     string reason = type.IsLong
-        ? "the CVM has no 'long' instructions defined yet (declaring a 'long', taking its address, forming a pointer/array of it, and pointer arithmetic on it all work; reading its actual value does not, yet)"
+        ? "the CVM has no 'long' arithmetic instructions defined yet (declaring a 'long', taking its address, forming a pointer/array of it, and pointer arithmetic on it all work; reading its actual value does not, yet)"
         : "reading or assigning a whole struct value is not yet supported by this compiler (access one of its own members instead)";
     Error(location, $"{subject} has type \"{type}\" -- {reason}");
-    EmitCode("pushlit 0");
     return CType.Int;
   }
 
-  /// <summary>Mirrors <see cref="IsFloatNamedVariable"/> exactly, for <see
-  /// cref="IsUnsupportedWholeValueType"/> instead of <c>float</c> -- added 2026-09-26 alongside <c>long</c>
-  /// support, closing a gap this same audit found in <see cref="EmitName"/>'s own pre-existing struct
-  /// handling (see this class's own doc comment): a bare struct-typed variable name used as a value (a
-  /// lone "s;" statement, or either side of "s1 = s2;" reached via <see cref="EmitAssign"/>'s general
-  /// path) had NO guard at all here before today, unlike the equivalent CIndexExpr/CMemberAccessExpr cases
-  /// in <see cref="EmitExpr"/>, which already reject a whole struct VALUE -- so it would have silently
-  /// read only the struct's FIRST word. <c>long</c> needs the identical guard for the new reason given on
-  /// <see cref="IsUnsupportedWholeValueType"/>.</summary>
-  private bool IsUnsupportedValueNamedVariable(CNameExpr name, out CType type)
+  /// <summary>Whether <paramref name="expr"/> contains a function call anywhere inside it --
+  /// claude/cvm-abi.md section 3.4's "spilling across a call" rule: every register is call-volatile, so
+  /// a binary expression whose RIGHT operand contains a call must spill its already-computed LEFT
+  /// operand to a frame scratch slot first.</summary>
+  private static bool ContainsCall(CExpr expr) => expr switch
   {
-    CVarSymbol? symbol = LookupVariable(name.Name);
-    if (symbol is not null)
-    {
-      type = symbol.Type;
-      return IsUnsupportedWholeValueType(type);
-    }
+    CCallExpr => true,
+    CUnaryExpr unary => ContainsCall(unary.Operand),
+    CBinaryExpr binary => ContainsCall(binary.Left) || ContainsCall(binary.Right),
+    CAssignExpr assign => ContainsCall(assign.Target) || ContainsCall(assign.Value),
+    CCompoundAssignExpr compoundAssign => ContainsCall(compoundAssign.Target) || ContainsCall(compoundAssign.Value),
+    CConditionalExpr conditional => ContainsCall(conditional.Condition) || ContainsCall(conditional.WhenTrue) || ContainsCall(conditional.WhenFalse),
+    CIndexExpr index => ContainsCall(index.Base) || ContainsCall(index.Index),
+    CCastExpr cast => ContainsCall(cast.Operand),
+    CCommaExpr comma => ContainsCall(comma.Left) || ContainsCall(comma.Right),
+    CMemberAccessExpr member => ContainsCall(member.Base),
+    CSizeOfExprExpr => false, // the operand is never evaluated.
+    _ => false,
+  };
 
-    if (_globals.TryGetValue(name.Name, out CGlobalSymbol? global))
-    {
-      type = global.Type;
-      return IsUnsupportedWholeValueType(type);
-    }
+  // ---------------------------------------------------------------------------------------------------
+  // Expression evaluation. EmitIntExprInto evaluates an int/char/unsigned/comparison/logical-result
+  // expression into plain register `reg`; EmitWideExprInto evaluates a pointer/float expression into
+  // double register `destDouble`. `depth` is the shared nesting-depth parameter described on the
+  // Addressing section above -- `reg`/`destDouble` need not themselves equal ScalarReg(depth)/
+  // WideReg(depth) (a top-level caller may pass a param/return register instead), but every INTERNAL
+  // sub-computation always does.
+  //
+  // A statement-level caller that just needs an expression evaluated (and does not care where the
+  // result lands) goes through EmitStatementExprForEffect below instead of a dedicated "for value"
+  // entry point -- it already takes the shared `depth` parameter every internal evaluator needs, so one
+  // method covers both "evaluate at the top of a statement" (depth 0) and "evaluate as the discarded
+  // left side of a comma operator at whatever depth the enclosing expression is already at".
 
-    type = CType.Int;
-    return false;
-  }
-
-  /// <summary>Saves <c>fr[from..from+count-1]</c> onto the ordinary data stack, ascending -- the first
-  /// half of the caller-save/restore discipline this class's own doc comment describes. Paired with
-  /// <see cref="EmitFloatRegisterRestoreRange"/>.</summary>
-  private void EmitFloatRegisterSaveRange(int from, int count)
-  {
-    for (int r = from; r < from + count; r++)
-    {
-      EmitCode($"fpush {r}");
-    }
-  }
-
-  /// <summary>Restores <c>fr[from..from+count-1]</c> from the ordinary data stack, DESCENDING (LIFO order
-  /// matching <see cref="EmitFloatRegisterSaveRange"/>'s own ascending save order).</summary>
-  private void EmitFloatRegisterRestoreRange(int from, int count)
-  {
-    for (int r = from + count - 1; r >= from; r--)
-    {
-      EmitCode($"fpop {r}");
-    }
-  }
-
-  /// <summary>
-  /// The float-expression evaluator's public entry point -- evaluates <paramref name="expr"/> into
-  /// <c>fr[destReg]</c>. Sets <see cref="_liveFloatRegisterCount"/> to <paramref name="destReg"/> for the
-  /// duration (see this class's own doc comment: every register below the CURRENT destReg is, by
-  /// construction, still needed by an enclosing operation, and <see cref="EmitCall"/> reads this field to
-  /// decide how many registers a call needs to protect), restoring the previous value afterward so a
-  /// caller further up the recursion (or a sibling call/argument evaluation) sees its own correct value
-  /// again.
+  /// <summary>Loads an addressable expression's (name/index/member/dereference) whole value into
+  /// whichever of <paramref name="scalarReg"/>/<paramref name="wideDouble"/> matches its own type --
+  /// shared by both <see cref="EmitIntExprInto"/> and <see cref="EmitWideExprInto"/>'s leaf cases.
   /// </summary>
-  private void EmitFloatExprInto(CExpr expr, int destReg)
+  private CType EmitLoadAddressableValue(CExpr expr, int scalarReg, int wideDouble, int depth)
   {
-    if (destReg >= FloatRegisterCount)
+    CAddr addr = ResolveAddr(expr, depth);
+    if (IsUnsupportedWholeValueType(addr.Type))
     {
-      Error(expr.Location, $"this expression is too complex: it needs more than {FloatRegisterCount} 'float' registers (fr[0..{FloatRegisterCount - 1}]) to evaluate");
-      EmitFloatLiteralInto(0f, FloatRegisterCount - 1);
-      return;
+      return ReportUnsupportedValueRead(expr.Location, addr.Type, "this expression");
     }
 
-    int outerLiveCount = _liveFloatRegisterCount;
-    _liveFloatRegisterCount = destReg;
-    EmitFloatExprIntoCore(expr, destReg);
-    _liveFloatRegisterCount = outerLiveCount;
+    EmitLoadValueFromAddr(addr, scalarReg, wideDouble, depth);
+    return addr.Type;
   }
 
-  private void EmitFloatExprIntoCore(CExpr expr, int destReg)
+  private CType EmitIntExprInto(CExpr expr, int reg, int depth)
   {
     switch (expr)
     {
-      case CFloatLiteralExpr literal:
-        EmitFloatLiteralInto(literal.Value, destReg);
-        return;
+      case CIntLiteralExpr literal:
+        EmitCode($"rlit r{reg}, {literal.Value}");
+        return literal.IsUnsigned ? CType.UnsignedInt : CType.Int;
 
-      case CIntLiteralExpr:
-        // No implicit int->float conversion in this first pass -- see this class's own doc comment.
-        Error(expr.Location, "an integer literal cannot be used directly where a 'float' is expected (implicit int-to-float conversion is not yet supported)");
-        EmitFloatLiteralInto(0f, destReg);
-        return;
-
-      case CNameExpr name:
-        if (!IsFloatNamedVariable(name))
-        {
-          Error(expr.Location, $"\"{name.Name}\" is not a 'float' value");
-          EmitFloatLiteralInto(0f, destReg);
-          return;
-        }
-
-        EmitFloatLoad(ResolveFloatLvalue(name), destReg);
-        return;
+      case CNameExpr or CIndexExpr or CMemberAccessExpr or CUnaryExpr { Op: CUnaryOp.Dereference }:
+        return EmitLoadAddressableValue(expr, reg, WideReg(depth), depth);
 
       case CUnaryExpr { Op: CUnaryOp.Plus } unary:
-        EmitFloatExprInto(unary.Operand, destReg);
-        return;
+        return EmitIntExprInto(unary.Operand, reg, depth);
 
       case CUnaryExpr { Op: CUnaryOp.Minus } unary:
-        EmitFloatExprInto(unary.Operand, destReg);
-        EmitCode($"fneg {destReg} {destReg}");
-        return;
-
-      case CUnaryExpr { Op: CUnaryOp.Dereference }:
-      case CIndexExpr:
-      case CMemberAccessExpr:
-        // Added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a dereferenced 'float *', a
-        // 'float' array element, or a 'float' struct member, reached here either directly (a bare
-        // "*fp;"/"arr[i];"/"s.member;" float-context expression) or as an operand nested inside a larger
-        // float expression (e.g. "*fp + 1.0f") -- ResolveFloatLvalue's own new cases for these three node
-        // kinds do the actual address computation and float-ness check; this is just the read side.
-        EmitFloatLoad(ResolveFloatLvalue(expr), destReg);
-        return;
-
-      case CUnaryExpr:
-        Error(expr.Location, "this operator is not yet supported for 'float' (only unary +/- are)");
-        EmitFloatLiteralInto(0f, destReg);
-        return;
-
-      case CBinaryExpr { Op: CBinaryOp.Add or CBinaryOp.Subtract or CBinaryOp.Multiply or CBinaryOp.Divide } binary:
         {
-          int rightReg = destReg + 1;
-          EmitFloatExprInto(binary.Left, destReg);
-          EmitFloatExprInto(binary.Right, rightReg);
-          EmitCode($"{FloatBinaryMnemonic(binary.Op)} {destReg} {rightReg}");
-          return;
+          CType type = EmitIntExprInto(unary.Operand, reg, depth);
+          EmitCode($"neg r{reg}");
+          return type;
         }
 
-      case CBinaryExpr:
-        Error(expr.Location, "this operator is not yet supported for 'float' (comparisons, bitwise, shift and modulo are not) -- only +, -, *, / are");
-        EmitFloatLiteralInto(0f, destReg);
-        return;
-
-      case CAssignExpr assign:
+      case CUnaryExpr { Op: CUnaryOp.BitwiseNot } unary:
         {
-          CFloatLvalue target = ResolveFloatLvalue(assign.Target);
-          EmitFloatExprInto(assign.Value, destReg);
-          EmitFloatStore(target, destReg);
-          return;
+          CType type = EmitIntExprInto(unary.Operand, reg, depth);
+          EmitCode($"inv r{reg}");
+          return type;
         }
 
-      case CCallExpr call:
+      case CUnaryExpr { Op: CUnaryOp.LogicalNot } unary:
         {
-          if (TryGetFloatBuiltin(call, out string builtinMnemonic, out int builtinArity))
-          {
-            // Arity mismatches were already reported by TryGetFloatBuiltin above -- a missing argument
-            // here (wrong-arity call) falls back to a harmless 0.0 literal rather than crashing or
-            // re-recursing into this same call node.
-            CExpr placeholder = new CFloatLiteralExpr(call.Location, 0f);
-            if (builtinArity == 1)
-            {
-              EmitFloatExprInto(call.Arguments.Count > 0 ? call.Arguments[0] : placeholder, destReg);
-              EmitCode($"{builtinMnemonic} {destReg} {destReg}");
-            }
-            else
-            {
-              int rightReg = destReg + 1;
-              EmitFloatExprInto(call.Arguments.Count > 0 ? call.Arguments[0] : placeholder, destReg);
-              EmitFloatExprInto(call.Arguments.Count > 1 ? call.Arguments[1] : placeholder, rightReg);
-              EmitCode($"{builtinMnemonic} {destReg} {rightReg}");
-            }
-
-            return;
-          }
-
-          CType returnType = EmitCall(call, floatResultDestRegister: destReg);
-          if (!returnType.IsFloat)
-          {
-            Error(call.Location, $"\"{call.FunctionName}\" does not return a value of type 'float'");
-          }
-
-          return;
-        }
-
-      case CCastExpr cast when cast.TargetType.IsFloat:
-        if (LooksLikeFloatExpr(cast.Operand))
-        {
-          EmitFloatExprInto(cast.Operand, destReg);
-        }
-        else
-        {
-          Error(cast.Location, "casting a non-'float' value to 'float' is not yet supported by this compiler");
-          EmitFloatLiteralInto(0f, destReg);
-        }
-
-        return;
-
-      default:
-        Error(expr.Location, $"this expression is not yet supported in a 'float' context (\"{expr.GetType().Name}\")");
-        EmitFloatLiteralInto(0f, destReg);
-        return;
-    }
-  }
-
-  /// <summary>Pushes the address of a local (or, since 2026-09-09, a parameter) at frame-relative
-  /// <paramref name="offset"/> -- replaces the retired <c>lal</c>/<c>lap</c> mnemonics ("'lal' &amp;
-  /// 'lap' are removed. use ''f' or 'fpush' from node 506 and add the offset to calculate the address of
-  /// a local or parameter." -- quoted verbatim as originally given). <c>pushf</c> pushes node 506's own
-  /// frame pointer <c>f</c> onto the data stack; a LOCAL's address is <c>f - offset</c> (matching node
-  /// 506's own <c>f/main</c> dispatch, which negates a local's offset with <c>inv</c> before adding it to
-  /// <c>f</c> for <c>ldl</c>/<c>stl</c>), while a PARAMETER's address is <c>f + offset</c> (no negation,
-  /// matching <c>ldp</c>/<c>stp</c>). Not yet confirmed against real hardware -- see this class's own
-  /// remarks.
-  ///
-  /// <b>RENAMED, 2026-09-16.</b> This method used to emit the CVM mnemonic <c>fpush</c> for node 506's own
-  /// push word. Stefan required node 306's own, unrelated <c>'fpush</c> word to be wired as CVM mnemonic
-  /// <c>fpush</c> too ("'fpush' from node 306 must be wired as fpush"), which collided with this one;
-  /// Stefan resolved the collision by renaming node 506's own push word to <c>'pushf</c> ("i renamed
-  /// 'fpush' of node 506 into 'pushf'"). This method emits the literal mnemonic string directly rather
-  /// than referencing <see cref="Ga144.Cvm.Toolchain.CvmInstructionSet.PushFrameMnemonic"/>, so the rename
-  /// had to be applied here by hand, not just at the constant's definition -- see that constant's own
-  /// remarks for the full rationale.</summary>
-  private void EmitLocalOrParameterAddress(int offset, bool isParameter)
-  {
-    EmitCode("pushf");
-    EmitCode($"pushlit {offset}");
-    EmitCode("pop");
-    EmitCode(isParameter ? "add" : "sub");
-  }
-
-  /// <summary>Computes and pushes the address of an lvalue expression, WITHOUT latching it into "t"
-  /// (unlike <see cref="ResolveLvalue"/>) -- this is the address-of ("&amp;") operator's own codegen, and
-  /// also <see cref="CIndexExpr"/>'s helper for computing an element's address before <c>xt</c>.</summary>
-  private CType EmitAddressOf(CExpr expr)
-  {
-    switch (expr)
-    {
-      case CNameExpr name:
-        {
-          CVarSymbol? symbol = LookupVariable(name.Name);
-          if (symbol is { Kind: CVarKind.Local })
-          {
-            // Float ABI (2026-09-26 follow-up, once 'float *' became legal): a LOCAL float's two frame
-            // slots are stored HIGH-then-LOW (see EmitFloatLoadLocal's own remarks for why -- it's what
-            // makes the actual MEMORY address order come out low-then-high, matching every other float
-            // storage location), so the address a 'float *' must hold (the LOW word's own address) is
-            // this local's own slot number PLUS one, not the slot number itself (which is the HIGH
-            // word's address). 'long' (added 2026-09-26 -- see CType.Long's own remarks) gets the exact
-            // same treatment for the exact same reason, EVEN THOUGH no 'long' load/store exists yet to
-            // actually honor it (every value-level 'long' operation is rejected elsewhere in this class):
-            // establishing the correct low-word-at-lower-address convention here now means whoever
-            // eventually implements real 'long' load/store only needs to match this, rather than
-            // discovering and silently correcting a wrong existing address convention later.
-            int offset = symbol.Type.IsFloat || symbol.Type.IsLong ? symbol.Index + 1 : symbol.Index;
-            EmitLocalOrParameterAddress(offset, isParameter: false);
-            return CType.PointerTo(symbol.Type);
-          }
-
-          if (symbol is { Kind: CVarKind.Parameter })
-          {
-            EmitLocalOrParameterAddress(symbol.Index, isParameter: true);
-            return CType.PointerTo(symbol.Type);
-          }
-
-          string label = symbol?.GlobalLabel ?? MangleExternalSymbol(name.Name);
-          CType type;
-          if (symbol is { Kind: CVarKind.Global })
-          {
-            // A static local -- its storage is already emitted under this mangled label, no import needed.
-            type = symbol.Type;
-          }
-          else if (_globals.TryGetValue(name.Name, out CGlobalSymbol? global))
-          {
-            // A real global -- EmitGlobal already declared it (as storage or, for "extern", an import).
-            type = global.Type;
-          }
-          else
-          {
-            Error(expr.Location, $"\"{name.Name}\" is not declared");
-            type = CType.Int;
-          }
-
-          EmitCode($"pushlit {label}");
-          return CType.PointerTo(type);
-        }
-
-      case CUnaryExpr { Op: CUnaryOp.Dereference } deref:
-        // "&*p" is just "p" -- evaluate the pointer expression directly, no extra indirection.
-        return EmitExpr(deref.Operand);
-
-      case CIndexExpr index:
-        return CType.PointerTo(EmitAddressOfIndex(index));
-
-      case CMemberAccessExpr member:
-        return CType.PointerTo(EmitAddressOfMember(member));
-
-      default:
-        Error(expr.Location, "cannot take the address of this expression");
-        EmitCode("pushlit 0");
-        return CType.PointerTo(CType.Int);
-    }
-  }
-
-  /// <summary>
-  /// Pushes the address of "Base.Member" or "Base-&gt;Member" (the base's own address plus a
-  /// compile-time-known member offset -- no scaling needed, since an offset here is already expressed
-  /// in whole CVM words, exactly like <see cref="EmitAddressOfIndex"/>'s own "no scaling multiplication"
-  /// remark) and returns the member's own type. Added 2026-09-26 alongside basic <c>struct</c> support.
-  ///
-  /// <b>"-&gt;" vs ".", and how chained access (<c>a.b.c</c>, <c>p-&gt;q.r</c>, ...) falls out for
-  /// free.</b> "-&gt;" evaluates <see cref="CMemberAccessExpr.Base"/> as an ordinary VALUE (it must
-  /// already be a pointer to a struct); "." instead recurses into <see cref="EmitAddressOf"/> on <see
-  /// cref="CMemberAccessExpr.Base"/> (it must be an addressable struct VALUE) -- and <see
-  /// cref="EmitAddressOf"/>'s own <see cref="CMemberAccessExpr"/> case calls back into this method, so a
-  /// chain of any length composes purely through this mutual recursion, each level adding its own
-  /// member's offset onto whatever address the level below it already pushed. No separate "direct local
-  /// slot" fast path exists yet for a single-level struct member access the way one does for a local
-  /// array's constant-indexed element (see <see cref="TryGetConstantLocalArrayElementSlot"/>) -- every
-  /// struct member access goes through <see cref="CacheIndirectAddress"/>/node 306's dereference
-  /// sequence, correctly but not yet as cheaply as it could be; flagged in the design doc as a future
-  /// optimization in the same spirit as that one, not attempted here.
-  /// </summary>
-  private CType EmitAddressOfMember(CMemberAccessExpr member)
-  {
-    CType structType;
-    if (member.IsArrow)
-    {
-      CType pointerType = EmitExpr(member.Base);
-      if (!pointerType.IsPointer || !pointerType.ElementType!.IsStruct)
-      {
-        // NOTE: EmitExpr above already left exactly one word on the stack (the uniform codegen
-        // invariant -- see this class's own doc comment) -- do not push another placeholder here, or
-        // every caller up the chain (CacheIndirectAddress in particular) would see an extra, unbalanced
-        // word. Matches ResolveLvalue's own CUnaryExpr{Dereference} case, which has the identical shape.
-        Error(member.Location, $"\"->\" requires a pointer to a struct, but this expression has type \"{pointerType}\"");
-        return CType.Int;
-      }
-
-      structType = pointerType.ElementType!;
-    }
-    else
-    {
-      CType baseAddressType = EmitAddressOf(member.Base);
-      if (!baseAddressType.IsPointer || !baseAddressType.ElementType!.IsStruct)
-      {
-        Error(member.Location, $"\".\" requires a struct value, but this expression has type \"{(baseAddressType.IsPointer ? baseAddressType.ElementType : baseAddressType)}\"");
-        return CType.Int;
-      }
-
-      structType = baseAddressType.ElementType!;
-    }
-
-    CStructMember? field = structType.Members!.FirstOrDefault(m => m.Name == member.Member);
-    if (field is null)
-    {
-      Error(member.Location, $"\"{structType}\" has no member named \"{member.Member}\"");
-      return CType.Int;
-    }
-
-    if (field.Offset != 0)
-    {
-      EmitCode($"pushlit {field.Offset}");
-      EmitCode("pop");
-      EmitCode("add");
-    }
-
-    return field.Type;
-  }
-
-  /// <summary>Pushes the address of <c>Base[Index]</c> (base address + Index scaled by the element's own
-  /// size -- see <see cref="EmitScaleByElementSize"/>'s own remarks for why scaling is needed at all, added
-  /// 2026-09-26 alongside multi-word pointer arithmetic/indexing) and returns the element's type. When
-  /// <c>Base[Index]</c> is a compile-time-constant-indexed element of a local array, shares <see
-  /// cref="TryGetConstantLocalArrayElementSlot"/> with <see cref="ResolveLvalue"/> to compute the address
-  /// directly from the combined slot number in one <see cref="EmitLocalOrParameterAddress"/> call, rather
-  /// than evaluating the array's own base address and the index separately and adding them at
-  /// runtime.</summary>
-  private CType EmitAddressOfIndex(CIndexExpr index)
-  {
-    if (TryGetConstantLocalArrayElementSlot(index, out int directSlot, out CType directElementType))
-    {
-      EmitLocalOrParameterAddress(directSlot, isParameter: false);
-      return directElementType;
-    }
-
-    CType baseType = EmitExpr(index.Base).Decay();
-    if (!baseType.IsPointer)
-    {
-      Error(index.Location, $"cannot index into a value of type \"{baseType}\"");
-      baseType = CType.PointerTo(CType.Int);
-    }
-
-    EmitExpr(index.Index);
-    EmitScaleByElementSize(Math.Max(baseType.ElementType!.SizeInWords, 1));
-    EmitCode("pop");
-    EmitCode("add");
-    return baseType.ElementType!;
-  }
-
-  private CType EmitAssign(CAssignExpr assign)
-  {
-    if (LooksLikeFloatExpr(assign.Target))
-    {
-      // Float ABI: reached only from the general (int/pointer) expression path, when a 'float'
-      // assignment's OWN result value is needed by an enclosing expression (e.g. chained assignment) --
-      // see this class's own doc comment. destReg 0: a top-level, freshly-entered float context.
-      CFloatLvalue floatTarget = ResolveFloatLvalue(assign.Target);
-      EmitFloatExprInto(assign.Value, 0);
-      EmitFloatStore(floatTarget, 0);
-      return CType.Float;
-    }
-
-    CLvalue target = ResolveLvalue(assign.Target);
-    CType rhsType = EmitExpr(assign.Value);
-    if (rhsType.IsFloat)
-    {
-      Error(assign.Location, $"cannot assign a 'float' value to a target of type \"{target.Type}\"");
-    }
-    else if (target.Type.IsStruct || rhsType.IsStruct)
-    {
-      // See CType.StructOf's own remarks: whole-struct assignment ("s1 = s2;") is not yet supported --
-      // assign through its own members instead. Still falls through to EmitDup/EmitStore below, same as
-      // every other error branch in this method: the diagnostic is what actually stops the build, not a
-      // separate early return.
-      Error(assign.Location, "assigning a whole struct value is not yet supported by this compiler (assign through its own members instead)");
-    }
-    else if (target.Type.IsLong || rhsType.IsLong)
-    {
-      // Added 2026-09-26 alongside 'long' support -- see CType.Long's own remarks: the CVM has no 'long'
-      // instructions defined yet, so a 'long' assignment (of any kind: a plain variable, through a
-      // dereferenced 'long *', an array element, a struct member -- ResolveLvalue's own CNameExpr/
-      // CUnaryExpr{Dereference}/CIndexExpr/CMemberAccessExpr cases all funnel into this same target.Type
-      // check regardless of which one produced it) is rejected here, same "report but still fall through"
-      // convention as the struct branch just above.
-      Error(assign.Location, "assigning a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet");
-    }
-
-    EmitDup();
-    EmitStore(target);
-    return target.Type;
-  }
-
-  /// <summary><c>__optimize</c> narrow path (added 2026-09-27): resolves <paramref name="expr"/> to a
-  /// <see cref="CFloatLvalue"/> ONLY when it is a plain named <c>float</c> variable (a local, a parameter,
-  /// or a global) -- never a dereference, array element, or struct member. Those three other shapes
-  /// (<see cref="CFloatLvalueKind.Indirect"/>, via <see cref="CacheFloatIndirectAddress"/>) compute a
-  /// RUNTIME address with their own emitted code and side effects, which <see
-  /// cref="EmitOptimizedFabsAssignment"/>'s raw "load high word into r, bclr, store it back" sequence
-  /// cannot safely interleave with -- so this deliberately narrower check, rather than reusing <see
-  /// cref="ResolveFloatLvalue"/> directly, is what keeps the bypass-the-register-file shortcut confined to
-  /// the exact statement shape Stefan described ("otherwise the compiler must load the high word into r,
-  /// then perform a 'bclr 15' and write it back").</summary>
-  private bool TryResolveSimpleFloatLvalue(CExpr expr, out CFloatLvalue lvalue)
-  {
-    if (expr is CNameExpr name && IsFloatNamedVariable(name))
-    {
-      lvalue = ResolveFloatLvalue(name);
-      return true;
-    }
-
-    lvalue = null!;
-    return false;
-  }
-
-  /// <summary>Whether two float lvalues, each already known (by <see cref="TryResolveSimpleFloatLvalue"/>)
-  /// to be a plain named variable, refer to the very same storage -- e.g. the degenerate <c>a = fabsf(a);</c>
-  /// -- in which case <see cref="EmitOptimizedFabsAssignment"/> skips copying the LOW word onto itself.
-  /// </summary>
-  private static bool FloatLvalueRefersToSameStorage(CFloatLvalue a, CFloatLvalue b)
-  {
-    if (a.Kind != b.Kind)
-    {
-      return false;
-    }
-
-    return a.Kind == CFloatLvalueKind.Global ? a.Label == b.Label : a.Index == b.Index;
-  }
-
-  /// <summary><c>__optimize</c> narrow path: loads one word (the HIGH word if <paramref name="high"/>,
-  /// otherwise the LOW word) of a plain named <c>float</c> variable directly into register <c>r</c> --
-  /// never through node 305's floating-point register file at all. Mirrors <see cref="EmitFloatLoad"/>'s
-  /// own per-kind word layout exactly (a LOCAL's slots are HIGH-then-LOW, a PARAMETER's/GLOBAL's are
-  /// LOW-then-HIGH -- see this class's own doc comment and <see cref="EmitFloatLoadLocal"/>'s own remarks
-  /// for why), but stops after the single-word <c>ldl</c>/<c>ldp</c>/<c>gld</c> -- no <c>push</c>/
-  /// <c>fpop</c> -- since nothing here ever needs the value anywhere but in <c>r</c>. Only ever called with
-  /// a Local/Parameter/Global lvalue -- see <see cref="TryResolveSimpleFloatLvalue"/>'s own remarks for why
-  /// an Indirect lvalue never reaches here.</summary>
-  private void EmitFloatWordLoadIntoR(CFloatLvalue lvalue, bool high)
-  {
-    switch (lvalue.Kind)
-    {
-      case CFloatLvalueKind.Local:
-        // Local layout: baseSlot (Index) = HIGH, baseSlot+1 = LOW.
-        EmitCode($"ldl {lvalue.Index + (high ? 0 : 1)}");
-        break;
-      case CFloatLvalueKind.Parameter:
-        // Parameter layout: Index = LOW, Index+1 = HIGH.
-        EmitCode($"ldp {lvalue.Index + (high ? 1 : 0)}");
-        break;
-      case CFloatLvalueKind.Global:
-        // Global layout: Label = LOW, "{Label}__hi" = HIGH.
-        EmitGlobalFetch(high ? lvalue.Label + "__hi" : lvalue.Label!);
-        break;
-      default:
-        throw new InvalidOperationException($"EmitFloatWordLoadIntoR does not support a '{lvalue.Kind}' float lvalue -- the __optimize narrow path only ever resolves a plain named variable (see TryResolveSimpleFloatLvalue)");
-    }
-  }
-
-  /// <summary>The write-side counterpart of <see cref="EmitFloatWordLoadIntoR"/>: stores register
-  /// <c>r</c> directly into one word (HIGH or LOW) of a plain named <c>float</c> variable, with no float
-  /// register file involved.</summary>
-  private void EmitFloatWordStoreFromR(CFloatLvalue lvalue, bool high)
-  {
-    switch (lvalue.Kind)
-    {
-      case CFloatLvalueKind.Local:
-        EmitCode($"stl {lvalue.Index + (high ? 0 : 1)}");
-        break;
-      case CFloatLvalueKind.Parameter:
-        EmitCode($"stp {lvalue.Index + (high ? 1 : 0)}");
-        break;
-      case CFloatLvalueKind.Global:
-        EmitGlobalAssign(high ? lvalue.Label + "__hi" : lvalue.Label!);
-        break;
-      default:
-        throw new InvalidOperationException($"EmitFloatWordStoreFromR does not support a '{lvalue.Kind}' float lvalue -- the __optimize narrow path only ever resolves a plain named variable (see TryResolveSimpleFloatLvalue)");
-    }
-  }
-
-  /// <summary>
-  /// <c>__optimize</c> narrow path (added 2026-09-27), per Stefan's own description: "if the variable is
-  /// in a float register, there is already an 'fabs' opcode. otherwise the compiler must load the high
-  /// word into r, then perform a 'bclr 15' and write it back." <c>fabs</c> only ever clears the IEEE-754
-  /// sign bit (bit 15) of the HIGH word -- the LOW word is bit-for-bit unchanged -- so this copies the LOW
-  /// word across verbatim (skipped entirely when <paramref name="target"/> and <paramref name="source"/>
-  /// are literally the same storage, e.g. <c>a = fabsf(a);</c>) and only ever touches the HIGH word: load
-  /// it into <c>r</c>, clear bit 15 with node 409's own <c>bclr 15</c> (see
-  /// <c>Ga144.Cvm.Toolchain.CvmInstructionSet.BitClearMnemonic</c>'s own remarks and
-  /// <c>claude/cvm-node409-bit-operations.md</c>), and store it back -- entirely bypassing node 305's
-  /// floating-point register file, unlike every other float operation this compiler emits.
-  ///
-  /// <b>UNCONFIRMED ASSUMPTION, flagged rather than silently asserted:</b> this assumes <c>bclr</c>
-  /// operates directly on register <c>r</c> in place, needing no <c>push</c>/<c>pop</c> around it -- the
-  /// same convention already confirmed for <c>ldl</c>/<c>stl</c>/<c>ldp</c>/<c>stp</c>/<c>gld</c>/
-  /// <c>gst</c> and for the ALU ops <see cref="CUnaryOp.Minus"/>/<see cref="CUnaryOp.BitwiseNot"/> already
-  /// emit around (<c>pop</c>, the ALU op, <c>push</c>), and exactly matching Stefan's own literal
-  /// description above -- but node 409's bit-operation family has no behavioral CVM simulator yet to
-  /// confirm this against real execution, only the self-describing instruction-set wiring itself. If this
-  /// turns out wrong once node 409 is simulated or run on real hardware, the fix is localized to this one
-  /// method.
-  ///
-  /// <b>DELIBERATE SCOPE EXPANSION, also flagged rather than silently absorbed:</b> every other <c>float</c>
-  /// built-in this compiler recognizes (<see cref="FloatBuiltins"/>, <see
-  /// cref="OptimizeFloatRegisterMnemonics"/>) is backed by node 305's FP subprocessor itself, per Stefan's
-  /// own scope instruction ("only add functions that are directly supported by the FP subprocessor should
-  /// be used by the compiler"). <c>bclr</c> lives on a DIFFERENT physical node (409), not the FP
-  /// subprocessor (305/306) -- this narrow path is a one-off exception for the exact function Stefan asked
-  /// for by name (<c>float fabsf(float)</c> -- <b>RENAMED 2026-09-27</b> from <c>float fabs(float)</c>,
-  /// see <see cref="IsRecognizedOptimizeSignature"/>'s own remarks), not a general precedent for pulling
-  /// in other nodes' opcodes as float built-ins.
-  /// </summary>
-  private void EmitOptimizedFabsAssignment(CFloatLvalue target, CFloatLvalue source)
-  {
-    if (!FloatLvalueRefersToSameStorage(target, source))
-    {
-      EmitFloatWordLoadIntoR(source, high: false);
-      EmitFloatWordStoreFromR(target, high: false);
-    }
-
-    EmitFloatWordLoadIntoR(source, high: true);
-    EmitCode("bclr 15");
-    EmitFloatWordStoreFromR(target, high: true);
-  }
-
-  /// <summary>
-  /// Recognizes the <c>__optimize</c> narrow-path statement shape "<c>simpleTarget = fabsf(simpleSource);</c>"
-  /// (<b>RENAMED 2026-09-27</b> from <c>fabs</c> -- see <see cref="IsRecognizedOptimizeSignature"/>'s own
-  /// remarks) -- see <see cref="EmitOptimizedFabsAssignment"/>'s own remarks for why this bypasses node
-  /// 305's float register file entirely, and <see cref="TryResolveSimpleFloatLvalue"/>'s own remarks for
-  /// why both sides must be a plain named variable. Emits nothing and returns <see langword="false"/> for
-  /// every other shape (a call to a non-<c>__optimize</c> function, a wrong-arity call, a dereference/
-  /// array/struct-member operand, a nested expression), so <see cref="EmitAssignForEffect"/> falls through
-  /// to the general float-register path unchanged.</summary>
-  private bool TryEmitOptimizedFabsAssignment(CAssignExpr assign)
-  {
-    if (assign.Value is not CCallExpr { Arguments.Count: 1 } call)
-    {
-      return false;
-    }
-
-    if (!_functions.TryGetValue(call.FunctionName, out CFunctionSignature? signature) || !signature.IsOptimize)
-    {
-      return false;
-    }
-
-    if (call.FunctionName != "fabsf")
-    {
-      // Only "fabsf" has a narrow in-place substitution today -- CollectSignatures already rejects any
-      // other __optimize-declared name/signature outright (see IsRecognizedOptimizeSignature), so this
-      // branch is unreachable in practice; spelled out rather than assumed.
-      return false;
-    }
-
-    if (!TryResolveSimpleFloatLvalue(assign.Target, out CFloatLvalue target) ||
-        !TryResolveSimpleFloatLvalue(call.Arguments[0], out CFloatLvalue source))
-    {
-      return false;
-    }
-
-    EmitOptimizedFabsAssignment(target, source);
-    return true;
-  }
-
-  /// <summary>Assignment used purely for its side effect -- a bare <c>a = expr;</c> statement, or a
-  /// plain declaration's initializer -- where nothing downstream needs the assignment's own result
-  /// value (C's rule that "a = expr" is itself an expression only matters when something actually
-  /// consumes that value, e.g. chained assignment or "if ((a = f()))"). Skips <see cref="EmitDup"/>
-  /// entirely: <see cref="EmitStore"/> already nets to "-1 word" on its own (it pops the value it
-  /// stores), which exactly cancels the "+1 word" <see cref="EmitExpr"/> just produced, so the net
-  /// stack effect of the whole assignment is zero with no discard <c>pop</c> needed either. 2026-09-09:
-  /// this is what makes <c>int a = 3;</c> compile to just <c>pushlit 3; pop; stl 0</c> instead of
-  /// dup-ing the value and immediately throwing the extra copy away. See <see cref="EmitAssign"/> for
-  /// the expression-context version that keeps the residual value.
-  ///
-  /// <c>__optimize</c> (added 2026-09-27): checked FIRST, before <see cref="LooksLikeFloatExpr"/> --
-  /// <see cref="TryEmitOptimizedFabsAssignment"/> only ever matches the exact narrow statement shape
-  /// "<c>simpleTarget = fabsf(simpleSource);</c>" and emits its own complete, self-contained code when it
-  /// does, so nothing below it runs for that shape. Every other assignment (including a call to fabsf whose
-  /// operands are not both plain variables) falls through unchanged to the general float-register path.
-  /// </summary>
-  private void EmitAssignForEffect(CAssignExpr assign)
-  {
-    if (TryEmitOptimizedFabsAssignment(assign))
-    {
-      return;
-    }
-
-    if (LooksLikeFloatExpr(assign.Target))
-    {
-      CFloatLvalue floatTarget = ResolveFloatLvalue(assign.Target);
-      EmitFloatExprInto(assign.Value, 0);
-      EmitFloatStore(floatTarget, 0);
-      return;
-    }
-
-    CLvalue target = ResolveLvalue(assign.Target);
-    CType rhsType = EmitExpr(assign.Value);
-    if (rhsType.IsFloat)
-    {
-      Error(assign.Location, $"cannot assign a 'float' value to a target of type \"{target.Type}\"");
-    }
-    else if (target.Type.IsStruct || rhsType.IsStruct)
-    {
-      Error(assign.Location, "assigning a whole struct value is not yet supported by this compiler (assign through its own members instead)");
-    }
-    else if (target.Type.IsLong || rhsType.IsLong)
-    {
-      // See EmitAssign's own remarks on the equivalent check.
-      Error(assign.Location, "assigning a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet");
-    }
-
-    EmitStore(target);
-  }
-
-  /// <summary>Float ABI: only <c>+=</c>/<c>-=</c>/<c>*=</c>/<c>/=</c> are supported for a 'float' target
-  /// (every one of these has a direct hardware opcode -- see this class's own doc comment); every other
-  /// compound-assignment operator is rejected with a clear diagnostic.</summary>
-  private static bool TryGetFloatCompoundOp(CBinaryOp op, out string mnemonic)
-  {
-    if (op is CBinaryOp.Add or CBinaryOp.Subtract or CBinaryOp.Multiply or CBinaryOp.Divide)
-    {
-      mnemonic = FloatBinaryMnemonic(op);
-      return true;
-    }
-
-    mnemonic = string.Empty;
-    return false;
-  }
-
-  private CType EmitCompoundAssign(CCompoundAssignExpr expr)
-  {
-    if (LooksLikeFloatExpr(expr.Target))
-    {
-      if (!TryGetFloatCompoundOp(expr.Op, out string mnemonic))
-      {
-        Error(expr.Location, $"'{expr.Op}=' is not supported for 'float' (only +=, -=, *=, /= are)");
-        return CType.Float;
-      }
-
-      CFloatLvalue target = ResolveFloatLvalue(expr.Target);
-      EmitFloatLoad(target, 0);
-      EmitFloatExprInto(expr.Value, 1);
-      EmitCode($"{mnemonic} 0 1");
-      EmitFloatStore(target, 0);
-      return CType.Float;
-    }
-
-    CLvalue intTarget = ResolveLvalue(expr.Target);
-    if (IsUnsupportedWholeValueType(intTarget.Type))
-    {
-      // Added 2026-09-26 alongside 'long' support -- see IsUnsupportedWholeValueType's own remarks. Same
-      // "report but still fall through" convention as EmitAssign's equivalent check.
-      Error(expr.Location, intTarget.Type.IsLong
-          ? "compound assignment on a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet"
-          : "compound assignment on a whole struct value is not yet supported by this compiler");
-    }
-
-    EmitLoad(intTarget);
-    CType rhsType = EmitExpr(expr.Value);
-    // EmitBinaryOperation itself performs the single "pop" the ABI's binary-op pattern needs (it
-    // expects both operands already sitting on the stack, lhs then rhs) -- do not pop again here.
-    CType resultType = EmitBinaryOperation(expr.Op, intTarget.Type, rhsType, expr.Location);
-    EmitDup();
-    EmitStore(intTarget);
-    return resultType;
-  }
-
-  /// <summary>The for-effect twin of <see cref="EmitCompoundAssign"/> -- see
-  /// <see cref="EmitAssignForEffect"/>'s own remarks for why skipping the dup is safe whenever nothing
-  /// needs the expression's own result (a bare <c>a += expr;</c> statement).</summary>
-  private void EmitCompoundAssignForEffect(CCompoundAssignExpr expr)
-  {
-    if (LooksLikeFloatExpr(expr.Target))
-    {
-      if (!TryGetFloatCompoundOp(expr.Op, out string mnemonic))
-      {
-        Error(expr.Location, $"'{expr.Op}=' is not supported for 'float' (only +=, -=, *=, /= are)");
-        return;
-      }
-
-      CFloatLvalue target = ResolveFloatLvalue(expr.Target);
-      EmitFloatLoad(target, 0);
-      EmitFloatExprInto(expr.Value, 1);
-      EmitCode($"{mnemonic} 0 1");
-      EmitFloatStore(target, 0);
-      return;
-    }
-
-    CLvalue intTarget = ResolveLvalue(expr.Target);
-    if (IsUnsupportedWholeValueType(intTarget.Type))
-    {
-      // See EmitCompoundAssign's own remarks on the equivalent check.
-      Error(expr.Location, intTarget.Type.IsLong
-          ? "compound assignment on a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet"
-          : "compound assignment on a whole struct value is not yet supported by this compiler");
-    }
-
-    EmitLoad(intTarget);
-    CType rhsType = EmitExpr(expr.Value);
-    EmitBinaryOperation(expr.Op, intTarget.Type, rhsType, expr.Location);
-    EmitStore(intTarget);
-  }
-
-  /// <summary>Pre/post increment and decrement, both built on the same lvalue primitives. Pre- dups the
-  /// NEW value (computed, then duplicated, then stored -- result is the value now in memory); post- dups
-  /// the OLD value immediately after loading it, before computing the new one, so the expression's own
-  /// result is the value memory held before the update. Both leave exactly one word on the stack, per
-  /// this class's own uniform codegen invariant.</summary>
-  private CType EmitIncrementOrDecrement(CUnaryExpr expr)
-  {
-    if (LooksLikeFloatExpr(expr.Operand))
-    {
-      Error(expr.Location, "'++'/'--' on 'float' is not yet supported by this compiler");
-      return CType.Float;
-    }
-
-    bool isIncrement = expr.Op is CUnaryOp.PreIncrement or CUnaryOp.PostIncrement;
-    bool isPre = expr.Op is CUnaryOp.PreIncrement or CUnaryOp.PreDecrement;
-    CBinaryOp op = isIncrement ? CBinaryOp.Add : CBinaryOp.Subtract;
-
-    CLvalue target = ResolveLvalue(expr.Operand);
-    if (IsUnsupportedWholeValueType(target.Type))
-    {
-      // Added 2026-09-26 alongside 'long' support -- see IsUnsupportedWholeValueType's own remarks. Same
-      // "report but still fall through" convention as EmitAssign's equivalent check.
-      Error(expr.Location, target.Type.IsLong
-          ? "'++'/'--' on a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet"
-          : "'++'/'--' on a whole struct value is not yet supported by this compiler");
-    }
-
-    // EmitBinaryOperation performs its own single "pop" (both operands are already on the stack by the
-    // time it runs, lhs then rhs) -- neither branch below pops again first.
-    if (isPre)
-    {
-      EmitLoad(target);          // stack: [old]
-      EmitCode("pushlit 1");     // stack: [old, 1]
-      EmitBinaryOperation(op, target.Type, CType.Int, expr.Location); // stack: [new]
-      EmitDup();                 // stack: [new, new]
-      EmitStore(target);         // stack: [new]  -- expression result is the NEW value.
-    }
-    else
-    {
-      EmitLoad(target);          // stack: [old]
-      EmitDup();                 // stack: [old, old]
-      EmitCode("pushlit 1");     // stack: [old, old, 1]
-      EmitBinaryOperation(op, target.Type, CType.Int, expr.Location); // stack: [old, new]
-      EmitStore(target);         // stack: [old]  -- expression result is the OLD value.
-    }
-
-    return target.Type;
-  }
-
-  /// <summary>The for-effect twin of <see cref="EmitIncrementOrDecrement"/> -- a bare <c>i++;</c> or
-  /// <c>--i;</c> statement, where pre- vs. post- makes no observable difference (both just add or
-  /// subtract one from memory) since nothing reads the expression's own result. See
-  /// <see cref="EmitAssignForEffect"/>'s own remarks for why skipping the dup is safe here.</summary>
-  private void EmitIncrementOrDecrementForEffect(CUnaryExpr expr)
-  {
-    if (LooksLikeFloatExpr(expr.Operand))
-    {
-      Error(expr.Location, "'++'/'--' on 'float' is not yet supported by this compiler");
-      return;
-    }
-
-    bool isIncrement = expr.Op is CUnaryOp.PreIncrement or CUnaryOp.PostIncrement;
-    CBinaryOp op = isIncrement ? CBinaryOp.Add : CBinaryOp.Subtract;
-
-    CLvalue target = ResolveLvalue(expr.Operand);
-    if (IsUnsupportedWholeValueType(target.Type))
-    {
-      // See EmitIncrementOrDecrement's own remarks on the equivalent check.
-      Error(expr.Location, target.Type.IsLong
-          ? "'++'/'--' on a 'long' value is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet"
-          : "'++'/'--' on a whole struct value is not yet supported by this compiler");
-    }
-
-    EmitLoad(target);          // stack: [old]
-    EmitCode("pushlit 1");     // stack: [old, 1]
-    EmitBinaryOperation(op, target.Type, CType.Int, expr.Location); // stack: [new]
-    EmitStore(target);         // stack: []
-  }
-
-  // ---------------------------------------------------------------------------------------------
-  // Binary operations.
-  // ---------------------------------------------------------------------------------------------
-
-  private static CType ComputeCommonType(CType a, CType b) => a.IsUnsigned || b.IsUnsigned ? CType.UnsignedInt : CType.Int;
-
-  /// <summary>Multiplies the value already on top of the stack, in place, by <paramref
-  /// name="elementSizeInWords"/> -- added 2026-09-26 alongside multi-word pointer arithmetic/indexing,
-  /// replacing this compiler's old blanket assumption (documented on this class itself) that every
-  /// pointer/array element is exactly one word, so "base address + index" never needed a scaling
-  /// multiplication. Skipped entirely when the factor is 1 (the overwhelmingly common case -- a plain
-  /// int/char/pointer element), both as a cheap optimization and so a program that never indexes a wider
-  /// element never pulls in a spurious "__mul" import. Reuses "__mul" -- the same hand-written runtime
-  /// routine and calling convention "*" itself uses (see <see cref="EmitLibraryBinary"/>'s own remarks):
-  /// the value to scale is already on the stack, so only the factor needs pushing before the
-  /// call.</summary>
-  private void EmitScaleByElementSize(int elementSizeInWords)
-  {
-    if (elementSizeInWords == 1)
-    {
-      return;
-    }
-
-    EmitCode($"pushlit {elementSizeInWords}");
-    _imports.Add("__mul");
-    EmitCode("call __mul");
-  }
-
-  /// <summary>The inverse of <see cref="EmitScaleByElementSize"/>, for pointer-minus-pointer ("p2 - p1",
-  /// which yields a count of ELEMENTS, not words): divides the value already on top of the stack (the raw
-  /// word difference "pop; sub" just computed) by <paramref name="elementSizeInWords"/>, via "__divs"
-  /// (signed -- the difference can be negative). Skipped when the factor is 1, for the same reasons <see
-  /// cref="EmitScaleByElementSize"/> skips it.</summary>
-  private void EmitDescaleByElementSize(int elementSizeInWords)
-  {
-    if (elementSizeInWords == 1)
-    {
-      return;
-    }
-
-    EmitCode($"pushlit {elementSizeInWords}");
-    _imports.Add("__divs");
-    EmitCode("call __divs");
-  }
-
-  private CType EmitBinaryOperation(CBinaryOp op, CType leftType, CType rightType, CSourceLocation location)
-  {
-    switch (op)
-    {
-      case CBinaryOp.Add:
-        if (leftType.IsPointer && !rightType.IsPointer)
-        {
-          // "pointer + int": stack is [pointerValue, intValue] -- scale the int (already on top) by the
-          // pointee's own size before the ordinary "pop; add", so a wider element (float, struct, or an
-          // array/struct member) advances the pointer by the right number of WORDS. See
-          // EmitScaleByElementSize's own remarks.
-          EmitScaleByElementSize(Math.Max(leftType.ElementType!.SizeInWords, 1));
-          EmitCode("pop");
-          EmitCode("add");
-          return leftType;
-        }
-
-        if (rightType.IsPointer && !leftType.IsPointer)
-        {
-          int elementSize = Math.Max(rightType.ElementType!.SizeInWords, 1);
-          if (elementSize != 1)
-          {
-            // "int + pointer" (the int written first, e.g. "1 + p"): the value needing to be scaled (the
-            // int) sits UNDERNEATH the pointer value already on top of the stack, and this compiler's
-            // stack machine has no operation to reach or reorder a non-top word -- a deliberate, narrow
-            // SCOPE limit (not a hardware hypothesis), not a case worth a stack-reordering primitive for.
-            // Write "pointer + int" instead.
-            Error(location, $"\"int + {rightType}\" (the pointer written second) is not yet supported by this compiler for an element wider than one word -- write \"{rightType} + int\" instead");
-          }
-
-          EmitCode("pop");
-          EmitCode("add");
-          return rightType;
-        }
-
-        EmitCode("pop");
-        EmitCode("add");
-        return ComputeCommonType(leftType, rightType);
-
-      case CBinaryOp.Subtract:
-        if (leftType.IsPointer && rightType.IsPointer)
-        {
-          // "pointer - pointer" yields a count of ELEMENTS: compute the raw word difference first, then
-          // divide by the (common) element size -- see EmitDescaleByElementSize's own remarks.
-          EmitCode("pop");
-          EmitCode("sub");
-          EmitDescaleByElementSize(Math.Max(leftType.ElementType!.SizeInWords, 1));
+          EmitConditionTestInto(unary.Operand, reg, depth);
+          EmitCode($"cond r{reg}, ==0");
+          EmitCode($"rpop r{reg}");
           return CType.Int;
         }
 
-        if (leftType.IsPointer)
+      case CUnaryExpr { Op: CUnaryOp.AddressOf }:
+        Error(expr.Location, "the address of an expression (\"&...\") is a pointer -- assign it to a pointer-typed variable or expression");
+        EmitCode($"rlit r{reg}, 0");
+        return CType.Int;
+
+      case CUnaryExpr { Op: CUnaryOp.PreIncrement or CUnaryOp.PreDecrement or CUnaryOp.PostIncrement or CUnaryOp.PostDecrement } incDec:
+        return EmitIncrementOrDecrement(incDec, reg, WideReg(depth), depth);
+
+      case CBinaryExpr { Op: CBinaryOp.LogicalAnd or CBinaryOp.LogicalOr } logical:
+        EmitLogicalInto(logical, reg, depth);
+        return CType.Int;
+
+      case CBinaryExpr { Op: CBinaryOp.Equal or CBinaryOp.NotEqual or CBinaryOp.Less or CBinaryOp.Greater or CBinaryOp.LessOrEqual or CBinaryOp.GreaterOrEqual } comparison:
+        EmitComparisonInto(comparison, reg, depth);
+        return CType.Int;
+
+      case CBinaryExpr binary:
         {
-          // "pointer - int": same reasoning as "pointer + int" above.
-          EmitScaleByElementSize(Math.Max(leftType.ElementType!.SizeInWords, 1));
-          EmitCode("pop");
-          EmitCode("sub");
-          return leftType;
+          bool spillNeeded = ContainsCall(binary.Right);
+          int? spillSlot = spillNeeded ? AllocateFrameWords(1) : null;
+          CType leftType = EmitIntExprInto(binary.Left, reg, depth);
+          if (spillSlot is not null)
+          {
+            EmitCode($"stf r{reg}, {spillSlot}");
+          }
+
+          int rightReg = ScalarReg(depth + 1);
+          CType rightType = EmitIntExprInto(binary.Right, rightReg, depth + 1);
+          if (spillSlot is not null)
+          {
+            EmitCode($"ldf r{reg}, {spillSlot}");
+          }
+
+          return EmitIntBinaryOperation(binary.Op, leftType, rightType, reg, rightReg, binary.Location);
         }
 
-        EmitCode("pop");
-        EmitCode("sub");
-        return ComputeCommonType(leftType, rightType);
+      case CCastExpr cast:
+        return EmitIntCast(cast, reg, depth);
 
-      case CBinaryOp.Multiply:
-        return EmitLibraryBinary(leftType, rightType, "__mul", location);
+      case CConditionalExpr conditional:
+        return EmitConditionalInto(conditional, reg, -1, depth, isWide: false);
 
-      case CBinaryOp.Divide:
-        return EmitLibraryBinary(leftType, rightType, ComputeCommonType(leftType, rightType).IsUnsigned ? "__divu" : "__divs", location);
+      case CAssignExpr assign:
+        return EmitAssignInto(assign, reg, -1, depth, isWide: false);
 
-      case CBinaryOp.Modulo:
-        return EmitLibraryBinary(leftType, rightType, ComputeCommonType(leftType, rightType).IsUnsigned ? "__modu" : "__mods", location);
+      case CCompoundAssignExpr compoundAssign:
+        return EmitCompoundAssignInto(compoundAssign, reg, -1, depth, isWide: false);
 
-      case CBinaryOp.BitwiseAnd:
-        EmitCode("pop");
-        EmitCode("and");
-        return ComputeCommonType(leftType, rightType);
+      case CCallExpr call:
+        return EmitCallInto(call, reg, -1, depth, isWide: false);
 
-      case CBinaryOp.BitwiseOr:
-        EmitCode("pop");
-        EmitCode("or");
-        return ComputeCommonType(leftType, rightType);
+      case CCommaExpr comma:
+        EmitStatementExprForEffect(comma.Left, depth);
+        return EmitIntExprInto(comma.Right, reg, depth);
 
-      case CBinaryOp.BitwiseXor:
-        EmitCode("pop");
-        EmitCode("xor");
-        return ComputeCommonType(leftType, rightType);
+      case CSizeOfTypeExpr sizeOfType:
+        EmitCode($"rlit r{reg}, {sizeOfType.Type.SizeInWords}");
+        return CType.UnsignedInt;
 
-      case CBinaryOp.ShiftLeft:
-        EmitCode("pop");
-        EmitCode("usl");
-        return leftType;
-
-      case CBinaryOp.ShiftRight:
-        EmitCode("pop");
-        EmitCode(leftType.IsUnsigned ? "usr" : "ssr");
-        return leftType;
-
-      case CBinaryOp.Equal:
-        EmitCode("pop");
-        EmitCode("eq");
-        return CType.Int;
-
-      case CBinaryOp.NotEqual:
-        EmitCode("pop");
-        EmitCode("ne");
-        return CType.Int;
-
-      case CBinaryOp.Less:
-        EmitCode("pop");
-        EmitCode(ComputeCommonType(leftType, rightType).IsUnsigned ? "ult" : "lt");
-        return CType.Int;
-
-      case CBinaryOp.Greater:
-        EmitCode("pop");
-        EmitCode(ComputeCommonType(leftType, rightType).IsUnsigned ? "ugt" : "gt");
-        return CType.Int;
-
-      case CBinaryOp.LessOrEqual:
-        EmitCode("pop");
-        EmitCode(ComputeCommonType(leftType, rightType).IsUnsigned ? "ule" : "le");
-        return CType.Int;
-
-      case CBinaryOp.GreaterOrEqual:
-        EmitCode("pop");
-        EmitCode(ComputeCommonType(leftType, rightType).IsUnsigned ? "uge" : "ge");
-        return CType.Int;
+      case CSizeOfExprExpr sizeOfExpr:
+        {
+          TryGetStaticType(sizeOfExpr.Operand, out CType operandType);
+          EmitCode($"rlit r{reg}, {Math.Max(operandType.SizeInWords, 1)}");
+          return CType.UnsignedInt;
+        }
 
       default:
-        Error(location, $"operator \"{op}\" is not yet supported by the code generator");
-        EmitCode("pop");
+        Error(expr.Location, $"this expression is not yet supported by the code generator");
+        EmitCode($"rlit r{reg}, 0");
         return CType.Int;
     }
   }
 
-  /// <summary>Emits a call to one of the hand-written CVM runtime library routines that back
-  /// <c>*</c>/<c>/</c>/<c>%</c> (no hardware primitive exists for any of them -- see this class's own
-  /// doc comment). By the time this runs, both operands are already on the stack (pushed left-to-right
-  /// by <see cref="EmitExpr"/>'s <see cref="CBinaryExpr"/> case or by
-  /// <see cref="EmitCompoundAssign"/>); the callee consumes both and pushes exactly one result
-  /// word.</summary>
-  private CType EmitLibraryBinary(CType leftType, CType rightType, string functionName, CSourceLocation location)
+  private CType EmitWideExprInto(CExpr expr, int destDouble, int depth)
   {
-    if (leftType.IsPointer || rightType.IsPointer)
+    switch (expr)
     {
-      Error(location, $"\"{functionName}\" is not defined for a pointer operand");
-    }
+      case CIntLiteralExpr { Value: 0 }:
+        // A plain "0" is the only integer literal that may stand for a NULL pointer.
+        EmitCode($"dlit d{destDouble}, 0, 0");
+        return CType.PointerTo(CType.Void);
 
-    _imports.Add(functionName);
-    EmitCode($"call {functionName}");
-    return ComputeCommonType(leftType, rightType);
+      case CFloatLiteralExpr literal:
+        EmitFloatLiteralInto(literal.Value, destDouble);
+        return CType.Float;
+
+      case CStringLiteralExpr stringLiteral:
+        EmitCode($"dlit d{destDouble}, {GlobalDataPage}, {InternStringLiteral(stringLiteral.Value)}");
+        return CType.PointerTo(CType.Char);
+
+      case CNameExpr or CIndexExpr or CMemberAccessExpr or CUnaryExpr { Op: CUnaryOp.Dereference }:
+        {
+          if (TryGetStaticType(expr, out CType exprType) && exprType.IsArray)
+          {
+            // Array used as a value (not &arr, not arr[i]) decays to its own address.
+            CType elementType = EmitAddressOfInto(expr, destDouble, depth);
+            return CType.PointerTo(elementType);
+          }
+
+          return EmitLoadAddressableValue(expr, ScalarReg(depth), destDouble, depth);
+        }
+
+      case CUnaryExpr { Op: CUnaryOp.AddressOf } addressOf:
+        {
+          CType pointeeType = EmitAddressOfInto(addressOf.Operand, destDouble, depth);
+          return CType.PointerTo(pointeeType);
+        }
+
+      case CUnaryExpr { Op: CUnaryOp.Plus } unary:
+        return EmitWideExprInto(unary.Operand, destDouble, depth);
+
+      case CUnaryExpr { Op: CUnaryOp.Minus } unary:
+        {
+          CType type = EmitWideExprInto(unary.Operand, destDouble, depth);
+          if (!type.IsFloat)
+          {
+            Error(expr.Location, $"unary \"-\" is not defined for \"{type}\"");
+            return type;
+          }
+
+          // No float negate opcode exists -- flip the IEEE sign bit via the r-alias trick (valid for
+          // d0-d7, the individually-addressable half; destDouble is always d1-d3 here, the general wide
+          // scratch pool -- claude/cvm-abi.md section 3.4/3.8).
+          EmitCode($"inv15 r{2 * destDouble + 1}");
+          return type;
+        }
+
+      case CUnaryExpr { Op: CUnaryOp.PreIncrement or CUnaryOp.PreDecrement or CUnaryOp.PostIncrement or CUnaryOp.PostDecrement } incDec:
+        return EmitIncrementOrDecrement(incDec, ScalarReg(depth), destDouble, depth);
+
+      case CBinaryExpr { Op: CBinaryOp.Add or CBinaryOp.Subtract } addSub:
+        return EmitWidePointerOrFloatAddSub(addSub, destDouble, depth);
+
+      case CBinaryExpr { Op: CBinaryOp.Multiply or CBinaryOp.Divide } floatMulDiv:
+        {
+          bool spillNeeded = ContainsCall(floatMulDiv.Right);
+          int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
+          CType leftType = EmitWideExprInto(floatMulDiv.Left, destDouble, depth);
+          if (spillLow is not null)
+          {
+            EmitCode($"stf r{2 * destDouble}, {spillLow}");
+            EmitCode($"stf r{2 * destDouble + 1}, {spillLow + 1}");
+          }
+
+          int rightDouble = WideReg(depth + 1);
+          CType rightType = EmitWideExprInto(floatMulDiv.Right, rightDouble, depth + 1);
+          if (spillLow is not null)
+          {
+            EmitCode($"ldf r{2 * destDouble}, {spillLow}");
+            EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
+          }
+
+          if (!leftType.IsFloat || !rightType.IsFloat)
+          {
+            Error(floatMulDiv.Location, $"\"{(floatMulDiv.Op == CBinaryOp.Multiply ? "*" : "/")}\" between \"{leftType}\" and \"{rightType}\" is not supported (only float*float/float are)");
+            return CType.Float;
+          }
+
+          EmitCode($"{(floatMulDiv.Op == CBinaryOp.Multiply ? "fmul" : "fdiv")} d{destDouble}, d{rightDouble}");
+          return CType.Float;
+        }
+
+      case CConditionalExpr conditional:
+        return EmitConditionalInto(conditional, -1, destDouble, depth, isWide: true);
+
+      case CAssignExpr assign:
+        return EmitAssignInto(assign, -1, destDouble, depth, isWide: true);
+
+      case CCompoundAssignExpr compoundAssign:
+        return EmitCompoundAssignInto(compoundAssign, -1, destDouble, depth, isWide: true);
+
+      case CCallExpr call:
+        return EmitCallInto(call, -1, destDouble, depth, isWide: true);
+
+      case CCastExpr cast:
+        return EmitWideCast(cast, destDouble, depth);
+
+      case CCommaExpr comma:
+        EmitStatementExprForEffect(comma.Left, depth);
+        return EmitWideExprInto(comma.Right, destDouble, depth);
+
+      default:
+        Error(expr.Location, "this expression is not yet supported by the code generator");
+        EmitCode($"dlit d{destDouble}, 0, 0");
+        return CType.PointerTo(CType.Void);
+    }
   }
 
-  /// <summary>Short-circuit "&amp;&amp;"/"||", both branching on <c>cbr</c>'s CONFIRMED
-  /// branches-if-r-equals-0 polarity documented on this class. "a &amp;&amp; b": evaluate a; if a is
-  /// false, short-circuit straight to a result of 0 without ever evaluating b; otherwise evaluate b and
-  /// coerce it to exactly 0 or 1 (matching C's own &amp;&amp;/|| result type). "a || b" mirrors this: if
-  /// a is true, short-circuit straight to 1; otherwise evaluate and coerce b the same way. 2026-09-09:
-  /// since <c>cbr</c> itself already tests "r == 0", "&amp;&amp;" (short-circuits exactly on that same
-  /// condition, left == 0) needs no extra op before it; "||" (short-circuits on the OPPOSITE condition,
-  /// left != 0) needs an explicit <c>eq0</c> first to invert the sense so <c>cbr</c> fires at the right
-  /// moment -- see this class's own ABI doc comment.</summary>
-  private CType EmitLogical(CBinaryExpr expr)
+  /// <summary>Evaluates <paramref name="expr"/> purely for a side effect, discarding its value --
+  /// comma operator's left-hand side, and a bare expression statement.</summary>
+  private void EmitStatementExprForEffect(CExpr expr, int depth)
   {
-    bool isAnd = expr.Op == CBinaryOp.LogicalAnd;
-    string shortCircuitLabel = NewLabel(isAnd ? "and_false" : "or_true");
-    string doneLabel = NewLabel(isAnd ? "and_done" : "or_done");
-
-    EmitExpr(expr.Left);
-    EmitCode("pop");
-    if (!isAnd)
+    TryGetStaticType(expr, out CType type);
+    if (type.IsFloat || type.IsPointer)
     {
-      EmitCode("eq0"); // || short-circuits when left is true (!=0); invert first so cbr's own "r==0" test fires on that.
+      EmitWideExprInto(expr, WideReg(depth), depth);
+    }
+    else
+    {
+      EmitIntExprInto(expr, ScalarReg(depth), depth);
+    }
+  }
+
+  /// <summary>Evaluates <paramref name="expr"/> as a condition test subject and leaves <c>rN</c> set up
+  /// so an immediately-following <c>cond</c>/<c>if</c> tests the right thing: for an int/pointer
+  /// expression that is simply its value (nonzero = true); float conditions are not supported (no
+  /// hardware sign-test exists for a float's bit pattern as a truth value here).</summary>
+  private void EmitConditionTestInto(CExpr expr, int reg, int depth)
+  {
+    TryGetStaticType(expr, out CType type);
+    if (type.IsFloat)
+    {
+      Error(expr.Location, "a 'float' expression cannot be used directly as a condition (compare it to 0.0 explicitly)");
     }
 
-    EmitCode($"cbr {shortCircuitLabel}"); // && needs no inversion: it short-circuits exactly when left == 0, which is what cbr already tests.
+    if (type.IsPointer)
+    {
+      int wideDouble = WideReg(depth);
+      EmitWideExprInto(expr, wideDouble, depth);
+      EmitCode($"mov r{reg}, r{2 * wideDouble}"); // NULL test only looks at the address half -- see EmitWidePointerOrFloatAddSub's own "far pointers" remarks for why this project never needs to look at the page half for a truth test.
+      return;
+    }
 
-    EmitExpr(expr.Right);
-    EmitCode("pop");
-    EmitCode("ne0");
-    EmitCode("push");
-    EmitCode($"br {doneLabel}");
+    EmitIntExprInto(expr, reg, depth);
+  }
+
+  /// <summary>
+  /// Adds a compile-time constant to a pointer/frame-relative ADDRESS in place -- used for a
+  /// frame/struct-member/constant-array-index/pointer-increment offset. <paramref name="register"/> is
+  /// always the low (address) r-alias of some double register (<c>2 *</c> that double register's own
+  /// index -- every call site below satisfies this). <paramref name="guaranteedSamePage"/> is the
+  /// caller's own claim, decided per call site (see each one's own remarks), about whether
+  /// <paramref name="register"/>'s CURRENT value plus <paramref name="constant"/> is guaranteed to never
+  /// leave the current page (never overflow/underflow the low 16 bits).
+  ///
+  /// CHANGED 2026-10-18 (two rounds, both per Stefan directly): first "i suggest reserving 1
+  /// register(d0) for inflight pointer arithmetic ... so change the ABI to use register d0 (r0,r1) as
+  /// reserved for pointer arithmetic and return values", then the correction that actually drives the
+  /// branch below: "rlit and add can only be used if it is guaranteed that the final address does not
+  /// cross a page border. if not then dlit and dadd must be used for pointer arithmetic." The reason: a
+  /// plain 16-bit <c>inc</c>/<c>dec</c>/<c>add</c> on the address half alone WRAPS silently on
+  /// overflow/underflow -- it has no carry-out to the page half -- so if the true result ever left the
+  /// current page, that cheap encoding would silently produce a wrong address on the SAME page instead
+  /// of the correct address on the next/previous one. There is still no add-WITH-IMMEDIATE opcode
+  /// either way (the 16-bit binary ALU row is register-register only), so a literal first has to land in
+  /// a scratch register regardless of which path is taken.
+  ///
+  /// - <paramref name="guaranteedSamePage"/> == <c>true</c>: the cheap encoding. <c>|constant| &lt;= 1</c>
+  ///   goes through a single <c>inc</c>/<c>dec</c> (one word); anything larger loads the constant into
+  ///   <see cref="PointerArithmeticScratchDouble"/>'s own low alias (<c>r0</c>) via <c>rlit</c> and does
+  ///   ONE <c>add</c> (two words flat, regardless of magnitude -- replacing what used to be one
+  ///   <c>inc</c>/<c>dec</c> PER UNIT, e.g. a frame offset of 7 used to cost 7 words). <c>rlit</c> accepts
+  ///   a negative literal directly, so <c>add</c> alone covers both directions.
+  /// - <paramref name="guaranteedSamePage"/> == <c>false</c>: the safe encoding. <paramref
+  ///   name="register"/>'s own double register (<c>register / 2</c>) must already hold a COMPLETE, valid
+  ///   <c>(page, address)</c> value in both halves before this call -- true at every call site below (see
+  ///   each one's own remarks) -- because the constant is loaded as a full signed 32-bit value via
+  ///   <c>dlit</c> into a scratch double register, then added with <c>dadd</c> (node 408's own
+  ///   carry-propagating 32-bit add, <c>x5/dadd</c>), so a carry/borrow out of the address half correctly
+  ///   adjusts the page half too. Four words total regardless of <paramref name="constant"/>'s magnitude
+  ///   or sign -- correctness over the cheap path's word-count savings, for any address this method
+  ///   cannot prove stays on one page.
+  ///
+  /// Either path needs a scratch double register distinct from the one actually being adjusted (so the
+  /// literal load doesn't clobber the very base value being adjusted) -- unavoidable at one specific call
+  /// path: a pointer/<c>float</c> <c>return</c> statement computes its value directly into <see
+  /// cref="WideReturnDouble"/>, which IS <see cref="PointerArithmeticScratchDouble"/> (<c>d0</c>),
+  /// deliberately, per the ABI change above (e.g. <c>return &amp;arr[7];</c>). The cheap path has no
+  /// OTHER individually-addressable double register available to borrow (the r-alias trick -- a plain
+  /// 16-bit op on one half -- only reaches <c>d0</c>-<c>d7</c>, all of which are otherwise already
+  /// claimed by the param/scratch pools), so it falls back to the always-correct repeated
+  /// <c>inc</c>/<c>dec</c> instead when the target IS <c>d0</c> itself. The safe path, needing no
+  /// individually-16-bit-addressable register at all (<c>dlit</c>/<c>dadd</c> are whole-double-register
+  /// ops), simply borrows <see cref="GlobalAddressTempDouble"/> (<c>d8</c>) instead in that one case --
+  /// already established elsewhere in this file as a dedicated, collision-free scratch double.
+  /// </summary>
+  private void EmitAddConstantToRegister(int register, int constant, bool guaranteedSamePage)
+  {
+    if (Math.Abs(constant) > 128)
+    {
+      _diagnostics.Add($"<internal>: EmitAddConstantToRegister({constant}) on r{register} -- this compiler only expects small frame/member/index offsets; something is unexpectedly large.");
+    }
+
+    int targetDouble = register / 2;
+    bool targetIsPointerArithmeticScratchItself = targetDouble == PointerArithmeticScratchDouble;
+
+    if (!guaranteedSamePage)
+    {
+      int scratchDouble = targetIsPointerArithmeticScratchItself ? GlobalAddressTempDouble : PointerArithmeticScratchDouble;
+      EmitCode($"dlit d{scratchDouble}, {constant}");
+      EmitCode($"dadd d{targetDouble}, d{scratchDouble}");
+      return;
+    }
+
+    if (Math.Abs(constant) <= 1 || targetIsPointerArithmeticScratchItself)
+    {
+      int steps = Math.Abs(constant);
+      string mnemonic = constant > 0 ? "inc" : "dec";
+      for (int i = 0; i < steps; i++)
+      {
+        EmitCode($"{mnemonic} r{register}");
+      }
+
+      return;
+    }
+
+    EmitCode($"rlit r{2 * PointerArithmeticScratchDouble}, {constant}");
+    EmitCode($"add r{register}, r{2 * PointerArithmeticScratchDouble}");
+  }
+
+  /// <summary>Reads ONE word of <paramref name="addr"/> (word <paramref name="wordIndex"/>, 0 = low)
+  /// into plain register <paramref name="destRegister"/>.</summary>
+  private void EmitLoadWordFromAddr(CAddr addr, int wordIndex, int destRegister)
+  {
+    switch (addr.Kind)
+    {
+      case CAddrKind.Frame:
+        EmitCode($"ldf r{destRegister}, {addr.Offset + wordIndex}");
+        return;
+
+      case CAddrKind.Global:
+        EmitCode($"dlit d{GlobalAddressTempDouble}, {GlobalDataPage}, {GlobalWordLabel(addr.Label!, wordIndex)}");
+        EmitCode($"rload r{destRegister}, d{GlobalAddressTempDouble}");
+        return;
+
+      case CAddrKind.Pointer:
+        if (wordIndex != 0)
+        {
+          EmitCode($"inc r{2 * addr.PointerDouble}");
+        }
+
+        EmitCode($"rload r{destRegister}, d{addr.PointerDouble}");
+        if (wordIndex != 0)
+        {
+          EmitCode($"dec r{2 * addr.PointerDouble}");
+        }
+
+        return;
+    }
+  }
+
+  /// <summary>Writes ONE word of <paramref name="addr"/> from plain register <paramref
+  /// name="srcRegister"/> -- the store-side mirror of <see cref="EmitLoadWordFromAddr"/>.</summary>
+  private void EmitStoreWordToAddr(CAddr addr, int wordIndex, int srcRegister)
+  {
+    switch (addr.Kind)
+    {
+      case CAddrKind.Frame:
+        EmitCode($"stf r{srcRegister}, {addr.Offset + wordIndex}");
+        return;
+
+      case CAddrKind.Global:
+        EmitCode($"dlit d{GlobalAddressTempDouble}, {GlobalDataPage}, {GlobalWordLabel(addr.Label!, wordIndex)}");
+        EmitCode($"rstore r{srcRegister}, d{GlobalAddressTempDouble}");
+        return;
+
+      case CAddrKind.Pointer:
+        if (wordIndex != 0)
+        {
+          EmitCode($"inc r{2 * addr.PointerDouble}");
+        }
+
+        EmitCode($"rstore r{srcRegister}, d{addr.PointerDouble}");
+        if (wordIndex != 0)
+        {
+          EmitCode($"dec r{2 * addr.PointerDouble}");
+        }
+
+        return;
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------------
+  // Lvalue mutation (assignment, compound assignment, increment/decrement). All three resolve the
+  // target's address exactly ONCE (claude/cvm-abi.md's own addressing remarks, and CCompoundAssignExpr's
+  // own doc comment) and share one register-safety rule: when the target's address itself lives in a
+  // register (CAddrKind.Pointer -- e.g. "*p = ...", "*p += ...", "(*p)++"), the NEW value must be
+  // computed/held in a register OTHER than the address's own, or computing it would overwrite the
+  // pointer before the store-back gets to use it. Every method below gets this right by using depth+1
+  // (a register guaranteed different from WideReg(depth)/ScalarReg(depth), which is what ResolveAddr
+  // used to build the Pointer-kind address at the SAME depth) for that case, then moving into the
+  // caller's requested destination afterward if needed; a Frame/Global target holds no register at all,
+  // so the value can be computed directly into the destination with nothing to protect.
+
+  private void CheckAssignmentType(CSourceLocation location, CType targetType, CType valueType)
+  {
+    if (targetType.IsFloat != valueType.IsFloat)
+    {
+      Error(location, $"cannot assign \"{valueType}\" to \"{targetType}\" (float/non-float mismatch -- cast explicitly)");
+    }
+  }
+
+  /// <summary>The "just do the assignment, no result needed" form -- used by <see cref="DeclareLocal"/>
+  /// for an initializer, where <paramref name="addr"/> is always <see cref="CAddrKind.Frame"/> (a brand
+  /// new local has no pointer register to protect), but written to handle every <see cref="CAddrKind"/>
+  /// correctly regardless, for any future caller.</summary>
+  private void EmitAssignToAddr(CAddr addr, CExpr valueExpr, CSourceLocation location, int depth)
+  {
+    if (IsUnsupportedWholeValueType(addr.Type))
+    {
+      ReportUnsupportedValueRead(location, addr.Type, "this assignment's target");
+      return;
+    }
+
+    bool isWide = addr.Type.IsPointer || addr.Type.IsFloat;
+    int valueDepth = addr.Kind == CAddrKind.Pointer ? depth + 1 : depth;
+
+    if (isWide)
+    {
+      int valueDouble = WideReg(valueDepth);
+      CType valueType = EmitWideExprInto(valueExpr, valueDouble, valueDepth);
+      CheckAssignmentType(location, addr.Type, valueType);
+      EmitStoreValueToAddr(addr, 0, valueDouble);
+    }
+    else
+    {
+      int valueReg = ScalarReg(valueDepth);
+      CType valueType = EmitIntExprInto(valueExpr, valueReg, valueDepth);
+      CheckAssignmentType(location, addr.Type, valueType);
+      EmitStoreValueToAddr(addr, valueReg, 0);
+    }
+  }
+
+  /// <summary>Plain "target = value" used as an EXPRESSION (its own value is the assigned value) --
+  /// exactly one of <paramref name="scalarDest"/>/<paramref name="wideDest"/> is meaningful, selected by
+  /// <paramref name="isWide"/>, per this file's own "-1 sentinel for the unused side" convention.</summary>
+  private CType EmitAssignInto(CAssignExpr assign, int scalarDest, int wideDest, int depth, bool isWide)
+  {
+    CAddr addr = ResolveAddr(assign.Target, depth);
+    if (IsUnsupportedWholeValueType(addr.Type))
+    {
+      return ReportUnsupportedValueRead(assign.Location, addr.Type, "this assignment's target");
+    }
+
+    bool targetIsWide = addr.Type.IsPointer || addr.Type.IsFloat;
+    if (targetIsWide != isWide)
+    {
+      Error(assign.Location, $"internal: assignment target wideness mismatch for \"{addr.Type}\"");
+    }
+
+    bool needsFreshRegister = addr.Kind == CAddrKind.Pointer;
+
+    if (targetIsWide)
+    {
+      int valueDouble = needsFreshRegister ? WideReg(depth + 1) : wideDest;
+      CType valueType = EmitWideExprInto(assign.Value, valueDouble, needsFreshRegister ? depth + 1 : depth);
+      CheckAssignmentType(assign.Location, addr.Type, valueType);
+      EmitStoreValueToAddr(addr, 0, valueDouble);
+      if (needsFreshRegister && isWide && valueDouble != wideDest)
+      {
+        EmitCode($"mov r{2 * wideDest}, r{2 * valueDouble}");
+        EmitCode($"mov r{2 * wideDest + 1}, r{2 * valueDouble + 1}");
+      }
+    }
+    else
+    {
+      int valueReg = needsFreshRegister ? ScalarReg(depth + 1) : scalarDest;
+      CType valueType = EmitIntExprInto(assign.Value, valueReg, needsFreshRegister ? depth + 1 : depth);
+      CheckAssignmentType(assign.Location, addr.Type, valueType);
+      EmitStoreValueToAddr(addr, valueReg, 0);
+      if (needsFreshRegister && !isWide && valueReg != scalarDest)
+      {
+        EmitCode($"mov r{scalarDest}, r{valueReg}");
+      }
+    }
+
+    return addr.Type;
+  }
+
+  /// <summary>"target op= value" -- the target's address is resolved exactly once (see this section's
+  /// own remarks), its current value loaded, combined with the right-hand side, stored back, and the
+  /// NEW value (standard C semantics for a compound-assignment expression's own value) handed back to
+  /// the caller.</summary>
+  private CType EmitCompoundAssignInto(CCompoundAssignExpr compoundAssign, int scalarDest, int wideDest, int depth, bool isWide)
+  {
+    CAddr addr = ResolveAddr(compoundAssign.Target, depth);
+    if (IsUnsupportedWholeValueType(addr.Type))
+    {
+      return ReportUnsupportedValueRead(compoundAssign.Location, addr.Type, "this assignment's target");
+    }
+
+    bool targetIsWide = addr.Type.IsPointer || addr.Type.IsFloat;
+    bool needsFreshRegister = addr.Kind == CAddrKind.Pointer;
+    int baseDepth = needsFreshRegister ? depth + 1 : depth;
+
+    if (targetIsWide)
+    {
+      int currentDouble = WideReg(baseDepth);
+      EmitLoadValueFromAddr(addr, 0, currentDouble, baseDepth);
+
+      if (addr.Type.IsPointer && compoundAssign.Op is CBinaryOp.Add or CBinaryOp.Subtract)
+      {
+        int elementWords = Math.Max(addr.Type.ElementType!.SizeInWords, 1);
+
+        // guaranteedSamePage: false, unconditionally -- currentDouble just above holds the TARGET's
+        // current pointer VALUE, loaded from memory via EmitLoadValueFromAddr; that value is a general
+        // runtime pointer regardless of where/what addr itself is (a bounded local/global pointer
+        // VARIABLE still holds an unbounded pointer VALUE -- see IsBoundedPointerValue's own remarks).
+        EmitAddIndexScaledToPointer(currentDouble, compoundAssign.Value, compoundAssign.Op == CBinaryOp.Subtract ? -elementWords : elementWords, baseDepth + 1, guaranteedSamePage: false);
+      }
+      else if (addr.Type.IsFloat && compoundAssign.Op is CBinaryOp.Add or CBinaryOp.Subtract or CBinaryOp.Multiply or CBinaryOp.Divide)
+      {
+        int rightDouble = WideReg(baseDepth + 1);
+        CType rightFloatType = EmitWideExprInto(compoundAssign.Value, rightDouble, baseDepth + 1);
+        if (!rightFloatType.IsFloat)
+        {
+          Error(compoundAssign.Location, "this compound assignment needs a 'float' right-hand side");
+        }
+
+        string op = compoundAssign.Op switch
+        {
+          CBinaryOp.Add => "fadd",
+          CBinaryOp.Subtract => "fsub",
+          CBinaryOp.Multiply => "fmul",
+          _ => "fdiv",
+        };
+        EmitCode($"{op} d{currentDouble}, d{rightDouble}");
+      }
+      else
+      {
+        Error(compoundAssign.Location, $"this compound assignment operator is not supported for \"{addr.Type}\"");
+      }
+
+      EmitStoreValueToAddr(addr, 0, currentDouble);
+
+      if (isWide && currentDouble != wideDest)
+      {
+        EmitCode($"mov r{2 * wideDest}, r{2 * currentDouble}");
+        EmitCode($"mov r{2 * wideDest + 1}, r{2 * currentDouble + 1}");
+      }
+
+      return addr.Type;
+    }
+
+    int currentReg = ScalarReg(baseDepth);
+    EmitLoadValueFromAddr(addr, currentReg, 0, baseDepth);
+    int rightReg = ScalarReg(baseDepth + 1);
+    CType rightType = EmitIntExprInto(compoundAssign.Value, rightReg, baseDepth + 1);
+    CType resultType = EmitIntBinaryOperation(compoundAssign.Op, addr.Type, rightType, currentReg, rightReg, compoundAssign.Location);
+    EmitStoreValueToAddr(addr, currentReg, 0);
+
+    if (!isWide && currentReg != scalarDest)
+    {
+      EmitCode($"mov r{scalarDest}, r{currentReg}");
+    }
+
+    return resultType;
+  }
+
+  /// <summary>Pre/post increment/decrement on any lvalue -- int (by 1), pointer (by its own element
+  /// size, via the same scaling <see cref="EmitAddIndexScaledToPointer"/> uses for "+"/"-"). 'float' is
+  /// rejected (no float increment opcode, and this compiler has never been asked for one). A post-form's
+  /// own value is the OLD one, captured to a frame scratch slot before the update.</summary>
+  private CType EmitIncrementOrDecrement(CUnaryExpr incDec, int scalarReg, int wideDouble, int depth)
+  {
+    bool isIncrement = incDec.Op is CUnaryOp.PreIncrement or CUnaryOp.PostIncrement;
+    bool isPost = incDec.Op is CUnaryOp.PostIncrement or CUnaryOp.PostDecrement;
+
+    CAddr addr = ResolveAddr(incDec.Operand, depth);
+    if (IsUnsupportedWholeValueType(addr.Type))
+    {
+      return ReportUnsupportedValueRead(incDec.Location, addr.Type, "this expression");
+    }
+
+    bool isWide = addr.Type.IsPointer || addr.Type.IsFloat;
+    if (addr.Type.IsFloat)
+    {
+      Error(incDec.Location, "'++'/'--' on a 'float' is not supported by this compiler (no float increment/decrement opcode exists)");
+    }
+
+    bool needsFreshRegister = addr.Kind == CAddrKind.Pointer;
+
+    if (isWide)
+    {
+      int valueDouble = needsFreshRegister ? WideReg(depth + 1) : wideDouble;
+      EmitLoadValueFromAddr(addr, 0, valueDouble, depth);
+
+      int? spillLow = isPost ? AllocateFrameWords(2) : null;
+      if (spillLow is not null)
+      {
+        EmitCode($"stf r{2 * valueDouble}, {spillLow}");
+        EmitCode($"stf r{2 * valueDouble + 1}, {spillLow + 1}");
+      }
+
+      int elementWords = addr.Type.IsPointer ? Math.Max(addr.Type.ElementType!.SizeInWords, 1) : 1;
+
+      // guaranteedSamePage: false -- valueDouble holds an arbitrary runtime pointer/float VALUE just
+      // loaded from addr (EmitLoadValueFromAddr just above always populates both halves), not a
+      // compile-time-bounded frame/global address, so a page-crossing ++/-- (e.g. incrementing a pointer
+      // right up to the end of a page-spanning buffer) must carry into the page half correctly.
+      EmitAddConstantToRegister(2 * valueDouble, isIncrement ? elementWords : -elementWords, guaranteedSamePage: false);
+      EmitStoreValueToAddr(addr, 0, valueDouble);
+
+      if (isPost && spillLow is not null)
+      {
+        EmitCode($"ldf r{2 * valueDouble}, {spillLow}");
+        EmitCode($"ldf r{2 * valueDouble + 1}, {spillLow + 1}");
+      }
+
+      if (needsFreshRegister && valueDouble != wideDouble)
+      {
+        EmitCode($"mov r{2 * wideDouble}, r{2 * valueDouble}");
+        EmitCode($"mov r{2 * wideDouble + 1}, r{2 * valueDouble + 1}");
+      }
+
+      return addr.Type;
+    }
+
+    int reg = needsFreshRegister ? ScalarReg(depth + 1) : scalarReg;
+    EmitLoadValueFromAddr(addr, reg, 0, depth);
+
+    int? spillSlot = isPost ? AllocateFrameWords(1) : null;
+    if (spillSlot is not null)
+    {
+      EmitCode($"stf r{reg}, {spillSlot}");
+    }
+
+    EmitCode(isIncrement ? $"inc r{reg}" : $"dec r{reg}");
+    EmitStoreValueToAddr(addr, reg, 0);
+
+    if (isPost && spillSlot is not null)
+    {
+      EmitCode($"ldf r{reg}, {spillSlot}");
+    }
+
+    if (needsFreshRegister && reg != scalarReg)
+    {
+      EmitCode($"mov r{scalarReg}, r{reg}");
+    }
+
+    return addr.Type;
+  }
+
+  // ---------------------------------------------------------------------------------------------------
+  // Comparisons and short-circuit logical operators (claude/cvm-abi.md section 3.7). `cond`/`if` only
+  // expose a single-register sign-test against zero -- there is no two-operand compare opcode -- so a
+  // general comparison lowers to subtract + the matching named condition, with an unsigned comparison
+  // XOR-0x8000-biasing both operands first (the standard trick remapping unsigned order onto signed
+  // order).
+
+  /// <summary>Evaluates a `==`/`!=`/`&lt;`/`&gt;`/`&lt;=`/`&gt;=` comparison into 0/1 in <paramref
+  /// name="reg"/>. Pointer operands compare their ADDRESS half only (same "ignore the page half"
+  /// convention <see cref="EmitConditionTestInto"/> already uses for a pointer's NULL test -- this
+  /// compiler never needs a true cross-page ordering). 'float' operands are rejected: no float-compare
+  /// opcode exists in the final ISA.</summary>
+  private void EmitComparisonInto(CBinaryExpr comparison, int reg, int depth)
+  {
+    TryGetStaticType(comparison.Left, out CType leftStaticType);
+    TryGetStaticType(comparison.Right, out CType rightStaticType);
+
+    if (leftStaticType.IsFloat || rightStaticType.IsFloat)
+    {
+      Error(comparison.Location, "comparing 'float' values is not supported by this compiler (no float-compare opcode exists)");
+      EmitCode($"rlit r{reg}, 0");
+      return;
+    }
+
+    bool spillNeeded = ContainsCall(comparison.Right);
+    int leftReg, rightReg;
+    bool isUnsigned;
+
+    if (leftStaticType.IsPointer || rightStaticType.IsPointer)
+    {
+      int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
+      int leftDouble = WideReg(depth);
+      EmitWideExprInto(comparison.Left, leftDouble, depth);
+      if (spillLow is not null)
+      {
+        EmitCode($"stf r{2 * leftDouble}, {spillLow}");
+        EmitCode($"stf r{2 * leftDouble + 1}, {spillLow + 1}");
+      }
+
+      int rightDouble = WideReg(depth + 1);
+      EmitWideExprInto(comparison.Right, rightDouble, depth + 1);
+      if (spillLow is not null)
+      {
+        EmitCode($"ldf r{2 * leftDouble}, {spillLow}");
+        EmitCode($"ldf r{2 * leftDouble + 1}, {spillLow + 1}");
+      }
+
+      leftReg = ScalarReg(depth);
+      rightReg = ScalarReg(depth + 1);
+      EmitCode($"mov r{leftReg}, r{2 * leftDouble}");
+      EmitCode($"mov r{rightReg}, r{2 * rightDouble}");
+      isUnsigned = true; // pointers compare as unsigned addresses.
+    }
+    else
+    {
+      int? spillSlot = spillNeeded ? AllocateFrameWords(1) : null;
+      leftReg = reg;
+      CType leftType = EmitIntExprInto(comparison.Left, leftReg, depth);
+      if (spillSlot is not null)
+      {
+        EmitCode($"stf r{leftReg}, {spillSlot}");
+      }
+
+      rightReg = ScalarReg(depth + 1);
+      CType rightType = EmitIntExprInto(comparison.Right, rightReg, depth + 1);
+      if (spillSlot is not null)
+      {
+        EmitCode($"ldf r{leftReg}, {spillSlot}");
+      }
+
+      isUnsigned = leftType.IsUnsigned || rightType.IsUnsigned;
+    }
+
+    if (isUnsigned)
+    {
+      int biasReg = ScalarReg(depth + 2);
+      EmitCode($"rlit r{biasReg}, 0x8000");
+      EmitCode($"xor r{leftReg}, r{biasReg}");
+      EmitCode($"xor r{rightReg}, r{biasReg}");
+    }
+
+    EmitCode($"sub r{leftReg}, r{rightReg}");
+    string condition = comparison.Op switch
+    {
+      CBinaryOp.Equal => "==0",
+      CBinaryOp.NotEqual => "!=0",
+      CBinaryOp.Less => "<0",
+      CBinaryOp.LessOrEqual => "<=0",
+      CBinaryOp.Greater => ">0",
+      CBinaryOp.GreaterOrEqual => ">=0",
+      _ => "==0",
+    };
+
+    EmitCode($"cond r{leftReg}, {condition}");
+    EmitCode($"rpop r{reg}");
+  }
+
+  /// <summary>Short-circuit `&amp;&amp;`/`||`, normalizing the result to a clean 0/1 in <paramref
+  /// name="reg"/> either way (the left/right operands' own truth-test value need not already be exactly
+  /// 1).</summary>
+  private void EmitLogicalInto(CBinaryExpr logical, int reg, int depth)
+  {
+    bool isAnd = logical.Op == CBinaryOp.LogicalAnd;
+    string shortCircuitLabel = NewLabel(isAnd ? "and_false" : "or_true");
+    string endLabel = NewLabel(isAnd ? "and_end" : "or_end");
+
+    EmitConditionTestInto(logical.Left, reg, depth);
+    EmitCode($"if r{reg} {(isAnd ? "==0" : "!=0")} then {shortCircuitLabel}");
+
+    EmitConditionTestInto(logical.Right, reg, depth);
+    EmitCode($"cond r{reg}, !=0");
+    EmitCode($"rpop r{reg}");
+    EmitCode($"br {endLabel}");
 
     EmitLabel(shortCircuitLabel);
-    EmitCode($"pushlit {(isAnd ? 0 : 1)}");
+    EmitCode($"rlit r{reg}, {(isAnd ? 0 : 1)}");
 
-    EmitLabel(doneLabel);
-    return CType.Int;
+    EmitLabel(endLabel);
   }
 
-  // ---------------------------------------------------------------------------------------------
-  // Statements.
-  // ---------------------------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------------------------------
+  // Binary operator lowering, casts, the conditional operator, float literals, and function calls.
+
+  /// <summary>Combines <paramref name="leftReg"/> := <paramref name="leftReg"/> <paramref name="op"/>
+  /// <paramref name="rightReg"/> in place. `+`/`-`/`&amp;`/`|`/`^` are direct hardware opcodes; `*`/`/`/
+  /// `%`/`&lt;&lt;`/`&gt;&gt;` have no hardware opcode at all (the 16-bit binary ALU row is only `or`/
+  /// `and`/`xor`/`sub`/`add`/`mov`/`packbytes`, and only `mul2`/`div2`/`udiv2` -- fixed x2/÷2 -- exist for
+  /// shift-like operations) and lower to a runtime library call instead -- see <see
+  /// cref="EmitLibraryBinaryCall"/>'s own doc comment for the important caveat about that library.
+  /// </summary>
+  private CType EmitIntBinaryOperation(CBinaryOp op, CType leftType, CType rightType, int leftReg, int rightReg, CSourceLocation location)
+  {
+    bool isUnsigned = leftType.IsUnsigned || rightType.IsUnsigned;
+    CType resultType = isUnsigned ? CType.UnsignedInt : CType.Int;
+
+    switch (op)
+    {
+      case CBinaryOp.Add:
+        EmitCode($"add r{leftReg}, r{rightReg}");
+        return resultType;
+
+      case CBinaryOp.Subtract:
+        EmitCode($"sub r{leftReg}, r{rightReg}");
+        return resultType;
+
+      case CBinaryOp.BitwiseAnd:
+        EmitCode($"and r{leftReg}, r{rightReg}");
+        return resultType;
+
+      case CBinaryOp.BitwiseOr:
+        EmitCode($"or r{leftReg}, r{rightReg}");
+        return resultType;
+
+      case CBinaryOp.BitwiseXor:
+        EmitCode($"xor r{leftReg}, r{rightReg}");
+        return resultType;
+
+      case CBinaryOp.Multiply:
+        EmitLibraryBinaryCall("__mul", leftReg, rightReg);
+        return resultType;
+
+      case CBinaryOp.Divide:
+        EmitLibraryBinaryCall(isUnsigned ? "__divu" : "__divs", leftReg, rightReg);
+        return resultType;
+
+      case CBinaryOp.Modulo:
+        EmitLibraryBinaryCall(isUnsigned ? "__modu" : "__mods", leftReg, rightReg);
+        return resultType;
+
+      case CBinaryOp.ShiftLeft:
+        EmitLibraryBinaryCall("__shl", leftReg, rightReg);
+        return resultType;
+
+      case CBinaryOp.ShiftRight:
+        EmitLibraryBinaryCall(isUnsigned ? "__shru" : "__shrs", leftReg, rightReg);
+        return resultType;
+
+      default:
+        Error(location, $"binary operator \"{op}\" is not supported by this code generator");
+        return resultType;
+    }
+  }
+
+  /// <summary>Calls a 2-argument runtime library routine with the ordinary stack calling convention
+  /// (push <paramref name="leftReg"/> then <paramref name="rightReg"/>, call, pop the result back into
+  /// <paramref name="leftReg"/>) -- the same pattern <see cref="EmitAddIndexScaledToPointer"/> already
+  /// uses for `__mul`. <b>The library itself (`__mul`/`__divs`/`__divu`/`__mods`/`__modu`/`__shl`/
+  /// `__shrs`/`__shru`) still targets the OLD, retired CVM1/CVM2-era ISA and needs its own from-scratch
+  /// rewrite against the final 79-mnemonic set before any program using `*`/`/`/`%`/a shift operator
+  /// actually links/runs correctly -- out of scope for this file. Flagged here, and in this class's own
+  /// top doc comment, rather than silently assumed done.</b></summary>
+  private void EmitLibraryBinaryCall(string functionName, int leftReg, int rightReg)
+  {
+    _imports.Add(functionName);
+    EmitCode($"rpush r{leftReg}");
+    EmitCode($"rpush r{rightReg}");
+    EmitCode($"call {functionName}");
+    EmitCode($"rpop r{leftReg}");
+  }
+
+  /// <summary>`(int)`/`(char)`/`(unsigned ...)`/pointer-to-int casts. Every integer kind is exactly one
+  /// CVM word (this class's own top doc comment / <see cref="CType"/>'s own remarks), so int/char/
+  /// unsigned casts are a free register reinterpretation; a pointer operand is narrowed to its own
+  /// address half (the page is discarded, same "address half only" convention used throughout this
+  /// file). A 'float' operand is rejected -- no int&lt;-&gt;float conversion opcode exists.</summary>
+  private CType EmitIntCast(CCastExpr cast, int reg, int depth)
+  {
+    TryGetStaticType(cast.Operand, out CType operandType);
+
+    if (operandType.IsFloat)
+    {
+      Error(cast.Location, "casting between 'float' and an integer type is not supported by this compiler (no int<->float conversion opcode exists)");
+      EmitWideExprInto(cast.Operand, WideReg(depth), depth); // keep generating code so later errors aren't swallowed.
+      EmitCode($"rlit r{reg}, 0");
+      return cast.TargetType;
+    }
+
+    if (operandType.IsPointer)
+    {
+      int pointerDouble = WideReg(depth);
+      EmitWideExprInto(cast.Operand, pointerDouble, depth);
+      EmitCode($"mov r{reg}, r{2 * pointerDouble}");
+      return cast.TargetType;
+    }
+
+    EmitIntExprInto(cast.Operand, reg, depth);
+    return cast.TargetType;
+  }
+
+  /// <summary>`(float)`/pointer-type casts. float-to-float and pointer-to-pointer are free
+  /// reinterpretations; int-to-pointer assumes page 0 (there is no general way to recover a page number
+  /// from a plain integer -- flagged as an assumption, not a confirmed rule, same as this class's other
+  /// documented gaps) except the exact literal 0, which <see cref="EmitWideExprInto"/>'s own null-
+  /// pointer-literal case already turns into a true NULL. int&lt;-&gt;float and float-to-pointer are
+  /// rejected.</summary>
+  private CType EmitWideCast(CCastExpr cast, int destDouble, int depth)
+  {
+    TryGetStaticType(cast.Operand, out CType operandType);
+
+    if (cast.TargetType.IsFloat)
+    {
+      if (!operandType.IsFloat)
+      {
+        Error(cast.Location, "casting between an integer type and 'float' is not supported by this compiler (no int<->float conversion opcode exists)");
+      }
+
+      EmitWideExprInto(cast.Operand, destDouble, depth);
+      return cast.TargetType;
+    }
+
+    if (operandType.IsPointer)
+    {
+      EmitWideExprInto(cast.Operand, destDouble, depth);
+      return cast.TargetType;
+    }
+
+    if (operandType.IsFloat)
+    {
+      Error(cast.Location, "casting a 'float' to a pointer type is not supported by this compiler");
+      EmitCode($"dlit d{destDouble}, 0, 0");
+      return cast.TargetType;
+    }
+
+    int addressReg = ScalarReg(depth);
+    EmitIntExprInto(cast.Operand, addressReg, depth);
+    EmitCode($"rlit r{2 * destDouble + 1}, 0"); // assumed page 0 -- see this method's own doc comment.
+    EmitCode($"mov r{2 * destDouble}, r{addressReg}");
+    return cast.TargetType;
+  }
+
+  /// <summary>Pointer arithmetic (`pointer + int`, `int + pointer`, `pointer - int`) and float `+`/`-`,
+  /// the two cases <see cref="EmitWideExprInto"/>'s own `Add`/`Subtract` case defers to (claude/cvm-
+  /// abi.md section 3.3's "pointer arithmetic only ever touches the address half" rule, and section
+  /// 3.8's `fadd`/`fsub`).</summary>
+  private CType EmitWidePointerOrFloatAddSub(CBinaryExpr addSub, int destDouble, int depth)
+  {
+    TryGetStaticType(addSub.Left, out CType leftStaticType);
+    TryGetStaticType(addSub.Right, out CType rightStaticType);
+
+    if (!leftStaticType.IsPointer && rightStaticType.IsPointer && addSub.Op == CBinaryOp.Add)
+    {
+      // "int + pointer" -- the only shape where the pointer is the RIGHT operand (TryGetStaticType's own
+      // rule: a left-pointer wins whenever either side is a pointer, except this one case).
+      CType pointerType = EmitWideExprInto(addSub.Right, destDouble, depth);
+      int elementWords = Math.Max(pointerType.ElementType!.SizeInWords, 1);
+
+      // guaranteedSamePage: IsBoundedPointerValue(addSub.Right) -- true when the pointer operand just
+      // evaluated into destDouble decayed from a compile-time-bounded array (local or global); false
+      // when it's a general pointer VALUE (parameter, heap, dereference, cast, ...).
+      EmitAddIndexScaledToPointer(destDouble, addSub.Left, elementWords, depth + 1, guaranteedSamePage: IsBoundedPointerValue(addSub.Right));
+      return pointerType;
+    }
+
+    bool spillNeeded = ContainsCall(addSub.Right);
+    int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
+    CType leftType = EmitWideExprInto(addSub.Left, destDouble, depth);
+    if (spillLow is not null)
+    {
+      EmitCode($"stf r{2 * destDouble}, {spillLow}");
+      EmitCode($"stf r{2 * destDouble + 1}, {spillLow + 1}");
+    }
+
+    if (leftType.IsPointer && rightStaticType.IsPointer)
+    {
+      // "pointer - pointer" -- NOT supported: real C's "p - q" counts ELEMENTS, which needs a divide by
+      // the element size that this ISA has no opcode for. Flagged with an error rather than silently
+      // emitting a raw (and almost certainly wrong) address subtraction.
+      if (spillLow is not null)
+      {
+        EmitCode($"ldf r{2 * destDouble}, {spillLow}");
+        EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
+      }
+
+      Error(addSub.Location, "pointer-minus-pointer (\"p - q\") is not supported by this compiler -- no divide opcode exists to scale the raw address difference down to an element count");
+      return leftType;
+    }
+
+    if (leftType.IsPointer)
+    {
+      if (spillLow is not null)
+      {
+        EmitCode($"ldf r{2 * destDouble}, {spillLow}");
+        EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
+      }
+
+      int elementWords = Math.Max(leftType.ElementType!.SizeInWords, 1);
+
+      // guaranteedSamePage: IsBoundedPointerValue(addSub.Left) -- same reasoning as the "int + pointer"
+      // branch above, mirrored onto the left operand (the pointer side in "pointer +/- int").
+      EmitAddIndexScaledToPointer(destDouble, addSub.Right, addSub.Op == CBinaryOp.Subtract ? -elementWords : elementWords, depth + 1, guaranteedSamePage: IsBoundedPointerValue(addSub.Left));
+      return leftType;
+    }
+
+    // Neither operand is a pointer -- both float, the only remaining case EmitWideExprInto's own binary
+    // case forwards here (TryGetStaticType's own Add/Subtract rule).
+    int rightFloatDouble = WideReg(depth + 1);
+    CType rightFloatType = EmitWideExprInto(addSub.Right, rightFloatDouble, depth + 1);
+    if (spillLow is not null)
+    {
+      EmitCode($"ldf r{2 * destDouble}, {spillLow}");
+      EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
+    }
+
+    if (!leftType.IsFloat || !rightFloatType.IsFloat)
+    {
+      Error(addSub.Location, $"\"{(addSub.Op == CBinaryOp.Add ? "+" : "-")}\" between \"{leftType}\" and \"{rightFloatType}\" is not supported");
+      return CType.Float;
+    }
+
+    EmitCode($"{(addSub.Op == CBinaryOp.Add ? "fadd" : "fsub")} d{destDouble}, d{rightFloatDouble}");
+    return CType.Float;
+  }
+
+  /// <summary>Bit-splits a `float` literal's IEEE-754 pattern into a `dlit dX, hi, lo` -- the same hi/lo
+  /// operand order (confirmed 2026-10-16) <see cref="EmitAddressOfInto"/>'s own Global case and every
+  /// other `dlit` emission in this file already uses.</summary>
+  private void EmitFloatLiteralInto(float value, int destDouble)
+  {
+    int bits = BitConverter.SingleToInt32Bits(value);
+    int hi = (int)((uint)bits >> 16);
+    int lo = bits & 0xFFFF;
+    EmitCode($"dlit d{destDouble}, 0x{hi:X4}, 0x{lo:X4}");
+  }
+
+  /// <summary>The `?:` operator. <paramref name="scalarDest"/>/<paramref name="wideDest"/> follow this
+  /// file's usual "-1 sentinel for the unused side" convention, selected by <paramref
+  /// name="isWide"/>.</summary>
+  private CType EmitConditionalInto(CConditionalExpr conditional, int scalarDest, int wideDest, int depth, bool isWide)
+  {
+    string falseLabel = NewLabel("condfalse");
+    string endLabel = NewLabel("condend");
+
+    EmitConditionTestInto(conditional.Condition, ScalarReg(depth), depth);
+    EmitCode($"if r{ScalarReg(depth)} ==0 then {falseLabel}");
+
+    CType trueType = isWide
+        ? EmitWideExprInto(conditional.WhenTrue, wideDest, depth)
+        : EmitIntExprInto(conditional.WhenTrue, scalarDest, depth);
+    EmitCode($"br {endLabel}");
+
+    EmitLabel(falseLabel);
+    CType falseType = isWide
+        ? EmitWideExprInto(conditional.WhenFalse, wideDest, depth)
+        : EmitIntExprInto(conditional.WhenFalse, scalarDest, depth);
+
+    EmitLabel(endLabel);
+    return trueType.IsFloat || falseType.IsFloat ? CType.Float : trueType;
+  }
+
+  private static bool IsFloatBuiltinName(string name) => name is "fabsf" or "fminf" or "fmaxf";
+
+  /// <summary>`fabsf`/`fminf`/`fmaxf` -- compiler-recognized builtins against `mask15`/`fmin`/`fmax`
+  /// directly (claude/cvm-abi.md section 3.8/3.9: `__optimize` is retired as a SEPARATE mechanism, so
+  /// these three names are substituted unconditionally whenever their signature matches, whether or not
+  /// the declaration used `__optimize`). `fabsf` clears the IEEE sign bit on the HIGH r-alias of the
+  /// `d0`-`d3` register holding the value -- the "r-alias trick" (section 3.4), valid because
+  /// <paramref name="destDouble"/> is always in that range here.</summary>
+  private CType EmitFloatBuiltinCall(CCallExpr call, int scalarDest, int wideDest, int depth, bool isWide)
+  {
+    if (!isWide)
+    {
+      Error(call.Location, $"internal: \"{call.FunctionName}\" returns 'float', which needs a wide destination");
+    }
+
+    int destDouble = isWide ? wideDest : WideReg(depth);
+
+    if (call.FunctionName == "fabsf")
+    {
+      if (call.Arguments.Count != 1)
+      {
+        Error(call.Location, "\"fabsf\" takes exactly one argument");
+      }
+
+      EmitWideExprInto(call.Arguments.Count > 0 ? call.Arguments[0] : new CFloatLiteralExpr(call.Location, 0f), destDouble, depth);
+      EmitCode($"mask15 r{2 * destDouble + 1}");
+      return CType.Float;
+    }
+
+    if (call.Arguments.Count != 2)
+    {
+      Error(call.Location, $"\"{call.FunctionName}\" takes exactly two arguments");
+    }
+
+    bool spillNeeded = call.Arguments.Count > 1 && ContainsCall(call.Arguments[1]);
+    int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
+    EmitWideExprInto(call.Arguments.Count > 0 ? call.Arguments[0] : new CFloatLiteralExpr(call.Location, 0f), destDouble, depth);
+    if (spillLow is not null)
+    {
+      EmitCode($"stf r{2 * destDouble}, {spillLow}");
+      EmitCode($"stf r{2 * destDouble + 1}, {spillLow + 1}");
+    }
+
+    int rightDouble = WideReg(depth + 1);
+    EmitWideExprInto(call.Arguments.Count > 1 ? call.Arguments[1] : new CFloatLiteralExpr(call.Location, 0f), rightDouble, depth + 1);
+    if (spillLow is not null)
+    {
+      EmitCode($"ldf r{2 * destDouble}, {spillLow}");
+      EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
+    }
+
+    EmitCode($"{(call.FunctionName == "fminf" ? "fmin" : "fmax")} d{destDouble}, d{rightDouble}");
+    return CType.Float;
+  }
+
+  private void CheckArgumentType(CSourceLocation location, int argumentIndex, CType expectedType, CType actualType)
+  {
+    if (expectedType.IsFloat != actualType.IsFloat)
+    {
+      Error(location, $"argument {argumentIndex + 1}: cannot pass \"{actualType}\" where \"{expectedType}\" is expected (float/non-float mismatch -- cast explicitly)");
+    }
+  }
+
+  /// <summary>
+  /// A function call. Functions are never mangled (unlike globals, which get a leading "_" --
+  /// <see cref="MangleExternalSymbol"/>): the old compiler already called library routines like
+  /// "__mul" directly by their plain name, and this one keeps that. Every argument, whatever its final
+  /// destination, is evaluated LEFT TO RIGHT into its own dedicated frame scratch slot first (claude/
+  /// cvm-abi.md section 3.4's own "spilling across a call" idea, generalized to every argument of a
+  /// call, not just a binary operator's one operand) -- this decouples evaluation order from the order
+  /// values must finally be placed in without ever needing to keep more than one argument's value live
+  /// in a shared scratch register while evaluating another, possibly call-containing, argument. Once
+  /// every argument is safely parked in its own frame slot: stack-passed arguments are reloaded and
+  /// pushed RIGHT TO LEFT (so the first-declared one ends up closest to the new frame's own <c>fp</c> --
+  /// section 3.5), then register-passed (fastcall) arguments are reloaded directly into their final
+  /// <c>r0</c>-<c>r3</c>/<c>d4</c>-<c>d7</c> register, deferred until immediately before the <c>call</c>
+  /// itself (section 3.4) -- and only then is <c>call</c> emitted. After it returns, the caller drops
+  /// every stack-passed argument word it pushed (one <c>drop</c> per word -- there is no callee-cleanup
+  /// convention in this ABI, unlike the old "leave" instruction) and reads the return value out of
+  /// <c>r0</c>/<c>d0</c> directly.
+  /// </summary>
+  private CType EmitCallInto(CCallExpr call, int scalarDest, int wideDest, int depth, bool isWide)
+  {
+    if (!_functions.TryGetValue(call.FunctionName, out CFunctionSignature? signature))
+    {
+      Error(call.Location, $"\"{call.FunctionName}\" is not declared");
+      if (isWide)
+      {
+        EmitCode($"dlit d{wideDest}, 0, 0");
+      }
+      else
+      {
+        EmitCode($"rlit r{scalarDest}, 0");
+      }
+
+      return isWide ? CType.PointerTo(CType.Void) : CType.Int;
+    }
+
+    if (IsFloatBuiltinName(call.FunctionName) && signature.ReturnType.IsFloat
+        && signature.ParameterTypes.Count is 1 or 2 && signature.ParameterTypes.All(t => t.IsFloat))
+    {
+      return EmitFloatBuiltinCall(call, scalarDest, wideDest, depth, isWide);
+    }
+
+    if (call.Arguments.Count != signature.ParameterTypes.Count)
+    {
+      Error(call.Location, $"\"{call.FunctionName}\" expects {signature.ParameterTypes.Count} argument(s), got {call.Arguments.Count}");
+    }
+
+    IReadOnlyList<CParamSlot> slots = ComputeParameterSlots(signature.ParameterTypes, signature.IsFastcall);
+    int argumentCount = Math.Min(call.Arguments.Count, slots.Count);
+
+    var argumentSpillOffsets = new int[argumentCount];
+    for (int i = 0; i < argumentCount; i++)
+    {
+      CType expectedType = slots[i].Type;
+      bool argIsWide = expectedType.IsPointer || expectedType.IsFloat;
+      int size = Math.Max(expectedType.SizeInWords, 1);
+      int spillOffset = AllocateFrameWords(size);
+      argumentSpillOffsets[i] = spillOffset;
+
+      if (argIsWide)
+      {
+        int argDouble = WideReg(0);
+        CType actualType = EmitWideExprInto(call.Arguments[i], argDouble, 0);
+        CheckArgumentType(call.Arguments[i].Location, i, expectedType, actualType);
+        EmitCode($"stf r{2 * argDouble}, {spillOffset}");
+        EmitCode($"stf r{2 * argDouble + 1}, {spillOffset + 1}");
+      }
+      else
+      {
+        int argReg = ScalarReg(0);
+        CType actualType = EmitIntExprInto(call.Arguments[i], argReg, 0);
+        CheckArgumentType(call.Arguments[i].Location, i, expectedType, actualType);
+        EmitCode($"stf r{argReg}, {spillOffset}");
+      }
+    }
+
+    for (int i = argumentCount - 1; i >= 0; i--)
+    {
+      CParamSlot slot = slots[i];
+      if (slot.IsRegister)
+      {
+        continue;
+      }
+
+      int size = Math.Max(slot.Type.SizeInWords, 1);
+      if (size == 2)
+      {
+        // WideReg(0), not GlobalAddressTempDouble (d8): `ldf`'s register field is 4 bits (r0-r15 only),
+        // so d8's own r-aliases, r16/r17, are not reachable here -- confirmed by Stefan 2026-10-18, "r16
+        // and r17 are not accessible with opcodes using rx". WideReg(0) is safe to reuse as transient
+        // scratch at this point: the loop just above already consumed every argument (including this
+        // one, at the SAME depth 0) into its own spill slot before this second loop runs, so nothing is
+        // still live in WideReg(0)/ScalarReg(0) here -- the same precedent this loop's own `else` branch
+        // already relies on for ScalarReg(0).
+        int scratchDouble = WideReg(0);
+        EmitCode($"ldf r{2 * scratchDouble}, {argumentSpillOffsets[i]}");
+        EmitCode($"ldf r{2 * scratchDouble + 1}, {argumentSpillOffsets[i] + 1}");
+        EmitCode($"dpush d{scratchDouble}");
+      }
+      else
+      {
+        EmitCode($"ldf r{ScalarReg(0)}, {argumentSpillOffsets[i]}");
+        EmitCode($"rpush r{ScalarReg(0)}");
+      }
+    }
+
+    for (int i = 0; i < argumentCount; i++)
+    {
+      CParamSlot slot = slots[i];
+      if (!slot.IsRegister)
+      {
+        continue;
+      }
+
+      if (slot.IsWide)
+      {
+        EmitCode($"ldf r{2 * slot.RegisterIndex}, {argumentSpillOffsets[i]}");
+        EmitCode($"ldf r{2 * slot.RegisterIndex + 1}, {argumentSpillOffsets[i] + 1}");
+      }
+      else
+      {
+        EmitCode($"ldf r{slot.RegisterIndex}, {argumentSpillOffsets[i]}");
+      }
+    }
+
+    EmitCode($"call {call.FunctionName}");
+
+    int stackWordsToDrop = slots.Where(s => !s.IsRegister).Sum(s => Math.Max(s.Type.SizeInWords, 1));
+    for (int i = 0; i < stackWordsToDrop; i++)
+    {
+      EmitCode("drop");
+    }
+
+    if (signature.ReturnType.IsVoid)
+    {
+      if (isWide)
+      {
+        EmitCode($"dlit d{wideDest}, 0, 0");
+      }
+      else
+      {
+        EmitCode($"rlit r{scalarDest}, 0");
+      }
+
+      return signature.ReturnType;
+    }
+
+    if (isWide)
+    {
+      if (wideDest != WideReturnDouble)
+      {
+        EmitCode($"mov r{2 * wideDest}, r{2 * WideReturnDouble}");
+        EmitCode($"mov r{2 * wideDest + 1}, r{2 * WideReturnDouble + 1}");
+      }
+    }
+    else
+    {
+      if (scalarDest != ScalarReturnRegister)
+      {
+        EmitCode($"mov r{scalarDest}, r{ScalarReturnRegister}");
+      }
+    }
+
+    return signature.ReturnType;
+  }
+
+  // ---------------------------------------------------------------------------------------------------
+  // Statements and control flow. Every "branch when false"/"loop while true" test goes through
+  // EmitConditionTestInto + `if rN ==0/!=0 then label` -- CONFIRMED 2026-10-03 against real hardware
+  // (see claude/cvm-br-if-cond-verification.md): `if` branches when its own condition is TRUE, so
+  // testing the COMPLEMENT condition directly gets "skip when false" with no separate negation step
+  // (unlike the old, retired `cbr`, which branched on r == 0 unconditionally and needed an explicit
+  // `eq0` first for e.g. do-while's "loop while true").
+
+  private void EmitSwitchLabel(CStmt labelNode, CStmt inner)
+  {
+    if (_switchLabelsByNode is null || !_switchLabelsByNode.TryGetValue(labelNode, out string? label))
+    {
+      Error(labelNode.Location, "\"case\"/\"default\" is not within a switch");
+      EmitStatement(inner);
+      return;
+    }
+
+    EmitLabel(label);
+    EmitStatement(inner);
+  }
+
+  private string MangleLabel(string name) => $"{_currentFunction!.Name}__label_{name}";
 
   private void EmitStatement(CStmt stmt)
   {
-    // 2026-09-26: tag every "real" statement with its own source-comment label before emitting its
-    // code -- see EmitSourceLineComment's own remarks. Deliberately excluded: CCompoundStmt itself
-    // (its Location is just the opening brace; its own inner statements get tagged individually as
-    // this method recurses into them) and CEmptyStmt (a bare ";", nothing to label).
     if (stmt is not (CCompoundStmt or CEmptyStmt))
     {
       EmitSourceLineComment(stmt.Location);
@@ -3660,65 +2750,19 @@ public sealed class CCodeGenerator
         break;
 
       case CExprStmt exprStmt:
-        // 2026-09-09: a bare assignment/compound-assignment/increment-decrement statement is the
-        // single most common expression statement there is, and its own result value is NEVER read
-        // (there is nowhere for a statement's "value" to go) -- so these three go through their
-        // "ForEffect" twins, which skip the dup this class's own uniform stack invariant would
-        // otherwise require, rather than the generic EmitExpr-then-pop path below. See
-        // EmitAssignForEffect's own remarks.
-        switch (exprStmt.Expression)
-        {
-          case CAssignExpr assign:
-            EmitAssignForEffect(assign);
-            break;
-
-          case CCompoundAssignExpr compoundAssign:
-            EmitCompoundAssignForEffect(compoundAssign);
-            break;
-
-          case CUnaryExpr { Op: CUnaryOp.PreIncrement or CUnaryOp.PostIncrement or CUnaryOp.PreDecrement or CUnaryOp.PostDecrement } incDec:
-            EmitIncrementOrDecrementForEffect(incDec);
-            break;
-
-          default:
-            {
-              CType type = EmitExpr(exprStmt.Expression);
-              // Float ABI: a 'float' result never left anything on the ordinary stack -- nothing to
-              // discard (e.g. a bare "someFloatFunction();" statement). See this class's own doc comment.
-              if (!type.IsVoid && !type.IsFloat)
-              {
-                EmitCode("pop");
-              }
-
-              break;
-            }
-        }
-
+        EmitStatementExprForEffect(exprStmt.Expression, 0);
         break;
 
       case CLocalVarDecl localDecl:
         DeclareLocal(localDecl);
-        if (localDecl.Initializer is not null && !localDecl.IsStatic)
-        {
-          // Same "ForEffect" reasoning as CExprStmt above: a declaration's initializer value is never
-          // read either, so this goes straight to EmitAssignForEffect rather than round-tripping
-          // through a dup it would just have to discard again.
-          EmitAssignForEffect(new CAssignExpr(localDecl.Location, new CNameExpr(localDecl.Location, localDecl.Name), localDecl.Initializer));
-        }
-
         break;
 
       case CIfStmt ifStmt:
         {
           string elseLabel = NewLabel("else");
           string endLabel = NewLabel("endif");
-          EmitExpr(ifStmt.Condition);
-          EmitCode("pop");
-          // 2026-09-09: cbr branches when r == 0 (CONFIRMED, see this class's own ABI doc comment) --
-          // exactly the "condition is false, skip to else" test we need, so no eq0 is needed first any
-          // more (the old "ifbr" placeholder branched on nonzero, which is why this used to negate with
-          // eq0 first).
-          EmitCode($"cbr {elseLabel}");
+          EmitConditionTestInto(ifStmt.Condition, ScalarReg(0), 0);
+          EmitCode($"if r{ScalarReg(0)} ==0 then {elseLabel}");
           EmitStatement(ifStmt.Then);
           EmitCode($"br {endLabel}");
           EmitLabel(elseLabel);
@@ -3735,17 +2779,14 @@ public sealed class CCodeGenerator
         {
           string startLabel = NewLabel("while");
           string endLabel = NewLabel("endwhile");
-          _currentFunction!.BreakLabels.Push(endLabel);
-          _currentFunction.ContinueLabels.Push(startLabel);
+          _currentFunction!.LoopLabels.Add((endLabel, startLabel));
           EmitLabel(startLabel);
-          EmitExpr(whileStmt.Condition);
-          EmitCode("pop");
-          EmitCode($"cbr {endLabel}"); // 2026-09-09: cbr already branches on r == 0 -- see EmitStatement's CIfStmt case remarks.
+          EmitConditionTestInto(whileStmt.Condition, ScalarReg(0), 0);
+          EmitCode($"if r{ScalarReg(0)} ==0 then {endLabel}");
           EmitStatement(whileStmt.Body);
           EmitCode($"br {startLabel}");
           EmitLabel(endLabel);
-          _currentFunction.BreakLabels.Pop();
-          _currentFunction.ContinueLabels.Pop();
+          _currentFunction.LoopLabels.RemoveAt(_currentFunction.LoopLabels.Count - 1);
           break;
         }
 
@@ -3754,22 +2795,14 @@ public sealed class CCodeGenerator
           string startLabel = NewLabel("dowhile");
           string continueLabel = NewLabel("dowhile_cont");
           string endLabel = NewLabel("enddowhile");
-          _currentFunction!.BreakLabels.Push(endLabel);
-          _currentFunction.ContinueLabels.Push(continueLabel);
+          _currentFunction!.LoopLabels.Add((endLabel, continueLabel));
           EmitLabel(startLabel);
           EmitStatement(doWhileStmt.Body);
           EmitLabel(continueLabel);
-          EmitExpr(doWhileStmt.Condition);
-          EmitCode("pop");
-          // 2026-09-09: do-while needs to loop back when the condition is TRUE, the opposite of what
-          // cbr tests directly (r == 0) -- so, unlike if/while/for, this needs an explicit eq0 first to
-          // invert the sense before branching (see this class's own ABI doc comment). The old "ifbr"
-          // placeholder branched on nonzero, so it needed no such inversion here; cbr does.
-          EmitCode("eq0");
-          EmitCode($"cbr {startLabel}");
+          EmitConditionTestInto(doWhileStmt.Condition, ScalarReg(0), 0);
+          EmitCode($"if r{ScalarReg(0)} !=0 then {startLabel}");
           EmitLabel(endLabel);
-          _currentFunction.BreakLabels.Pop();
-          _currentFunction.ContinueLabels.Pop();
+          _currentFunction.LoopLabels.RemoveAt(_currentFunction.LoopLabels.Count - 1);
           break;
         }
 
@@ -3785,31 +2818,24 @@ public sealed class CCodeGenerator
             EmitStatement(forStmt.Init);
           }
 
-          _currentFunction!.BreakLabels.Push(endLabel);
-          _currentFunction.ContinueLabels.Push(continueLabel);
+          _currentFunction!.LoopLabels.Add((endLabel, continueLabel));
           EmitLabel(startLabel);
           if (forStmt.Condition is not null)
           {
-            EmitExpr(forStmt.Condition);
-            EmitCode("pop");
-            EmitCode($"cbr {endLabel}"); // 2026-09-09: cbr already branches on r == 0 -- see EmitStatement's CIfStmt case remarks.
+            EmitConditionTestInto(forStmt.Condition, ScalarReg(0), 0);
+            EmitCode($"if r{ScalarReg(0)} ==0 then {endLabel}");
           }
 
           EmitStatement(forStmt.Body);
           EmitLabel(continueLabel);
           if (forStmt.Update is not null)
           {
-            CType updateType = EmitExpr(forStmt.Update);
-            if (!updateType.IsVoid && !updateType.IsFloat)
-            {
-              EmitCode("pop");
-            }
+            EmitStatementExprForEffect(forStmt.Update, 0);
           }
 
           EmitCode($"br {startLabel}");
           EmitLabel(endLabel);
-          _currentFunction.BreakLabels.Pop();
-          _currentFunction.ContinueLabels.Pop();
+          _currentFunction.LoopLabels.RemoveAt(_currentFunction.LoopLabels.Count - 1);
           ExitScope();
           break;
         }
@@ -3822,32 +2848,21 @@ public sealed class CCodeGenerator
             {
               Error(returnStmt.Location, $"function \"{_currentFunction.Name}\" returns void and cannot return a value");
             }
-
-            if (_currentFunction.ReturnType.IsFloat)
+            else if (IsUnsupportedWholeValueType(_currentFunction.ReturnType))
             {
-              // Float ABI HYPOTHESIS (see this class's own doc comment): the return value always goes in
-              // fr[0], regardless of calling convention.
-              EmitFloatExprInto(returnStmt.Value, 0);
+              ReportUnsupportedValueRead(returnStmt.Location, _currentFunction.ReturnType, $"function \"{_currentFunction.Name}\"'s return value");
             }
-            else if (_currentFunction.ReturnType.IsPointer)
+            else if (_currentFunction.ReturnType.IsFloat || _currentFunction.ReturnType.IsPointer)
             {
-              // Return-value ABI (added 2026-09-27, per Stefan verbatim -- see this class's own doc
-              // comment above EmitRegisterWordLoadIntoR): a pointer return always goes in ar[0].
-              EmitPointerReturn(returnStmt.Value, returnStmt.Location, _currentFunction.Name);
-            }
-            else if (_currentFunction.ReturnType.SizeInWords == 2)
-            {
-              // Same 2026-09-27 ABI: every remaining genuinely-2-word return type (neither float nor
-              // pointer -- 'long', or a 2-word struct) goes low word in reg[0], high word in reg[1].
-              EmitRegisterReturn(returnStmt.Value, _currentFunction.ReturnType, returnStmt.Location, _currentFunction.Name);
+              CType valueType = EmitWideExprInto(returnStmt.Value, WideReturnDouble, 0);
+              if (valueType.IsFloat != _currentFunction.ReturnType.IsFloat)
+              {
+                Error(returnStmt.Location, $"function \"{_currentFunction.Name}\" returns \"{_currentFunction.ReturnType}\", not \"{valueType}\"");
+              }
             }
             else
             {
-              CType valueType = EmitExpr(returnStmt.Value);
-              if (valueType.IsFloat)
-              {
-                Error(returnStmt.Location, $"function \"{_currentFunction.Name}\" does not return 'float'");
-              }
+              EmitIntExprInto(returnStmt.Value, ScalarReturnRegister, 0);
             }
           }
           else if (!_currentFunction!.ReturnType.IsVoid)
@@ -3855,29 +2870,38 @@ public sealed class CCodeGenerator
             Error(returnStmt.Location, $"function \"{_currentFunction.Name}\" must return a value of type \"{_currentFunction.ReturnType}\"");
           }
 
-          EmitCode($"br {_currentFunction!.EpilogueLabel}");
+          EmitCode("unlink");
+          EmitCode("ret");
           break;
         }
 
       case CBreakStmt breakStmt:
-        if (_currentFunction!.BreakLabels.Count == 0)
+        if (_currentFunction!.LoopLabels.Count == 0)
         {
           Error(breakStmt.Location, "\"break\" is not within a loop or switch");
           break;
         }
 
-        EmitCode($"br {_currentFunction.BreakLabels.Peek()}");
+        EmitCode($"br {_currentFunction.LoopLabels[^1].BreakLabel}");
         break;
 
       case CContinueStmt continueStmt:
-        if (_currentFunction!.ContinueLabels.Count == 0)
         {
-          Error(continueStmt.Location, "\"continue\" is not within a loop");
+          int i = _currentFunction!.LoopLabels.Count - 1;
+          while (i >= 0 && _currentFunction.LoopLabels[i].ContinueLabel is null)
+          {
+            i--; // skip a switch's own break-only scope -- it has no continue target of its own.
+          }
+
+          if (i < 0)
+          {
+            Error(continueStmt.Location, "\"continue\" is not within a loop");
+            break;
+          }
+
+          EmitCode($"br {_currentFunction.LoopLabels[i].ContinueLabel}");
           break;
         }
-
-        EmitCode($"br {_currentFunction.ContinueLabels.Peek()}");
-        break;
 
       case CGotoStmt gotoStmt:
         EmitCode($"br {MangleLabel(gotoStmt.Label)}");
@@ -3906,30 +2930,12 @@ public sealed class CCodeGenerator
     }
   }
 
-  private void EmitSwitchLabel(CStmt labelNode, CStmt inner)
-  {
-    if (_switchLabelsByNode is null || !_switchLabelsByNode.TryGetValue(labelNode, out string? label))
-    {
-      Error(labelNode.Location, "\"case\"/\"default\" is not within a switch");
-      EmitStatement(inner);
-      return;
-    }
-
-    EmitLabel(label);
-    EmitStatement(inner);
-  }
-
-  private string MangleLabel(string name) => $"{_currentFunction!.Name}__label_{name}";
-
   /// <summary>
-  /// Compiles a <c>switch</c> without a real <c>tjmp</c> instruction -- see this class's own doc comment
-  /// for why. The selector is evaluated exactly once into a compiler-allocated temporary local, then a
-  /// chain of equality comparisons (in source order, "default" last regardless of where it was written,
-  /// matching the order real hardware would want to test them in) jumps into the right position; the
-  /// body then runs as ordinary statements, with each <see cref="CCaseLabelStmt"/>/
-  /// <see cref="CDefaultLabelStmt"/> becoming a label the comparison chain already jumps to -- giving
-  /// real C fall-through for free, since nothing here stops execution from running from one case
-  /// straight into the next.
+  /// Compiles a `switch` as an if-chain (claude/cvm-abi.md section 3.9 -- no `tjmp`-style jump table has
+  /// ever been confirmed for this project). The selector is evaluated exactly once into a frame scratch
+  /// slot, then a chain of subtract+`if ... ==0 then label` comparisons (in source order, "default" last
+  /// regardless of where it was written) jumps into the right position; the body then runs as ordinary
+  /// statements, giving real C fall-through for free.
   /// </summary>
   private void EmitSwitch(CSwitchStmt switchStmt)
   {
@@ -3939,40 +2945,43 @@ public sealed class CCodeGenerator
     string? defaultLabel = null;
     CollectSwitchLabels(switchStmt.Body, labels, cases, ref defaultLabel, switchStmt.Location);
 
-    // Evaluate the selector exactly once and store it. 2026-09-09: "stl" stores r, not the stack top
-    // (see this class's own ABI doc comment), so the selector has to be popped into r before it can be
-    // stashed away, and reloaded (ldl; push) at the top of every comparison since "eq"'s own pop
-    // clobbers r on each iteration.
-    EmitExpr(switchStmt.Selector);        // stack: [selector]
-    EmitCode("pop");                       // r := selector; stack: []
-    int selectorSlot = _currentFunction!.NextLocalSlot++;
-    EmitCode($"stl {selectorSlot}");      // selectorSlot := r (the selector)
+    TryGetStaticType(switchStmt.Selector, out CType selectorType);
+    if (selectorType.IsFloat || selectorType.IsPointer)
+    {
+      Error(switchStmt.Location, "a \"switch\" selector must be an integer expression");
+    }
 
+    int selectorReg = ScalarReg(0);
+    EmitIntExprInto(switchStmt.Selector, selectorReg, 0);
+    int selectorSlot = AllocateFrameWords(1);
+    EmitCode($"stf r{selectorReg}, {selectorSlot}");
+
+    bool isUnsigned = selectorType.IsUnsigned;
     foreach ((long value, string label) in cases)
     {
-      EmitCode($"ldl {selectorSlot}");   // r := selector
-      EmitCode("push");                   // stack: [selector]
-      EmitCode($"pushlit {value}");      // stack: [selector, value]
-      EmitCode("pop");                    // r := value; stack: [selector]
-      EmitCode("eq");                     // stack: [selector == value]
-      EmitCode("pop");                    // r := comparison result; stack: []
-      // 2026-09-09: need to branch into this case when the comparison is TRUE, the opposite of what cbr
-      // tests directly (r == 0) -- so, like do-while, this needs an explicit eq0 first to invert the
-      // sense before branching (see this class's own ABI doc comment).
-      EmitCode("eq0");
-      EmitCode($"cbr {label}");
+      int compareReg = ScalarReg(0);
+      int literalReg = ScalarReg(1);
+      EmitCode($"ldf r{compareReg}, {selectorSlot}");
+      EmitCode($"rlit r{literalReg}, {(int)(value & 0xFFFF)}");
+      if (isUnsigned)
+      {
+        int biasReg = ScalarReg(2);
+        EmitCode($"rlit r{biasReg}, 0x8000");
+        EmitCode($"xor r{compareReg}, r{biasReg}");
+        EmitCode($"xor r{literalReg}, r{biasReg}");
+      }
+
+      EmitCode($"sub r{compareReg}, r{literalReg}");
+      EmitCode($"if r{compareReg} ==0 then {label}");
     }
 
     EmitCode($"br {defaultLabel ?? endLabel}");
 
-    // Save/restore rather than clobbering to null: a nested switch inside this one's body recursively
-    // calls EmitSwitch, which would otherwise permanently wipe out THIS switch's own label table for
-    // any case/default label that textually follows the nested switch.
     Dictionary<CStmt, string>? outerSwitchLabels = _switchLabelsByNode;
     _switchLabelsByNode = labels;
-    _currentFunction.BreakLabels.Push(endLabel);
+    _currentFunction!.LoopLabels.Add((endLabel, null)); // break-only scope -- "continue" skips past it.
     EmitStatement(switchStmt.Body);
-    _currentFunction.BreakLabels.Pop();
+    _currentFunction.LoopLabels.RemoveAt(_currentFunction.LoopLabels.Count - 1);
     _switchLabelsByNode = outerSwitchLabels;
 
     EmitLabel(endLabel);
@@ -4037,13 +3046,6 @@ public sealed class CCodeGenerator
 
         break;
 
-      case CLabelStmt labelStmt:
-        CollectSwitchLabels(labelStmt.Inner, labels, cases, ref defaultLabel, switchLocation);
-        break;
-
-      // A case/default label may be nested inside a loop that's itself inside the switch's body (the
-      // Duff's-device shape, among others) -- descend into every loop kind's own Body so those are
-      // still collected, exactly as CSwitchStmt's own doc comment (CAstStmt.cs) promises.
       case CWhileStmt whileStmt:
         CollectSwitchLabels(whileStmt.Body, labels, cases, ref defaultLabel, switchLocation);
         break;
@@ -4056,621 +3058,15 @@ public sealed class CCodeGenerator
         CollectSwitchLabels(forStmt.Body, labels, cases, ref defaultLabel, switchLocation);
         break;
 
+      case CLabelStmt labelStmt:
+        CollectSwitchLabels(labelStmt.Inner, labels, cases, ref defaultLabel, switchLocation);
+        break;
+
       case CSwitchStmt:
-        // A nested switch owns its own case/default labels -- do not descend into it.
-        break;
+        break; // a nested switch's own case/default labels belong to it, not this one.
 
       default:
         break;
     }
-  }
-
-  // ---------------------------------------------------------------------------------------------
-  // Expressions. Every case leaves exactly one stack word (this class's own uniform codegen
-  // invariant), except a call to a void function, which leaves nothing.
-  // ---------------------------------------------------------------------------------------------
-
-  private CType EmitExpr(CExpr expr)
-  {
-    switch (expr)
-    {
-      case CIntLiteralExpr literal:
-        EmitCode($"pushlit {literal.Value}");
-        return literal.IsUnsigned ? CType.UnsignedInt : CType.Int;
-
-      case CFloatLiteralExpr floatLiteral:
-        // Float ABI: reached via the general (int/pointer) path -- e.g. a bare "3.5;" statement, or a
-        // float literal used where an int was expected. Evaluate it at fr[0] anyway (so downstream code
-        // is well-formed) and report its real type upward -- this class's own uniform "leave one stack
-        // word" invariant does not hold for it, so nothing further should try to treat it as an int.
-        EmitFloatExprInto(floatLiteral, 0);
-        return CType.Float;
-
-      case CStringLiteralExpr stringLiteral:
-        EmitCode($"pushlit {InternStringLiteral(stringLiteral.Value)}");
-        return CType.PointerTo(CType.Char);
-
-      case CNameExpr name:
-        return EmitName(name);
-
-      case CUnaryExpr { Op: CUnaryOp.Plus } unary:
-        return EmitExpr(unary.Operand);
-
-      case CUnaryExpr { Op: CUnaryOp.Minus } unary:
-        {
-          // RENAMED 2026-09-09: node 508's own "negate" no longer resolved against any live CVM2 node,
-          // and was deleted outright from CvmInstructionSet the same day once this codegen stopped
-          // emitting it (see that class's own remarks on the 2026-09-09 CVM1-opcode purge) -- node 509's
-          // "neg" (a genuinely different mnemonic string, live and node-resolved) computes the identical
-          // two's-complement result ("inv" then "+1", see Node509Program's own remarks) and is used here
-          // instead.
-          CType type = EmitExpr(unary.Operand);
-          EmitCode("pop");
-          EmitCode("neg");
-          EmitCode("push");
-          return type;
-        }
-
-      case CUnaryExpr { Op: CUnaryOp.LogicalNot } unary:
-        {
-          EmitExpr(unary.Operand);
-          EmitCode("pop");
-          EmitCode("eq0");
-          EmitCode("push");
-          return CType.Int;
-        }
-
-      case CUnaryExpr { Op: CUnaryOp.BitwiseNot } unary:
-        {
-          CType type = EmitExpr(unary.Operand);
-          EmitCode("pop");
-          EmitCode("inv");
-          EmitCode("push");
-          return type;
-        }
-
-      case CUnaryExpr { Op: CUnaryOp.AddressOf } unary:
-        return EmitAddressOf(unary.Operand);
-
-      case CUnaryExpr { Op: CUnaryOp.Dereference } unary:
-        {
-          // Added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a dereferenced 'float *'
-          // reached via the general path (e.g. a bare "*fp;" statement) -- this compiler's uniform "leave
-          // exactly one word" invariant does not hold for a 2-word 'float', so it must be routed to the
-          // float-specific evaluator instead of ResolveLvalue/EmitLoad's ordinary single-word path. Mirrors
-          // CFloatLiteralExpr's own handling at the top of this switch.
-          if (LooksLikeFloatExpr(unary))
-          {
-            EmitFloatExprInto(unary, 0);
-            return CType.Float;
-          }
-
-          CLvalue lvalue = ResolveLvalue(unary);
-          if (IsUnsupportedWholeValueType(lvalue.Type))
-          {
-            // Added 2026-09-26 alongside 'long' support -- closes a gap this same audit found for
-            // 'struct' too: dereferencing a whole struct pointer as a VALUE ("*p;", or the read side of
-            // "*p = x;") had no guard here at all, unlike the CIndexExpr/CMemberAccessExpr cases just
-            // below, which already reject this. See IsUnsupportedWholeValueType's own remarks.
-            return ReportUnsupportedValueRead(unary.Location, lvalue.Type, "dereferencing this pointer");
-          }
-
-          EmitLoad(lvalue);
-          return lvalue.Type;
-        }
-
-      case CUnaryExpr { Op: CUnaryOp.PreIncrement or CUnaryOp.PreDecrement or CUnaryOp.PostIncrement or CUnaryOp.PostDecrement } incDec:
-        return EmitIncrementOrDecrement(incDec);
-
-      case CBinaryExpr { Op: CBinaryOp.LogicalAnd or CBinaryOp.LogicalOr } logical:
-        return EmitLogical(logical);
-
-      case CBinaryExpr binary:
-        {
-          CType leftType = EmitExpr(binary.Left);
-          CType rightType = EmitExpr(binary.Right);
-          return EmitBinaryOperation(binary.Op, leftType, rightType, binary.Location);
-        }
-
-      case CAssignExpr assign:
-        return EmitAssign(assign);
-
-      case CCompoundAssignExpr compoundAssign:
-        return EmitCompoundAssign(compoundAssign);
-
-      case CConditionalExpr conditional:
-        return EmitConditional(conditional);
-
-      case CCallExpr call:
-        return EmitCall(call);
-
-      case CIndexExpr index:
-        {
-          // Added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a 'float' array/pointer
-          // element reached via the general path -- see the CUnaryExpr{Dereference} case just above for
-          // why this needs the float-specific evaluator instead.
-          if (LooksLikeFloatExpr(index))
-          {
-            EmitFloatExprInto(index, 0);
-            return CType.Float;
-          }
-
-          CLvalue lvalue = ResolveLvalue(index);
-          if (lvalue.Type.IsStruct)
-          {
-            // Added 2026-09-26 alongside array-of-struct support -- mirrors CMemberAccessExpr's own
-            // guard just below: EmitLoad would read only the element's FIRST word (this compiler's
-            // uniform "one word per value" invariant does not hold for a multi-word struct), so a
-            // placeholder is emitted instead of a genuinely wrong partial read.
-            Error(index.Location, $"indexing here yields a struct value of type \"{lvalue.Type}\" -- reading or assigning a whole struct value is not yet supported by this compiler (access one of its own members instead)");
-            EmitCode("pushlit 0");
-            return CType.Int;
-          }
-
-          if (lvalue.Type.IsLong)
-          {
-            // Added 2026-09-26 alongside 'long' support -- see IsUnsupportedWholeValueType's own remarks.
-            return ReportUnsupportedValueRead(index.Location, lvalue.Type, "indexing here");
-          }
-
-          EmitLoad(lvalue);
-          return lvalue.Type;
-        }
-
-      case CMemberAccessExpr member:
-        {
-          // Added 2026-09-26 alongside multi-word pointer arithmetic/indexing: a 'float' struct member
-          // reached via the general path -- see the CUnaryExpr{Dereference} case above for why.
-          if (LooksLikeFloatExpr(member))
-          {
-            EmitFloatExprInto(member, 0);
-            return CType.Float;
-          }
-
-          CLvalue lvalue = ResolveLvalue(member);
-          if (lvalue.Type.IsStruct)
-          {
-            // ResolveLvalue's own CMemberAccessExpr case already reported this -- EmitLoad would read
-            // only the member's FIRST word (this compiler's uniform "one word per value" invariant does
-            // not hold for a multi-word struct), so a placeholder is emitted instead of a genuinely
-            // wrong partial read, matching this class's own error-branch convention elsewhere (e.g. the
-            // "expression kind not supported" default case just below).
-            EmitCode("pushlit 0");
-            return CType.Int;
-          }
-
-          if (lvalue.Type.IsLong)
-          {
-            // Added 2026-09-26 alongside 'long' support -- ResolveLvalue's own CMemberAccessExpr case
-            // doesn't know about 'long' specifically (only 'struct'), so the diagnostic is reported here
-            // instead. See IsUnsupportedWholeValueType's own remarks.
-            return ReportUnsupportedValueRead(member.Location, lvalue.Type, $"\"{member.Member}\"");
-          }
-
-          EmitLoad(lvalue);
-          return lvalue.Type;
-        }
-
-      case CCastExpr cast:
-        {
-          // Float ABI: 'float' breaks the "every supported type is one word" premise the plain
-          // reinterpreting cast below relies on, and this compiler does not implement the actual
-          // IEEE-754 conversion an int<->float cast would need (out of scope for this first pass -- see
-          // this class's own doc comment) -- so a cast involving 'float' is either a no-op (float-to-
-          // float, reached here e.g. as a bare statement) or a clear diagnostic, never a silent
-          // reinterpretation of an int's bits as a float or vice versa.
-          if (cast.TargetType.IsFloat)
-          {
-            if (!LooksLikeFloatExpr(cast.Operand))
-            {
-              Error(cast.Location, "casting a non-'float' value to 'float' is not yet supported by this compiler");
-              EmitCode("pushlit 0");
-              return CType.Float;
-            }
-
-            EmitFloatExprInto(cast.Operand, 0);
-            return CType.Float;
-          }
-
-          if (LooksLikeFloatExpr(cast.Operand))
-          {
-            Error(cast.Location, "casting a 'float' value to a non-'float' type is not yet supported by this compiler");
-            EmitCode("pushlit 0");
-            return cast.TargetType;
-          }
-
-          // Added 2026-09-26 alongside 'long' support: a cast TO 'long' would need an actual int->long
-          // widening conversion (sign-extend into a second word) that, like every other 'long' value
-          // operation, this compiler does not implement yet -- see CType.Long's own remarks. (A cast FROM
-          // a 'long' operand is already caught upstream, the moment EmitExpr(cast.Operand) below tries to
-          // read that operand's value through one of IsUnsupportedWholeValueType's own guarded paths.)
-          if (cast.TargetType.IsLong)
-          {
-            Error(cast.Location, "casting to 'long' is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet");
-            EmitCode("pushlit 0");
-            return CType.Long;
-          }
-
-          // Every other supported type is one word, so a cast is a pure reinterpretation: emit the
-          // operand and relabel its type, no runtime conversion needed.
-          EmitExpr(cast.Operand);
-          return cast.TargetType;
-        }
-
-      case CSizeOfTypeExpr sizeOfType:
-        EmitCode($"pushlit {sizeOfType.Type.SizeInWords}");
-        return CType.UnsignedInt;
-
-      case CSizeOfExprExpr sizeOfExpr:
-        {
-          // Prefer static type resolution (added 2026-09-26 alongside 'long' support). Real C's
-          // "sizeof expr" is compile-time-only and never actually evaluates its operand at all -- resolving
-          // the type via TryGetStaticType, when it can (see that method's own remarks for what it covers),
-          // is both MORE correct than the "evaluate at runtime and discard" fallback just below (no side
-          // effects: "sizeof(x++)" no longer actually increments x) and now NECESSARY: that fallback calls
-          // EmitExpr on the operand, which for a bare 'float' name was ALREADY, before today, wrongly
-          // reported as a compile error and sized as 1 instead of 2 (a real pre-existing bug this
-          // incidentally fixes -- EmitName's "float can only be used in a floating-point expression" guard
-          // fired even here, where no float VALUE was ever actually needed), and would now do the same for
-          // 'long'/'struct' too via IsUnsupportedWholeValueType's own new guards, for the identical reason:
-          // none of these three ever needed the operand's VALUE here, only its TYPE.
-          if (TryGetStaticType(sizeOfExpr.Operand, out CType staticType))
-          {
-            EmitCode($"pushlit {Math.Max(staticType.SizeInWords, 1)}");
-            return CType.UnsignedInt;
-          }
-
-          // Deviation from strict C semantics, documented in the design doc: the operand is evaluated at
-          // runtime and discarded rather than being purely a compile-time type inspection. Safe as long
-          // as the operand has no side effects. Only reached now when TryGetStaticType can't resolve the
-          // operand's type at all (e.g. a function call's return type isn't tracked there).
-          CType operandType = EmitExpr(sizeOfExpr.Operand);
-          if (operandType.IsVoid)
-          {
-            // Already-invalid C ("sizeof" of a void-returning call) -- report it instead of silently
-            // popping whatever value happens to be sitting under a stack slot that was never pushed.
-            Error(sizeOfExpr.Location, "\"sizeof\" cannot be applied to a value of type \"void\"");
-          }
-          else if (!operandType.IsFloat)
-          {
-            // Float ABI: a 'float' operand never left anything on the ordinary stack (see this class's
-            // own doc comment) -- nothing to discard here.
-            EmitCode("pop");
-          }
-
-          EmitCode($"pushlit {Math.Max(operandType.SizeInWords, 1)}");
-          return CType.UnsignedInt;
-        }
-
-      case CCommaExpr comma:
-        {
-          CType leftType = EmitExpr(comma.Left);
-          if (!leftType.IsVoid && !leftType.IsFloat)
-          {
-            EmitCode("pop");
-          }
-
-          return EmitExpr(comma.Right);
-        }
-
-      default:
-        Error(expr.Location, $"expression kind \"{expr.GetType().Name}\" is not yet supported by the code generator");
-        EmitCode("pushlit 0");
-        return CType.Int;
-    }
-  }
-
-  private CType EmitName(CNameExpr name)
-  {
-    CVarSymbol? symbol = LookupVariable(name.Name);
-
-    if (IsFloatNamedVariable(name))
-    {
-      // Float ABI: a 'float' name reached the general (int/pointer) expression path -- this compiler's
-      // own uniform "leave exactly one word" stack invariant does not hold for a 2-word 'float', so this
-      // is always a genuine usage error (comparisons, bitwise/shift ops, an unconverted mix with an
-      // int-context expression) rather than something to silently mis-emit. See this class's own doc
-      // comment.
-      Error(name.Location, $"\"{name.Name}\" is a 'float' and can only be used in a floating-point expression");
-      EmitCode("pushlit 0");
-      return CType.Int;
-    }
-
-    if (IsUnsupportedValueNamedVariable(name, out CType unsupportedType))
-    {
-      return ReportUnsupportedValueRead(name.Location, unsupportedType, $"\"{name.Name}\"");
-    }
-
-    if (symbol is { Kind: CVarKind.Local })
-    {
-      if (symbol.Type.IsArray)
-      {
-        EmitLocalOrParameterAddress(symbol.Index, isParameter: false);
-        return symbol.Type.Decay();
-      }
-
-      EmitCode($"ldl {symbol.Index}");
-      EmitCode("push");
-      return symbol.Type;
-    }
-
-    if (symbol is { Kind: CVarKind.Parameter })
-    {
-      if (symbol.Type.IsArray)
-      {
-        EmitLocalOrParameterAddress(symbol.Index, isParameter: true);
-        return symbol.Type.Decay();
-      }
-
-      EmitCode($"ldp {symbol.Index}");
-      EmitCode("push");
-      return symbol.Type;
-    }
-
-    string? staticLabel = symbol is { Kind: CVarKind.Global } ? symbol.GlobalLabel : null;
-    if (staticLabel is not null)
-    {
-      if (symbol!.Type.IsArray)
-      {
-        EmitCode($"pushlit {staticLabel}");
-        return symbol.Type.Decay();
-      }
-
-      EmitGlobalFetch(staticLabel);   // r := the global's value -- no address computation at all
-      EmitCode("push");
-      return symbol.Type;
-    }
-
-    if (_globals.TryGetValue(name.Name, out CGlobalSymbol? global))
-    {
-      string globalLabel = MangleExternalSymbol(name.Name);
-      if (global.Type.IsArray)
-      {
-        EmitCode($"pushlit {globalLabel}");
-        return global.Type.Decay();
-      }
-
-      EmitGlobalFetch(globalLabel);   // r := the global's value -- no address computation at all
-      EmitCode("push");
-      return global.Type;
-    }
-
-    if (_functions.ContainsKey(name.Name))
-    {
-      Error(name.Location, $"\"{name.Name}\" is a function -- did you mean to call it?");
-      EmitCode("pushlit 0");
-      return CType.Int;
-    }
-
-    // Not defined in this file -- assume an external global the linker will resolve, per this
-    // compiler's "missing pieces become an .import" rule.
-    string importedLabel = MangleExternalSymbol(name.Name);
-    _imports.Add(importedLabel);
-    EmitGlobalFetch(importedLabel);   // r := the global's value -- no address computation at all
-    EmitCode("push");
-    return CType.Int;
-  }
-
-  private CType EmitConditional(CConditionalExpr conditional)
-  {
-    string elseLabel = NewLabel("condfalse");
-    string endLabel = NewLabel("condend");
-
-    EmitExpr(conditional.Condition);
-    EmitCode("pop");
-    EmitCode($"cbr {elseLabel}"); // 2026-09-09: cbr already branches on r == 0 -- see EmitStatement's CIfStmt case remarks.
-    CType trueType = EmitExpr(conditional.WhenTrue);
-    EmitCode($"br {endLabel}");
-    EmitLabel(elseLabel);
-    CType falseType = EmitExpr(conditional.WhenFalse);
-    EmitLabel(endLabel);
-
-    return trueType.IsPointer ? trueType : falseType.IsPointer ? falseType : ComputeCommonType(trueType, falseType);
-  }
-
-  /// <summary>
-  /// Emits a call. <paramref name="floatResultDestRegister"/> is Float ABI plumbing (added 2026-09-26,
-  /// see this class's own doc comment): when the callee returns <c>float</c> and this is non-null, the
-  /// return value (always in <c>fr[0]</c> -- see this class's own return-value HYPOTHESIS) is moved into
-  /// that register before any save/restore pops run. Left null for a call reached from the general
-  /// (int/pointer) expression path, which has no register of its own to receive a <c>float</c> result
-  /// into -- see <see cref="EmitFloatExprInto"/>'s own <c>CCallExpr</c> case for the only call site that
-  /// passes a real value.
-  ///
-  /// Float ABI: EVERY call, regardless of the callee's own return type, may need to protect currently-live
-  /// fr registers (<see cref="_liveFloatRegisterCount"/>) from being clobbered by the callee -- see this
-  /// class's own doc comment's "Caller-save/restore" bullet. That wrap covers the ENTIRE call, including
-  /// argument marshalling (not just the bare "call" instruction), because marshalling a <c>float</c>
-  /// argument itself writes into fr[0..], which could clobber an enclosing evaluation's still-live
-  /// registers before the callee ever runs.
-  /// </summary>
-  private CType EmitCall(CCallExpr call, int? floatResultDestRegister = null)
-  {
-    string mangledName = MangleExternalSymbol(call.FunctionName);
-    bool calleeMayUseFr = CalleeUsesFloatRegisters(call.FunctionName);
-    int savedLiveFloatCount = _liveFloatRegisterCount;
-    bool needsFloatSaveRestore = calleeMayUseFr && savedLiveFloatCount > 0;
-
-    if (needsFloatSaveRestore)
-    {
-      EmitFloatRegisterSaveRange(0, savedLiveFloatCount);
-    }
-
-    if (!_functions.TryGetValue(call.FunctionName, out CFunctionSignature? signature))
-    {
-      Error(call.Location, $"\"{call.FunctionName}\" is not declared");
-      _imports.Add(mangledName);
-      foreach (CExpr argument in call.Arguments)
-      {
-        // Arguments stay on the stack for the callee, exactly like a normal call -- do not pop them.
-        // (An undeclared function's parameter types are unknown, so a 'float' argument here would be
-        // mishandled by the plain EmitExpr path below -- already an error case; not worth special-casing
-        // further.)
-        EmitExpr(argument);
-      }
-
-      EmitCode($"call {mangledName}");
-      if (needsFloatSaveRestore)
-      {
-        EmitFloatRegisterRestoreRange(0, savedLiveFloatCount);
-      }
-
-      return CType.Int;
-    }
-
-    if (signature.ParameterTypes.Count != call.Arguments.Count)
-    {
-      Error(call.Location, $"\"{call.FunctionName}\" expects {signature.ParameterTypes.Count} argument(s), but {call.Arguments.Count} were given");
-    }
-
-    // ABI v2: an argument landing in one of node 306's address registers is evaluated exactly like any
-    // other argument (so side effects and evaluation order never change), but its result is then popped
-    // back off the stack and loaded into the assigned address register instead of being left there for
-    // the callee to find with ldp/stp. The register is loaded with "arld", which per node 306's own
-    // opcode table takes the address word from r and the page word from the CVM stack top -- so the
-    // sequence is: pop the just-pushed address into r, push a literal page word of 0 (far/32-bit
-    // pointers spanning pages are not yet supported -- see this file's own ABI v2 doc-comment remarks),
-    // then "arld <register>" consumes both. This mirrors the callee-side prologue spill in EmitFunction,
-    // which immediately re-spills the same register back onto the stack/into a local slot -- the
-    // register itself is never assumed to survive anything but this one handoff.
-    //
-    // CORRECTED 2026-09-11: this line used to emit "lda {assignedRegister}" -- flagged the moment the
-    // register-operand fix made it assemblable for the first time, since "lda"
-    // (LoadAddressRegisterValueMnemonic) is node 306's dereference-LOAD role ("load r FROM the address
-    // held in register aa"), not "SET the register from (address = r, page = stack top)" as this comment
-    // describes. Stefan confirmed directly: "arld loads an address into an address register. lda loads r
-    // using the address of an address register." -- i.e. arld is exactly the SET direction this call
-    // site needs. Fixed to "arld <register>".
-    //
-    // Float ABI (2026-09-26): a 'float' argument is marshalled entirely separately from the plain
-    // EmitExpr path (it needs 2 words and node 305's fr registers, not the ordinary 1-word stack) -- see
-    // this class's own doc comment's "Parameter passing" bullet. argFloatFloor tracks how many low fr
-    // registers are already "spoken for" by an EARLIER fastcall float argument of THIS SAME call (a
-    // register-assigned argument's value must stay put in its register until the call runs; a
-    // stack-passed one is pushed and its scratch register freed immediately, so it never needs to hold
-    // argFloatFloor up).
-    int argFloatFloor = 0;
-    for (int i = 0; i < call.Arguments.Count; i++)
-    {
-      CType paramType = i < signature.ParameterTypes.Count ? signature.ParameterTypes[i] : CType.Int;
-      if (paramType.IsFloat)
-      {
-        int? floatRegisterIndex = i < signature.ParameterFloatRegisterSlots.Count ? signature.ParameterFloatRegisterSlots[i] : null;
-        if (floatRegisterIndex is int assignedFrRegister)
-        {
-          EmitFloatExprInto(call.Arguments[i], assignedFrRegister);
-          argFloatFloor = Math.Max(argFloatFloor, assignedFrRegister + 1);
-        }
-        else
-        {
-          int scratch = argFloatFloor;
-          EmitFloatExprInto(call.Arguments[i], scratch);
-          EmitCode($"fpush {scratch}"); // stack-passed: push its two words (low, high) for the callee's ldp/stp -- the register is free again immediately.
-        }
-
-        continue;
-      }
-
-      // 'long' (added 2026-09-27, alongside allowing 'long' as a parameter type -- see CType.Long's own
-      // remarks): a live 'long' ARGUMENT cannot be marshalled correctly yet -- there is no 'long' value
-      // operation to read it with in the first place (IsUnsupportedWholeValueType's own guard already
-      // rejects that, generically, wherever a 'long' value would be read: a bare variable, a dereference,
-      // an array element, a struct member). That guard's own fallback pushes exactly ONE placeholder word
-      // (see ReportUnsupportedValueRead), which is correct for an ordinary expression context but would be
-      // WRONG here: EmitFunction's own callee-side prologue already reserves TWO stack words for this
-      // parameter (SizeInWords), so silently falling through to the generic EmitExpr path below would push
-      // only one, desynchronizing every later stack-passed parameter's own offset (and the return address)
-      // from what the callee expects -- a real stack-corruption bug, not just a "value unavailable"
-      // diagnostic. Reported here instead, with exactly two placeholder words pushed (matching
-      // CType.Long.SizeInWords) so the stack frame stays self-consistent for whatever follows, and the
-      // argument expression is deliberately never evaluated (no side effects run) rather than evaluated
-      // and discarded -- mirroring ReportUnsupportedValueRead's own "report and substitute a placeholder,
-      // don't try to salvage the real value" convention, just at the correct word width for a call
-      // argument. See ParseParameterList's own remarks: "functions with long will come later" is exactly
-      // this gap.
-      if (paramType.IsLong)
-      {
-        Error(call.Arguments[i].Location, $"passing a 'long' argument to \"{call.FunctionName}\" is not yet supported by this compiler -- the CVM has no 'long' instructions defined yet");
-        EmitCode("pushlit 0");
-        EmitCode("pushlit 0");
-        continue;
-      }
-
-      _liveFloatRegisterCount = argFloatFloor; // protect any float argument already placed above while this (non-float) argument evaluates.
-      EmitExpr(call.Arguments[i]);
-
-      int? registerIndex = i < signature.ParameterRegisterSlots.Count ? signature.ParameterRegisterSlots[i] : null;
-      if (registerIndex is int assignedRegister)
-      {
-        EmitCode("pop");
-        EmitCode("pushlit 0");
-        EmitCode($"arld {assignedRegister}");
-      }
-    }
-
-    _liveFloatRegisterCount = savedLiveFloatCount;
-
-    if (!signature.IsDefined)
-    {
-      _imports.Add(mangledName);
-    }
-
-    EmitCode($"call {mangledName}");
-
-    CType returnType = signature.ReturnType;
-    if (returnType.IsFloat)
-    {
-      // Float ABI (unchanged by the 2026-09-27 return-value ABI addition below): the callee already left
-      // the result in fr[0] itself (see EmitStatement's own CReturnStmt case), so there is nothing to
-      // retrieve here unless the caller wants it somewhere OTHER than fr[0].
-      if (floatResultDestRegister is int destReg && destReg != 0)
-      {
-        // Retrieve the return value out of fr[0] BEFORE the restore pops below run -- fr[0] is always
-        // among the registers being restored whenever destReg != 0 (0..savedLiveFloatCount-1 always
-        // includes 0).
-        EmitCode($"fmove {destReg} 0");
-      }
-    }
-    else if (returnType.IsPointer)
-    {
-      // Return-value ABI (added 2026-09-27, per Stefan verbatim -- see this class's own doc comment above
-      // EmitRegisterWordLoadIntoR): the callee left the pointer in ar[0]'s own stored (address, page)
-      // pair, not on the general stack (see EmitPointerReturn's own remarks), so it has to be retrieved
-      // here. "arst" sets r to the address but ALSO pushes the register's own page word onto the stack as
-      // an unavoidable side effect (see CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic's own
-      // remarks), so the address has to be saved to a compiler-allocated temporary local first -- "stl"
-      // reads r directly, without touching the stack, exactly like EmitFunction's own ABI v2 prologue
-      // spill for a register-eligible pointer PARAMETER -- before that leftover page word can be popped
-      // away; only then can the address be reloaded and pushed as the caller's own single return word,
-      // matching every other non-float, non-void call result (see CExprStmt's own discard-by-one-pop
-      // convention).
-      int scratchSlot = _currentFunction!.NextLocalSlot++;
-      EmitCode("arst 0");             // r := ar[0]'s address; stack: [..., page]
-      EmitCode($"stl {scratchSlot}"); // scratchSlot := r (the address); stack unchanged
-      EmitCode("pop");                // r := the leftover page word, discarded; stack: [...]
-      EmitCode($"ldl {scratchSlot}"); // r := the address (reloaded from the scratch slot)
-      EmitCode("push");               // stack: [..., address]
-    }
-    else if (returnType.SizeInWords == 2)
-    {
-      // Same 2026-09-27 ABI: the callee left this 'long'/2-word-struct return in reg[0]/reg[1] (see
-      // EmitRegisterReturn's own remarks), not on the general stack. This compiler has no general
-      // mechanism yet to bring a 2-word value back from there onto the stack (EmitRegisterReturn itself
-      // only ever supports the narrow "return someVariable;" shape on the CALLEE side -- there is no
-      // corresponding "receive it into a variable" story on the CALLER side yet either), so using the
-      // result here is rejected with a diagnostic; a single placeholder word is still pushed to preserve
-      // the same one-word-per-call-result invariant every other non-float, non-void caller relies on (see
-      // CExprStmt's own discard-by-one-pop logic) -- mirroring ReportUnsupportedValueRead's own "report,
-      // but still leave well-defined state behind" convention.
-      Error(call.Location, $"the return value of \"{call.FunctionName}\" (a \"{returnType}\") is not usable yet -- this compiler cannot bring a 2-word return value back from reg[0]/reg[1] into an expression yet");
-      EmitCode("pushlit 0");
-    }
-
-    if (needsFloatSaveRestore)
-    {
-      EmitFloatRegisterRestoreRange(0, savedLiveFloatCount);
-    }
-
-    return returnType;
   }
 }

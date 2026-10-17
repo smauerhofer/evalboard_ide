@@ -23,12 +23,14 @@ public sealed record CStructMember(string Name, CType Type, int Offset);
 
 /// <summary>
 /// A C type, sized for the CVM's own word-addressed memory: there is no byte addressing anywhere in
-/// this machine, so every scalar and every pointer -- <c>char</c> included -- occupies exactly one
-/// CVM word (see <see cref="SizeInWords"/>). This is a deliberate simplification over standard C's
-/// usual "char is the smallest addressable unit, int is usually wider" model, made because the target
-/// hardware genuinely has no smaller unit to give <c>char</c>; <c>char</c> still exists as its own
-/// type purely so a programmer's intent ("this is a small/byte-range value") is preserved and checked,
-/// not because it saves any storage.
+/// this machine, so every scalar integer -- <c>char</c> included -- occupies exactly one CVM word (see
+/// <see cref="SizeInWords"/>). This is a deliberate simplification over standard C's usual "char is the
+/// smallest addressable unit, int is usually wider" model, made because the target hardware genuinely
+/// has no smaller unit to give <c>char</c>; <c>char</c> still exists as its own type purely so a
+/// programmer's intent ("this is a small/byte-range value") is preserved and checked, not because it
+/// saves any storage. <see cref="CTypeKind.Pointer"/> is the one exception to "every scalar is one
+/// word": as of the 2026-10-17 CVM_pipeline C ABI v2 rewrite a pointer is TWO words, a <c>(page,
+/// address)</c> pair -- see <see cref="SizeInWords"/>'s own remarks.
 /// </summary>
 public sealed class CType : IEquatable<CType>
 {
@@ -214,17 +216,19 @@ public sealed class CType : IEquatable<CType>
   /// </summary>
   public bool IsUnsigned => Kind is CTypeKind.UnsignedInt or CTypeKind.UnsignedChar or CTypeKind.Pointer;
 
-  /// <summary>Size in CVM words. See the type's own doc comment for why every scalar/pointer is 1 --
-  /// except <see cref="CTypeKind.Float"/> (added 2026-09-26), which is 2 (see <see cref="Float"/>'s own
-  /// remarks), and <see cref="CTypeKind.Long"/> (added 2026-09-26), which is likewise 2 (see <see
-  /// cref="Long"/>'s own remarks) despite <see cref="CCodeGenerator"/> not yet implementing any actual
-  /// value-level codegen for it -- the word count itself is exactly what makes declaring/sizing/
-  /// addressing a <c>long</c> already correct today, independent of whether its VALUE can be used
-  /// yet.</summary>
+  /// <summary>Size in CVM words. Every scalar integer (<c>int</c>/<c>unsigned int</c>/<c>char</c>/
+  /// <c>unsigned char</c>) is 1 -- except <see cref="CTypeKind.Float"/> (added 2026-09-26) and <see
+  /// cref="CTypeKind.Long"/> (added 2026-09-26), both 2 (see their own remarks), and, as of the
+  /// 2026-10-17 CVM_pipeline C ABI v2 rewrite, <see cref="CTypeKind.Pointer"/> is likewise 2: the
+  /// hardware's only memory-access opcodes (<c>dfetch</c>/<c>dstore</c>/<c>rload</c>/<c>rstore</c>) all
+  /// take a <c>(page, address)</c> pair in a double register, so a C pointer is represented the same way
+  /// -- 2 words, low word = address, high word = page, matching <see cref="Float"/>/<see cref="Long"/>'s
+  /// own "low word at the lower memory address" convention. See <c>claude/cvm-abi.md</c>'s "ABI v2" section
+  /// for the full design (register allocation, calling convention, global addressing).</summary>
   public int SizeInWords => Kind switch
   {
     CTypeKind.Void or CTypeKind.Function => 0,
-    CTypeKind.Float or CTypeKind.Long => 2,
+    CTypeKind.Float or CTypeKind.Long or CTypeKind.Pointer => 2,
     CTypeKind.Array => Math.Max(ArrayLength, 0) * (ElementType?.SizeInWords ?? 1),
     CTypeKind.Struct => Members?.Sum(m => Math.Max(m.Type.SizeInWords, 1)) ?? 0,
     _ => 1,

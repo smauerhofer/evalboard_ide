@@ -152,35 +152,31 @@ public sealed class CParser
   /// </summary>
   private readonly Dictionary<string, CType> _structTags = new();
 
-  /// <summary>A `__fastcall` function's pointer parameters are passed in the address-register node's four
-  /// registers, `ar[0]` through `ar[3]` -- node 308 as of 2026-09-15's renumbering, previously called
-  /// "node 306" (see `Ga144.Evb.Ide.Cvm.Node308Program`'s own remarks) -- see `claude/cvm-abi.md` section
-  /// 2.2. A 5th pointer parameter
-  /// has nowhere to go under this convention (pointers never fall back to the stack, or to node 511's
-  /// register file, for a `__fastcall` function), so it is a compiler error -- Stefan, verbatim: "a 5th
-  /// __fastcall pointer parameter also rises a compiler error."</summary>
-  private const int MaxFastcallPointerParameters = 4;
+  /// <summary>
+  /// REWRITTEN 2026-10-17 for the CVM_pipeline C ABI v2 (see <c>claude/cvm-abi.md</c>'s own "ABI v2"
+  /// section and <see cref="CCodeGenerator"/>'s own class-level remarks for the full design). The old
+  /// address-register node (ar[0..3]) and node 511's 32-register file are both long retired from the
+  /// live CVM instruction set -- a `__fastcall` function's leading parameters are now passed directly in
+  /// the general register file instead: up to <see cref="MaxFastcallScalarParameters"/> 1-word (int/
+  /// char/pointer-less-than-2-words -- today that means int/unsigned int/char/unsigned char) parameters
+  /// in r0..r3, and up to <see cref="MaxFastcallWideParameters"/> 2-word (pointer or float) parameters in
+  /// d4..d7 -- two independent counters over two disjoint physical-register ranges, exactly mirroring
+  /// this class's own pre-existing pointer-vs-float split, just retargeted to the new register file and
+  /// new limits (4, not 32 or 8). Both are spilled into the callee's own frame in the prologue before
+  /// anything else runs, so nothing past <see cref="CParser"/> ever needs to know a parameter arrived in
+  /// a register rather than on the stack.
+  /// </summary>
+  /// <b>internal, not private</b> (changed 2026-10-17): <see cref="CCodeGenerator.ComputeParameterSlots"/>
+  /// reads this same constant directly, so the two can never drift apart -- see that method's own doc
+  /// comment.
+  internal const int MaxFastcallScalarParameters = 4;
 
-  /// <summary>A `__fastcall` function's non-pointer parameters are passed in node 511's own register
-  /// file, one register per 16-bit word, beginning at `reg[0]` -- see `claude/cvm-abi.md` section 2.2
-  /// and `claude/cvm-node510-511-register-file.md`. That register file holds exactly 32 registers, so a
-  /// `__fastcall` function whose non-pointer parameters need more than 32 words of register space cannot
-  /// be represented -- Stefan, verbatim: "if a __fastcall function uses more than 32 register, the
-  /// compiler should generate an error." Measured in WORDS, not parameter COUNT, via
-  /// <see cref="CType.SizeInWords"/> -- today every non-pointer type this compiler supports (int,
-  /// unsigned int, char, unsigned char) is exactly 1 word, so this is currently equivalent to counting
-  /// non-pointer parameters, but the word-based accounting matches the ABI doc's own "32-bit values...
-  /// occupies two consecutive registers" rule and stays correct if a wider non-pointer type is ever
-  /// added.</summary>
-  private const int MaxFastcallRegisterWords = 32;
-
-  /// <summary>A `__fastcall` function's <c>float</c> parameters are passed in node 305's own 8-register
-  /// floating-point file, fr[0] for the first, fr[1] for the second, etc. -- see
-  /// <c>claude/cvm-abi.md</c> section 2.3 and this class's own remarks above
-  /// <see cref="MaxFastcallRegisterWords"/>. Added 2026-09-26, per Stefan verbatim: "we have 8 float
-  /// register. so for fastcall functions the parameter are passed by register fr[0] for the first float
-  /// parameter, fr[1] for the second parameter, ...".</summary>
-  private const int MaxFastcallFloatParameters = 8;
+  /// <summary>See <see cref="MaxFastcallScalarParameters"/>'s own remarks -- the combined limit for a
+  /// `__fastcall` function's leading pointer-OR-float parameters (one shared 4-slot d-register pool,
+  /// d4..d7), counted together since both are 2-word values competing for the same physical
+  /// registers. <b>internal, not private</b> for the same reason as <see
+  /// cref="MaxFastcallScalarParameters"/>.</summary>
+  internal const int MaxFastcallWideParameters = 4;
 
   private readonly List<CToken> _tokens;
   private readonly List<string> _diagnostics = [];
@@ -913,45 +909,29 @@ public sealed class CParser
       // caller only ever needs to check IsLower to decide the call/lcall encoding, never IsFastcall.
       bool isLower = isLowerSpecified || isFastcall;
 
-      // "pointers must be allocated in ar[0..3] for fastcall functions" plus "a 5th __fastcall pointer
-      // parameter also rises a compiler error" (Stefan, 2026-09-07, 3rd/4th rounds of claude/cvm-abi.md's
-      // dictation): a __fastcall function may declare at most MaxFastcallPointerParameters pointer
-      // parameters (the address-register node -- node 308 as of 2026-09-15, previously "node 306" --
-      // has exactly that many address registers, ar[0..3]) -- a 5th has nowhere
-      // left to go under this convention (pointers are never passed via node 511's register file, and
-      // never fall back to the stack for a __fastcall function per that same dictation).
-      //
-      // "if a __fastcall function uses more than 32 register, the compiler should generate an error"
-      // (same 3rd round): every NON-pointer parameter is instead passed in node 511's own register file,
-      // one register per CType.SizeInWords word, and that file holds only MaxFastcallRegisterWords
-      // registers total -- exceeding it is likewise a compiler error, not a silent fallback to the stack.
-      // Both checks only need the already-parsed parameter list (no code generation involved), so both
-      // are enforced here rather than deferred.
+      // REWRITTEN 2026-10-17 for the CVM_pipeline C ABI v2 -- see MaxFastcallScalarParameters'/
+      // MaxFastcallWideParameters' own remarks. Two independent counters, same shape as before, just
+      // retargeted: up to 4 one-word (int/char) parameters go in r0..r3, up to 4 two-word (pointer or
+      // float, counted TOGETHER) parameters go in d4..d7. Both checks only need the already-parsed
+      // parameter list, so both are enforced here rather than deferred to CCodeGenerator.
       if (isFastcall)
       {
-        int pointerParameterCount = parameters.Count(p => p.Type.IsPointer);
-        if (pointerParameterCount > MaxFastcallPointerParameters)
+        int scalarParameterCount = parameters.Count(p => !p.Type.IsPointer && !p.Type.IsFloat && p.Type.SizeInWords <= 1);
+        if (scalarParameterCount > MaxFastcallScalarParameters)
         {
-          throw Error(location, $"\"{name}\" is '__fastcall' but declares {pointerParameterCount} pointer parameters -- a '__fastcall' function may have at most {MaxFastcallPointerParameters} (node 308's ar[0..3])");
+          throw Error(location, $"\"{name}\" is '__fastcall' but declares {scalarParameterCount} scalar (1-word) parameters -- a '__fastcall' function may have at most {MaxFastcallScalarParameters} (r0..r{MaxFastcallScalarParameters - 1})");
         }
 
-        int registerWordCount = parameters.Where(p => !p.Type.IsPointer).Sum(p => p.Type.SizeInWords);
-        if (registerWordCount > MaxFastcallRegisterWords)
+        int wideParameterCount = parameters.Count(p => p.Type.IsPointer || p.Type.IsFloat);
+        if (wideParameterCount > MaxFastcallWideParameters)
         {
-          throw Error(location, $"\"{name}\" is '__fastcall' but its non-pointer parameters need {registerWordCount} node-511 registers -- a '__fastcall' function may use at most {MaxFastcallRegisterWords} (reg[0..{MaxFastcallRegisterWords - 1}])");
+          throw Error(location, $"\"{name}\" is '__fastcall' but declares {wideParameterCount} pointer/float (2-word) parameters -- a '__fastcall' function may have at most {MaxFastcallWideParameters} (d4..d{3 + MaxFastcallWideParameters}), pointer and float sharing the same 4-slot pool");
         }
 
-        // Added 2026-09-26, per Stefan's own float-ABI dictation: "for fastcall functions the parameter
-        // are passed by register fr[0] for the first float parameter, fr[1] for the second parameter,
-        // ..." -- a separate, independent counter from both the pointer/ar-register check above and the
-        // (not yet implemented -- see registerWordCount's own remarks) node-511 int-register count, since
-        // node 305's floating-point register file is its own, separate 8-register file. See
-        // CCodeGenerator's own ComputeParameterFloatRegisterSlots for the matching codegen-side count.
-        int floatParameterCount = parameters.Count(p => p.Type.IsFloat);
-        if (floatParameterCount > MaxFastcallFloatParameters)
-        {
-          throw Error(location, $"\"{name}\" is '__fastcall' but declares {floatParameterCount} 'float' parameters -- a '__fastcall' function may have at most {MaxFastcallFloatParameters} (node 305's fr[0..{MaxFastcallFloatParameters - 1}])");
-        }
+        // long/struct parameters (SizeInWords 2, but neither pointer nor float) are not passable by
+        // register under this ABI at all -- they always fall back to the stack convention, regardless of
+        // this function being __fastcall. Nothing to validate here: CCodeGenerator's own parameter-
+        // marshaling simply never considers a long/struct parameter for a register slot.
       }
 
       CCompoundStmt? body = null;

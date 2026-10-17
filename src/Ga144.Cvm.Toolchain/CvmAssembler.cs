@@ -475,6 +475,28 @@ public static class CvmAssembler
             break;
           }
 
+          // ADDED 2026-10-17: bclr/bset/binv/btst (CvmInstructionSet.BitClearMnemonic and friends, node
+          // 307's real bit-op family) -- per Stefan directly ("use register-token syntax"), switched from
+          // the initial plain-number wiring ("bclr 3 5") to a register token for the first operand
+          // ("bclr r3 5"), mirroring c32's/the floating-point family's own dedicated messages just above.
+          // The generic EmbeddedUnsignedValuePair branch below would already enforce the right ARG COUNT
+          // (two), but its own generic error message ("bclr 3 5") doesn't tell the reader the first
+          // operand is a register -- this dedicated branch exists purely for a syntax-accurate example.
+          // The real parsing/encoding (register-token first operand, plain-number second) happens in pass
+          // 2's own shared "case BitClearMnemonic: ... case BitTestMnemonic:", not here.
+          if (shape.Mnemonic is CvmInstructionSet.BitClearMnemonic or CvmInstructionSet.BitSetMnemonic
+              or CvmInstructionSet.BitInvertMnemonic or CvmInstructionSet.BitTestMnemonic)
+          {
+            if (line.Args.Count != 2)
+            {
+              errors.Add($"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly two operands (a register, a bit position), e.g. \"{shape.Mnemonic} r3 5\".");
+              break;
+            }
+
+            sectionCursors[section] += shape.WordLength;
+            break;
+          }
+
           // ADDED 2026-10-16: ldf/stf take TWO operands (register, SIGNED frame offset) although their
           // shape is NodeResolvedEmbeddedValue, same as rlit/dlit just below -- see
           // CvmInstructionSet.LoadFrameMnemonic's own remarks. A dedicated branch (like c32's/the
@@ -789,6 +811,94 @@ public static class CvmAssembler
             }
 
             c32Section.Words.Add(c32Shape.Tag | (c32Register & c32Shape.ValueBitMask) | ((c32Index << c32Shape.SecondValueBitShift) & c32Shape.SecondValueBitMask));
+            break;
+          }
+
+        case CvmInstructionSet.BitClearMnemonic:
+        case CvmInstructionSet.BitSetMnemonic:
+        case CvmInstructionSet.BitInvertMnemonic:
+        case CvmInstructionSet.BitTestMnemonic:
+          {
+            // "bclr r3 5" (immediate bit index) or "bclr r3 r1" (bit index held in a register) -- CHANGED
+            // 2026-10-17 (fifth pass) per Stefan directly ("there are 2 versions of bit operations...
+            // described in node 507 comments"): node 507's own header table defines TWO variants of this
+            // family, differing only in whether the second operand is an immediate literal or a second
+            // register -- see CvmInstructionSet.Node307BitOperationTag's own remarks for the full,
+            // table-confirmed derivation of both. Both variants share the SAME mnemonic and first
+            // operand (a plain 16-bit register, "r3" -- unlike c32's/fadd's own DOUBLE-register tokens);
+            // which variant assembles is decided here, by whether the SECOND operand parses as a
+            // register token, not by a separate mnemonic name. The register variant has no Instructions
+            // row of its own (TryGetShape only ever returns the immediate variant's shape for these
+            // mnemonics -- see Node307BitOperationRegisterTag's own remarks for why), so its Tag is
+            // looked up directly below instead of through bitOpShape.
+            CvmInstructionSet.CvmInstructionShape bitOpShape = CvmInstructionSet.TryGetShape(line.Directive)!;
+            CvmSection bitOpSection = objectFile.GetOrAddSection(section);
+
+            int bitOpMaxRegister = bitOpShape.ValueBitMask >> bitOpShape.ValueBitShift;
+            string bitOpRegisterToken = line.Args[0];
+            int bitOpRegister;
+            if (bitOpRegisterToken.Length >= 2 && char.ToLowerInvariant(bitOpRegisterToken[0]) == 'd')
+            {
+              // Explicitly called out, not just "not a number": this family's register is always a
+              // PLAIN 16-bit register -- a "dN" token would silently alias the wrong half of some rN
+              // pair if accepted.
+              errors.Add($"line {line.LineNumber}: \"{bitOpShape.Mnemonic}\"'s first operand is a plain 16-bit register -- write r0..r{bitOpMaxRegister} (e.g. \"{bitOpShape.Mnemonic} r3 5\"), not \"{bitOpRegisterToken}\": {bitOpShape.Mnemonic} has no d-register form.");
+              bitOpRegister = 0;
+            }
+            else if (bitOpRegisterToken.Length >= 2 && char.ToLowerInvariant(bitOpRegisterToken[0]) == 'r' &&
+                     int.TryParse(bitOpRegisterToken.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out bitOpRegister))
+            {
+              // Parsed as an "rN" token -- range-checked below, same as the plain-number fallback.
+            }
+            else if (!TryParseNumericLiteral(bitOpRegisterToken, out bitOpRegister))
+            {
+              errors.Add($"line {line.LineNumber}: \"{bitOpRegisterToken}\" is not a valid register for \"{bitOpShape.Mnemonic}\" -- write r0..r{bitOpMaxRegister} or a plain number, e.g. \"{bitOpShape.Mnemonic} r3 5\".");
+              bitOpRegister = 0;
+            }
+
+            if (bitOpRegister < 0 || bitOpRegister > bitOpMaxRegister)
+            {
+              errors.Add($"line {line.LineNumber}: \"{bitOpRegisterToken}\" is out of range for \"{bitOpShape.Mnemonic}\" -- expected r0..r{bitOpMaxRegister}.");
+              bitOpRegister = 0;
+            }
+
+            // Decide the variant by the SECOND operand's own token shape: "rN" picks the register-held
+            // bit-index variant, anything else (a plain number -- labels/imports not yet supported here,
+            // same as the immediate variant's own existing limitation) picks the immediate variant.
+            string bitOpSecondToken = line.Args[1];
+            bool bitOpSecondIsRegisterToken = bitOpSecondToken.Length >= 2 && char.ToLowerInvariant(bitOpSecondToken[0]) == 'r' &&
+                int.TryParse(bitOpSecondToken.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _);
+
+            if (bitOpSecondIsRegisterToken)
+            {
+              int bitOpSecondRegister = int.Parse(bitOpSecondToken.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture);
+              if (bitOpSecondRegister < 0 || bitOpSecondRegister > bitOpMaxRegister)
+              {
+                errors.Add($"line {line.LineNumber}: \"{bitOpSecondToken}\" is out of range for \"{bitOpShape.Mnemonic}\" -- expected r0..r{bitOpMaxRegister}.");
+                bitOpSecondRegister = 0;
+              }
+
+              int bitOpRegisterVariantTag = bitOpShape.Mnemonic switch
+              {
+                CvmInstructionSet.BitClearMnemonic => CvmInstructionSet.Node307BitClearRegisterTag,
+                CvmInstructionSet.BitSetMnemonic => CvmInstructionSet.Node307BitSetRegisterTag,
+                CvmInstructionSet.BitInvertMnemonic => CvmInstructionSet.Node307BitInvertRegisterTag,
+                CvmInstructionSet.BitTestMnemonic => CvmInstructionSet.Node307BitTestRegisterTag,
+                _ => throw new System.InvalidOperationException($"Unreachable: \"{bitOpShape.Mnemonic}\" is not one of node 307's bit-operation mnemonics."),
+              };
+
+              bitOpSection.Words.Add(bitOpRegisterVariantTag | (bitOpRegister & bitOpShape.ValueBitMask) | ((bitOpSecondRegister << bitOpShape.SecondValueBitShift) & bitOpShape.SecondValueBitMask));
+              break;
+            }
+
+            int bitOpMaxPosition = bitOpShape.SecondValueBitMask >> bitOpShape.SecondValueBitShift;
+            if (!TryParseNumericLiteral(bitOpSecondToken, out int bitOpPosition) || bitOpPosition < 0 || bitOpPosition > bitOpMaxPosition)
+            {
+              errors.Add($"line {line.LineNumber}: \"{bitOpSecondToken}\" does not fit \"{bitOpShape.Mnemonic}\"'s unsigned bit position (0..{bitOpMaxPosition}) -- \"{bitOpShape.Mnemonic}\" does not (yet) support a label/import operand for it.");
+              bitOpPosition = 0;
+            }
+
+            bitOpSection.Words.Add(bitOpShape.Tag | (bitOpRegister & bitOpShape.ValueBitMask) | ((bitOpPosition << bitOpShape.SecondValueBitShift) & bitOpShape.SecondValueBitMask));
             break;
           }
 

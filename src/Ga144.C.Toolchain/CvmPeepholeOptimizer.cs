@@ -1,40 +1,45 @@
 namespace Ga144.C.Toolchain;
 
 /// <summary>
-/// Optimizer step 2 of 2, added 2026-09-10 alongside <see cref="CConstantFolder"/> (see that class's own
-/// remarks for the full request and the division of labor between the two). Where the constant folder
-/// cleans up arithmetic the PERSON wrote, in the C source, before code generation even starts, this pass
-/// cleans up redundant instruction sequences the CODE GENERATOR ITSELF introduces while lowering an ABI
-/// construct -- run AFTER <see cref="CCodeGenerator"/> has already emitted every line, over its own CODE
-/// section (<c>_codeLines</c>, exposed to this pass as a plain line list, never over the DATA section).
+/// Optimizer step 2 of 2 (see <see cref="CConstantFolder"/> for step 1 and the original division of
+/// labor between the two). Where the constant folder cleans up arithmetic the PERSON wrote, in the C
+/// source, before code generation even starts, this pass cleans up redundant instruction sequences the
+/// CODE GENERATOR ITSELF introduces while lowering an ABI construct -- run AFTER <see
+/// cref="CCodeGenerator"/> has already emitted every line, over its own CODE section (<c>_codeLines</c>,
+/// exposed to this pass as a plain line list, never over the DATA section).
 ///
-/// The motivating example, straight from a hand-walked review of this compiler's own output for
-/// <c>d[0] = a;</c> where <c>d</c> is a local array: computing <c>d</c>'s own address is <c>pushf;
-/// pushlit &lt;offset&gt;; pop; sub</c> (see <see cref="CCodeGenerator.EmitLocalOrParameterAddress"/>;
-/// this mnemonic was renamed from <c>fpush</c> to <c>pushf</c> on 2026-09-16 -- see that method's own
-/// remarks),
-/// then the array index contributes a SECOND, separately-emitted <c>pushlit &lt;index * elementSize&gt;;
-/// pop; add</c> -- and for <c>d[0]</c> specifically, that second literal is always zero, so the whole
-/// three-line group computes nothing at all. This sequence is never a <see cref="CBinaryExpr"/> node
-/// anywhere in the parsed tree (it's synthesized directly as instruction text by codegen's own lowering
-/// helpers) -- no amount of AST-level folding (<see cref="CConstantFolder"/>) can reach it, since there
-/// is no AST node left to fold by the time it's emitted. Only a pass over the instructions THEMSELVES,
-/// after they exist, can.
+/// <b>REWRITTEN 2026-10-17 against the final, hardware-confirmed <c>CVM_pipeline</c> 79-mnemonic opcode
+/// set</b> (see <see cref="CCodeGenerator"/>'s own top doc comment and claude/cvm-abi.md section 3) --
+/// the previous version of this file matched <c>push</c>/<c>pop</c>/<c>pushlit</c>/<c>ldl</c>/<c>stl</c>/
+/// <c>ldp</c>/<c>stp</c>, none of which the rewritten <see cref="CCodeGenerator"/> emits anywhere
+/// anymore. The four rules below match the NEW code generator's own equally-redundant sequences instead:
 ///
-/// <b>Scope and safety.</b> Every rule below is justified purely from this ABI's own instruction
-/// semantics as <see cref="CCodeGenerator"/>'s own class-level ABI doc comment already states them --
-/// push/pop's stack effect, and add/sub's stack-top-vs-r operand order and commutativity for a zero
-/// operand -- except for the two <c>stl</c>/<c>stp</c> forwarding rules, which rely on the SAME
-/// "a store leaves r unchanged, like push does" assumption <see cref="CCodeGenerator.EmitFunction"/>'s
-/// own ABI v2 prologue already leans on (see that method's own remarks) -- not a new, separately
-/// unverified assumption introduced here, but flagged the same way that one is: NOT yet confirmed
-/// against real hardware. Every rule matches a small, fixed run of ADJACENT lines and either deletes it
-/// outright or shortens it. A CVM branch/label target is always its own separate entry in the line list
-/// (see <see cref="CCodeGenerator.EmitLabel"/>) -- a bare instruction line never carries a label of its
-/// own -- so a label can never sit hidden INSIDE a matched run; a rule can therefore never delete or
-/// skip past something another instruction branches into. Rules are applied to a fixed point (repeated
-/// left-to-right passes until one full pass makes no further change), since removing one matched run can
-/// bring two previously non-adjacent lines together into a brand new match.
+/// <list type="bullet">
+/// <item><description><c>rpush rN</c> immediately followed by <c>rpop rN</c> (same N) -- a full no-op:
+/// <c>rpush</c> pushes <c>rN</c>'s CURRENT value onto the VM (page-1) stack without altering it, and the
+/// very next <c>rpop</c> then pops that exact value straight back into the SAME register and off the
+/// stack.</description></item>
+/// <item><description><c>dpush dN</c> immediately followed by <c>dpop dN</c> (same N) -- the same idea,
+/// for a whole double register.</description></item>
+/// <item><description><c>ldf rX, O</c> immediately followed by <c>stf rX, O</c> (same X, same O) -- load
+/// frame slot O into rX, then immediately store rX right back into the SAME slot: a no-op, since nothing
+/// ran in between to change either the slot or rX.</description></item>
+/// <item><description><c>stf rX, O</c> immediately followed by <c>ldf rX, O</c> (same X, same O) -- the
+/// reload is redundant. <c>stf</c> stores rX's CURRENT value into frame slot O without altering rX (the
+/// same "a store leaves its source register unchanged" assumption the OLD version of this file already
+/// leaned on for <c>stl</c>/<c>stp</c>, carried over rather than re-derived -- NOT yet confirmed against
+/// real hardware), so rX already holds exactly what the <c>ldf</c> would reload immediately
+/// afterward.</description></item>
+/// </list>
+///
+/// <b>Scope and safety</b> -- unchanged from the previous version. Every rule matches a small, fixed run
+/// of ADJACENT lines and either deletes it outright or shortens it. A CVM branch/label target is always
+/// its own separate entry in the line list (see <see cref="CCodeGenerator.EmitLabel"/>) -- a bare
+/// instruction line never carries a label of its own -- so a label can never sit hidden INSIDE a matched
+/// run; a rule can therefore never delete or skip past something another instruction branches into.
+/// Rules are applied to a fixed point (repeated left-to-right passes until one full pass makes no
+/// further change), since removing one matched run can bring two previously non-adjacent lines together
+/// into a brand new match.
 ///
 /// Deliberately NOT attempted here: anything that needs to reason about a value's flow across more than
 /// this one small window -- general dead-store elimination, register/stack lifetime analysis across
@@ -45,8 +50,8 @@ public static class CvmPeepholeOptimizer
 {
   /// <summary>Rewrites <paramref name="codeLines"/> (exactly the shape <see
   /// cref="CCodeGenerator"/>'s own <c>_codeLines</c> already has -- a label line is bare text ending in
-  /// <c>":"</c>, an instruction line is <c>"  " + mnemonic[ operand]</c>) to a fixed point. Never mutates
-  /// the input list; always returns a new one.</summary>
+  /// <c>":"</c>, an instruction line is <c>"  " + mnemonic[ operand[, operand]]</c>) to a fixed point.
+  /// Never mutates the input list; always returns a new one.</summary>
   public static List<string> Optimize(IReadOnlyList<string> codeLines)
   {
     var lines = new List<string>(codeLines);
@@ -85,50 +90,40 @@ public static class CvmPeepholeOptimizer
     replacementLine = null;
     int remaining = lines.Count - i;
 
-    // Rule: "push" immediately followed by "pop" -- a full no-op. "push" pushes register r's CURRENT
-    // value onto the stack without altering r; the very next "pop" then pops that exact value straight
-    // back into r and off the stack -- net effect on both the stack and r: none.
-    if (remaining >= 2 && lines[i] == "  push" && lines[i + 1] == "  pop")
+    // Rule: "rpush rN; rpop rN" (same N) -- a full no-op on both the VM stack and the register.
+    if (remaining >= 2
+        && TryParseRegisterInstruction(lines[i], "rpush", "r", out int pushedReg)
+        && TryParseRegisterInstruction(lines[i + 1], "rpop", "r", out int poppedReg)
+        && pushedReg == poppedReg)
     {
       return 2;
     }
 
-    // Rule: "pushlit 0; pop; add" or "pushlit 0; pop; sub" -- adding or subtracting a literal zero is a
-    // full no-op on the stack top. "pop" sets r := 0 (the literal just pushed) and removes it from the
-    // stack; "add"/"sub" then combine r with the (new) stack top and replace it with the result -- since
-    // ordinary integer addition/subtraction of zero is an identity regardless of operand order, the
-    // stack top comes out exactly as it already was either way.
-    if (remaining >= 3 && lines[i] == "  pushlit 0" && lines[i + 1] == "  pop" && (lines[i + 2] == "  add" || lines[i + 2] == "  sub"))
-    {
-      return 3;
-    }
-
-    // Rule: "ldl N; stl N" (same N) -- load local N into r, then immediately store r right back into
-    // local N: a no-op, since nothing else ran in between to change either the local or r.
-    if (remaining >= 2 && TryParseSlotInstruction(lines[i], "ldl", out int loadedLocal) && TryParseSlotInstruction(lines[i + 1], "stl", out int storedLocal) && loadedLocal == storedLocal)
+    // Rule: "dpush dN; dpop dN" (same N) -- the same idea, for a whole double register.
+    if (remaining >= 2
+        && TryParseRegisterInstruction(lines[i], "dpush", "d", out int pushedDouble)
+        && TryParseRegisterInstruction(lines[i + 1], "dpop", "d", out int poppedDouble)
+        && pushedDouble == poppedDouble)
     {
       return 2;
     }
 
-    // Rule: "ldp N; stp N" (same N) -- the same idea, for a parameter slot.
-    if (remaining >= 2 && TryParseSlotInstruction(lines[i], "ldp", out int loadedParam) && TryParseSlotInstruction(lines[i + 1], "stp", out int storedParam) && loadedParam == storedParam)
+    // Rule: "ldf rX, O; stf rX, O" (same X, same O) -- load then immediately store back the exact same
+    // value to the exact same frame slot: a no-op.
+    if (remaining >= 2
+        && TryParseFrameInstruction(lines[i], "ldf", out int loadedReg, out int loadedOffset)
+        && TryParseFrameInstruction(lines[i + 1], "stf", out int storedReg, out int storedOffset)
+        && loadedReg == storedReg && loadedOffset == storedOffset)
     {
       return 2;
     }
 
-    // Rule: "stl N; ldl N" (same N) -- the reload is redundant. "stl N" stores r's CURRENT value into
-    // local N; per the SAME assumption CCodeGenerator.EmitFunction's own ABI v2 prologue already relies
-    // on ("stl" leaves r unchanged, like "push" does -- see that method's own remarks), r already holds
-    // exactly what "ldl N" would reload immediately afterward, making the reload redundant. NOT yet
-    // confirmed against real hardware, exactly like that existing assumption.
-    if (remaining >= 2 && TryParseSlotInstruction(lines[i], "stl", out int storedLocal2) && TryParseSlotInstruction(lines[i + 1], "ldl", out int reloadedLocal) && storedLocal2 == reloadedLocal)
-    {
-      replacementLine = lines[i];
-      return 2;
-    }
-
-    // Rule: "stp N; ldp N" (same N) -- the same idea, for a parameter slot.
-    if (remaining >= 2 && TryParseSlotInstruction(lines[i], "stp", out int storedParam2) && TryParseSlotInstruction(lines[i + 1], "ldp", out int reloadedParam) && storedParam2 == reloadedParam)
+    // Rule: "stf rX, O; ldf rX, O" (same X, same O) -- the reload is redundant (see this class's own
+    // doc comment for the "a store leaves its source register unchanged" assumption this relies on).
+    if (remaining >= 2
+        && TryParseFrameInstruction(lines[i], "stf", out int storedReg2, out int storedOffset2)
+        && TryParseFrameInstruction(lines[i + 1], "ldf", out int reloadedReg, out int reloadedOffset)
+        && storedReg2 == reloadedReg && storedOffset2 == reloadedOffset)
     {
       replacementLine = lines[i];
       return 2;
@@ -137,18 +132,46 @@ public static class CvmPeepholeOptimizer
     return 0;
   }
 
-  /// <summary>Matches an emitted instruction line of the shape <c>"  {mnemonic} {slot}"</c> (exactly
-  /// what <see cref="CCodeGenerator.EmitCode"/> produces for <c>ldl</c>/<c>stl</c>/<c>ldp</c>/<c>stp</c>)
-  /// and extracts its integer slot operand.</summary>
-  private static bool TryParseSlotInstruction(string line, string mnemonic, out int slot)
+  /// <summary>Matches an emitted instruction line of the shape <c>"  {mnemonic} {registerPrefix}{N}"</c>
+  /// (exactly what <see cref="CCodeGenerator.EmitCode"/> produces for <c>rpush</c>/<c>rpop</c>/
+  /// <c>dpush</c>/<c>dpop</c>) and extracts its integer register number.</summary>
+  private static bool TryParseRegisterInstruction(string line, string mnemonic, string registerPrefix, out int register)
   {
-    string prefix = "  " + mnemonic + " ";
-    if (line.StartsWith(prefix, StringComparison.Ordinal) && int.TryParse(line.AsSpan(prefix.Length), out slot))
+    string prefix = "  " + mnemonic + " " + registerPrefix;
+    if (line.StartsWith(prefix, StringComparison.Ordinal) && int.TryParse(line.AsSpan(prefix.Length), out register))
     {
       return true;
     }
 
-    slot = 0;
+    register = 0;
     return false;
+  }
+
+  /// <summary>Matches an emitted instruction line of the shape <c>"  {mnemonic} r{X}, {offset}"</c>
+  /// (exactly what <see cref="CCodeGenerator.EmitCode"/> produces for <c>ldf</c>/<c>stf</c>) and extracts
+  /// its register number and signed frame offset.</summary>
+  private static bool TryParseFrameInstruction(string line, string mnemonic, out int register, out int offset)
+  {
+    register = 0;
+    offset = 0;
+
+    string prefix = "  " + mnemonic + " r";
+    if (!line.StartsWith(prefix, StringComparison.Ordinal))
+    {
+      return false;
+    }
+
+    int commaIndex = line.IndexOf(',', prefix.Length);
+    if (commaIndex < 0)
+    {
+      return false;
+    }
+
+    if (!int.TryParse(line.AsSpan(prefix.Length, commaIndex - prefix.Length), out register))
+    {
+      return false;
+    }
+
+    return int.TryParse(line.AsSpan(commaIndex + 1).Trim(), out offset);
   }
 }

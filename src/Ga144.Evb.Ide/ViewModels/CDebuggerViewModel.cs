@@ -416,7 +416,16 @@ public sealed class CDebuggerViewModel : ObservableObject
     }
 
     var objectInputs = new List<CvmLinkObjectInput> { new(DebuggerObjectDisplayName, objectFile) };
-    CvmLinker.Result linkResult = CvmLinker.Link(objectInputs, libraryInputs, exported.Table, new CvmLinkOptions());
+    // SectionPages/HeapStartSymbolName (added 2026-10-17, CVM_pipeline C ABI v2): see CProjectViewModel's
+    // own identical call site for why this mapping is passed here too -- same reasoning, same shared
+    // constants, so a debugger-compiled program sees the exact same "_heap_start" marker a real Build
+    // would produce for it.
+    CvmLinker.Result linkResult = CvmLinker.Link(objectInputs, libraryInputs, exported.Table, new CvmLinkOptions
+    {
+      SectionPages = new Dictionary<string, int> { [CCodeGenerator.GlobalDataSectionName] = CCodeGenerator.GlobalDataPage },
+      HeapStartSymbolName = CCodeGenerator.HeapStartSymbolName,
+      HeapStartAfterSectionName = CCodeGenerator.GlobalDataSectionName,
+    });
     messages.AddRange(linkResult.Messages);
     if (!linkResult.Success || linkResult.Image is null)
     {

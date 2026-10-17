@@ -51,6 +51,38 @@ public sealed class CvmImageSymbol
 }
 
 /// <summary>
+/// One named section's final layout within a linked <see cref="CvmImage"/> -- ADDED 2026-10-17, per
+/// Stefan's own ask ("is there a possibility to know after the linker builds the executable, where are
+/// the code, data and bss blocks and how long they are?"): <see cref="CvmLinker.Link"/> already computes
+/// exactly this while resolving relocations (see its own <c>sectionLayout</c>/<c>PlaceSection</c>
+/// remarks) but used to discard it the moment linking finished. One entry per DISTINCT section NAME
+/// across every linked object (e.g. one "CODE" entry, one "DATA" entry) -- not one entry per linked
+/// object's own contribution to that name, since every object contributing to the same section name is
+/// always placed contiguously by <see cref="CvmLinker"/>'s own section-concatenation layout model (see
+/// that class's own "Layout model" remarks), so "where does CODE start and how long is it" is already a
+/// single, unambiguous answer without needing a per-object breakdown.
+///
+/// <b>There is no separate "bss" here</b>: this toolchain has never had a section name for
+/// zero-initialized-only data distinct from initialized data -- <c>Ga144.C.Toolchain.CCodeGenerator.
+/// GlobalDataSectionName</c> ("DATA") holds every C global/static regardless of whether it has an
+/// initializer, so a "bss" block simply doesn't exist to report; "DATA" is the closest equivalent today.
+/// </summary>
+public sealed class CvmImageSection
+{
+  /// <summary>The section name every linked object that defines it used (e.g. "CODE", "DATA") -- see <see cref="CvmObjectFile"/>/<see cref="CvmSection"/>'s own remarks for why any name is accepted.</summary>
+  public required string Name { get; init; }
+
+  /// <summary>Which external-memory page this section landed on -- 0 unless <see cref="CvmLinkOptions.SectionPages"/> placed it elsewhere (see that property's own remarks). <see cref="BaseAddress"/> is always this page's own word address, i.e. <c>BaseAddress == Page * CvmLinker.PageWordCount + (offset within the page)</c>.</summary>
+  public required int Page { get; init; }
+
+  /// <summary>The word address (within the flat <see cref="CvmImage.Words"/> stream) this section's first word landed at.</summary>
+  public required int BaseAddress { get; init; }
+
+  /// <summary>How many words this section actually occupies -- the sum of every linked object's own contribution to this section name, NOT including any zero-padded gap before or after it (see <see cref="CvmLinker"/>'s own "Paged sections" remarks for where those gaps come from).</summary>
+  public required int WordCount { get; init; }
+}
+
+/// <summary>
 /// A linked CVM program image (.gaimg): <see cref="CvmLinker"/>'s own output -- a single flat word
 /// stream with every relocation already applied and every symbol at its final address, ready to load
 /// directly into the CVM's own memory (<c>CvmSimulatedSram.LoadProgram</c> and the real-hardware
@@ -59,8 +91,10 @@ public sealed class CvmImageSymbol
 ///
 /// On-disk shape (a <see cref="GaffDocument"/> of kind <see cref="GaffFileKind.Image"/>): a "STRT"
 /// chunk (the shared string table), an "IMGH" chunk (entry address, word count), a "WORD" chunk (the
-/// final flat word stream, packed the same way a <see cref="CvmObjectFile"/> section is), and a "SYMT"
-/// chunk (one entry per resolved symbol: name offset, final address).
+/// final flat word stream, packed the same way a <see cref="CvmObjectFile"/> section is), a "SYMT"
+/// chunk (one entry per resolved symbol: name offset, final address), and -- added 2026-10-17, see
+/// <see cref="CvmImageSection"/>'s own remarks -- a "SECT" chunk (one entry per distinct section name:
+/// name offset, page, base address, word count).
 /// </summary>
 public sealed class CvmImage
 {
@@ -70,6 +104,17 @@ public sealed class CvmImage
   public required int EntryAddress { get; init; }
 
   public required IReadOnlyList<CvmImageSymbol> Symbols { get; init; }
+
+  /// <summary>
+  /// Added 2026-10-17, alongside <see cref="CvmImageSection"/> (see its own remarks): one entry per
+  /// distinct section name this link placed anywhere in <see cref="Words"/>, in the same order <see
+  /// cref="CvmLinker"/> itself lays sections out ("CODE" first if present, then every other name in
+  /// first-encountered order). <b>Breaking on-disk change</b> to the "SECT" chunk below, exactly like
+  /// every other <see cref="CvmImage"/> shape change in this project's own history (see e.g. <see
+  /// cref="CvmImageSymbol.DefiningObjectName"/>'s own remarks) -- a .gaimg saved before this field
+  /// existed has no chunk for it; re-link from source rather than loading an old image.
+  /// </summary>
+  public required IReadOnlyList<CvmImageSection> Sections { get; init; }
 
   public void Save(Stream stream)
   {
@@ -107,6 +152,22 @@ public sealed class CvmImage
       }
 
       document.AddChunk("SYMT", symbolPayload.ToArray());
+    }
+
+    // SECT (added 2026-10-17, alongside CvmImageSection -- see its own remarks): one fixed-width record
+    // per distinct section name, same shape convention as SYMT above.
+    using (var sectionPayload = new MemoryStream())
+    using (var sectionWriter = new BinaryWriter(sectionPayload))
+    {
+      foreach (CvmImageSection section in Sections)
+      {
+        sectionWriter.Write((uint)strings.Intern(section.Name));
+        sectionWriter.Write((uint)section.Page);
+        sectionWriter.Write((uint)section.BaseAddress);
+        sectionWriter.Write((uint)section.WordCount);
+      }
+
+      document.AddChunk("SECT", sectionPayload.ToArray());
     }
 
     document.Chunks.Insert(0, new GaffChunk("STRT", strings.ToBytes()));
@@ -156,6 +217,25 @@ public sealed class CvmImage
       }
     }
 
-    return new CvmImage { Words = words, EntryAddress = entryAddress, Symbols = symbols };
+    var sections = new List<CvmImageSection>();
+    using (var sectionReader = new BinaryReader(new MemoryStream(document.GetRequiredChunk("SECT").Payload)))
+    {
+      while (sectionReader.BaseStream.Position < sectionReader.BaseStream.Length)
+      {
+        string name = strings.ReadAt((int)sectionReader.ReadUInt32());
+        int page = (int)sectionReader.ReadUInt32();
+        int baseAddress = (int)sectionReader.ReadUInt32();
+        int sectionWordCount = (int)sectionReader.ReadUInt32();
+        sections.Add(new CvmImageSection
+        {
+          Name = name,
+          Page = page,
+          BaseAddress = baseAddress,
+          WordCount = sectionWordCount
+        });
+      }
+    }
+
+    return new CvmImage { Words = words, EntryAddress = entryAddress, Symbols = symbols, Sections = sections };
   }
 }

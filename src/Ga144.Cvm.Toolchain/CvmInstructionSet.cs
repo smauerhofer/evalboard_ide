@@ -826,11 +826,13 @@ public static class CvmInstructionSet
   public const string DoubleLiteralMnemonic = "dlit";
   public const string DropMnemonic = "drop";
 
-  /// <summary>
-  /// <c>swap</c> (NEW 2026-10-05, node 509's <c>'swap</c>, "size 4 without register"): swaps the top two VM stack
-  /// words, VM( w1 w2 - w2 w1 ). No operand, one memory word.
-  /// </summary>
-  public const string SwapMnemonic = "swap";
+  // SwapMnemonic ("swap", formerly Id 26, node 509's 'swap: "swaps the top two VM stack words, VM( w1 w2
+  // - w2 w1 ), no operand, one memory word") -- DELETED OUTRIGHT 2026-10-17, per Stefan: "remove 'swap'
+  // from the CVM language." This followed the 2026-10-17 opcode audit (cvm-opcode-audit-2026-10-15.md)
+  // re-run against the newest full-chip source: node 509's current source (now ending at 'ldf/'stf) has
+  // no 'swap under that name or any other, the same kind of gap rinc/rdec/radd's own 2026-10-15 removal
+  // caught. Same treatment as that precedent: constant and Instructions row both gone outright, not
+  // commented out. Id 26 is still never to be reused.
   public const string DupMnemonic = "dup";
 
   /// <summary>
@@ -1013,10 +1015,24 @@ public static class CvmInstructionSet
   public const string FramePointerStoreMnemonic = "fp!";
   public const string RegisterStoreMnemonic = "rstore";
 
-  /// <summary>True for the words whose SECOND register operand is a double register (d0..d15): rload and rstore.</summary>
+  /// <summary>
+  /// True for the words whose SECOND register operand is a double register (d0..d15): rload/rstore (mixed,
+  /// first operand stays a 16-bit register -- see <see cref="IsDoubleRegisterMnemonic"/>) and, ADDED
+  /// 2026-10-17, node 408's binary 32-bit integer family (dmov/dand/dor/dxor/dadd/dudiv/dmul/dpack -- see
+  /// <see cref="DoubleBinaryMoveMnemonic"/>'s own remarks), whose FIRST operand is also a double register
+  /// (see <see cref="IsDoubleRegisterMnemonic"/>'s own matching update).
+  /// </summary>
   public static bool IsSecondRegisterDoubleMnemonic(string mnemonic) =>
       string.Equals(mnemonic, RegisterLoadMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      string.Equals(mnemonic, RegisterStoreMnemonic, StringComparison.OrdinalIgnoreCase);
+      string.Equals(mnemonic, RegisterStoreMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryMoveMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryAndMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryOrMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryXorMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryAddMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryUnsignedDivideMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryMultiplyMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryPackMnemonic, StringComparison.OrdinalIgnoreCase);
 
   /// <summary>First register ("x", the destination and first operand) of a node-306 16-bit operation: bits 3-0.</summary>
   public const int Operation16FirstRegisterBitMask = 0x000F;
@@ -1121,6 +1137,70 @@ public static class CvmInstructionSet
 
   /// <summary>Isolates the double-register field ("x", bits 3-0) of every <see cref="DoubleRegisterInvertMnemonic"/>-family mnemonic.</summary>
   public const int UnaryInt32RegisterFieldBitMask = 0x000F;
+
+  /// <summary>
+  /// <c>dmov</c>/<c>dand</c>/<c>dor</c>/<c>dxor</c>/<c>dadd</c>/<c>dudiv</c>/<c>dmul</c>/<c>dpack</c> --
+  /// ADDED 2026-10-17, per the full node-mesh dump Stefan pasted ("all names starting with a ' must be
+  /// used for opcodes") confirming node 408 defines a real, working binary 32-bit integer ALU family
+  /// (<c>x5/binary32</c>'s own dispatch, <c>x5/finish32</c>'s own carry-propagating writeback) -- not the
+  /// "empty stub" claude/cvm-pipeline-float32-coprocessor.md once described; that doc predates this
+  /// source. Each op is <c>( d1 d2 - d3 )</c> on two double registers: <c>'dmov</c> (copy), <c>'dand</c>/
+  /// <c>'dor</c>/<c>'dxor</c> (bitwise), <c>'dadd</c> (carry-propagating 32-bit add -- see node 408's own
+  /// <c>x5/dadd</c>), <c>'dudiv</c> (unsigned divide), <c>'dmul</c> (multiply), <c>'dpack</c> (pack two
+  /// double values into one, per node 408's own body).
+  ///
+  /// Bit layout: CORRECTED 2026-10-17 (second pass) -- the first pass guessed a 4-bit function field
+  /// (bits 11-8, mask 0x0F00) by direct structural analogy to node 306's binary-16 row, miscounting the
+  /// tag's own width in the process. Stefan re-pasted the same node mesh dump and pointed at node
+  /// 307/308's own relay chain (<c>x3/binary32</c> -&gt; <c>x4/binary32</c>), confirmed real and tested on
+  /// hardware: <c>x4/binary32</c> masks the incoming operation selector with <c>0x7 and</c> before
+  /// forwarding it to node 408's <c>x5/binary32</c> -- three bits, not four, matching the family's 8
+  /// members (dmov=0..dpack=7) exactly. This also matches the master CVM_pipeline table row (see this
+  /// file's own class-level remarks right after <see cref="UnlinkMnemonic"/>) once counted correctly:
+  /// "1110|1   |yyyy|xxxx| binary {32 bit}", tag <see cref="ReservedBinary32Tag"/> (0xE800) -- the tag
+  /// prefix is <c>1110|1</c>, FIVE bits (bits 15-11, the trailing "1" is part of the fixed tag, not
+  /// available to the function field), leaving only bits 10-8 (three bits, the row's "   " blank) for the
+  /// function field before <c>yyyy</c> (bits 7-4, second double register) and <c>xxxx</c> (bits 3-0, first
+  /// double register). Function field is therefore mask 0x0700, shift 8 (see
+  /// <see cref="Ga144.Evb.Ide.Services.CvmAssemblyLanguage"/>'s own <c>Node408BinaryInt32FunctionFieldBitMask</c>/
+  /// <c>Shift</c>), leaving <c>yyyy</c>/<c>xxxx</c> exactly where every other binary family in this table
+  /// already puts them (see <see cref="Operation16FirstRegisterBitMask"/>/<see cref="Operation16SecondRegisterBitMask"/>,
+  /// reused as-is since the field WIDTHS are identical -- only the register NUMBERING is doubled, like
+  /// every other <c>d</c>-register family). Both operands are double registers (<c>d0..d15</c>, see
+  /// <see cref="IsDoubleRegisterMnemonic"/>), unlike node 306's 16-bit <c>r</c>-registers. The field WIDTH
+  /// is now cross-checked against a live dispatch source (not just analogy); the exact numeric op value
+  /// (0-7) assigned to each of the 8 mnemonics is still inferred from their order in node 408's own
+  /// source (dmov=0, dand=1, dor=2, dxor=3, dadd=4, dudiv=5, dmul=6, dpack=7) and not independently
+  /// confirmed -- per Stefan's own "existing opcodes are implemented and tested on hardware, use this
+  /// source as given" instruction, taken as ground truth here.
+  ///
+  /// Fresh Ids 80-87 (<c>Id</c> values are freely reassignable now, see
+  /// claude/cvm-instruction-id-compaction-2026-10-15.md -- these numbers happen to coincide with several
+  /// OLD, permanently-retired CVM1-era Ids in this file's own commented-out history further below; that
+  /// collision is cosmetic only, per the compaction doc's own "Going forward" section).
+  /// </summary>
+  public const string DoubleBinaryMoveMnemonic = "dmov";
+
+  /// <summary>See <see cref="DoubleBinaryMoveMnemonic"/>'s own remarks for the full family derivation.</summary>
+  public const string DoubleBinaryAndMnemonic = "dand";
+
+  /// <summary>See <see cref="DoubleBinaryMoveMnemonic"/>'s own remarks.</summary>
+  public const string DoubleBinaryOrMnemonic = "dor";
+
+  /// <summary>See <see cref="DoubleBinaryMoveMnemonic"/>'s own remarks.</summary>
+  public const string DoubleBinaryXorMnemonic = "dxor";
+
+  /// <summary>See <see cref="DoubleBinaryMoveMnemonic"/>'s own remarks, including the carry-propagating writeback note.</summary>
+  public const string DoubleBinaryAddMnemonic = "dadd";
+
+  /// <summary>See <see cref="DoubleBinaryMoveMnemonic"/>'s own remarks.</summary>
+  public const string DoubleBinaryUnsignedDivideMnemonic = "dudiv";
+
+  /// <summary>See <see cref="DoubleBinaryMoveMnemonic"/>'s own remarks.</summary>
+  public const string DoubleBinaryMultiplyMnemonic = "dmul";
+
+  /// <summary>See <see cref="DoubleBinaryMoveMnemonic"/>'s own remarks.</summary>
+  public const string DoubleBinaryPackMnemonic = "dpack";
 
   // 'tjmp, node 507's own table-jump primitive -- always present in node 507's source ("'tjmp .loc
   // (rso-rs) a . + a!", identical body to node 507's own internal m/branch), but left unwired as a CVM
@@ -2327,12 +2407,34 @@ public static class CvmInstructionSet
   // physical neighbor at column 8 would be node 408. Reproduced verbatim in Node409Program's own Source
   // string and wired into CvmBootStreamBuilder exactly as written (importing from node 407), per the same
   // "reproduce, flag, don't guess" convention.
+  /// <summary>
+  /// REPOINTED 2026-10-17: node 409's own bit-op family above was always permanently retired (Ids
+  /// 172-175, still commented out below, dead ever since the move off node 409) -- this mnemonic STRING
+  /// is reused for node 307's real, live, hardware-tested 'bclr instead (see the <c>Node307Bit*</c>
+  /// constants and Ids 88-91 further below for the new wiring). The name survives; the tag, field layout,
+  /// node and operand shape are all new.
+  /// </summary>
   public const string BitClearMnemonic = "bclr";
+  /// <summary>REPOINTED 2026-10-17, same as <see cref="BitClearMnemonic"/> -- now node 307's real 'bset.</summary>
   public const string BitSetMnemonic = "bset";
+  /// <summary>REPOINTED 2026-10-17, same as <see cref="BitClearMnemonic"/> -- now node 307's real 'binv.</summary>
   public const string BitInvertMnemonic = "binv";
+  /// <summary>
+  /// UNCHANGED, still permanently retired: node 409's old fourth bit-op member. Node 307's real family has
+  /// NO equivalent -- its own fourth member is 'btst (<see cref="BitTestMnemonic"/>), a different
+  /// operation entirely (test, not copy), so "bcopy" has nothing to repoint to and stays dead.
+  /// </summary>
   public const string BitCopyMnemonic = "bcopy";
 
-  /// <summary>Fixed prefix for node 409's four bit-operation opcodes -- bits 15-11 = 11111, i.e. 0xF800. See the remarks above <see cref="BitClearMnemonic"/> for the full bit-layout derivation.</summary>
+  /// <summary>
+  /// NEW 2026-10-17: node 307's real fourth bit operation. Per node 307's own live source
+  /// ("<c>'btst ( bitmask w - f ) and if drop 1 ; then</c>"), tests a bit and leaves a boolean, unlike
+  /// bclr/bset/binv which leave a modified word. See the <c>Node307Bit*</c> constants below for the
+  /// shared field layout.
+  /// </summary>
+  public const string BitTestMnemonic = "btst";
+
+  /// <summary>Fixed prefix for node 409's four bit-operation opcodes -- bits 15-11 = 11111, i.e. 0xF800. See the remarks above <see cref="BitClearMnemonic"/> for the full bit-layout derivation. RETIRED along with the rest of node 409's own family -- superseded by <see cref="Node307BitOperationTag"/> below.</summary>
   public const int BitOperationTag = 0xF800;
 
   /// <summary>Isolates node 409's first bit-position operand field, <c>aaaa</c> (bits 6-3, 0-15) -- the sole operand of <c>bclr</c>/<c>bset</c>/<c>binv</c>, and the first operand of <c>bcopy</c>. See the remarks above <see cref="BitClearMnemonic"/>.</summary>
@@ -2355,6 +2457,92 @@ public static class CvmInstructionSet
   public const int BitInvertTag = BitOperationTag | 2;
   /// <summary>Per-mnemonic tag for <see cref="BitCopyMnemonic"/> -- operation index 3. UNLIKE bclr/bset/binv, takes TWO operands ("bcopy a b") -- see the remarks above <see cref="BitClearMnemonic"/>.</summary>
   public const int BitCopyTag = BitOperationTag | 3;
+
+  /// <summary>
+  /// Node 307's real, live, hardware-tested bit-operation family (<c>'bclr/'bset/'binv/'btst</c>), WIRED
+  /// 2026-10-17 per Stefan directly ("wire the 4 bitop opcodes from node 307 into the CVM language"), on
+  /// top of the field-layout investigation the same pass turned up (see <see cref="BitClearMnemonic"/>'s
+  /// own remarks for what replaced node 409's dead family here).
+  ///
+  /// Node 307's own x3/bitop (its real dispatch path, confirmed in the full node-mesh dump) masks the
+  /// incoming operation selector with "0x03 and" (TWO bits -- bclr=0/bset=1/binv=2/btst=3, in exactly
+  /// their source order) and separately reads a register ("@b") and a bit-position operand through
+  /// x3/bit ("0xf and", FOUR bits). This confirms the OPERAND SHAPE directly from a live dispatch source.
+  ///
+  /// CONFIRMED 2026-10-17 (fifth pass), per Stefan directly ("there are 2 versions of bit operations...
+  /// all this is described in node 507 comments") -- the bit POSITIONS below, previously this file's own
+  /// best derivation, are now read straight from node 507's own second-pass header table
+  /// (<c>claude/cvm-node507-memory-access.md</c>), which turns out to define TWO variants of this same
+  /// family, split by where the bit index comes from:
+  ///
+  /// <code>1100|10pp|bbbb|xxxx| 506 | 16-bit bit operation rx = bitop{p, rx, b}</code>  (IMMEDIATE bit index)
+  /// <code>1100|11pp|yyyy|xxxx| 506 | 16-bit bit operation rx = bitop{p, rx, ry}</code> (REGISTER holding the bit index)
+  ///
+  /// Both rows confirm this derivation's field positions exactly: "p" (bits 9-8, 2-bit op selector,
+  /// matching x3/bitop's own "0x03 and" mask) | "b"/"y" (bits 7-4, matching x3/bit's own "0xf and" mask
+  /// -- an IMMEDIATE literal in the first row, a REGISTER index in the second) | "x" (bits 3-0, the
+  /// register being operated on, <see cref="Operation16FirstRegisterBitMask"/>). Only the fixed tag
+  /// nibble's low two bits differ between the variants -- "10" (0xC800-0xCBFF, immediate) vs "11"
+  /// (0xCC00-0xCFFF, register) -- everything else about the two rows is identical. Both assemble under
+  /// the SAME mnemonic ("bclr r0 4" vs "bclr r0 r1"), the assembler choosing the row by whether the
+  /// second operand token parses as a register (see CvmAssembler's own "case BitClearMnemonic: ... case
+  /// BitTestMnemonic:" for the real dispatch, and TryDescribeSelfDecodingWord's own matching pair of
+  /// special cases for disassembly).
+  /// </summary>
+  public const int Node307BitOperationTag = ReservedImmediateTag;
+
+  /// <summary>Isolates the 2-bit operation selector "p" (bits 9-8) of a <see cref="Node307BitOperationTag"/>/<see cref="Node307BitOperationRegisterTag"/> word -- 0=bclr, 1=bset, 2=binv, 3=btst, matching node 307's own x3/bitop "0x03 and" mask and node 507's own header table. See the remarks above <see cref="Node307BitOperationTag"/>.</summary>
+  public const int Node307BitOperationFieldBitMask = 0x0300;
+
+  /// <summary>How far left the operation selector is shifted before OR-ing into <see cref="Node307BitOperationFieldBitMask"/>'s bits -- 8, since the bit-index field (bits 7-4) and register field (bits 3-0) sit below it. See the remarks above <see cref="Node307BitOperationTag"/>.</summary>
+  public const int Node307BitOperationFieldShift = 8;
+
+  /// <summary>
+  /// Isolates the bit-index field (bits 7-4, 0-15) of a <see cref="Node307BitOperationTag"/>/
+  /// <see cref="Node307BitOperationRegisterTag"/> word, matching node 307's own x3/bit "0xf and" mask.
+  /// Dual-purpose per node 507's own header table: under <see cref="Node307BitOperationTag"/> (tag nibble
+  /// "10") this field is Stefan's own <c>b</c>, an IMMEDIATE bit-position literal; under
+  /// <see cref="Node307BitOperationRegisterTag"/> (tag nibble "11") the SAME bits are <c>y</c>, a
+  /// REGISTER index holding the bit position instead. Same physical bits, different meaning depending on
+  /// which tag family is in play -- see the remarks above <see cref="Node307BitOperationTag"/>.
+  /// </summary>
+  public const int Node307BitPositionFieldBitMask = 0x00F0;
+
+  /// <summary>How far left the bit-index field is shifted before OR-ing into <see cref="Node307BitPositionFieldBitMask"/>'s bits -- 4, since the register field (bits 3-0) sits below it. See the remarks above <see cref="Node307BitOperationTag"/>.</summary>
+  public const int Node307BitPositionFieldShift = 4;
+
+  /// <summary>Per-mnemonic tag for <see cref="BitClearMnemonic"/>'s node-307 wiring, IMMEDIATE bit-index variant ("bclr r0 4") -- operation index 0.</summary>
+  public const int Node307BitClearTag = Node307BitOperationTag | (0 << Node307BitOperationFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="BitSetMnemonic"/>'s node-307 wiring, IMMEDIATE bit-index variant ("bset r0 4") -- operation index 1.</summary>
+  public const int Node307BitSetTag = Node307BitOperationTag | (1 << Node307BitOperationFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="BitInvertMnemonic"/>'s node-307 wiring, IMMEDIATE bit-index variant ("binv r0 4") -- operation index 2.</summary>
+  public const int Node307BitInvertTag = Node307BitOperationTag | (2 << Node307BitOperationFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="BitTestMnemonic"/>, IMMEDIATE bit-index variant ("btst r0 4") -- operation index 3.</summary>
+  public const int Node307BitTestTag = Node307BitOperationTag | (3 << Node307BitOperationFieldShift);
+
+  /// <summary>
+  /// Fixed prefix for node 307's bit-operation family's REGISTER bit-index variant ("bclr r0 r1",
+  /// per node 507's own header row "1100|11pp|yyyy|xxxx| 506 | 16-bit bit operation rx = bitop{p, rx,
+  /// ry}") -- bits 15-10 = 110011, i.e. 0xCC00. ADDED 2026-10-17 (fifth pass) alongside the IMMEDIATE
+  /// variant's own confirmation -- see <see cref="Node307BitOperationTag"/>'s own remarks for the full
+  /// two-variant derivation. Same "p" field (bits 9-8, <see cref="Node307BitOperationFieldBitMask"/>/
+  /// <see cref="Node307BitOperationFieldShift"/>) and same "x" register field (bits 3-0,
+  /// <see cref="Operation16FirstRegisterBitMask"/>) as the immediate variant -- only the fixed tag
+  /// nibble's low two bits differ ("11" here vs "10"), and bits 7-4 hold a SECOND register (the one
+  /// holding the bit index) rather than an immediate literal, reusing
+  /// <see cref="Node307BitPositionFieldBitMask"/>/<see cref="Node307BitPositionFieldShift"/> for the same
+  /// physical bits.
+  /// </summary>
+  public const int Node307BitOperationRegisterTag = 0xCC00;
+
+  /// <summary>Per-mnemonic tag for <see cref="BitClearMnemonic"/>'s node-307 wiring, REGISTER bit-index variant ("bclr r0 r1") -- operation index 0.</summary>
+  public const int Node307BitClearRegisterTag = Node307BitOperationRegisterTag | (0 << Node307BitOperationFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="BitSetMnemonic"/>'s node-307 wiring, REGISTER bit-index variant ("bset r0 r1") -- operation index 1.</summary>
+  public const int Node307BitSetRegisterTag = Node307BitOperationRegisterTag | (1 << Node307BitOperationFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="BitInvertMnemonic"/>'s node-307 wiring, REGISTER bit-index variant ("binv r0 r1") -- operation index 2.</summary>
+  public const int Node307BitInvertRegisterTag = Node307BitOperationRegisterTag | (2 << Node307BitOperationFieldShift);
+  /// <summary>Per-mnemonic tag for <see cref="BitTestMnemonic"/>, REGISTER bit-index variant ("btst r0 r1") -- operation index 3.</summary>
+  public const int Node307BitTestRegisterTag = Node307BitOperationRegisterTag | (3 << Node307BitOperationFieldShift);
 
   /// <summary>
   /// The widest word address <c>call</c> can directly encode into its own opcode word: 0x7FFF, i.e.
@@ -3282,8 +3470,9 @@ public static class CvmInstructionSet
     // (x = 16-bit register in bits 3-0, y = DOUBLE register in bits 7-4), see RegisterLoadMnemonic's remarks.
     new(Id: 24, RegisterLoadMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 25, RegisterStoreMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
-    // swap (Id 247, NEW 2026-10-05): node 509's 'swap, no operand.
-    new(Id: 26, SwapMnemonic, 1, CvmOperandEncoding.None),
+    // swap (formerly Id 26) -- DELETED OUTRIGHT 2026-10-17, see DupMnemonic's own remarks (just above,
+    // where SwapMnemonic's constant used to be declared) for Stefan's exact words and the audit that
+    // found it. Id 26 is still never to be reused.
     new(Id: 27, MoveRegisterMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 28, PackBytesMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
     new(Id: 29, DivideByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask),
@@ -3362,6 +3551,49 @@ public static class CvmInstructionSet
     new(Id: 61, DoubleRegisterMultiplyByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
     new(Id: 62, DoubleRegisterDivideByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
     new(Id: 63, DoubleRegisterUnsignedDivideByTwoMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: UnaryInt32RegisterFieldBitMask),
+    // dmov/dand/dor/dxor/dadd/dudiv/dmul/dpack (Ids 80-87, NEW 2026-10-17): node 408's binary 32-bit
+    // integer ALU family -- see DoubleBinaryMoveMnemonic's own remarks for the full derivation, including
+    // the FLAGGED (not table-confirmed) field layout. Same NodeResolvedEmbeddedValue/two-register shape as
+    // node 306's binary 16-bit family (Ids 15-19 above), just on double registers (both ValueBitMask and
+    // SecondValueBitMask reuse Operation16First/SecondRegisterBitMask -- the field WIDTHS, not the register
+    // kind, are what these constants actually name).
+    new(Id: 80, DoubleBinaryMoveMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 81, DoubleBinaryAndMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 82, DoubleBinaryOrMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 83, DoubleBinaryXorMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 84, DoubleBinaryAddMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 85, DoubleBinaryUnsignedDivideMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 86, DoubleBinaryMultiplyMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    new(Id: 87, DoubleBinaryPackMnemonic, 1, CvmOperandEncoding.NodeResolvedEmbeddedValue, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Operation16SecondRegisterBitMask, SecondValueBitShift: Operation16SecondRegisterBitShift),
+    // WIRED 2026-10-17 (third pass), per Stefan directly ("wire the 4 bitop opcodes from node 307 into
+    // the CVM language"), this Instructions row covers node 307's real 'bclr/'bset/'binv/'btst, IMMEDIATE
+    // bit-index variant only ("bclr r3 5") -- see Node307BitOperationTag's own remarks for the full
+    // derivation, CONFIRMED (fifth pass) directly against node 507's own header table. EmbeddedUnsignedValuePair;
+    // first operand (register, ValueBitMask) reuses Operation16FirstRegisterBitMask (bits 3-0, matching
+    // every other single-register field in this table), second operand (immediate bit index,
+    // SecondValueBitMask) is Node307BitPositionFieldBitMask (bits 7-4). SYNTAX CHANGED 2026-10-17 (fourth
+    // pass), per Stefan directly ("use register-token syntax"): the first pass used two PLAIN numbers
+    // ("bclr 3 5"); now the register operand is a register TOKEN instead ("bclr r3 5"), matching
+    // c32's/the current fadd family's own precedent.
+    //
+    // A SECOND variant also exists (fifth pass, same Stefan message: "there are 2 versions of bit
+    // operations... bset r0,4 and bset r0,r1... described in node 507 comments") -- the bit index held
+    // in a SECOND register instead of an immediate ("bclr r3 r1"), tag Node307BitOperationRegisterTag
+    // (0xCC00 family). It shares these SAME mnemonic strings, so it has NO Instructions row of its own
+    // (TryGetShape/Instructions.ToDictionary only tolerate one row per mnemonic) -- CvmAssembler's own
+    // "case BitClearMnemonic: ... case BitTestMnemonic:" picks between the two variants by inspecting
+    // the second operand's own token shape ("rN" vs a plain number), and
+    // TryDescribeSelfDecodingWord's own dedicated, checked-first tag-range decode (see its own remarks)
+    // covers the register variant's disassembly, since the generic EmbeddedUnsignedValuePair loop below
+    // only ever sees this row's own (immediate) Tag.
+    //
+    // The OLD, retired node-409 family below (Ids 172-175, bclr/bset/binv/bcopy -- different fourth
+    // member, "bcopy" vs today's "btst") used a since-superseded tag (0xF800) and physical node, so its
+    // own rows stay commented out, untouched.
+    new(Id: 88, BitClearMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: Node307BitClearTag, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Node307BitPositionFieldBitMask, SecondValueBitShift: Node307BitPositionFieldShift),
+    new(Id: 89, BitSetMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: Node307BitSetTag, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Node307BitPositionFieldBitMask, SecondValueBitShift: Node307BitPositionFieldShift),
+    new(Id: 90, BitInvertMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: Node307BitInvertTag, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Node307BitPositionFieldBitMask, SecondValueBitShift: Node307BitPositionFieldShift),
+    new(Id: 91, BitTestMnemonic, 1, CvmOperandEncoding.EmbeddedUnsignedValuePair, Tag: Node307BitTestTag, ValueBitMask: Operation16FirstRegisterBitMask, SecondValueBitMask: Node307BitPositionFieldBitMask, SecondValueBitShift: Node307BitPositionFieldShift),
     // sbr (Id 194): table row "1011|oooo|oooo|oooo| sbr {short branch, relative}" -- bits 15-12 fixed
     // "1011" (0xB000), bits 11-0 a 12-bit SIGNED relative offset ("o", per the table's own legend:
     // "o: signed offset") embedded directly in the one word -- no trailing word at all, which is
@@ -3940,7 +4172,18 @@ public static class CvmInstructionSet
       string.Equals(mnemonic, DoubleRegisterNegateMnemonic, StringComparison.OrdinalIgnoreCase) ||
       string.Equals(mnemonic, DoubleRegisterMultiplyByTwoMnemonic, StringComparison.OrdinalIgnoreCase) ||
       string.Equals(mnemonic, DoubleRegisterDivideByTwoMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      string.Equals(mnemonic, DoubleRegisterUnsignedDivideByTwoMnemonic, StringComparison.OrdinalIgnoreCase);
+      string.Equals(mnemonic, DoubleRegisterUnsignedDivideByTwoMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      // ADDED 2026-10-17: node 408's binary 32-bit integer family -- see DoubleBinaryMoveMnemonic's own
+      // remarks. Both operands are double registers for this family (see IsSecondRegisterDoubleMnemonic's
+      // own matching update), unlike rload/rstore's mixed r/d pairing.
+      string.Equals(mnemonic, DoubleBinaryMoveMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryAndMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryOrMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryXorMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryAddMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryUnsignedDivideMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryMultiplyMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, DoubleBinaryPackMnemonic, StringComparison.OrdinalIgnoreCase);
 
   /// <summary>
   /// ADDED 2026-10-03: recognises a register token as the operand of a
@@ -4129,6 +4372,35 @@ public static class CvmInstructionSet
   public static string? TryDescribeSelfDecodingWord(int word, out int wordLength, int? wordAddress = null, int? nextWord = null, int? nextWord2 = null, Func<int, string?>? ifConditionName = null)
   {
     wordLength = 1;
+
+    // ADDED 2026-10-17 (fifth pass), checked FIRST: node 307's bit-operation family's REGISTER
+    // bit-index variant ("bclr r0 r1", Node307BitOperationRegisterTag, 0xCC00-0xCFFF) has no
+    // Instructions row of its own -- it shares its mnemonic strings (BitClearMnemonic and friends) with
+    // the IMMEDIATE variant's own row (Ids 88-91), and Instructions.ToDictionary (TryGetShape's own
+    // backing store) would throw on a duplicate mnemonic key if a second row used the same string. So
+    // this variant is decoded directly here instead, by tag range, exactly like the FixedOpcode loop
+    // just below handles shapes with no generic field pattern to match against. See
+    // Node307BitOperationRegisterTag's own remarks for the full two-variant derivation (both confirmed
+    // directly from node 507's own header table, claude/cvm-node507-memory-access.md).
+    if ((word & 0xFC00) == Node307BitOperationRegisterTag)
+    {
+      int node307RegisterVariantOp = (word & Node307BitOperationFieldBitMask) >> Node307BitOperationFieldShift;
+      int node307RegisterVariantSecondRegister = (word & Node307BitPositionFieldBitMask) >> Node307BitPositionFieldShift;
+      int node307RegisterVariantFirstRegister = word & Operation16FirstRegisterBitMask;
+      string? node307RegisterVariantMnemonic = node307RegisterVariantOp switch
+      {
+        0 => BitClearMnemonic,
+        1 => BitSetMnemonic,
+        2 => BitInvertMnemonic,
+        3 => BitTestMnemonic,
+        _ => null,
+      };
+
+      if (node307RegisterVariantMnemonic is not null)
+      {
+        return $"{node307RegisterVariantMnemonic} r{node307RegisterVariantFirstRegister} r{node307RegisterVariantSecondRegister}";
+      }
+    }
 
     // ADDED 2026-09-30, checked FIRST, ahead of every hardcoded check below: the new VM's own
     // CvmOperandEncoding.FixedOpcode shapes (today, just nop, word 0x0000 -- see that enum case's own
@@ -4358,6 +4630,20 @@ public static class CvmInstructionSet
         if (string.Equals(shape.Mnemonic, Const32Mnemonic, StringComparison.Ordinal))
         {
           return $"{shape.Mnemonic} d{first} {FormatOperand(second)}";
+        }
+
+        // ADDED 2026-10-17: node 307's real bit-op family (bclr/bset/binv/btst), IMMEDIATE bit-index
+        // variant only (Node307BitClearTag and friends, the Tag this row's own shape actually carries) --
+        // lists its register operand as an "rN" token -- "bclr r3 5" -- not the generic "bclr 3 5" the
+        // fallback below would otherwise print, matching CvmAssembler's own CHANGED 2026-10-17
+        // register-token syntax (per Stefan directly, "use register-token syntax"). Second operand (bit
+        // index) stays a plain number here, same as c32's own second operand. The REGISTER bit-index
+        // variant ("bclr r3 r1", Node307BitOperationRegisterTag) never reaches this generic
+        // EmbeddedUnsignedValuePair loop at all -- it has no Instructions row of its own, so it's decoded
+        // by its own dedicated, checked-first tag-range check right at the top of this method instead.
+        if (shape.Mnemonic is BitClearMnemonic or BitSetMnemonic or BitInvertMnemonic or BitTestMnemonic)
+        {
+          return $"{shape.Mnemonic} r{first} {FormatOperand(second)}";
         }
 
         // ADDED 2026-10-13: fadd/fsub/fmin/fmax/fmul/fdiv's NEW encoding (FloatingPointBinaryOperationTag)

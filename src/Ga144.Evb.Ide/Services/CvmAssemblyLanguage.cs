@@ -577,6 +577,30 @@ internal static class CvmAssemblyLanguage
   private const int Node308UnaryInt32FunctionFieldBitMask = 0x07F0;
   private const int Node308UnaryInt32FunctionFieldShift = 4;
 
+  // Node 408's "binary 32-bit integer operation" row, ADDED 2026-10-17 per the full node-mesh dump Stefan
+  // pasted confirming a real, working x5/binary32 family on node 408 -- see
+  // CvmInstructionSet.DoubleBinaryMoveMnemonic's own remarks for the full derivation. CORRECTED 2026-10-17
+  // (second pass): the first pass guessed a 4-bit function field (bits 11-8, mask 0x0F00) by analogy to
+  // node 306's binary-16 row, miscounting the tag's own width. Stefan re-pasted the same dump and pointed
+  // at node 307/308's own relay chain (x3/binary32 -> x4/binary32), confirmed real and tested on hardware:
+  // x4/binary32 masks the incoming op selector with "0x7 and" before forwarding to node 408's
+  // x5/binary32 -- three bits, not four, matching the family's 8 members (dmov=0..dpack=7) exactly. Tag =
+  // CvmInstructionSet.ReservedBinary32Tag (0xE800, the master table's own "1110|1   |yyyy|xxxx| binary {32
+  // bit}" row); the tag prefix "1110|1" is FIVE bits (bits 15-11), leaving only bits 10-8 (three bits, the
+  // row's "   " blank) for the function field -- mask 0x0700, shift 8 -- the same bit COUNT node 308's own
+  // Node308UnaryInt32FunctionFieldBitMask above uses for its row's blank field (7 bits there, because that
+  // row has only one register field instead of two). Both register fields reuse
+  // Operation16First/SecondRegisterBitMask as-is (bits 3-0/7-4) -- those constants name the field WIDTHS,
+  // which are identical here, even though both operands are double (d0..d15), not 16-bit, registers (see
+  // CvmInstructionSet.IsDoubleRegisterMnemonic/IsSecondRegisterDoubleMnemonic's own matching updates). The
+  // field WIDTH is now cross-checked against a live dispatch source; the exact numeric op value (0-7)
+  // assigned to each mnemonic is still inferred from source order (dmov=0..dpack=7), not independently
+  // confirmed -- per Stefan's own "existing opcodes are implemented and tested on hardware, use this
+  // source as given" instruction, taken as ground truth here.
+  private const int Node408BinaryInt32OperationTagBits = CvmInstructionSet.ReservedBinary32Tag;
+  private const int Node408BinaryInt32FunctionFieldBitMask = 0x0700;
+  private const int Node408BinaryInt32FunctionFieldShift = 8;
+
   // Node 206 -- BRAND NEW coordinate to this file, 2026-10-14, per Stefan directly ("unary 16-bit
   // opcodes have been moved to node 206:") pasting node 206's full F18 source for the first time. All
   // 17 of the 16-bit UNARY operation words below (the 16 that moved to node 307 on 2026-10-11, PLUS
@@ -943,7 +967,8 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.RegisterCallMnemonic] = (Node509Program.Coordinate, "'rcall", Node509SpecialBaseTagBits),
         [CvmInstructionSet.DropMnemonic] = (Node509Program.Coordinate, "'drop", Node509SpecialBaseTagBits),
         [CvmInstructionSet.DupMnemonic] = (Node509Program.Coordinate, "'dup", Node509SpecialBaseTagBits),
-        [CvmInstructionSet.SwapMnemonic] = (Node509Program.Coordinate, "'swap", Node509SpecialBaseTagBits),
+        // swap -- DELETED OUTRIGHT 2026-10-17 alongside its CvmInstructionSet constant and Instructions
+        // row (see CvmInstructionSet.DupMnemonic's own remarks): node 509's current source has no 'swap.
 
         // Node 407's long-branch op (added 2026-09-06, "more opcodes to node 407 added") -- reached
         // through node 407's own SAME "1100" n/main branch as 'lcall/'ljmp above, so it shares the SAME
@@ -1251,6 +1276,18 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoubleRegisterDivideByTwoMnemonic] = (Node308Program.Coordinate, "'ddiv2", Node308UnaryInt32OperationTagBits),
         [CvmInstructionSet.DoubleRegisterUnsignedDivideByTwoMnemonic] = (Node308Program.Coordinate, "'dudiv2", Node308UnaryInt32OperationTagBits),
 
+        // dmov/dand/dor/dxor/dadd/dudiv/dmul/dpack (ADDED 2026-10-17): node 408's binary 32-bit integer ALU
+        // family -- see CvmInstructionSet.DoubleBinaryMoveMnemonic's own remarks, including the FLAGGED
+        // (analogy-derived, not table-confirmed) field layout behind Node408BinaryInt32OperationTagBits.
+        [CvmInstructionSet.DoubleBinaryMoveMnemonic] = (Node408Program.Coordinate, "'dmov", Node408BinaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleBinaryAndMnemonic] = (Node408Program.Coordinate, "'dand", Node408BinaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleBinaryOrMnemonic] = (Node408Program.Coordinate, "'dor", Node408BinaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleBinaryXorMnemonic] = (Node408Program.Coordinate, "'dxor", Node408BinaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleBinaryAddMnemonic] = (Node408Program.Coordinate, "'dadd", Node408BinaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleBinaryUnsignedDivideMnemonic] = (Node408Program.Coordinate, "'dudiv", Node408BinaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleBinaryMultiplyMnemonic] = (Node408Program.Coordinate, "'dmul", Node408BinaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleBinaryPackMnemonic] = (Node408Program.Coordinate, "'dpack", Node408BinaryInt32OperationTagBits),
+
         // REMOVED OUTRIGHT, 2026-09-21: node 306's OLD 'fpop/'fpush entries (2026-09-15/16, tag
         // FloatingPointUnaryTag/0xDC00) and its four OLD constant-lookup entries (2026-09-17, tag
         // FloatingPointConstantLookupTag/0xDD00, all four resolving "fpr/const") -- REWORKED per Stefan's
@@ -1400,6 +1437,18 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoubleRegisterMultiplyByTwoMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
         [CvmInstructionSet.DoubleRegisterDivideByTwoMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
         [CvmInstructionSet.DoubleRegisterUnsignedDivideByTwoMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
+        // Node 408's "binary 32-bit integer operation" family (2026-10-17, CORRECTED second pass -- see
+        // Node408BinaryInt32OperationTagBits's own remarks): function field = bits 10-8 (3 bits, cross-checked
+        // against node 307/308's own "0x7 and" relay mask, not just analogy), x/y (both double registers) at
+        // bits 3-0/7-4.
+        [CvmInstructionSet.DoubleBinaryMoveMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.DoubleBinaryAndMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.DoubleBinaryOrMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.DoubleBinaryXorMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.DoubleBinaryAddMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.DoubleBinaryUnsignedDivideMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.DoubleBinaryMultiplyMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        [CvmInstructionSet.DoubleBinaryPackMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
         [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
         [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
@@ -1484,7 +1533,7 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.RegisterCallMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.DropMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.DupMnemonic] = Node509SpecialAddressShift,
-        [CvmInstructionSet.SwapMnemonic] = Node509SpecialAddressShift,
+        // swap -- DELETED OUTRIGHT 2026-10-17, see CvmInstructionSet.DupMnemonic's own remarks.
       };
 
   /// <summary>
