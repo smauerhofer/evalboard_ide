@@ -9,8 +9,8 @@ settings:
   krakenIdlePolicy: CloseAfterIdleTimeout
   recentCProjectPaths:
   - C:\devl\GreenArray\Ga144EvalboardIde\prgs\CTest1
-  - C:\devl\GreenArray\Ga144EvalboardIde\libs\cvm
   - C:\devl\GreenArray\Ga144EvalboardIde\libs\libc
+  - C:\devl\GreenArray\Ga144EvalboardIde\libs\cvm
   - C:\devl\GreenArray\Ga144EvalboardIde\libs\CTest1
   cWorkspaceRootPath: C:\devl\GreenArray\Ga144EvalboardIde
 boards:
@@ -68167,14 +68167,13 @@ projects:
           // receive sequence: addr w
           // send sequence: w'
           >r
-          @b ex 0xffff and !b // w -> w'
+          @b ex !b // w -> w'
         ;
 
 
         : 'div2 ( w - w' )
           2* 2* 2/ 2/ 2/
         ;
-
 
 
         : 'inv ( w - w' )
@@ -68256,6 +68255,17 @@ projects:
         ;
 
 
+        : 'bitrev ( w - .. w' )
+          dup dup xor
+          15 for
+            ( remaining reversed )
+            over 1 and >r
+            2* r> xor
+            >r 2/ r>
+          next
+        ;
+
+
         : 'highbyte ( w - byte )
           2/ 2/ 2/ 2/ 2/ 2/ 2/ 2/
         : 'lowbyte ( w - byte )
@@ -68269,7 +68279,6 @@ projects:
           2* 2* 2* 2* 2* 2* 2* 2*
           xor
         ;
-
 
 
         : x2c/float32 ( op -  )
@@ -68293,12 +68302,11 @@ projects:
 
       ramWords:
       - 0x2FF5D
-      - 0x04025
-      - 0x0FFFF
+      - 0x09555
       - 0x364C2
       - 0x30755
       - 0x33555
-      - 0x33707
+      - 0x33706
       - 0x049F5
       - 0x00001
       - 0x049F5
@@ -68310,10 +68318,10 @@ projects:
       - 0x04355
       - 0x08000
       - 0x244DA
-      - 0x1B414
-      - 0x3B706
+      - 0x1B413
+      - 0x3B705
       - 0x3B555
-      - 0x19418
+      - 0x19417
       - 0x3BD55
       - 0x00001
       - 0x15555
@@ -68325,19 +68333,28 @@ projects:
       - 0x3C055
       - 0x24893
       - 0x38AB2
-      - 0x11424
+      - 0x11423
       - 0x0629A
       - 0x3EDBA
-      - 0x1F422
+      - 0x1F421
       - 0x23DAD
       - 0x001D5
+      - 0x24DE7
+      - 0x0000F
+      - 0x2E9B2
+      - 0x21DFA
+      - 0x00001
+      - 0x2E49A
+      - 0x388C2
+      - 0x27029
+      - 0x15555
       - 0x307C2
       - 0x307C2
       - 0x307B2
       - 0x04055
       - 0x000FF
       - 0x248B2
-      - 0x13427
+      - 0x1342F
       - 0x264DA
       - 0x364DA
       - 0x364DA
@@ -68347,14 +68364,6 @@ projects:
       - 0x01F2A
       - 0x0BF02
       - 0x0BA55
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       startup:
         entryPoint: 0x195
@@ -68553,8 +68562,6 @@ projects:
         ;
 
 
-
-
         : 'dinv ( hi lo - .. lo' hi' )
           inv over inv
         ;
@@ -68575,6 +68582,8 @@ projects:
         ;
 
 
+        : 'dinc2 ( hi lo - .. lo' hi' )
+          'dinc over
         : 'dinc ( hi lo - .. lo' hi' )
           1 . +
           dup 2* -if
@@ -68586,6 +68595,8 @@ projects:
         ;
 
 
+        : 'ddec2 ( hi lo - .. lo' hi' )
+          'ddec over
         : 'ddec ( hi lo - .. lo' hi' )
           -1 . +
           -if
@@ -68599,14 +68610,11 @@ projects:
 
 
         : 'dneg ( hi lo - .. lo' hi' )
-          dup
           if
-            drop
             inv 1 . +           // nonzero low: negate low
             over inv            // complement high
             ;
           then
-          drop
           over inv 1 . +        // zero low: negate high
         ;
 
@@ -68638,6 +68646,32 @@ projects:
           xor 2/ r>
         ;
 
+
+        : 'fabs ( hi lo - .. lo hi )
+          // unary float32 instruction
+          // mnemonic: "fabs fx"
+          // description: absolute value.
+          over 0x7fff and
+        ;
+
+
+        : 'fneg ( hi lo - .. lo hi )
+          // unary float32 instruction
+          // mnemonic: "fneg fx"
+          // description: toggle sign.
+          over 0x8000 xor
+        ;
+
+
+        : 'dsext ( hi lo - .. lo hi' )
+          // Sign-extend the low 16 bits to 32 bits.
+          dup 2* 2* . -if
+            dup xor inv ;
+          then
+          dup xor
+        ;
+
+
       ramWords:
       - 0x00802
       - 0x01455
@@ -68645,59 +68679,59 @@ projects:
       - 0x32FCD
       - 0x204DA
       - 0x1B407
-      - 0x3B718
+      - 0x3B71C
       - 0x3AF55
       - 0x3A9B2
       - 0x24DE5
+      - 0x1340C
+      - 0x209B2
       - 0x049F3
       - 0x00001
-      - 0x37210
+      - 0x37212
       - 0x3AF12
       - 0x00001
       - 0x3D555
       - 0x3AF55
+      - 0x13415
+      - 0x209B2
       - 0x049F2
       - 0x3FFFF
-      - 0x1B417
+      - 0x1B41B
       - 0x21DB0
       - 0x3FFFF
       - 0x15555
       - 0x21555
-      - 0x2531C
-      - 0x3A612
+      - 0x19420
+      - 0x33DB0
       - 0x00001
-      - 0x3CFCD
-      - 0x3AFCF
+      - 0x20655
+      - 0x20612
       - 0x00001
-      - 0x2C155
+      - 0x3D555
       - 0x36DDA
       - 0x2EFDA
-      - 0x27224
+      - 0x27228
       - 0x3BDE5
       - 0x00001
       - 0x3B555
       - 0x204DA
       - 0x307C2
-      - 0x2F729
+      - 0x2F72D
       - 0x207BA
       - 0x21DFA
       - 0x00001
-      - 0x1942E
+      - 0x19432
       - 0x3BDB2
       - 0x10000
       - 0x3879D
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x21DFD
+      - 0x07FFF
+      - 0x21DE5
+      - 0x08000
+      - 0x244DA
+      - 0x1B43A
+      - 0x243CD
+      - 0x24355
       - 0x15555
       - 0x15555
       - 0x15555
@@ -70370,6 +70404,7 @@ projects:
           x3/switch
         : x3/st16 ( r w )
           up b!
+          0xffff and
           A[ @p r/r! ]] lit !b
           !b                         // w
           !b                         // r
@@ -70412,7 +70447,10 @@ projects:
           !                     // addr
           @b >r                 // d
           x3/pass2              // hi lo
+        : x3/complete32
           @ @ r>
+          up a!
+          x3/finish32
         ;
 
 
@@ -70424,7 +70462,7 @@ projects:
           !                     // addr
           @b >r                 // d
           x3/pass4              // hi1 lo1 hi2 lo2
-          @ @ r>
+          x3/complete32
         ;
 
 
@@ -70477,8 +70515,10 @@ projects:
       - 0x13400
       - 0x04B12
       - 0x00145
+      - 0x0FFFF
+      - 0x3FD22
       - 0x05627
-      - 0x09B27
+      - 0x09B12
       - 0x13421
       - 0x09DA5
       - 0x001D5
@@ -70496,18 +70536,20 @@ projects:
       - 0x0B555
       - 0x04A12
       - 0x00175
-      - 0x0560B
+      - 0x05606
       - 0x0BA02
-      - 0x2F629
-      - 0x03E9D
+      - 0x2F62D
+      - 0x03E9F
+      - 0x00145
+      - 0x2B715
       - 0x04A12
       - 0x00175
       - 0x05600
       - 0x0BA02
-      - 0x2F628
-      - 0x03E9D
-      - 0x13429
-      - 0x1342A
+      - 0x2F62C
+      - 0x11423
+      - 0x1342D
+      - 0x1342E
       - 0x01A55
       - 0x01FB2
       - 0x13400
@@ -70525,10 +70567,6 @@ projects:
       - 0x05A2A
       - 0x05618
       - 0x0B700
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       startup:
         entryPoint: 0x195
@@ -136816,11 +136854,7 @@ projects:
 
         // Node 507: FP=0000, SP=FFFF, PC=0000.
 
-        // Selector order from node 408: 0 dmov, 1 dand, 2 dor, 3 dxor,
-
-        // 4 dadd, 5 dudiv, 6 dmul, 7 dpack.
-
-        // Encoding: F000 | (selector<<8) | (source<<4) | destination.
+        // All operations use assembler mnemonics; no hardcoded instruction words.
 
         // X = X op Y modulo 2^32. Source Y remains unchanged unless X aliases Y.
 
@@ -136849,7 +136883,7 @@ projects:
 
         dlit d2 0x5AA4 0x3457
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0001: destination result; d0=00000000.
 
@@ -136884,7 +136918,7 @@ projects:
 
         dlit d2 0x5AA7 0x68AE
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0004: destination result; d0=FFFFFFFF.
 
@@ -136919,7 +136953,7 @@ projects:
 
         dlit d2 0x5AA6 0x9D05
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0007: destination result; d0=00000000.
 
@@ -136954,7 +136988,7 @@ projects:
 
         dlit d2 0x5AA1 0xD15C
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0010: destination result; d0=FFFFFFFF.
 
@@ -136989,7 +137023,7 @@ projects:
 
         dlit d2 0x5AA3 0x05B3
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0013: destination result; d0=00000001.
 
@@ -137024,7 +137058,7 @@ projects:
 
         dlit d2 0x5AA2 0x3A0A
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0016: destination result; d0=00000001.
 
@@ -137059,7 +137093,7 @@ projects:
 
         dlit d2 0x5AAD 0x6E61
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0019: destination result; d0=00000001.
 
@@ -137094,7 +137128,7 @@ projects:
 
         dlit d2 0x5AAC 0xA2B8
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0022: destination result; d0=00000001.
 
@@ -137129,7 +137163,7 @@ projects:
 
         dlit d2 0x5AAF 0xD70F
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0025: destination result; d0=80000000.
 
@@ -137164,7 +137198,7 @@ projects:
 
         dlit d2 0x5AA9 0x0B66
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0028: destination result; d0=00010002.
 
@@ -137199,7 +137233,7 @@ projects:
 
         dlit d2 0x5AA8 0x3FBD
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0031: destination result; d0=5555AAAA.
 
@@ -137234,7 +137268,7 @@ projects:
 
         dlit d2 0x5AAB 0x7414
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0034: destination result; d0=0000FFFF.
 
@@ -137269,7 +137303,7 @@ projects:
 
         dlit d2 0x5AAA 0xA86B
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0037: destination result; d0=00010001.
 
@@ -137304,7 +137338,7 @@ projects:
 
         dlit d2 0x5AB5 0xDCC2
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0040: destination result; d0=00000003.
 
@@ -137339,7 +137373,7 @@ projects:
 
         dlit d2 0x5AB7 0x1119
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0043: destination result; d0=ABCD8001.
 
@@ -137374,7 +137408,7 @@ projects:
 
         dlit d2 0x5AB6 0x4570
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0046: destination result; d0=0000FFFF.
 
@@ -137409,7 +137443,7 @@ projects:
 
         dlit d2 0x5AB1 0x79C7
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0049: destination result; d0=00000002.
 
@@ -137444,7 +137478,7 @@ projects:
 
         dlit d2 0x5AB0 0xAE1E
 
-        .word 0xF010 // dmov d0 d1
+        dmov d0 d1
 
         // Observation 0052: destination result; d0=0000FFFF.
 
@@ -137481,7 +137515,7 @@ projects:
 
         dlit d1 0x5AB3 0xE275
 
-        .word 0xF070 // dmov d0 d7
+        dmov d0 d7
 
         // Observation 0055: destination result; d0=87654321.
 
@@ -137516,7 +137550,7 @@ projects:
 
         dlit d0 0x5ABD 0x16CC
 
-        .word 0xF081 // dmov d1 d8
+        dmov d1 d8
 
         // Observation 0058: destination result; d1=87654321.
 
@@ -137551,7 +137585,7 @@ projects:
 
         dlit d0 0x5ABC 0x4B23
 
-        .word 0xF092 // dmov d2 d9
+        dmov d2 d9
 
         // Observation 0061: destination result; d2=87654321.
 
@@ -137586,7 +137620,7 @@ projects:
 
         dlit d0 0x5ABF 0x7F7A
 
-        .word 0xF0A3 // dmov d3 d10
+        dmov d3 d10
 
         // Observation 0064: destination result; d3=87654321.
 
@@ -137621,7 +137655,7 @@ projects:
 
         dlit d0 0x5ABE 0xB3D1
 
-        .word 0xF0B4 // dmov d4 d11
+        dmov d4 d11
 
         // Observation 0067: destination result; d4=87654321.
 
@@ -137656,7 +137690,7 @@ projects:
 
         dlit d0 0x5AB9 0xE828
 
-        .word 0xF0C5 // dmov d5 d12
+        dmov d5 d12
 
         // Observation 0070: destination result; d5=87654321.
 
@@ -137691,7 +137725,7 @@ projects:
 
         dlit d0 0x5ABB 0x1C7F
 
-        .word 0xF0D6 // dmov d6 d13
+        dmov d6 d13
 
         // Observation 0073: destination result; d6=87654321.
 
@@ -137726,7 +137760,7 @@ projects:
 
         dlit d0 0x5ABA 0x50D6
 
-        .word 0xF0E7 // dmov d7 d14
+        dmov d7 d14
 
         // Observation 0076: destination result; d7=87654321.
 
@@ -137761,7 +137795,7 @@ projects:
 
         dlit d0 0x5A85 0x852D
 
-        .word 0xF0F8 // dmov d8 d15
+        dmov d8 d15
 
         // Observation 0079: destination result; d8=87654321.
 
@@ -137796,7 +137830,7 @@ projects:
 
         dlit d1 0x5A84 0xB984
 
-        .word 0xF009 // dmov d9 d0
+        dmov d9 d0
 
         // Observation 0082: destination result; d9=87654321.
 
@@ -137831,7 +137865,7 @@ projects:
 
         dlit d0 0x5A87 0xEDDB
 
-        .word 0xF01A // dmov d10 d1
+        dmov d10 d1
 
         // Observation 0085: destination result; d10=87654321.
 
@@ -137866,7 +137900,7 @@ projects:
 
         dlit d0 0x5A81 0x2232
 
-        .word 0xF02B // dmov d11 d2
+        dmov d11 d2
 
         // Observation 0088: destination result; d11=87654321.
 
@@ -137901,7 +137935,7 @@ projects:
 
         dlit d0 0x5A80 0x5689
 
-        .word 0xF03C // dmov d12 d3
+        dmov d12 d3
 
         // Observation 0091: destination result; d12=87654321.
 
@@ -137936,7 +137970,7 @@ projects:
 
         dlit d0 0x5A83 0x8AE0
 
-        .word 0xF04D // dmov d13 d4
+        dmov d13 d4
 
         // Observation 0094: destination result; d13=87654321.
 
@@ -137971,7 +138005,7 @@ projects:
 
         dlit d0 0x5A82 0xBF37
 
-        .word 0xF05E // dmov d14 d5
+        dmov d14 d5
 
         // Observation 0097: destination result; d14=87654321.
 
@@ -138006,7 +138040,7 @@ projects:
 
         dlit d0 0x5A8D 0xF38E
 
-        .word 0xF06F // dmov d15 d6
+        dmov d15 d6
 
         // Observation 0100: destination result; d15=87654321.
 
@@ -138041,7 +138075,7 @@ projects:
 
         dlit d1 0x5A8F 0x27E5
 
-        .word 0xF000 // dmov d0 d0
+        dmov d0 d0
 
         // Observation 0103: destination result; d0=00000000.
 
@@ -138066,7 +138100,7 @@ projects:
 
         dlit d0 0x5A8E 0x5C3C
 
-        .word 0xF011 // dmov d1 d1
+        dmov d1 d1
 
         // Observation 0105: destination result; d1=00000001.
 
@@ -138091,7 +138125,7 @@ projects:
 
         dlit d0 0x5A89 0x9093
 
-        .word 0xF033 // dmov d3 d3
+        dmov d3 d3
 
         // Observation 0107: destination result; d3=00010000.
 
@@ -138116,7 +138150,7 @@ projects:
 
         dlit d0 0x5A88 0xC4EA
 
-        .word 0xF077 // dmov d7 d7
+        dmov d7 d7
 
         // Observation 0109: destination result; d7=80000000.
 
@@ -138141,7 +138175,7 @@ projects:
 
         dlit d0 0x5A8B 0xF941
 
-        .word 0xF088 // dmov d8 d8
+        dmov d8 d8
 
         // Observation 0111: destination result; d8=FFFFFFFF.
 
@@ -138166,7 +138200,7 @@ projects:
 
         dlit d0 0x5A95 0x2D98
 
-        .word 0xF0CC // dmov d12 d12
+        dmov d12 d12
 
         // Observation 0113: destination result; d12=12345678.
 
@@ -138191,7 +138225,7 @@ projects:
 
         dlit d0 0x5A94 0x61EF
 
-        .word 0xF0EE // dmov d14 d14
+        dmov d14 d14
 
         // Observation 0115: destination result; d14=AAAA5555.
 
@@ -138216,7 +138250,7 @@ projects:
 
         dlit d0 0x5A97 0x9646
 
-        .word 0xF0FF // dmov d15 d15
+        dmov d15 d15
 
         // Observation 0117: destination result; d15=80000001.
 
@@ -138246,7 +138280,7 @@ projects:
 
         dlit d2 0x5A96 0xCA9D
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0119: destination result; d0=00000000.
 
@@ -138281,7 +138315,7 @@ projects:
 
         dlit d2 0x5A91 0xFEF4
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0122: destination result; d0=00000000.
 
@@ -138316,7 +138350,7 @@ projects:
 
         dlit d2 0x5A93 0x334B
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0125: destination result; d0=00000000.
 
@@ -138351,7 +138385,7 @@ projects:
 
         dlit d2 0x5A92 0x67A2
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0128: destination result; d0=FFFFFFFF.
 
@@ -138386,7 +138420,7 @@ projects:
 
         dlit d2 0x5A9D 0x9BF9
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0131: destination result; d0=00000001.
 
@@ -138421,7 +138455,7 @@ projects:
 
         dlit d2 0x5A9C 0xD050
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0134: destination result; d0=00000001.
 
@@ -138456,7 +138490,7 @@ projects:
 
         dlit d2 0x5A9E 0x04A7
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0137: destination result; d0=00000001.
 
@@ -138491,7 +138525,7 @@ projects:
 
         dlit d2 0x5A99 0x38FE
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0140: destination result; d0=00000001.
 
@@ -138526,7 +138560,7 @@ projects:
 
         dlit d2 0x5A98 0x6D55
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0143: destination result; d0=80000000.
 
@@ -138561,7 +138595,7 @@ projects:
 
         dlit d2 0x5A9B 0xA1AC
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0146: destination result; d0=00000000.
 
@@ -138596,7 +138630,7 @@ projects:
 
         dlit d2 0x5A9A 0xD603
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0149: destination result; d0=00000000.
 
@@ -138631,7 +138665,7 @@ projects:
 
         dlit d2 0x5AE4 0x0A5A
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0152: destination result; d0=00000000.
 
@@ -138666,7 +138700,7 @@ projects:
 
         dlit d2 0x5AE7 0x3EB1
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0155: destination result; d0=00010001.
 
@@ -138701,7 +138735,7 @@ projects:
 
         dlit d2 0x5AE6 0x7308
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0158: destination result; d0=00000001.
 
@@ -138736,7 +138770,7 @@ projects:
 
         dlit d2 0x5AE1 0xA75F
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0161: destination result; d0=02048001.
 
@@ -138771,7 +138805,7 @@ projects:
 
         dlit d2 0x5AE0 0xDBB6
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0164: destination result; d0=0000FFFF.
 
@@ -138806,7 +138840,7 @@ projects:
 
         dlit d2 0x5AE2 0x100D
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0167: destination result; d0=00000000.
 
@@ -138841,7 +138875,7 @@ projects:
 
         dlit d2 0x5AED 0x4464
 
-        .word 0xF110 // dand d0 d1
+        dand d0 d1
 
         // Observation 0170: destination result; d0=00000000.
 
@@ -138878,7 +138912,7 @@ projects:
 
         dlit d1 0x5AEC 0x78BB
 
-        .word 0xF170 // dand d0 d7
+        dand d0 d7
 
         // Observation 0173: destination result; d0=86440200.
 
@@ -138913,7 +138947,7 @@ projects:
 
         dlit d0 0x5AEF 0xAD12
 
-        .word 0xF181 // dand d1 d8
+        dand d1 d8
 
         // Observation 0176: destination result; d1=86440200.
 
@@ -138948,7 +138982,7 @@ projects:
 
         dlit d0 0x5AEE 0xE169
 
-        .word 0xF192 // dand d2 d9
+        dand d2 d9
 
         // Observation 0179: destination result; d2=86440200.
 
@@ -138983,7 +139017,7 @@ projects:
 
         dlit d0 0x5AE8 0x15C0
 
-        .word 0xF1A3 // dand d3 d10
+        dand d3 d10
 
         // Observation 0182: destination result; d3=86440200.
 
@@ -139018,7 +139052,7 @@ projects:
 
         dlit d0 0x5AEB 0x4A17
 
-        .word 0xF1B4 // dand d4 d11
+        dand d4 d11
 
         // Observation 0185: destination result; d4=86440200.
 
@@ -139053,7 +139087,7 @@ projects:
 
         dlit d0 0x5AEA 0x7E6E
 
-        .word 0xF1C5 // dand d5 d12
+        dand d5 d12
 
         // Observation 0188: destination result; d5=86440200.
 
@@ -139088,7 +139122,7 @@ projects:
 
         dlit d0 0x5AF5 0xB2C5
 
-        .word 0xF1D6 // dand d6 d13
+        dand d6 d13
 
         // Observation 0191: destination result; d6=86440200.
 
@@ -139123,7 +139157,7 @@ projects:
 
         dlit d0 0x5AF4 0xE71C
 
-        .word 0xF1E7 // dand d7 d14
+        dand d7 d14
 
         // Observation 0194: destination result; d7=86440200.
 
@@ -139158,7 +139192,7 @@ projects:
 
         dlit d0 0x5AF6 0x1B73
 
-        .word 0xF1F8 // dand d8 d15
+        dand d8 d15
 
         // Observation 0197: destination result; d8=86440200.
 
@@ -139193,7 +139227,7 @@ projects:
 
         dlit d1 0x5AF1 0x4FCA
 
-        .word 0xF109 // dand d9 d0
+        dand d9 d0
 
         // Observation 0200: destination result; d9=86440200.
 
@@ -139228,7 +139262,7 @@ projects:
 
         dlit d0 0x5AF0 0x8421
 
-        .word 0xF11A // dand d10 d1
+        dand d10 d1
 
         // Observation 0203: destination result; d10=86440200.
 
@@ -139263,7 +139297,7 @@ projects:
 
         dlit d0 0x5AF3 0xB878
 
-        .word 0xF12B // dand d11 d2
+        dand d11 d2
 
         // Observation 0206: destination result; d11=86440200.
 
@@ -139298,7 +139332,7 @@ projects:
 
         dlit d0 0x5AF2 0xECCF
 
-        .word 0xF13C // dand d12 d3
+        dand d12 d3
 
         // Observation 0209: destination result; d12=86440200.
 
@@ -139333,7 +139367,7 @@ projects:
 
         dlit d0 0x5AFC 0x2126
 
-        .word 0xF14D // dand d13 d4
+        dand d13 d4
 
         // Observation 0212: destination result; d13=86440200.
 
@@ -139368,7 +139402,7 @@ projects:
 
         dlit d0 0x5AFF 0x557D
 
-        .word 0xF15E // dand d14 d5
+        dand d14 d5
 
         // Observation 0215: destination result; d14=86440200.
 
@@ -139403,7 +139437,7 @@ projects:
 
         dlit d0 0x5AFE 0x89D4
 
-        .word 0xF16F // dand d15 d6
+        dand d15 d6
 
         // Observation 0218: destination result; d15=86440200.
 
@@ -139438,7 +139472,7 @@ projects:
 
         dlit d1 0x5AF9 0xBE2B
 
-        .word 0xF100 // dand d0 d0
+        dand d0 d0
 
         // Observation 0221: destination result; d0=00000000.
 
@@ -139463,7 +139497,7 @@ projects:
 
         dlit d0 0x5AF8 0xF282
 
-        .word 0xF111 // dand d1 d1
+        dand d1 d1
 
         // Observation 0223: destination result; d1=00000001.
 
@@ -139488,7 +139522,7 @@ projects:
 
         dlit d0 0x5AFA 0x26D9
 
-        .word 0xF133 // dand d3 d3
+        dand d3 d3
 
         // Observation 0225: destination result; d3=00010000.
 
@@ -139513,7 +139547,7 @@ projects:
 
         dlit d0 0x5AC5 0x5B30
 
-        .word 0xF177 // dand d7 d7
+        dand d7 d7
 
         // Observation 0227: destination result; d7=80000000.
 
@@ -139538,7 +139572,7 @@ projects:
 
         dlit d0 0x5AC4 0x8F87
 
-        .word 0xF188 // dand d8 d8
+        dand d8 d8
 
         // Observation 0229: destination result; d8=FFFFFFFF.
 
@@ -139563,7 +139597,7 @@ projects:
 
         dlit d0 0x5AC7 0xC3DE
 
-        .word 0xF1CC // dand d12 d12
+        dand d12 d12
 
         // Observation 0231: destination result; d12=12345678.
 
@@ -139588,7 +139622,7 @@ projects:
 
         dlit d0 0x5AC6 0xF835
 
-        .word 0xF1EE // dand d14 d14
+        dand d14 d14
 
         // Observation 0233: destination result; d14=AAAA5555.
 
@@ -139613,7 +139647,7 @@ projects:
 
         dlit d0 0x5AC0 0x2C8C
 
-        .word 0xF1FF // dand d15 d15
+        dand d15 d15
 
         // Observation 0235: destination result; d15=80000001.
 
@@ -139643,7 +139677,7 @@ projects:
 
         dlit d2 0x5AC3 0x60E3
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0237: destination result; d0=00000000.
 
@@ -139678,7 +139712,7 @@ projects:
 
         dlit d2 0x5AC2 0x953A
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0240: destination result; d0=FFFFFFFF.
 
@@ -139713,7 +139747,7 @@ projects:
 
         dlit d2 0x5ACD 0xC991
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0243: destination result; d0=FFFFFFFF.
 
@@ -139748,7 +139782,7 @@ projects:
 
         dlit d2 0x5ACC 0xFDE8
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0246: destination result; d0=FFFFFFFF.
 
@@ -139783,7 +139817,7 @@ projects:
 
         dlit d2 0x5ACE 0x323F
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0249: destination result; d0=00000001.
 
@@ -139818,7 +139852,7 @@ projects:
 
         dlit d2 0x5AC9 0x6696
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0252: destination result; d0=0000FFFF.
 
@@ -139853,7 +139887,7 @@ projects:
 
         dlit d2 0x5AC8 0x9AED
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0255: destination result; d0=FFFFFFFF.
 
@@ -139888,7 +139922,7 @@ projects:
 
         dlit d2 0x5ACB 0xCF44
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0258: destination result; d0=7FFFFFFF.
 
@@ -139923,7 +139957,7 @@ projects:
 
         dlit d2 0x5AD5 0x039B
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0261: destination result; d0=80000000.
 
@@ -139958,7 +139992,7 @@ projects:
 
         dlit d2 0x5AD4 0x37F2
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0264: destination result; d0=1235567A.
 
@@ -139993,7 +140027,7 @@ projects:
 
         dlit d2 0x5AD7 0x6C49
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0267: destination result; d0=FFFFFFFF.
 
@@ -140028,7 +140062,7 @@ projects:
 
         dlit d2 0x5AD6 0xA0A0
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0270: destination result; d0=FFFFFFFF.
 
@@ -140063,7 +140097,7 @@ projects:
 
         dlit d2 0x5AD1 0xD4F7
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0273: destination result; d0=00010001.
 
@@ -140098,7 +140132,7 @@ projects:
 
         dlit d2 0x5AD3 0x094E
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0276: destination result; d0=80000003.
 
@@ -140133,7 +140167,7 @@ projects:
 
         dlit d2 0x5AD2 0x3DA5
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0279: destination result; d0=BBFDFFFF.
 
@@ -140168,7 +140202,7 @@ projects:
 
         dlit d2 0x5ADD 0x71FC
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0282: destination result; d0=0000FFFF.
 
@@ -140203,7 +140237,7 @@ projects:
 
         dlit d2 0x5ADC 0xA653
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0285: destination result; d0=80000002.
 
@@ -140238,7 +140272,7 @@ projects:
 
         dlit d2 0x5ADF 0xDAAA
 
-        .word 0xF210 // dor d0 d1
+        dor d0 d1
 
         // Observation 0288: destination result; d0=0001FFFF.
 
@@ -140275,7 +140309,7 @@ projects:
 
         dlit d1 0x5AD9 0x0F01
 
-        .word 0xF270 // dor d0 d7
+        dor d0 d7
 
         // Observation 0291: destination result; d0=FFFDFBB9.
 
@@ -140310,7 +140344,7 @@ projects:
 
         dlit d0 0x5AD8 0x4358
 
-        .word 0xF281 // dor d1 d8
+        dor d1 d8
 
         // Observation 0294: destination result; d1=FFFDFBB9.
 
@@ -140345,7 +140379,7 @@ projects:
 
         dlit d0 0x5ADB 0x77AF
 
-        .word 0xF292 // dor d2 d9
+        dor d2 d9
 
         // Observation 0297: destination result; d2=FFFDFBB9.
 
@@ -140380,7 +140414,7 @@ projects:
 
         dlit d0 0x5ADA 0xAC06
 
-        .word 0xF2A3 // dor d3 d10
+        dor d3 d10
 
         // Observation 0300: destination result; d3=FFFDFBB9.
 
@@ -140415,7 +140449,7 @@ projects:
 
         dlit d0 0x5A25 0xE05D
 
-        .word 0xF2B4 // dor d4 d11
+        dor d4 d11
 
         // Observation 0303: destination result; d4=FFFDFBB9.
 
@@ -140450,7 +140484,7 @@ projects:
 
         dlit d0 0x5A27 0x14B4
 
-        .word 0xF2C5 // dor d5 d12
+        dor d5 d12
 
         // Observation 0306: destination result; d5=FFFDFBB9.
 
@@ -140485,7 +140519,7 @@ projects:
 
         dlit d0 0x5A26 0x490B
 
-        .word 0xF2D6 // dor d6 d13
+        dor d6 d13
 
         // Observation 0309: destination result; d6=FFFDFBB9.
 
@@ -140520,7 +140554,7 @@ projects:
 
         dlit d0 0x5A21 0x7D62
 
-        .word 0xF2E7 // dor d7 d14
+        dor d7 d14
 
         // Observation 0312: destination result; d7=FFFDFBB9.
 
@@ -140555,7 +140589,7 @@ projects:
 
         dlit d0 0x5A20 0xB1B9
 
-        .word 0xF2F8 // dor d8 d15
+        dor d8 d15
 
         // Observation 0315: destination result; d8=FFFDFBB9.
 
@@ -140590,7 +140624,7 @@ projects:
 
         dlit d1 0x5A23 0xE610
 
-        .word 0xF209 // dor d9 d0
+        dor d9 d0
 
         // Observation 0318: destination result; d9=FFFDFBB9.
 
@@ -140625,7 +140659,7 @@ projects:
 
         dlit d0 0x5A2D 0x1A67
 
-        .word 0xF21A // dor d10 d1
+        dor d10 d1
 
         // Observation 0321: destination result; d10=FFFDFBB9.
 
@@ -140660,7 +140694,7 @@ projects:
 
         dlit d0 0x5A2C 0x4EBE
 
-        .word 0xF22B // dor d11 d2
+        dor d11 d2
 
         // Observation 0324: destination result; d11=FFFDFBB9.
 
@@ -140695,7 +140729,7 @@ projects:
 
         dlit d0 0x5A2F 0x8315
 
-        .word 0xF23C // dor d12 d3
+        dor d12 d3
 
         // Observation 0327: destination result; d12=FFFDFBB9.
 
@@ -140730,7 +140764,7 @@ projects:
 
         dlit d0 0x5A2E 0xB76C
 
-        .word 0xF24D // dor d13 d4
+        dor d13 d4
 
         // Observation 0330: destination result; d13=FFFDFBB9.
 
@@ -140765,7 +140799,7 @@ projects:
 
         dlit d0 0x5A29 0xEBC3
 
-        .word 0xF25E // dor d14 d5
+        dor d14 d5
 
         // Observation 0333: destination result; d14=FFFDFBB9.
 
@@ -140800,7 +140834,7 @@ projects:
 
         dlit d0 0x5A2B 0x201A
 
-        .word 0xF26F // dor d15 d6
+        dor d15 d6
 
         // Observation 0336: destination result; d15=FFFDFBB9.
 
@@ -140835,7 +140869,7 @@ projects:
 
         dlit d1 0x5A2A 0x5471
 
-        .word 0xF200 // dor d0 d0
+        dor d0 d0
 
         // Observation 0339: destination result; d0=00000000.
 
@@ -140860,7 +140894,7 @@ projects:
 
         dlit d0 0x5A35 0x88C8
 
-        .word 0xF211 // dor d1 d1
+        dor d1 d1
 
         // Observation 0341: destination result; d1=00000001.
 
@@ -140885,7 +140919,7 @@ projects:
 
         dlit d0 0x5A34 0xBD1F
 
-        .word 0xF233 // dor d3 d3
+        dor d3 d3
 
         // Observation 0343: destination result; d3=00010000.
 
@@ -140910,7 +140944,7 @@ projects:
 
         dlit d0 0x5A37 0xF176
 
-        .word 0xF277 // dor d7 d7
+        dor d7 d7
 
         // Observation 0345: destination result; d7=80000000.
 
@@ -140935,7 +140969,7 @@ projects:
 
         dlit d0 0x5A31 0x25CD
 
-        .word 0xF288 // dor d8 d8
+        dor d8 d8
 
         // Observation 0347: destination result; d8=FFFFFFFF.
 
@@ -140960,7 +140994,7 @@ projects:
 
         dlit d0 0x5A30 0x5A24
 
-        .word 0xF2CC // dor d12 d12
+        dor d12 d12
 
         // Observation 0349: destination result; d12=12345678.
 
@@ -140985,7 +141019,7 @@ projects:
 
         dlit d0 0x5A33 0x8E7B
 
-        .word 0xF2EE // dor d14 d14
+        dor d14 d14
 
         // Observation 0351: destination result; d14=AAAA5555.
 
@@ -141010,7 +141044,7 @@ projects:
 
         dlit d0 0x5A32 0xC2D2
 
-        .word 0xF2FF // dor d15 d15
+        dor d15 d15
 
         // Observation 0353: destination result; d15=80000001.
 
@@ -141040,7 +141074,7 @@ projects:
 
         dlit d2 0x5A3D 0xF729
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0355: destination result; d0=00000000.
 
@@ -141075,7 +141109,7 @@ projects:
 
         dlit d2 0x5A3F 0x2B80
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0358: destination result; d0=FFFFFFFF.
 
@@ -141110,7 +141144,7 @@ projects:
 
         dlit d2 0x5A3E 0x5FD7
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0361: destination result; d0=FFFFFFFF.
 
@@ -141145,7 +141179,7 @@ projects:
 
         dlit d2 0x5A39 0x942E
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0364: destination result; d0=00000000.
 
@@ -141180,7 +141214,7 @@ projects:
 
         dlit d2 0x5A38 0xC885
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0367: destination result; d0=00000000.
 
@@ -141215,7 +141249,7 @@ projects:
 
         dlit d2 0x5A3B 0xFCDC
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0370: destination result; d0=0000FFFE.
 
@@ -141250,7 +141284,7 @@ projects:
 
         dlit d2 0x5A05 0x3133
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0373: destination result; d0=FFFFFFFE.
 
@@ -141285,7 +141319,7 @@ projects:
 
         dlit d2 0x5A04 0x658A
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0376: destination result; d0=7FFFFFFE.
 
@@ -141320,7 +141354,7 @@ projects:
 
         dlit d2 0x5A07 0x99E1
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0379: destination result; d0=00000000.
 
@@ -141355,7 +141389,7 @@ projects:
 
         dlit d2 0x5A06 0xCE38
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0382: destination result; d0=1235567A.
 
@@ -141390,7 +141424,7 @@ projects:
 
         dlit d2 0x5A00 0x028F
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0385: destination result; d0=FFFFFFFF.
 
@@ -141425,7 +141459,7 @@ projects:
 
         dlit d2 0x5A03 0x36E6
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0388: destination result; d0=FFFFFFFF.
 
@@ -141460,7 +141494,7 @@ projects:
 
         dlit d2 0x5A02 0x6B3D
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0391: destination result; d0=00000000.
 
@@ -141495,7 +141529,7 @@ projects:
 
         dlit d2 0x5A0D 0x9F94
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0394: destination result; d0=80000002.
 
@@ -141530,7 +141564,7 @@ projects:
 
         dlit d2 0x5A0C 0xD3EB
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0397: destination result; d0=B9F97FFE.
 
@@ -141565,7 +141599,7 @@ projects:
 
         dlit d2 0x5A0E 0x0842
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0400: destination result; d0=00000000.
 
@@ -141600,7 +141634,7 @@ projects:
 
         dlit d2 0x5A09 0x3C99
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0403: destination result; d0=80000002.
 
@@ -141635,7 +141669,7 @@ projects:
 
         dlit d2 0x5A08 0x70F0
 
-        .word 0xF310 // dxor d0 d1
+        dxor d0 d1
 
         // Observation 0406: destination result; d0=0001FFFF.
 
@@ -141672,7 +141706,7 @@ projects:
 
         dlit d1 0x5A0B 0xA547
 
-        .word 0xF370 // dxor d0 d7
+        dxor d0 d7
 
         // Observation 0409: destination result; d0=79B9F9B9.
 
@@ -141707,7 +141741,7 @@ projects:
 
         dlit d0 0x5A0A 0xD99E
 
-        .word 0xF381 // dxor d1 d8
+        dxor d1 d8
 
         // Observation 0412: destination result; d1=79B9F9B9.
 
@@ -141742,7 +141776,7 @@ projects:
 
         dlit d0 0x5A14 0x0DF5
 
-        .word 0xF392 // dxor d2 d9
+        dxor d2 d9
 
         // Observation 0415: destination result; d2=79B9F9B9.
 
@@ -141777,7 +141811,7 @@ projects:
 
         dlit d0 0x5A17 0x424C
 
-        .word 0xF3A3 // dxor d3 d10
+        dxor d3 d10
 
         // Observation 0418: destination result; d3=79B9F9B9.
 
@@ -141812,7 +141846,7 @@ projects:
 
         dlit d0 0x5A16 0x76A3
 
-        .word 0xF3B4 // dxor d4 d11
+        dxor d4 d11
 
         // Observation 0421: destination result; d4=79B9F9B9.
 
@@ -141847,7 +141881,7 @@ projects:
 
         dlit d0 0x5A11 0xAAFA
 
-        .word 0xF3C5 // dxor d5 d12
+        dxor d5 d12
 
         // Observation 0424: destination result; d5=79B9F9B9.
 
@@ -141882,7 +141916,7 @@ projects:
 
         dlit d0 0x5A10 0xDF51
 
-        .word 0xF3D6 // dxor d6 d13
+        dxor d6 d13
 
         // Observation 0427: destination result; d6=79B9F9B9.
 
@@ -141917,7 +141951,7 @@ projects:
 
         dlit d0 0x5A12 0x13A8
 
-        .word 0xF3E7 // dxor d7 d14
+        dxor d7 d14
 
         // Observation 0430: destination result; d7=79B9F9B9.
 
@@ -141952,7 +141986,7 @@ projects:
 
         dlit d0 0x5A1D 0x47FF
 
-        .word 0xF3F8 // dxor d8 d15
+        dxor d8 d15
 
         // Observation 0433: destination result; d8=79B9F9B9.
 
@@ -141987,7 +142021,7 @@ projects:
 
         dlit d1 0x5A1C 0x7C56
 
-        .word 0xF309 // dxor d9 d0
+        dxor d9 d0
 
         // Observation 0436: destination result; d9=79B9F9B9.
 
@@ -142022,7 +142056,7 @@ projects:
 
         dlit d0 0x5A1F 0xB0AD
 
-        .word 0xF31A // dxor d10 d1
+        dxor d10 d1
 
         // Observation 0439: destination result; d10=79B9F9B9.
 
@@ -142057,7 +142091,7 @@ projects:
 
         dlit d0 0x5A1E 0xE504
 
-        .word 0xF32B // dxor d11 d2
+        dxor d11 d2
 
         // Observation 0442: destination result; d11=79B9F9B9.
 
@@ -142092,7 +142126,7 @@ projects:
 
         dlit d0 0x5A18 0x195B
 
-        .word 0xF33C // dxor d12 d3
+        dxor d12 d3
 
         // Observation 0445: destination result; d12=79B9F9B9.
 
@@ -142127,7 +142161,7 @@ projects:
 
         dlit d0 0x5A1B 0x4DB2
 
-        .word 0xF34D // dxor d13 d4
+        dxor d13 d4
 
         // Observation 0448: destination result; d13=79B9F9B9.
 
@@ -142162,7 +142196,7 @@ projects:
 
         dlit d0 0x5A1A 0x8209
 
-        .word 0xF35E // dxor d14 d5
+        dxor d14 d5
 
         // Observation 0451: destination result; d14=79B9F9B9.
 
@@ -142197,7 +142231,7 @@ projects:
 
         dlit d0 0x5A65 0xB660
 
-        .word 0xF36F // dxor d15 d6
+        dxor d15 d6
 
         // Observation 0454: destination result; d15=79B9F9B9.
 
@@ -142232,7 +142266,7 @@ projects:
 
         dlit d1 0x5A64 0xEAB7
 
-        .word 0xF300 // dxor d0 d0
+        dxor d0 d0
 
         // Observation 0457: destination result; d0=00000000.
 
@@ -142257,7 +142291,7 @@ projects:
 
         dlit d0 0x5A66 0x1F0E
 
-        .word 0xF311 // dxor d1 d1
+        dxor d1 d1
 
         // Observation 0459: destination result; d1=00000000.
 
@@ -142282,7 +142316,7 @@ projects:
 
         dlit d0 0x5A61 0x5365
 
-        .word 0xF333 // dxor d3 d3
+        dxor d3 d3
 
         // Observation 0461: destination result; d3=00000000.
 
@@ -142307,7 +142341,7 @@ projects:
 
         dlit d0 0x5A60 0x87BC
 
-        .word 0xF377 // dxor d7 d7
+        dxor d7 d7
 
         // Observation 0463: destination result; d7=00000000.
 
@@ -142332,7 +142366,7 @@ projects:
 
         dlit d0 0x5A63 0xBC13
 
-        .word 0xF388 // dxor d8 d8
+        dxor d8 d8
 
         // Observation 0465: destination result; d8=00000000.
 
@@ -142357,7 +142391,7 @@ projects:
 
         dlit d0 0x5A62 0xF06A
 
-        .word 0xF3CC // dxor d12 d12
+        dxor d12 d12
 
         // Observation 0467: destination result; d12=00000000.
 
@@ -142382,7 +142416,7 @@ projects:
 
         dlit d0 0x5A6C 0x24C1
 
-        .word 0xF3EE // dxor d14 d14
+        dxor d14 d14
 
         // Observation 0469: destination result; d14=00000000.
 
@@ -142407,7 +142441,7 @@ projects:
 
         dlit d0 0x5A6F 0x5918
 
-        .word 0xF3FF // dxor d15 d15
+        dxor d15 d15
 
         // Observation 0471: destination result; d15=00000000.
 
@@ -142437,7 +142471,7 @@ projects:
 
         dlit d2 0x5A6E 0x8D6F
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0473: destination result; d0=00000000.
 
@@ -142472,7 +142506,7 @@ projects:
 
         dlit d2 0x5A69 0xC1C6
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0476: destination result; d0=FFFFFFFF.
 
@@ -142507,7 +142541,7 @@ projects:
 
         dlit d2 0x5A68 0xF61D
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0479: destination result; d0=FFFFFFFF.
 
@@ -142542,7 +142576,7 @@ projects:
 
         dlit d2 0x5A6A 0x2A74
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0482: destination result; d0=FFFFFFFE.
 
@@ -142577,7 +142611,7 @@ projects:
 
         dlit d2 0x5A75 0x5ECB
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0485: destination result; d0=00000002.
 
@@ -142612,7 +142646,7 @@ projects:
 
         dlit d2 0x5A74 0x9322
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0488: destination result; d0=00010000.
 
@@ -142647,7 +142681,7 @@ projects:
 
         dlit d2 0x5A77 0xC779
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0491: destination result; d0=00000000.
 
@@ -142682,7 +142716,7 @@ projects:
 
         dlit d2 0x5A76 0xFBD0
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0494: destination result; d0=80000000.
 
@@ -142717,7 +142751,7 @@ projects:
 
         dlit d2 0x5A70 0x3027
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0497: destination result; d0=00000000.
 
@@ -142752,7 +142786,7 @@ projects:
 
         dlit d2 0x5A73 0x647E
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0500: destination result; d0=1235567A.
 
@@ -142787,7 +142821,7 @@ projects:
 
         dlit d2 0x5A72 0x98D5
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0503: destination result; d0=FFFFFFFF.
 
@@ -142822,7 +142856,7 @@ projects:
 
         dlit d2 0x5A7D 0xCD2C
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0506: destination result; d0=FFFFFFFF.
 
@@ -142857,7 +142891,7 @@ projects:
 
         dlit d2 0x5A7F 0x0183
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0509: destination result; d0=00020002.
 
@@ -142892,7 +142926,7 @@ projects:
 
         dlit d2 0x5A7E 0x35DA
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0512: destination result; d0=80000004.
 
@@ -142927,7 +142961,7 @@ projects:
 
         dlit d2 0x5A79 0x6A31
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0515: destination result; d0=BE028000.
 
@@ -142962,7 +142996,7 @@ projects:
 
         dlit d2 0x5A78 0x9E88
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0518: destination result; d0=0001FFFE.
 
@@ -142997,7 +143031,7 @@ projects:
 
         dlit d2 0x5A7B 0xD2DF
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0521: destination result; d0=80000002.
 
@@ -143032,7 +143066,7 @@ projects:
 
         dlit d2 0x5A45 0x0736
 
-        .word 0xF410 // dadd d0 d1
+        dadd d0 d1
 
         // Observation 0524: destination result; d0=0001FFFF.
 
@@ -143069,7 +143103,7 @@ projects:
 
         dlit d1 0x5A44 0x3B8D
 
-        .word 0xF470 // dadd d0 d7
+        dadd d0 d7
 
         // Observation 0527: destination result; d0=8641FDB9.
 
@@ -143104,7 +143138,7 @@ projects:
 
         dlit d0 0x5A47 0x6FE4
 
-        .word 0xF481 // dadd d1 d8
+        dadd d1 d8
 
         // Observation 0530: destination result; d1=8641FDB9.
 
@@ -143139,7 +143173,7 @@ projects:
 
         dlit d0 0x5A46 0xA43B
 
-        .word 0xF492 // dadd d2 d9
+        dadd d2 d9
 
         // Observation 0533: destination result; d2=8641FDB9.
 
@@ -143174,7 +143208,7 @@ projects:
 
         dlit d0 0x5A41 0xD892
 
-        .word 0xF4A3 // dadd d3 d10
+        dadd d3 d10
 
         // Observation 0536: destination result; d3=8641FDB9.
 
@@ -143209,7 +143243,7 @@ projects:
 
         dlit d0 0x5A43 0x0CE9
 
-        .word 0xF4B4 // dadd d4 d11
+        dadd d4 d11
 
         // Observation 0539: destination result; d4=8641FDB9.
 
@@ -143244,7 +143278,7 @@ projects:
 
         dlit d0 0x5A42 0x4140
 
-        .word 0xF4C5 // dadd d5 d12
+        dadd d5 d12
 
         // Observation 0542: destination result; d5=8641FDB9.
 
@@ -143279,7 +143313,7 @@ projects:
 
         dlit d0 0x5A4D 0x7597
 
-        .word 0xF4D6 // dadd d6 d13
+        dadd d6 d13
 
         // Observation 0545: destination result; d6=8641FDB9.
 
@@ -143314,7 +143348,7 @@ projects:
 
         dlit d0 0x5A4C 0xA9EE
 
-        .word 0xF4E7 // dadd d7 d14
+        dadd d7 d14
 
         // Observation 0548: destination result; d7=8641FDB9.
 
@@ -143349,7 +143383,7 @@ projects:
 
         dlit d0 0x5A4F 0xDE45
 
-        .word 0xF4F8 // dadd d8 d15
+        dadd d8 d15
 
         // Observation 0551: destination result; d8=8641FDB9.
 
@@ -143384,7 +143418,7 @@ projects:
 
         dlit d1 0x5A49 0x129C
 
-        .word 0xF409 // dadd d9 d0
+        dadd d9 d0
 
         // Observation 0554: destination result; d9=8641FDB9.
 
@@ -143419,7 +143453,7 @@ projects:
 
         dlit d0 0x5A48 0x46F3
 
-        .word 0xF41A // dadd d10 d1
+        dadd d10 d1
 
         // Observation 0557: destination result; d10=8641FDB9.
 
@@ -143454,7 +143488,7 @@ projects:
 
         dlit d0 0x5A4B 0x7B4A
 
-        .word 0xF42B // dadd d11 d2
+        dadd d11 d2
 
         // Observation 0560: destination result; d11=8641FDB9.
 
@@ -143489,7 +143523,7 @@ projects:
 
         dlit d0 0x5A4A 0xAFA1
 
-        .word 0xF43C // dadd d12 d3
+        dadd d12 d3
 
         // Observation 0563: destination result; d12=8641FDB9.
 
@@ -143524,7 +143558,7 @@ projects:
 
         dlit d0 0x5A55 0xE3F8
 
-        .word 0xF44D // dadd d13 d4
+        dadd d13 d4
 
         // Observation 0566: destination result; d13=8641FDB9.
 
@@ -143559,7 +143593,7 @@ projects:
 
         dlit d0 0x5A57 0x184F
 
-        .word 0xF45E // dadd d14 d5
+        dadd d14 d5
 
         // Observation 0569: destination result; d14=8641FDB9.
 
@@ -143594,7 +143628,7 @@ projects:
 
         dlit d0 0x5A56 0x4CA6
 
-        .word 0xF46F // dadd d15 d6
+        dadd d15 d6
 
         // Observation 0572: destination result; d15=8641FDB9.
 
@@ -143629,7 +143663,7 @@ projects:
 
         dlit d1 0x5A51 0x80FD
 
-        .word 0xF400 // dadd d0 d0
+        dadd d0 d0
 
         // Observation 0575: destination result; d0=00000000.
 
@@ -143654,7 +143688,7 @@ projects:
 
         dlit d0 0x5A50 0xB554
 
-        .word 0xF411 // dadd d1 d1
+        dadd d1 d1
 
         // Observation 0577: destination result; d1=00000002.
 
@@ -143679,7 +143713,7 @@ projects:
 
         dlit d0 0x5A53 0xE9AB
 
-        .word 0xF433 // dadd d3 d3
+        dadd d3 d3
 
         // Observation 0579: destination result; d3=00020000.
 
@@ -143704,7 +143738,7 @@ projects:
 
         dlit d0 0x5A5D 0x1E02
 
-        .word 0xF477 // dadd d7 d7
+        dadd d7 d7
 
         // Observation 0581: destination result; d7=00000000.
 
@@ -143729,7 +143763,7 @@ projects:
 
         dlit d0 0x5A5C 0x5259
 
-        .word 0xF488 // dadd d8 d8
+        dadd d8 d8
 
         // Observation 0583: destination result; d8=FFFFFFFE.
 
@@ -143754,7 +143788,7 @@ projects:
 
         dlit d0 0x5A5F 0x86B0
 
-        .word 0xF4CC // dadd d12 d12
+        dadd d12 d12
 
         // Observation 0585: destination result; d12=2468ACF0.
 
@@ -143779,7 +143813,7 @@ projects:
 
         dlit d0 0x5A5E 0xBB07
 
-        .word 0xF4EE // dadd d14 d14
+        dadd d14 d14
 
         // Observation 0587: destination result; d14=5554AAAA.
 
@@ -143804,7 +143838,7 @@ projects:
 
         dlit d0 0x5A59 0xEF5E
 
-        .word 0xF4FF // dadd d15 d15
+        dadd d15 d15
 
         // Observation 0589: destination result; d15=00000002.
 
@@ -143834,7 +143868,7 @@ projects:
 
         dlit d2 0x5A5B 0x23B5
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0591: destination result; d0=FFFFFFFF.
 
@@ -143869,7 +143903,7 @@ projects:
 
         dlit d2 0x5A5A 0x580C
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0594: destination result; d0=FFFFFFFF.
 
@@ -143904,7 +143938,7 @@ projects:
 
         dlit d2 0x5BA5 0x8C63
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0597: destination result; d0=FFFFFFFF.
 
@@ -143939,7 +143973,7 @@ projects:
 
         dlit d2 0x5BA4 0xC0BA
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0600: destination result; d0=00000000.
 
@@ -143974,7 +144008,7 @@ projects:
 
         dlit d2 0x5BA7 0xF511
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0603: destination result; d0=00000001.
 
@@ -144009,7 +144043,7 @@ projects:
 
         dlit d2 0x5BA1 0x2968
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0606: destination result; d0=00000000.
 
@@ -144044,7 +144078,7 @@ projects:
 
         dlit d2 0x5BA0 0x5DBF
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0609: destination result; d0=0000003F.
 
@@ -144079,7 +144113,7 @@ projects:
 
         dlit d2 0x5BA3 0x9216
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0612: destination result; d0=00000001.
 
@@ -144114,7 +144148,7 @@ projects:
 
         dlit d2 0x5BA2 0xC66D
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0615: destination result; d0=00000001.
 
@@ -144149,7 +144183,7 @@ projects:
 
         dlit d2 0x5BAD 0xFAC4
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0618: destination result; d0=00000000.
 
@@ -144184,7 +144218,7 @@ projects:
 
         dlit d2 0x5BAF 0x2F1B
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0621: destination result; d0=00000001.
 
@@ -144219,7 +144253,7 @@ projects:
 
         dlit d2 0x5BAE 0x6372
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0624: destination result; d0=00000002.
 
@@ -144254,7 +144288,7 @@ projects:
 
         dlit d2 0x5BA9 0x97C9
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0627: destination result; d0=00000002.
 
@@ -144289,7 +144323,7 @@ projects:
 
         dlit d2 0x5BA8 0xCC20
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0630: destination result; d0=00000001.
 
@@ -144324,7 +144358,7 @@ projects:
 
         dlit d2 0x5BAA 0x0077
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0633: destination result; d0=0000000F.
 
@@ -144359,7 +144393,7 @@ projects:
 
         dlit d2 0x5BB5 0x34CE
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0636: destination result; d0=00000012.
 
@@ -144394,7 +144428,7 @@ projects:
 
         dlit d2 0x5BB4 0x6925
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0639: destination result; d0=0000000F.
 
@@ -144429,7 +144463,7 @@ projects:
 
         dlit d2 0x5BB7 0x9D7C
 
-        .word 0xF510 // dudiv d0 d1
+        dudiv d0 d1
 
         // Observation 0642: destination result; d0=00000080.
 
@@ -144466,7 +144500,7 @@ projects:
 
         dlit d1 0x5BB6 0xD1D3
 
-        .word 0xF570 // dudiv d0 d7
+        dudiv d0 d7
 
         // Observation 0645: destination result; d0=00000012.
 
@@ -144501,7 +144535,7 @@ projects:
 
         dlit d0 0x5BB0 0x062A
 
-        .word 0xF581 // dudiv d1 d8
+        dudiv d1 d8
 
         // Observation 0648: destination result; d1=00000012.
 
@@ -144536,7 +144570,7 @@ projects:
 
         dlit d0 0x5BB3 0x3A81
 
-        .word 0xF592 // dudiv d2 d9
+        dudiv d2 d9
 
         // Observation 0651: destination result; d2=00000012.
 
@@ -144571,7 +144605,7 @@ projects:
 
         dlit d0 0x5BB2 0x6ED8
 
-        .word 0xF5A3 // dudiv d3 d10
+        dudiv d3 d10
 
         // Observation 0654: destination result; d3=00000012.
 
@@ -144606,7 +144640,7 @@ projects:
 
         dlit d0 0x5BBD 0xA32F
 
-        .word 0xF5B4 // dudiv d4 d11
+        dudiv d4 d11
 
         // Observation 0657: destination result; d4=00000012.
 
@@ -144641,7 +144675,7 @@ projects:
 
         dlit d0 0x5BBC 0xD786
 
-        .word 0xF5C5 // dudiv d5 d12
+        dudiv d5 d12
 
         // Observation 0660: destination result; d5=00000012.
 
@@ -144676,7 +144710,7 @@ projects:
 
         dlit d0 0x5BBE 0x0BDD
 
-        .word 0xF5D6 // dudiv d6 d13
+        dudiv d6 d13
 
         // Observation 0663: destination result; d6=00000012.
 
@@ -144711,7 +144745,7 @@ projects:
 
         dlit d0 0x5BB9 0x4034
 
-        .word 0xF5E7 // dudiv d7 d14
+        dudiv d7 d14
 
         // Observation 0666: destination result; d7=00000012.
 
@@ -144746,7 +144780,7 @@ projects:
 
         dlit d0 0x5BB8 0x748B
 
-        .word 0xF5F8 // dudiv d8 d15
+        dudiv d8 d15
 
         // Observation 0669: destination result; d8=00000012.
 
@@ -144781,7 +144815,7 @@ projects:
 
         dlit d1 0x5BBB 0xA8E2
 
-        .word 0xF509 // dudiv d9 d0
+        dudiv d9 d0
 
         // Observation 0672: destination result; d9=00000012.
 
@@ -144816,7 +144850,7 @@ projects:
 
         dlit d0 0x5BBA 0xDD39
 
-        .word 0xF51A // dudiv d10 d1
+        dudiv d10 d1
 
         // Observation 0675: destination result; d10=00000012.
 
@@ -144851,7 +144885,7 @@ projects:
 
         dlit d0 0x5B84 0x1190
 
-        .word 0xF52B // dudiv d11 d2
+        dudiv d11 d2
 
         // Observation 0678: destination result; d11=00000012.
 
@@ -144886,7 +144920,7 @@ projects:
 
         dlit d0 0x5B87 0x45E7
 
-        .word 0xF53C // dudiv d12 d3
+        dudiv d12 d3
 
         // Observation 0681: destination result; d12=00000012.
 
@@ -144921,7 +144955,7 @@ projects:
 
         dlit d0 0x5B86 0x7A3E
 
-        .word 0xF54D // dudiv d13 d4
+        dudiv d13 d4
 
         // Observation 0684: destination result; d13=00000012.
 
@@ -144956,7 +144990,7 @@ projects:
 
         dlit d0 0x5B81 0xAE95
 
-        .word 0xF55E // dudiv d14 d5
+        dudiv d14 d5
 
         // Observation 0687: destination result; d14=00000012.
 
@@ -144991,7 +145025,7 @@ projects:
 
         dlit d0 0x5B80 0xE2EC
 
-        .word 0xF56F // dudiv d15 d6
+        dudiv d15 d6
 
         // Observation 0690: destination result; d15=00000012.
 
@@ -145026,7 +145060,7 @@ projects:
 
         dlit d1 0x5B82 0x1743
 
-        .word 0xF500 // dudiv d0 d0
+        dudiv d0 d0
 
         // Observation 0693: destination result; d0=FFFFFFFF.
 
@@ -145051,7 +145085,7 @@ projects:
 
         dlit d0 0x5B8D 0x4B9A
 
-        .word 0xF511 // dudiv d1 d1
+        dudiv d1 d1
 
         // Observation 0695: destination result; d1=00000001.
 
@@ -145076,7 +145110,7 @@ projects:
 
         dlit d0 0x5B8C 0x7FF1
 
-        .word 0xF533 // dudiv d3 d3
+        dudiv d3 d3
 
         // Observation 0697: destination result; d3=00000001.
 
@@ -145101,7 +145135,7 @@ projects:
 
         dlit d0 0x5B8F 0xB448
 
-        .word 0xF577 // dudiv d7 d7
+        dudiv d7 d7
 
         // Observation 0699: destination result; d7=00000001.
 
@@ -145126,7 +145160,7 @@ projects:
 
         dlit d0 0x5B8E 0xE89F
 
-        .word 0xF588 // dudiv d8 d8
+        dudiv d8 d8
 
         // Observation 0701: destination result; d8=00000001.
 
@@ -145151,7 +145185,7 @@ projects:
 
         dlit d0 0x5B88 0x1CF6
 
-        .word 0xF5CC // dudiv d12 d12
+        dudiv d12 d12
 
         // Observation 0703: destination result; d12=00000001.
 
@@ -145176,7 +145210,7 @@ projects:
 
         dlit d0 0x5B8B 0x514D
 
-        .word 0xF5EE // dudiv d14 d14
+        dudiv d14 d14
 
         // Observation 0705: destination result; d14=00000001.
 
@@ -145201,7 +145235,7 @@ projects:
 
         dlit d0 0x5B8A 0x85A4
 
-        .word 0xF5FF // dudiv d15 d15
+        dudiv d15 d15
 
         // Observation 0707: destination result; d15=00000001.
 
@@ -145231,7 +145265,7 @@ projects:
 
         dlit d2 0x5B95 0xB9FB
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0709: destination result; d0=00000000.
 
@@ -145266,7 +145300,7 @@ projects:
 
         dlit d2 0x5B94 0xEE52
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0712: destination result; d0=00000000.
 
@@ -145301,7 +145335,7 @@ projects:
 
         dlit d2 0x5B96 0x22A9
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0715: destination result; d0=00000000.
 
@@ -145336,7 +145370,7 @@ projects:
 
         dlit d2 0x5B91 0x5700
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0718: destination result; d0=00000001.
 
@@ -145371,7 +145405,7 @@ projects:
 
         dlit d2 0x5B90 0x8B57
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0721: destination result; d0=00000001.
 
@@ -145406,7 +145440,7 @@ projects:
 
         dlit d2 0x5B93 0xBFAE
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0724: destination result; d0=0000FFFF.
 
@@ -145441,7 +145475,7 @@ projects:
 
         dlit d2 0x5B92 0xF405
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0727: destination result; d0=FFFFFFFF.
 
@@ -145476,7 +145510,7 @@ projects:
 
         dlit d2 0x5B9C 0x285C
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0730: destination result; d0=7FFFFFFF.
 
@@ -145511,7 +145545,7 @@ projects:
 
         dlit d2 0x5B9F 0x5CB3
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0733: destination result; d0=00000000.
 
@@ -145546,7 +145580,7 @@ projects:
 
         dlit d2 0x5B9E 0x910A
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0736: destination result; d0=7AE0ACF0.
 
@@ -145581,7 +145615,7 @@ projects:
 
         dlit d2 0x5B99 0xC561
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0739: destination result; d0=00001C72.
 
@@ -145616,7 +145650,7 @@ projects:
 
         dlit d2 0x5B98 0xF9B8
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0742: destination result; d0=00010000.
 
@@ -145651,7 +145685,7 @@ projects:
 
         dlit d2 0x5B9A 0x2E0F
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0745: destination result; d0=00020001.
 
@@ -145686,7 +145720,7 @@ projects:
 
         dlit d2 0x5BE5 0x6266
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0748: destination result; d0=80000003.
 
@@ -145721,7 +145755,7 @@ projects:
 
         dlit d2 0x5BE4 0x96BD
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0751: destination result; d0=E6677FFF.
 
@@ -145756,7 +145790,7 @@ projects:
 
         dlit d2 0x5BE7 0xCB14
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0754: destination result; d0=FFFE0001.
 
@@ -145791,7 +145825,7 @@ projects:
 
         dlit d2 0x5BE6 0xFF6B
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0757: destination result; d0=00000000.
 
@@ -145826,7 +145860,7 @@ projects:
 
         dlit d2 0x5BE0 0x33C2
 
-        .word 0xF610 // dmul d0 d1
+        dmul d0 d1
 
         // Observation 0760: destination result; d0=FFFF0000.
 
@@ -145863,7 +145897,7 @@ projects:
 
         dlit d1 0x5BE3 0x6819
 
-        .word 0xF670 // dmul d0 d7
+        dmul d0 d7
 
         // Observation 0763: destination result; d0=6541D598.
 
@@ -145898,7 +145932,7 @@ projects:
 
         dlit d0 0x5BE2 0x9C70
 
-        .word 0xF681 // dmul d1 d8
+        dmul d1 d8
 
         // Observation 0766: destination result; d1=6541D598.
 
@@ -145933,7 +145967,7 @@ projects:
 
         dlit d0 0x5BED 0xD0C7
 
-        .word 0xF692 // dmul d2 d9
+        dmul d2 d9
 
         // Observation 0769: destination result; d2=6541D598.
 
@@ -145968,7 +146002,7 @@ projects:
 
         dlit d0 0x5BEF 0x051E
 
-        .word 0xF6A3 // dmul d3 d10
+        dmul d3 d10
 
         // Observation 0772: destination result; d3=6541D598.
 
@@ -146003,7 +146037,7 @@ projects:
 
         dlit d0 0x5BEE 0x3975
 
-        .word 0xF6B4 // dmul d4 d11
+        dmul d4 d11
 
         // Observation 0775: destination result; d4=6541D598.
 
@@ -146038,7 +146072,7 @@ projects:
 
         dlit d0 0x5BE9 0x6DCC
 
-        .word 0xF6C5 // dmul d5 d12
+        dmul d5 d12
 
         // Observation 0778: destination result; d5=6541D598.
 
@@ -146073,7 +146107,7 @@ projects:
 
         dlit d0 0x5BE8 0xA223
 
-        .word 0xF6D6 // dmul d6 d13
+        dmul d6 d13
 
         // Observation 0781: destination result; d6=6541D598.
 
@@ -146108,7 +146142,7 @@ projects:
 
         dlit d0 0x5BEB 0xD67A
 
-        .word 0xF6E7 // dmul d7 d14
+        dmul d7 d14
 
         // Observation 0784: destination result; d7=6541D598.
 
@@ -146143,7 +146177,7 @@ projects:
 
         dlit d0 0x5BF5 0x0AD1
 
-        .word 0xF6F8 // dmul d8 d15
+        dmul d8 d15
 
         // Observation 0787: destination result; d8=6541D598.
 
@@ -146178,7 +146212,7 @@ projects:
 
         dlit d1 0x5BF4 0x3F28
 
-        .word 0xF609 // dmul d9 d0
+        dmul d9 d0
 
         // Observation 0790: destination result; d9=6541D598.
 
@@ -146213,7 +146247,7 @@ projects:
 
         dlit d0 0x5BF7 0x737F
 
-        .word 0xF61A // dmul d10 d1
+        dmul d10 d1
 
         // Observation 0793: destination result; d10=6541D598.
 
@@ -146248,7 +146282,7 @@ projects:
 
         dlit d0 0x5BF6 0xA7D6
 
-        .word 0xF62B // dmul d11 d2
+        dmul d11 d2
 
         // Observation 0796: destination result; d11=6541D598.
 
@@ -146283,7 +146317,7 @@ projects:
 
         dlit d0 0x5BF1 0xDC2D
 
-        .word 0xF63C // dmul d12 d3
+        dmul d12 d3
 
         // Observation 0799: destination result; d12=6541D598.
 
@@ -146318,7 +146352,7 @@ projects:
 
         dlit d0 0x5BF3 0x1084
 
-        .word 0xF64D // dmul d13 d4
+        dmul d13 d4
 
         // Observation 0802: destination result; d13=6541D598.
 
@@ -146353,7 +146387,7 @@ projects:
 
         dlit d0 0x5BF2 0x44DB
 
-        .word 0xF65E // dmul d14 d5
+        dmul d14 d5
 
         // Observation 0805: destination result; d14=6541D598.
 
@@ -146388,7 +146422,7 @@ projects:
 
         dlit d0 0x5BFD 0x7932
 
-        .word 0xF66F // dmul d15 d6
+        dmul d15 d6
 
         // Observation 0808: destination result; d15=6541D598.
 
@@ -146423,7 +146457,7 @@ projects:
 
         dlit d1 0x5BFC 0xAD89
 
-        .word 0xF600 // dmul d0 d0
+        dmul d0 d0
 
         // Observation 0811: destination result; d0=00000000.
 
@@ -146448,7 +146482,7 @@ projects:
 
         dlit d0 0x5BFF 0xE1E0
 
-        .word 0xF611 // dmul d1 d1
+        dmul d1 d1
 
         // Observation 0813: destination result; d1=00000001.
 
@@ -146473,7 +146507,7 @@ projects:
 
         dlit d0 0x5BF9 0x1637
 
-        .word 0xF633 // dmul d3 d3
+        dmul d3 d3
 
         // Observation 0815: destination result; d3=00000000.
 
@@ -146498,7 +146532,7 @@ projects:
 
         dlit d0 0x5BF8 0x4A8E
 
-        .word 0xF677 // dmul d7 d7
+        dmul d7 d7
 
         // Observation 0817: destination result; d7=00000000.
 
@@ -146523,7 +146557,7 @@ projects:
 
         dlit d0 0x5BFB 0x7EE5
 
-        .word 0xF688 // dmul d8 d8
+        dmul d8 d8
 
         // Observation 0819: destination result; d8=00000001.
 
@@ -146548,7 +146582,7 @@ projects:
 
         dlit d0 0x5BFA 0xB33C
 
-        .word 0xF6CC // dmul d12 d12
+        dmul d12 d12
 
         // Observation 0821: destination result; d12=1DF4D840.
 
@@ -146573,7 +146607,7 @@ projects:
 
         dlit d0 0x5BC5 0xE793
 
-        .word 0xF6EE // dmul d14 d14
+        dmul d14 d14
 
         // Observation 0823: destination result; d14=55558E39.
 
@@ -146598,7 +146632,7 @@ projects:
 
         dlit d0 0x5BC7 0x1BEA
 
-        .word 0xF6FF // dmul d15 d15
+        dmul d15 d15
 
         // Observation 0825: destination result; d15=00000001.
 
@@ -146628,7 +146662,7 @@ projects:
 
         dlit d2 0x5BC6 0x5041
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0827: destination result; d0=00000000.
 
@@ -146663,7 +146697,7 @@ projects:
 
         dlit d2 0x5BC1 0x8498
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0830: destination result; d0=FFFF0000.
 
@@ -146698,7 +146732,7 @@ projects:
 
         dlit d2 0x5BC0 0xB8EF
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0833: destination result; d0=0000FFFF.
 
@@ -146733,7 +146767,7 @@ projects:
 
         dlit d2 0x5BC3 0xED46
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0836: destination result; d0=FFFFFFFF.
 
@@ -146768,7 +146802,7 @@ projects:
 
         dlit d2 0x5BCD 0x219D
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0839: destination result; d0=00010001.
 
@@ -146803,7 +146837,7 @@ projects:
 
         dlit d2 0x5BCC 0x55F4
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0842: destination result; d0=0001FFFF.
 
@@ -146838,7 +146872,7 @@ projects:
 
         dlit d2 0x5BCF 0x8A4B
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0845: destination result; d0=0001FFFF.
 
@@ -146873,7 +146907,7 @@ projects:
 
         dlit d2 0x5BCE 0xBEA2
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0848: destination result; d0=0001FFFF.
 
@@ -146908,7 +146942,7 @@ projects:
 
         dlit d2 0x5BC9 0xF2F9
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0851: destination result; d0=00000000.
 
@@ -146943,7 +146977,7 @@ projects:
 
         dlit d2 0x5BCB 0x2750
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0854: destination result; d0=00025678.
 
@@ -146978,7 +147012,7 @@ projects:
 
         dlit d2 0x5BCA 0x5BA7
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0857: destination result; d0=AAAA5555.
 
@@ -147013,7 +147047,7 @@ projects:
 
         dlit d2 0x5BD5 0x8FFE
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0860: destination result; d0=FFFF0000.
 
@@ -147048,7 +147082,7 @@ projects:
 
         dlit d2 0x5BD4 0xC455
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0863: destination result; d0=00010001.
 
@@ -147083,7 +147117,7 @@ projects:
 
         dlit d2 0x5BD7 0xF8AC
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0866: destination result; d0=00030001.
 
@@ -147118,7 +147152,7 @@ projects:
 
         dlit d2 0x5BD1 0x2D03
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0869: destination result; d0=8001FFFF.
 
@@ -147153,7 +147187,7 @@ projects:
 
         dlit d2 0x5BD0 0x615A
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0872: destination result; d0=FFFFFFFF.
 
@@ -147188,7 +147222,7 @@ projects:
 
         dlit d2 0x5BD3 0x95B1
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0875: destination result; d0=00020000.
 
@@ -147223,7 +147257,7 @@ projects:
 
         dlit d2 0x5BD2 0xCA08
 
-        .word 0xF710 // dpack d0 d1
+        dpack d0 d1
 
         // Observation 0878: destination result; d0=FFFF0000.
 
@@ -147260,7 +147294,7 @@ projects:
 
         dlit d1 0x5BDD 0xFE5F
 
-        .word 0xF770 // dpack d0 d7
+        dpack d0 d7
 
         // Observation 0881: destination result; d0=4321BA98.
 
@@ -147295,7 +147329,7 @@ projects:
 
         dlit d0 0x5BDF 0x32B6
 
-        .word 0xF781 // dpack d1 d8
+        dpack d1 d8
 
         // Observation 0884: destination result; d1=4321BA98.
 
@@ -147330,7 +147364,7 @@ projects:
 
         dlit d0 0x5BDE 0x670D
 
-        .word 0xF792 // dpack d2 d9
+        dpack d2 d9
 
         // Observation 0887: destination result; d2=4321BA98.
 
@@ -147365,7 +147399,7 @@ projects:
 
         dlit d0 0x5BD9 0x9B64
 
-        .word 0xF7A3 // dpack d3 d10
+        dpack d3 d10
 
         // Observation 0890: destination result; d3=4321BA98.
 
@@ -147400,7 +147434,7 @@ projects:
 
         dlit d0 0x5BD8 0xCFBB
 
-        .word 0xF7B4 // dpack d4 d11
+        dpack d4 d11
 
         // Observation 0893: destination result; d4=4321BA98.
 
@@ -147435,7 +147469,7 @@ projects:
 
         dlit d0 0x5BDA 0x0412
 
-        .word 0xF7C5 // dpack d5 d12
+        dpack d5 d12
 
         // Observation 0896: destination result; d5=4321BA98.
 
@@ -147470,7 +147504,7 @@ projects:
 
         dlit d0 0x5B25 0x3869
 
-        .word 0xF7D6 // dpack d6 d13
+        dpack d6 d13
 
         // Observation 0899: destination result; d6=4321BA98.
 
@@ -147505,7 +147539,7 @@ projects:
 
         dlit d0 0x5B24 0x6CC0
 
-        .word 0xF7E7 // dpack d7 d14
+        dpack d7 d14
 
         // Observation 0902: destination result; d7=4321BA98.
 
@@ -147540,7 +147574,7 @@ projects:
 
         dlit d0 0x5B27 0xA117
 
-        .word 0xF7F8 // dpack d8 d15
+        dpack d8 d15
 
         // Observation 0905: destination result; d8=4321BA98.
 
@@ -147575,7 +147609,7 @@ projects:
 
         dlit d1 0x5B26 0xD56E
 
-        .word 0xF709 // dpack d9 d0
+        dpack d9 d0
 
         // Observation 0908: destination result; d9=4321BA98.
 
@@ -147610,7 +147644,7 @@ projects:
 
         dlit d0 0x5B20 0x09C5
 
-        .word 0xF71A // dpack d10 d1
+        dpack d10 d1
 
         // Observation 0911: destination result; d10=4321BA98.
 
@@ -147645,7 +147679,7 @@ projects:
 
         dlit d0 0x5B23 0x3E1C
 
-        .word 0xF72B // dpack d11 d2
+        dpack d11 d2
 
         // Observation 0914: destination result; d11=4321BA98.
 
@@ -147680,7 +147714,7 @@ projects:
 
         dlit d0 0x5B22 0x7273
 
-        .word 0xF73C // dpack d12 d3
+        dpack d12 d3
 
         // Observation 0917: destination result; d12=4321BA98.
 
@@ -147715,7 +147749,7 @@ projects:
 
         dlit d0 0x5B2D 0xA6CA
 
-        .word 0xF74D // dpack d13 d4
+        dpack d13 d4
 
         // Observation 0920: destination result; d13=4321BA98.
 
@@ -147750,7 +147784,7 @@ projects:
 
         dlit d0 0x5B2C 0xDB21
 
-        .word 0xF75E // dpack d14 d5
+        dpack d14 d5
 
         // Observation 0923: destination result; d14=4321BA98.
 
@@ -147785,7 +147819,7 @@ projects:
 
         dlit d0 0x5B2E 0x0F78
 
-        .word 0xF76F // dpack d15 d6
+        dpack d15 d6
 
         // Observation 0926: destination result; d15=4321BA98.
 
@@ -147820,7 +147854,7 @@ projects:
 
         dlit d1 0x5B29 0x43CF
 
-        .word 0xF700 // dpack d0 d0
+        dpack d0 d0
 
         // Observation 0929: destination result; d0=00000000.
 
@@ -147845,7 +147879,7 @@ projects:
 
         dlit d0 0x5B28 0x7826
 
-        .word 0xF711 // dpack d1 d1
+        dpack d1 d1
 
         // Observation 0931: destination result; d1=00010001.
 
@@ -147870,7 +147904,7 @@ projects:
 
         dlit d0 0x5B2B 0xAC7D
 
-        .word 0xF733 // dpack d3 d3
+        dpack d3 d3
 
         // Observation 0933: destination result; d3=00000000.
 
@@ -147895,7 +147929,7 @@ projects:
 
         dlit d0 0x5B2A 0xE0D4
 
-        .word 0xF777 // dpack d7 d7
+        dpack d7 d7
 
         // Observation 0935: destination result; d7=00000000.
 
@@ -147920,7 +147954,7 @@ projects:
 
         dlit d0 0x5B34 0x152B
 
-        .word 0xF788 // dpack d8 d8
+        dpack d8 d8
 
         // Observation 0937: destination result; d8=FFFFFFFF.
 
@@ -147945,7 +147979,7 @@ projects:
 
         dlit d0 0x5B37 0x4982
 
-        .word 0xF7CC // dpack d12 d12
+        dpack d12 d12
 
         // Observation 0939: destination result; d12=56785678.
 
@@ -147970,7 +148004,7 @@ projects:
 
         dlit d0 0x5B36 0x7DD9
 
-        .word 0xF7EE // dpack d14 d14
+        dpack d14 d14
 
         // Observation 0941: destination result; d14=55555555.
 
@@ -147995,7 +148029,7 @@ projects:
 
         dlit d0 0x5B31 0xB230
 
-        .word 0xF7FF // dpack d15 d15
+        dpack d15 d15
 
         // Observation 0943: destination result; d15=00010001.
 
@@ -148025,7 +148059,7 @@ projects:
 
         dlit d0 0x5B30 0xE687
 
-        .word 0xF4FE // dadd d14 d15
+        dadd d14 d15
 
         // Observation 0945: destination result; d14=00000000.
 
@@ -148058,7 +148092,7 @@ projects:
 
         dlit d0 0x5B32 0x1ADE
 
-        .word 0xF6FE // dmul d14 d15
+        dmul d14 d15
 
         // Observation 0948: destination result; d14=00000000.
 
@@ -148091,7 +148125,7 @@ projects:
 
         dlit d0 0x5B3D 0x4F35
 
-        .word 0xF2FE // dor d14 d15
+        dor d14 d15
 
         // Observation 0951: destination result; d14=12345678.
 
@@ -148124,7 +148158,7 @@ projects:
 
         dlit d0 0x5B3C 0x838C
 
-        .word 0xF3FE // dxor d14 d15
+        dxor d14 d15
 
         // Observation 0954: destination result; d14=00005678.
 
@@ -148157,7 +148191,7 @@ projects:
 
         dlit d0 0x5B3F 0xB7E3
 
-        .word 0xF7FE // dpack d14 d15
+        dpack d14 d15
 
         // Observation 0957: destination result; d14=00025678.
 
@@ -148190,7 +148224,7 @@ projects:
 
         dlit d0 0x5B3E 0xEC3A
 
-        .word 0xF5FE // dudiv d14 d15
+        dudiv d14 d15
 
         // Observation 0960: destination result; d14=00000002.
 
@@ -148223,7 +148257,7 @@ projects:
 
         dlit d0 0x5B38 0x2091
 
-        .word 0xF1FE // dand d14 d15
+        dand d14 d15
 
         // Observation 0963: destination result; d14=00000002.
 
@@ -148256,7 +148290,7 @@ projects:
 
         dlit d0 0x5B3B 0x54E8
 
-        .word 0xF0FE // dmov d14 d15
+        dmov d14 d15
 
         // Observation 0966: destination result; d14=80000001.
 
@@ -150288,7 +150322,7 @@ projects:
         unlink
 
         ret
-    lastSelectedDebuggerProgramName: 16-bit unary regression test
+    lastSelectedDebuggerProgramName: bitcnt regression test
     cDebuggerPrograms:
     - name: default
       source: >
