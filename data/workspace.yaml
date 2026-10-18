@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-17T22:04:59.4299325
-      utcDateTime: 2026-10-17T22:04:59.4299325Z
-      localDateTime: 2026-10-18T00:04:59.4299325+02:00
-      date: 2026-10-17T00:00:00.0000000
-      day: 17
-      dayOfWeek: Saturday
-      dayOfYear: 290
-      hour: 22
-      millisecond: 429
-      microsecond: 932
-      nanosecond: 500
-      minute: 4
+      dateTime: 2026-10-18T13:35:56.0336832
+      utcDateTime: 2026-10-18T13:35:56.0336832Z
+      localDateTime: 2026-10-18T15:35:56.0336832+02:00
+      date: 2026-10-18T00:00:00.0000000
+      day: 18
+      dayOfWeek: Sunday
+      dayOfYear: 291
+      hour: 13
+      millisecond: 33
+      microsecond: 683
+      nanosecond: 200
+      minute: 35
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 59
-      ticks: 639278714994299325
-      utcTicks: 639278714994299325
-      timeOfDay: 22:04:59.4299325
+      second: 56
+      ticks: 639279273560336832
+      utcTicks: 639279273560336832
+      timeOfDay: 13:35:56.0336832
       year: 2026
   portB: 
   portC:
@@ -68524,8 +68524,7 @@ projects:
         ( CVM_pipeline node 208.
 
 
-        instruction execution.
-
+        32-bit unary operations
 
 
         )
@@ -72622,52 +72621,85 @@ projects:
         # 0 org
 
 
-        : 'rpop // pop 16-bit value from the VM stack and stores it in a register VM( w - ) ( fp sp r - fp sp' )
+        : 'irpush // push register indirect on the VM stack. VM( - w )
           // size 2 with register.
-          A[ >r m/pop ]] ,
-          A[ r> m/r! ; ]] ,
+          A[ m/r@ ]] ,
+        : 'rpush // push register on the VM stack. VM( - w )
+          // size 1 with register.
+          A[ m/rpush ; ]] ,
 
-        : 'dpop // pop 32-bit value from the VM stack and stores it in a double register VM( hi lo - )
+        : 'irpop // pop register indirect from VM stack. VM( w - )
+          // size 2 with register.
+          A[ m/r@ ]] ,
+        : 'rpop // pop register from VM stack. VM( w - )
+          // size 1 with register.
+          A[ m/rpop ; ]] ,
+
+        : 'idpush // push double register indirect on the VM stack. VM( - hi lo )
+          // size 3 with register.
+          A[ m/r@ ]] ,
+        : 'dpush // push double register on the VM stack. VM( - hi lo )
+          // size 2 with register.
+          A[ m/d@ ]] ,
+          A[ m/dpush ; ]] ,
+
+        : 'idpop // pop double register indirect from the VM stack. VM( hi lo - )
+          // size 3 with register.
+          A[ m/r@ ]] ,
+        : 'dpop // pop double register from the VM stack. VM( hi lo - )
           // size 2 with register.
           A[ >r m/dpop ]] ,
           A[ r> m/d! ; ]] ,
 
-        : 'rpush // read 16-bit value from register and push it on the VM stack VM( - w )
-          // size 2 with register.
+        : 'idfetch // read the content of a memory cell pointed to by a 32-register indirect and push its value on the stack VM( - w )
+          // size 4 with register.
           A[ m/r@ ]] ,
-          A[ m/push ; ]] ,
-
         : 'dfetch // read the content of a memory cell pointed to by a 32-register and push its value on the stack VM( - w )
           // size 3 with register.
           A[ m/d@ ]] ,
           A[ m/read ]] ,
           A[ m/push ; ]] ,
 
-        : 'dstore // pop a value from the stack and write the content of a memory cell pointed to by a 32-register VM( w - )
+        : 'idstore // pop a value from the stack and write the content of a memory cell pointed to by a 32-register indirect, VM( w - )
+          // size 4 with register.
+          A[ m/r@ ]] ,
+        : 'dstore // pop a value from the stack and write the content of a memory cell pointed to by a 32-register. VM( w - )
           // size 3 with register.
           A[ >r m/pop ]] ,
           A[ r> m/d@ ]] ,
           A[ m/write ; ]] ,
 
-        : 'rlit // next 16-bit literal -> register
-          // size 2 with register. memory: opcode, value
+        : 'irlit // store next 16-bit literal to register indirect
+          // size 3 with register.
+          A[ m/r@ ]] ,
+        : 'rlit // store next 16-bit literal to register
+          // size 2 with register
           A[ >r m/next ]] ,
           A[ r> m/r! ; ]] ,
 
-        : 'dlit // next 32-bit literal -> double register
-          // size 2 with register. memory: opcode, lo, hi
+        : 'idlit // store next 32-bit literal to double register indirect. memory: opcode, lo, hi
+          // size 3 with register.
+          A[ m/r@ ]] ,
+        : 'dlit // store next 32-bit literal to double register. memory: opcode, lo, hi
+          // size 2 with register
           A[ >r m/dnext ]] ,
           A[ r> m/d! ; ]] ,
 
+        : 'irjmp // jump to address held in register indirect
+          // size 4 with register.
+          A[ m/r@ ]] ,
         : 'rjmp // jump to address held in register
-          // size 2 with register.
+          // size 3 with register.
           A[ m/r@ ]] ,
-          A[ m/jmp ; ]] ,
+          A[ @p ! ! ; ]] , A[ drop @p ]] ,
 
-        : 'rcall // call address held in register
-          // size 2 with register.
+        : 'ircall // call address held in register indirect
+          // size 4 with register.
           A[ m/r@ ]] ,
-          A[ m/calladdr ; ]] ,
+        : 'rcall // call address held in register
+          // size 3 with register.
+          A[ m/r@ ]] ,
+          A[ @p ! ! ; ]] , A[ @p mem/calladdr ]] ,
 
         : 'ldf // load register from mem[1: fp + offset]
           // size 4 with register.
@@ -72683,12 +72715,10 @@ projects:
           A[ @p m/write ; ]] ,
           # 1 ,
 
-        : 'dpush // read 32-bit value from double register and push it on the VM stack VM( - hi lo )
-          // size 2 with register.
-          A[ m/d@ ]] ,
-          A[ m/dpush ; ]] ,
-
-        : 'lea // rx = (fp + signed next-word offset) & 0xffff
+        : 'ilea // load effective address indirect. r[rx] = (fp + signed next-word offset) & 0xffff
+          // size 3 with register.
+          A[ m/r@ ]] ,
+        : 'lea // load effective address. rx = (fp + signed next-word offset) & 0xffff
           // size 2 with register.
           A[ m/fpnext ]] ,
           A[ m/r!x ; ]] ,
@@ -72696,49 +72726,49 @@ projects:
 
 
       ramWords:
-      - 0x2F60A
-      - 0x27717
-      - 0x2F609
-      - 0x2771A
-      - 0x13414
-      - 0x11426
-      - 0x13411
-      - 0x13431
-      - 0x11426
-      - 0x2F60A
-      - 0x27611
-      - 0x1142E
-      - 0x2F60D
-      - 0x27717
+      - 0x13418
+      - 0x11424
+      - 0x13418
+      - 0x11421
+      - 0x13418
+      - 0x13415
+      - 0x11429
+      - 0x13418
       - 0x2F60C
-      - 0x2771A
-      - 0x13414
-      - 0x11434
-      - 0x13414
+      - 0x2771E
+      - 0x13418
+      - 0x13415
+      - 0x1342F
       - 0x1142A
-      - 0x13422
-      - 0x05631
+      - 0x13418
+      - 0x2F60D
+      - 0x27615
+      - 0x1142C
+      - 0x13418
+      - 0x2F611
+      - 0x2771B
+      - 0x13418
+      - 0x2F610
+      - 0x2771E
+      - 0x13418
+      - 0x13418
+      - 0x05A2D
+      - 0x3BDB2
+      - 0x13418
+      - 0x13418
+      - 0x05A2D
+      - 0x05630
+      - 0x13426
+      - 0x0562F
       - 0x00001
-      - 0x1141C
-      - 0x13414
-      - 0x13422
-      - 0x0572E
+      - 0x11422
+      - 0x13418
+      - 0x13426
+      - 0x0572C
       - 0x00001
-      - 0x13411
-      - 0x11425
-      - 0x13422
-      - 0x1141C
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x13418
+      - 0x13426
+      - 0x11422
       - 0x15555
       - 0x15555
       - 0x15555
@@ -74251,10 +74281,18 @@ projects:
 
           2* -if // 101*
             2* -if // 1011*
-              A[ @p d1/inout ]] lit d/op ;
+              2* -if // 10111*
+                // I/O
+                A[ @p d1/inout ]] lit d/op ;
+              then
+
+              // 10110*
+              // direct
+              @b >r ;
 
             then // 1010*
 
+            // slit
             @b drop
             2* 2/ 2/ 2/ 2/ 2/ 2/ 0xffff and
             A[ @p m/push ; ]] lit !b !b
@@ -74274,7 +74312,6 @@ projects:
 
           // if
 
-
           d/cond@
           A[ m/next ]] lit !b
           if
@@ -74287,6 +74324,29 @@ projects:
           A[ drop ; ]] lit xor !b
         ;
 
+
+        /*
+
+        : d/next ( - w )
+          A[ m/next ]] lit !b
+          A[ ! ]] lit !b @b
+        ;
+
+
+        : d/rpushm ( fp mask - fp )
+          d/next
+          2*
+          15 for
+            2* -if
+              r> dup >r
+              m/r!
+              m/push
+            then
+          next
+          drop
+        ;
+
+        */
 
       ramWords:
       - 0x15555
@@ -74312,10 +74372,12 @@ projects:
       - 0x09F6F
       - 0x05708
       - 0x0560B
-      - 0x37222
-      - 0x3721B
+      - 0x37224
+      - 0x3721D
+      - 0x3721C
       - 0x05708
       - 0x05600
+      - 0x00855
       - 0x002DA
       - 0x307C2
       - 0x307C7
@@ -74323,19 +74385,17 @@ projects:
       - 0x3FD22
       - 0x05727
       - 0x09555
-      - 0x37226
+      - 0x37228
       - 0x1340D
       - 0x05B25
       - 0x05727
       - 0x1340D
-      - 0x05B63
+      - 0x05B65
       - 0x13411
       - 0x049B2
-      - 0x2A162
+      - 0x2A17A
       - 0x04325
       - 0x3B555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -74410,9 +74470,11 @@ projects:
 
         1010|iiii|iiii|iiii| 506  | slit { push 12-bit signed literal on stack }
 
-        1011|00ww|wwww|xxxx| 506  | input
+        1011|0000|00ww|wwww| 508  | 508 direct
 
-        1011|10ww|wwww|xxxx| 506  | output
+        1011|10ww|wwww|xxxx| 506  | input
+
+        1011|11ww|wwww|xxxx| 506  | output
 
         1100|00ww|wwww|xxxx| 506  | unary 16-bit operation {w = address in node 306}
 
@@ -74548,23 +74610,17 @@ projects:
         ;
 
 
+        : m/rpop ( r - )
+          m/pop
         : m/r!x ( r w - )
           over m/r! drop
         ;
 
 
-        /*
-
-        : m/sp@ ( - sp )
-          A[ over !p ]] lit ! @
+        : m/rpush ( r - )
+          m/r@
+          m/push
         ;
-
-
-        : m/sp! ( sp - )
-          A[ @p over ]] lit ! !
-        ;
-
-        */
 
 
         : m/fpnext   ( fp r - fp r addr )
@@ -74581,22 +74637,6 @@ projects:
         ;
 
 
-
-        : m/call ( - )
-          A[ mem/call ]] lit !
-        ;
-
-
-        : m/calladdr ( addr - )
-          A[ @p mem/calladdr ]] lit ! !
-        ;
-
-
-        : m/ret ( fp -  fp )
-          A[ mem/ret ]] lit !
-        ;
-
-
         : m/write ( w addr p - )
           A[ @p mem/write ]] lit !
           ! ! !
@@ -74609,20 +74649,8 @@ projects:
         ;
 
 
-        : m/jmp ( addr - )
-          A[ drop @p ]] lit !
-          !
-        ;
-
-
         : m/branch ( offset - )
           A[ @p mem/branch ]] lit !
-          !
-        ;
-
-
-        : m/adjust ( offset - )
-          A[ mem/adjust ]] lit !
           !
         ;
 
@@ -74633,8 +74661,33 @@ projects:
         ;
 
 
+        /*
+
+        : m/rpushm ( fp mask - fp )
+          2*
+          15 for
+            2* -if
+              r> dup >r
+              m/rpush
+            then
+          next
+          drop
+        ;
 
 
+        : m/rpopm ( fp mask - fp )
+          2*
+          15 for
+            2* -if
+              r> dup >r
+              15 xor
+              m/rpop
+            then
+          next
+          drop
+        ;
+
+        */
 
 
       ramWords:
@@ -74671,20 +74724,17 @@ projects:
       - 0x05BB2
       - 0x05635
       - 0x1141D
+      - 0x1340D
       - 0x2161B
       - 0x3B555
+      - 0x13418
+      - 0x1142A
       - 0x21611
       - 0x3DDFD
       - 0x0FFFF
-      - 0x13427
+      - 0x1342A
       - 0x05A2D
       - 0x05626
-      - 0x05A55
-      - 0x1342F
-      - 0x05A2D
-      - 0x05630
-      - 0x05A55
-      - 0x13433
       - 0x05A2A
       - 0x05622
       - 0x0BA55
@@ -74692,13 +74742,16 @@ projects:
       - 0x05624
       - 0x0BE55
       - 0x05A2D
-      - 0x3BDB2
-      - 0x05A2D
       - 0x05602
-      - 0x05A2D
-      - 0x13400
       - 0x25611
-      - 0x11424
+      - 0x11427
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
+      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -74851,7 +74904,7 @@ projects:
       - 0x27D22
       - 0x05615
       - 0x09D22
-      - 0x13432
+      - 0x1342F
       - 0x27D22
       - 0x0571B
       - 0x09555
@@ -74860,7 +74913,7 @@ projects:
       - 0x09B12
       - 0x05615
       - 0x09B12
-      - 0x1142F
+      - 0x1142C
       - 0x09555
       - 0x04812
       - 0x00014
@@ -74869,7 +74922,7 @@ projects:
       - 0x002DA
       - 0x307C2
       - 0x31D22
-      - 0x05737
+      - 0x05732
       - 0x09555
       - 0x37222
       - 0x01602
@@ -74948,17 +75001,17 @@ projects:
           A[ ; ]] ,
 
         : 'ret // return from call
-          // size 1 without register.
-          A[ m/ret ; ]] ,
+          // size 2 without register.
+          A[ @p ! ; ]] , A[ mem/ret ]] ,
 
         : 'call // call to address in next word
-          // size 1 without register.
-          A[ m/call ; ]] ,
+          // size 2 without register.
+          A[ @p ! ; ]] , A[ mem/call ]] ,
 
         : 'jmp // jump to address in next word
-          // size 2 without register.
+          // size 3 without register.
           A[ m/next ]] ,
-          A[ m/jmp ; ]] ,
+          A[ @p ! ! ; ]] , A[ drop @p ]] ,
 
         : 'link
           // size 2 without register.
@@ -75039,9 +75092,9 @@ projects:
           A[ @ m/push ; ]] ,
 
         : 'adjust // SP = (SP + signed next-word offset) & 0xffff
-          // size 2 without register.
+          // size 3 without register.
           A[ m/next ]] ,
-          A[ m/adjust ; ]] ,
+          A[ @p ! ! ; ]] , A[ mem/adjust ]] ,
 
         : 'pushfp // push mem[1:fp + signed next-word offset]
           // size 4 without register.
@@ -75060,58 +75113,58 @@ projects:
 
       ramWords:
       - 0x15555
-      - 0x1142D
-      - 0x11429
+      - 0x05A55
+      - 0x13433
+      - 0x05A55
+      - 0x1342F
       - 0x13411
-      - 0x11435
+      - 0x05A2D
+      - 0x3BDB2
       - 0x13411
       - 0x11407
       - 0x1140A
       - 0x13410
-      - 0x11426
+      - 0x11429
       - 0x13411
-      - 0x11427
+      - 0x1142A
       - 0x1340C
-      - 0x11421
+      - 0x11422
       - 0x1340D
       - 0x2F60C
       - 0x2771E
       - 0x1340D
       - 0x13418
-      - 0x11427
+      - 0x1142A
       - 0x1340D
       - 0x13415
-      - 0x11426
+      - 0x11429
       - 0x05A55
       - 0x13411
       - 0x1340D
       - 0x3B555
       - 0x1340D
       - 0x249B2
-      - 0x2F627
-      - 0x27727
+      - 0x2F62A
+      - 0x2772A
       - 0x1140D
-      - 0x25727
+      - 0x2572A
       - 0x1340D
       - 0x05A2D
       - 0x04FB2
       - 0x05AB2
       - 0x21AB2
-      - 0x03727
+      - 0x0372A
       - 0x13411
-      - 0x11439
-      - 0x1343B
-      - 0x05632
+      - 0x05A2D
+      - 0x13400
+      - 0x13434
+      - 0x0562F
       - 0x00001
-      - 0x11427
+      - 0x1142A
       - 0x1340D
-      - 0x13423
-      - 0x0572F
+      - 0x13426
+      - 0x0572C
       - 0x00001
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -149142,23 +149195,17 @@ projects:
 
         // Double-literal source operands: hi, lo.
 
-        // Assembler must emit their memory operands: lo, hi.
+        // Assembler emits memory operands: lo, hi.
 
         //
 
         // rpush/drop exposes one expected 16-bit value.
 
-        // dpush/drop/drop exposes lo first, then hi on the READ trace.
+        // dpush/drop/drop exposes lo first, then hi.
 
         //
 
-        // Arithmetic opcodes are emitted explicitly below so their
-
-        // expected encodings are visible alongside the operation.
-
-        //
-
-        // Not yet assembled or hardware-tested.
+        // This revised test has not yet been assembled or run.
 
 
         // ------------------------------------------------------------
@@ -149265,10 +149312,6 @@ projects:
 
         // rlit, if, cond.
 
-        // Raw selectors: ==0 = 0, !=0 = 4.
-
-        // Each if offset is relative to PC after reading its offset.
-
         // ------------------------------------------------------------
 
 
@@ -149276,11 +149319,12 @@ projects:
 
         rlit r1 0x1111
 
-        .word 0x8000
-
-        .word 2
+        if r0 ==0 if_taken
 
         rlit r1 0xDEAD
+
+
+        if_taken:
 
         rpush r1
 
@@ -149293,11 +149337,12 @@ projects:
 
         rlit r1 0x1111
 
-        .word 0x8000
-
-        .word 2
+        if r0 ==0 if_not_taken
 
         rlit r1 0x2222
+
+
+        if_not_taken:
 
         rpush r1
 
@@ -149306,7 +149351,7 @@ projects:
         // Untaken ==0: expect 2222.
 
 
-        .word 0x9000
+        cond r0 ==0
 
         rpop r1
 
@@ -149314,10 +149359,10 @@ projects:
 
         drop
 
-        // cond ==0 r0: expect 0000.
+        // Expect 0000.
 
 
-        .word 0x9040
+        cond r0 !=0
 
         rpop r1
 
@@ -149325,7 +149370,50 @@ projects:
 
         drop
 
-        // cond !=0 r0: expect 0001.
+        // Expect 0001.
+
+
+        // irpop, irpush: r5 holds the target register index.
+
+        rlit r5 6
+
+        push 0xBEEF
+
+        irpop r5
+
+
+        irpush r5
+
+        rpop r0
+
+        rpush r0
+
+        drop
+
+        // Expect BEEF.
+
+
+        // idpop, idpush: r5 holds the target double-register index.
+
+        rlit r5 3
+
+        push2 0x1357 0x2468
+
+        idpop r5
+
+
+        idpush r5
+
+        dpop d4
+
+        dpush d4
+
+        drop
+
+        drop
+
+        // READ sequence: 2468, 1357.
+
 
 
         // ------------------------------------------------------------
@@ -149359,69 +149447,6 @@ projects:
         // READ sequence: DEF0, 9ABC.
 
 
-        // ------------------------------------------------------------
-
-        // rpopi, rpushi.
-
-        // ------------------------------------------------------------
-
-
-        push 0xBEEF
-
-        push 6
-
-        rpopi
-
-
-        push 6
-
-        rpushi
-
-        rpop r0
-
-        rpush r0
-
-        drop
-
-        // Expect BEEF.
-
-
-        // ------------------------------------------------------------
-
-        // dpopi, dpushi.
-
-        // ------------------------------------------------------------
-
-
-        push2 0x1357 0x2468
-
-        push 3
-
-        dpopi
-
-
-        push 3
-
-        dpushi
-
-        dpop d4
-
-        dpush d4
-
-        drop
-
-        drop
-
-        // READ sequence: 2468, 1357.
-
-
-        // ------------------------------------------------------------
-
-        // link, unlink, ldf, stf.
-
-        // ------------------------------------------------------------
-
-
         link -4
 
         // FP = FFFE, SP = FFFA.
@@ -149445,7 +149470,7 @@ projects:
 
         // WRITE/READ 1:FFFD = A55A.
 
-        // Both inspection values: A55A.
+        // Inspection values: A55A, A55A.
 
 
         rlit r0 0x2468
@@ -149467,6 +149492,7 @@ projects:
 
         // FP = FFF9, SP = FFF7.
 
+
         rlit r0 0xBEEF
 
         stf r0 -1
@@ -149481,6 +149507,7 @@ projects:
 
         // Inspection value: BEEF.
 
+
         unlink
 
 
@@ -149491,6 +149518,7 @@ projects:
         drop
 
         // Outer local remains A55A.
+
 
         unlink
 
@@ -149617,23 +149645,21 @@ projects:
 
         // rstore, rload.
 
-        // Direct handler addresses: rload = 0, rstore = 7.
-
         // ------------------------------------------------------------
 
 
         rlit r6 0xBEEF
 
-        .word 0x2776
+        rstore r6 d7
 
-        // rstore r6, d7: WRITE 2:0100 <- BEEF.
+        // WRITE 2:0100 <- BEEF.
 
 
         rlit r6 0
 
-        .word 0x2076
+        rload r6 d7
 
-        // rload r6, d7: READ 2:0100 -> BEEF.
+        // READ 2:0100 -> BEEF.
 
 
         rpush r6
@@ -149656,9 +149682,8 @@ projects:
 
         rlit r1 0x00FF
 
-        .word 0xD010
 
-        // or r0, r1
+        or r0 r1
 
         rpush r0
 
@@ -149667,9 +149692,7 @@ projects:
         // Expect 12FF.
 
 
-        .word 0xD210
-
-        // and r0, r1
+        and r0 r1
 
         rpush r0
 
@@ -149678,9 +149701,7 @@ projects:
         // Expect 00FF.
 
 
-        .word 0xD310
-
-        // xor r0, r1
+        xor r0 r1
 
         rpush r0
 
@@ -149689,9 +149710,7 @@ projects:
         // Expect 0000.
 
 
-        .word 0xD410
-
-        // sub r0, r1
+        sub r0 r1
 
         rpush r0
 
@@ -149700,9 +149719,7 @@ projects:
         // Expect FF01.
 
 
-        .word 0xD610
-
-        // add r0, r1
+        add r0 r1
 
         rpush r0
 
@@ -149711,9 +149728,7 @@ projects:
         // Expect 0000.
 
 
-        .word 0xD710
-
-        // mov r0, r1
+        mov r0 r1
 
         rpush r0
 
@@ -149726,9 +149741,7 @@ projects:
 
         rlit r1 0xABCD
 
-        .word 0xD810
-
-        // packbytes r0, r1
+        packbytes r0 r1
 
         rpush r0
 
@@ -149753,9 +149766,7 @@ projects:
 
         rlit r0 0x8001
 
-        .word 0xC030
-
-        // div2
+        div2 r0
 
         rpush r0
 
@@ -149764,9 +149775,7 @@ projects:
         // Expect C000.
 
 
-        .word 0xC050
-
-        // inv
+        inv r0
 
         rpush r0
 
@@ -149775,9 +149784,7 @@ projects:
         // Expect 3FFF.
 
 
-        .word 0xC060
-
-        // neg
+        neg r0
 
         rpush r0
 
@@ -149786,9 +149793,7 @@ projects:
         // Expect C001.
 
 
-        .word 0xC070
-
-        // inc
+        inc r0
 
         rpush r0
 
@@ -149797,9 +149802,7 @@ projects:
         // Expect C002.
 
 
-        .word 0xC090
-
-        // dec
+        dec r0
 
         rpush r0
 
@@ -149808,9 +149811,7 @@ projects:
         // Expect C001.
 
 
-        .word 0xC0B0
-
-        // mul2
+        mul2 r0
 
         rpush r0
 
@@ -149819,9 +149820,7 @@ projects:
         // Expect 8002.
 
 
-        .word 0xC0C0
-
-        // udiv2
+        udiv2 r0
 
         rpush r0
 
@@ -149832,9 +149831,7 @@ projects:
 
         rlit r0 0xFFFF
 
-        .word 0xC0D0
-
-        // mask15
+        mask15 r0
 
         rpush r0
 
@@ -149843,9 +149840,7 @@ projects:
         // Expect 7FFF.
 
 
-        .word 0xC0F0
-
-        // inv15
+        inv15 r0
 
         rpush r0
 
@@ -149854,9 +149849,7 @@ projects:
         // Expect FFFF.
 
 
-        .word 0xC110
-
-        // abs
+        abs r0
 
         rpush r0
 
@@ -149865,9 +149858,7 @@ projects:
         // Expect 0001.
 
 
-        .word 0xC150
-
-        // bool
+        bool r0
 
         rpush r0
 
@@ -149878,9 +149869,7 @@ projects:
 
         rlit r0 0x1234
 
-        .word 0xC190
-
-        // clearlow
+        clearlow r0
 
         rpush r0
 
@@ -149889,9 +149878,7 @@ projects:
         // Expect 1230.
 
 
-        .word 0xC1C0
-
-        // lowbit
+        lowbit r0
 
         rpush r0
 
@@ -149902,9 +149889,7 @@ projects:
 
         rlit r0 0xFFFF
 
-        .word 0xC1F0
-
-        // bitcnt
+        bitcnt r0
 
         rpush r0
 
@@ -149915,9 +149900,7 @@ projects:
 
         rlit r0 0xABCD
 
-        .word 0xC270
-
-        // highbyte
+        highbyte r0
 
         rpush r0
 
@@ -149928,9 +149911,7 @@ projects:
 
         rlit r0 0xABCD
 
-        .word 0xC2A0
-
-        // lowbyte
+        lowbyte r0
 
         rpush r0
 
@@ -149941,9 +149922,7 @@ projects:
 
         rlit r0 0xABCD
 
-        .word 0xC2C0
-
-        // byteswap
+        byteswap r0
 
         rpush r0
 
@@ -149984,80 +149963,80 @@ projects:
         dlit d1 0x4000 0x0000
 
 
-        .word 0xF810
-
-        // fadd: 1.5 + 2.0 = 3.5.
+        fadd d0 d1
 
         dpush d0
 
         drop
 
         drop
+
+        // 1.5 + 2.0 = 3.5.
 
         // READ sequence: 0000, 4060.
 
 
-        .word 0xF910
-
-        // fsub: 3.5 - 2.0 = 1.5.
+        fsub d0 d1
 
         dpush d0
 
         drop
 
         drop
+
+        // 3.5 - 2.0 = 1.5.
 
         // READ sequence: 0000, 3FC0.
 
 
-        .word 0xFA10
-
-        // fmin: min(1.5, 2.0) = 1.5.
+        fmin d0 d1
 
         dpush d0
 
         drop
 
         drop
+
+        // min(1.5, 2.0) = 1.5.
 
         // READ sequence: 0000, 3FC0.
 
 
-        .word 0xFB10
-
-        // fmax: max(1.5, 2.0) = 2.0.
+        fmax d0 d1
 
         dpush d0
 
         drop
 
         drop
+
+        // max(1.5, 2.0) = 2.0.
 
         // READ sequence: 0000, 4000.
 
 
-        .word 0xFC10
-
-        // fmul: 2.0 * 2.0 = 4.0.
+        fmul d0 d1
 
         dpush d0
 
         drop
 
         drop
+
+        // 2.0 * 2.0 = 4.0.
 
         // READ sequence: 0000, 4080.
 
 
-        .word 0xFD10
-
-        // fdiv: 4.0 / 2.0 = 2.0.
+        fdiv d0 d1
 
         dpush d0
 
         drop
 
         drop
+
+        // 4.0 / 2.0 = 2.0.
 
         // READ sequence: 0000, 4000.
 
@@ -150080,9 +150059,7 @@ projects:
 
         dlit d0 0x1234 0x5678
 
-        .word 0xE100
-
-        // dinv
+        dinv d0
 
         dpush d0
 
@@ -150095,9 +150072,7 @@ projects:
 
         dlit d0 0xFFFF 0xFFFE
 
-        .word 0xE110
-
-        // dabs
+        dabs d0
 
         dpush d0
 
@@ -150110,9 +150085,7 @@ projects:
 
         dlit d0 0x1234 0x5678
 
-        .word 0xE160
-
-        // dlow16
+        dlow16 d0
 
         dpush d0
 
@@ -150125,9 +150098,7 @@ projects:
 
         dlit d0 0x1234 0x5678
 
-        .word 0xE150
-
-        // dhigh16
+        dhigh16 d0
 
         dpush d0
 
@@ -150140,9 +150111,7 @@ projects:
 
         dlit d0 0x0000 0xFFFF
 
-        .word 0xE170
-
-        // dinc
+        dinc d0
 
         dpush d0
 
@@ -150153,9 +150122,7 @@ projects:
         // READ sequence: 0000, 0001.
 
 
-        .word 0xE1E0
-
-        // ddec
+        ddec d0
 
         dpush d0
 
@@ -150168,9 +150135,7 @@ projects:
 
         dlit d0 0x1234 0x5678
 
-        .word 0xE230
-
-        // dswap
+        dswap d0
 
         dpush d0
 
@@ -150183,9 +150148,7 @@ projects:
 
         dlit d0 0x0000 0x0001
 
-        .word 0xE250
-
-        // dneg
+        dneg d0
 
         dpush d0
 
@@ -150198,9 +150161,7 @@ projects:
 
         dlit d0 0x0000 0x8000
 
-        .word 0xE2C0
-
-        // dmul2
+        dmul2 d0
 
         dpush d0
 
@@ -150213,9 +150174,7 @@ projects:
 
         dlit d0 0x8000 0x0001
 
-        .word 0xE320
-
-        // ddiv2
+        ddiv2 d0
 
         dpush d0
 
@@ -150228,9 +150187,7 @@ projects:
 
         dlit d0 0x8000 0x0001
 
-        .word 0xE350
-
-        // dudiv2
+        dudiv2 d0
 
         dpush d0
 
@@ -150331,7 +150288,7 @@ projects:
         unlink
 
         ret
-    lastSelectedDebuggerProgramName: microcode regression test
+    lastSelectedDebuggerProgramName: 16-bit unary regression test
     cDebuggerPrograms:
     - name: default
       source: >

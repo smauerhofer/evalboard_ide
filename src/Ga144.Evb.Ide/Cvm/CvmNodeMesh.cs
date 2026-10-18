@@ -72,7 +72,10 @@ namespace Ga144.Evb.Ide.Cvm;
 /// own no-session disassembly showed no mnemonic at all for 0xE424 -- the same "opcode's own node
 /// isn't in THIS list" gap 508/509 hit before they were added here, not a CvmAssemblyLanguage/
 /// CvmInstructionSet bug (their round-trip already verified clean against a compile that DOES
-/// include node 406 -- see CvmInstructionSet.AddConstantMnemonic's own remarks). Listed last since it
+/// include node 406 -- see <c>CvmInstructionSet</c>'s own node-406 ALU-family remarks, where the
+/// "addi"/<c>AddConstantMnemonic</c> mnemonic itself was DELETED OUTRIGHT 2026-10-18, per Stefan's own
+/// explicit request to remove a large batch of old C# mnemonic constants; this historical note about
+/// the gap it once hit is kept as-is). Listed last since it
 /// imports node 407's own exports ('# 407 import'), same "parent before child, CompileNode resolves
 /// the import regardless of list order" note as 508/509 above.
 ///
@@ -256,6 +259,17 @@ public static class CvmNodeMesh
     // Node 206 also hosts x2c/float32 (the float32-binary relay, already part of the mesh via node
     // 305's own x2a/float32 -- unaffected by this addition, no NodeSymbolByMnemonic entry of its own).
     206,
+    // ADDED 2026-10-18, per Stefan directly ("unary 32-bit opcodes are defined in node 208 and not
+    // 308:"), pasting node 208's full source for the first time. The eleven 'dinv/'dabs/'dlow16/
+    // 'dhigh16/'dinc/'ddec/'dswap/'dneg/'dmul2/'ddiv2/'dudiv2 mnemonics (see
+    // CvmAssemblyLanguage.Node308UnaryInt32OperationTagBits's own remarks for the full correction -- this
+    // family was originally, incorrectly, wired against node 308) are node-resolved against this
+    // coordinate's live compile, same as node 206's own entry just above: it must be in THIS list or
+    // Assemble reports them as "did not compile (or wasn't included) this run" even though node 208
+    // compiles fine on its own in the Node Editor. Bare int literal, not a NodeXxxProgram.Coordinate
+    // reference, same reasoning as node 206's own entry (no Cvm/Node208Program.cs reference-copy file
+    // exists for it).
+    208,
     102, // 102, special step 4 (MUL/DIV special-case resolution).
     103, // 103, special step 3 (ADD/SUB special-case handling; MUL/DIV delegated to 102).
     104, // 104, special step 1 (special operation dispatcher).

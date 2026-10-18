@@ -126,7 +126,7 @@ namespace Ga144.Cvm.Toolchain;
 /// mnemonics, once node 306's six address-register ops (<c>arinc</c>/<c>ardec</c>/<c>arld</c>/<c>arst</c>/
 /// <c>lda</c>/<c>sta</c>) were re-tasked onto this exact shape (per Stefan's own follow-up, "there is
 /// more than 1 address register. change the assembler to reflect that" -- see
-/// <see cref="CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic"/>'s own remarks). The missing
+/// <c>ArithmeticStoreAddressRegisterMnemonic</c>'s own remarks). The missing
 /// piece the paragraph above described -- "no way to express a second, per-instance operand value" on a
 /// relocation -- is now solved by <see cref="CvmRelocation.EmbeddedValue"/>: the register-index operand
 /// is a literal the assembler already knows in full at assemble time (unlike the symbol's own resolved
@@ -162,7 +162,7 @@ namespace Ga144.Cvm.Toolchain;
 /// (<see cref="CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTrailingWord"/>, a new encoding added
 /// specifically for it) are real <see cref="CvmInstructionSet.Instructions"/> entries; <c>call</c> itself
 /// is a pure pseudo-mnemonic, exactly like <c>literal</c> above, that lowers to whichever of the two fits
-/// (see <see cref="CvmInstructionSet.ShortCallMnemonic"/>'s own class-level remarks for the full
+/// (see <c>ShortCallMnemonic</c>'s own class-level remarks for the full
 /// derivation and the "a label/import operand always means lcall" restriction this class's own two-pass
 /// layout forces on it).
 /// </summary>
@@ -254,15 +254,17 @@ public static class CvmAssembler
           // "literal" (2026-09-27, per Stefan: "change opcode 'literal' so that it uses 'lit' when the
           // constant fits and 'litr' if the constant is too big for 'lit'") -- a pure assembler-level
           // pseudo-mnemonic, not a real CvmInstructionSet.Instructions entry, so it needs its own case
-          // here rather than falling into the generic tagged-mnemonic default below. Unlike every other
-          // mnemonic in THIS pass (word length fixed by mnemonic alone, per this class's own remarks),
-          // "literal"'s word count depends on the operand's VALUE -- 1 word ("lit") if it fits, 2
-          // ("litr"'s tag word plus its own trailing operand word) otherwise -- so the value must be
-          // known here, in pass 1, same as ".word"'s own already-variable-length case just above. Only a
-          // plain numeric literal is supported, same restriction as "lit" itself (see that mnemonic's
-          // own remarks): a label's real address isn't resolved until a separate, later link step this
-          // assembler doesn't run itself, so there would be no way to know here which of "lit"/"litr" a
-          // label operand needs.
+          // here rather than falling into the generic tagged-mnemonic default below. Only a plain numeric
+          // literal is supported, same restriction as "lit" itself (see that mnemonic's own remarks): a
+          // label's real address isn't resolved until a separate, later link step this assembler doesn't
+          // run itself, so there would be no way to know here whether it fits "lit"'s own embedded range.
+          //
+          // DELETED OUTRIGHT 2026-10-18, per Stefan's own explicit request to remove a large batch of old
+          // C# mnemonic constants: "litr" (CvmInstructionSet.LitrMnemonic) is gone, so the "2 words,
+          // litr's tag word plus its own trailing operand word" fallback this case used to size/emit for
+          // an out-of-range value no longer exists -- "literal" now only supports values that fit "lit"
+          // directly; a value too big for "lit" is a hard error here in pass 1, same as this method's own
+          // "lit"-retired-entirely guard just below.
           if (line.Args.Count != 1)
           {
             errors.Add($"line {line.LineNumber}: \"literal\" requires exactly one operand, e.g. \"literal 1234\".");
@@ -271,22 +273,27 @@ public static class CvmAssembler
 
           if (!TryParseSignedNumericLiteral(line.Args[0], out int literalPass1Value))
           {
-            errors.Add($"line {line.LineNumber}: \"literal\" does not support a label operand -- its word count depends on the value, which must be known at assemble time; supply a literal number instead, or use \"litr\" directly for a label's own address.");
+            errors.Add($"line {line.LineNumber}: \"literal\" does not support a label operand -- its word count depends on the value, which must be known at assemble time; supply a literal number instead.");
             break;
           }
 
-          // ADDED 2026-09-30: "lit"/"litr" were both retired in the new VM's reset (see
-          // CvmInstructionSet.Instructions' own remarks at the top of its list) -- "literal" has nothing
-          // left to lower to. Checked here, in pass 1, before FitsLitRange even runs (see that method's
-          // own guard, which returns false rather than crashing for the same reason) so this fails with
-          // one clear, specific message instead of reaching pass 2's own litr-fallback crash.
+          // ADDED 2026-09-30: "lit" was retired in the new VM's reset at the time (see
+          // CvmInstructionSet.Instructions' own remarks at the top of its list) -- "literal" would have
+          // had nothing left to lower to. "lit" is live again now, so this guard is dormant in practice,
+          // but kept as a defensive check against a future retirement the same way.
           if (CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic) is null)
           {
-            errors.Add($"line {line.LineNumber}: \"literal\" is not supported -- \"lit\"/\"litr\" were both retired in the new VM's 2026-09-30 reset (see CvmInstructionSet.Instructions' own remarks); \"nop\" is the only valid opcode right now.");
+            errors.Add($"line {line.LineNumber}: \"literal\" is not supported -- \"lit\" is not currently a known opcode.");
             break;
           }
 
-          sectionCursors[section] += FitsLitRange(literalPass1Value) ? 1 : 2;
+          if (!FitsLitRange(literalPass1Value))
+          {
+            errors.Add($"line {line.LineNumber}: \"literal\" value {literalPass1Value} does not fit \"lit\"'s own embedded range -- the \"litr\" large-literal fallback was removed 2026-10-18, so only values \"lit\" can hold directly are supported now.");
+            break;
+          }
+
+          sectionCursors[section] += 1;
           break;
 
         // case "call": -- RETIRED as an assembler-level pseudo-mnemonic 2026-10-03 (CVM redesign). It used
@@ -422,11 +429,13 @@ public static class CvmAssembler
           // The typed order is hi-then-lo again as of 2026-10-16 (same text Stefan would have written on
           // 2026-10-04) -- what changed that day is which one gets WRITTEN first; see pass 2's own
           // "DoubleLiteralMnemonic" branch for the emission-order fix and its full history.
-          if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
+          // JOINED 2026-10-18 by idlit (CvmInstructionSet.IndirectDoubleLiteralMnemonic) -- same
+          // two-or-three-operand shape, see that constant's own remarks.
+          if (shape.Mnemonic is CvmInstructionSet.DoubleLiteralMnemonic or CvmInstructionSet.IndirectDoubleLiteralMnemonic)
           {
             if (line.Args.Count is not (2 or 3))
             {
-              errors.Add($"line {line.LineNumber}: \"dlit\" takes a register and one 32-bit operand (\"dlit d1 0x12345678\") or two 16-bit operands, hi then lo (\"dlit d1 0x1234 0x5678\").");
+              errors.Add($"line {line.LineNumber}: \"{shape.Mnemonic}\" takes a register and one 32-bit operand (\"{shape.Mnemonic} d1 0x12345678\") or two 16-bit operands, hi then lo (\"{shape.Mnemonic} d1 0x1234 0x5678\").");
               break;
             }
 
@@ -505,7 +514,9 @@ public static class CvmAssembler
           // CvmInstructionSet.RegisterLiteralMnemonic" branch there, now joined by ldf/stf).
           // JOINED 2026-10-17 by lea (CvmInstructionSet.LeaMnemonic) -- exact same two-operand shape
           // (register, signed frame offset), see that constant's own remarks.
-          if (shape.Mnemonic is CvmInstructionSet.LoadFrameMnemonic or CvmInstructionSet.StoreFrameMnemonic or CvmInstructionSet.LeaMnemonic)
+          // JOINED 2026-10-18 by ilea (CvmInstructionSet.IndirectLeaMnemonic) -- identical shape, see that
+          // constant's own remarks.
+          if (shape.Mnemonic is CvmInstructionSet.LoadFrameMnemonic or CvmInstructionSet.StoreFrameMnemonic or CvmInstructionSet.LeaMnemonic or CvmInstructionSet.IndirectLeaMnemonic)
           {
             if (line.Args.Count != 2)
             {
@@ -519,7 +530,12 @@ public static class CvmAssembler
 
           // ADDED 2026-10-04: rlit/dlit take TWO operands (register, literal) although their shape is
           // NodeResolvedEmbeddedValue: "rlit r1, 0x1234", "dlit d1, 0x12345678".
-          bool isRegisterLiteral = shape.Mnemonic is CvmInstructionSet.RegisterLiteralMnemonic or CvmInstructionSet.DoubleLiteralMnemonic;
+          // JOINED 2026-10-18 by irlit/idlit (CvmInstructionSet.IndirectRegisterLiteralMnemonic/
+          // IndirectDoubleLiteralMnemonic) -- dlit/idlit are already intercepted above (their own 2-or-3
+          // branch), so only irlit actually reaches this boolean in practice; idlit stays listed here too,
+          // same as dlit, for consistency with that existing (redundant but harmless) precedent.
+          bool isRegisterLiteral = shape.Mnemonic is CvmInstructionSet.RegisterLiteralMnemonic or CvmInstructionSet.DoubleLiteralMnemonic
+              or CvmInstructionSet.IndirectRegisterLiteralMnemonic or CvmInstructionSet.IndirectDoubleLiteralMnemonic;
           int requiredArgCount = isRegisterLiteral || CvmInstructionSet.IsBinaryRegisterOperation(shape) || shape.Encoding is CvmInstructionSet.CvmOperandEncoding.EmbeddedUnsignedValuePair or CvmInstructionSet.CvmOperandEncoding.TwoTrailingWords or CvmInstructionSet.CvmOperandEncoding.FixedOpcodeWithTwoTrailingWords ? 2 : shape.HasOperand ? 1 : 0;
           if (line.Args.Count != requiredArgCount)
           {
@@ -611,40 +627,21 @@ public static class CvmAssembler
 
         case "literal":
           {
-            // See this method's own pass-1 remarks on "literal" -- pass 1 already validated the arg count
-            // and that the operand parses as a plain literal (never a label), so both are re-parsed here,
-            // not re-validated. "literal" has no CvmInstructionSet.Instructions entry of its own, so
-            // neither "lit"'s self-describing word nor "litr"'s placeholder-plus-relocation is reached via
-            // the generic default case below -- both are written out directly here instead. The "!" below
-            // is safe by the same invariant the generic default case's own pass-1/pass-2 split already
-            // relies on (see this method's own class-level remarks): pass 2 only ever runs once pass 1 has
-            // found zero errors across every line, and pass 1's own "literal" case (above) now guards
-            // against "lit" being retired (ADDED 2026-09-30) before this point is ever reached.
+            // See this method's own pass-1 remarks on "literal" -- pass 1 already validated the arg count,
+            // that the operand parses as a plain literal (never a label), and that it fits "lit"'s own
+            // embedded range (the "litr" large-literal fallback that used to live here was DELETED
+            // OUTRIGHT 2026-10-18, see pass 1's own remarks), so none of that is re-validated here. "lit"'s
+            // self-describing word is written out directly rather than reached via the generic default
+            // case below, since "literal" has no CvmInstructionSet.Instructions entry of its own. The "!"
+            // below is safe by the same invariant the generic default case's own pass-1/pass-2 split
+            // already relies on (see this method's own class-level remarks): pass 2 only ever runs once
+            // pass 1 has found zero errors across every line, and pass 1's own "literal" case (above) now
+            // guards both against "lit" being retired and against an out-of-range value before this point
+            // is ever reached.
             TryParseSignedNumericLiteral(line.Args[0], out int literalValue);
             CvmInstructionSet.CvmInstructionShape litShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitMnemonic)!;
             CvmSection literalSection = objectFile.GetOrAddSection(section);
-            if (FitsLitRange(literalValue))
-            {
-              literalSection.Words.Add(litShape.Tag | (literalValue & litShape.ValueBitMask));
-              break;
-            }
-
-            // Too big for "lit" -- fall back to "litr": the exact same placeholder-word-plus-CvmOpcode-
-            // relocation-plus-trailing-operand-word shape the generic TrailingWord branch below emits for
-            // any other node-resolved mnemonic, just written out directly since "literal" bypasses that
-            // generic dispatch entirely.
-            CvmInstructionSet.CvmInstructionShape litrShape = CvmInstructionSet.TryGetShape(CvmInstructionSet.LitrMnemonic)!;
-            int litrOpcodeOffset = literalSection.Words.Count;
-            literalSection.Words.Add(0x8000 | litrShape.Id);
-            externalSymbols.Add(litrShape.Mnemonic);
-            objectFile.Relocations.Add(new CvmRelocation
-            {
-              SectionName = section,
-              WordOffset = litrOpcodeOffset,
-              SymbolName = litrShape.Mnemonic,
-              Type = CvmRelocationType.CvmOpcode,
-            });
-            literalSection.Words.Add(literalValue & CvmWordCodec.WordMask);
+            literalSection.Words.Add(litShape.Tag | (literalValue & litShape.ValueBitMask));
             break;
           }
 
@@ -986,13 +983,13 @@ public static class CvmAssembler
             // that happens to resolve to address 0 only once CvmLinker runs is NOT (yet) caught anywhere --
             // a pre-existing gap in this relocation's own range checking (the same gap CVM2's OLD call
             // always had for its own 15-bit range), not something newly introduced here.
-            if (string.Equals(shape.Mnemonic, CvmInstructionSet.ShortCallMnemonic, StringComparison.Ordinal) &&
-                TryParseNumericLiteral(line.Args[0], out int scallLiteralValue) && scallLiteralValue == 0)
-            {
-              errors.Add($"line {line.LineNumber}: \"scall 0\" does not exist -- address 0 is reserved for \"nop\" (the word scall would produce, 0x0000, is identical to nop's own); use \"lcall 0\" instead.");
-              break;
-            }
-
+            //
+            // The "scall 0" special case that used to live here (CvmInstructionSet.ShortCallMnemonic) was
+            // DELETED OUTRIGHT 2026-10-18, per Stefan's own explicit request to remove a large batch of
+            // old C# mnemonic constants -- "scall" no longer has a live Instructions row at all, so
+            // shape.Mnemonic can never actually be "scall" here any more. The rest of this EmbeddedAddress
+            // branch is kept as general-purpose infrastructure for any future mnemonic using the same
+            // encoding.
             EmitOperandWord(
                 objectFile, section, line.Args[0], line.LineNumber, labelOffsets, imported, externalSymbols, errors,
                 maxValue: shape.ValueBitMask,
@@ -1045,15 +1042,14 @@ public static class CvmAssembler
             //
             // JOINED 2026-10-02 by "sbr" (the "CVM_pipeline" table's own short, relative branch, Id
             // 194 -- CvmInstructionSet.ShortBranchMnemonic): br/cbr (the names this check originally
-            // listed) are CVM2's OLD, now fully-retired mnemonics -- neither has a live Instructions row
-            // any more, so this check can no longer actually match either of them; it is kept, unedited,
-            // as the historical record, with sbr added alongside rather than replacing it. Allowing sbr a
-            // label operand is a reasonable, low-risk extension of the SAME convention (not asserted by
-            // Stefan in so many words): the table itself calls sbr's own row "relative", the same word
-            // used for br/cbr's own relative-offset behavior above, and sbr's own ValueBitMask/shift are
-            // otherwise identical in spirit (a signed offset packed into the low bits of a self-describing
-            // word) -- flagged here rather than silently assumed elsewhere.
-            bool supportsRelativeLabel = shape.Mnemonic is CvmInstructionSet.BranchMnemonic or CvmInstructionSet.ConditionalBranchMnemonic or CvmInstructionSet.ShortBranchMnemonic;
+            // listed) were CVM2's OLD, fully-retired mnemonics -- neither had a live Instructions row
+            // any more, so this check could no longer actually match either of them.
+            //
+            // DELETED OUTRIGHT 2026-10-18, per Stefan's own explicit request to remove a large batch of
+            // old C# mnemonic constants: ConditionalBranchMnemonic ("cbr") and ShortBranchMnemonic
+            // ("sbr") are both gone now (see CvmInstructionSet.cs's own class-level remarks for the full
+            // batch). Only "br" (BranchMnemonic) is left as a real, live mnemonic reaching this branch.
+            bool supportsRelativeLabel = shape.Mnemonic is CvmInstructionSet.BranchMnemonic;
             EmitEmbeddedSignedValue(codeSection, shape, line.Args[0], line.LineNumber, codeSection.Words.Count, supportsRelativeLabel, labelOffsets, section, imported, errors);
             break;
           }
@@ -1188,13 +1184,15 @@ public static class CvmAssembler
             EmbeddedValue = embeddedRegisterValue,
           });
 
-          if (shape.Mnemonic == CvmInstructionSet.RegisterLiteralMnemonic)
+          // JOINED 2026-10-18 by irlit (CvmInstructionSet.IndirectRegisterLiteralMnemonic) -- identical
+          // shape, see that constant's own remarks.
+          if (shape.Mnemonic is CvmInstructionSet.RegisterLiteralMnemonic or CvmInstructionSet.IndirectRegisterLiteralMnemonic)
           {
             // ADDED 2026-10-04: rlit -- the register is already in the opcode word (embedded value above);
             // the second operand is the 16-bit literal word (a number, or a label/import = absolute address).
             EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
           }
-          else if (shape.Mnemonic is CvmInstructionSet.LoadFrameMnemonic or CvmInstructionSet.StoreFrameMnemonic or CvmInstructionSet.LeaMnemonic)
+          else if (shape.Mnemonic is CvmInstructionSet.LoadFrameMnemonic or CvmInstructionSet.StoreFrameMnemonic or CvmInstructionSet.LeaMnemonic or CvmInstructionSet.IndirectLeaMnemonic)
           {
             // ADDED 2026-10-16: ldf/stf -- same shape as rlit just above (register already embedded in
             // the opcode word; the second operand is the trailing word). Here it's a SIGNED offset from
@@ -1202,9 +1200,11 @@ public static class CvmAssembler
             // numeric literal (two's-complement within the word) exactly as rlit's own literal does, so
             // no separate emitter is needed -- see CvmInstructionSet.LoadFrameMnemonic's own remarks.
             // JOINED 2026-10-17 by lea -- identical shape, see CvmInstructionSet.LeaMnemonic's own remarks.
+            // JOINED 2026-10-18 by ilea -- identical shape, see CvmInstructionSet.IndirectLeaMnemonic's
+            // own remarks.
             EmitOperandWord(objectFile, section, line.Args[1], line.LineNumber, labelOffsets, imported, externalSymbols, errors);
           }
-          else if (shape.Mnemonic == CvmInstructionSet.DoubleLiteralMnemonic)
+          else if (shape.Mnemonic is CvmInstructionSet.DoubleLiteralMnemonic or CvmInstructionSet.IndirectDoubleLiteralMnemonic)
           {
             // REVERSED 2026-10-16, per Stefan directly ("notice that 'dlit' and 'push2' have reverse the
             // order of their 32-bit argument") -- CORRECTED again same day, per Stefan: "Double literals
@@ -1237,7 +1237,7 @@ public static class CvmAssembler
             }
             else
             {
-              errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" is not a 32-bit number (-2147483648..4294967295) -- \"dlit d1 x\" needs a numeric literal, no label.");
+              errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" is not a 32-bit number (-2147483648..4294967295) -- \"{shape.Mnemonic} d1 x\" needs a numeric literal, no label.");
               codeSection.Words.Add(0);
               codeSection.Words.Add(0);
             }

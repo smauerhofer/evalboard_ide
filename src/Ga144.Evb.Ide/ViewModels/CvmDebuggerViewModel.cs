@@ -166,6 +166,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   private string _memoryBaseText = "0:0000";
   private string _programCounterText = "-";
   private string _assemblyCodeText = DefaultAssemblyCode;
+  private bool _showLineNumbers;
 
   // Added 2026-09-26, replacing the old "Breakpoints" GroupBox (a typed address, Add/Remove
   // selected/Clear all, and a plain ListBox of "p:aaaa" strings) per Stefan: "i want to place
@@ -320,6 +321,14 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// committed until you act on it" contract this editor always had.
   /// </summary>
   public string AssemblyCodeText { get => _assemblyCodeText; set => SetProperty(ref _assemblyCodeText, value ?? string.Empty); }
+
+  /// <summary>
+  /// Added per Stefan: the Assembly Code editor's line-number gutter is off by default and shown only
+  /// while this is checked (see <see cref="Views.CvmDebuggerWindow"/>'s own "Show line numbers"
+  /// CheckBox). Purely a view-state toggle -- not persisted onto the chip's own project data, unlike
+  /// <see cref="AssemblyCodeText"/> itself.
+  /// </summary>
+  public bool ShowLineNumbers { get => _showLineNumbers; set => SetProperty(ref _showLineNumbers, value); }
 
   /// <summary>
   /// This chip's own named CVM Debugger programs -- a working copy of

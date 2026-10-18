@@ -55,7 +55,7 @@ namespace Ga144.Evb.Ide.Services;
 /// rule, these six were repointed to node 507's implementation
 /// (<see cref="Node507Cvm2LocalExecuteTagBits"/>) rather than added as new entries. CVM2 node 507's other
 /// four tick-labeled words ('tjmp, 'jump, 'xs, 'xp) had no existing CVM1 mnemonic; 'tjmp was wired in
-/// 2026-09-09 (Stefan: "'tjmp is in node 507") as <see cref="CvmInstructionSet.TableJumpMnemonic"/>, the
+/// 2026-09-09 (Stefan: "'tjmp is in node 507") as <c>TableJumpMnemonic</c>, the
 /// same way the six repoints above are -- 'jump/'xs/'xp remain deliberately NOT wired into this file.
 ///
 /// <b>Node 507, not 508 -- corrected 2026-09-01.</b> These six primitives were briefly pointed at node
@@ -79,7 +79,7 @@ namespace Ga144.Evb.Ide.Services;
 /// The coordinate 407 was then reused for a completely different CVM2 node -- Stefan's long-call/
 /// long-jump helper, reached from node 507's own <c>m/main</c> dispatch once the memory layout grew
 /// past <c>call</c>'s own 15-bit reach -- and that new node DOES have two entries below,
-/// <see cref="CvmInstructionSet.LongCallMnemonic"/>/<see cref="CvmInstructionSet.LongJumpMnemonic"/>,
+/// <c>LongCallMnemonic</c>/<c>LongJumpMnemonic</c>,
 /// pointed at <see cref="Node407Program.Coordinate"/> with the new <see cref="Node407LongCallTagBits"/>
 /// tag -- see that constant's own remarks for the full derivation. Extended 2026-09-06 with THREE more
 /// tick-prefixed words on the SAME node -- <c>'clbr</c>/<c>'lbr</c>/<c>'cljmp</c> (long conditional
@@ -129,8 +129,8 @@ namespace Ga144.Evb.Ide.Services;
 ///
 /// <b>RE-SYNCED 2026-09-09 against Stefan's LATEST <c>workspace.yaml</c> upload -- supersedes the
 /// 2026-09-06 paragraph above.</b> The newest export shows node 508's own tick-prefixed words are
-/// actually named <c>'gld</c>/<c>'gst</c>, not <c>'ldg</c>/<c>'stg</c> -- so <see cref="CvmInstructionSet.LoadGlobalMnemonic"/>/
-/// <see cref="CvmInstructionSet.StoreGlobalMnemonic"/>'s own string VALUES were corrected to <c>"gld"</c>/
+/// actually named <c>'gld</c>/<c>'gst</c>, not <c>'ldg</c>/<c>'stg</c> -- so <c>LoadGlobalMnemonic</c>/
+/// <c>StoreGlobalMnemonic</c>'s own string VALUES were corrected to <c>"gld"</c>/
 /// <c>"gst"</c> (their C# constant names are unchanged, since they still describe "load global"/"store
 /// global" semantically), and the two entries below now resolve against the F18 symbols <c>'gld</c>/
 /// <c>'gst</c> instead. Node 508's own dispatch cascade also reverted to a SHALLOWER shape than the
@@ -560,19 +560,33 @@ internal static class CvmAssemblyLanguage
   private const int Node306BinaryFunctionFieldBitMask = 0x0F00;
   private const int Node306BinaryFunctionFieldShift = 8;
 
-  // Node 308's "unary 32-bit integer operation" row, ADDED 2026-10-15 per Stefan's newest node 507 header
+  // "Unary 32-bit integer operation" row, ADDED 2026-10-15 per Stefan's newest node 507 header
   // ("1110|0www|wwww|xxxx| 506 | unary 32-bit integer operation") and the full float32-coprocessor dump
   // pasted with it -- see CvmInstructionSet.DoubleRegisterInvertMnemonic's own remarks for the eleven
   // mnemonics this resolves (dinv/dabs/dlow16/dhigh16/dinc/ddec/dswap/dneg/dmul2/ddiv2/dudiv2) and the two
-  // flagged (not resolved) addressing oddities in node 308's own source. Fixed prefix bits 15-11 = 11100
+  // flagged (not resolved) addressing oddities in the words' own source. Fixed prefix bits 15-11 = 11100
   // (bit 11 = 0 is what distinguishes this from the still-unimplemented "unary 32-bit FLOAT operation" row
   // right below it in the same table, 0xE800 -- a separate, still-orphaned family, see
   // CvmInstructionSet.FloatingPointMoveMnemonic's own remarks): tag = 0xE000. The address field is SEVEN
   // bits (bits 10-4, mask 0x07F0, shift 4) -- one bit wider than node 306/307/206's own unary-16 family's
-  // six, since node 308 needs more address space for this longer family -- and the register field is the
+  // six, since this family needs more address space -- and the register field is the
   // same bits 3-0 as every other family here (CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0x000F),
   // except it is a DOUBLE register (d0..d15, see CvmInstructionSet.IsDoubleRegisterMnemonic), not a 16-bit
   // one.
+  //
+  // CORRECTED 2026-10-18: Stefan pasted node 208's actual full source directly ("unary 32-bit opcodes are
+  // defined in node 208 and not 308") -- all eleven 'dinv/'dabs/'dlow16/'dhigh16/'dinc/'ddec/'dswap/'dneg/
+  // 'dmul2/'ddiv2/'dudiv2 labels are defined there, not on node 308 (which hosts the unrelated
+  // address-register family, 'arinc/'ardec/etc., untouched by this correction). The constant NAMES below
+  // keep their original "Node308" prefix regardless -- same convention cvm-node206-unary16-move.md already
+  // established for Node306UnaryOperationTagBits after ITS family moved node 307 -> 206: the name
+  // identifies the opcode's fixed bit pattern (tag/field widths), not which node resolves the live
+  // address. Only the NodeSymbolByMnemonic entries below (the node-coordinate half of each tuple) actually
+  // changed, from a bare 308 literal to a bare 208 literal -- and node 208 was added to
+  // CvmNodeMesh.StandaloneCoordinates (it was not previously listed there at all; without that the CVM
+  // Debugger's standalone Assemble/Disassemble path and CvmPrimitiveTableExporter never compile node 208,
+  // so these mnemonics would fail to resolve even with the coordinate itself fixed -- same failure mode
+  // node 206's own entry in that list documents).
   private const int Node308UnaryInt32OperationTagBits = 0xE000;
   private const int Node308UnaryInt32FunctionFieldBitMask = 0x07F0;
   private const int Node308UnaryInt32FunctionFieldShift = 4;
@@ -587,9 +601,9 @@ internal static class CvmAssemblyLanguage
   // x5/binary32 -- three bits, not four, matching the family's 8 members (dmov=0..dpack=7) exactly. Tag =
   // CvmInstructionSet.ReservedBinary32Tag (0xE800, the master table's own "1110|1   |yyyy|xxxx| binary {32
   // bit}" row); the tag prefix "1110|1" is FIVE bits (bits 15-11), leaving only bits 10-8 (three bits, the
-  // row's "   " blank) for the function field -- mask 0x0700, shift 8 -- the same bit COUNT node 308's own
-  // Node308UnaryInt32FunctionFieldBitMask above uses for its row's blank field (7 bits there, because that
-  // row has only one register field instead of two). Both register fields reuse
+  // row's "   " blank) for the function field -- mask 0x0700, shift 8 -- the same bit COUNT the unary
+  // family's own Node308UnaryInt32FunctionFieldBitMask above uses for its row's blank field (7 bits there,
+  // because that row has only one register field instead of two). Both register fields reuse
   // Operation16First/SecondRegisterBitMask as-is (bits 3-0/7-4) -- those constants name the field WIDTHS,
   // which are identical here, even though both operands are double (d0..d15), not 16-bit, registers (see
   // CvmInstructionSet.IsDoubleRegisterMnemonic/IsSecondRegisterDoubleMnemonic's own matching updates). The
@@ -859,14 +873,10 @@ internal static class CvmAssemblyLanguage
         // tjmp (2026-09-09, "'tjmp is in node 507") -- node 507's own table-jump primitive, reached the
         // SAME "1000_1???" local-execute tag family as the six above (Node507Cvm2LocalExecuteTagBits) --
         // see CvmInstructionSet.TableJumpMnemonic's own remarks.
-        [CvmInstructionSet.TableJumpMnemonic] = (507, "'tjmp", Node507Cvm2LocalExecuteTagBits),
         // jump/xs/xp (2026-09-09 opcode/assembler-vs-node reconciliation audit -- see
         // CvmInstructionSet.JumpMnemonic's own remarks): node 507's remaining three tick-labeled
         // opcodes, previously left deliberately unwired. Same "1000_1???" local-execute tag family as
         // the six above.
-        [CvmInstructionSet.JumpMnemonic] = (507, "'jump", Node507Cvm2LocalExecuteTagBits),
-        [CvmInstructionSet.ExchangeSMnemonic] = (507, "'xs", Node507Cvm2LocalExecuteTagBits),
-        [CvmInstructionSet.ExchangePMnemonic] = (507, "'xp", Node507Cvm2LocalExecuteTagBits),
         // CVM2's long call/long jump (2026-09-02) -- resolve against node 407's own live compile, tag
         // 0xC000 (Node407LongCallTagBits's own remarks). Unlike nop/pushlit/push/pop/ret/halt above,
         // these live on a DIFFERENT node than CVM2's CPU (507) -- BuildDecodeTable/BuildEncodeTable
@@ -880,8 +890,6 @@ internal static class CvmAssemblyLanguage
         // Ids 195/196, CvmOperandEncoding.None, node 507, tag Node506BitPatternTableTagBits) replacing
         // this CVM2-era one (node 407, tag 0xC000) -- kept here as a comment, per "do not remove any
         // opcodes", as the historical record; the live entries are just below.
-        // [CvmInstructionSet.LongCallMnemonic] = (Node407Program.Coordinate, "'lcall", Node407LongCallTagBits),
-        // [CvmInstructionSet.LongJumpMnemonic] = (Node407Program.Coordinate, "'ljmp", Node407LongCallTagBits),
         //
         // NEW 2026-10-02: lcall/ljmp join ret/link/unlink in node 507's own "special" family (Ids
         // 195/196 -- see CvmInstructionSet.Instructions' own remarks on those Ids for Stefan's exact
@@ -894,8 +902,6 @@ internal static class CvmAssemblyLanguage
         // remarks) lowers to lcall through this entry exactly like any other node-resolved tagged
         // mnemonic -- the live-resolved opcode word comes from BuildEncodeTable via this very entry,
         // not a fixed constant the way the OLD, retired Id 183 shape used to supply one directly.
-        // [CvmInstructionSet.LongCallMnemonic] = (Node507Program.Coordinate, "'lcall", Node506BitPatternTableTagBits),
-        // [CvmInstructionSet.LongJumpMnemonic] = (Node507Program.Coordinate, "'ljmp", Node506BitPatternTableTagBits),
         // (lcall/ljmp RETIRED 2026-10-03 -- replaced by call/jmp, see the node-509 block below and
         // CvmInstructionSet.Instructions' own remarks on Ids 195-199.)
         // NEW 2026-10-02, same day: 'push joins lcall/ljmp/ret/link/unlink in node 507's own "special"
@@ -949,10 +955,6 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.Push2Mnemonic] = (509, "'push2", Node509SpecialBaseTagBits),
         [CvmInstructionSet.RegisterPushMnemonic] = (408, "'rpush", Node509SpecialBaseTagBits),
         [CvmInstructionSet.DoublePushMnemonic] = (408, "'dpush", Node509SpecialBaseTagBits),
-        [CvmInstructionSet.RegisterPopIndirectMnemonic] = (509, "'rpopi", Node509SpecialBaseTagBits),
-        [CvmInstructionSet.DoublePopIndirectMnemonic] = (509, "'dpopi", Node509SpecialBaseTagBits),
-        [CvmInstructionSet.RegisterPushIndirectMnemonic] = (509, "'rpushi", Node509SpecialBaseTagBits),
-        [CvmInstructionSet.DoublePushIndirectMnemonic] = (509, "'dpushi", Node509SpecialBaseTagBits),
         // RegisterIncrementMnemonic/RegisterDecrementMnemonic/RegisterAddMnemonic ("rinc"/"rdec"/"radd")
         // -- DELETED OUTRIGHT 2026-10-15 along with their constants in CvmInstructionSet.cs; see that
         // file's own remarks (where these three constants used to be declared) for the full history.
@@ -982,6 +984,25 @@ internal static class CvmAssemblyLanguage
         // entry, no NodeResolvedEmbeddedValueFieldLayoutByMnemonic/NodeResolvedAddressShiftByMnemonic entry
         // needed for the same reason ldf/stf don't need one.
         [CvmInstructionSet.LeaMnemonic] = (408, "'lea", Node509SpecialBaseTagBits),
+        // Node 408's eleven indirect siblings (NEW 2026-10-18, see
+        // CvmInstructionSet.IndirectRegisterPushMnemonic's own remarks). Originally pasted with a
+        // TRAILING "i" ('rpushi'/'rpopi'/'dpushi'/'dpopi'), which collided by string with the
+        // already-wired, hardware-confirmed node-509 RegisterPushIndirectMnemonic/
+        // RegisterPopIndirectMnemonic/DoublePushIndirectMnemonic/DoublePopIndirectMnemonic entries just
+        // above -- flagged rather than wired. Stefan's own fix moved the "i" to the front of each new F18
+        // word instead ('irpush/'irpop/'idpush/'idpop/...), which collides with nothing, so these are
+        // ordinary new special-word-table entries, same node (408) and tag as their direct counterparts.
+        [CvmInstructionSet.IndirectRegisterPushMnemonic] = (408, "'irpush", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.IndirectRegisterPopMnemonic] = (408, "'irpop", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.IndirectDoublePushMnemonic] = (408, "'idpush", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.IndirectDoublePopMnemonic] = (408, "'idpop", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.IndirectDoubleFetchMnemonic] = (408, "'idfetch", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.IndirectDoubleStoreMnemonic] = (408, "'idstore", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.IndirectRegisterLiteralMnemonic] = (408, "'irlit", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.IndirectDoubleLiteralMnemonic] = (408, "'idlit", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.IndirectRegisterJumpMnemonic] = (408, "'irjmp", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.IndirectRegisterCallMnemonic] = (408, "'ircall", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.IndirectLeaMnemonic] = (408, "'ilea", Node509SpecialBaseTagBits),
         [CvmInstructionSet.DropMnemonic] = (509, "'drop", Node509SpecialBaseTagBits),
         [CvmInstructionSet.DupMnemonic] = (509, "'dup", Node509SpecialBaseTagBits),
         // swap -- DELETED OUTRIGHT 2026-10-17 alongside its CvmInstructionSet constant and Instructions
@@ -1012,7 +1033,6 @@ internal static class CvmAssemblyLanguage
         // leave mnemonics"); enter is a DIFFERENT (self-describing) shape and is wired directly in
         // CvmInstructionSet.Instructions instead (see Node506EnterTag's own remarks), not here. Node
         // 506's own load-local/load-parameter/store-local/store-parameter are not wired in yet.
-        [CvmInstructionSet.LeaveMnemonic] = (506, "'leave", Node506LeaveTagBits),
         // f/fpush (2026-09-09, replacing the retired lal/lap -- "use ''f' or 'fpush' from node 506 and
         // add the offset to calculate the address of a local or parameter. i will provide a new 506.")
         // -- reached the SAME way 'leave is, sharing its tag (Node506LeaveTagBits, 0x9000 | address on
@@ -1020,8 +1040,6 @@ internal static class CvmAssemblyLanguage
         // remarks. RENAMED 2026-09-16: node 506's own F18 word is now "'pushf" (was "'fpush"), per
         // Stefan's own rename resolving the CVM mnemonic collision with node 306's own 'fpush -- see
         // CvmInstructionSet.PushFrameMnemonic's own remarks.
-        [CvmInstructionSet.FrameToRegisterMnemonic] = (506, "'f", Node506LeaveTagBits),
-        [CvmInstructionSet.PushFrameMnemonic] = (506, "'pushf", Node506LeaveTagBits),
         // CVM2's node 508 (2026-09-04) -- the globals-access node, resolved against node 508's own live
         // compile, tag 0xA000 (Node508LoadStoreGlobalTagBits's own remarks). Only 'gld/'gst so far, per
         // Stefan's own tick-naming rule (only these two of node 508's own words begin with a leading
@@ -1031,16 +1049,11 @@ internal static class CvmAssemblyLanguage
         // 'ldg'/'stg to 'gld'/'gst -- re-synced against Stefan's latest workspace.yaml; see the class
         // remarks above for the full re-sync note, including a flagged (not fixed) apparent naming/body
         // cross-wire between 'gld'/'gst and node 508's own g/@/g/! primitives.
-        [CvmInstructionSet.LoadGlobalMnemonic] = (508, "'gld", Node508LoadStoreGlobalTagBits),
-        [CvmInstructionSet.StoreGlobalMnemonic] = (508, "'gst", Node508LoadStoreGlobalTagBits),
         // Node 508's literal-load family (2026-09-27, "add litr, litm and lit2 to the language") --
         // same node, same tag (Node508LoadStoreGlobalTagBits) as 'gld/'gst above, just three more
         // tick-prefixed words resolved against the same live compile. See Node508Program's own remarks
         // for 'litm's fall-through-into-'litr mechanism and CvmInstructionSet.LitrMnemonic's own remarks
         // for the CVM-level shape (litr: TrailingWord; litm/lit2: the new TwoTrailingWords).
-        [CvmInstructionSet.LitrMnemonic] = (508, "'litr", Node508LoadStoreGlobalTagBits),
-        [CvmInstructionSet.LitmMnemonic] = (508, "'litm", Node508LoadStoreGlobalTagBits),
-        [CvmInstructionSet.Lit2Mnemonic] = (508, "'lit2", Node508LoadStoreGlobalTagBits),
         // REPOINTED 2026-10-11, per Stefan directly ("16-bit unary integer opcode have moved to node
         // 307"), then REPOINTED AGAIN 2026-10-14 ("unary 16-bit opcodes have been moved to node 206") --
         // see Node206Coordinate's own remarks above for the full history. Still tag 0xC000
@@ -1056,8 +1069,6 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.NegMnemonic] = (Node206Coordinate, "'neg", Node306UnaryOperationTagBits),
         // Node 509's tenth/eleventh ops (2026-09-05, "I added 2 new opcodes to node 509. add them also
         // to the language") -- both genuinely new, same tag, same live compile as the rest of node 509.
-        [CvmInstructionSet.ParityMnemonic] = (509, "'parity", Node509UnaryArithmeticTagBits),
-        [CvmInstructionSet.OddMnemonic] = (509, "'odd", Node509UnaryArithmeticTagBits),
         // Node 509's thirteenth op (2026-09-05, "I added 'not' to node 509. please add it to assembler
         // and disassembler") -- genuinely new, same tag, same live compile as the rest of node 509.
         [CvmInstructionSet.NotMnemonic] = (509, "'not", Node509UnaryArithmeticTagBits),
@@ -1070,29 +1081,13 @@ internal static class CvmAssemblyLanguage
         // Stefan's own naming rule ("for opcode with constant parameter, add a i to the mnemonic. so
         // 'add' becomes 'addi'"). See Node406Program's own remarks for the full derivation.
         [CvmInstructionSet.AddMnemonic] = (306, "'add", Node306BinaryOperationTagBits),
-        [CvmInstructionSet.AddConstantMnemonic] = (406, "'add", Node406BinaryConstantTagBits),
         [CvmInstructionSet.SubtractMnemonic] = (306, "'sub", Node306BinaryOperationTagBits),
-        [CvmInstructionSet.SubtractConstantMnemonic] = (406, "'sub", Node406BinaryConstantTagBits),
-        [CvmInstructionSet.ReverseSubtractMnemonic] = (406, "'rsb", Node406BinaryStackTagBits),
-        [CvmInstructionSet.ReverseSubtractConstantMnemonic] = (406, "'rsb", Node406BinaryConstantTagBits),
         [CvmInstructionSet.AndMnemonic] = (306, "'and", Node306BinaryOperationTagBits),
-        [CvmInstructionSet.AndConstantMnemonic] = (406, "'and", Node406BinaryConstantTagBits),
         [CvmInstructionSet.XorMnemonic] = (306, "'xor", Node306BinaryOperationTagBits),
-        [CvmInstructionSet.XorConstantMnemonic] = (406, "'xor", Node406BinaryConstantTagBits),
         [CvmInstructionSet.OrMnemonic] = (306, "'or", Node306BinaryOperationTagBits),
-        [CvmInstructionSet.OrConstantMnemonic] = (406, "'or", Node406BinaryConstantTagBits),
-        [CvmInstructionSet.ReverseShiftLeftMnemonic] = (406, "'rsl", Node406BinaryStackTagBits),
-        [CvmInstructionSet.ReverseShiftLeftConstantMnemonic] = (406, "'rsl", Node406BinaryConstantTagBits),
         [CvmInstructionSet.UnsignedShiftLeftMnemonic] = (406, "'usl", Node406BinaryStackTagBits),
-        [CvmInstructionSet.UnsignedShiftLeftConstantMnemonic] = (406, "'usl", Node406BinaryConstantTagBits),
-        [CvmInstructionSet.ReverseShiftRightMnemonic] = (406, "'rsr", Node406BinaryStackTagBits),
-        [CvmInstructionSet.ReverseShiftRightConstantMnemonic] = (406, "'rsr", Node406BinaryConstantTagBits),
         [CvmInstructionSet.SignedShiftRightMnemonic] = (406, "'ssr", Node406BinaryStackTagBits),
-        [CvmInstructionSet.SignedShiftRightConstantMnemonic] = (406, "'ssr", Node406BinaryConstantTagBits),
-        [CvmInstructionSet.ReverseUnsignedShiftRightMnemonic] = (406, "'rur", Node406BinaryStackTagBits),
-        [CvmInstructionSet.ReverseUnsignedShiftRightConstantMnemonic] = (406, "'rur", Node406BinaryConstantTagBits),
         [CvmInstructionSet.UnsignedShiftRightMnemonic] = (406, "'usr", Node406BinaryStackTagBits),
-        [CvmInstructionSet.UnsignedShiftRightConstantMnemonic] = (406, "'usr", Node406BinaryConstantTagBits),
         // CVM1's OLD 27 node-508 comparison/arithmetic ops -- permanently orphaned (node 508's own REAL
         // CVM2 source, added 2026-09-04, is the globals-access node above and does not define any of
         // these 27 old F18 symbols), kept per "do not remove any opcodes." Simply omitted from
@@ -1107,12 +1102,6 @@ internal static class CvmAssemblyLanguage
         // Node408Program's own remarks for the full derivation and the binary/unary tag split. Binary
         // ops (two stack inputs, ( xy-f)) use Node408BinaryComparisonTagBits; unary ops (one input, ( -f)
         // or ( x-f)) use Node408UnaryComparisonTagBits.
-        [CvmInstructionSet.EqualMnemonic] = (408, "'eq", Node408BinaryComparisonTagBits),
-        [CvmInstructionSet.EqualToZeroMnemonic] = (408, "'eq0", Node408UnaryComparisonTagBits),
-        [CvmInstructionSet.FalseMnemonic] = (408, "'false", Node408UnaryComparisonTagBits),
-        [CvmInstructionSet.TrueMnemonic] = (408, "'true", Node408UnaryComparisonTagBits),
-        [CvmInstructionSet.NotEqualMnemonic] = (408, "'ne", Node408BinaryComparisonTagBits),
-        [CvmInstructionSet.NotEqualToZeroMnemonic] = (408, "'ne0", Node408UnaryComparisonTagBits),
         // ugt/ule/ult/uge: RESOLVED 2026-09-09 (second pass, against Stefan's own workspace.yaml export
         // -- the exact gap that prompted the whole audit). Node 408's own current source defines a real
         // c/u helper plus matching 'ugt/'ule/'ult/'uge words (all four binary, ( xy-f), so they use
@@ -1122,18 +1111,6 @@ internal static class CvmAssemblyLanguage
         // for a while longer, flagged and kept per Ga144.C.Toolchain.CCodeGenerator's own continued use,
         // until the 2026-09-09 CVM1-opcode purge (later the same day) rewrote that codegen and deleted
         // all four outright -- see CvmInstructionSet's own remarks on that purge for the full accounting.
-        [CvmInstructionSet.UnsignedGreaterThanMnemonic] = (408, "'ugt", Node408BinaryComparisonTagBits),
-        [CvmInstructionSet.GreaterThanMnemonic] = (408, "'gt", Node408BinaryComparisonTagBits),
-        [CvmInstructionSet.GreaterThanZeroMnemonic] = (408, "'gt0", Node408UnaryComparisonTagBits),
-        [CvmInstructionSet.GreaterOrEqualMnemonic] = (408, "'ge", Node408BinaryComparisonTagBits),
-        [CvmInstructionSet.GreaterOrEqualToZeroMnemonic] = (408, "'ge0", Node408UnaryComparisonTagBits),
-        [CvmInstructionSet.UnsignedLessOrEqualMnemonic] = (408, "'ule", Node408BinaryComparisonTagBits),
-        [CvmInstructionSet.LessOrEqualMnemonic] = (408, "'le", Node408BinaryComparisonTagBits),
-        [CvmInstructionSet.LessOrEqualToZeroMnemonic] = (408, "'le0", Node408UnaryComparisonTagBits),
-        [CvmInstructionSet.LessThanMnemonic] = (408, "'lt", Node408BinaryComparisonTagBits),
-        [CvmInstructionSet.LessThanZeroMnemonic] = (408, "'lt0", Node408UnaryComparisonTagBits),
-        [CvmInstructionSet.UnsignedLessThanMnemonic] = (408, "'ult", Node408BinaryComparisonTagBits),
-        [CvmInstructionSet.UnsignedGreaterOrEqualMnemonic] = (408, "'uge", Node408BinaryComparisonTagBits),
         // negate/xt/ldt/stt -- WIRED to node 508 here at the time ("'negate", "'xt", "'ldt", "'stt"),
         // kept per Ga144.C.Toolchain.CCodeGenerator's own continued use. DELETED OUTRIGHT 2026-09-09
         // (CVM1-opcode purge, later the same day) once CCodeGenerator was rewritten to stop emitting all
@@ -1275,40 +1252,34 @@ internal static class CvmAssemblyLanguage
         // register for 2 new opcodes") -- see CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic's
         // own remarks for the flagged, unconfirmed "leap"/"then" F18 body shape this wiring does not
         // depend on.
-        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (308, "'arinc", 0xD800),
-        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (308, "'ardec", 0xD800),
-        [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (308, "'arinc2", 0xD800),
-        [CvmInstructionSet.ArithmeticDecrementAddressRegisterByTwoMnemonic] = (308, "'ardec2", 0xD800),
-        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (308, "'arld", 0xD800),
-        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = (308, "'arst", 0xD800),
-        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = (308, "'lda", 0xD800),
-        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (308, "'sta", 0xD800),
 
         // REMOVED OUTRIGHT, 2026-09-15: node 308's old dpop/dpush/dinc/ddec/dadd/dor entries (added
         // 2026-09-09, tag Node308Tag/0xDC00) -- see CvmInstructionSet's own removal note above
         // FloatingPointRegisterFieldBitMask for why (Stefan's own direct instruction: "remove the old
         // dpop/dpush/dinc/ddec/dadd/dor family completely").
 
-        // ADDED 2026-10-15: node 308's NEW "unary 32-bit integer operation" family (table row
+        // ADDED 2026-10-15: the NEW "unary 32-bit integer operation" family (table row
         // 1110|0www|wwww|xxxx, Node308UnaryInt32OperationTagBits -- see that constant's own remarks and
         // CvmInstructionSet.DoubleRegisterInvertMnemonic's own remarks for the full derivation, including
         // the deliberate naming split from the REMOVED entries just above this one, which happen to share
-        // two of the same opcode STRINGS ("dinc"/"ddec") for a wholly unrelated, long-gone family). Node
-        // 308's own source defines these right after x4/unary32, under the same "# 0 org" as that relay.
-        [CvmInstructionSet.DoubleRegisterInvertMnemonic] = (308, "'dinv", Node308UnaryInt32OperationTagBits),
-        [CvmInstructionSet.DoubleRegisterAbsoluteMnemonic] = (308, "'dabs", Node308UnaryInt32OperationTagBits),
-        [CvmInstructionSet.DoubleRegisterLowWordMnemonic] = (308, "'dlow16", Node308UnaryInt32OperationTagBits),
-        [CvmInstructionSet.DoubleRegisterHighWordMnemonic] = (308, "'dhigh16", Node308UnaryInt32OperationTagBits),
-        [CvmInstructionSet.DoubleRegisterIncrementMnemonic] = (308, "'dinc", Node308UnaryInt32OperationTagBits),
-        [CvmInstructionSet.DoubleRegisterDecrementMnemonic] = (308, "'ddec", Node308UnaryInt32OperationTagBits),
+        // two of the same opcode STRINGS ("dinc"/"ddec") for a wholly unrelated, long-gone family).
+        // CORRECTED 2026-10-18: these resolve against node 208 (bare literal, not 308) -- see
+        // Node308UnaryInt32OperationTagBits's own remarks for the correction and why the constant names
+        // keep their old "Node308" prefix anyway.
+        [CvmInstructionSet.DoubleRegisterInvertMnemonic] = (208, "'dinv", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleRegisterAbsoluteMnemonic] = (208, "'dabs", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleRegisterLowWordMnemonic] = (208, "'dlow16", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleRegisterHighWordMnemonic] = (208, "'dhigh16", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleRegisterIncrementMnemonic] = (208, "'dinc", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleRegisterDecrementMnemonic] = (208, "'ddec", Node308UnaryInt32OperationTagBits),
         // FLAGGED (not resolved) -- see DoubleRegisterInvertMnemonic's own remarks: 'dswap's own label,
         // read as plain F18 control flow, sits on what looks like 'ddec's own early-return point. Wired
         // anyway -- this file only needs 'dswap's live-compiled address, whatever it resolves to.
-        [CvmInstructionSet.DoubleRegisterSwapMnemonic] = (308, "'dswap", Node308UnaryInt32OperationTagBits),
-        [CvmInstructionSet.DoubleRegisterNegateMnemonic] = (308, "'dneg", Node308UnaryInt32OperationTagBits),
-        [CvmInstructionSet.DoubleRegisterMultiplyByTwoMnemonic] = (308, "'dmul2", Node308UnaryInt32OperationTagBits),
-        [CvmInstructionSet.DoubleRegisterDivideByTwoMnemonic] = (308, "'ddiv2", Node308UnaryInt32OperationTagBits),
-        [CvmInstructionSet.DoubleRegisterUnsignedDivideByTwoMnemonic] = (308, "'dudiv2", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleRegisterSwapMnemonic] = (208, "'dswap", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleRegisterNegateMnemonic] = (208, "'dneg", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleRegisterMultiplyByTwoMnemonic] = (208, "'dmul2", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleRegisterDivideByTwoMnemonic] = (208, "'ddiv2", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleRegisterUnsignedDivideByTwoMnemonic] = (208, "'dudiv2", Node308UnaryInt32OperationTagBits),
 
         // dmov/dand/dor/dxor/dadd/dudiv/dmul/dpack (ADDED 2026-10-17): binary 32-bit integer ALU family --
         // see CvmInstructionSet.DoubleBinaryMoveMnemonic's own remarks, including the FLAGGED
@@ -1344,22 +1315,12 @@ internal static class CvmAssemblyLanguage
         // immediate "ex" -- so it shares node 406's own "1110_1???" tag (0xE800) OR'd with each op's own
         // address on node 405, the same "tag | resolved local address" scheme every other simple
         // tagged/node-resolved family in this file uses.
-        [CvmInstructionSet.ToggleCarryMnemonic] = (405, "'tgc", 0xE800),
-        [CvmInstructionSet.AddWithCarryFlagMnemonic] = (405, "'adc", 0xE800),
-        [CvmInstructionSet.LoadCarryMnemonic] = (405, "'ldc", 0xE800),
-        [CvmInstructionSet.SetCarryMnemonic] = (405, "'sec", 0xE800),
-        [CvmInstructionSet.ClearCarryMnemonic] = (405, "'clc", 0xE800),
-        [CvmInstructionSet.StoreCarryMnemonic] = (405, "'stc", 0xE800),
-        [CvmInstructionSet.SubtractWithCarryMnemonic] = (405, "'sbc", 0xE800),
-        [CvmInstructionSet.RotateLeftMnemonic] = (405, "'rol", 0xE800),
-        [CvmInstructionSet.RotateRightMnemonic] = (405, "'ror", 0xE800),
 
         // Node 505's 'fx (2026-09-09) -- BRAND NEW, tagged/node-resolved. Node 505's own f2/main also has
         // no bit cascade -- a single dispatch word then "ex" -- sharing node 506's own "1001_01??" tag
         // (0x9400) OR'd with 'fx's own address on node 505. Node 505's OTHER word, spelled 'f in its own
         // source, is deliberately NOT given an entry here -- see FrameExchangeMnemonic's own remarks for
         // the FLAGGED collision with FrameToRegisterMnemonic ("f") above, already wired to node 506.
-        [CvmInstructionSet.FrameExchangeMnemonic] = (505, "'fx", 0x9400),
 
         // REMOVED OUTRIGHT, 2026-09-27: node 510's OLD "extended arithmetic" ops (2026-09-09,
         // 'addc/'xst/'xld/'xmul2/'xdiv2/'xumul, tag 0xB800) -- node 510's wholesale redesign into
@@ -1466,7 +1427,9 @@ internal static class CvmAssemblyLanguage
         // CvmInstructionSet.StackPointerFetchMnemonic's own remarks). Their replacements, sp!/fp!, are
         // operand-less "506 direct" words (CvmOperandEncoding.None), so they don't need a row here at all --
         // see NodeResolvedAddressShiftByMnemonic's own entries for them instead.
-        // Node 308's "unary 32-bit integer operation" family (2026-10-15): function field = node-308 address
+        // The "unary 32-bit integer operation" family (2026-10-15; CORRECTED 2026-10-18 from node 308 to
+        // node 208, see Node308UnaryInt32OperationTagBits's own remarks for the correction and why the
+        // constant names keep their old "Node308" prefix anyway): function field = node-208 address
         // (7 bits at bits 10-4), x (the double register) at bits 3-0 -- see Node308UnaryInt32OperationTagBits's
         // own remarks and CvmInstructionSet.DoubleRegisterInvertMnemonic's own remarks for the full derivation.
         [CvmInstructionSet.DoubleRegisterInvertMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
@@ -1492,14 +1455,6 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoubleBinaryUnsignedDivideMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.DoubleBinaryMultiplyMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.DoubleBinaryPackMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
-        [CvmInstructionSet.ArithmeticIncrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
-        [CvmInstructionSet.ArithmeticDecrementAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
-        [CvmInstructionSet.ArithmeticIncrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
-        [CvmInstructionSet.ArithmeticDecrementAddressRegisterByTwoMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
-        [CvmInstructionSet.ArithmeticLoadAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
-        [CvmInstructionSet.ArithmeticStoreAddressRegisterMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
-        [CvmInstructionSet.LoadAddressRegisterValueMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
-        [CvmInstructionSet.StoreAddressRegisterValueMnemonic] = (CvmInstructionSet.AddressRegisterFunctionFieldBitMask, CvmInstructionSet.AddressRegisterFunctionFieldShift, CvmInstructionSet.AddressRegisterFunctionFieldBaseAddress, CvmInstructionSet.AddressRegisterRegisterFieldBitMask, 0),
       };
 
   /// <summary>
@@ -1560,10 +1515,6 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.Push2Mnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.RegisterPushMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.DoublePushMnemonic] = Node509SpecialAddressShift,
-        [CvmInstructionSet.RegisterPopIndirectMnemonic] = Node509SpecialAddressShift,
-        [CvmInstructionSet.DoublePopIndirectMnemonic] = Node509SpecialAddressShift,
-        [CvmInstructionSet.RegisterPushIndirectMnemonic] = Node509SpecialAddressShift,
-        [CvmInstructionSet.DoublePushIndirectMnemonic] = Node509SpecialAddressShift,
         // RegisterIncrementMnemonic/RegisterDecrementMnemonic/RegisterAddMnemonic -- DELETED OUTRIGHT
         // 2026-10-15, see CvmInstructionSet.cs's own remarks.
         [CvmInstructionSet.HaltMnemonic] = Node509SpecialAddressShift,
