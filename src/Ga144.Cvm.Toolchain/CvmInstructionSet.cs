@@ -959,15 +959,33 @@ public static class CvmInstructionSet
   /// that is read live from each word's own "// size N with register." comment exactly like every other
   /// special-word-table entry, so it needs no C# change.
   ///
+  /// CORRECTED 2026-10-20, per Stefan directly ("indirect register are always simple register rx and
+  /// never other register like dx or fx. idpop works on a normal register no a double register"): the
+  /// embedded register field just described above names the INDEX-HOLDING register, i.e. the register
+  /// whose VALUE at runtime selects which register (of whatever family the direct sibling targets) the
+  /// indirect word actually operates on -- it does NOT name the target itself. That index-holding register
+  /// is always a plain 16-bit register, r0..r15, for every one of these eleven indirect siblings, including
+  /// <c>idpush</c>/<c>idpop</c>/<c>idfetch</c>/<c>idstore</c>/<c>idlit</c> despite the "d" in their names:
+  /// that "d" describes the WIDTH of the value being pushed/popped/fetched/stored/loaded (32-bit, i.e.
+  /// double, matching their direct <c>dpush</c>/<c>dpop</c>/<c>dfetch</c>/<c>dstore</c>/<c>dlit</c>
+  /// siblings), not the type of the register operand written in the instruction. Originally wired into
+  /// <see cref="IsDoubleRegisterMnemonic"/> on the (wrong) assumption that it meant the same thing it does
+  /// for the DIRECT siblings -- i.e. that the register named IS the double-register target, so "idpop d1"
+  /// would be required -- which produced a hard assemble error on Stefan's own "idpop r5"/"idpush r5"
+  /// (correct, intended usage). Removed from that predicate accordingly; see its own remarks for the
+  /// removal. "<c>idpop r5</c>" now means: read index register r5's value, use it to select which 32-bit
+  /// double-register pair to pop into.
+  ///
   /// <c>irpush</c>/<c>irpop</c>/<c>idpush</c>/<c>idpop</c>/<c>idfetch</c>/<c>idstore</c>/<c>irjmp</c>/
   /// <c>ircall</c> -- plain <see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/>, <c>WordLength</c> 1,
   /// identical shape to <see cref="RegisterPushMnemonic"/>/<see cref="RegisterPopMnemonic"/>/
   /// <see cref="DoublePushMnemonic"/>/<see cref="DoublePopMnemonic"/>/<see cref="DoubleFetchMnemonic"/>/
   /// <see cref="DoubleStoreMnemonic"/>/<see cref="RegisterJumpMnemonic"/>/<see cref="RegisterCallMnemonic"/>
   /// respectively -- no <c>Ga144.Cvm.Toolchain.CvmAssembler</c> change needed, fully covered by the existing
-  /// generic <see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/> register-parsing branch. The
-  /// double-register ones join <see cref="IsDoubleRegisterMnemonic"/> so "<c>idpush d1</c>" parses/
-  /// disassembles the same way "<c>dpush d1</c>" does.
+  /// generic <see cref="CvmOperandEncoding.NodeResolvedEmbeddedValue"/> register-parsing branch. ALL eleven
+  /// of these indirect siblings parse/disassemble their register operand as a plain r0..r15 (see the
+  /// CORRECTED note above) -- none of them join <see cref="IsDoubleRegisterMnemonic"/>, unlike their direct
+  /// counterparts.
   ///
   /// <c>irlit</c> -- same two-operand (register, literal) shape as <see cref="RegisterLiteralMnemonic"/>,
   /// <c>WordLength</c> 2; joins that mnemonic's own special-casing in <c>CvmAssembler</c> (pass 1's
@@ -975,8 +993,9 @@ public static class CvmInstructionSet
   ///
   /// <c>idlit</c> -- same two-OR-three-operand (register, one 32-bit literal OR hi/lo) shape as
   /// <see cref="DoubleLiteralMnemonic"/>, <c>WordLength</c> 3; joins that mnemonic's own dedicated pass-1
-  /// arg-count branch and pass-2 hi/lo emission branch in <c>CvmAssembler</c>, and
-  /// <see cref="IsDoubleRegisterMnemonic"/>.
+  /// arg-count branch and pass-2 hi/lo emission branch in <c>CvmAssembler</c> (the 32-bit LITERAL value
+  /// itself is unaffected by the 2026-10-20 register-operand correction above -- only the index register
+  /// that selects which double-register pair receives it is a plain r0..r15).
   ///
   /// <c>ilea</c> -- same two-operand (register, signed frame offset) shape as <see cref="LeaMnemonic"/>,
   /// <c>WordLength</c> 2; joins the <see cref="LoadFrameMnemonic"/>/<see cref="StoreFrameMnemonic"/>/
@@ -4172,14 +4191,17 @@ public static class CvmInstructionSet
       string.Equals(mnemonic, DoubleFetchMnemonic, StringComparison.OrdinalIgnoreCase) ||
       string.Equals(mnemonic, DoubleStoreMnemonic, StringComparison.OrdinalIgnoreCase) ||
       string.Equals(mnemonic, DoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      // ADDED 2026-10-18: node 408's indirect siblings of dpush/dpop/dfetch/dstore/dlit -- see
-      // IndirectDoublePushMnemonic's own remarks. Same double-register operand convention as their direct
-      // counterparts just above.
-      string.Equals(mnemonic, IndirectDoublePushMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      string.Equals(mnemonic, IndirectDoublePopMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      string.Equals(mnemonic, IndirectDoubleFetchMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      string.Equals(mnemonic, IndirectDoubleStoreMnemonic, StringComparison.OrdinalIgnoreCase) ||
-      string.Equals(mnemonic, IndirectDoubleLiteralMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      // ADDED 2026-10-18, REMOVED 2026-10-20: node 408's indirect siblings of dpush/dpop/dfetch/dstore/
+      // dlit (idpush/idpop/idfetch/idstore/idlit) were wired in here on the assumption that their embedded
+      // register field names the double-register TARGET the same way the direct words' does. It does not
+      // -- per Stefan directly ("indirect register are always simple register rx and never other register
+      // like dx or fx. idpop works on a normal register no a double register"), that field instead names a
+      // plain r0..r15 INDEX register whose VALUE at runtime selects the double register actually being
+      // operated on; the "d" in the mnemonic describes the 32-bit width of the value moved, not the
+      // register operand's type. Being wired in here made the assembler wrongly demand "idpop d1" and
+      // reject Stefan's own correct "idpop r5"/"idpush r5". See IndirectRegisterPushMnemonic's own
+      // CORRECTED remarks for the full explanation; none of the eleven node-408 indirect siblings belong in
+      // this predicate.
       // getctx/setctx (the two double-register node-506-direct words) were DELETED OUTRIGHT 2026-10-16 --
       // see StackPointerFetchMnemonic's own remarks; their replacements sp!/fp! are operand-less, so this
       // predicate has nothing left to say about that family.

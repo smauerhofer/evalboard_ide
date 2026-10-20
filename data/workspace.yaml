@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-18T13:35:56.0336832
-      utcDateTime: 2026-10-18T13:35:56.0336832Z
-      localDateTime: 2026-10-18T15:35:56.0336832+02:00
-      date: 2026-10-18T00:00:00.0000000
-      day: 18
-      dayOfWeek: Sunday
-      dayOfYear: 291
-      hour: 13
-      millisecond: 33
-      microsecond: 683
-      nanosecond: 200
-      minute: 35
+      dateTime: 2026-10-20T19:28:03.6811533
+      utcDateTime: 2026-10-20T19:28:03.6811533Z
+      localDateTime: 2026-10-20T21:28:03.6811533+02:00
+      date: 2026-10-20T00:00:00.0000000
+      day: 20
+      dayOfWeek: Tuesday
+      dayOfYear: 293
+      hour: 19
+      millisecond: 681
+      microsecond: 153
+      nanosecond: 300
+      minute: 28
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 56
-      ticks: 639279273560336832
-      utcTicks: 639279273560336832
-      timeOfDay: 13:35:56.0336832
+      second: 3
+      ticks: 639281212836811533
+      utcTicks: 639281212836811533
+      timeOfDay: 19:28:03.6811533
       year: 2026
   portB: 
   portC:
@@ -70426,6 +70426,7 @@ projects:
           r>
           ( hi lo d )
         : x3/finish32 ( hi lo d - )
+          up a!
           >r 0xffff dup >r
           and over r> and
           ( .. lo hi / d )
@@ -70449,7 +70450,6 @@ projects:
           x3/pass2              // hi lo
         : x3/complete32
           @ @ r>
-          up a!
           x3/finish32
         ;
 
@@ -70525,10 +70525,11 @@ projects:
       - 0x01709
       - 0x2FF02
       - 0x269B2
-      - 0x2FD92
+      - 0x04ABF
+      - 0x00145
       - 0x0FFFF
-      - 0x2E082
-      - 0x26012
+      - 0x248FA
+      - 0x20CFF
       - 0x0562D
       - 0x0BA2A
       - 0x27A12
@@ -70539,15 +70540,14 @@ projects:
       - 0x05606
       - 0x0BA02
       - 0x2F62D
-      - 0x03E9F
-      - 0x00145
-      - 0x2B715
+      - 0x03E9A
+      - 0x11415
       - 0x04A12
       - 0x00175
       - 0x05600
       - 0x0BA02
       - 0x2F62C
-      - 0x11423
+      - 0x11424
       - 0x1342D
       - 0x1342E
       - 0x01A55
@@ -150322,7 +150322,7 @@ projects:
         unlink
 
         ret
-    lastSelectedDebuggerProgramName: bitcnt regression test
+    lastSelectedDebuggerProgramName: complete regression test
     cDebuggerPrograms:
     - name: default
       source: >
