@@ -200,8 +200,13 @@ public static class CvmNodeMesh
     505, // 505, CVM2's frame2/more-frame-operations node (added 2026-09-09).
     508, // 508, CVM2's gld/gst node (added 2026-09-05, renamed 2026-09-09).
     509, // 509, CVM2's unary-arithmetic node (added 2026-09-05).
-    510, // 510, CVM2's extended-arithmetic (double-register) node (added 2026-09-09).
-    511, // 511, CVM2's 32-register register-file node (added 2026-09-09).
+    // RETIRED 2026-10-20: the full 5,345-line CVM_pipeline/CVM2 source dump audited that day defines no
+    // node 510 or 511 anywhere, and CvmAssemblyLanguage.NodeSymbolByMnemonic has no ACTIVE entry
+    // referencing either coordinate (only already-retired/commented ones pointing at the old
+    // Node510Program.Coordinate). Commented out, not deleted, per this project's own "do not remove
+    // anything outright" convention -- restore if Stefan's project ever defines these nodes for real.
+    // 510, // 510, CVM2's extended-arithmetic (double-register) node (added 2026-09-09).
+    // 511, // 511, CVM2's 32-register register-file node (added 2026-09-09).
     406, // 406, CVM2's binary-arithmetic node (added 2026-09-05).
     405, // 405, CVM2's multiword-arithmetic (carry-flag) node (added 2026-09-09).
     409, // 409, CVM2's bit-operations node (bclr/bset/binv/bcopy, added 2026-09-27).

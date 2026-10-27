@@ -450,11 +450,23 @@ public static class CvmAssembler
           // syntax-accurate example, mirroring push2/dlit's own dedicated messages just above. The real
           // parsing/encoding (register-token vs. plain-number first operand) happens in pass 2's own
           // "case Const32Mnemonic", not here -- see that case's own remarks.
-          if (shape.Mnemonic == CvmInstructionSet.Const32Mnemonic)
+          //
+          // JOINED 2026-10-23 by "fconst" (CvmInstructionSet.FloatingPointConstantMnemonic), per Stefan
+          // directly ("'fconst' is an alias for 'c32'. make it so") -- a pure alias, same treatment, same
+          // message (using shape.Mnemonic so a mistyped "fconst" line reads back as "fconst", not "c32").
+          if (shape.Mnemonic is CvmInstructionSet.Const32Mnemonic or CvmInstructionSet.FloatingPointConstantMnemonic)
           {
+            // CHANGED 2026-10-23 (fconst follow-up), per Stefan directly ("fconst must use a
+            // floatingpoint register. 'fconst dx ..' is invalid. 'fconst fx ..' is valid."): the
+            // example/wording here now matches whichever spelling was typed -- "d3" for c32, "f3" for
+            // fconst -- even though both still just enforce ARG COUNT (two) at this stage; the actual
+            // prefix (d vs f vs r) is enforced in pass 2's own "case Const32Mnemonic" below.
             if (line.Args.Count != 2)
             {
-              errors.Add($"line {line.LineNumber}: \"c32\" requires exactly two operands (destination double register, constant index), e.g. \"c32 d3 2\".");
+              bool isFloatSpellingArgCount = shape.Mnemonic == CvmInstructionSet.FloatingPointConstantMnemonic;
+              string registerKindArgCount = isFloatSpellingArgCount ? "floating-point" : "double";
+              string exampleTokenArgCount = isFloatSpellingArgCount ? "f3" : "d3";
+              errors.Add($"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly two operands (destination {registerKindArgCount} register, constant index), e.g. \"{shape.Mnemonic} {exampleTokenArgCount} 2\".");
               break;
             }
 
@@ -763,6 +775,7 @@ public static class CvmAssembler
           }
 
         case CvmInstructionSet.Const32Mnemonic:
+        case CvmInstructionSet.FloatingPointConstantMnemonic:
           {
             // "c32 dx <index>" -- CORRECTED 2026-10-12, same day as this mnemonic's first pass: Stefan's
             // own node-507 source comment read "c32 <index>" (one operand), which turned out to be a typo
@@ -772,8 +785,41 @@ public static class CvmAssembler
             // operand is a destination double-register TOKEN ("d3"), so this is written out directly
             // here instead of falling into the generic EmbeddedUnsignedValuePair branch below, exactly
             // like if/cond intercept their own non-plain-number operand just above.
+            //
+            // JOINED 2026-10-23 by "fconst" (CvmInstructionSet.FloatingPointConstantMnemonic), per Stefan
+            // directly ("'fconst' is an alias for 'c32'. make it so"): a pure alias, same as
+            // fmove/fpush/fpop/ifpush/ifpop before it (see cvm-fmove-dmov-alias-2026-10-23.md and
+            // cvm-fpush-fpop-ifpush-ifpop-alias-2026-10-23.md). The shape, tag, and encoding below are
+            // ALWAYS resolved against c32's own canonical Const32Mnemonic shape regardless of which of
+            // the two spellings triggered this case -- so "c32 d3 2" and "fconst f3 2" always produce the
+            // identical opcode word. Error/mnemonic text below uses the mnemonic actually typed
+            // (line.Directive -- this switch's own case label, "shape" isn't in scope in this pass'
+            // switch until the default/generic case below), not a hardcoded "c32", so a mistyped
+            // "fconst" line reads back as "fconst".
+            //
+            // CHANGED 2026-10-23 (same day, follow-up), per Stefan directly ("fconst must use a
+            // floatingpoint register. 'fconst dx ..' is invalid. 'fconst fx ..' is valid."): the two
+            // spellings now REQUIRE different register-token prefixes even though they still share the
+            // identical shape/tag/encoding -- c32's destination is written "dN" (a double register,
+            // unchanged), fconst's is written "fN" (a floating-point register -- the same physical bits,
+            // but the assembler now enforces the "f" spelling so a program can't write a c32 constant
+            // into a register and read it back as a float, or vice versa, without saying so at the call
+            // site). This is purely an assembler-syntax gate on the FIRST operand's prefix; it does not
+            // touch the shared shape/tag/masks, so "c32 d3 2" and "fconst f3 2" remain byte-identical
+            // words. Unlike fneg/fabs/fpop/fpush (which all accept "fx" as just Stefan's own notation for
+            // "the d-register, used as a float" and parse it as "dN" -- see
+            // FloatingPointNegateMnemonic's own 2026-10-20 remarks, still flagged/unresolved there), this
+            // is the first mnemonic in the file where "f" is wired as a REAL, distinct parsing prefix.
             CvmInstructionSet.CvmInstructionShape c32Shape = CvmInstructionSet.TryGetShape(CvmInstructionSet.Const32Mnemonic)!;
             CvmSection c32Section = objectFile.GetOrAddSection(section);
+            string c32MnemonicText = line.Directive;
+
+            bool c32IsFloatSpelling = c32MnemonicText == CvmInstructionSet.FloatingPointConstantMnemonic;
+            char c32ExpectedPrefix = c32IsFloatSpelling ? 'f' : 'd';
+            char c32OtherRegisterPrefix = c32IsFloatSpelling ? 'd' : 'f';
+            string c32RegisterKindName = c32IsFloatSpelling ? "FLOATING-POINT" : "DOUBLE";
+            string c32OtherMnemonicText = c32IsFloatSpelling ? CvmInstructionSet.Const32Mnemonic : CvmInstructionSet.FloatingPointConstantMnemonic;
+            string c32OtherRegisterKindName = c32IsFloatSpelling ? "double" : "floating-point";
 
             int c32MaxRegister = c32Shape.ValueBitMask >> c32Shape.ValueBitShift;
             string c32RegisterToken = line.Args[0];
@@ -781,31 +827,55 @@ public static class CvmAssembler
             if (c32RegisterToken.Length >= 2 && char.ToLowerInvariant(c32RegisterToken[0]) == 'r')
             {
               // Explicitly called out, not just "not a number": c32's destination is always a DOUBLE
-              // register -- r0..r15 would silently alias the wrong half of some dN if accepted.
-              errors.Add($"line {line.LineNumber}: \"c32\"'s first operand is a destination DOUBLE register -- write d0..d{c32MaxRegister} (e.g. \"c32 d3 2\"), not \"{c32RegisterToken}\": c32 has no r-register form.");
+              // register and fconst's is always a FLOATING-POINT register -- r0..r15 would silently
+              // alias the wrong half of some dN/fN if accepted.
+              errors.Add($"line {line.LineNumber}: \"{c32MnemonicText}\"'s first operand is a destination {c32RegisterKindName} register -- write {c32ExpectedPrefix}0..{c32ExpectedPrefix}{c32MaxRegister} (e.g. \"{c32MnemonicText} {c32ExpectedPrefix}3 2\"), not \"{c32RegisterToken}\": {c32MnemonicText} has no r-register form.");
               c32Register = 0;
             }
-            else if (c32RegisterToken.Length >= 2 && char.ToLowerInvariant(c32RegisterToken[0]) == 'd' &&
+            else if (c32RegisterToken.Length >= 2 && char.ToLowerInvariant(c32RegisterToken[0]) == c32OtherRegisterPrefix)
+            {
+              // "c32 f3 2" or "fconst d3 2" -- shaped exactly like the OTHER spelling's own register
+              // token, so call that out by name instead of a generic "not valid" message.
+              errors.Add($"line {line.LineNumber}: \"{c32MnemonicText}\" requires a {c32RegisterKindName.ToLowerInvariant()} register -- write {c32ExpectedPrefix}0..{c32ExpectedPrefix}{c32MaxRegister} (e.g. \"{c32MnemonicText} {c32ExpectedPrefix}3 2\"), not \"{c32RegisterToken}\": \"{c32RegisterToken}\" is a {c32OtherRegisterKindName} register, which belongs to \"{c32OtherMnemonicText}\".");
+              c32Register = 0;
+            }
+            else if (c32RegisterToken.Length >= 2 && char.ToLowerInvariant(c32RegisterToken[0]) == c32ExpectedPrefix &&
                      int.TryParse(c32RegisterToken.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out c32Register))
             {
-              // Parsed as a "dN" token -- range-checked below, same as the plain-number fallback.
+              // Parsed as the expected-prefix token ("dN" for c32, "fN" for fconst) -- range-checked
+              // below, same as the plain-number fallback.
             }
             else if (!TryParseNumericLiteral(c32RegisterToken, out c32Register))
             {
-              errors.Add($"line {line.LineNumber}: \"{c32RegisterToken}\" is not a valid destination register for \"c32\" -- write d0..d{c32MaxRegister} or a plain number, e.g. \"c32 d3 2\".");
+              errors.Add($"line {line.LineNumber}: \"{c32RegisterToken}\" is not a valid destination register for \"{c32MnemonicText}\" -- write {c32ExpectedPrefix}0..{c32ExpectedPrefix}{c32MaxRegister} or a plain number, e.g. \"{c32MnemonicText} {c32ExpectedPrefix}3 2\".");
               c32Register = 0;
             }
 
             if (c32Register < 0 || c32Register > c32MaxRegister)
             {
-              errors.Add($"line {line.LineNumber}: \"{c32RegisterToken}\" is out of range for \"c32\" -- expected d0..d{c32MaxRegister}.");
+              errors.Add($"line {line.LineNumber}: \"{c32RegisterToken}\" is out of range for \"{c32MnemonicText}\" -- expected {c32ExpectedPrefix}0..{c32ExpectedPrefix}{c32MaxRegister}.");
               c32Register = 0;
             }
 
             int c32MaxIndex = c32Shape.SecondValueBitMask >> c32Shape.SecondValueBitShift;
-            if (!TryParseNumericLiteral(line.Args[1], out int c32Index) || c32Index < 0 || c32Index > c32MaxIndex)
+            string c32IndexToken = line.Args[1];
+            int c32Index;
+
+            // WIDENED 2026-10-23 (second follow-up), per Stefan directly ("additionally 'fconst fx n's
+            // syntax must be widened. n can be a number of a string constant" plus his own 16-row
+            // table): "fconst f3 pi" is now accepted as an alternative spelling for "fconst f3 8" --
+            // see CvmInstructionSet.FloatingPointConstantIndexByName's own remarks for the full table
+            // and why this lookup is gated to the "fconst" spelling only (c32IsFloatSpelling), not c32.
+            if (c32IsFloatSpelling && CvmInstructionSet.FloatingPointConstantIndexByName.TryGetValue(c32IndexToken, out int c32NamedIndex))
             {
-              errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" does not fit \"c32\"'s unsigned constant index (0..{c32MaxIndex}) -- \"c32\" does not (yet) support a label/import operand for it.");
+              c32Index = c32NamedIndex;
+            }
+            else if (!TryParseNumericLiteral(c32IndexToken, out c32Index) || c32Index < 0 || c32Index > c32MaxIndex)
+            {
+              string c32IndexErrorSuffix = c32IsFloatSpelling
+                  ? $" or one of its named constants (e.g. \"pi\", \"sqrt(2)\", \"1/ln(2)\")"
+                  : "";
+              errors.Add($"line {line.LineNumber}: \"{c32IndexToken}\" does not fit \"{c32MnemonicText}\"'s unsigned constant index (0..{c32MaxIndex}){c32IndexErrorSuffix} -- \"{c32MnemonicText}\" does not (yet) support a label/import operand for it.");
               c32Index = 0;
             }
 

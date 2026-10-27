@@ -611,9 +611,40 @@ internal static class CvmAssemblyLanguage
   // assigned to each mnemonic is still inferred from source order (dmov=0..dpack=7), not independently
   // confirmed -- per Stefan's own "existing opcodes are implemented and tested on hardware, use this
   // source as given" instruction, taken as ground truth here.
-  private const int Node408BinaryInt32OperationTagBits = CvmInstructionSet.ReservedBinary32Tag;
+  //
+  // RETAGGED 2026-10-27 (full CVM_pipeline dump audit, confirmed by Stefan: "look at node 505"):
+  // Stefan's newest node 507 header table splits the old undifferentiated "binary {32 bit}" row at
+  // 0xE800 into four distinct rows -- 0xE800 is now "32-bit shift/rotate operation" (node 308's new
+  // dlsl/dlsr/dror, see Node308ShiftRotateOperationTagBits below) and this family's own row moved to
+  // 0xF000 ("binary 32-bit integer operation", right next to 0xF800's separate "binary 32-bit float
+  // operation" row, CvmInstructionSet.FloatingPointBinaryOperationTag, unchanged). Node 505's own
+  // d1/op32 decode independently confirms binary-32-int and binary-32-float are genuinely separate
+  // dispatch branches (d1/binfinish via x1a/binary vs. the dedicated x1a/float32 relay), not one shared
+  // row -- not a guess. 0xF000 was previously only a historical, unreferenced value (LongCallTag --
+  // see that constant's own remarks: lcall moved to the "special" 0x2000 tag family long ago, so
+  // nothing live has ever actually emitted 0xF000 until now). No longer derived from
+  // CvmInstructionSet.ReservedBinary32Tag (that constant is left as-is, purely as the OLDER,
+  // pre-2026-10-27 table reading's own historical record -- see its own remarks). Function-field/
+  // register-field bit positions below are UNCHANGED -- only the fixed tag nibble moved.
+  private const int Node408BinaryInt32OperationTagBits = 0xF000;
   private const int Node408BinaryInt32FunctionFieldBitMask = 0x0700;
   private const int Node408BinaryInt32FunctionFieldShift = 8;
+
+  // Node 308's new "32-bit shift/rotate operation" row, ADDED 2026-10-27 (full CVM_pipeline dump
+  // audit): Stefan's newest node 507 header table gives this family its own row right below "unary
+  // 32-bit integer operation": "1110|1wwy|yyyy|xxxx| 32-bit shift/rotate operation" -- tag 0xE800
+  // (freed by Node408BinaryInt32OperationTagBits's own retag to 0xF000, see that constant's own
+  // remarks), bits 15-11 fixed, same as every other tag in this file. Same function-field/register-
+  // field bit WIDTHS as Node308UnaryInt32OperationTagBits's own unary-int family right above (7-bit
+  // function field at bits 10-4, 4-bit register field at bits 3-0, CvmInstructionSet.
+  // UnaryInt32RegisterFieldBitMask) -- node 505's own x4/unary32 relay (shared with the plain unary-int
+  // family) distinguishes the two by testing bit 7 of the forwarded address byte, which is just the
+  // live-resolved address's own bit 11 carried through, so no separate dispatch logic is needed here:
+  // the resolved F18 address of 'dlsl/'dlsr/'dror already IS the opcode's own function-field value --
+  // see CvmInstructionSet.DoubleRegisterLogicalShiftLeftMnemonic's own remarks for the full derivation.
+  private const int Node308ShiftRotateOperationTagBits = 0xE800;
+  private const int Node308ShiftRotateFunctionFieldBitMask = 0x07F0;
+  private const int Node308ShiftRotateFunctionFieldShift = 4;
 
   // Node 206 -- BRAND NEW coordinate to this file, 2026-10-14, per Stefan directly ("unary 16-bit
   // opcodes have been moved to node 206:") pasting node 206's full F18 source for the first time. All
@@ -955,6 +986,12 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.Push2Mnemonic] = (509, "'push2", Node509SpecialBaseTagBits),
         [CvmInstructionSet.RegisterPushMnemonic] = (408, "'rpush", Node509SpecialBaseTagBits),
         [CvmInstructionSet.DoublePushMnemonic] = (408, "'dpush", Node509SpecialBaseTagBits),
+        // fpop/fpush (ADDED 2026-10-23), per Stefan directly ("'fpop fx', 'fpush fx' ... are aliases
+        // for 'dpush', 'dpop'. make it so"): pure aliases of DoublePopMnemonic/DoublePushMnemonic right
+        // above -- identical (node, symbol, tag) tuple. See CvmInstructionSet.FloatingPointPopMnemonic's
+        // own remarks for the full derivation.
+        [CvmInstructionSet.FloatingPointPopMnemonic] = (408, "'dpop", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.FloatingPointPushMnemonic] = (408, "'dpush", Node509SpecialBaseTagBits),
         // RegisterIncrementMnemonic/RegisterDecrementMnemonic/RegisterAddMnemonic ("rinc"/"rdec"/"radd")
         // -- DELETED OUTRIGHT 2026-10-15 along with their constants in CvmInstructionSet.cs; see that
         // file's own remarks (where these three constants used to be declared) for the full history.
@@ -996,6 +1033,12 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.IndirectRegisterPopMnemonic] = (408, "'irpop", Node509SpecialBaseTagBits),
         [CvmInstructionSet.IndirectDoublePushMnemonic] = (408, "'idpush", Node509SpecialBaseTagBits),
         [CvmInstructionSet.IndirectDoublePopMnemonic] = (408, "'idpop", Node509SpecialBaseTagBits),
+        // ifpush/ifpop (ADDED 2026-10-23), per Stefan directly ("'ifpush rx' and 'ifpop rx' ... are
+        // aliases for 'idpush' and 'idpop'. make it so"): pure aliases of IndirectDoublePushMnemonic/
+        // IndirectDoublePopMnemonic right above -- identical (node, symbol, tag) tuple. See
+        // CvmInstructionSet.FloatingPointIndirectPushMnemonic's own remarks for the full derivation.
+        [CvmInstructionSet.FloatingPointIndirectPushMnemonic] = (408, "'idpush", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.FloatingPointIndirectPopMnemonic] = (408, "'idpop", Node509SpecialBaseTagBits),
         [CvmInstructionSet.IndirectDoubleFetchMnemonic] = (408, "'idfetch", Node509SpecialBaseTagBits),
         [CvmInstructionSet.IndirectDoubleStoreMnemonic] = (408, "'idstore", Node509SpecialBaseTagBits),
         [CvmInstructionSet.IndirectRegisterLiteralMnemonic] = (408, "'irlit", Node509SpecialBaseTagBits),
@@ -1027,7 +1070,12 @@ internal static class CvmAssemblyLanguage
         // disassembler" -- their entries are deleted here, not kept-and-orphaned, since
         // CvmInstructionSet.Instructions itself already retired their Ids (98/100) outright for the same
         // reason (see that table's own remarks).
-        [CvmInstructionSet.LongBranchMnemonic] = (407, "'lbr", Node407LongCallTagBits),
+        // RETIRED 2026-10-20: the full CVM_pipeline/CVM2 source dump audited that day shows node 407 has
+        // since been rewritten and no longer defines 'lbr anywhere; this entry is inert (CvmInstructionSet
+        // already has LongBranchMnemonic's own Instructions row commented out) but kept consistent with
+        // that retirement instead of left active here. Commented out, not deleted, per this file's own
+        // "do not remove any opcodes" convention.
+        // [CvmInstructionSet.LongBranchMnemonic] = (407, "'lbr", Node407LongCallTagBits),
         // CVM2's node 506 (2026-09-02) -- repointed from CVM1's node 606 ("only update existing opcodes
         // where possible"). Only 'leave so far, per Stefan's own explicit scope ("give me now enter and
         // leave mnemonics"); enter is a DIFFERENT (self-describing) shape and is wired directly in
@@ -1071,7 +1119,10 @@ internal static class CvmAssemblyLanguage
         // to the language") -- both genuinely new, same tag, same live compile as the rest of node 509.
         // Node 509's thirteenth op (2026-09-05, "I added 'not' to node 509. please add it to assembler
         // and disassembler") -- genuinely new, same tag, same live compile as the rest of node 509.
-        [CvmInstructionSet.NotMnemonic] = (509, "'not", Node509UnaryArithmeticTagBits),
+        // RETIRED 2026-10-20: the full source dump audited that day shows node 509 has since been
+        // rewritten and no longer defines 'not anywhere; inert (NotMnemonic's own Instructions row is
+        // already commented out) but kept consistent with that retirement. Commented out, not deleted.
+        // [CvmInstructionSet.NotMnemonic] = (509, "'not", Node509UnaryArithmeticTagBits),
         // CVM2's node 406 (2026-09-05) -- the binary-arithmetic node, resolved against node 406's own
         // live compile. EIGHT of these twelve REPOINT node 507's old, permanently-orphaned ALU-op
         // mnemonics ("only update existing opcodes where possible"); rsb/rsl/rsr/rur are genuinely new.
@@ -1085,9 +1136,12 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.AndMnemonic] = (306, "'and", Node306BinaryOperationTagBits),
         [CvmInstructionSet.XorMnemonic] = (306, "'xor", Node306BinaryOperationTagBits),
         [CvmInstructionSet.OrMnemonic] = (306, "'or", Node306BinaryOperationTagBits),
-        [CvmInstructionSet.UnsignedShiftLeftMnemonic] = (406, "'usl", Node406BinaryStackTagBits),
-        [CvmInstructionSet.SignedShiftRightMnemonic] = (406, "'ssr", Node406BinaryStackTagBits),
-        [CvmInstructionSet.UnsignedShiftRightMnemonic] = (406, "'usr", Node406BinaryStackTagBits),
+        // RETIRED 2026-10-20: the full source dump audited that day shows node 406 has since been
+        // rewritten and no longer defines 'usl/'ssr/'usr anywhere; inert (their own Instructions rows are
+        // already commented out) but kept consistent with that retirement. Commented out, not deleted.
+        // [CvmInstructionSet.UnsignedShiftLeftMnemonic] = (406, "'usl", Node406BinaryStackTagBits),
+        // [CvmInstructionSet.SignedShiftRightMnemonic] = (406, "'ssr", Node406BinaryStackTagBits),
+        // [CvmInstructionSet.UnsignedShiftRightMnemonic] = (406, "'usr", Node406BinaryStackTagBits),
         // CVM1's OLD 27 node-508 comparison/arithmetic ops -- permanently orphaned (node 508's own REAL
         // CVM2 source, added 2026-09-04, is the globals-access node above and does not define any of
         // these 27 old F18 symbols), kept per "do not remove any opcodes." Simply omitted from
@@ -1168,8 +1222,18 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.Mask15Mnemonic] = (Node206Coordinate, "'mask15", Node306UnaryOperationTagBits),
         [CvmInstructionSet.Invert15Mnemonic] = (Node206Coordinate, "'inv15", Node306UnaryOperationTagBits),
         [CvmInstructionSet.BoolMnemonic] = (Node206Coordinate, "'bool", Node306UnaryOperationTagBits),
-        [CvmInstructionSet.ClearLowestBitMnemonic] = (Node206Coordinate, "'clearlow", Node306UnaryOperationTagBits),
+        // RENAMED 2026-10-27 (full CVM_pipeline dump audit): node 206's own F18 word is now spelled
+        // 'clrlow, not 'clearlow -- same node, same tag, same semantics, only the live symbol's own
+        // name changed. The C# mnemonic ("clearlow", what Stefan types) is unchanged; only this target
+        // symbol string was updated to match -- see CvmInstructionSet.ClearLowestBitMnemonic's own
+        // remarks.
+        [CvmInstructionSet.ClearLowestBitMnemonic] = (Node206Coordinate, "'clrlow", Node306UnaryOperationTagBits),
         [CvmInstructionSet.LowestBitMnemonic] = (Node206Coordinate, "'lowbit", Node306UnaryOperationTagBits),
+        // bitrev/ror -- ADDED 2026-10-27, full CVM_pipeline dump audit: node 206's own source defines
+        // 'bitrev ( w - w' ) and 'ror ( w - w' ) alongside this family -- see
+        // CvmInstructionSet.BitReverseMnemonic's own remarks.
+        [CvmInstructionSet.BitReverseMnemonic] = (Node206Coordinate, "'bitrev", Node306UnaryOperationTagBits),
+        [CvmInstructionSet.RotateRightMnemonic] = (Node206Coordinate, "'ror", Node306UnaryOperationTagBits),
         // CORRECTED 2026-10-11 (second pass): 'bitcount did NOT follow its 16 unary siblings to node 307
         // that day -- Stefan directly: "bitcount has been moved to node 306. it address must be set to 0,
         // so 'if' in 306 is working." REPOINTED AGAIN 2026-10-14, this time REJOINING its 16 siblings on
@@ -1281,6 +1345,21 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoubleRegisterDivideByTwoMnemonic] = (208, "'ddiv2", Node308UnaryInt32OperationTagBits),
         [CvmInstructionSet.DoubleRegisterUnsignedDivideByTwoMnemonic] = (208, "'dudiv2", Node308UnaryInt32OperationTagBits),
 
+        // dinc2/ddec2 (ADDED 2026-10-27, full CVM_pipeline dump audit): node 208's own source defines
+        // these as their own tick-labeled entries in this exact same x4a/main dispatch block -- see
+        // CvmInstructionSet.DoubleRegisterIncrementByTwoMnemonic's own remarks.
+        [CvmInstructionSet.DoubleRegisterIncrementByTwoMnemonic] = (208, "'dinc2", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.DoubleRegisterDecrementByTwoMnemonic] = (208, "'ddec2", Node308UnaryInt32OperationTagBits),
+
+        // dsext/fneg/fabs (ADDED 2026-10-20): all three live in this exact same node-208 tick-labelled
+        // block, dispatched by the exact same x4a/main loop, as the family right above -- see
+        // CvmInstructionSet.DoubleRegisterInvertMnemonic's and FloatingPointNegateMnemonic's own remarks
+        // for the full derivation (including why fneg/fabs reuse this family's tag rather than needing a
+        // distinct 0xE800-based one of their own).
+        [CvmInstructionSet.DoubleRegisterSignExtendMnemonic] = (208, "'dsext", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.FloatingPointNegateMnemonic] = (208, "'fneg", Node308UnaryInt32OperationTagBits),
+        [CvmInstructionSet.FloatingPointAbsoluteMnemonic] = (208, "'fabs", Node308UnaryInt32OperationTagBits),
+
         // dmov/dand/dor/dxor/dadd/dudiv/dmul/dpack (ADDED 2026-10-17): binary 32-bit integer ALU family --
         // see CvmInstructionSet.DoubleBinaryMoveMnemonic's own remarks, including the FLAGGED
         // (analogy-derived, not table-confirmed) field layout behind Node408BinaryInt32OperationTagBits.
@@ -1301,6 +1380,29 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoubleBinaryUnsignedDivideMnemonic] = (309, "'dudiv", Node408BinaryInt32OperationTagBits),
         [CvmInstructionSet.DoubleBinaryMultiplyMnemonic] = (309, "'dmul", Node408BinaryInt32OperationTagBits),
         [CvmInstructionSet.DoubleBinaryPackMnemonic] = (309, "'dpack", Node408BinaryInt32OperationTagBits),
+        // fmove (ADDED 2026-10-23), per Stefan directly ("'fmove fx fy' can be implemented as an alias
+        // for 'dmove dx dy'. make it so"): a pure alias of DoubleBinaryMoveMnemonic right above --
+        // identical (node, symbol, tag) tuple, so the two mnemonics always resolve to the exact same
+        // live-compiled address and always assemble to the exact same opcode word. See
+        // CvmInstructionSet.FloatingPointMoveMnemonic's own remarks for the full derivation.
+        [CvmInstructionSet.FloatingPointMoveMnemonic] = (309, "'dmov", Node408BinaryInt32OperationTagBits),
+
+        // dlsl/dlsr/dror (ADDED 2026-10-27, full CVM_pipeline dump audit): node 308's new shift/rotate
+        // family -- previously node 308 had NO active mnemonic targeting it at all -- see
+        // CvmInstructionSet.DoubleRegisterLogicalShiftLeftMnemonic's own remarks and
+        // Node308ShiftRotateOperationTagBits's own remarks for the tag derivation.
+        [CvmInstructionSet.DoubleRegisterLogicalShiftLeftMnemonic] = (308, "'dlsl", Node308ShiftRotateOperationTagBits),
+        [CvmInstructionSet.DoubleRegisterLogicalShiftRightMnemonic] = (308, "'dlsr", Node308ShiftRotateOperationTagBits),
+        [CvmInstructionSet.DoubleRegisterRotateRightMnemonic] = (308, "'dror", Node308ShiftRotateOperationTagBits),
+
+        // rpopi/dpopi/rpushi/dpushi (ADDED 2026-10-27, full CVM_pipeline dump audit): node 509's new
+        // "register # on the stack" family -- CvmOperandEncoding.None, resolved via node 509's own
+        // special-word mechanism (TryResolveNode509SpecialOpcode), same tag as push/drop/dup/etc. --
+        // see CvmInstructionSet.StackRegisterPopMnemonic's own remarks.
+        [CvmInstructionSet.StackRegisterPopMnemonic] = (509, "'rpopi", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.StackDoublePopMnemonic] = (509, "'dpopi", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.StackRegisterPushMnemonic] = (509, "'rpushi", Node509SpecialBaseTagBits),
+        [CvmInstructionSet.StackDoublePushMnemonic] = (509, "'dpushi", Node509SpecialBaseTagBits),
 
         // REMOVED OUTRIGHT, 2026-09-21: node 306's OLD 'fpop/'fpush entries (2026-09-15/16, tag
         // FloatingPointUnaryTag/0xDC00) and its four OLD constant-lookup entries (2026-09-17, tag
@@ -1405,6 +1507,10 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.BoolMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
         [CvmInstructionSet.ClearLowestBitMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
         [CvmInstructionSet.LowestBitMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        // bitrev/ror (ADDED 2026-10-27): same family/field layout -- see
+        // CvmInstructionSet.BitReverseMnemonic's own remarks.
+        [CvmInstructionSet.BitReverseMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
+        [CvmInstructionSet.RotateRightMnemonic] = (Node306UnaryFunctionFieldBitMask, Node306UnaryFunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask, 0),
         // bitcount -- RETIRED 2026-10-15 alongside its NodeSymbolByMnemonic entry above; the field
         // layout itself is unaffected by the rename (same bit positions either way), but the entry is
         // unreachable now that "bitcount" has no live Instructions row, so it's commented out too.
@@ -1443,6 +1549,15 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoubleRegisterMultiplyByTwoMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
         [CvmInstructionSet.DoubleRegisterDivideByTwoMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
         [CvmInstructionSet.DoubleRegisterUnsignedDivideByTwoMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
+        // dinc2/ddec2 (ADDED 2026-10-27): same family/field layout -- see
+        // CvmInstructionSet.DoubleRegisterIncrementByTwoMnemonic's own remarks.
+        [CvmInstructionSet.DoubleRegisterIncrementByTwoMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
+        [CvmInstructionSet.DoubleRegisterDecrementByTwoMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
+        // dsext/fneg/fabs (ADDED 2026-10-20): same node-208 family, same field layout -- see
+        // CvmInstructionSet.DoubleRegisterInvertMnemonic's and FloatingPointNegateMnemonic's own remarks.
+        [CvmInstructionSet.DoubleRegisterSignExtendMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
+        [CvmInstructionSet.FloatingPointNegateMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
+        [CvmInstructionSet.FloatingPointAbsoluteMnemonic] = (Node308UnaryInt32FunctionFieldBitMask, Node308UnaryInt32FunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
         // Node 408's "binary 32-bit integer operation" family (2026-10-17, CORRECTED second pass -- see
         // Node408BinaryInt32OperationTagBits's own remarks): function field = bits 10-8 (3 bits, cross-checked
         // against node 307/308's own "0x7 and" relay mask, not just analogy), x/y (both double registers) at
@@ -1455,6 +1570,16 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.DoubleBinaryUnsignedDivideMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.DoubleBinaryMultiplyMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
         [CvmInstructionSet.DoubleBinaryPackMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+        // fmove (ADDED 2026-10-23): pure alias of DoubleBinaryMoveMnemonic, same field layout -- see
+        // CvmInstructionSet.FloatingPointMoveMnemonic's own remarks.
+        [CvmInstructionSet.FloatingPointMoveMnemonic] = (Node408BinaryInt32FunctionFieldBitMask, Node408BinaryInt32FunctionFieldShift, 0, CvmInstructionSet.Operation16FirstRegisterBitMask | CvmInstructionSet.Operation16SecondRegisterBitMask, 0),
+
+        // dlsl/dlsr/dror (ADDED 2026-10-27): node 308's new shift/rotate family -- same field-layout
+        // shape as the unary32-int family (7-bit function field, 4-bit register field), new tag -- see
+        // CvmInstructionSet.DoubleRegisterLogicalShiftLeftMnemonic's own remarks.
+        [CvmInstructionSet.DoubleRegisterLogicalShiftLeftMnemonic] = (Node308ShiftRotateFunctionFieldBitMask, Node308ShiftRotateFunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
+        [CvmInstructionSet.DoubleRegisterLogicalShiftRightMnemonic] = (Node308ShiftRotateFunctionFieldBitMask, Node308ShiftRotateFunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
+        [CvmInstructionSet.DoubleRegisterRotateRightMnemonic] = (Node308ShiftRotateFunctionFieldBitMask, Node308ShiftRotateFunctionFieldShift, 0, CvmInstructionSet.UnaryInt32RegisterFieldBitMask, 0),
       };
 
   /// <summary>
@@ -1515,6 +1640,11 @@ internal static class CvmAssemblyLanguage
         [CvmInstructionSet.Push2Mnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.RegisterPushMnemonic] = Node509SpecialAddressShift,
         [CvmInstructionSet.DoublePushMnemonic] = Node509SpecialAddressShift,
+        // fpop/fpush (ADDED 2026-10-23): pure aliases of DoublePopMnemonic/DoublePushMnemonic, same
+        // address shift. ifpush/ifpop are NOT here -- same as their IndirectDoublePushMnemonic/
+        // IndirectDoublePopMnemonic counterparts, which also have no entry in this dictionary.
+        [CvmInstructionSet.FloatingPointPopMnemonic] = Node509SpecialAddressShift,
+        [CvmInstructionSet.FloatingPointPushMnemonic] = Node509SpecialAddressShift,
         // RegisterIncrementMnemonic/RegisterDecrementMnemonic/RegisterAddMnemonic -- DELETED OUTRIGHT
         // 2026-10-15, see CvmInstructionSet.cs's own remarks.
         [CvmInstructionSet.HaltMnemonic] = Node509SpecialAddressShift,

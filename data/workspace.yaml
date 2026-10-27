@@ -30,25 +30,25 @@ boards:
       friendlyName: USB Serial Port (COM3)
     lastKnownComPort: COM3
     lastSeenUtc: &o0
-      dateTime: 2026-10-20T19:28:03.6811533
-      utcDateTime: 2026-10-20T19:28:03.6811533Z
-      localDateTime: 2026-10-20T21:28:03.6811533+02:00
-      date: 2026-10-20T00:00:00.0000000
-      day: 20
+      dateTime: 2026-10-27T18:53:18.2980946
+      utcDateTime: 2026-10-27T18:53:18.2980946Z
+      localDateTime: 2026-10-27T19:53:18.2980946+01:00
+      date: 2026-10-27T00:00:00.0000000
+      day: 27
       dayOfWeek: Tuesday
-      dayOfYear: 293
-      hour: 19
-      millisecond: 681
-      microsecond: 153
-      nanosecond: 300
-      minute: 28
+      dayOfYear: 300
+      hour: 18
+      millisecond: 298
+      microsecond: 94
+      nanosecond: 600
+      minute: 53
       month: 10
       offset: 00:00:00
       totalOffsetMinutes: 0
-      second: 3
-      ticks: 639281212836811533
-      utcTicks: 639281212836811533
-      timeOfDay: 19:28:03.6811533
+      second: 18
+      ticks: 639287239982980946
+      utcTicks: 639287239982980946
+      timeOfDay: 18:53:18.2980946
       year: 2026
   portB: 
   portC:
@@ -68232,7 +68232,7 @@ projects:
         ;
 
 
-        : 'clearlow ( w - w' ) // clear lowest set bit
+        : 'clrlow ( w - w' ) // clear lowest set bit
           dup -1 . + and
         ;
 
@@ -68251,18 +68251,18 @@ projects:
             then
           next
           a
-          right a!
         ;
 
 
         : 'bitrev ( w - .. w' )
-          dup dup xor
+          dup dup xor a!
           15 for
             ( remaining reversed )
-            over 1 and >r
-            2* r> xor
-            >r 2/ r>
+            dup 1 and
+            a 2* xor a!
+            2/
           next
+          a
         ;
 
 
@@ -68278,6 +68278,12 @@ projects:
           ( lo8 hi - w )
           2* 2* 2* 2* 2* 2* 2* 2*
           xor
+        ;
+
+
+        : 'ror ( w - .. w' )
+          dup a!
+          0x10000 over . +*
         ;
 
 
@@ -68337,34 +68343,34 @@ projects:
       - 0x0629A
       - 0x3EDBA
       - 0x1F421
-      - 0x23DAD
-      - 0x001D5
-      - 0x24DE7
+      - 0x23555
+      - 0x24DE2
+      - 0x2BDBA
       - 0x0000F
-      - 0x2E9B2
-      - 0x21DFA
+      - 0x25DFA
       - 0x00001
-      - 0x2E49A
-      - 0x388C2
-      - 0x27029
-      - 0x15555
+      - 0x224E2
+      - 0x2A778
+      - 0x23555
       - 0x307C2
       - 0x307C2
       - 0x307B2
       - 0x04055
       - 0x000FF
       - 0x248B2
-      - 0x1342F
+      - 0x1342D
       - 0x264DA
       - 0x364DA
       - 0x364DA
       - 0x39555
+      - 0x24A12
+      - 0x10000
+      - 0x209D5
       - 0x04A2A
       - 0x00175
       - 0x01F2A
       - 0x0BF02
       - 0x0BA55
-      - 0x15555
       startup:
         entryPoint: 0x195
         p: 0x000
@@ -70603,6 +70609,69 @@ projects:
         # 0 org
 
 
+        : 'dlsl x4/dlsl ;  // logical shift left
+
+        : 'dlsr x4/dlsr ;  // logical shift right
+
+        : 'dror  // rotate right
+
+        : x4/dror ( hi lo n - .. lo' hi' )
+          >r x4/drol_next ;
+          begin
+            2* 2* a!
+            0 over . +*
+
+          // Original low bit is now A bit 1.
+            a 2 and
+            if
+              drop 0x8000 xor
+            else
+              drop
+            then
+
+            a 2/ 2/
+        : x4/drol_next
+          next
+          over
+        ;
+
+
+
+        : x4/dlsr ( hi lo n - lo hi )
+          >r x4/dlsr_next ;
+          for
+            // Align the low half for the 18-bit hardware shift.
+            2* 2* a!
+            0 over . +*
+            a 2/ 2/
+            ( .. hi' lo' )
+        : x4/dlsr_next
+          next
+          over
+        ;
+
+
+        : x4/dlsl ( hi lo n - lo hi )
+          >r x4/dlsl_next ;
+          for
+            2*
+            dup 2* -if
+              // Carry from low half.
+              drop
+              >r 2* 1 xor r> .
+            else
+              drop
+              >r 2* r>
+            then
+            0xffff and
+            ( hi' lo' )
+        : x4/dlsl_next
+          next
+          over
+        ;
+
+
+
         : x4/binary32 ( addr - )
           // receive: addr hi1 lo1 hi2 lo2
           // send: instr addr hi1 lo1 hi2 lo2
@@ -70625,6 +70694,14 @@ projects:
           // return receive: hi lo
           // return send: hi lo
           down a!
+          dup 0x80 and if
+            drop >r @b @b r>
+            // 1110 1wwy yyyy xxxx
+            // special shift operation
+            dup 2/ 2/ 2/ 2/ 2/ 0x3 and >r
+            0x1f and ex !b !b ;
+          then
+          drop
           !          // addr
           @b !       // hi
           @b !       // lo
@@ -70633,69 +70710,68 @@ projects:
         ;
 
 
-
       ramWords:
+      - 0x11418
+      - 0x11410
+      - 0x2F70E
+      - 0x364AF
+      - 0x00000
+      - 0x209D2
+      - 0x23DFA
+      - 0x00002
+      - 0x1940C
+      - 0x3BDE2
+      - 0x08000
+      - 0x1140D
+      - 0x3A9B2
+      - 0x227C2
+      - 0x1F403
+      - 0x21555
+      - 0x2F716
+      - 0x2E9B2
+      - 0x364AF
+      - 0x00000
+      - 0x209D2
+      - 0x227C2
+      - 0x1F412
+      - 0x21555
+      - 0x2F724
+      - 0x2E9B2
+      - 0x36DDA
+      - 0x1B420
+      - 0x3A8DF
+      - 0x00001
+      - 0x38CB2
+      - 0x11422
+      - 0x3A8DA
+      - 0x269B2
+      - 0x040B2
+      - 0x0FFFF
+      - 0x1F41A
+      - 0x21555
       - 0x04A2A
       - 0x001D5
       - 0x01A02
       - 0x0BF2A
       - 0x01A0A
       - 0x09E25
-      - 0x04A2A
+      - 0x04A97
       - 0x00115
-      - 0x01A02
-      - 0x0BE22
-      - 0x03B55
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
-      - 0x15555
+      - 0x00080
+      - 0x3F339
+      - 0x3A802
+      - 0x00C92
+      - 0x307C2
+      - 0x30712
+      - 0x00003
+      - 0x3E812
+      - 0x0001F
+      - 0x3F455
+      - 0x09B55
+      - 0x3BA02
+      - 0x0BF2A
+      - 0x03B0A
+      - 0x09555
       - 0x15555
       - 0x15555
       - 0x15555
@@ -74526,7 +74602,7 @@ projects:
 
         1110|0www|wwww|xxxx| 506  | unary 32-bit integer operation
 
-        1110|1www|wwww|xxxx| 506  | unary 32-bit float operation
+        1110|1wwy|yyyy|xxxx| 506  | 32-bit shift/rotate operation
 
         1111|0ppp|yyyy|xxxx| 506  | binary 32-bit integer operation
 
