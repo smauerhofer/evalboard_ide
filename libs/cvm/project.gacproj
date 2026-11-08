@@ -2,3 +2,7 @@ schemaVersion: 1
 name: cvm
 kind: Library
 libraryReferences: []
+chipProjectId: ''
+chipProjectRole: Target
+enableConstantFolding: true
+enablePeepholeOptimization: false

@@ -6,7 +6,7 @@ namespace Ga144.C.Toolchain;
 /// annotating the tree in a separate pass.</summary>
 public abstract record CExpr(CSourceLocation Location);
 
-public sealed record CIntLiteralExpr(CSourceLocation Location, long Value, bool IsUnsigned) : CExpr(Location);
+public sealed record CIntLiteralExpr(CSourceLocation Location, long Value, bool IsUnsigned, bool IsLong = false) : CExpr(Location);
 
 /// <summary>A <c>float</c> literal ("3.14", "1.5f", "1e-3") -- added 2026-09-26 alongside basic
 /// <c>float</c> support (see <see cref="CType.Float"/>'s own remarks). <see cref="Value"/> is stored as a
@@ -96,4 +96,4 @@ public sealed record CCommaExpr(CSourceLocation Location, CExpr Left, CExpr Righ
 /// here: whether <see cref="Base"/> actually has a struct type, which member offset "Member" resolves
 /// to, and whether <paramref name="IsArrow"/> is even the right operator for <see cref="Base"/>'s type
 /// are all resolved by <see cref="CCodeGenerator"/> during codegen, not here.</summary>
-public sealed record CMemberAccessExpr(CSourceLocation Location, CExpr Base, string Member, bool IsArrow) : CExpr(Location);
+public sealed record CMemberAccessExpr(CSourceLocation Location, CExpr Base, string Member, bool IsArrow) : CExpr(Location);

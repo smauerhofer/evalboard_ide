@@ -30,6 +30,13 @@ namespace Ga144.C.Toolchain;
 /// leaned on for <c>stl</c>/<c>stp</c>, carried over rather than re-derived -- NOT yet confirmed against
 /// real hardware), so rX already holds exactly what the <c>ldf</c> would reload immediately
 /// afterward.</description></item>
+/// <item><description>(ADDED 2026-11-08) <c>inc rN</c>/<c>dec rN</c>, <c>neg rN</c>/<c>neg rN</c>,
+/// <c>inv rN</c>/<c>inv rN</c>, <c>dinc dN</c>/<c>ddec dN</c> and <c>dinc2</c>/<c>ddec2</c> pairs on the same
+/// register (either order) -- exact inverses, so the pair is deleted.</description></item>
+/// <item><description>(ADDED 2026-11-08) <c>rpush rA</c> immediately followed by <c>rpop rB</c> with
+/// A != B -- replaced by the single <c>mov rB, rA</c>.</description></item>
+/// <item><description>(ADDED 2026-11-08) <c>mov rA, rB</c> immediately followed by <c>mov rB, rA</c> -- the
+/// second move is a no-op and is deleted; a self-move <c>mov rA, rA</c> is deleted too.</description></item>
 /// </list>
 ///
 /// <b>Scope and safety</b> -- unchanged from the previous version. Every rule matches a small, fixed run
@@ -129,8 +136,95 @@ public static class CvmPeepholeOptimizer
       return 2;
     }
 
+    // ADDED 2026-11-08. Rule: two adjacent self-cancelling unary ops on the same register --
+    // "inc rN; dec rN", "dec rN; inc rN", "neg rN; neg rN", "inv rN; inv rN" and the double-register
+    // "dinc/ddec" and "dinc2/ddec2" pairs (either order). All of these are exact modular inverses, so the
+    // pair is a full no-op. They arise when constant-offset pointer/index arithmetic is emitted next to its
+    // own undo (for example the "inc rP; rload ...; dec rP" word-1 access sequence directly followed by
+    // another access).
+    if (remaining >= 2)
+    {
+      foreach ((string first, string second, string prefix) in CancellingPairs)
+      {
+        if (TryParseRegisterInstruction(lines[i], first, prefix, out int firstReg)
+            && TryParseRegisterInstruction(lines[i + 1], second, prefix, out int secondReg)
+            && firstReg == secondReg)
+        {
+          return 2;
+        }
+      }
+    }
+
+    // ADDED 2026-11-08. Rule: "rpush rA; rpop rB" (A != B, adjacent) -- the value is pushed and popped
+    // straight back off, so the VM stack is unchanged and the net effect is "mov rB, rA" (one word and one
+    // instruction instead of two). The A == B case is the full no-op rule above.
+    if (remaining >= 2
+        && TryParseRegisterInstruction(lines[i], "rpush", "r", out int movedFrom)
+        && TryParseRegisterInstruction(lines[i + 1], "rpop", "r", out int movedTo)
+        && movedFrom != movedTo)
+    {
+      replacementLine = $"  mov r{movedTo}, r{movedFrom}";
+      return 2;
+    }
+
+    // ADDED 2026-11-08. Rule: "mov rA, rB; mov rB, rA" -- after the first move both registers hold the same
+    // value, so the second is a no-op (this is what "copy the result of a library call to the scratch register,
+    // then copy it on to r0" produces). A self-move "mov rA, rA" is deleted as well.
+    if (TryParseMove(lines[i], out int moveDest, out int moveSource))
+    {
+      if (moveDest == moveSource)
+      {
+        return 1;
+      }
+
+      if (remaining >= 2
+          && TryParseMove(lines[i + 1], out int backDest, out int backSource)
+          && backDest == moveSource && backSource == moveDest)
+      {
+        replacementLine = lines[i];
+        return 2;
+      }
+    }
+
     return 0;
   }
+
+  /// <summary>Matches <c>"  mov rA, rB"</c> (two plain registers).</summary>
+  private static bool TryParseMove(string line, out int destination, out int source)
+  {
+    destination = 0;
+    source = 0;
+    const string prefix = "  mov r";
+    if (!line.StartsWith(prefix, StringComparison.Ordinal))
+    {
+      return false;
+    }
+
+    int commaIndex = line.IndexOf(',', prefix.Length);
+    if (commaIndex < 0)
+    {
+      return false;
+    }
+
+    string rest = line[(commaIndex + 1)..].Trim();
+    return rest.StartsWith('r')
+        && int.TryParse(line.AsSpan(prefix.Length, commaIndex - prefix.Length), out destination)
+        && int.TryParse(rest.AsSpan(1), out source);
+  }
+
+  /// <summary>(first mnemonic, second mnemonic, register prefix) triples that cancel exactly when applied
+  /// back to back on the same register -- see the rule in <see cref="TryMatchAndRewrite"/>.</summary>
+  private static readonly (string First, string Second, string Prefix)[] CancellingPairs =
+  [
+    ("inc", "dec", "r"),
+    ("dec", "inc", "r"),
+    ("neg", "neg", "r"),
+    ("inv", "inv", "r"),
+    ("dinc", "ddec", "d"),
+    ("ddec", "dinc", "d"),
+    ("dinc2", "ddec2", "d"),
+    ("ddec2", "dinc2", "d"),
+  ];
 
   /// <summary>Matches an emitted instruction line of the shape <c>"  {mnemonic} {registerPrefix}{N}"</c>
   /// (exactly what <see cref="CCodeGenerator.EmitCode"/> produces for <c>rpush</c>/<c>rpop</c>/

@@ -9,6 +9,7 @@ public enum CTypeKind
   UnsignedChar,
   Float,
   Long,
+  UnsignedLong,
   Pointer,
   Array,
   Function,
@@ -113,6 +114,14 @@ public sealed class CType : IEquatable<CType>
   /// </summary>
   public static readonly CType Long = new() { Kind = CTypeKind.Long };
 
+  /// <summary>
+  /// <b>ADDED 2026-11-08</b>: <c>unsigned long</c>, the 32-bit unsigned counterpart of <see cref="Long"/>
+  /// (same 2-word little-endian layout; only the meaning of <c>/</c>, <c>%</c>, <c>&gt;&gt;</c> and the
+  /// ordered comparisons differs). <c>long</c> itself is now a fully supported value type: see
+  /// <c>claude/cvm-long-support-2026-11-08.md</c>.
+  /// </summary>
+  public static readonly CType UnsignedLong = new() { Kind = CTypeKind.UnsignedLong };
+
   public required CTypeKind Kind { get; init; }
 
   /// <summary>Pointer/Array only: what it points to / holds.</summary>
@@ -197,7 +206,7 @@ public sealed class CType : IEquatable<CType>
   public bool IsArray => Kind == CTypeKind.Array;
   public bool IsFunction => Kind == CTypeKind.Function;
   public bool IsStruct => Kind == CTypeKind.Struct;
-  public bool IsIntegral => Kind is CTypeKind.Int or CTypeKind.UnsignedInt or CTypeKind.Char or CTypeKind.UnsignedChar or CTypeKind.Long;
+  public bool IsIntegral => Kind is CTypeKind.Int or CTypeKind.UnsignedInt or CTypeKind.Char or CTypeKind.UnsignedChar or CTypeKind.Long or CTypeKind.UnsignedLong;
   public bool IsFloat => Kind == CTypeKind.Float;
 
   /// <summary>Added 2026-09-26 alongside <see cref="Long"/>'s own remarks -- true for the 2-word integer
@@ -206,7 +215,11 @@ public sealed class CType : IEquatable<CType>
   /// value codegen yet" restriction -- see <see cref="CCodeGenerator"/>'s own <c>IsUnsupportedWholeValueType</c>
   /// for where both are checked together) purely so each call site can give its own precise diagnostic.
   /// </summary>
-  public bool IsLong => Kind == CTypeKind.Long;
+  public bool IsLong => Kind is CTypeKind.Long or CTypeKind.UnsignedLong;
+
+  /// <summary>Any 2-word VALUE that lives in a double register while it is being computed: a pointer, a
+  /// <c>float</c> or a (signed or unsigned) <c>long</c>.</summary>
+  public bool IsWideValue => IsPointer || IsFloat || IsLong;
 
   public bool IsScalar => IsIntegral || IsPointer || IsFloat;
 
@@ -214,7 +227,7 @@ public sealed class CType : IEquatable<CType>
   /// comparison/shift/divide operations. A pointer is treated as unsigned for this purpose (address
   /// comparisons and shifts are not meaningful anyway; only division of a pointer never happens).
   /// </summary>
-  public bool IsUnsigned => Kind is CTypeKind.UnsignedInt or CTypeKind.UnsignedChar or CTypeKind.Pointer;
+  public bool IsUnsigned => Kind is CTypeKind.UnsignedInt or CTypeKind.UnsignedChar or CTypeKind.UnsignedLong or CTypeKind.Pointer;
 
   /// <summary>Size in CVM words. Every scalar integer (<c>int</c>/<c>unsigned int</c>/<c>char</c>/
   /// <c>unsigned char</c>) is 1 -- except <see cref="CTypeKind.Float"/> (added 2026-09-26) and <see
@@ -228,7 +241,7 @@ public sealed class CType : IEquatable<CType>
   public int SizeInWords => Kind switch
   {
     CTypeKind.Void or CTypeKind.Function => 0,
-    CTypeKind.Float or CTypeKind.Long or CTypeKind.Pointer => 2,
+    CTypeKind.Float or CTypeKind.Long or CTypeKind.UnsignedLong or CTypeKind.Pointer => 2,
     CTypeKind.Array => Math.Max(ArrayLength, 0) * (ElementType?.SizeInWords ?? 1),
     CTypeKind.Struct => Members?.Sum(m => Math.Max(m.Type.SizeInWords, 1)) ?? 0,
     _ => 1,
@@ -281,10 +294,11 @@ public sealed class CType : IEquatable<CType>
     CTypeKind.UnsignedChar => "unsigned char",
     CTypeKind.Float => "float",
     CTypeKind.Long => "long",
+    CTypeKind.UnsignedLong => "unsigned long",
     CTypeKind.Pointer => $"{ElementType} *",
     CTypeKind.Array => ArrayLength >= 0 ? $"{ElementType}[{ArrayLength}]" : $"{ElementType}[]",
     CTypeKind.Function => $"{ReturnType} ({string.Join(", ", ParameterTypes)})",
     CTypeKind.Struct => $"struct {Tag}",
     _ => Kind.ToString(),
   };
-}
+}

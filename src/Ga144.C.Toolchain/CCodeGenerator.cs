@@ -11,6 +11,24 @@ namespace Ga144.C.Toolchain;
 /// mnemonic this class emits below is one of the 79 that opcode audit confirmed; nothing from the old
 /// ISA is referenced anywhere in this file.
 ///
+/// <para><b>UPDATED 2026-11-08 to the CURRENT 122-mnemonic <c>CvmInstructionSet</c></b> (see
+/// <c>claude/cvm-full-opcode-audit-2026-10-27.md</c>). Every mnemonic still emitted was re-checked against
+/// the live <c>Instructions</c> table: none was removed or renamed since 2026-10-17. What changed is that
+/// opcodes added since then are now USED where they replace longer sequences:</para>
+/// <list type="bullet">
+/// <item><description><c>lea rX, offset</c> (Id 243) loads a frame address in ONE instruction -- replaces
+/// <c>fp@</c> + <c>rpop</c> + <c>rlit</c>/<c>add</c> (or repeated <c>inc</c>/<c>dec</c>).</description></item>
+/// <item><description><c>dinc</c>/<c>ddec</c>/<c>dinc2</c>/<c>ddec2</c> (32-bit, carry into the page word)
+/// replace the 4-word <c>dlit</c>+<c>dadd</c> pair for small cross-page pointer steps (|n| &lt;= 6).</description></item>
+/// <item><description><c>dsext dN</c> (Id 258) sign-extends the index low word into a 32-bit delta --
+/// replaces the <c>if</c>/<c>br</c>/<c>rlit -1|0</c> block in <see cref="EmitAddIndexScaledToPointer"/>.</description></item>
+/// <item><description><c>mul2</c>/<c>udiv2</c>/<c>div2</c>/<c>highbyte</c>/<c>lowbyte</c>/<c>byteswap</c>
+/// implement shifts by a CONSTANT amount, multiplication by a constant (shift-and-add), unsigned
+/// division and modulo by a power of two, with no runtime-library call at all (see
+/// <see cref="TryEmitConstantIntOperation"/>). Only a non-constant operand still reaches
+/// <c>__mul</c>/<c>__divs</c>/... .</description></item>
+/// </list>
+///
 /// Walks a <see cref="CTranslationUnit"/> exactly once and emits CVM assembly text (the same
 /// <c>.casm</c> syntax <see cref="Ga144.Cvm.Toolchain.CvmAssembler"/> accepts) -- there is no separate
 /// type-checking pass and no annotated tree: <see cref="EmitExprForValue"/> computes (and checks) each
@@ -51,9 +69,15 @@ namespace Ga144.C.Toolchain;
 /// does a general shift -- all five lower to a call to a hand-written runtime library routine
 /// (<c>__mul</c>/<c>__divs</c>/<c>__divu</c>/<c>__mods</c>/<c>__modu</c>/<c>__shl</c>/<c>__shrs</c>/
 /// <c>__shru</c>), exactly the same pattern the previous version already used for
-/// <c>*</c>/<c>/</c>/<c>%</c> (this is a real, pre-existing ISA gap, not new scope). <b>That library
-/// itself still needs rewriting against the new ISA -- out of scope for this file, flagged, not silently
-/// assumed done.</b></description></item>
+/// <c>*</c>/<c>/</c>/<c>%</c> (this is a real, pre-existing ISA gap, not new scope). <b>UPDATED 2026-11-08:
+/// the library now exists</b> -- hand-written CVM assembler in
+/// <c>libs/cvm/asm/cvmmath.asm</c>, declared in
+/// <c>libs/cvm/include/cvm.h</c>, as <c>__fastcall</c> functions (arguments in <c>r0</c>/<c>r1</c>, result
+/// in <c>r0</c>, no stack frame). A constant operand
+/// avoids the call entirely (see <see cref="TryEmitConstantIntOperation"/>). <see
+/// cref="EmitLibraryBinaryCall"/> follows the normal calling convention and preserves the live scalar
+/// scratch registers itself; pointer/float registers held across a library call are spilled by their
+/// holders (see <see cref="MayCallOrUseLibrary"/>).</description></item>
 /// <item><description>A general two-operand comparison lowers to subtract + a <c>cond</c>/<c>if</c>
 /// sign-test (<c>&lt;0</c>/<c>&lt;=0</c>/<c>&gt;0</c>/<c>&gt;=0</c>/<c>==0</c>/<c>!=0</c>); an unsigned
 /// comparison XORs both operands with <c>0x8000</c> first (the standard bias trick).</description></item>
@@ -329,6 +353,16 @@ public sealed class CCodeGenerator
         Error(function.Location, $"\"__optimize\" function \"{function.Name}\" is not one this compiler recognizes as a builtin (recognized: \"float fabsf(float)\", \"float fminf(float, float)\", \"float fmaxf(float, float)\")");
       }
 
+      // FIXED 2026-11-08: a prototype that appears AFTER (or alongside) the definition of the same function --
+      // the normal "header with prototypes + .c file with the definitions" layout, e.g. libs/cvm/include/cvm.h
+      // included by libs/cvm/src/cvm.c -- must neither overwrite the definition's signature nor make the
+      // function an import ("is both a local label and .import"ed").
+      bool definedElsewhereInThisUnit = function.Body is null && existing is not null && existing.IsDefinedHere;
+      if (definedElsewhereInThisUnit)
+      {
+        continue;
+      }
+
       _functions[function.Name] = new CFunctionSignature
       {
         Name = function.Name,
@@ -344,6 +378,9 @@ public sealed class CCodeGenerator
         _imports.Add(function.Name);
       }
     }
+
+    // ...and a prototype seen BEFORE the definition has already queued an import: drop it.
+    _imports.RemoveWhere(name => _functions.TryGetValue(name, out CFunctionSignature? signature) && signature.IsDefinedHere);
   }
 
   private static bool IsRecognizedOptimizeSignature(CFunctionDecl function) =>
@@ -380,7 +417,7 @@ public sealed class CCodeGenerator
     for (int i = 0; i < parameterTypes.Count; i++)
     {
       CType type = parameterTypes[i];
-      bool isWideEligible = type.IsPointer || type.IsFloat;
+      bool isWideEligible = type.IsWideValue;
       bool isScalarEligible = !isWideEligible && type.SizeInWords <= 1;
 
       if (isFastcall && isScalarEligible && nextScalarRegister < ScalarParamFirstRegister + CParser.MaxFastcallScalarParameters)
@@ -432,7 +469,26 @@ public sealed class CCodeGenerator
     }
 
     List<string> words = ComputeGlobalInitialWords(global.Type, global.Initializer, global.Location);
-    _dataLines.Add($"{label}: .word {string.Join(", ", words)}");
+    AddGlobalDataLines(label, global.Type, words);
+  }
+
+  /// <summary>FIXED 2026-11-08: the load/store code addresses word k of a multi-word global (a float, a long,
+  /// a pointer) through the label <c>name__wk</c> (see <see cref="GlobalWordLabel"/>), but only the first word
+  /// ever got a label, so any such global failed to assemble ("_x__w1 is undefined"). Every word of a
+  /// non-array global now gets its own label; the words stay contiguous, so the first label still addresses
+  /// the whole variable.</summary>
+  private void AddGlobalDataLines(string label, CType type, List<string> words)
+  {
+    if (type.IsArray || words.Count < 2)
+    {
+      _dataLines.Add($"{label}: .word {string.Join(", ", words)}");
+      return;
+    }
+
+    for (int k = 0; k < words.Count; k++)
+    {
+      _dataLines.Add($"{GlobalWordLabel(label, k)}: .word {words[k]}");
+    }
   }
 
   /// <summary>Computes a global's (or static local's) initial DATA-section words: exactly
@@ -462,12 +518,16 @@ public sealed class CCodeGenerator
 
     if (type.IsLong)
     {
-      // Same real ISA gap as before this rewrite (see CType.Long's own remarks): there is still no
-      // 32-bit binary integer opcode in the final ISA, so correctly sign-extending an arbitrary 'long'
-      // constant into two words is not attempted -- declaring one without an initializer (zero-filled)
-      // still works.
-      Error(location, "initializing a 'long' global/static variable is not yet supported by this compiler -- the CVM has no 'long' arithmetic instructions defined yet (declare it without an initializer; it will be zero-filled)");
-      return Enumerable.Repeat("0", size).ToList();
+      // ADDED 2026-11-08: a long / unsigned long global or static initializer is folded to a full 32-bit
+      // constant and emitted as two words, LOW word first (the same little-endian layout as float).
+      if (!TryEvaluateConstantLong(initializer, out long longValue))
+      {
+        Error(location, "a 'long' global/static variable's initializer must be a compile-time constant integer expression");
+        longValue = 0;
+      }
+
+      uint longBits = unchecked((uint)longValue);
+      return [(longBits & 0xFFFF).ToString(), (longBits >> 16).ToString()];
     }
 
     if (type.IsPointer)
@@ -544,6 +604,10 @@ public sealed class CCodeGenerator
     {
       case CFloatLiteralExpr literal:
         value = literal.Value;
+        return true;
+
+      case CIntLiteralExpr intLiteral:
+        value = intLiteral.Value;
         return true;
 
       case CUnaryExpr { Op: CUnaryOp.Minus } unary when TryEvaluateConstantFloat(unary.Operand, out float v):
@@ -746,7 +810,7 @@ public sealed class CCodeGenerator
     {
       string label = $"_{_currentFunction!.Name}__static{_staticLocalCounter++}_{decl.Name}";
       List<string> words = ComputeGlobalInitialWords(decl.Type, decl.Initializer, decl.Location);
-      _dataLines.Add($"{label}: .word {string.Join(", ", words)}");
+      AddGlobalDataLines(label, decl.Type, words);
       DeclareSymbol(decl.Name, new CVarSymbol(CVarStorage.StaticGlobal, decl.Type, Label: label));
       return;
     }
@@ -938,20 +1002,16 @@ public sealed class CCodeGenerator
               return symbol.Type;
             }
 
-            // Frame address = fp + offset, page 1 (implicit). fp@ pushes fp's own raw address value
-            // onto the VM stack; rpop brings it into a plain r-register for arithmetic. guaranteedSamePage:
-            // true -- this is the VM's OWN frame pointer plus this function's own local-frame offset
-            // (bounded by its total declared local size, a compile-time-known small quantity), on page 1
-            // only; the stack itself would have to overflow a whole 64K-word page before this could ever
-            // leave page 1, a pre-existing, out-of-scope failure mode distinct from general C pointer
-            // arithmetic on an arbitrary runtime pointer value (see the other three call sites below).
-            EmitCode("fp@");
-            EmitCode($"rpop r{2 * destDouble}");
-            if (symbol.Offset != 0)
-            {
-              EmitAddConstantToRegister(2 * destDouble, symbol.Offset, guaranteedSamePage: true);
-            }
-
+            // Frame address = fp + offset, page 1 (implicit). The result never leaves page 1: it is the
+            // VM's OWN frame pointer plus this function's own local-frame offset (bounded by its total
+            // declared local size, a compile-time-known small quantity); the stack itself would have to
+            // overflow a whole 64K-word page before this could ever leave page 1, a pre-existing,
+            // out-of-scope failure mode distinct from general C pointer arithmetic on an arbitrary
+            // runtime pointer value (see the other three call sites below).
+            // CHANGED 2026-11-08: "lea rX, offset" (CvmInstructionSet Id 243, node 408: rX = (fp + signed
+            // offset) & 0xffff) does the whole job in one instruction, replacing the previous fp@ + rpop +
+            // rlit/add (or inc/dec) offset adjustment.
+            EmitCode($"lea r{2 * destDouble}, {symbol.Offset}");
             EmitCode($"rlit r{2 * destDouble + 1}, 1");
             return symbol.Type;
           }
@@ -1101,8 +1161,8 @@ public sealed class CCodeGenerator
   ///   time it needs adding. When guaranteed, the ORIGINAL plain 16-bit `add` is unchanged (cheapest,
   ///   and provably correct here). When NOT guaranteed, `indexRegister`'s value (a signed 16-bit delta)
   ///   is copied into <see cref="PointerArithmeticScratchDouble"/>'s own low alias, its HIGH alias is set
-  ///   to the correct sign-extension (`0` or `-1`, via the same `cond`/`if` sign-test
-  ///   `claude/cvm-abi.md` section 3.7 already uses for comparisons) so the resulting double register is
+  ///   to the correct sign-extension (`0` or `-1` -- since 2026-11-08 by the single `dsext` opcode, before
+  ///   that by an `if`/`br`/`rlit` block) so the resulting double register is
   ///   a properly sign-extended 32-bit delta, and `dadd` adds that into <paramref name="pointerDouble"/>
   ///   -- mirroring <see cref="EmitAddConstantToRegister"/>'s own `dlit`+`dadd` encoding, just with the
   ///   delta's low half coming from a register instead of a compile-time literal.
@@ -1128,16 +1188,31 @@ public sealed class CCodeGenerator
       return;
     }
 
+    // ADDED 2026-11-08: the pointer in pointerDouble is live while the index is computed and scaled. A
+    // call or runtime-library call in either step clobbers every wide register, so spill the pointer to a
+    // frame slot first and reload it just before the add (previously a call in the index silently
+    // destroyed the pointer).
+    bool scaleUsesLibrary = elementWords != 1 && !MultiplyIsInline(elementWords);
+    int? pointerSpill = MayCallOrUseLibrary(indexExpr) || scaleUsesLibrary ? AllocateFrameWords(2) : null;
+    if (pointerSpill is not null)
+    {
+      EmitCode($"stf r{2 * pointerDouble}, {pointerSpill}");
+      EmitCode($"stf r{2 * pointerDouble + 1}, {pointerSpill + 1}");
+    }
+
     int indexRegister = ScalarReg(depth);
     EmitIntExprInto(indexExpr, indexRegister, depth);
     if (elementWords != 1)
     {
-      EmitCode($"rlit r{indexRegister + 1}, {elementWords}");
-      _imports.Add("__mul");
-      EmitCode($"rpush r{indexRegister}");
-      EmitCode($"rpush r{indexRegister + 1}");
-      EmitCode("call __mul");
-      EmitCode($"rpop r{indexRegister}");
+      // CHANGED 2026-11-08: inline shift-and-add (mul2/add/neg) for every constant that is cheap enough,
+      // the runtime-library call only as the fallback -- see EmitMultiplyRegisterByConstant.
+      EmitMultiplyRegisterByConstant(indexRegister, elementWords, indexRegister + 1);
+    }
+
+    if (pointerSpill is not null)
+    {
+      EmitCode($"ldf r{2 * pointerDouble}, {pointerSpill}");
+      EmitCode($"ldf r{2 * pointerDouble + 1}, {pointerSpill + 1}");
     }
 
     if (guaranteedSamePage || pointerDouble == PointerArithmeticScratchDouble)
@@ -1146,15 +1221,11 @@ public sealed class CCodeGenerator
       return;
     }
 
+    // CHANGED 2026-11-08: "dsext dN" (CvmInstructionSet Id 258, node 208) sign-extends the low 16 bits of
+    // a double register into the full 32 bits, so the previous if/br/rlit -1|0 block (and its two labels)
+    // collapses to mov + dsext + dadd.
     EmitCode($"mov r{2 * PointerArithmeticScratchDouble}, r{indexRegister}");
-    string deltaNegativeLabel = NewLabel("idxdeltaneg");
-    string deltaDoneLabel = NewLabel("idxdeltadone");
-    EmitCode($"if r{indexRegister} <0 then {deltaNegativeLabel}");
-    EmitCode($"rlit r{2 * PointerArithmeticScratchDouble + 1}, 0");
-    EmitCode($"br {deltaDoneLabel}");
-    EmitLabel(deltaNegativeLabel);
-    EmitCode($"rlit r{2 * PointerArithmeticScratchDouble + 1}, -1");
-    EmitLabel(deltaDoneLabel);
+    EmitCode($"dsext d{PointerArithmeticScratchDouble}");
     EmitCode($"dadd d{pointerDouble}, d{PointerArithmeticScratchDouble}");
   }
 
@@ -1246,7 +1317,9 @@ public sealed class CCodeGenerator
     switch (expr)
     {
       case CIntLiteralExpr literal:
-        type = literal.IsUnsigned ? CType.UnsignedInt : CType.Int;
+        type = literal.IsLong
+            ? (literal.IsUnsigned ? CType.UnsignedLong : CType.Long)
+            : (literal.IsUnsigned ? CType.UnsignedInt : CType.Int);
         return true;
 
       case CFloatLiteralExpr:
@@ -1348,7 +1421,22 @@ public sealed class CCodeGenerator
         return true;
 
       case CConditionalExpr conditional:
-        return TryGetStaticType(conditional.WhenTrue, out type);
+        {
+          bool haveTrue = TryGetStaticType(conditional.WhenTrue, out CType trueStaticType);
+          bool haveFalse = TryGetStaticType(conditional.WhenFalse, out CType falseStaticType);
+          type = trueStaticType;
+          if (haveTrue && haveFalse && (trueStaticType.IsLong || falseStaticType.IsLong) && trueStaticType.IsIntegral && falseStaticType.IsIntegral)
+          {
+            type = PromoteArithmeticType(trueStaticType, falseStaticType);
+          }
+          else if (haveTrue && haveFalse && (trueStaticType.IsFloat || falseStaticType.IsFloat)
+              && (trueStaticType.IsFloat || trueStaticType.IsIntegral) && (falseStaticType.IsFloat || falseStaticType.IsIntegral))
+          {
+            type = CType.Float; // ADDED 2026-11-08: "c ? 1 : 2.5" is a float, the integer branch is converted.
+          }
+
+          return haveTrue;
+        }
 
       case CAssignExpr assign:
         return TryGetStaticType(assign.Target, out type);
@@ -1358,6 +1446,20 @@ public sealed class CCodeGenerator
 
       case CCommaExpr comma:
         return TryGetStaticType(comma.Right, out type);
+
+      case CUnaryExpr { Op: CUnaryOp.Plus or CUnaryOp.Minus or CUnaryOp.BitwiseNot } unary:
+        {
+          bool haveOperand = TryGetStaticType(unary.Operand, out CType operandType);
+          type = haveOperand && (operandType.IsLong || operandType.IsFloat) ? operandType : CType.Int;
+          return haveOperand;
+        }
+
+      case CUnaryExpr { Op: CUnaryOp.LogicalNot }:
+        type = CType.Int;
+        return true;
+
+      case CUnaryExpr { Op: CUnaryOp.PreIncrement or CUnaryOp.PreDecrement or CUnaryOp.PostIncrement or CUnaryOp.PostDecrement } incDec:
+        return TryGetStaticType(incDec.Operand, out type);
 
       case CBinaryExpr { Op: CBinaryOp.Add or CBinaryOp.Subtract } binary:
         {
@@ -1375,15 +1477,27 @@ public sealed class CCodeGenerator
             return true;
           }
 
-          type = haveLeft && leftType.IsFloat || haveRight && rightType.IsFloat ? CType.Float : CType.Int;
+          type = PromoteArithmeticType(haveLeft ? leftType : null, haveRight ? rightType : null);
           return haveLeft || haveRight;
+        }
+
+      case CBinaryExpr { Op: CBinaryOp.Equal or CBinaryOp.NotEqual or CBinaryOp.Less or CBinaryOp.Greater or CBinaryOp.LessOrEqual or CBinaryOp.GreaterOrEqual or CBinaryOp.LogicalAnd or CBinaryOp.LogicalOr }:
+        type = CType.Int;
+        return true;
+
+      case CBinaryExpr { Op: CBinaryOp.ShiftLeft or CBinaryOp.ShiftRight } shift:
+        {
+          // A shift's result has the (promoted) type of its LEFT operand only.
+          bool haveShiftLeft = TryGetStaticType(shift.Left, out CType shiftLeftType);
+          type = haveShiftLeft && (shiftLeftType.IsLong || shiftLeftType.IsFloat) ? shiftLeftType : CType.Int;
+          return haveShiftLeft;
         }
 
       case CBinaryExpr binary:
         {
           bool haveLeft = TryGetStaticType(binary.Left, out CType leftType);
           bool haveRight = TryGetStaticType(binary.Right, out CType rightType);
-          type = haveLeft && leftType.IsFloat || haveRight && rightType.IsFloat ? CType.Float : CType.Int;
+          type = PromoteArithmeticType(haveLeft ? leftType : null, haveRight ? rightType : null);
           return haveLeft || haveRight;
         }
 
@@ -1393,13 +1507,34 @@ public sealed class CCodeGenerator
     }
   }
 
-  private static bool IsUnsupportedWholeValueType(CType type) => type.IsStruct || type.IsLong;
+  /// <summary>ADDED 2026-11-08. The usual arithmetic conversions of this compiler's type system: a
+  /// <c>float</c> operand makes the result <c>float</c>; otherwise a <c>long</c> operand makes it
+  /// <c>long</c> (<c>unsigned long</c> if either operand is <c>unsigned long</c> -- an <c>unsigned int</c>
+  /// operand converts to a signed <c>long</c> because 32 bits hold every 16-bit value); otherwise the
+  /// result stays plain <c>int</c> (its signedness is tracked by the int code paths themselves, as
+  /// before).</summary>
+  private static CType PromoteArithmeticType(CType? left, CType? right)
+  {
+    if (left is { IsFloat: true } || right is { IsFloat: true })
+    {
+      return CType.Float;
+    }
+
+    if (left is { IsLong: true } || right is { IsLong: true })
+    {
+      return left?.Kind == CTypeKind.UnsignedLong || right?.Kind == CTypeKind.UnsignedLong ? CType.UnsignedLong : CType.Long;
+    }
+
+    return CType.Int;
+  }
+
+  private bool IsLongTyped(CExpr expr) => TryGetStaticType(expr, out CType type) && type.IsLong;
+
+  private static bool IsUnsupportedWholeValueType(CType type) => type.IsStruct;
 
   private CType ReportUnsupportedValueRead(CSourceLocation location, CType type, string subject)
   {
-    string reason = type.IsLong
-        ? "the CVM has no 'long' arithmetic instructions defined yet (declaring a 'long', taking its address, forming a pointer/array of it, and pointer arithmetic on it all work; reading its actual value does not, yet)"
-        : "reading or assigning a whole struct value is not yet supported by this compiler (access one of its own members instead)";
+    string reason = "reading or assigning a whole struct value is not yet supported by this compiler (access one of its own members instead)";
     Error(location, $"{subject} has type \"{type}\" -- {reason}");
     return CType.Int;
   }
@@ -1423,6 +1558,230 @@ public sealed class CCodeGenerator
     CSizeOfExprExpr => false, // the operand is never evaluated.
     _ => false,
   };
+
+  /// <summary>ADDED 2026-11-08. Whether evaluating <paramref name="expr"/> may CLOBBER registers it was not
+  /// asked to touch: it contains a real function call (<see cref="ContainsCall"/>), OR it contains an
+  /// operator that lowers to a runtime-library call (<c>*</c>, <c>/</c>, <c>%</c>, a variable shift, or an
+  /// array/pointer index whose element size is too large to scale inline). A library routine is an ordinary
+  /// C function, so it is call-volatile for the WIDE scratch registers exactly like a user function.
+  /// Callers use this (not <see cref="ContainsCall"/>) to decide whether a live pointer/float register pair
+  /// must be spilled to a frame slot first. Scalar scratch registers need no such spill: <see
+  /// cref="EmitLibraryBinaryCall"/> saves and restores those itself. Deliberately conservative -- a "true"
+  /// only costs one extra spill.</summary>
+  private bool MayCallOrUseLibrary(CExpr expr) => expr switch
+  {
+    CCallExpr => true,
+    CUnaryExpr unary => MayCallOrUseLibrary(unary.Operand),
+    CBinaryExpr binary => UsesLibraryOperator(binary.Op, binary.Left, binary.Right)
+        || PointerScaleUsesLibrary(binary)
+        || MayCallOrUseLibrary(binary.Left) || MayCallOrUseLibrary(binary.Right),
+    CAssignExpr assign => MayCallOrUseLibrary(assign.Target) || MayCallOrUseLibrary(assign.Value)
+        || (TryGetStaticType(assign.Target, out CType assignTargetType) && NeedsFloatConversionCall(assignTargetType, assign.Value)),
+    CCompoundAssignExpr compoundAssign => UsesLibraryOperator(compoundAssign.Op, compoundAssign.Target, compoundAssign.Value)
+        || MayCallOrUseLibrary(compoundAssign.Target) || MayCallOrUseLibrary(compoundAssign.Value),
+    CConditionalExpr conditional => MayCallOrUseLibrary(conditional.Condition) || MayCallOrUseLibrary(conditional.WhenTrue) || MayCallOrUseLibrary(conditional.WhenFalse)
+        || (TryGetStaticType(conditional, out CType conditionalType)
+            && (NeedsFloatConversionCall(conditionalType, conditional.WhenTrue) || NeedsFloatConversionCall(conditionalType, conditional.WhenFalse))),
+    CIndexExpr index => MayCallOrUseLibrary(index.Base) || MayCallOrUseLibrary(index.Index) || IndexScaleUsesLibrary(index) || IsFloatTyped(index.Index),
+    CCastExpr cast => MayCallOrUseLibrary(cast.Operand) || NeedsFloatConversionCall(cast.TargetType, cast.Operand),
+    CCommaExpr comma => MayCallOrUseLibrary(comma.Left) || MayCallOrUseLibrary(comma.Right),
+    CMemberAccessExpr member => MayCallOrUseLibrary(member.Base),
+    CSizeOfExprExpr => false, // the operand is never evaluated.
+    _ => false,
+  };
+
+  private bool IsFloatTyped(CExpr expr) => TryGetStaticType(expr, out CType type) && type.IsFloat;
+
+  /// <summary>ADDED 2026-11-08. Whether converting <paramref name="value"/> to <paramref name="targetType"/>
+  /// calls a cvmfloat.asm routine: float &lt;-&gt; integer conversions do (<c>__ltof</c>, <c>__ultof</c>,
+  /// <c>__ftol</c>, <c>__ftoul</c>), except an integer CONSTANT converted to float, which is folded at compile
+  /// time. Pointer conversions are errors elsewhere and count as "no call".</summary>
+  private bool NeedsFloatConversionCall(CType targetType, CExpr value)
+  {
+    if (!TryGetStaticType(value, out CType valueType) || targetType.IsFloat == valueType.IsFloat)
+    {
+      return false;
+    }
+
+    if (targetType.IsPointer || valueType.IsPointer)
+    {
+      return false;
+    }
+
+    return !(targetType.IsFloat && TryGetSimpleConstant(value, out _, out _));
+  }
+
+  /// <summary>A float operand expression that is evaluated while another wide value is live: true when it may
+  /// call or use a library routine, or needs an int/long -> float conversion call.</summary>
+  private bool FloatOperandUsesLibrary(CExpr expr) => MayCallOrUseLibrary(expr) || NeedsFloatConversionCall(CType.Float, expr);
+
+  /// <summary>Whether converting <paramref name="value"/> to <paramref name="targetType"/>
+  /// calls a cvmfloat.asm routine.</summary>
+  private bool ConversionUsesLibrary(CType targetType, CExpr value) => NeedsFloatConversionCall(targetType, value);
+
+  /// <summary>Whether <c>left op right</c> (or <c>left op= right</c>) takes the <c>__mul</c>/<c>__divs</c>/...
+  /// library path. Mirrors <see cref="TryEmitConstantIntOperation"/>: a constant operand that has an inline
+  /// form does not. Float <c>*</c> and <c>/</c> are coprocessor opcodes, not library calls. Unknown static
+  /// types are treated as "uses the library".</summary>
+  private bool UsesLibraryOperator(CBinaryOp op, CExpr left, CExpr right)
+  {
+    // ADDED 2026-11-08: every long * / % shift and ordered comparison is a call into the cvm library.
+    if (op is CBinaryOp.Multiply or CBinaryOp.Divide or CBinaryOp.Modulo or CBinaryOp.ShiftLeft or CBinaryOp.ShiftRight
+        or CBinaryOp.Less or CBinaryOp.LessOrEqual or CBinaryOp.Greater or CBinaryOp.GreaterOrEqual
+        && (IsLongTyped(left) || IsLongTyped(right)))
+    {
+      return true;
+    }
+
+    // ADDED 2026-11-08: float comparisons (__flt ... __fne) and the implicit int/long -> float conversion of
+    // a mixed int/float operation (__ltof / __ultof) are calls into cvmfloat.asm; any other operator with a
+    // float operand falls back to converting it to an integer (__ftol).
+    if (op is not (CBinaryOp.LogicalAnd or CBinaryOp.LogicalOr))
+    {
+      bool leftIsFloat = IsFloatTyped(left);
+      bool rightIsFloat = IsFloatTyped(right);
+      if (leftIsFloat || rightIsFloat)
+      {
+        if (op is CBinaryOp.Add or CBinaryOp.Subtract or CBinaryOp.Multiply or CBinaryOp.Divide)
+        {
+          return NeedsFloatConversionCall(CType.Float, leftIsFloat ? right : left);
+        }
+
+        return true;
+      }
+    }
+
+    switch (op)
+    {
+      case CBinaryOp.Multiply:
+      case CBinaryOp.Divide:
+        {
+          if (TryGetStaticType(left, out CType leftType) && leftType.IsFloat)
+          {
+            return false;
+          }
+
+          if (op == CBinaryOp.Multiply)
+          {
+            if (TryGetSimpleConstant(right, out long factor, out _) && factor >= -32768 && factor <= 65535 && MultiplyIsInline(factor))
+            {
+              return false;
+            }
+
+            if (TryGetSimpleConstant(left, out long leftFactor, out _) && leftFactor >= -32768 && leftFactor <= 65535 && MultiplyIsInline(leftFactor))
+            {
+              return false;
+            }
+
+            return true;
+          }
+
+          return !IsInlineUnsignedPowerOfTwo(left, right);
+        }
+
+      case CBinaryOp.Modulo:
+        return !IsInlineUnsignedPowerOfTwo(left, right);
+
+      case CBinaryOp.ShiftLeft:
+      case CBinaryOp.ShiftRight:
+        return !(TryGetSimpleConstant(right, out long count, out _) && count >= 0 && count <= 255);
+
+      // ADDED 2026-11-08: ordered comparisons call __lts/__ltu/... except against a literal 0 on a plain
+      // (non-pointer, non-float) left operand -- mirrors EmitComparisonInto. Unknown static types count as
+      // "uses the library" (the safe direction: an extra spill, never a missed one).
+      case CBinaryOp.Less:
+      case CBinaryOp.LessOrEqual:
+      case CBinaryOp.Greater:
+      case CBinaryOp.GreaterOrEqual:
+        {
+          bool leftKnown = TryGetStaticType(left, out CType orderedLeftType);
+          bool rightKnown = TryGetStaticType(right, out CType orderedRightType);
+          if (leftKnown && rightKnown && orderedLeftType.IsFloat | orderedRightType.IsFloat)
+          {
+            return false; // rejected with an error anyway.
+          }
+
+          bool plainIntegers = leftKnown && rightKnown && !orderedLeftType.IsPointer && !orderedRightType.IsPointer;
+          return !(plainIntegers && TryGetSimpleConstant(right, out long zero, out _) && zero == 0);
+        }
+
+      default:
+        return false;
+    }
+  }
+
+  /// <summary>ADDED 2026-11-08. True for an int expression that can safely be evaluated with its partial
+  /// results held in <c>r0</c> (see the <see cref="CReturnStmt"/> case of <c>EmitStatement</c>): only
+  /// literals, non-pointer/non-float variable reads, unary <c>+ - ! ~</c>, casts, and binary operators that
+  /// are not runtime-library calls. Nothing in such an expression can call a function, take the library
+  /// path, or touch the <c>d0</c> pointer-arithmetic scratch.</summary>
+  private bool IsPlainScalarExpression(CExpr expr) => expr switch
+  {
+    CIntLiteralExpr => true,
+    CNameExpr name => TryGetStaticType(name, out CType type) && !type.IsPointer && !type.IsFloat && !type.IsArray,
+    CUnaryExpr unary => unary.Op is CUnaryOp.Plus or CUnaryOp.Minus or CUnaryOp.LogicalNot or CUnaryOp.BitwiseNot
+        && IsPlainScalarExpression(unary.Operand),
+    CCastExpr cast => IsPlainScalarExpression(cast.Operand),
+    CBinaryExpr binary => !UsesLibraryOperator(binary.Op, binary.Left, binary.Right)
+        && IsPlainScalarExpression(binary.Left) && IsPlainScalarExpression(binary.Right),
+    _ => false,
+  };
+
+  private bool IsInlineUnsignedPowerOfTwo(CExpr left, CExpr right)
+  {
+    if (!TryGetSimpleConstant(right, out long constant, out bool rightIsUnsigned) || !IsPowerOfTwo(constant) || constant > 0x8000)
+    {
+      return false;
+    }
+
+    return rightIsUnsigned || (TryGetStaticType(left, out CType leftType) && leftType.IsUnsigned);
+  }
+
+  /// <summary>Pointer +/- integer where the element size is too large for an inline scale.</summary>
+  private bool PointerScaleUsesLibrary(CBinaryExpr binary)
+  {
+    if (binary.Op is not (CBinaryOp.Add or CBinaryOp.Subtract))
+    {
+      return false;
+    }
+
+    CExpr indexSide;
+    CType pointerType;
+    if (TryGetStaticType(binary.Left, out CType leftType) && leftType.IsPointer)
+    {
+      indexSide = binary.Right;
+      pointerType = leftType;
+    }
+    else if (binary.Op == CBinaryOp.Add && TryGetStaticType(binary.Right, out CType rightType) && rightType.IsPointer)
+    {
+      indexSide = binary.Left;
+      pointerType = rightType;
+    }
+    else
+    {
+      return false;
+    }
+
+    return pointerType.ElementType is not null
+        && !TryEvaluateConstantLong(indexSide, out _)
+        && ElementScaleUsesLibrary(pointerType.ElementType);
+  }
+
+  private bool IndexScaleUsesLibrary(CIndexExpr index)
+  {
+    if (TryEvaluateConstantLong(index.Index, out _))
+    {
+      return false;
+    }
+
+    return !TryGetStaticType(index.Base, out CType baseType) || baseType.ElementType is null || ElementScaleUsesLibrary(baseType.ElementType);
+  }
+
+  private static bool ElementScaleUsesLibrary(CType elementType)
+  {
+    int words = Math.Max(elementType.SizeInWords, 1);
+    return words != 1 && !MultiplyIsInline(words);
+  }
 
   // ---------------------------------------------------------------------------------------------------
   // Expression evaluation. EmitIntExprInto evaluates an int/char/unsigned/comparison/logical-result
@@ -1454,8 +1813,27 @@ public sealed class CCodeGenerator
     return addr.Type;
   }
 
+  // FIXED 2026-11-08: the two scalar-leaf cases below pass a wide register as the (unused) "wideDouble"
+  // placeholder. That used to be WideReg(depth), which reported "pointer/float scratch pool exhausted" for any
+  // PURELY INTEGER expression nested more than 3 levels deep (the wide pool has 3 levels, the scalar pool 8),
+  // e.g. "(a * b + c) * (d - a / b)". The placeholder is clamped to the last wide level instead; it is never
+  // written for a scalar value.
   private CType EmitIntExprInto(CExpr expr, int reg, int depth)
   {
+    // ADDED 2026-11-08: an expression whose static type is long / unsigned long is evaluated in a double
+    // register and only its LOW word is kept (C's conversion of a long to a 16-bit int).
+    if (TryGetStaticType(expr, out CType staticLongCheck) && staticLongCheck.IsLong)
+    {
+      return EmitLongTruncatedInto(expr, reg, depth);
+    }
+
+    // ADDED 2026-11-08: a float-typed expression used where an int is wanted is converted (truncated toward
+    // zero) with __ftol and its low word kept.
+    if (TryGetStaticType(expr, out CType staticFloatCheck) && staticFloatCheck.IsFloat)
+    {
+      return EmitFloatTruncatedInto(expr, reg, depth, false);
+    }
+
     switch (expr)
     {
       case CIntLiteralExpr literal:
@@ -1463,7 +1841,7 @@ public sealed class CCodeGenerator
         return literal.IsUnsigned ? CType.UnsignedInt : CType.Int;
 
       case CNameExpr or CIndexExpr or CMemberAccessExpr or CUnaryExpr { Op: CUnaryOp.Dereference }:
-        return EmitLoadAddressableValue(expr, reg, WideReg(depth), depth);
+        return EmitLoadAddressableValue(expr, reg, WideReg(Math.Min(depth, WideScratchMaxDepth - 1)), depth);
 
       case CUnaryExpr { Op: CUnaryOp.Plus } unary:
         return EmitIntExprInto(unary.Operand, reg, depth);
@@ -1496,7 +1874,7 @@ public sealed class CCodeGenerator
         return CType.Int;
 
       case CUnaryExpr { Op: CUnaryOp.PreIncrement or CUnaryOp.PreDecrement or CUnaryOp.PostIncrement or CUnaryOp.PostDecrement } incDec:
-        return EmitIncrementOrDecrement(incDec, reg, WideReg(depth), depth);
+        return EmitIncrementOrDecrement(incDec, reg, WideReg(Math.Min(depth, WideScratchMaxDepth - 1)), depth);
 
       case CBinaryExpr { Op: CBinaryOp.LogicalAnd or CBinaryOp.LogicalOr } logical:
         EmitLogicalInto(logical, reg, depth);
@@ -1508,16 +1886,36 @@ public sealed class CCodeGenerator
 
       case CBinaryExpr binary:
         {
-          bool spillNeeded = ContainsCall(binary.Right);
+          // ADDED 2026-11-08: multiplication is commutative, so a constant LEFT factor ("4 * x") is
+          // swapped to the right where TryEmitConstantIntOperation can strength-reduce it. The constant
+          // has no side effects and no call, so the evaluation order of the remaining operand is untouched.
+          CExpr leftOperand = binary.Left;
+          CExpr rightOperand = binary.Right;
+          if (binary.Op == CBinaryOp.Multiply && TryGetSimpleConstant(leftOperand, out _, out _) && !TryGetSimpleConstant(rightOperand, out _, out _))
+          {
+            (leftOperand, rightOperand) = (rightOperand, leftOperand);
+          }
+
+          bool spillNeeded = ContainsCall(rightOperand);
           int? spillSlot = spillNeeded ? AllocateFrameWords(1) : null;
-          CType leftType = EmitIntExprInto(binary.Left, reg, depth);
+          CType leftType = EmitIntExprInto(leftOperand, reg, depth);
+
+          // ADDED 2026-11-08: a constant right operand with a cheaper current-opcode form (inc/dec,
+          // lowbyte, mask15, inv15, mul2/udiv2/div2 shifts, shift-and-add multiply, ...) is handled here
+          // without ever loading the constant -- see TryEmitConstantIntOperation. spillSlot is always null
+          // in that case (a constant contains no call).
+          if (TryEmitConstantIntOperation(binary.Op, leftType, rightOperand, reg, ScalarReg(depth + 1), out CType constantResultType))
+          {
+            return constantResultType;
+          }
+
           if (spillSlot is not null)
           {
             EmitCode($"stf r{reg}, {spillSlot}");
           }
 
           int rightReg = ScalarReg(depth + 1);
-          CType rightType = EmitIntExprInto(binary.Right, rightReg, depth + 1);
+          CType rightType = EmitIntExprInto(rightOperand, rightReg, depth + 1);
           if (spillSlot is not null)
           {
             EmitCode($"ldf r{reg}, {spillSlot}");
@@ -1567,6 +1965,16 @@ public sealed class CCodeGenerator
   {
     switch (expr)
     {
+      case CIntLiteralExpr { IsLong: true } longLiteral:
+        EmitLongConstantInto(longLiteral.Value, destDouble);
+        return longLiteral.IsUnsigned ? CType.UnsignedLong : CType.Long;
+
+      case CUnaryExpr { Op: CUnaryOp.Minus or CUnaryOp.BitwiseNot } longUnary when IsLongTyped(expr):
+        return EmitLongUnary(longUnary, destDouble, depth);
+
+      case CBinaryExpr longBinary when IsLongTyped(expr):
+        return EmitLongBinary(longBinary, destDouble, depth);
+
       case CIntLiteralExpr { Value: 0 }:
         // A plain "0" is the only integer literal that may stand for a NULL pointer.
         EmitCode($"dlit d{destDouble}, 0, 0");
@@ -1627,33 +2035,7 @@ public sealed class CCodeGenerator
         return EmitWidePointerOrFloatAddSub(addSub, destDouble, depth);
 
       case CBinaryExpr { Op: CBinaryOp.Multiply or CBinaryOp.Divide } floatMulDiv:
-        {
-          bool spillNeeded = ContainsCall(floatMulDiv.Right);
-          int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
-          CType leftType = EmitWideExprInto(floatMulDiv.Left, destDouble, depth);
-          if (spillLow is not null)
-          {
-            EmitCode($"stf r{2 * destDouble}, {spillLow}");
-            EmitCode($"stf r{2 * destDouble + 1}, {spillLow + 1}");
-          }
-
-          int rightDouble = WideReg(depth + 1);
-          CType rightType = EmitWideExprInto(floatMulDiv.Right, rightDouble, depth + 1);
-          if (spillLow is not null)
-          {
-            EmitCode($"ldf r{2 * destDouble}, {spillLow}");
-            EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
-          }
-
-          if (!leftType.IsFloat || !rightType.IsFloat)
-          {
-            Error(floatMulDiv.Location, $"\"{(floatMulDiv.Op == CBinaryOp.Multiply ? "*" : "/")}\" between \"{leftType}\" and \"{rightType}\" is not supported (only float*float/float are)");
-            return CType.Float;
-          }
-
-          EmitCode($"{(floatMulDiv.Op == CBinaryOp.Multiply ? "fmul" : "fdiv")} d{destDouble}, d{rightDouble}");
-          return CType.Float;
-        }
+        return EmitFloatBinary(floatMulDiv, destDouble, depth);
 
       case CConditionalExpr conditional:
         return EmitConditionalInto(conditional, -1, destDouble, depth, isWide: true);
@@ -1686,7 +2068,7 @@ public sealed class CCodeGenerator
   private void EmitStatementExprForEffect(CExpr expr, int depth)
   {
     TryGetStaticType(expr, out CType type);
-    if (type.IsFloat || type.IsPointer)
+    if (type.IsWideValue)
     {
       EmitWideExprInto(expr, WideReg(depth), depth);
     }
@@ -1705,7 +2087,24 @@ public sealed class CCodeGenerator
     TryGetStaticType(expr, out CType type);
     if (type.IsFloat)
     {
-      Error(expr.Location, "a 'float' expression cannot be used directly as a condition (compare it to 0.0 explicitly)");
+      // ADDED 2026-11-08: a float is "true" when it is not +/-0.0: the high word without its sign bit, or'd
+      // with the low word, is non-zero (a NaN is true, as in C).
+      int floatDouble = WideReg(depth);
+      EmitWideExprInto(expr, floatDouble, depth);
+      EmitCode($"mov r{reg}, r{2 * floatDouble + 1}");
+      EmitCode($"mask15 r{reg}");
+      EmitCode($"or r{reg}, r{2 * floatDouble}");
+      return;
+    }
+
+    if (type.IsLong)
+    {
+      // ADDED 2026-11-08: a long is "true" when either of its two words is non-zero.
+      int longDouble = WideReg(depth);
+      EmitWideExprInto(expr, longDouble, depth);
+      EmitCode($"mov r{reg}, r{2 * longDouble}");
+      EmitCode($"or r{reg}, r{2 * longDouble + 1}");
+      return;
     }
 
     if (type.IsPointer)
@@ -1781,6 +2180,23 @@ public sealed class CCodeGenerator
 
     if (!guaranteedSamePage)
     {
+      // ADDED 2026-11-08: dinc/ddec/dinc2/ddec2 (node 208) add/subtract 1 or 2 to the WHOLE 32-bit
+      // double register with the carry/borrow propagating into the page word -- the same full-width
+      // semantics as dlit+dadd, but without the 3-word dlit, the scratch double register, or the 1-word
+      // dadd. At most three such instructions are emitted (|constant| <= 6); anything bigger keeps the
+      // dlit+dadd pair (4 words, no better).
+      if (Math.Abs(constant) <= 6)
+      {
+        string stepTwo = constant > 0 ? "dinc2" : "ddec2";
+        string stepOne = constant > 0 ? "dinc" : "ddec";
+        for (int remaining = Math.Abs(constant); remaining > 0; remaining -= 2)
+        {
+          EmitCode($"{(remaining >= 2 ? stepTwo : stepOne)} d{targetDouble}");
+        }
+
+        return;
+      }
+
       int scratchDouble = targetIsPointerArithmeticScratchItself ? GlobalAddressTempDouble : PointerArithmeticScratchDouble;
       EmitCode($"dlit d{scratchDouble}, {constant}");
       EmitCode($"dadd d{targetDouble}, d{scratchDouble}");
@@ -1881,8 +2297,45 @@ public sealed class CCodeGenerator
   {
     if (targetType.IsFloat != valueType.IsFloat)
     {
-      Error(location, $"cannot assign \"{valueType}\" to \"{targetType}\" (float/non-float mismatch -- cast explicitly)");
+      // An integer converts to / from float implicitly (cvmfloat.asm); a pointer or other type does not.
+      if (!(targetType.IsFloat ? valueType : targetType).IsIntegral)
+      {
+        Error(location, $"cannot assign \"{valueType}\" to \"{targetType}\" (float/non-float mismatch -- cast explicitly)");
+      }
     }
+    else if (targetType.IsLong && !valueType.IsIntegral || valueType.IsLong && targetType.IsPointer)
+    {
+      Error(location, $"cannot assign \"{valueType}\" to \"{targetType}\" (cast explicitly)");
+    }
+  }
+
+  /// <summary>ADDED 2026-11-08. When <paramref name="addr"/> is a computed pointer address
+  /// (<see cref="CAddrKind.Pointer"/>) that stays live while <paramref name="laterExpr"/> is evaluated and
+  /// that expression may call a function or a runtime-library routine, spills the address pair to a fresh
+  /// 2-word frame slot and returns the slot; otherwise emits nothing and returns null. Pair with <see
+  /// cref="RestorePointerAddress"/>.</summary>
+  private int? SpillPointerAddressIfNeeded(CAddr addr, CExpr laterExpr)
+  {
+    if (addr.Kind != CAddrKind.Pointer || !(MayCallOrUseLibrary(laterExpr) || ConversionUsesLibrary(addr.Type, laterExpr)))
+    {
+      return null;
+    }
+
+    int slot = AllocateFrameWords(2);
+    EmitCode($"stf r{2 * addr.PointerDouble}, {slot}");
+    EmitCode($"stf r{2 * addr.PointerDouble + 1}, {slot + 1}");
+    return slot;
+  }
+
+  private void RestorePointerAddress(CAddr addr, int? slot)
+  {
+    if (slot is null)
+    {
+      return;
+    }
+
+    EmitCode($"ldf r{2 * addr.PointerDouble}, {slot}");
+    EmitCode($"ldf r{2 * addr.PointerDouble + 1}, {slot + 1}");
   }
 
   /// <summary>The "just do the assignment, no result needed" form -- used by <see cref="DeclareLocal"/>
@@ -1897,13 +2350,15 @@ public sealed class CCodeGenerator
       return;
     }
 
-    bool isWide = addr.Type.IsPointer || addr.Type.IsFloat;
+    bool isWide = addr.Type.IsWideValue;
     int valueDepth = addr.Kind == CAddrKind.Pointer ? depth + 1 : depth;
+    int? addressSpill = SpillPointerAddressIfNeeded(addr, valueExpr);
 
     if (isWide)
     {
       int valueDouble = WideReg(valueDepth);
-      CType valueType = EmitWideExprInto(valueExpr, valueDouble, valueDepth);
+      CType valueType = EmitValueForTarget(addr.Type, valueExpr, valueDouble, valueDepth);
+      RestorePointerAddress(addr, addressSpill);
       CheckAssignmentType(location, addr.Type, valueType);
       EmitStoreValueToAddr(addr, 0, valueDouble);
     }
@@ -1911,6 +2366,7 @@ public sealed class CCodeGenerator
     {
       int valueReg = ScalarReg(valueDepth);
       CType valueType = EmitIntExprInto(valueExpr, valueReg, valueDepth);
+      RestorePointerAddress(addr, addressSpill);
       CheckAssignmentType(location, addr.Type, valueType);
       EmitStoreValueToAddr(addr, valueReg, 0);
     }
@@ -1927,18 +2383,20 @@ public sealed class CCodeGenerator
       return ReportUnsupportedValueRead(assign.Location, addr.Type, "this assignment's target");
     }
 
-    bool targetIsWide = addr.Type.IsPointer || addr.Type.IsFloat;
+    bool targetIsWide = addr.Type.IsWideValue;
     if (targetIsWide != isWide)
     {
       Error(assign.Location, $"internal: assignment target wideness mismatch for \"{addr.Type}\"");
     }
 
     bool needsFreshRegister = addr.Kind == CAddrKind.Pointer;
+    int? addressSpill = SpillPointerAddressIfNeeded(addr, assign.Value);
 
     if (targetIsWide)
     {
       int valueDouble = needsFreshRegister ? WideReg(depth + 1) : wideDest;
-      CType valueType = EmitWideExprInto(assign.Value, valueDouble, needsFreshRegister ? depth + 1 : depth);
+      CType valueType = EmitValueForTarget(addr.Type, assign.Value, valueDouble, needsFreshRegister ? depth + 1 : depth);
+      RestorePointerAddress(addr, addressSpill);
       CheckAssignmentType(assign.Location, addr.Type, valueType);
       EmitStoreValueToAddr(addr, 0, valueDouble);
       if (needsFreshRegister && isWide && valueDouble != wideDest)
@@ -1951,6 +2409,7 @@ public sealed class CCodeGenerator
     {
       int valueReg = needsFreshRegister ? ScalarReg(depth + 1) : scalarDest;
       CType valueType = EmitIntExprInto(assign.Value, valueReg, needsFreshRegister ? depth + 1 : depth);
+      RestorePointerAddress(addr, addressSpill);
       CheckAssignmentType(assign.Location, addr.Type, valueType);
       EmitStoreValueToAddr(addr, valueReg, 0);
       if (needsFreshRegister && !isWide && valueReg != scalarDest)
@@ -1974,14 +2433,39 @@ public sealed class CCodeGenerator
       return ReportUnsupportedValueRead(compoundAssign.Location, addr.Type, "this assignment's target");
     }
 
-    bool targetIsWide = addr.Type.IsPointer || addr.Type.IsFloat;
+    bool targetIsWide = addr.Type.IsWideValue;
     bool needsFreshRegister = addr.Kind == CAddrKind.Pointer;
     int baseDepth = needsFreshRegister ? depth + 1 : depth;
+
+    // ADDED 2026-11-08: a computed pointer address stays live while the right-hand side is evaluated; spill
+    // it across any call / runtime-library call there. (Also, for an operand holding a CALL, the target's
+    // current value is loaded AFTER the right-hand side is evaluated -- C leaves that order unspecified --
+    // so it is never held in a register across the call.)
+    int? addressSpill = SpillPointerAddressIfNeeded(addr, compoundAssign.Value);
+    bool valueHasCall = ContainsCall(compoundAssign.Value);
+
+    if (!addr.Type.IsFloat && IsFloatTyped(compoundAssign.Value))
+    {
+      // "int op= float" would have to compute in float and convert back; write "i = i op f" instead.
+      RestorePointerAddress(addr, addressSpill);
+      Error(compoundAssign.Location, $"a compound assignment to \"{addr.Type}\" with a 'float' right-hand side is not supported (write \"x = x op f\" explicitly)");
+      EmitCode(isWide ? $"dlit d{wideDest}, 0, 0" : $"rlit r{scalarDest}, 0");
+      return addr.Type;
+    }
+
+    if (addr.Type.IsLong)
+    {
+      return EmitLongCompoundAssign(compoundAssign, addr, addressSpill, wideDest, baseDepth, isWide);
+    }
 
     if (targetIsWide)
     {
       int currentDouble = WideReg(baseDepth);
-      EmitLoadValueFromAddr(addr, 0, currentDouble, baseDepth);
+      bool floatValueFirst = (valueHasCall || FloatOperandUsesLibrary(compoundAssign.Value)) && addr.Type.IsFloat && compoundAssign.Op is CBinaryOp.Add or CBinaryOp.Subtract or CBinaryOp.Multiply or CBinaryOp.Divide;
+      if (!floatValueFirst)
+      {
+        EmitLoadValueFromAddr(addr, 0, currentDouble, baseDepth);
+      }
 
       if (addr.Type.IsPointer && compoundAssign.Op is CBinaryOp.Add or CBinaryOp.Subtract)
       {
@@ -1992,11 +2476,18 @@ public sealed class CCodeGenerator
         // runtime pointer regardless of where/what addr itself is (a bounded local/global pointer
         // VARIABLE still holds an unbounded pointer VALUE -- see IsBoundedPointerValue's own remarks).
         EmitAddIndexScaledToPointer(currentDouble, compoundAssign.Value, compoundAssign.Op == CBinaryOp.Subtract ? -elementWords : elementWords, baseDepth + 1, guaranteedSamePage: false);
+        RestorePointerAddress(addr, addressSpill);
       }
       else if (addr.Type.IsFloat && compoundAssign.Op is CBinaryOp.Add or CBinaryOp.Subtract or CBinaryOp.Multiply or CBinaryOp.Divide)
       {
         int rightDouble = WideReg(baseDepth + 1);
-        CType rightFloatType = EmitWideExprInto(compoundAssign.Value, rightDouble, baseDepth + 1);
+        CType rightFloatType = EmitFloatValueInto(compoundAssign.Value, rightDouble, baseDepth + 1);
+        RestorePointerAddress(addr, addressSpill);
+        if (floatValueFirst)
+        {
+          EmitLoadValueFromAddr(addr, 0, currentDouble, baseDepth);
+        }
+
         if (!rightFloatType.IsFloat)
         {
           Error(compoundAssign.Location, "this compound assignment needs a 'float' right-hand side");
@@ -2013,6 +2504,7 @@ public sealed class CCodeGenerator
       }
       else
       {
+        RestorePointerAddress(addr, addressSpill);
         Error(compoundAssign.Location, $"this compound assignment operator is not supported for \"{addr.Type}\"");
       }
 
@@ -2028,10 +2520,31 @@ public sealed class CCodeGenerator
     }
 
     int currentReg = ScalarReg(baseDepth);
-    EmitLoadValueFromAddr(addr, currentReg, 0, baseDepth);
     int rightReg = ScalarReg(baseDepth + 1);
-    CType rightType = EmitIntExprInto(compoundAssign.Value, rightReg, baseDepth + 1);
-    CType resultType = EmitIntBinaryOperation(compoundAssign.Op, addr.Type, rightType, currentReg, rightReg, compoundAssign.Location);
+    CType resultType;
+
+    if (valueHasCall)
+    {
+      CType rightType = EmitIntExprInto(compoundAssign.Value, rightReg, baseDepth + 1);
+      RestorePointerAddress(addr, addressSpill);
+      EmitLoadValueFromAddr(addr, currentReg, 0, baseDepth);
+      resultType = EmitIntBinaryOperation(compoundAssign.Op, addr.Type, rightType, currentReg, rightReg, compoundAssign.Location);
+    }
+    else
+    {
+      EmitLoadValueFromAddr(addr, currentReg, 0, baseDepth);
+
+      // ADDED 2026-11-08: "x <<= 3", "x *= 10", "x &= 0xFF", "x += 1" ... with a constant right-hand side
+      // use the same inline current-opcode sequences as the plain binary operators.
+      if (!TryEmitConstantIntOperation(compoundAssign.Op, addr.Type, compoundAssign.Value, currentReg, rightReg, out resultType))
+      {
+        CType rightType = EmitIntExprInto(compoundAssign.Value, rightReg, baseDepth + 1);
+        resultType = EmitIntBinaryOperation(compoundAssign.Op, addr.Type, rightType, currentReg, rightReg, compoundAssign.Location);
+      }
+
+      RestorePointerAddress(addr, addressSpill);
+    }
+
     EmitStoreValueToAddr(addr, currentReg, 0);
 
     if (!isWide && currentReg != scalarDest)
@@ -2057,7 +2570,7 @@ public sealed class CCodeGenerator
       return ReportUnsupportedValueRead(incDec.Location, addr.Type, "this expression");
     }
 
-    bool isWide = addr.Type.IsPointer || addr.Type.IsFloat;
+    bool isWide = addr.Type.IsWideValue;
     if (addr.Type.IsFloat)
     {
       Error(incDec.Location, "'++'/'--' on a 'float' is not supported by this compiler (no float increment/decrement opcode exists)");
@@ -2128,10 +2641,11 @@ public sealed class CCodeGenerator
 
   // ---------------------------------------------------------------------------------------------------
   // Comparisons and short-circuit logical operators (claude/cvm-abi.md section 3.7). `cond`/`if` only
-  // expose a single-register sign-test against zero -- there is no two-operand compare opcode -- so a
-  // general comparison lowers to subtract + the matching named condition, with an unsigned comparison
-  // XOR-0x8000-biasing both operands first (the standard trick remapping unsigned order onto signed
-  // order).
+  // expose a single-register sign-test against zero -- there is no two-operand compare opcode.
+  // CHANGED 2026-11-08: == and != still lower to subtract + `cond ==0`/`!=0` (exact). The ordered
+  // comparisons < <= > >= call the exact libs/cvm helpers (__lts ... __geu): "subtract, test the sign"
+  // (with the unsigned 0x8000 bias) is wrong whenever the operands are 0x8000 or more apart. The one
+  // inline exception is an ordered comparison against a literal 0 (EmitOrderedComparisonWithZero).
 
   /// <summary>Evaluates a `==`/`!=`/`&lt;`/`&gt;`/`&lt;=`/`&gt;=` comparison into 0/1 in <paramref
   /// name="reg"/>. Pointer operands compare their ADDRESS half only (same "ignore the page half"
@@ -2145,18 +2659,31 @@ public sealed class CCodeGenerator
 
     if (leftStaticType.IsFloat || rightStaticType.IsFloat)
     {
-      Error(comparison.Location, "comparing 'float' values is not supported by this compiler (no float-compare opcode exists)");
-      EmitCode($"rlit r{reg}, 0");
+      if (leftStaticType.IsPointer || rightStaticType.IsPointer)
+      {
+        Error(comparison.Location, "comparing a 'float' with a pointer is not supported");
+        EmitCode($"rlit r{reg}, 0");
+        return;
+      }
+
+      EmitFloatComparisonInto(comparison, reg, depth);
+      return;
+    }
+
+    if ((leftStaticType.IsLong || rightStaticType.IsLong) && !leftStaticType.IsPointer && !rightStaticType.IsPointer)
+    {
+      EmitLongComparisonInto(comparison, leftStaticType, rightStaticType, reg, depth);
       return;
     }
 
     bool spillNeeded = ContainsCall(comparison.Right);
+    bool wideSpillNeeded = MayCallOrUseLibrary(comparison.Right);
     int leftReg, rightReg;
     bool isUnsigned;
 
     if (leftStaticType.IsPointer || rightStaticType.IsPointer)
     {
-      int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
+      int? spillLow = wideSpillNeeded ? AllocateFrameWords(2) : null;
       int leftDouble = WideReg(depth);
       EmitWideExprInto(comparison.Left, leftDouble, depth);
       if (spillLow is not null)
@@ -2189,6 +2716,21 @@ public sealed class CCodeGenerator
         EmitCode($"stf r{leftReg}, {spillSlot}");
       }
 
+      // ADDED 2026-11-08: "x < 0", "x >= 0", ... against a literal zero is exact without the library (the
+      // sign of x itself is the answer) and needs no second operand at all -- see EmitOrderedComparisonWithZero.
+      if (IsOrderedComparison(comparison.Op)
+          && TryGetSimpleConstant(comparison.Right, out long zeroCandidate, out bool zeroIsUnsigned)
+          && zeroCandidate == 0)
+      {
+        EmitOrderedComparisonWithZero(comparison.Op, leftType.IsUnsigned || zeroIsUnsigned, leftReg);
+        if (leftReg != reg)
+        {
+          EmitCode($"mov r{reg}, r{leftReg}");
+        }
+
+        return;
+      }
+
       rightReg = ScalarReg(depth + 1);
       CType rightType = EmitIntExprInto(comparison.Right, rightReg, depth + 1);
       if (spillSlot is not null)
@@ -2199,28 +2741,82 @@ public sealed class CCodeGenerator
       isUnsigned = leftType.IsUnsigned || rightType.IsUnsigned;
     }
 
-    if (isUnsigned)
+    // CHANGED 2026-11-08: an ORDERED comparison (< <= > >=) no longer uses "bias, subtract, test the sign".
+    // That form is only exact while the operands are less than 0x8000 apart (the 16-bit `sub` wraps), so
+    // e.g. unsigned 0 < 0xFFFF and signed -32768 < 32767 came out wrong. It now calls the exact helpers
+    // from libs/cvm (__lts/__les/__gts/__ges signed, __ltu/__leu/__gtu/__geu unsigned) through
+    // EmitLibraryBinaryCall; the 0/1 result comes back in leftReg. == and != need no helper: the
+    // difference of two equal values is exactly 0 whatever the magnitude, so they keep sub + cond (and no
+    // longer waste two xors on the 0x8000 bias, which equality never needed).
+    if (IsOrderedComparison(comparison.Op))
     {
-      int biasReg = ScalarReg(depth + 2);
-      EmitCode($"rlit r{biasReg}, 0x8000");
-      EmitCode($"xor r{leftReg}, r{biasReg}");
-      EmitCode($"xor r{rightReg}, r{biasReg}");
+      EmitLibraryBinaryCall(OrderedComparisonHelper(comparison.Op, isUnsigned), leftReg, rightReg);
+      if (leftReg != reg)
+      {
+        EmitCode($"mov r{reg}, r{leftReg}");
+      }
+
+      return;
     }
 
     EmitCode($"sub r{leftReg}, r{rightReg}");
-    string condition = comparison.Op switch
-    {
-      CBinaryOp.Equal => "==0",
-      CBinaryOp.NotEqual => "!=0",
-      CBinaryOp.Less => "<0",
-      CBinaryOp.LessOrEqual => "<=0",
-      CBinaryOp.Greater => ">0",
-      CBinaryOp.GreaterOrEqual => ">=0",
-      _ => "==0",
-    };
-
-    EmitCode($"cond r{leftReg}, {condition}");
+    EmitCode($"cond r{leftReg}, {(comparison.Op == CBinaryOp.NotEqual ? "!=0" : "==0")}");
     EmitCode($"rpop r{reg}");
+  }
+
+  private static bool IsOrderedComparison(CBinaryOp op) =>
+      op is CBinaryOp.Less or CBinaryOp.LessOrEqual or CBinaryOp.Greater or CBinaryOp.GreaterOrEqual;
+
+  /// <summary>Name of the libs/cvm helper that computes an ordered comparison exactly.</summary>
+  private static string OrderedComparisonHelper(CBinaryOp op, bool isUnsigned) => (op, isUnsigned) switch
+  {
+    (CBinaryOp.Less, false) => "__lts",
+    (CBinaryOp.LessOrEqual, false) => "__les",
+    (CBinaryOp.Greater, false) => "__gts",
+    (CBinaryOp.GreaterOrEqual, false) => "__ges",
+    (CBinaryOp.Less, true) => "__ltu",
+    (CBinaryOp.LessOrEqual, true) => "__leu",
+    (CBinaryOp.Greater, true) => "__gtu",
+    _ => "__geu",
+  };
+
+  /// <summary>Ordered comparison of the value in <paramref name="reg"/> with a literal 0, result 0/1 back in
+  /// <paramref name="reg"/>, no library call. Signed: the sign test of the value itself is exact (there is no
+  /// subtraction to overflow). Unsigned: nothing is below zero (<c>&lt;</c> is always 0, <c>&gt;=</c> always
+  /// 1), <c>&lt;=</c> means "is zero" and <c>&gt;</c> means "is not zero".</summary>
+  private void EmitOrderedComparisonWithZero(CBinaryOp op, bool isUnsigned, int reg)
+  {
+    if (!isUnsigned)
+    {
+      string condition = op switch
+      {
+        CBinaryOp.Less => "<0",
+        CBinaryOp.LessOrEqual => "<=0",
+        CBinaryOp.Greater => ">0",
+        _ => ">=0",
+      };
+      EmitCode($"cond r{reg}, {condition}");
+      EmitCode($"rpop r{reg}");
+      return;
+    }
+
+    switch (op)
+    {
+      case CBinaryOp.Less:
+        EmitCode($"rlit r{reg}, 0");
+        break;
+      case CBinaryOp.GreaterOrEqual:
+        EmitCode($"rlit r{reg}, 1");
+        break;
+      case CBinaryOp.LessOrEqual:
+        EmitCode($"cond r{reg}, ==0");
+        EmitCode($"rpop r{reg}");
+        break;
+      default:
+        EmitCode($"cond r{reg}, !=0");
+        EmitCode($"rpop r{reg}");
+        break;
+    }
   }
 
   /// <summary>Short-circuit `&amp;&amp;`/`||`, normalizing the result to a clean 0/1 in <paramref
@@ -2295,13 +2891,16 @@ public sealed class CCodeGenerator
         EmitLibraryBinaryCall(isUnsigned ? "__modu" : "__mods", leftReg, rightReg);
         return resultType;
 
+      // CHANGED 2026-11-08: a shift's result type (and the choice between logical and arithmetic right
+      // shift) follows the LEFT operand only, per C; the shift count's own signedness never matters.
+      // Constant counts never reach here -- see TryEmitConstantIntOperation.
       case CBinaryOp.ShiftLeft:
         EmitLibraryBinaryCall("__shl", leftReg, rightReg);
-        return resultType;
+        return leftType.IsUnsigned ? CType.UnsignedInt : CType.Int;
 
       case CBinaryOp.ShiftRight:
-        EmitLibraryBinaryCall(isUnsigned ? "__shru" : "__shrs", leftReg, rightReg);
-        return resultType;
+        EmitLibraryBinaryCall(leftType.IsUnsigned ? "__shru" : "__shrs", leftReg, rightReg);
+        return leftType.IsUnsigned ? CType.UnsignedInt : CType.Int;
 
       default:
         Error(location, $"binary operator \"{op}\" is not supported by this code generator");
@@ -2309,21 +2908,487 @@ public sealed class CCodeGenerator
     }
   }
 
-  /// <summary>Calls a 2-argument runtime library routine with the ordinary stack calling convention
-  /// (push <paramref name="leftReg"/> then <paramref name="rightReg"/>, call, pop the result back into
-  /// <paramref name="leftReg"/>) -- the same pattern <see cref="EmitAddIndexScaledToPointer"/> already
-  /// uses for `__mul`. <b>The library itself (`__mul`/`__divs`/`__divu`/`__mods`/`__modu`/`__shl`/
-  /// `__shrs`/`__shru`) still targets the OLD, retired CVM1/CVM2-era ISA and needs its own from-scratch
-  /// rewrite against the final 79-mnemonic set before any program using `*`/`/`/`%`/a shift operator
-  /// actually links/runs correctly -- out of scope for this file. Flagged here, and in this class's own
-  /// top doc comment, rather than silently assumed done.</b></summary>
+  /// <summary>Library helpers (libs/cvm/asm/cvmmath.asm) declared <c>__fastcall</c> in cvm.h: they take their
+  /// two arguments in r0 and r1 instead of on the stack. (<c>__udivmod</c>, <c>__cmps</c> and <c>__cmpu</c> are
+  /// fastcall too but are never emitted by the compiler.)</summary>
+  private static readonly HashSet<string> FastcallLibraryFunctions = new()
+  {
+    "__mul", "__divs", "__mods", "__divu", "__modu", "__shl", "__shrs", "__shru",
+    "__lts", "__les", "__gts", "__ges", "__ltu", "__leu", "__gtu", "__geu",
+  };
+
+  /// <summary>Calls a 2-argument runtime library routine (<c>__mul</c>, <c>__divs</c>, <c>__divu</c>,
+  /// <c>__mods</c>, <c>__modu</c>, <c>__shl</c>, <c>__shrs</c>, <c>__shru</c>, all hand-written CVM
+  /// assembler in <c>libs/cvm/asm/cvmmath.asm</c> and declared in <c>libs/cvm/include/cvm.h</c>) (and the ordered
+  /// comparison predicates <c>__lts</c> ... <c>__geu</c>). All of them are <c>__fastcall</c> today (see
+  /// <see cref="FastcallLibraryFunctions"/>); a routine NOT in that set would get the ordinary stack
+  /// convention (claude/cvm-abi.md section 3.5): the arguments are pushed right-to-left (so the first
+  /// parameter, <paramref name="leftReg"/>, ends at the lowest frame offset +2), <c>call</c>, the caller
+  /// drops both argument words, and the 1-word result comes back in <c>r0</c>.
+  /// <b>REWRITTEN 2026-11-08</b>: the previous <c>rpush left; rpush right; call; rpop left</c> sequence did
+  /// not match that convention (wrong push order, no <c>drop</c>s, result read from the stack instead of
+  /// r0) and did not protect live registers. Because every register is call-volatile, the sequence now
+  /// saves the outer scalar scratch registers <c>r8..leftReg-1</c> (which an enclosing expression may
+  /// still hold) on the VM stack around the call and restores them afterwards. <c>r0</c> never holds a
+  /// live partial result across a library call: an expression that can reach one is not evaluated into
+  /// r0 (see <see cref="IsPlainScalarExpression"/>). WIDE registers (pointers, floats) are not saved
+  /// here; their holders spill them to a frame slot instead (see <see
+  /// cref="MayCallOrUseLibrary"/>).
+  /// <b>2026-11-08</b>: the helpers listed in <see cref="FastcallLibraryFunctions"/> (every routine at present) are
+  /// <c>__fastcall</c>: the arguments are moved into <c>r1</c> (right) and <c>r0</c> (left), there is
+  /// nothing to push or drop, and the result still comes back in <c>r0</c>.</summary>
   private void EmitLibraryBinaryCall(string functionName, int leftReg, int rightReg)
   {
     _imports.Add(functionName);
-    EmitCode($"rpush r{leftReg}");
-    EmitCode($"rpush r{rightReg}");
-    EmitCode($"call {functionName}");
-    EmitCode($"rpop r{leftReg}");
+
+    var saved = new List<int>();
+    for (int r = ScalarReg(0); r < leftReg; r++)
+    {
+      saved.Add(r);
+    }
+
+    foreach (int r in saved)
+    {
+      EmitCode($"rpush r{r}");
+    }
+
+    if (FastcallLibraryFunctions.Contains(functionName))
+    {
+      // __fastcall helper: first argument in r0, second in r1, no stack traffic and nothing to drop.
+      // leftReg/rightReg are scalar scratch registers (r8 and up), so the two moves cannot collide.
+      EmitCode($"mov r{ScalarParamFirstRegister + 1}, r{rightReg}");
+      EmitCode($"mov r{ScalarParamFirstRegister}, r{leftReg}");
+      EmitCode($"call {functionName}");
+    }
+    else
+    {
+      EmitCode($"rpush r{rightReg}");
+      EmitCode($"rpush r{leftReg}");
+      EmitCode($"call {functionName}");
+      EmitCode("drop");
+      EmitCode("drop");
+    }
+
+    if (leftReg != ScalarReturnRegister)
+    {
+      EmitCode($"mov r{leftReg}, r{ScalarReturnRegister}");
+    }
+
+    for (int k = saved.Count - 1; k >= 0; k--)
+    {
+      EmitCode($"rpop r{saved[k]}");
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------------
+  // Constant-operand strength reduction. ADDED 2026-11-08, to use the 16-bit unary opcodes that exist in
+  // the CURRENT CvmInstructionSet (mul2 / udiv2 / div2 / highbyte / lowbyte / byteswap / mask15 / inv15 /
+  // inc / dec / neg / inv) instead of a runtime-library call or an `rlit` + binary-op pair. Everything in
+  // this section only fires when the RIGHT operand is a compile-time constant; a non-constant operand
+  // still takes the ordinary path (`add`/`sub`/... or the `__mul`/`__divs`/... library calls).
+  //
+  // Semantics relied on (claude/cvm-16bit-ops-test.md, node 206 source): mul2 = x << 1, udiv2 = x >> 1
+  // logical, div2 = x >> 1 arithmetic (sign kept), highbyte = x >> 8 logical, lowbyte = x & 0xFF,
+  // byteswap = swap the two bytes, mask15 = x & 0x7FFF, inv15 = x ^ 0x8000; all mod 0x10000.
+
+  /// <summary>Largest instruction count <see cref="TryEmitMultiplyByConstant"/> will spend on one
+  /// constant multiply before it gives up and lets the caller use the library call instead.</summary>
+  private const int MaxInlineMultiplyInstructions = 12;
+
+  /// <summary>Recognizes the few constant shapes the code generator can strength-reduce. Deliberately
+  /// narrow (a literal, a signed literal, <c>sizeof(type)</c>) -- anything more elaborate has already been
+  /// folded to a literal by <see cref="CConstantFolder"/>, or simply takes the ordinary path.</summary>
+  private static bool TryGetSimpleConstant(CExpr expr, out long value, out bool isUnsigned)
+  {
+    switch (expr)
+    {
+      case CIntLiteralExpr literal:
+        value = literal.Value;
+        isUnsigned = literal.IsUnsigned;
+        return true;
+
+      case CUnaryExpr { Op: CUnaryOp.Minus, Operand: CIntLiteralExpr inner }:
+        value = -inner.Value;
+        isUnsigned = inner.IsUnsigned;
+        return true;
+
+      case CUnaryExpr { Op: CUnaryOp.Plus, Operand: CIntLiteralExpr inner }:
+        value = inner.Value;
+        isUnsigned = inner.IsUnsigned;
+        return true;
+
+      case CSizeOfTypeExpr sizeOfType:
+        value = sizeOfType.Type.SizeInWords;
+        isUnsigned = true; // sizeof yields CType.UnsignedInt in EmitIntExprInto, same here.
+        return true;
+
+      default:
+        value = 0;
+        isUnsigned = false;
+        return false;
+    }
+  }
+
+  private static bool IsPowerOfTwo(long value) => value > 0 && (value & (value - 1)) == 0;
+
+  private static int Log2(long powerOfTwo) => System.Numerics.BitOperations.Log2((ulong)powerOfTwo);
+
+  /// <summary>Emits <c>reg &lt;&lt;= count</c> for 0 &lt;= count &lt;= 15 with no library call: <c>count</c>
+  /// copies of <c>mul2</c> for count &lt; 8, and for count &gt;= 8 the byte route -- <c>lowbyte</c> +
+  /// <c>byteswap</c> is exactly <c>(x &amp; 0xFF) &lt;&lt; 8</c> -- followed by <c>count - 8</c>
+  /// <c>mul2</c>. Counts of 16 and above (undefined behaviour in C) produce 0.</summary>
+  private void EmitShiftLeftByConstant(int reg, int count)
+  {
+    if (count >= 16)
+    {
+      EmitCode($"rlit r{reg}, 0");
+      return;
+    }
+
+    int remaining = count;
+    if (count >= 8)
+    {
+      EmitCode($"lowbyte r{reg}");
+      EmitCode($"byteswap r{reg}");
+      remaining = count - 8;
+    }
+
+    for (int i = 0; i < remaining; i++)
+    {
+      EmitCode($"mul2 r{reg}");
+    }
+  }
+
+  /// <summary>Emits <c>reg &gt;&gt;= count</c> with no library call. Unsigned: <c>udiv2</c> per bit, or
+  /// <c>highbyte</c> (x &gt;&gt; 8) first for count &gt;= 8; 16 and above gives 0. Signed (arithmetic shift):
+  /// <c>div2</c> per bit; a shift of 15 or more is pure sign fill and is done as
+  /// <c>cond r, &lt;0</c> / <c>rpop r</c> / <c>neg r</c> (1 or 0, negated to -1 or 0).</summary>
+  private void EmitShiftRightByConstant(int reg, int count, bool isUnsigned)
+  {
+    if (isUnsigned)
+    {
+      if (count >= 16)
+      {
+        EmitCode($"rlit r{reg}, 0");
+        return;
+      }
+
+      int remaining = count;
+      if (count >= 8)
+      {
+        EmitCode($"highbyte r{reg}");
+        remaining = count - 8;
+      }
+
+      for (int i = 0; i < remaining; i++)
+      {
+        EmitCode($"udiv2 r{reg}");
+      }
+
+      return;
+    }
+
+    if (count >= 15)
+    {
+      EmitCode($"cond r{reg}, <0");
+      EmitCode($"rpop r{reg}");
+      EmitCode($"neg r{reg}");
+      return;
+    }
+
+    for (int i = 0; i < count; i++)
+    {
+      EmitCode($"div2 r{reg}");
+    }
+  }
+
+  /// <summary>Digits (0/1, least significant first) of a positive value.</summary>
+  private static int[] BinaryDigits(long value)
+  {
+    var digits = new List<int>();
+    for (long v = value; v > 0; v >>= 1)
+    {
+      digits.Add((int)(v & 1));
+    }
+
+    return [.. digits];
+  }
+
+  /// <summary>Non-adjacent-form digits (-1/0/1, least significant first) of a positive value: no two
+  /// adjacent digits are non-zero, which minimizes the number of non-zero digits.</summary>
+  private static int[] NonAdjacentFormDigits(long value)
+  {
+    var digits = new List<int>();
+    for (long v = value; v > 0; v >>= 1)
+    {
+      int digit = 0;
+      if ((v & 1) != 0)
+      {
+        digit = 2 - (int)(v & 3); // v mod 4 == 1 -> +1, == 3 -> -1
+        v -= digit;
+      }
+
+      digits.Add(digit);
+    }
+
+    return [.. digits];
+  }
+
+  /// <summary>Instruction count of the Horner sequence for <paramref name="digits"/>: one <c>mov</c>
+  /// (save x), one <c>mul2</c> per digit below the top one, one <c>add</c>/<c>sub</c> per non-zero digit
+  /// below the top one.</summary>
+  private static int MultiplyCost(int[] digits)
+  {
+    int nonZeroBelowTop = 0;
+    for (int i = 0; i < digits.Length - 1; i++)
+    {
+      if (digits[i] != 0)
+      {
+        nonZeroBelowTop++;
+      }
+    }
+
+    return 1 + (digits.Length - 1) + nonZeroBelowTop;
+  }
+
+  /// <summary>
+  /// Tries to emit <c>reg *= constant</c> inline and returns whether it did. A power of two is a shift
+  /// (<see cref="EmitShiftLeftByConstant"/>). Any other constant uses Horner's scheme on a signed-digit
+  /// expansion (binary or non-adjacent form, whichever is cheaper): copy x into <paramref name="scratchReg"/>,
+  /// then for every digit below the top one <c>mul2</c> the accumulator and, when that digit is +1/-1,
+  /// <c>add</c>/<c>sub</c> the saved x -- e.g. x*3 = <c>mov t,x; mul2 x; add x,t</c>, x*255 = x*256 - x. A negative constant multiplies by its magnitude and then <c>neg</c>s.
+  /// Gives up (returns false, emits nothing) when the sequence would exceed <see
+  /// cref="MaxInlineMultiplyInstructions"/>. All arithmetic is mod 0x10000, so signedness is irrelevant.
+  /// </summary>
+  private bool TryEmitMultiplyByConstant(int reg, long constant, int scratchReg)
+  {
+    if (!MultiplyIsInline(constant))
+    {
+      return false;
+    }
+
+    bool negate = constant < 0;
+    long magnitude = Math.Abs(constant) & 0xFFFF;
+
+    if (magnitude == 0)
+    {
+      EmitCode($"rlit r{reg}, 0");
+      return true;
+    }
+
+    if (IsPowerOfTwo(magnitude))
+    {
+      EmitShiftLeftByConstant(reg, Log2(magnitude));
+    }
+    else
+    {
+      int[] digits = CheaperMultiplyDigits(magnitude);
+      EmitCode($"mov r{scratchReg}, r{reg}");
+      for (int bit = digits.Length - 2; bit >= 0; bit--)
+      {
+        EmitCode($"mul2 r{reg}");
+        if (digits[bit] > 0)
+        {
+          EmitCode($"add r{reg}, r{scratchReg}");
+        }
+        else if (digits[bit] < 0)
+        {
+          EmitCode($"sub r{reg}, r{scratchReg}");
+        }
+      }
+    }
+
+    if (negate)
+    {
+      EmitCode($"neg r{reg}");
+    }
+
+    return true;
+  }
+
+  /// <summary>Both the plain binary expansion (digits 0/1) and the non-adjacent form (digits -1/0/1, fewer
+  /// non-zero digits for runs of ones: 255 = 256 - 1) are costed; the cheaper wins. Digit 0 is the least
+  /// significant; the top digit is +1.</summary>
+  private static int[] CheaperMultiplyDigits(long magnitude)
+  {
+    int[] binaryDigits = BinaryDigits(magnitude);
+    int[] nafDigits = NonAdjacentFormDigits(magnitude);
+    return MultiplyCost(nafDigits) < MultiplyCost(binaryDigits) ? nafDigits : binaryDigits;
+  }
+
+  /// <summary>Whether <c>x * constant</c> is emitted inline (no library call) by <see
+  /// cref="TryEmitMultiplyByConstant"/>. Pure function of the constant, so callers can ask it at analysis
+  /// time (see <see cref="MayCallOrUseLibrary"/>).</summary>
+  private static bool MultiplyIsInline(long constant)
+  {
+    bool negate = constant < 0;
+    long magnitude = Math.Abs(constant) & 0xFFFF;
+    if (magnitude == 0)
+    {
+      return true;
+    }
+
+    if (IsPowerOfTwo(magnitude))
+    {
+      int shift = Log2(magnitude);
+      int shiftCost = shift >= 8 ? 2 + (shift - 8) : shift;
+      return shiftCost + (negate ? 1 : 0) <= MaxInlineMultiplyInstructions;
+    }
+
+    return MultiplyCost(CheaperMultiplyDigits(magnitude)) + (negate ? 1 : 0) <= MaxInlineMultiplyInstructions;
+  }
+
+  /// <summary>Inline <c>reg *= constant</c> if <see cref="TryEmitMultiplyByConstant"/> can; otherwise the
+  /// ordinary <c>__mul</c> library call (constant loaded into <paramref name="scratchReg"/>).</summary>
+  private void EmitMultiplyRegisterByConstant(int reg, long constant, int scratchReg)
+  {
+    if (TryEmitMultiplyByConstant(reg, constant, scratchReg))
+    {
+      return;
+    }
+
+    EmitCode($"rlit r{scratchReg}, {constant}");
+    EmitLibraryBinaryCall("__mul", reg, scratchReg);
+  }
+
+  /// <summary>
+  /// Strength-reduces <c>reg = reg op constant</c> when <paramref name="rightExpr"/> is a simple
+  /// compile-time constant and <paramref name="op"/> has a cheaper current-opcode form than "load the
+  /// constant, then use the generic binary op / library call". Returns true (and the C result type)
+  /// when it emitted the operation; returns false and emits NOTHING otherwise, so the caller must then
+  /// evaluate the right operand and use <see cref="EmitIntBinaryOperation"/> as before.
+  /// <para><paramref name="scratchReg"/> must be a register that is free for the duration of the
+  /// operation (callers pass <c>ScalarReg(depth + 1)</c>, the slot the right operand would have used).</para>
+  /// <list type="bullet">
+  /// <item><description><c>+ k</c> / <c>- k</c> for |k| &lt;= 2: <c>inc</c>/<c>dec</c> (1 word each, versus
+  /// a 2-word <c>rlit</c> plus the add).</description></item>
+  /// <item><description><c>&amp; 0xFF</c> -&gt; <c>lowbyte</c>; <c>&amp; 0x7FFF</c> -&gt; <c>mask15</c>;
+  /// <c>^ 0x8000</c> -&gt; <c>inv15</c>; <c>^ -1</c> -&gt; <c>inv</c>; and the identities/zeroes (<c>&amp; 0</c>,
+  /// <c>| 0</c>, <c>^ 0</c>, <c>&amp; -1</c>, <c>| -1</c>).</description></item>
+  /// <item><description><c>* k</c>: <see cref="TryEmitMultiplyByConstant"/>.</description></item>
+  /// <item><description>UNSIGNED <c>/ 2^n</c> (a logical right shift) and UNSIGNED <c>% 2^n</c>
+  /// (a mask: <c>lowbyte</c> for 256, <c>mask15</c> for 32768, else <c>rlit</c>+<c>and</c>). Signed
+  /// division/modulo are NOT shifts/masks for negative dividends and keep the library call.</description></item>
+  /// <item><description><c>&lt;&lt; k</c> / <c>&gt;&gt; k</c> for a constant 0..255 count (the C rule: the
+  /// result has the type and signedness of the LEFT operand only).</description></item>
+  /// </list>
+  /// </summary>
+  private bool TryEmitConstantIntOperation(CBinaryOp op, CType leftType, CExpr rightExpr, int reg, int scratchReg, out CType resultType)
+  {
+    resultType = CType.Int;
+    if (!TryGetSimpleConstant(rightExpr, out long constant, out bool rightIsUnsigned))
+    {
+      return false;
+    }
+
+    bool isUnsigned = leftType.IsUnsigned || rightIsUnsigned;
+    resultType = isUnsigned ? CType.UnsignedInt : CType.Int;
+    bool fitsWord = constant >= -32768 && constant <= 65535;
+
+    switch (op)
+    {
+      case CBinaryOp.Add when fitsWord && Math.Abs(constant) <= 2:
+      case CBinaryOp.Subtract when fitsWord && Math.Abs(constant) <= 2:
+        {
+          long delta = op == CBinaryOp.Add ? constant : -constant;
+          string mnemonic = delta >= 0 ? "inc" : "dec";
+          for (long i = 0; i < Math.Abs(delta); i++)
+          {
+            EmitCode($"{mnemonic} r{reg}");
+          }
+
+          return true;
+        }
+
+      case CBinaryOp.BitwiseAnd when fitsWord:
+        switch (constant & 0xFFFF)
+        {
+          case 0x0000:
+            EmitCode($"rlit r{reg}, 0");
+            return true;
+          case 0xFFFF:
+            return true;
+          case 0x00FF:
+            EmitCode($"lowbyte r{reg}");
+            return true;
+          case 0x7FFF:
+            EmitCode($"mask15 r{reg}");
+            return true;
+          default:
+            return false;
+        }
+
+      case CBinaryOp.BitwiseOr when fitsWord:
+        switch (constant & 0xFFFF)
+        {
+          case 0x0000:
+            return true;
+          case 0xFFFF:
+            EmitCode($"rlit r{reg}, -1");
+            return true;
+          default:
+            return false;
+        }
+
+      case CBinaryOp.BitwiseXor when fitsWord:
+        switch (constant & 0xFFFF)
+        {
+          case 0x0000:
+            return true;
+          case 0xFFFF:
+            EmitCode($"inv r{reg}");
+            return true;
+          case 0x8000:
+            EmitCode($"inv15 r{reg}");
+            return true;
+          default:
+            return false;
+        }
+
+      case CBinaryOp.Multiply when fitsWord:
+        return TryEmitMultiplyByConstant(reg, constant, scratchReg);
+
+      case CBinaryOp.Divide when isUnsigned && IsPowerOfTwo(constant) && constant <= 0x8000:
+        EmitShiftRightByConstant(reg, Log2(constant), isUnsigned: true);
+        return true;
+
+      case CBinaryOp.Modulo when isUnsigned && IsPowerOfTwo(constant) && constant <= 0x8000:
+        {
+          long mask = constant - 1;
+          if (mask == 0)
+          {
+            EmitCode($"rlit r{reg}, 0");
+          }
+          else if (mask == 0xFF)
+          {
+            EmitCode($"lowbyte r{reg}");
+          }
+          else if (mask == 0x7FFF)
+          {
+            EmitCode($"mask15 r{reg}");
+          }
+          else
+          {
+            EmitCode($"rlit r{scratchReg}, {mask}");
+            EmitCode($"and r{reg}, r{scratchReg}");
+          }
+
+          return true;
+        }
+
+      case CBinaryOp.ShiftLeft when constant >= 0 && constant <= 255:
+        resultType = leftType.IsUnsigned ? CType.UnsignedInt : CType.Int;
+        EmitShiftLeftByConstant(reg, (int)Math.Min(constant, 16));
+        return true;
+
+      case CBinaryOp.ShiftRight when constant >= 0 && constant <= 255:
+        resultType = leftType.IsUnsigned ? CType.UnsignedInt : CType.Int;
+        EmitShiftRightByConstant(reg, (int)Math.Min(constant, 16), leftType.IsUnsigned);
+        return true;
+
+      default:
+        return false;
+    }
   }
 
   /// <summary>`(int)`/`(char)`/`(unsigned ...)`/pointer-to-int casts. Every integer kind is exactly one
@@ -2337,9 +3402,8 @@ public sealed class CCodeGenerator
 
     if (operandType.IsFloat)
     {
-      Error(cast.Location, "casting between 'float' and an integer type is not supported by this compiler (no int<->float conversion opcode exists)");
-      EmitWideExprInto(cast.Operand, WideReg(depth), depth); // keep generating code so later errors aren't swallowed.
-      EmitCode($"rlit r{reg}, 0");
+      // ADDED 2026-11-08: float -> integer truncates toward zero (__ftol / __ftoul, low word kept).
+      EmitFloatTruncatedInto(cast.Operand, reg, depth, cast.TargetType.IsUnsigned);
       return cast.TargetType;
     }
 
@@ -2355,6 +3419,344 @@ public sealed class CCodeGenerator
     return cast.TargetType;
   }
 
+  // ---------------------------------------------------------------------------------------------------
+  // long / unsigned long (ADDED 2026-11-08, see claude/cvm-long-support-2026-11-08.md).
+  //
+  // A long is a 2-word little-endian value (low word at the lower address / even register, high word at the
+  // higher address / odd register) that lives in a wide scratch double register (d1..d3) while it is being
+  // computed, exactly like a pointer or a float. Operators:
+  //   + - & | ^ ~ unary-minus ++ --   inline 32-bit opcodes (dadd dneg dinv dand dor dxor dinc ddec); a
+  //                                   subtraction is "dneg right; dadd left, right".
+  //   int -> long                     mov + dsext (signed source) or mov + "high word := 0" (unsigned source).
+  //   long -> int                     the low word.
+  //   * / % << >> < <= > >=           calls into the cvm library (__lmul, __ldivs, __ldivu, __lmods, __lmodu,
+  //                                   __lshl, __lshrs, __lshru, __llts ... __lgeu). They are __fastcall: first
+  //                                   long in d4 (r8/r9), second long in d5 (r10/r11), an int shift count in r0;
+  //                                   a long result comes back in d0 (r0/r1), a comparison result in r0.
+  //   == !=                           inline (xor both word pairs, or them together, test for zero).
+  // Every register is call-volatile, so a library call saves the outer scalar scratch registers
+  // (r8..ScalarReg(depth)-1) with rpush/rpop, and a holder of a live wide value spills it around any operand
+  // that may call or use a library routine (MayCallOrUseLibrary), exactly as for float.
+
+  /// <summary>Emits <c>dlit</c> for a 32-bit constant (the value's two's complement bits; operand order is
+  /// high word first, like every other <c>dlit</c> in this file).</summary>
+  private void EmitLongConstantInto(long value, int destDouble)
+  {
+    uint bits = unchecked((uint)value);
+    EmitCode($"dlit d{destDouble}, 0x{bits >> 16:X4}, 0x{bits & 0xFFFF:X4}");
+  }
+
+  /// <summary>Evaluates <paramref name="expr"/> as a long into <paramref name="destDouble"/>, converting an
+  /// integer expression (int, unsigned, char) the way C does: a signed source is sign-extended, an unsigned
+  /// one zero-extended. Returns <c>long</c>/<c>unsigned long</c> according to the SOURCE type.</summary>
+  private CType EmitLongValueInto(CExpr expr, int destDouble, int depth)
+  {
+    if (TryGetSimpleConstant(expr, out long constant, out bool constantIsUnsigned))
+    {
+      EmitLongConstantInto(constant, destDouble);
+      bool constantIsLong = expr is CIntLiteralExpr { IsLong: true } || expr is CUnaryExpr { Operand: CIntLiteralExpr { IsLong: true } };
+      return constantIsUnsigned && constantIsLong ? CType.UnsignedLong : constantIsUnsigned && constant > 0x7FFFFFFF ? CType.UnsignedLong : CType.Long;
+    }
+
+    TryGetStaticType(expr, out CType type);
+    if (type.IsLong)
+    {
+      return EmitWideExprInto(expr, destDouble, depth);
+    }
+
+    if (type.IsFloat)
+    {
+      return EmitFloatToLongInto(expr, destDouble, depth, false);
+    }
+
+    if (type.IsPointer)
+    {
+      Error(expr.Location, $"cannot convert \"{type}\" to a long (cast explicitly)");
+      EmitWideExprInto(expr, destDouble, depth);
+      return CType.Long;
+    }
+
+    int sourceReg = ScalarReg(depth);
+    CType sourceType = EmitIntExprInto(expr, sourceReg, depth);
+    EmitCode($"mov r{2 * destDouble}, r{sourceReg}");
+    if (sourceType.IsUnsigned)
+    {
+      EmitCode($"rlit r{2 * destDouble + 1}, 0");
+      return CType.Long;
+    }
+
+    EmitCode($"dsext d{destDouble}");
+    return CType.Long;
+  }
+
+  /// <summary>A long-typed expression used where a 16-bit int is wanted: evaluated as a long, low word kept.</summary>
+  private CType EmitLongTruncatedInto(CExpr expr, int reg, int depth)
+  {
+    if (expr is CIntLiteralExpr { IsLong: true } literal)
+    {
+      EmitCode($"rlit r{reg}, {literal.Value & 0xFFFF}");
+      return literal.IsUnsigned ? CType.UnsignedInt : CType.Int;
+    }
+
+    int wide = WideReg(depth);
+    CType type = EmitWideExprInto(expr, wide, depth);
+    EmitCode($"mov r{reg}, r{2 * wide}");
+    return type.IsUnsigned ? CType.UnsignedInt : CType.Int;
+  }
+
+  private CType EmitLongUnary(CUnaryExpr unary, int destDouble, int depth)
+  {
+    CType type = EmitLongValueInto(unary.Operand, destDouble, depth);
+    EmitCode(unary.Op == CUnaryOp.Minus ? $"dneg d{destDouble}" : $"dinv d{destDouble}");
+    return type;
+  }
+
+  /// <summary>A binary arithmetic / bitwise / shift expression whose promoted type is long.</summary>
+  private CType EmitLongBinary(CBinaryExpr binary, int destDouble, int depth)
+  {
+    TryGetStaticType(binary, out CType resultType);
+    bool isShift = binary.Op is CBinaryOp.ShiftLeft or CBinaryOp.ShiftRight;
+    bool spillNeeded = MayCallOrUseLibrary(binary.Right);
+    int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
+
+    EmitLongValueInto(binary.Left, destDouble, depth);
+    if (spillLow is not null)
+    {
+      EmitCode($"stf r{2 * destDouble}, {spillLow}");
+      EmitCode($"stf r{2 * destDouble + 1}, {spillLow + 1}");
+    }
+
+    if (isShift)
+    {
+      int countReg = ScalarReg(depth + 1);
+      EmitIntExprInto(binary.Right, countReg, depth + 1);
+      if (spillLow is not null)
+      {
+        EmitCode($"ldf r{2 * destDouble}, {spillLow}");
+        EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
+      }
+
+      EmitLongBinaryOperation(binary.Op, resultType.Kind == CTypeKind.UnsignedLong, destDouble, -1, countReg, depth);
+      return resultType;
+    }
+
+    int rightDouble = WideReg(depth + 1);
+    EmitLongValueInto(binary.Right, rightDouble, depth + 1);
+    if (spillLow is not null)
+    {
+      EmitCode($"ldf r{2 * destDouble}, {spillLow}");
+      EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
+    }
+
+    EmitLongBinaryOperation(binary.Op, resultType.Kind == CTypeKind.UnsignedLong, destDouble, rightDouble, -1, depth);
+    return resultType;
+  }
+
+  /// <summary><paramref name="leftDouble"/> := <paramref name="leftDouble"/> <paramref name="op"/> right, where
+  /// the right operand is the long in <paramref name="rightDouble"/> or (for a shift) the int in
+  /// <paramref name="countReg"/>. <paramref name="isUnsigned"/> selects the unsigned library routine for
+  /// <c>/</c>, <c>%</c> and <c>&gt;&gt;</c>.</summary>
+  private void EmitLongBinaryOperation(CBinaryOp op, bool isUnsigned, int leftDouble, int rightDouble, int countReg, int depth)
+  {
+    switch (op)
+    {
+      case CBinaryOp.Add:
+        EmitCode($"dadd d{leftDouble}, d{rightDouble}");
+        break;
+      case CBinaryOp.Subtract:
+        EmitCode($"dneg d{rightDouble}");
+        EmitCode($"dadd d{leftDouble}, d{rightDouble}");
+        break;
+      case CBinaryOp.BitwiseAnd:
+        EmitCode($"dand d{leftDouble}, d{rightDouble}");
+        break;
+      case CBinaryOp.BitwiseOr:
+        EmitCode($"dor d{leftDouble}, d{rightDouble}");
+        break;
+      case CBinaryOp.BitwiseXor:
+        EmitCode($"dxor d{leftDouble}, d{rightDouble}");
+        break;
+      case CBinaryOp.Multiply:
+        EmitLongLibraryCall("__lmul", leftDouble, rightDouble, -1, depth, -1);
+        break;
+      case CBinaryOp.Divide:
+        EmitLongLibraryCall(isUnsigned ? "__ldivu" : "__ldivs", leftDouble, rightDouble, -1, depth, -1);
+        break;
+      case CBinaryOp.Modulo:
+        EmitLongLibraryCall(isUnsigned ? "__lmodu" : "__lmods", leftDouble, rightDouble, -1, depth, -1);
+        break;
+      case CBinaryOp.ShiftLeft:
+        EmitLongLibraryCall("__lshl", leftDouble, -1, countReg, depth, -1);
+        break;
+      case CBinaryOp.ShiftRight:
+        EmitLongLibraryCall(isUnsigned ? "__lshru" : "__lshrs", leftDouble, -1, countReg, depth, -1);
+        break;
+      default:
+        _diagnostics.Add($"<internal>: operator {op} is not defined for long");
+        _hasError = true;
+        break;
+    }
+  }
+
+  /// <summary>Calls a __fastcall cvm library routine on long operands: the left long goes to d4 (r8/r9), the
+  /// right long (if any) to d5 (r10/r11), an int count (if any) to r0. The result is a long copied back into
+  /// <paramref name="leftDouble"/> (<paramref name="scalarResultReg"/> &lt; 0) or an int 0/1 or other word
+  /// copied into <paramref name="scalarResultReg"/>. The outer scalar scratch registers r8..ScalarReg(depth)-1
+  /// are saved around the call (the library freely clobbers every register).</summary>
+  private void EmitLongLibraryCall(string functionName, int leftDouble, int rightDouble, int countReg, int depth, int scalarResultReg)
+  {
+    _imports.Add(functionName);
+
+    var saved = new List<int>();
+    for (int r = ScalarScratchFirstRegister; r < ScalarScratchFirstRegister + depth; r++)
+    {
+      saved.Add(r);
+    }
+
+    foreach (int r in saved)
+    {
+      EmitCode($"rpush r{r}");
+    }
+
+    if (countReg >= 0)
+    {
+      // First: the count register may be one of r8..r11, which the long arguments overwrite below.
+      EmitCode($"mov r{ScalarParamFirstRegister}, r{countReg}");
+    }
+
+    EmitCode($"mov r{2 * WideParamFirstDouble}, r{2 * leftDouble}");
+    EmitCode($"mov r{2 * WideParamFirstDouble + 1}, r{2 * leftDouble + 1}");
+    if (rightDouble >= 0)
+    {
+      EmitCode($"mov r{2 * (WideParamFirstDouble + 1)}, r{2 * rightDouble}");
+      EmitCode($"mov r{2 * (WideParamFirstDouble + 1) + 1}, r{2 * rightDouble + 1}");
+    }
+
+    EmitCode($"call {functionName}");
+
+    if (scalarResultReg >= 0)
+    {
+      EmitCode($"mov r{scalarResultReg}, r{ScalarReturnRegister}");
+    }
+    else
+    {
+      EmitCode($"mov r{2 * leftDouble}, r{2 * WideReturnDouble}");
+      EmitCode($"mov r{2 * leftDouble + 1}, r{2 * WideReturnDouble + 1}");
+    }
+
+    for (int k = saved.Count - 1; k >= 0; k--)
+    {
+      EmitCode($"rpop r{saved[k]}");
+    }
+  }
+
+  private static string LongComparisonHelper(CBinaryOp op, bool isUnsigned) => (op, isUnsigned) switch
+  {
+    (CBinaryOp.Less, false) => "__llts",
+    (CBinaryOp.LessOrEqual, false) => "__lles",
+    (CBinaryOp.Greater, false) => "__lgts",
+    (CBinaryOp.GreaterOrEqual, false) => "__lges",
+    (CBinaryOp.Less, true) => "__lltu",
+    (CBinaryOp.LessOrEqual, true) => "__lleu",
+    (CBinaryOp.Greater, true) => "__lgtu",
+    _ => "__lgeu",
+  };
+
+  /// <summary>A comparison with a long on at least one side: both operands are converted to long. <c>==</c>
+  /// and <c>!=</c> are inline; the ordered comparisons call the exact library predicates.</summary>
+  private void EmitLongComparisonInto(CBinaryExpr comparison, CType leftStaticType, CType rightStaticType, int reg, int depth)
+  {
+    bool isUnsigned = leftStaticType.Kind == CTypeKind.UnsignedLong || rightStaticType.Kind == CTypeKind.UnsignedLong;
+    bool spillNeeded = MayCallOrUseLibrary(comparison.Right);
+    int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
+
+    int leftDouble = WideReg(depth);
+    EmitLongValueInto(comparison.Left, leftDouble, depth);
+    if (spillLow is not null)
+    {
+      EmitCode($"stf r{2 * leftDouble}, {spillLow}");
+      EmitCode($"stf r{2 * leftDouble + 1}, {spillLow + 1}");
+    }
+
+    int rightDouble = WideReg(depth + 1);
+    EmitLongValueInto(comparison.Right, rightDouble, depth + 1);
+    if (spillLow is not null)
+    {
+      EmitCode($"ldf r{2 * leftDouble}, {spillLow}");
+      EmitCode($"ldf r{2 * leftDouble + 1}, {spillLow + 1}");
+    }
+
+    if (IsOrderedComparison(comparison.Op))
+    {
+      EmitLongLibraryCall(LongComparisonHelper(comparison.Op, isUnsigned), leftDouble, rightDouble, -1, depth, reg);
+      return;
+    }
+
+    int helperReg = ScalarReg(depth + 1);
+    EmitCode($"mov r{reg}, r{2 * leftDouble}");
+    EmitCode($"xor r{reg}, r{2 * rightDouble}");
+    EmitCode($"mov r{helperReg}, r{2 * leftDouble + 1}");
+    EmitCode($"xor r{helperReg}, r{2 * rightDouble + 1}");
+    EmitCode($"or r{reg}, r{helperReg}");
+    EmitCode($"cond r{reg}, {(comparison.Op == CBinaryOp.NotEqual ? "!=0" : "==0")}");
+    EmitCode($"rpop r{reg}");
+  }
+
+  /// <summary>"target op= value" where the target is a long. The target's current value is loaded into the
+  /// wide scratch register of <paramref name="baseDepth"/>, combined with the converted right-hand side, and
+  /// stored back.</summary>
+  private CType EmitLongCompoundAssign(CCompoundAssignExpr compoundAssign, CAddr addr, int? addressSpill, int wideDest, int baseDepth, bool isWide)
+  {
+    int currentDouble = WideReg(baseDepth);
+    EmitLoadValueFromAddr(addr, 0, currentDouble, baseDepth);
+
+    bool isShift = compoundAssign.Op is CBinaryOp.ShiftLeft or CBinaryOp.ShiftRight;
+    bool spillNeeded = MayCallOrUseLibrary(compoundAssign.Value);
+    int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
+    if (spillLow is not null)
+    {
+      EmitCode($"stf r{2 * currentDouble}, {spillLow}");
+      EmitCode($"stf r{2 * currentDouble + 1}, {spillLow + 1}");
+    }
+
+    bool isUnsigned = addr.Type.Kind == CTypeKind.UnsignedLong;
+    if (isShift)
+    {
+      int countReg = ScalarReg(baseDepth + 1);
+      EmitIntExprInto(compoundAssign.Value, countReg, baseDepth + 1);
+      RestorePointerAddress(addr, addressSpill);
+      if (spillLow is not null)
+      {
+        EmitCode($"ldf r{2 * currentDouble}, {spillLow}");
+        EmitCode($"ldf r{2 * currentDouble + 1}, {spillLow + 1}");
+      }
+
+      EmitLongBinaryOperation(compoundAssign.Op, isUnsigned, currentDouble, -1, countReg, baseDepth);
+    }
+    else
+    {
+      int rightDouble = WideReg(baseDepth + 1);
+      CType valueType = EmitLongValueInto(compoundAssign.Value, rightDouble, baseDepth + 1);
+      RestorePointerAddress(addr, addressSpill);
+      if (spillLow is not null)
+      {
+        EmitCode($"ldf r{2 * currentDouble}, {spillLow}");
+        EmitCode($"ldf r{2 * currentDouble + 1}, {spillLow + 1}");
+      }
+
+      EmitLongBinaryOperation(compoundAssign.Op, isUnsigned || valueType.Kind == CTypeKind.UnsignedLong, currentDouble, rightDouble, -1, baseDepth);
+    }
+
+    EmitStoreValueToAddr(addr, 0, currentDouble);
+    if (isWide && currentDouble != wideDest)
+    {
+      EmitCode($"mov r{2 * wideDest}, r{2 * currentDouble}");
+      EmitCode($"mov r{2 * wideDest + 1}, r{2 * currentDouble + 1}");
+    }
+
+    return addr.Type;
+  }
+
   /// <summary>`(float)`/pointer-type casts. float-to-float and pointer-to-pointer are free
   /// reinterpretations; int-to-pointer assumes page 0 (there is no general way to recover a page number
   /// from a plain integer -- flagged as an assumption, not a confirmed rule, same as this class's other
@@ -2365,14 +3767,29 @@ public sealed class CCodeGenerator
   {
     TryGetStaticType(cast.Operand, out CType operandType);
 
-    if (cast.TargetType.IsFloat)
+    if (cast.TargetType.IsLong && operandType.IsFloat)
     {
-      if (!operandType.IsFloat)
+      EmitFloatToLongInto(cast.Operand, destDouble, depth, cast.TargetType.Kind == CTypeKind.UnsignedLong);
+      return cast.TargetType;
+    }
+
+    if (cast.TargetType.IsLong)
+    {
+      // ADDED 2026-11-08: (long) / (unsigned long) of an integer (sign- or zero-extended according to the
+      // operand's own signedness) or of another long (a plain reinterpretation of the same 32 bits).
+      if (!operandType.IsIntegral)
       {
-        Error(cast.Location, "casting between an integer type and 'float' is not supported by this compiler (no int<->float conversion opcode exists)");
+        Error(cast.Location, $"casting \"{operandType}\" to \"{cast.TargetType}\" is not supported by this compiler");
       }
 
-      EmitWideExprInto(cast.Operand, destDouble, depth);
+      EmitLongValueInto(cast.Operand, destDouble, depth);
+      return cast.TargetType;
+    }
+
+    if (cast.TargetType.IsFloat)
+    {
+      // (float) of an integer / long (__ltof / __ultof, or folded for a constant) or of another float.
+      EmitFloatValueInto(cast.Operand, destDouble, depth);
       return cast.TargetType;
     }
 
@@ -2419,7 +3836,13 @@ public sealed class CCodeGenerator
       return pointerType;
     }
 
-    bool spillNeeded = ContainsCall(addSub.Right);
+    if (!leftStaticType.IsPointer && !rightStaticType.IsPointer)
+    {
+      // ADDED 2026-11-08: float arithmetic, with an int / long operand converted to float first.
+      return EmitFloatBinary(addSub, destDouble, depth);
+    }
+
+    bool spillNeeded = MayCallOrUseLibrary(addSub.Right);
     int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
     CType leftType = EmitWideExprInto(addSub.Left, destDouble, depth);
     if (spillLow is not null)
@@ -2479,6 +3902,166 @@ public sealed class CCodeGenerator
     return CType.Float;
   }
 
+  // ---------------------------------------------------------------------------------------------------
+  // float <-> integer conversions and float comparisons (ADDED 2026-11-08, see
+  // claude/cvm-float-support-2026-11-08.md). + - * / are the coprocessor opcodes (fadd fsub fmul fdiv); the rest
+  // calls into libs/cvm/asm/cvmfloat.asm, all __fastcall like the long routines (first wide argument d4 =
+  // r8/r9, second d5 = r10/r11, wide result d0 = r0/r1, int result r0), through EmitLongLibraryCall:
+  //   int / long -> float     widened to long, then __ltof (__ultof for an unsigned long); an integer CONSTANT is
+  //                           folded into a float literal instead
+  //   float -> long / int     __ftol (__ftoul for an unsigned target); truncates toward zero; an int keeps the low
+  //                           word of the long
+  //   < <= > >= == !=         __flt __fle __fgt __fge __feq __fne (IEEE: false for a NaN, != true)
+  //   if (f), !f, f && g      inline: the high word without its sign bit, or'd with the low word
+  // Mixed int/float arithmetic and comparisons convert the integer side to float (C's usual arithmetic
+  // conversions). Every holder of a live wide value spills it around an operand that needs such a call
+  // (NeedsFloatConversionCall / MayCallOrUseLibrary).
+
+  /// <summary>Evaluates <paramref name="expr"/> as a float into <paramref name="destDouble"/>, converting an
+  /// int / unsigned / long / unsigned long expression.</summary>
+  private CType EmitFloatValueInto(CExpr expr, int destDouble, int depth)
+  {
+    TryGetStaticType(expr, out CType type);
+    if (type.IsFloat)
+    {
+      return EmitWideExprInto(expr, destDouble, depth);
+    }
+
+    if (type.IsPointer)
+    {
+      Error(expr.Location, $"cannot convert \"{type}\" to a float (cast explicitly)");
+      EmitCode($"dlit d{destDouble}, 0, 0");
+      return CType.Float;
+    }
+
+    if (TryGetSimpleConstant(expr, out long constant, out _))
+    {
+      EmitFloatLiteralInto((float)constant, destDouble);
+      return CType.Float;
+    }
+
+    EmitLongValueInto(expr, destDouble, depth);
+    EmitLongLibraryCall(type.Kind == CTypeKind.UnsignedLong ? "__ultof" : "__ltof", destDouble, -1, -1, depth, -1);
+    return CType.Float;
+  }
+
+  /// <summary>A float-typed expression converted to a long / unsigned long in <paramref name="destDouble"/>.</summary>
+  private CType EmitFloatToLongInto(CExpr expr, int destDouble, int depth, bool unsignedTarget)
+  {
+    EmitWideExprInto(expr, destDouble, depth);
+    EmitLongLibraryCall(unsignedTarget ? "__ftoul" : "__ftol", destDouble, -1, -1, depth, -1);
+    return unsignedTarget ? CType.UnsignedLong : CType.Long;
+  }
+
+  /// <summary>A float-typed expression used where a 16-bit int is wanted: converted like a long, low word kept.</summary>
+  private CType EmitFloatTruncatedInto(CExpr expr, int reg, int depth, bool unsignedTarget)
+  {
+    int wide = WideReg(depth);
+    EmitWideExprInto(expr, wide, depth);
+    EmitLongLibraryCall(unsignedTarget ? "__ftoul" : "__ftol", wide, -1, -1, depth, reg);
+    return unsignedTarget ? CType.UnsignedInt : CType.Int;
+  }
+
+  /// <summary>Evaluates <paramref name="expr"/> for assignment to / passing as <paramref name="targetType"/>, a
+  /// wide type (long, unsigned long, float, pointer), applying the implicit conversion to it.</summary>
+  private CType EmitValueForTarget(CType targetType, CExpr expr, int destDouble, int depth)
+  {
+    if (targetType.IsLong)
+    {
+      if (targetType.Kind == CTypeKind.UnsignedLong && IsFloatTyped(expr))
+      {
+        return EmitFloatToLongInto(expr, destDouble, depth, true);
+      }
+
+      return EmitLongValueInto(expr, destDouble, depth);
+    }
+
+    if (targetType.IsFloat)
+    {
+      return EmitFloatValueInto(expr, destDouble, depth);
+    }
+
+    return EmitWideExprInto(expr, destDouble, depth);
+  }
+
+  /// <summary><c>left + - * / right</c> where at least one operand is a float: both are converted to float and
+  /// combined with the coprocessor opcode.</summary>
+  private CType EmitFloatBinary(CBinaryExpr binary, int destDouble, int depth)
+  {
+    TryGetStaticType(binary.Left, out CType leftType);
+    TryGetStaticType(binary.Right, out CType rightType);
+    if (!leftType.IsFloat && !rightType.IsFloat)
+    {
+      Error(binary.Location, $"\"{binary.Op}\" between \"{leftType}\" and \"{rightType}\" is not supported");
+      EmitCode($"dlit d{destDouble}, 0, 0");
+      return CType.Float;
+    }
+
+    string op = binary.Op switch
+    {
+      CBinaryOp.Add => "fadd",
+      CBinaryOp.Subtract => "fsub",
+      CBinaryOp.Multiply => "fmul",
+      _ => "fdiv",
+    };
+
+    bool spillNeeded = FloatOperandUsesLibrary(binary.Right);
+    int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
+    EmitFloatValueInto(binary.Left, destDouble, depth);
+    if (spillLow is not null)
+    {
+      EmitCode($"stf r{2 * destDouble}, {spillLow}");
+      EmitCode($"stf r{2 * destDouble + 1}, {spillLow + 1}");
+    }
+
+    int rightDouble = WideReg(depth + 1);
+    EmitFloatValueInto(binary.Right, rightDouble, depth + 1);
+    if (spillLow is not null)
+    {
+      EmitCode($"ldf r{2 * destDouble}, {spillLow}");
+      EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
+    }
+
+    EmitCode($"{op} d{destDouble}, d{rightDouble}");
+    return CType.Float;
+  }
+
+  private static string FloatComparisonHelper(CBinaryOp op) => op switch
+  {
+    CBinaryOp.Less => "__flt",
+    CBinaryOp.LessOrEqual => "__fle",
+    CBinaryOp.Greater => "__fgt",
+    CBinaryOp.GreaterOrEqual => "__fge",
+    CBinaryOp.Equal => "__feq",
+    _ => "__fne",
+  };
+
+  /// <summary>A comparison with a float on at least one side: both operands are converted to float and the
+  /// IEEE predicate of cvmfloat.asm is called; the 0/1 result lands in <paramref name="reg"/>.</summary>
+  private void EmitFloatComparisonInto(CBinaryExpr comparison, int reg, int depth)
+  {
+    bool spillNeeded = FloatOperandUsesLibrary(comparison.Right);
+    int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
+
+    int leftDouble = WideReg(depth);
+    EmitFloatValueInto(comparison.Left, leftDouble, depth);
+    if (spillLow is not null)
+    {
+      EmitCode($"stf r{2 * leftDouble}, {spillLow}");
+      EmitCode($"stf r{2 * leftDouble + 1}, {spillLow + 1}");
+    }
+
+    int rightDouble = WideReg(depth + 1);
+    EmitFloatValueInto(comparison.Right, rightDouble, depth + 1);
+    if (spillLow is not null)
+    {
+      EmitCode($"ldf r{2 * leftDouble}, {spillLow}");
+      EmitCode($"ldf r{2 * leftDouble + 1}, {spillLow + 1}");
+    }
+
+    EmitLongLibraryCall(FloatComparisonHelper(comparison.Op), leftDouble, rightDouble, -1, depth, reg);
+  }
+
   /// <summary>Bit-splits a `float` literal's IEEE-754 pattern into a `dlit dX, hi, lo` -- the same hi/lo
   /// operand order (confirmed 2026-10-16) <see cref="EmitAddressOfInto"/>'s own Global case and every
   /// other `dlit` emission in this file already uses.</summary>
@@ -2501,17 +4084,32 @@ public sealed class CCodeGenerator
     EmitConditionTestInto(conditional.Condition, ScalarReg(depth), depth);
     EmitCode($"if r{ScalarReg(depth)} ==0 then {falseLabel}");
 
-    CType trueType = isWide
-        ? EmitWideExprInto(conditional.WhenTrue, wideDest, depth)
-        : EmitIntExprInto(conditional.WhenTrue, scalarDest, depth);
+    bool longResult = isWide && IsLongTyped(conditional);
+    bool floatResult = isWide && IsFloatTyped(conditional);
+    CType trueType = longResult
+        ? EmitLongValueInto(conditional.WhenTrue, wideDest, depth)
+        : floatResult
+            ? EmitFloatValueInto(conditional.WhenTrue, wideDest, depth)
+            : isWide
+                ? EmitWideExprInto(conditional.WhenTrue, wideDest, depth)
+                : EmitIntExprInto(conditional.WhenTrue, scalarDest, depth);
     EmitCode($"br {endLabel}");
 
     EmitLabel(falseLabel);
-    CType falseType = isWide
-        ? EmitWideExprInto(conditional.WhenFalse, wideDest, depth)
-        : EmitIntExprInto(conditional.WhenFalse, scalarDest, depth);
+    CType falseType = longResult
+        ? EmitLongValueInto(conditional.WhenFalse, wideDest, depth)
+        : floatResult
+            ? EmitFloatValueInto(conditional.WhenFalse, wideDest, depth)
+            : isWide
+                ? EmitWideExprInto(conditional.WhenFalse, wideDest, depth)
+                : EmitIntExprInto(conditional.WhenFalse, scalarDest, depth);
 
     EmitLabel(endLabel);
+    if (longResult)
+    {
+      return trueType.Kind == CTypeKind.UnsignedLong || falseType.Kind == CTypeKind.UnsignedLong ? CType.UnsignedLong : CType.Long;
+    }
+
     return trueType.IsFloat || falseType.IsFloat ? CType.Float : trueType;
   }
 
@@ -2539,7 +4137,7 @@ public sealed class CCodeGenerator
         Error(call.Location, "\"fabsf\" takes exactly one argument");
       }
 
-      EmitWideExprInto(call.Arguments.Count > 0 ? call.Arguments[0] : new CFloatLiteralExpr(call.Location, 0f), destDouble, depth);
+      EmitFloatValueInto(call.Arguments.Count > 0 ? call.Arguments[0] : new CFloatLiteralExpr(call.Location, 0f), destDouble, depth);
       EmitCode($"mask15 r{2 * destDouble + 1}");
       return CType.Float;
     }
@@ -2549,9 +4147,9 @@ public sealed class CCodeGenerator
       Error(call.Location, $"\"{call.FunctionName}\" takes exactly two arguments");
     }
 
-    bool spillNeeded = call.Arguments.Count > 1 && ContainsCall(call.Arguments[1]);
+    bool spillNeeded = call.Arguments.Count > 1 && (ContainsCall(call.Arguments[1]) || FloatOperandUsesLibrary(call.Arguments[1]));
     int? spillLow = spillNeeded ? AllocateFrameWords(2) : null;
-    EmitWideExprInto(call.Arguments.Count > 0 ? call.Arguments[0] : new CFloatLiteralExpr(call.Location, 0f), destDouble, depth);
+    EmitFloatValueInto(call.Arguments.Count > 0 ? call.Arguments[0] : new CFloatLiteralExpr(call.Location, 0f), destDouble, depth);
     if (spillLow is not null)
     {
       EmitCode($"stf r{2 * destDouble}, {spillLow}");
@@ -2559,7 +4157,7 @@ public sealed class CCodeGenerator
     }
 
     int rightDouble = WideReg(depth + 1);
-    EmitWideExprInto(call.Arguments.Count > 1 ? call.Arguments[1] : new CFloatLiteralExpr(call.Location, 0f), rightDouble, depth + 1);
+    EmitFloatValueInto(call.Arguments.Count > 1 ? call.Arguments[1] : new CFloatLiteralExpr(call.Location, 0f), rightDouble, depth + 1);
     if (spillLow is not null)
     {
       EmitCode($"ldf r{2 * destDouble}, {spillLow}");
@@ -2574,7 +4172,14 @@ public sealed class CCodeGenerator
   {
     if (expectedType.IsFloat != actualType.IsFloat)
     {
-      Error(location, $"argument {argumentIndex + 1}: cannot pass \"{actualType}\" where \"{expectedType}\" is expected (float/non-float mismatch -- cast explicitly)");
+      if (!(expectedType.IsFloat ? actualType : expectedType).IsIntegral)
+      {
+        Error(location, $"argument {argumentIndex + 1}: cannot pass \"{actualType}\" where \"{expectedType}\" is expected (float/non-float mismatch -- cast explicitly)");
+      }
+    }
+    else if (expectedType.IsLong && !actualType.IsIntegral || actualType.IsLong && expectedType.IsPointer)
+    {
+      Error(location, $"argument {argumentIndex + 1}: cannot pass \"{actualType}\" where \"{expectedType}\" is expected (cast explicitly)");
     }
   }
 
@@ -2631,7 +4236,7 @@ public sealed class CCodeGenerator
     for (int i = 0; i < argumentCount; i++)
     {
       CType expectedType = slots[i].Type;
-      bool argIsWide = expectedType.IsPointer || expectedType.IsFloat;
+      bool argIsWide = expectedType.IsWideValue;
       int size = Math.Max(expectedType.SizeInWords, 1);
       int spillOffset = AllocateFrameWords(size);
       argumentSpillOffsets[i] = spillOffset;
@@ -2639,7 +4244,7 @@ public sealed class CCodeGenerator
       if (argIsWide)
       {
         int argDouble = WideReg(0);
-        CType actualType = EmitWideExprInto(call.Arguments[i], argDouble, 0);
+        CType actualType = EmitValueForTarget(expectedType, call.Arguments[i], argDouble, 0);
         CheckArgumentType(call.Arguments[i].Location, i, expectedType, actualType);
         EmitCode($"stf r{2 * argDouble}, {spillOffset}");
         EmitCode($"stf r{2 * argDouble + 1}, {spillOffset + 1}");
@@ -2891,7 +4496,28 @@ public sealed class CCodeGenerator
             {
               ReportUnsupportedValueRead(returnStmt.Location, _currentFunction.ReturnType, $"function \"{_currentFunction.Name}\"'s return value");
             }
-            else if (_currentFunction.ReturnType.IsFloat || _currentFunction.ReturnType.IsPointer)
+            else if (_currentFunction.ReturnType.IsLong)
+            {
+              // ADDED 2026-11-08: the value is computed in the ordinary wide scratch pool and copied to
+              // d0 (r0 = low word, r1 = high word) last, because d0 is also the in-flight pointer
+              // arithmetic scratch and a library call's result register.
+              int returnScratch = WideReg(0);
+              CType valueType = EmitValueForTarget(_currentFunction.ReturnType, returnStmt.Value, returnScratch, 0);
+              CheckAssignmentType(returnStmt.Location, _currentFunction.ReturnType, valueType);
+              EmitCode($"mov r{2 * WideReturnDouble}, r{2 * returnScratch}");
+              EmitCode($"mov r{2 * WideReturnDouble + 1}, r{2 * returnScratch + 1}");
+            }
+            else if (_currentFunction.ReturnType.IsFloat)
+            {
+              // ADDED 2026-11-08: evaluated in WideReg(0) (conversions call the library, whose result lands in
+              // d0) and moved into d0 last, exactly like a long.
+              int returnScratch = WideReg(0);
+              CType valueType = EmitFloatValueInto(returnStmt.Value, returnScratch, 0);
+              CheckAssignmentType(returnStmt.Location, _currentFunction.ReturnType, valueType);
+              EmitCode($"mov r{2 * WideReturnDouble}, r{2 * returnScratch}");
+              EmitCode($"mov r{2 * WideReturnDouble + 1}, r{2 * returnScratch + 1}");
+            }
+            else if (_currentFunction.ReturnType.IsPointer)
             {
               CType valueType = EmitWideExprInto(returnStmt.Value, WideReturnDouble, 0);
               if (valueType.IsFloat != _currentFunction.ReturnType.IsFloat)
@@ -2899,9 +4525,20 @@ public sealed class CCodeGenerator
                 Error(returnStmt.Location, $"function \"{_currentFunction.Name}\" returns \"{_currentFunction.ReturnType}\", not \"{valueType}\"");
               }
             }
-            else
+            else if (IsPlainScalarExpression(returnStmt.Value))
             {
               EmitIntExprInto(returnStmt.Value, ScalarReturnRegister, 0);
+            }
+            else
+            {
+              // ADDED 2026-11-08: r0 is also the low half of d0, the scratch register pair pointer
+              // arithmetic (EmitAddIndexScaledToPointer / EmitAddConstantToRegister) works in, and the register
+              // every call and runtime-library call returns its result in. An expression that can use any of
+              // those must therefore NOT hold its partial result in r0: evaluate it in the ordinary scratch
+              // register and copy the final value across. (Before this, "return p[i*3] + p[j*3];" lost its
+              // left operand to the index scaling of the right one.)
+              EmitIntExprInto(returnStmt.Value, ScalarReg(0), 0);
+              EmitCode($"mov r{ScalarReturnRegister}, r{ScalarReg(0)}");
             }
           }
           else if (!_currentFunction!.ReturnType.IsVoid)
@@ -2985,7 +4622,7 @@ public sealed class CCodeGenerator
     CollectSwitchLabels(switchStmt.Body, labels, cases, ref defaultLabel, switchStmt.Location);
 
     TryGetStaticType(switchStmt.Selector, out CType selectorType);
-    if (selectorType.IsFloat || selectorType.IsPointer)
+    if (selectorType.IsFloat || selectorType.IsPointer || selectorType.IsLong)
     {
       Error(switchStmt.Location, "a \"switch\" selector must be an integer expression");
     }

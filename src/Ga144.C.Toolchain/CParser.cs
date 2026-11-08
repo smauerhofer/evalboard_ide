@@ -440,6 +440,12 @@ public sealed class CParser
       // "short" is a pure synonym for plain int width here (see this class's own remarks above) --
       // "signed short"/"signed short int" both just fall through to the same "return CType.Int" plain
       // "signed"/"signed int" already would.
+      if (Match("long"))
+      {
+        Match("int");
+        return CType.Long;
+      }
+
       Match("short");
       Match("int");
       return CType.Int;
@@ -450,6 +456,12 @@ public sealed class CParser
       if (Match("char"))
       {
         return CType.UnsignedChar;
+      }
+
+      if (Match("long"))
+      {
+        Match("int");
+        return CType.UnsignedLong;
       }
 
       // "unsigned short"/"unsigned short int" -- see the "signed" branch just above.
@@ -916,22 +928,21 @@ public sealed class CParser
       // parameter list, so both are enforced here rather than deferred to CCodeGenerator.
       if (isFastcall)
       {
-        int scalarParameterCount = parameters.Count(p => !p.Type.IsPointer && !p.Type.IsFloat && p.Type.SizeInWords <= 1);
+        int scalarParameterCount = parameters.Count(p => !p.Type.IsWideValue && p.Type.SizeInWords <= 1);
         if (scalarParameterCount > MaxFastcallScalarParameters)
         {
           throw Error(location, $"\"{name}\" is '__fastcall' but declares {scalarParameterCount} scalar (1-word) parameters -- a '__fastcall' function may have at most {MaxFastcallScalarParameters} (r0..r{MaxFastcallScalarParameters - 1})");
         }
 
-        int wideParameterCount = parameters.Count(p => p.Type.IsPointer || p.Type.IsFloat);
+        int wideParameterCount = parameters.Count(p => p.Type.IsWideValue);
         if (wideParameterCount > MaxFastcallWideParameters)
         {
-          throw Error(location, $"\"{name}\" is '__fastcall' but declares {wideParameterCount} pointer/float (2-word) parameters -- a '__fastcall' function may have at most {MaxFastcallWideParameters} (d4..d{3 + MaxFastcallWideParameters}), pointer and float sharing the same 4-slot pool");
+          throw Error(location, $"\"{name}\" is '__fastcall' but declares {wideParameterCount} pointer/float/long (2-word) parameters -- a '__fastcall' function may have at most {MaxFastcallWideParameters} (d4..d{3 + MaxFastcallWideParameters}), pointer, float and long sharing the same 4-slot pool");
         }
 
-        // long/struct parameters (SizeInWords 2, but neither pointer nor float) are not passable by
-        // register under this ABI at all -- they always fall back to the stack convention, regardless of
-        // this function being __fastcall. Nothing to validate here: CCodeGenerator's own parameter-
-        // marshaling simply never considers a long/struct parameter for a register slot.
+        // UPDATED 2026-11-08: a long / unsigned long parameter now shares the 4-slot d4..d7 pool with
+        // pointers and floats (counted above). A struct parameter (SizeInWords > 1, none of those) is
+        // still never register-passable and always uses the stack convention.
       }
 
       CCompoundStmt? body = null;
@@ -1572,13 +1583,14 @@ public sealed class CParser
         return new CFloatLiteralExpr(token.Location, ParseFloatLiteralValue(token));
       }
 
-      return new CIntLiteralExpr(token.Location, ParseNumberLiteralValue(token), IsUnsignedSuffix(token.Text));
+      long literalValue = ParseNumberLiteralValue(token);
+      return new CIntLiteralExpr(token.Location, literalValue, IsUnsignedSuffix(token.Text) || literalValue > 0x7FFFFFFF, IsLongSuffix(token.Text) || literalValue > 0xFFFF);
     }
 
     if (token.Kind == CTokenKind.CharLiteral)
     {
       Advance();
-      return new CIntLiteralExpr(token.Location, ParseCharLiteralValue(token.Text), IsUnsigned: false);
+      return new CIntLiteralExpr(token.Location, ParseCharLiteralValue(token.Text), IsUnsigned: false, IsLong: false);
     }
 
     if (token.Kind == CTokenKind.StringLiteral)
@@ -1606,6 +1618,11 @@ public sealed class CParser
   // ---- Literal decoding ---------------------------------------------------------------------------
 
   private static bool IsUnsignedSuffix(string numberText) => numberText.Any(c => c is 'u' or 'U');
+
+  /// <summary>ADDED 2026-11-08: an integer literal with an 'l'/'L' suffix is a <c>long</c> (an unsuffixed
+  /// literal above 0xFFFF is one too, since it cannot be an <c>int</c>). Hex/binary digits never contain
+  /// 'l', so a plain scan is safe.</summary>
+  private static bool IsLongSuffix(string numberText) => numberText.Any(c => c is 'l' or 'L');
 
   /// <summary>
   /// Disambiguates a lexer "pp-number" token (<see cref="CTokenKind.Number"/> -- the lexer itself does
@@ -1765,4 +1782,4 @@ public sealed class CParser
 
     return result.ToString();
   }
-}
+}

@@ -1,0 +1,18 @@
+#ifndef FLOAT_H
+#define FLOAT_H
+
+FLT_RADIX        2
+FLT_MANT_DIG     24
+FLT_DIG          6
+FLT_DECIMAL_DIG  9
+
+FLT_MIN_EXP     -125
+FLT_MAX_EXP      128
+
+FLT_MIN          1.17549435e-38F
+FLT_MAX          3.40282347e+38F
+FLT_EPSILON      1.19209290e-7F
+FLT_TRUE_MIN     1.40129846e-45F
+
+
+#endif

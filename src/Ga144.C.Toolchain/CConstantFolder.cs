@@ -80,6 +80,11 @@ public static class CConstantFolder
     _ => stmt,
   };
 
+  /// <summary>ADDED 2026-11-08: a folded <c>long</c> constant wraps to 32 bits (unsigned or signed); an
+  /// <c>int</c> constant keeps the earlier un-wrapped behaviour.</summary>
+  private static long WrapLong(long value, bool isLong, bool isUnsigned) =>
+      !isLong ? value : isUnsigned ? (long)(uint)value : (long)(int)value;
+
   private static CExpr FoldExpr(CExpr expr)
   {
     switch (expr)
@@ -96,7 +101,7 @@ public static class CConstantFolder
               CUnaryOp.BitwiseNot => ~literal.Value,
               _ => literal.Value, // unreachable given the case's own pattern guard above
             };
-            return new CIntLiteralExpr(unary.Location, value, literal.IsUnsigned);
+            return new CIntLiteralExpr(unary.Location, WrapLong(value, literal.IsLong, literal.IsUnsigned), literal.IsUnsigned, literal.IsLong);
           }
 
           return unary with { Operand = operand };
@@ -115,7 +120,12 @@ public static class CConstantFolder
           CExpr right = FoldExpr(binary.Right);
           if (left is CIntLiteralExpr l && right is CIntLiteralExpr r && TryEvaluateBinaryOp(binary.Op, l.Value, r.Value, out long result))
           {
-            return new CIntLiteralExpr(binary.Location, result, l.IsUnsigned || r.IsUnsigned);
+            bool isShift = binary.Op is CBinaryOp.ShiftLeft or CBinaryOp.ShiftRight;
+            bool yieldsInt = binary.Op is CBinaryOp.Equal or CBinaryOp.NotEqual or CBinaryOp.Less or CBinaryOp.Greater
+                or CBinaryOp.LessOrEqual or CBinaryOp.GreaterOrEqual or CBinaryOp.LogicalAnd or CBinaryOp.LogicalOr;
+            bool resultIsLong = !yieldsInt && (isShift ? l.IsLong : l.IsLong || r.IsLong);
+            bool resultIsUnsigned = yieldsInt ? false : isShift ? l.IsUnsigned : l.IsUnsigned || r.IsUnsigned;
+            return new CIntLiteralExpr(binary.Location, WrapLong(result, resultIsLong, resultIsUnsigned), resultIsUnsigned, resultIsLong);
           }
 
           return binary with { Left = left, Right = right };
