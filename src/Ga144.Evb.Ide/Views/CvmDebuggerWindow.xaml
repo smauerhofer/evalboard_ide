@@ -123,9 +123,12 @@
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
       <TextBlock FontWeight="SemiBold" Text="Simulated SRAM (read-only)" VerticalAlignment="Center" />
-      <Button Grid.Column="1" Content="Copy" Padding="10,2" Click="OnCopySramClick"
+      <Button Grid.Column="1" Content="Update" Padding="10,2" Margin="0,0,6,0" Command="{Binding UpdateMemoryCommand}"
+                      ToolTip="Updates the values below from the last simulated SRAM: the running session's memory while one is open, otherwise the final memory of the last session (what the program left in the statics and the stack) after Stop. Keeps the &quot;Show from&quot; address." />
+      <Button Grid.Column="2" Content="Copy" Padding="10,2" Click="OnCopySramClick"
                       ToolTip="Copies the selected Simulated SRAM row(s) to the clipboard as a Markdown table (Address | Value | Label | Disassembly | C source). Select one or more rows first (click, or Shift/Ctrl-click for more)." />
     </Grid>
     <Grid Grid.Row="5">

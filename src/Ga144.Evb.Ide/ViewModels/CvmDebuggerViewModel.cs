@@ -107,6 +107,14 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   private readonly CvmSimulatedSram _standaloneSram = new();
   private IReadOnlyList<int> _standaloneProgram = [];
 
+  // The simulated SRAM of the most recent debug session, kept after that session ends (Stop, a failed or
+  // repeated Start, window close) so the "Update" button can show what the program left in memory -- see
+  // UpdateMemoryFromLastSram. _viewLastSessionSram is true only after Update was clicked with no live session:
+  // RefreshMemoryView then reads _lastSessionSram instead of _standaloneSram. Anything that puts a different
+  // program into _standaloneSram (Assemble, a loaded image, a fresh Start) or Stop itself clears it again.
+  private CvmSimulatedSram? _lastSessionSram;
+  private bool _viewLastSessionSram;
+
   // Set by LoadImageFile, cleared the moment anything else (Assemble, or a fresh Start re-applying the
   // Assembly Code editor) overwrites what LoadImageFile put in the SRAM -- so RefreshMemoryView never
   // shows a linked program's own symbol names next to words that no longer belong to it.
@@ -226,6 +234,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     PauseCommand = new RelayCommand(Pause, () => IsContinuing);
     StopCommand = new RelayCommand(Stop, () => IsSessionActive);
     RefreshMemoryCommand = new RelayCommand(RefreshMemoryView);
+    UpdateMemoryCommand = new RelayCommand(UpdateMemoryFromLastSram);
     AssembleCommand = new RelayCommand(Assemble, () => !IsBusy);
     AddProgramCommand = new RelayCommand(AddProgram, () => !IsBusy);
     SaveCommand = new RelayCommand(SaveProgram);
@@ -394,6 +403,10 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   public RelayCommand PauseCommand { get; }
   public RelayCommand StopCommand { get; }
   public RelayCommand RefreshMemoryCommand { get; }
+
+  /// <summary>The "Update" button next to "Copy": re-reads the Simulated SRAM list from the last simulated SRAM,
+  /// the live session's while one is open, otherwise the final memory of the session that just ended.</summary>
+  public RelayCommand UpdateMemoryCommand { get; }
   public RelayCommand AssembleCommand { get; }
   public RelayCommand AddProgramCommand { get; }
   public RelayCommand SaveCommand { get; }
@@ -421,7 +434,20 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   private void CloseSession()
   {
     _continueCts?.Cancel();
-    _session?.Dispose();
+    ReleaseSession();
+  }
+
+  /// <summary>Disposes the current session (if any) and clears <see cref="_session"/>, first remembering its simulated SRAM
+  /// in <see cref="_lastSessionSram"/> so that memory can still be inspected afterward (see <see cref="UpdateMemoryFromLastSram"/>).</summary>
+  private void ReleaseSession()
+  {
+    if (_session is null)
+    {
+      return;
+    }
+
+    _lastSessionSram = _session.Sram;
+    _session.Dispose();
     _session = null;
   }
 
@@ -449,8 +475,8 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       // deliberately left untouched here -- per Stefan, breakpoints are independent of whether a
       // program is running, so they must survive a fresh Start exactly as they survived the Stop (or
       // never-yet-Started state) before it.
-      _session?.Dispose();
-      _session = null;
+      ReleaseSession();
+      _viewLastSessionSram = false;
 
       var compileService = new F18NodeCompilationService(_chip, _romLibrary, _userMacros);
       var installer = new Ga144CvmHardwareInstaller();
@@ -507,8 +533,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     }
     catch (Exception exception)
     {
-      _session?.Dispose();
-      _session = null;
+      ReleaseSession();
       StatusText = "Start failed: " + exception.Message;
       InstallSummaryText = string.Empty;
     }
@@ -628,6 +653,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     }
 
     CloseSession();
+    _viewLastSessionSram = false;
     // _breakpoints is deliberately NOT cleared here -- see its own remarks: it outlives the session,
     // so RefreshMemoryView (called just below) keeps showing every armed breakpoint's red circle in
     // the gutter even with nothing connected, and the next Start re-arms them all automatically.
@@ -1057,6 +1083,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
     }
 
     _standaloneProgram = words;
+    _viewLastSessionSram = false;
     return (true, null, words.Count, labels ?? new Dictionary<string, int>());
   }
 
@@ -1117,6 +1144,7 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   /// </summary>
   private void MirrorSessionProgramIntoStandaloneSram(IReadOnlyList<int> words)
   {
+    _viewLastSessionSram = false;
     int previousLength = _standaloneProgram.Count;
     _standaloneSram.LoadProgram(words);
     if (words.Count < previousLength)
@@ -1442,6 +1470,38 @@ public sealed class CvmDebuggerViewModel : ObservableObject
   }
 
   /// <summary>
+  /// The "Update" button (added 2026-11-08, per Stefan: "add a button 'Update' left to the 'Copy' button in the
+  /// 'Simulated SRAM' section ... updates the values in the window from last simulated SRAM memory"). With a live
+  /// session it re-reads that session's SRAM, exactly like Refresh. After Stop (or any end of a session) the normal
+  /// view falls back to the standalone SRAM, which only holds the program that was loaded -- not what the program
+  /// wrote while it ran -- so this button instead switches the list to the last session's own SRAM, final data
+  /// (statics at page 2, stack at page 1) included, until something else is assembled or loaded or a new Start
+  /// begins. The "Show from" address is kept.
+  /// </summary>
+  private void UpdateMemoryFromLastSram()
+  {
+    if (_session is null)
+    {
+      if (_lastSessionSram is null)
+      {
+        _viewLastSessionSram = false;
+        StatusText = "Nothing to update from: no debug session has run yet. Start a session first; showing the standalone simulated SRAM.";
+      }
+      else
+      {
+        _viewLastSessionSram = true;
+        StatusText = "Memory updated from the simulated SRAM of the last debug session.";
+      }
+    }
+    else
+    {
+      StatusText = "Memory updated from the live simulated SRAM.";
+    }
+
+    RefreshMemoryView();
+  }
+
+  /// <summary>
   /// Refreshes <see cref="MemoryRows"/> starting at <see cref="MemoryBaseText"/>. The number of
   /// words shown is <see cref="MemoryViewWordCount"/>, however many words the CURRENTLY loaded
   /// program actually occupies, or one past the highest address any <see cref="_loadedImageSymbols"/>
@@ -1515,11 +1575,13 @@ public sealed class CvmDebuggerViewModel : ObservableObject
       // whether or not anything has been assembled into it yet (untouched, it just reads back as
       // all-zero words). There is no "last fetch" without a live chip actually reading from it, so
       // that stays null here -- but breakpoints (above) are shown exactly as if a chip were connected.
-      words = _standaloneSram.ReadRange(baseAddress, count);
+      // After "Update" with no live session, the last session's own SRAM (with whatever the program wrote) is shown instead.
+      CvmSimulatedSram shownSram = _viewLastSessionSram && _lastSessionSram is not null ? _lastSessionSram : _standaloneSram;
+      words = shownSram.ReadRange(baseAddress, count);
       programCounter = null;
       (_, IReadOnlyDictionary<int, F18CompileResult> compiledRam, _) = CompileStandaloneCvmNodes();
       disassembly = baseAddress < CvmMemoryProtocol.Page0WordCount
-          ? CvmAssemblyLanguage.DisassemblePage0(_standaloneSram, compiledRam, Math.Min(baseAddress + count, CvmMemoryProtocol.Page0WordCount))
+          ? CvmAssemblyLanguage.DisassemblePage0(shownSram, compiledRam, Math.Min(baseAddress + count, CvmMemoryProtocol.Page0WordCount))
           : new Dictionary<int, string>();
     }
 

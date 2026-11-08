@@ -715,6 +715,23 @@ public sealed class CCodeGenerator
     }
   }
 
+  /// <summary>
+  /// True when <paramref name="statement"/> is a "return", a block whose own last statement is one, or an
+  /// if/else whose two branches both are -- control can never fall out of its end, so no code (no trailing
+  /// epilogue, no jump over the else branch) is generated after it. Labelled statements and loops are
+  /// deliberately not looked into: a jump may still land after them.
+  /// </summary>
+  private static bool EndsWithReturn(CStmt statement)
+  {
+    return statement switch
+    {
+      CReturnStmt => true,
+      CCompoundStmt block => block.Statements.Count > 0 && EndsWithReturn(block.Statements[^1]),
+      CIfStmt { Else: not null } branch => EndsWithReturn(branch.Then) && EndsWithReturn(branch.Else),
+      _ => false,
+    };
+  }
+
   // ---------------------------------------------------------------------------------------------------
   // Functions: prologue (link + register-parameter spill), body, epilogue (unlink + ret). Functions are
   // NOT mangled the way globals are (CvmBootStreamBuilder/claude/cvm-abi.md's own "__start"/"__exit"
@@ -770,8 +787,16 @@ public sealed class CCodeGenerator
       }
     }
 
-    EmitCode("unlink");
-    EmitCode("ret");
+    // A body whose last statement is a "return" has already emitted its own unlink/ret: nothing
+    // after it is reachable, so no second epilogue is generated.
+    bool bodyEndsWithReturn = function.Body is not null
+        && function.Body.Statements.Count > 0
+        && EndsWithReturn(function.Body.Statements[^1]);
+    if (!bodyEndsWithReturn)
+    {
+      EmitCode("unlink");
+      EmitCode("ret");
+    }
 
     int localWordCount = -context.NextFrameOffset;
     context.BodyLines[linkPlaceholderIndex] = $"  link {-localWordCount}";
@@ -905,7 +930,7 @@ public sealed class CCodeGenerator
   {
     if (depth >= WideScratchMaxDepth)
     {
-      _diagnostics.Add("<internal>: expression nested too deeply for this compiler's pointer/float scratch pool (max depth 4).");
+      _diagnostics.Add($"<internal>: expression nested too deeply for this compiler's pointer/float scratch pool (max depth {WideScratchMaxDepth}).");
       _hasError = true;
       depth = WideScratchMaxDepth - 1;
     }
@@ -1063,7 +1088,17 @@ public sealed class CCodeGenerator
           // decayed to that array's own compile-time-bounded address; false when index.Base is anything
           // pointer-typed (a pointer parameter/local, a dereferenced pointer, a heap pointer, ...), in
           // which case destDouble holds that pointer's own RUNTIME value -- could be anywhere on its page.
-          EmitAddIndexScaledToPointer(destDouble, index.Index, Math.Max(elementType.SizeInWords, 1), depth, guaranteedSamePage: IsBoundedAddress(index));
+          // The base address is live in destDouble (normally WideReg(depth)) while the index is computed, so
+          // the index is evaluated one level deeper. At the same depth an index that itself needs a wide
+          // register ("ia[idx[0]]": the inner element's address) loaded it into destDouble and destroyed the
+          // base ("dlit d1, _ia" followed by "dlit d1, _idx").
+          // When fewer than two deeper wide registers are left (an index such as "idx[i] + idx[0]" needs one
+          // for each operand), the base is spilled to the frame for the duration of the index instead and the
+          // index reuses this level's registers.
+          bool indexNeedsWide = IndexExpressionNeedsWideRegister(index.Index);
+          bool noDeeperWideRegister = indexNeedsWide && depth + 2 >= WideScratchMaxDepth;
+          EmitAddIndexScaledToPointer(destDouble, index.Index, Math.Max(elementType.SizeInWords, 1), indexNeedsWide && !noDeeperWideRegister ? depth + 1 : depth,
+              guaranteedSamePage: IsBoundedAddress(index), forceSpill: noDeeperWideRegister);
           return elementType;
         }
 
@@ -1145,6 +1180,30 @@ public sealed class CCodeGenerator
     return EmitWideExprInto(expr, destDouble, depth);
   }
 
+  /// <summary>False when computing <paramref name="expr"/> as an int only touches scalar registers and the
+  /// frame (one-word constants and names, and unary/binary/cast combinations of them), so it cannot overwrite
+  /// a wide register that holds a live base address. True for everything else: element loads, dereferences,
+  /// member accesses, calls, and any operand of a wide type (pointer, array, long, float -- a pointer
+  /// difference such as <c>p - q</c> loads both pointers into wide registers first).</summary>
+  private bool IndexExpressionNeedsWideRegister(CExpr expr)
+  {
+    switch (expr)
+    {
+      case CIntLiteralExpr literal:
+        return literal.IsLong;
+      case CNameExpr:
+        return !TryGetStaticType(expr, out CType nameType) || nameType.IsPointer || nameType.IsArray || nameType.SizeInWords != 1;
+      case CBinaryExpr binary:
+        return IndexExpressionNeedsWideRegister(binary.Left) || IndexExpressionNeedsWideRegister(binary.Right);
+      case CCastExpr cast:
+        return cast.TargetType.IsPointer || cast.TargetType.SizeInWords != 1 || IndexExpressionNeedsWideRegister(cast.Operand);
+      case CUnaryExpr { Op: CUnaryOp.Plus or CUnaryOp.Minus or CUnaryOp.BitwiseNot or CUnaryOp.LogicalNot } unary:
+        return IndexExpressionNeedsWideRegister(unary.Operand);
+      default:
+        return true;
+    }
+  }
+
   /// <summary>Adds <paramref name="indexExpr"/>'s value, scaled by <paramref name="elementWords"/>,
   /// to the pointer already sitting in double register <paramref name="pointerDouble"/>. <paramref
   /// name="guaranteedSamePage"/> is the caller's own page-crossing claim (see <see
@@ -1187,8 +1246,10 @@ public sealed class CCodeGenerator
   ///
   /// The index's own int value is computed into <c>ScalarReg(depth)</c> -- safe to reuse the SAME depth
   /// as the pointer itself, since the index value's lifetime ends (consumed into the pointer) before
-  /// anything else at this depth runs.</summary>
-  private void EmitAddIndexScaledToPointer(int pointerDouble, CExpr indexExpr, int elementWords, int depth, bool guaranteedSamePage)
+  /// anything else at this depth runs. EXCEPTION: when the index itself needs a wide register (an element
+  /// load such as <c>idx[0]</c> inside <c>ia[idx[0]]</c>), the caller passes a depth one level deeper, or
+  /// spills the pointer (<paramref name="forceSpill"/>), so that register is not the live pointer's.</summary>
+  private void EmitAddIndexScaledToPointer(int pointerDouble, CExpr indexExpr, int elementWords, int depth, bool guaranteedSamePage, bool forceSpill = false)
   {
     if (TryEvaluateConstantLong(indexExpr, out long constantIndex))
     {
@@ -1201,7 +1262,7 @@ public sealed class CCodeGenerator
     // frame slot first and reload it just before the add (previously a call in the index silently
     // destroyed the pointer).
     bool scaleUsesLibrary = elementWords != 1 && !MultiplyIsInline(elementWords);
-    int? pointerSpill = MayCallOrUseLibrary(indexExpr) || scaleUsesLibrary ? AllocateFrameWords(2) : null;
+    int? pointerSpill = forceSpill || MayCallOrUseLibrary(indexExpr) || scaleUsesLibrary ? AllocateFrameWords(2) : null;
     if (pointerSpill is not null)
     {
       EmitCode($"stf r{2 * pointerDouble}, {pointerSpill}");
@@ -1469,6 +1530,9 @@ public sealed class CCodeGenerator
       case CUnaryExpr { Op: CUnaryOp.PreIncrement or CUnaryOp.PreDecrement or CUnaryOp.PostIncrement or CUnaryOp.PostDecrement } incDec:
         return TryGetStaticType(incDec.Operand, out type);
 
+      case CBinaryExpr { Op: CBinaryOp.Subtract } pointerDifference when TryRewritePointerDifference(pointerDifference, out CExpr rewrittenDifference):
+        return TryGetStaticType(rewrittenDifference, out type);
+
       case CBinaryExpr { Op: CBinaryOp.Add or CBinaryOp.Subtract } binary:
         {
           bool haveLeft = TryGetStaticType(binary.Left, out CType leftType);
@@ -1547,6 +1611,46 @@ public sealed class CCodeGenerator
     return CType.Int;
   }
 
+  /// <summary>
+  /// ADDED 2026-11-08, per Stefan ("fix the pointer-difference bugs"): <c>p - q</c> where both operands are
+  /// pointers or arrays (an array operand decays to a pointer to its first element) is the number of ELEMENTS
+  /// between the two addresses, an <c>int</c>. Before, it was an error in the wide path, but in an int context
+  /// it silently compiled to a <c>sub</c> of registers that had never been loaded, and a bare array operand
+  /// stopped with an internal error. It is now rewritten into plain int arithmetic on the address words:
+  /// <c>((int)p - (int)q) / n</c>, where n is the element size in words (no division when n is 1, an array
+  /// operand taken as <c>(int)&amp;array[0]</c>). Only the low (address) word of each pointer takes part, as for any
+  /// pointer converted to int, which is exact for two pointers into the same object (the only case C defines);
+  /// the division is exact too, so an inline shift for a power-of-two size and <c>__divs</c> otherwise both give the
+  /// right (signed) count, negative when q is above p. The rewritten tree is rebuilt on every call, so every
+  /// analysis that looks at an expression (static type, library-call detection, emission) sees the same form.
+  /// </summary>
+  private bool TryRewritePointerDifference(CBinaryExpr binary, out CExpr rewritten)
+  {
+    rewritten = binary;
+    if (binary.Op != CBinaryOp.Subtract
+        || !TryGetStaticType(binary.Left, out CType leftType) || !TryGetStaticType(binary.Right, out CType rightType)
+        || !(leftType.IsPointer || leftType.IsArray) || !(rightType.IsPointer || rightType.IsArray))
+    {
+      return false;
+    }
+
+    int elementWords = Math.Max(leftType.ElementType?.SizeInWords ?? 1, 1);
+    CExpr difference = new CBinaryExpr(binary.Location, CBinaryOp.Subtract,
+        PointerOperandAsInt(binary.Left, leftType), PointerOperandAsInt(binary.Right, rightType));
+    rewritten = elementWords == 1
+        ? difference
+        : new CBinaryExpr(binary.Location, CBinaryOp.Divide, difference, new CIntLiteralExpr(binary.Location, elementWords, false));
+    return true;
+  }
+
+  private static CExpr PointerOperandAsInt(CExpr operand, CType type)
+  {
+    CExpr address = type.IsArray
+        ? new CUnaryExpr(operand.Location, CUnaryOp.AddressOf, new CIndexExpr(operand.Location, operand, new CIntLiteralExpr(operand.Location, 0, false)))
+        : operand;
+    return new CCastExpr(operand.Location, CType.Int, address);
+  }
+
   /// <summary>Whether <paramref name="expr"/> contains a function call anywhere inside it --
   /// claude/cvm-abi.md section 3.4's "spilling across a call" rule: every register is call-volatile, so
   /// a binary expression whose RIGHT operand contains a call must spill its already-computed LEFT
@@ -1580,6 +1684,7 @@ public sealed class CCodeGenerator
   {
     CCallExpr => true,
     CUnaryExpr unary => MayCallOrUseLibrary(unary.Operand),
+    CBinaryExpr pointerDifference when TryRewritePointerDifference(pointerDifference, out CExpr rewrittenDifference) => MayCallOrUseLibrary(rewrittenDifference),
     CBinaryExpr binary => UsesLibraryOperator(binary.Op, binary.Left, binary.Right)
         || PointerScaleUsesLibrary(binary)
         || MayCallOrUseLibrary(binary.Left) || MayCallOrUseLibrary(binary.Right),
@@ -1828,6 +1933,19 @@ public sealed class CCodeGenerator
   // written for a scalar value.
   private CType EmitIntExprInto(CExpr expr, int reg, int depth)
   {
+    // ADDED 2026-11-08: pointer - pointer (and pointer - array, array - pointer, array - array) is the number of
+    // ELEMENTS between the two addresses, an int -- see TryRewritePointerDifference.
+    if (expr is CBinaryExpr { Op: CBinaryOp.Subtract } pointerDifference && TryRewritePointerDifference(pointerDifference, out CExpr rewrittenDifference))
+    {
+      if (TryGetStaticType(pointerDifference.Left, out CType differenceLeftType) && TryGetStaticType(pointerDifference.Right, out CType differenceRightType)
+          && Math.Max(differenceLeftType.ElementType?.SizeInWords ?? 1, 1) != Math.Max(differenceRightType.ElementType?.SizeInWords ?? 1, 1))
+      {
+        Error(pointerDifference.Location, $"cannot subtract \"{differenceRightType}\" from \"{differenceLeftType}\" -- the two pointers point to different element types");
+      }
+
+      return EmitIntExprInto(rewrittenDifference, reg, depth);
+    }
+
     // ADDED 2026-11-08: an expression whose static type is long / unsigned long is evaluated in a double
     // register and only its LOW word is kept (C's conversion of a long to a 16-bit int).
     if (TryGetStaticType(expr, out CType staticLongCheck) && staticLongCheck.IsLong)
@@ -2076,6 +2194,7 @@ public sealed class CCodeGenerator
   private void EmitStatementExprForEffect(CExpr expr, int depth)
   {
     TryGetStaticType(expr, out CType type);
+    _discardNextVoidCallResult = expr is CCallExpr;
     if (type.IsWideValue)
     {
       EmitWideExprInto(expr, WideReg(depth), depth);
@@ -2084,6 +2203,8 @@ public sealed class CCodeGenerator
     {
       EmitIntExprInto(expr, ScalarReg(depth), depth);
     }
+
+    _discardNextVoidCallResult = false;
   }
 
   /// <summary>Evaluates <paramref name="expr"/> as a condition test subject and leaves <c>rN</c> set up
@@ -3861,16 +3982,16 @@ public sealed class CCodeGenerator
 
     if (leftType.IsPointer && rightStaticType.IsPointer)
     {
-      // "pointer - pointer" -- NOT supported: real C's "p - q" counts ELEMENTS, which needs a divide by
-      // the element size that this ISA has no opcode for. Flagged with an error rather than silently
-      // emitting a raw (and almost certainly wrong) address subtraction.
+      // "pointer - pointer" is an int (the element count) and is rewritten before it gets here -- see
+      // TryRewritePointerDifference -- so this branch is only a safety net. It still reports an error
+      // rather than silently emitting a raw (and almost certainly wrong) address subtraction.
       if (spillLow is not null)
       {
         EmitCode($"ldf r{2 * destDouble}, {spillLow}");
         EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
       }
 
-      Error(addSub.Location, "pointer-minus-pointer (\"p - q\") is not supported by this compiler -- no divide opcode exists to scale the raw address difference down to an element count");
+      Error(addSub.Location, "internal error: pointer difference (\"p - q\") reached the wide-value path; it should have been rewritten to an int expression");
       return leftType;
     }
 
@@ -4209,8 +4330,15 @@ public sealed class CCodeGenerator
   /// convention in this ABI, unlike the old "leave" instruction) and reads the return value out of
   /// <c>r0</c>/<c>d0</c> directly.
   /// </summary>
+  private bool _discardNextVoidCallResult;
+
   private CType EmitCallInto(CCallExpr call, int scalarDest, int wideDest, int depth, bool isWide)
   {
+    // Set only by EmitStatementExprForEffect for a bare call statement; consumed here before the arguments
+    // are evaluated, so a nested call inside an argument never sees it.
+    bool discardVoidResult = _discardNextVoidCallResult;
+    _discardNextVoidCallResult = false;
+
     if (!_functions.TryGetValue(call.FunctionName, out CFunctionSignature? signature))
     {
       Error(call.Location, $"\"{call.FunctionName}\" is not declared");
@@ -4325,6 +4453,12 @@ public sealed class CCodeGenerator
 
     if (signature.ReturnType.IsVoid)
     {
+      // A void call used as a statement has no value for anyone to read: no placeholder is loaded.
+      if (discardVoidResult)
+      {
+        return signature.ReturnType;
+      }
+
       if (isWide)
       {
         EmitCode($"dlit d{wideDest}, 0, 0");
@@ -4416,7 +4550,13 @@ public sealed class CCodeGenerator
           EmitConditionTestInto(ifStmt.Condition, ScalarReg(0), 0);
           EmitCode($"if r{ScalarReg(0)} ==0 then {elseLabel}");
           EmitStatement(ifStmt.Then);
-          EmitCode($"br {endLabel}");
+          if (ifStmt.Else is not null && !EndsWithReturn(ifStmt.Then))
+          {
+            // Without an "else" the end label directly follows the (empty) else label: a jump there would
+            // just land on the next instruction. A "then" that ends in a return never falls through.
+            EmitCode($"br {endLabel}");
+          }
+
           EmitLabel(elseLabel);
           if (ifStmt.Else is not null)
           {

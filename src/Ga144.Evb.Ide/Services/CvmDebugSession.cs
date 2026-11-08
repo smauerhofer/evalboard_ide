@@ -214,6 +214,11 @@ public sealed class CvmDebugSession : IDisposable
     lock (_sync) { _breakpoints.Clear(); }
   }
 
+  /// <summary>The simulated SRAM this session serviced. It stays readable after the session is disposed (it is plain
+  /// memory, only the serial port is released), which is how the CVM Debugger's "Update" button can still show the
+  /// last run's final memory contents after Stop.</summary>
+  public CvmSimulatedSram Sram => _sram;
+
   /// <summary>Read-only snapshot of <paramref name="count"/> simulated-SRAM words starting at <paramref name="startAddress"/>, for the memory inspector.</summary>
   public IReadOnlyList<int> ReadMemory(int startAddress, int count) => _sram.ReadRange(startAddress, count);
 

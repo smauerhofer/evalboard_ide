@@ -24,7 +24,7 @@ public partial class SelectChipProjectDialog : Window
 
   private Guid? SelectedProjectId { get; set; }
 
-  private Ga144ChipRole SelectedRole { get; set; } = Ga144ChipRole.Target;
+  private Ga144ChipRole SelectedRole { get; set; } = Ga144ChipRole.Host;
 
   private void OnOkClick(object sender, RoutedEventArgs e)
   {
@@ -51,8 +51,12 @@ public partial class SelectChipProjectDialog : Window
 
     dialog.ProjectListBox.ItemsSource = items;
     dialog.ProjectListBox.SelectedItem = items.FirstOrDefault(item => item.Id == currentProjectId) ?? items[0];
-    dialog.HostRadioButton.IsChecked = currentRole == Ga144ChipRole.Host;
-    dialog.TargetRadioButton.IsChecked = currentRole != Ga144ChipRole.Host;
+    // Host is the default (2026-11-08, per Stefan): it is pre-selected whenever no chip project has been chosen yet,
+    // even for a project saved before the default changed whose stored role is still Target. Once a chip project
+    // is chosen, its own role is shown as it was picked.
+    Ga144ChipRole shownRole = currentProjectId is null ? Ga144ChipRole.Host : currentRole;
+    dialog.HostRadioButton.IsChecked = shownRole == Ga144ChipRole.Host;
+    dialog.TargetRadioButton.IsChecked = shownRole != Ga144ChipRole.Host;
 
     return dialog.ShowDialog() == true ? (dialog.SelectedProjectId, dialog.SelectedRole) : null;
   }

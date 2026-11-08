@@ -58,11 +58,13 @@ public sealed class CProjectMetadata
   /// <summary>
   /// Which of that project's two physical chips (<see cref="Ga144ChipRole.Host"/> or
   /// <see cref="Ga144ChipRole.Target"/>) to compile the interpreter mesh from. Defaults to
-  /// <see cref="Ga144ChipRole.Target"/> since, on an EVB002, that is the chip a program built by this
-  /// IDE would normally be installed onto and run from -- the Host chip's own role is to talk to the
-  /// PC over serial, not to run an arbitrary C project's compiled program.
+  /// <see cref="Ga144ChipRole.Host"/> (CHANGED 2026-11-08, per Stefan: "i selected target instead of host in
+  /// the chip project. make host the default selection") -- the chip whose CVM2 node mesh a Program
+  /// project is normally built against. Picking Target for a chip project whose Target chip holds no CVM2
+  /// node sources makes Build export an empty primitive table and fail with a wall of "undefined reference"
+  /// errors for every mnemonic.
   /// </summary>
-  public Ga144ChipRole ChipProjectRole { get; set; } = Ga144ChipRole.Target;
+  public Ga144ChipRole ChipProjectRole { get; set; } = Ga144ChipRole.Host;
 
   /// <summary>
   /// Added 2026-09-10, per Stefan ("let's build an optimizer for the C compiler" / "add option to the

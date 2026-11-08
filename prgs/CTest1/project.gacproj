@@ -1,0 +1,10 @@
+schemaVersion: 1
+name: CTest1
+kind: Program
+libraryReferences:
+- ..\cvm
+- ..\..\libs\cvm
+chipProjectId: 08b90630-a572-4b5f-ad49-9c905e466a71
+chipProjectRole: Host
+enableConstantFolding: true
+enablePeepholeOptimization: true
