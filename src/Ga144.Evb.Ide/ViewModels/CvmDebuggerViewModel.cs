@@ -1388,7 +1388,12 @@ public sealed class CvmDebuggerViewModel : ObservableObject
 
     _session?.LoadImage(image);
     MirrorSessionProgramIntoStandaloneSram(image.Words);
-    _loadedImageSymbols = image.Symbols;
+    // CHANGED 2026-11-08: leave out the symbols the linker derives from primitive-table entries (nop, ret, call, ...;
+    // DefiningObjectName is null for them, see CvmImageSymbol). Their "address" is the opcode WORD, so every program
+    // address that happens to equal one (0x0050 = ret, 0x00D0 = call, 0x0710 = drop, ...) used to get that mnemonic
+    // as a bogus label in the memory view / C Debugger listing, and the highest such value also stretched the
+    // memory-view window (RefreshMemoryView). CvmAssemblyLanguage's standalone assembler already filters the same way.
+    _loadedImageSymbols = [.. image.Symbols.Where(symbol => symbol.DefiningObjectName is not null)];
     _loadedImage = image;
     // The OTHER label source (_assembledLabelAddresses, hand-typed Assembly Code editor labels) is
     // mutually exclusive with a loaded image's own symbols -- see that field's own remarks -- so it's

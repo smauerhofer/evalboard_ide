@@ -488,7 +488,7 @@ public static class CvmAssembler
           {
             if (line.Args.Count != 2)
             {
-              errors.Add($"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly two double-register operands (destination first), e.g. \"{shape.Mnemonic} d3 d2\".");
+              errors.Add($"line {line.LineNumber}: \"{shape.Mnemonic}\" requires exactly two floating-point register operands (destination first), e.g. \"{shape.Mnemonic} f3 f2\".");
               break;
             }
 
@@ -999,25 +999,38 @@ public static class CvmAssembler
               {
                 // Explicitly called out, not just "not a number": both of these operands are always
                 // DOUBLE registers -- r0..r15 would silently alias the wrong half of some dN if accepted.
-                errors.Add($"line {line.LineNumber}: \"{fBinShape.Mnemonic}\"'s {operandDescription} is a DOUBLE register -- write d0..d{fBinMaxRegister} (e.g. \"{fBinShape.Mnemonic} d3 d2\"), not \"{token}\": {fBinShape.Mnemonic} has no r-register form.");
+                errors.Add($"line {line.LineNumber}: \"{fBinShape.Mnemonic}\"'s {operandDescription} is a FLOATING-POINT register -- write f0..f{fBinMaxRegister} (e.g. \"{fBinShape.Mnemonic} f3 f2\"), not \"{token}\": {fBinShape.Mnemonic} has no r-register form.");
                 return 0;
               }
 
               int parsed;
-              if (token.Length >= 2 && char.ToLowerInvariant(token[0]) == 'd' &&
+              // CHANGED 2026-11-08, per Stefan ("fadd should disassemble to 'fadd fx fy' not 'fadd dx dy'", then "change
+              // the assembler to flag the use of dN in float instruction as an error"): the token is "fN" (what the
+              // disassembler prints and the C compiler emits); "dN" is an error; a plain number still works.
+              char fBinPrefix = token.Length >= 2 ? char.ToLowerInvariant(token[0]) : ' ';
+              if (fBinPrefix == 'd' && token.Length >= 2 && token.Skip(1).All(char.IsAsciiDigit))
+              {
+                // Rejected, per Stefan directly ("change the assembler to flag the use of dN in float instruction as
+                // an error"): the float instructions take floating-point registers f0..f15 -- dN is the double
+                // register of the integer 32-bit instructions (dmov, dadd, ...).
+                errors.Add($"line {line.LineNumber}: \"{fBinShape.Mnemonic}\" is a floating-point instruction and needs a floating-point register -- write f0..f{fBinMaxRegister} (e.g. \"{fBinShape.Mnemonic} f3 f2\"), not \"{token}\": d0..d{fBinMaxRegister} are the double registers of the integer 32-bit instructions (dmov, dpush, dadd, ...).");
+                return 0;
+              }
+
+              if (fBinPrefix == 'f' &&
                   int.TryParse(token.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out parsed))
               {
-                // Parsed as a "dN" token -- range-checked below, same as the plain-number fallback.
+                // Parsed as an "fN" token -- range-checked below, same as the plain-number fallback.
               }
               else if (!TryParseNumericLiteral(token, out parsed))
               {
-                errors.Add($"line {line.LineNumber}: \"{token}\" is not a valid {operandDescription} for \"{fBinShape.Mnemonic}\" -- write d0..d{fBinMaxRegister} or a plain number, e.g. \"{fBinShape.Mnemonic} d3 d2\".");
+                errors.Add($"line {line.LineNumber}: \"{token}\" is not a valid {operandDescription} for \"{fBinShape.Mnemonic}\" -- write f0..f{fBinMaxRegister} (or a plain number), e.g. \"{fBinShape.Mnemonic} f3 f2\".");
                 return 0;
               }
 
               if (parsed < 0 || parsed > fBinMaxRegister)
               {
-                errors.Add($"line {line.LineNumber}: \"{token}\" is out of range for \"{fBinShape.Mnemonic}\" -- expected d0..d{fBinMaxRegister}.");
+                errors.Add($"line {line.LineNumber}: \"{token}\" is out of range for \"{fBinShape.Mnemonic}\" -- expected f0..f{fBinMaxRegister}.");
                 return 0;
               }
 
@@ -1197,7 +1210,7 @@ public static class CvmAssembler
             }
             else if (!TryParseNumericLiteral(line.Args[0], out registerIndex) || registerIndex < 0 || registerIndex > shape.ValueBitMask)
             {
-              string exampleToken = CvmInstructionSet.IsDoubleRegisterMnemonic(shape.Mnemonic) ? "d1" : "r1";
+              string exampleToken = CvmInstructionSet.IsFloatRegisterMnemonic(shape.Mnemonic) ? "f1" : CvmInstructionSet.IsDoubleRegisterMnemonic(shape.Mnemonic) ? "d1" : "r1";
               errors.Add($"line {line.LineNumber}: \"{line.Args[0]}\" is not a valid register for \"{shape.Mnemonic}\" -- expected {exampleToken[0]}0..{exampleToken[0]}{shape.ValueBitMask} (or a plain number 0..{shape.ValueBitMask}), e.g. \"{shape.Mnemonic} {exampleToken}\".");
               registerIndex = 0;
             }
@@ -1227,8 +1240,8 @@ public static class CvmAssembler
               }
               else if (!TryParseNumericLiteral(line.Args[1], out secondIndex) || secondIndex < 0 || secondIndex > secondMaxIndex)
               {
-                char secondPrefix = CvmInstructionSet.IsSecondRegisterDoubleMnemonic(shape.Mnemonic) ? 'd' : 'r';
-                errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" is not a valid register for \"{shape.Mnemonic}\" -- expected {secondPrefix}0..{secondPrefix}{secondMaxIndex} (or a plain number 0..{secondMaxIndex}), e.g. \"{shape.Mnemonic} r1 {secondPrefix}2\".");
+                char secondPrefix = CvmInstructionSet.IsFloatRegisterMnemonic(shape.Mnemonic) ? 'f' : CvmInstructionSet.IsSecondRegisterDoubleMnemonic(shape.Mnemonic) ? 'd' : 'r';
+                errors.Add($"line {line.LineNumber}: \"{line.Args[1]}\" is not a valid register for \"{shape.Mnemonic}\" -- expected {secondPrefix}0..{secondPrefix}{secondMaxIndex} (or a plain number 0..{secondMaxIndex}), e.g. \"{shape.Mnemonic} {(secondPrefix == 'f' ? 'f' : 'r')}1 {secondPrefix}2\".");
                 secondIndex = 0;
               }
 

@@ -1,8 +1,11 @@
 #ifndef CVM_H
 #define CVM_H
 
-extern void _start();
-extern void _exit();
+/* Program entry and exit, defined in asm/startup.asm: __start sets sp = 0xFFFF and fp = 0, calls main() and then
+ * falls into __exit, which halts. (Declared with these exact names, since a declaration makes the compiler import
+ * the symbol, and the linker must find it.) */
+extern void __start();
+extern void __exit();
 
 extern void *heap_start;
 

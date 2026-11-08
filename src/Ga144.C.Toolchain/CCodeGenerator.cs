@@ -197,7 +197,7 @@ public sealed class CCodeGenerator
     public required CType ReturnType { get; init; }
     public required bool IsFastcall { get; init; }
     public List<Dictionary<string, CVarSymbol>> Scopes { get; } = [];
-    public int NextFrameOffset { get; set; } = -1; // next free (most-negative) frame offset to hand out.
+    public int NextFrameOffset { get; set; } // next free (most-negative) frame offset to hand out; locals occupy offsets 0, -1, ... -(N-1) (CHANGED 2026-11-08: the first local is at fp+0, not fp-1 -- see the frame layout remarks at ComputeParameterSlots).
     public List<string> BodyLines { get; } = []; // buffered separately from _codeLines -- see EmitFunction.
     public List<(string BreakLabel, string? ContinueLabel)> LoopLabels { get; } = [];
   }
@@ -406,13 +406,21 @@ public sealed class CCodeGenerator
   /// this ABI at all, so it always falls to the stack, renumbered to skip whichever parameters (of either
   /// kind) went to a register -- exactly the old ABI's own "by register" renumbering rule, just against
   /// the new register pools.
+  /// <para><b>Frame layout (CHANGED 2026-11-08, hardware-verified by Stefan's trace of a <c>main</c> with a local
+  /// array).</b> The CVM stack pointer is the NEXT FREE slot (a push writes at [sp], then sp decrements). <c>call</c>
+  /// pushes the return address, <c>link N</c> pushes the old fp and sets fp := sp (the free slot just below it),
+  /// then sp := fp - N. Relative to fp: +3.. stack-passed parameters (the first one at +3), +2 return address,
+  /// +1 saved fp, then fp+0 and below the N local words (offsets 0 down to -(N-1)); sp = fp - N is again the next
+  /// free slot, so nothing a later push writes can touch a local. Before this change the compiler assumed fp
+  /// pointed AT the saved fp (parameters from +2, locals from -1 to -N), which put the last local on the free
+  /// slot and read the first parameter from the return address.</para>
   /// </summary>
   private static IReadOnlyList<CParamSlot> ComputeParameterSlots(IReadOnlyList<CType> parameterTypes, bool isFastcall)
   {
     var slots = new CParamSlot[parameterTypes.Count];
     int nextScalarRegister = ScalarParamFirstRegister;
     int nextWideDouble = WideParamFirstDouble;
-    int nextStackOffset = 2; // offset +2 = the first stack-passed parameter, closest to fp -- see claude/cvm-abi.md section 3.5.
+    int nextStackOffset = 3; // offset +3 = the first stack-passed parameter, closest to fp. CHANGED 2026-11-08 from +2: on the real hardware fp is the FREE slot below the saved fp (saved fp at fp+1, return address at fp+2) -- see claude/cvm-frame-layout-hardware-2026-11-08.md.
 
     for (int i = 0; i < parameterTypes.Count; i++)
     {
@@ -765,7 +773,7 @@ public sealed class CCodeGenerator
     EmitCode("unlink");
     EmitCode("ret");
 
-    int localWordCount = -context.NextFrameOffset - 1;
+    int localWordCount = -context.NextFrameOffset;
     context.BodyLines[linkPlaceholderIndex] = $"  link {-localWordCount}";
 
     ExitScope();
@@ -2500,7 +2508,7 @@ public sealed class CCodeGenerator
           CBinaryOp.Multiply => "fmul",
           _ => "fdiv",
         };
-        EmitCode($"{op} d{currentDouble}, d{rightDouble}");
+        EmitCode($"{op} f{currentDouble}, f{rightDouble}"); // float instructions take floating-point registers fN (CHANGED 2026-11-08; dN is an assembler error for them)
       }
       else
       {
@@ -3898,7 +3906,7 @@ public sealed class CCodeGenerator
       return CType.Float;
     }
 
-    EmitCode($"{(addSub.Op == CBinaryOp.Add ? "fadd" : "fsub")} d{destDouble}, d{rightFloatDouble}");
+    EmitCode($"{(addSub.Op == CBinaryOp.Add ? "fadd" : "fsub")} f{destDouble}, f{rightFloatDouble}"); // fN, not dN (CHANGED 2026-11-08)
     return CType.Float;
   }
 
@@ -4022,7 +4030,7 @@ public sealed class CCodeGenerator
       EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
     }
 
-    EmitCode($"{op} d{destDouble}, d{rightDouble}");
+    EmitCode($"{op} f{destDouble}, f{rightDouble}"); // fN, not dN (CHANGED 2026-11-08)
     return CType.Float;
   }
 
@@ -4164,7 +4172,7 @@ public sealed class CCodeGenerator
       EmitCode($"ldf r{2 * destDouble + 1}, {spillLow + 1}");
     }
 
-    EmitCode($"{(call.FunctionName == "fminf" ? "fmin" : "fmax")} d{destDouble}, d{rightDouble}");
+    EmitCode($"{(call.FunctionName == "fminf" ? "fmin" : "fmax")} f{destDouble}, f{rightDouble}"); // fN, not dN (CHANGED 2026-11-08)
     return CType.Float;
   }
 

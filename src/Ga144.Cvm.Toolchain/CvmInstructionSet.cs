@@ -2482,8 +2482,13 @@ public static class CvmInstructionSet
   /// <see cref="IsSecondRegisterDoubleMnemonic"/> (both operands double registers, same as "dmov"'s own
   /// "fx"/"fy" read as this family's own notation for a d-register used as a float -- see
   /// <see cref="FloatingPointNegateMnemonic"/>'s own remarks on that same naming question).
+  ///
+  /// <para>RENAMED 2026-11-08, per Stefan directly ("i want to harmonize the mnemonics. rename \"fmove\" to
+  /// \"fmov\" so it is similar to \"dmov\""): the spelling is now "fmov" (Id, tag, node/symbol and operand
+  /// rules unchanged); "fmove" is no longer a mnemonic. The remarks above and elsewhere in this file still say
+  /// "fmove" for the history's sake.</para>
   /// </summary>
-  public const string FloatingPointMoveMnemonic = "fmove";
+  public const string FloatingPointMoveMnemonic = "fmov";
 
   /// <summary>
   /// ALIAS, ADDED 2026-10-23 per Stefan directly ("'fconst' is an alias for 'c32'. make it so"): NOT a
@@ -4545,6 +4550,29 @@ public static class CvmInstructionSet
   public static string FormatOperand(int value) => $"0x{value & 0xFFFF:X4} ({value})";
 
   /// <summary>
+  /// ADDED 2026-11-08, per Stefan directly ("change the C compiler to use the fN register instead of the dN register
+  /// for float instruction. change the assembler to flag the use of dN in float instruction as an error"): true for
+  /// the floating-point instructions -- fadd/fsub/fmin/fmax/fmul/fdiv, fneg/fabs, and the float spellings fmove/fpush/
+  /// fpop of dmov/dpush/dpop. Their register operands are written <c>f0..f15</c>; a <c>dN</c> token is an assembler
+  /// error for them (as it already was for fconst). The register FIELD is still the double-register index
+  /// (f1 = d1 = r2 lo / r3 hi), so <see cref="IsDoubleRegisterMnemonic"/> stays true for the ones that go through the
+  /// generic register-token path; this predicate only selects the SPELLING. dmov/dpush/dpop and the integer d-opcodes
+  /// keep <c>dN</c>.
+  /// </summary>
+  public static bool IsFloatRegisterMnemonic(string mnemonic) =>
+      string.Equals(mnemonic, FloatingPointAddMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, FloatingPointSubtractMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, FloatingPointMinimumMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, FloatingPointMaximumMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, FloatingPointMultiplyMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, FloatingPointDivideMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, FloatingPointNegateMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, FloatingPointAbsoluteMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, FloatingPointMoveMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, FloatingPointPushMnemonic, StringComparison.OrdinalIgnoreCase) ||
+      string.Equals(mnemonic, FloatingPointPopMnemonic, StringComparison.OrdinalIgnoreCase);
+
+  /// <summary>
   /// ADDED 2026-10-03: true for the node-509 words that work on a 32-bit DOUBLE register (<c>dpop</c>,
   /// <c>dpush</c>) -- their register operand is written <c>d0..d15</c>, never <c>r</c>: for 32-bit
   /// operations the register number is doubled (d1 = r2 lo / r3 hi), so "dpop r1" would read as the
@@ -4652,7 +4680,7 @@ public static class CvmInstructionSet
     }
 
     char prefix = char.ToLowerInvariant(text[0]);
-    if (prefix != 'r' && prefix != 'd')
+    if (prefix != 'r' && prefix != 'd' && prefix != 'f')
     {
       return false;
     }
@@ -4665,10 +4693,17 @@ public static class CvmInstructionSet
       }
     }
 
-    char expectedPrefix = isDouble ? 'd' : 'r';
+    // CHANGED 2026-11-08: the floating-point instructions (IsFloatRegisterMnemonic) take "fN" and reject "dN".
+    bool isFloat = isDouble && IsFloatRegisterMnemonic(shape.Mnemonic);
+    char expectedPrefix = isFloat ? 'f' : isDouble ? 'd' : 'r';
     if (prefix != expectedPrefix)
     {
-      error = isDouble && IsSecondRegisterDoubleMnemonic(shape.Mnemonic)
+      error = isFloat
+          ? $"\"{shape.Mnemonic}\" is a floating-point instruction and needs a floating-point register -- write f0..f{maxIndex} (e.g. \"{shape.Mnemonic} f1\"), not \"{text}\"" +
+            (prefix == 'd' ? ": d0..d15 are the double registers of the integer 32-bit instructions (dmov, dpush, dadd, ...)." : ".")
+          : prefix == 'f'
+          ? $"\"{shape.Mnemonic}\" is not a floating-point instruction -- write {expectedPrefix}0..{expectedPrefix}{maxIndex}, not \"{text}\": f0..f15 are the floating-point registers of fadd, fpush, fconst, ...."
+          : isDouble && IsSecondRegisterDoubleMnemonic(shape.Mnemonic)
           ? $"the second operand of \"{shape.Mnemonic}\" is a double register holding the memory pointer -- write d0..d{maxIndex} (e.g. \"{shape.Mnemonic} r1 d2\"), not \"{text}\"."
           : isDouble
           ? $"\"{shape.Mnemonic}\" works on a double register -- write d0..d{maxIndex} (e.g. \"{shape.Mnemonic} d1\"), not \"{text}\": for 32-bit operations the register number is doubled (d1 = r2/r3), so an r-name would be misleading."
@@ -4734,11 +4769,20 @@ public static class CvmInstructionSet
   /// <summary>
   /// ADDED 2026-10-03: renders a register operand the way the assemblers read it -- <c>d1</c> for
   /// <c>dpop</c>/<c>dpush</c>, <c>r1</c> for every other register word -- so the disassembly can be fed
-  /// back to the assembler unchanged.
+  /// back to the assembler unchanged. CHANGED 2026-11-08: the FIRST operand of a binary word used to be
+  /// printed as "r" unconditionally, so the 32-bit binary family listed "dadd r1 d2" for what the assembler
+  /// (and <see cref="IsDoubleRegisterMnemonic"/>) calls "dadd d1 d2"; it now follows
+  /// <see cref="IsDoubleRegisterMnemonic"/> exactly like the single-operand case below does (rload/rstore
+  /// keep "r" for their first operand, since they are not in that predicate).
   /// </summary>
   public static string FormatRegisterOperand(string mnemonic, int index) =>
-      IsBinaryRegisterOperation(mnemonic)
-          ? $"r{index & Operation16FirstRegisterBitMask} {(IsSecondRegisterDoubleMnemonic(mnemonic) ? 'd' : 'r')}{(index & Operation16SecondRegisterBitMask) >> Operation16SecondRegisterBitShift}"
+      IsFloatRegisterMnemonic(mnemonic)
+          // CHANGED 2026-11-08: the float instructions (fneg/fabs/fmove/fpush/fpop) list "fN", never "dN".
+          ? IsBinaryRegisterOperation(mnemonic)
+              ? $"f{index & Operation16FirstRegisterBitMask} f{(index & Operation16SecondRegisterBitMask) >> Operation16SecondRegisterBitShift}"
+              : $"f{index}"
+          : IsBinaryRegisterOperation(mnemonic)
+          ? $"{(IsDoubleRegisterMnemonic(mnemonic) ? 'd' : 'r')}{index & Operation16FirstRegisterBitMask} {(IsSecondRegisterDoubleMnemonic(mnemonic) ? 'd' : 'r')}{(index & Operation16SecondRegisterBitMask) >> Operation16SecondRegisterBitShift}"
           : $"{(IsDoubleRegisterMnemonic(mnemonic) ? 'd' : 'r')}{index}";
 
   /// <summary>
@@ -5101,13 +5145,19 @@ public static class CvmInstructionSet
         }
 
         // ADDED 2026-10-13: fadd/fsub/fmin/fmax/fmul/fdiv's NEW encoding (FloatingPointBinaryOperationTag)
-        // lists BOTH operands as "dN" double-register tokens -- "fadd d3 d2" -- not the generic
-        // "fadd 3 2" the fallback below would otherwise print. See FloatingPointBinaryOperationTag's
-        // own remarks for why this is flagged rather than certain.
+        // lists BOTH operands as register tokens -- "fadd f3 f2" -- not the generic "fadd 3 2" the
+        // fallback below would otherwise print. See FloatingPointBinaryOperationTag's own remarks for why
+        // this is flagged rather than certain.
+        //
+        // CHANGED 2026-11-08, per Stefan directly ("fadd should disassemble to 'fadd fx fy' not
+        // 'fadd dx dy'"): the tokens are now floating-point registers "fN", the same prefix fconst
+        // already uses (see the c32/fconst case above). CvmAssembler still ACCEPTS the old "dN" spelling
+        // for these six mnemonics (existing source and the C compiler's own output use it), so the
+        // listing can be fed back to the assembler unchanged either way.
         if (shape.Mnemonic is FloatingPointAddMnemonic or FloatingPointSubtractMnemonic or FloatingPointMinimumMnemonic
             or FloatingPointMaximumMnemonic or FloatingPointMultiplyMnemonic or FloatingPointDivideMnemonic)
         {
-          return $"{shape.Mnemonic} d{first} d{second}";
+          return $"{shape.Mnemonic} f{first} f{second}";
         }
 
         return $"{shape.Mnemonic} {FormatOperand(first)} {FormatOperand(second)}";

@@ -275,6 +275,12 @@ public static class CvmNodeMesh
     // reference, same reasoning as node 206's own entry (no Cvm/Node208Program.cs reference-copy file
     // exists for it).
     208,
+    // ADDED 2026-11-08: node 309 hosts the eight 32-bit binary mnemonics 'dmov/'dand/'dor/'dxor/'dadd/'dudiv/'dmul/'dpack
+    // (CvmAssemblyLanguage.NodeSymbolByMnemonic, tag 0xF000) and 'dmov's alias fmove. It was never in this list, so every
+    // C program that adds two longs (the compiler emits 'dadd inline) failed to link with "undefined reference to
+    // "dadd"", although the opcode assembled and the node itself compiles fine in the Node Editor. Node 209 (unsigned
+    // division) is only reached THROUGH node 309 at runtime and exports no mnemonic of its own, so it needs no entry.
+    309,
     102, // 102, special step 4 (MUL/DIV special-case resolution).
     103, // 103, special step 3 (ADD/SUB special-case handling; MUL/DIV delegated to 102).
     104, // 104, special step 1 (special operation dispatcher).
